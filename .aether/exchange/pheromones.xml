@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<pheromones version="1.0" generated_at="2026-04-09T14:21:04Z" count="166">
+<pheromones version="1.0" generated_at="2026-04-10T20:48:29Z" count="169">
   <signal id="imported:" type="" priority="" source="" created_at="" active="false">
     <content>
       <text></text>
@@ -828,6 +828,21 @@
   <signal id="sig_focus_1775607993_7200" type="FOCUS" priority="normal" source="terminal-app" created_at="2026-04-08T00:26:33Z" expires_at="2026-04-08T01:26:33Z" active="true">
     <content>
       <text>Canvas deposit at (130, 343)</text>
+    </content>
+  </signal>
+  <signal id="sig_1775752786_c0a4871d" type="FOCUS" priority="normal" source="cli" created_at="2026-04-09T16:39:46Z" active="true">
+    <content>
+      <text>Update and install pipeline — all sync paths must work correctly</text>
+    </content>
+  </signal>
+  <signal id="sig_1775752786_92d12ce3" type="FOCUS" priority="normal" source="cli" created_at="2026-04-09T16:39:46Z" active="true">
+    <content>
+      <text>Pheromone system — verify end-to-end pipeline integrity</text>
+    </content>
+  </signal>
+  <signal id="sig_1775752786_d1862dfe" type="REDIRECT" priority="high" source="cli" created_at="2026-04-09T16:39:46Z" expires_at="2026-05-09T16:39:46Z" active="true">
+    <content>
+      <text>Dont skip existing tests — all 1075+ must continue passing</text>
     </content>
   </signal>
 </pheromones>

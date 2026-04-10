@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<colony-archive colony_id="" sealed_at="2026-04-09T14:21:04Z" version="1.0">
-  <pheromones version="1.0" generated_at="2026-04-09T14:21:04Z" count="166">
+<colony-archive colony_id="" sealed_at="2026-04-10T20:48:29Z" version="1.0">
+  <pheromones version="1.0" generated_at="2026-04-10T20:48:29Z" count="169">
     <signal id="imported:" type="" priority="" source="" created_at="" active="false">
       <content>
         <text></text>
@@ -831,8 +831,23 @@
         <text>Canvas deposit at (130, 343)</text>
       </content>
     </signal>
+    <signal id="sig_1775752786_c0a4871d" type="FOCUS" priority="normal" source="cli" created_at="2026-04-09T16:39:46Z" active="true">
+      <content>
+        <text>Update and install pipeline — all sync paths must work correctly</text>
+      </content>
+    </signal>
+    <signal id="sig_1775752786_92d12ce3" type="FOCUS" priority="normal" source="cli" created_at="2026-04-09T16:39:46Z" active="true">
+      <content>
+        <text>Pheromone system — verify end-to-end pipeline integrity</text>
+      </content>
+    </signal>
+    <signal id="sig_1775752786_d1862dfe" type="REDIRECT" priority="high" source="cli" created_at="2026-04-09T16:39:46Z" expires_at="2026-05-09T16:39:46Z" active="true">
+      <content>
+        <text>Dont skip existing tests — all 1075+ must continue passing</text>
+      </content>
+    </signal>
   </pheromones>
-  <queen-wisdom version="1.0" colony_id="" generated_at="2026-04-09T14:21:04Z">
+  <queen-wisdom version="1.0" colony_id="" generated_at="2026-04-10T20:48:29Z">
     <philosophies></philosophies>
     <patterns>
       <pattern id="inst_1775264791" confidence="0.75" domain="" source="observation" created_at="2026-04-04T01:06:31Z">
@@ -957,6 +972,36 @@
       </pattern>
       <pattern id="inst_1775744194_cd8440" confidence="0.90" domain="learning" source="sha256:6865c2c085e341e26285b4c28bb3d8e5a067578e3ece7483632fdb6b29b0334b" created_at="2026-04-09T14:16:34Z">
         <content>Adding log.Printf to previously-silent error sites is zero-risk observability — errors remain non-fatal but failures become visible in logs</content>
+      </pattern>
+      <pattern id="inst_1775765845" confidence="0.70" domain="testing" source="phase-1" created_at="2026-04-09T20:17:25Z">
+        <content>when implementing protected directory/file patterns</content>
+      </pattern>
+      <pattern id="inst_1775765845" confidence="0.70" domain="workflow" source="phase-1" created_at="2026-04-09T20:17:25Z">
+        <content>when builders spawn worktrees during tests</content>
+      </pattern>
+      <pattern id="inst_1775767746" confidence="0.80" domain="testing" source="phase-2" created_at="2026-04-09T20:49:06Z">
+        <content>Testing pheromone or signal deduplication logic</content>
+      </pattern>
+      <pattern id="inst_1775769622" confidence="0.75" domain="architecture" source="phase-3" created_at="2026-04-09T21:20:22Z">
+        <content>Adding new context sections to colony-prime or pr-context</content>
+      </pattern>
+      <pattern id="inst_1775836415" confidence="0.75" domain="architecture" source="phase-1" created_at="2026-04-10T15:53:35Z">
+        <content>adding a new string enum type to ColonyState</content>
+      </pattern>
+      <pattern id="inst_1775846623" confidence="0.70" domain="workflow" source="phase-5" created_at="2026-04-10T18:43:43Z">
+        <content>When wiring conditional behavior into build playbooks based on colony configuration</content>
+      </pattern>
+      <pattern id="inst_1775847934" confidence="0.70" domain="architecture" source="phase-6" created_at="2026-04-10T19:05:34Z">
+        <content>injecting colony context fields into worker prompts</content>
+      </pattern>
+      <pattern id="inst_1775849336" confidence="0.80" domain="workflow" source="success-phase-7" created_at="2026-04-10T19:28:56Z">
+        <content>adding display fields to status or resume commands</content>
+      </pattern>
+      <pattern id="inst_1775850888" confidence="0.70" domain="workflow" source="phase-8" created_at="2026-04-10T19:54:48Z">
+        <content>When replacing dead or deprecated command blocks in playbooks</content>
+      </pattern>
+      <pattern id="inst_1775853604" confidence="0.70" domain="workflow" source="phase-10" created_at="2026-04-10T20:40:04Z">
+        <content>documentation phase for new feature</content>
       </pattern>
     </patterns>
   </queen-wisdom>

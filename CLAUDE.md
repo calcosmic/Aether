@@ -65,7 +65,7 @@
 
 Colony-prime assembles worker context from: QUEEN.md wisdom, eternal memory,
 pheromone signals, phase learnings, key decisions, blocker flags, user preferences,
-and context capsule — all within a token budget (see Token Budget below).
+parallel mode, and context capsule — all within a token budget (see Token Budget below).
 
 **See `RUNTIME UPDATE ARCHITECTURE.md` for complete distribution flow.**
 
@@ -138,7 +138,7 @@ aether update      # or /ant:update
 ├── agents-claude/       # Claude agent mirror used for packaging
 ├── commands/            # YAML source definitions for slash commands
 ├── data/                # LOCAL ONLY (never distributed)
-│   ├── COLONY_STATE.json  # Colony state with phase tracking
+│   ├── COLONY_STATE.json  # Colony state with phase tracking + parallel_mode
 │   ├── pheromones.json
 │   ├── constraints.json
 │   ├── midden/          # Failure tracking
@@ -663,6 +663,38 @@ Key additions:
 | `nurse` | Heals low-confidence instincts with supporting evidence |
 | `scribe` | Records curation decisions and audit trail |
 | `sentinel` | Guards against instinct corruption and conflicts |
+
+---
+
+## Parallel Execution Modes
+
+Aether supports two parallel execution strategies, selected at colony init:
+
+| Mode | Value | Description |
+|------|-------|-------------|
+| In-repo (default) | `"in-repo"` | Workers share the working tree directly |
+| Worktree | `"worktree"` | Each worker gets an isolated git worktree branch |
+
+### How It Works
+
+1. **`/ant:init`** prompts for strategy selection (Step 6.5) during colony setup
+2. The choice is saved as `parallel_mode` in `COLONY_STATE.json` (omitempty, defaults to `"in-repo"`)
+3. **Colony-prime** injects the current parallel mode into worker context
+4. **Build-wave playbook** conditionally allocates worktrees when mode is `"worktree"`
+5. **Continue-advance playbook** performs mode-aware merge-back (worktree branches merge to main; in-repo skips merge step)
+6. **Status and resume** commands display the active parallel mode
+
+### CLI Subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `parallel-mode get` | Read current parallel mode from colony state |
+| `parallel-mode set <mode>` | Change parallel mode ("in-repo" or "worktree") |
+
+### Choosing a Mode
+
+- **In-repo** is simpler and works well for most projects. Workers write directly to the repo.
+- **Worktree** provides isolation -- each worker gets its own branch, preventing file conflicts during parallel builds. Requires a clean working tree and is best for larger tasks with multiple workers touching different files.
 
 ---
 

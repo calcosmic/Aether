@@ -1,6 +1,6 @@
-# Crowned Anthill — Tackle the three speed fixes for pheromone injection: eliminate redundant process spawns, centralize validation, and add session-level caching
+# Crowned Anthill — Add worktree mode selection to colony init
 
-**Sealed:** 2026-04-09T14:19:37Z
+**Sealed:** 2026-04-10T21:05:00Z
 **Milestone:** Crowned Anthill
 **Version:** 3.0
 
@@ -10,33 +10,33 @@ This colony set out to accomplish something real — and it did. Every phase pus
 
 ## Colony Stats
 - Total Phases: 10
-- Phases Completed: 9 of 10
-- Colony Age: 1 days of focused work
-- Wisdom Promoted: 0 entries carried forward
+- Phases Completed: 10 of 10
+- Colony Age: 0 days of focused work
+- Wisdom Promoted: 10 entries carried forward
 
 ## Phase Recap
 
 Every phase below is a chapter in the story of this anthill's rise:
 
-  - Performance Baseline Benchmarks: completed
-  - Centralize Content Sanitization: completed
-  - File-Based Session Cache Package: completed
-  - Deduplicate COLONY_STATE.json Loads in pr-context: completed
-  - Deduplicate Pheromone Loads Across Commands: completed
-  - Eliminate Redundant Git Process Spawns: completed
-  - Eliminate Redundant Spawns in Skill Pipeline: completed
-  - Wire File Cache into Context Assembly Commands: completed
-  - Cache Cleanup and Session Hygiene: in_progress
-  - Integration Verification: completed
+  - Data Model and Constants: completed
+  - parallel-mode get/set subcommand: completed
+  - Template update: completed
+  - Init slash command user prompt: completed
+  - Build-wave conditional worktree wiring: completed
+  - Colony-prime context injection: completed
+  - Status and resume display: completed
+  - Continue-advance worktree awareness: completed
+  - Integration tests: completed
+  - Documentation updates: completed
 
 ## Pheromone Legacy
 
-The colony's hard-won wisdom doesn't stop here. 0 validated learnings and instincts have been promoted to QUEEN.md — a living record that will guide future colonies before they take their first steps.
+The colony's hard-won wisdom doesn't stop here. 10 validated learnings and instincts have been promoted to QUEEN.md — a living record that will guide future colonies before they take their first steps.
 
 What this colony learned, the next colony inherits.
 
 ## The Work
 
-Tackle the three speed fixes for pheromone injection: eliminate redundant process spawns, centralize validation, and add session-level caching
+Add worktree mode selection to colony init: prompt user to choose parallel strategy (worktrees vs in-repo), save preference to colony state.
 
 The anthill stands crowned. The work endures.

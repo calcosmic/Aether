@@ -2,7 +2,7 @@
   "version": "3.0",
   "goal": "Add worktree mode selection to colony init: prompt user to choose parallel strategy (worktrees vs in-repo), save preference to colony state",
   "colony_name": null,
-  "colony_version": 0,
+  "colony_version": 1,
   "state": "READY",
   "current_phase": 10,
   "session_id": "add_1775830632",
@@ -358,7 +358,7 @@
         "description": "Update CLAUDE.md and colony rules.",
         "id": 10,
         "name": "Documentation updates",
-        "status": "pending",
+        "status": "completed",
         "success_criteria": [
           "Documentation updated"
         ],
@@ -366,7 +366,7 @@
           {
             "goal": "Update CLAUDE.md to document parallel_mode in colony state and init workflow",
             "id": "10.1",
-            "status": "pending",
+            "status": "completed",
             "success_criteria": [
               "CLAUDE.md references parallel_mode"
             ]
@@ -374,7 +374,7 @@
           {
             "goal": "Update .claude/rules/aether-colony.md if needed",
             "id": "10.2",
-            "status": "pending",
+            "status": "completed",
             "success_criteria": [
               "Documentation consistent"
             ]
@@ -519,6 +519,21 @@
         "phase": 9,
         "phase_name": "Integration tests",
         "timestamp": "2026-04-10T20:20:16Z"
+      },
+      {
+        "id": "learning_1775853595",
+        "phase": 10,
+        "phase_name": "Documentation updates",
+        "learnings": [
+          {
+            "claim": "Documentation phases should update both CLAUDE.md (developer reference) and aether-colony.md (user-facing rules) in parallel, keeping feature descriptions consistent across both files",
+            "status": "hypothesis",
+            "tested": true,
+            "evidence": "Both CLAUDE.md and aether-colony.md updated consistently for parallel_mode feature, verified by Watcher (9/10) and Auditor (92/100)",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-04-10T20:39:55Z"
       }
     ],
     "decisions": null,
@@ -532,24 +547,12 @@
   "graveyards": [],
   "events": [
     "2026-04-10T20:06:00Z|phase_started|build|Phase 9: Integration tests started",
-    ""
+    "",
+    "2026-04-10T20:48:17Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
   ],
   "plan_granularity": "quarter",
   "parallel_mode": "in-repo",
-  "milestone": "",
-  "build_baseline_sha": "16603cfe931d6cbc39c207ed95c11eef42522605"
+  "milestone": "Crowned Anthill",
+  "build_baseline_sha": "16603cfe931d6cbc39c207ed95c11eef42522605",
+  "milestone_updated_at": "2026-04-10T20:48:17Z"
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

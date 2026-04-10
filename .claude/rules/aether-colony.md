@@ -146,9 +146,28 @@ Workers are assigned to castes based on task type:
 State is stored in `.aether/data/COLONY_STATE.json` and includes:
 - Colony goal and current phase
 - Task breakdown and completion status
+- Parallel mode (`parallel_mode`: "in-repo" or "worktree")
 - Instincts (learned patterns with confidence scores)
 - Pheromone signals (FOCUS/REDIRECT/FEEDBACK)
 - Event history
+
+## Parallel Mode
+
+Parallel mode controls how workers are isolated during builds with multiple tasks:
+
+| Mode | Behavior |
+|------|----------|
+| `in-repo` | All workers share the same repository directory (default) |
+| `worktree` | Each worker gets its own git worktree for isolated file changes |
+
+**Setting the mode:**
+- During `/ant:init` — you are prompted to choose a parallel strategy
+- After init — run `aether parallel-mode set <mode>` to change it
+
+**Checking the mode:**
+- `/ant:status` — colony dashboard shows the current parallel mode
+- `/ant:resume` — session restore displays the parallel mode
+- `aether parallel-mode get` — returns the current mode directly
 
 ## Pheromone System
 
