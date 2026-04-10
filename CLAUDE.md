@@ -1,6 +1,6 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.1 (npm package version in package.json)
+> **Current Version:** v1.0.0
 > **Last Updated:** 2026-04-09
 
 ---
@@ -722,4 +722,4 @@ For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
 
 ---
 
-*Updated for Aether v1.0.0 — 2026-04-05*
+*Updated for Aether v1.0.0 — 2026-04-10*
