@@ -1,205 +1,382 @@
 {
   "version": "3.0",
-  "goal": "Audit and fix the Aether update/distribution system so companion files always sync correctly, verify the pheromone pipeline works end-to-end, and ensure the system is production-ready",
-  "colony_name": "Aether Systems Audit",
-  "colony_version": 1,
+  "goal": "Add worktree mode selection to colony init: prompt user to choose parallel strategy (worktrees vs in-repo), save preference to colony state",
+  "colony_name": null,
+  "colony_version": 0,
   "state": "READY",
-  "current_phase": 5,
-  "session_id": "session_1775752815_22021",
-  "initialized_at": "2026-04-09T16:40:15Z",
+  "current_phase": 2,
+  "session_id": "add_1775830632",
+  "initialized_at": "2026-04-10T16:17:12.987162+02:00",
   "build_started_at": null,
   "plan": {
-    "generated_at": "2026-04-09T17:00:00Z",
-    "confidence": 92,
+    "generated_at": "2026-04-10T15:01:54Z",
+    "confidence": 95.0,
     "phases": [
       {
-        "description": "Remove stale worktrees, add update/install tests, fix setup protection parity",
+        "description": "Add ParallelMode type and field to ColonyState, wire into state-mutate.",
         "id": 1,
-        "name": "Cleanup and Distribution Tests",
+        "name": "Data Model and Constants",
         "status": "completed",
         "success_criteria": [
-          "All install/setup/update tests pass",
-          "Stale worktrees removed",
-          "setup has same protection as update"
+          "ParallelMode type with Valid() exists",
+          "ColonyState has parallel_mode field",
+          "state-mutate validates parallel_mode"
         ],
         "tasks": [
           {
-            "goal": "Remove 5 remaining stale worktrees from cmd/.aether/worktrees/",
+            "constraints": [
+              "Follow PlanGranularity pattern",
+              "Valid values: in-repo and worktree only"
+            ],
+            "goal": "Add ParallelMode type with constants (worktree, in-repo) and Valid() method to pkg/colony/colony.go",
+            "hints": [
+              "See PlanGranularity type at pkg/colony/colony.go:50-70"
+            ],
             "id": "1.1",
-            "status": "pending",
+            "status": "completed",
             "success_criteria": [
-              "cmd/.aether/worktrees/ is empty"
+              "ParallelMode type exists with Valid() method",
+              "go build ./pkg/colony/ succeeds"
             ]
           },
           {
-            "goal": "Add update command tests covering normal overwrite, dry-run, force, and protected dirs",
+            "constraints": [
+              "json tag parallel_mode,omitempty",
+              "Backward compatible"
+            ],
+            "goal": "Add ParallelMode field to ColonyState struct with omitempty",
+            "hints": [
+              "See Worktrees field at pkg/colony/colony.go:110"
+            ],
             "id": "1.2",
-            "status": "pending",
+            "status": "completed",
             "success_criteria": [
-              "go test ./cmd/ -run TestUpdate.* passes"
+              "ColonyState has ParallelMode field",
+              "JSON without parallel_mode deserializes"
             ]
           },
           {
-            "goal": "Add protected-dirs/files params to setupSyncDir matching update pattern",
+            "constraints": [
+              "Validate against ParallelMode constants"
+            ],
+            "goal": "Add parallel_mode to state-mutate field whitelist with validation",
+            "hints": [
+              "state-write at cmd/state_extra.go:80-116"
+            ],
             "id": "1.3",
-            "status": "pending",
+            "status": "completed",
             "success_criteria": [
-              "setup respects data/ and dreams/ boundaries"
+              "state-mutate accepts worktree/in-repo",
+              "rejects invalid values"
             ]
           },
           {
-            "goal": "End-to-end install-\u003esetup-\u003eupdate flow test in temp directory",
+            "goal": "Write tests for ParallelMode type, validation, backward compat, state-mutate",
             "id": "1.4",
-            "status": "pending",
+            "status": "completed",
             "success_criteria": [
-              "All three commands succeed; changes propagate"
+              "All new tests pass"
             ]
           }
         ]
       },
       {
-        "description": "Verify the full pheromone lifecycle with integration tests: write, read, prime, display, expire, dedup",
+        "description": "Add CLI subcommands following plan-granularity pattern.",
         "id": 2,
-        "name": "Pheromone Pipeline Verification",
-        "status": "completed",
+        "name": "parallel-mode get/set subcommand",
+        "status": "pending",
         "success_criteria": [
-          "Full lifecycle test passes",
-          "colony-prime includes signals",
-          "Dedup works correctly"
+          "parallel-mode get/set work",
+          "defaults to in-repo"
         ],
         "tasks": [
           {
-            "goal": "Create integration test for full pheromone lifecycle (write-\u003eread-\u003eprime-\u003edisplay-\u003eexpire)",
+            "constraints": [
+              "Follow colony-depth pattern",
+              "get returns default in-repo when unset"
+            ],
+            "goal": "Add parallel-mode get/set subcommands to cmd/colony_cmds.go",
+            "hints": [
+              "See cmd/colony_cmds.go:148"
+            ],
             "id": "2.1",
             "status": "pending",
             "success_criteria": [
-              "All 6 pipeline steps pass"
+              "parallel-mode get returns mode",
+              "parallel-mode set --mode worktree persists"
             ]
           },
           {
-            "goal": "Test colony-prime includes pheromone signals in assembled context",
+            "goal": "Write tests for parallel-mode get/set",
             "id": "2.2",
             "status": "pending",
             "success_criteria": [
-              "Pheromone section appears in colony-prime output"
-            ]
-          },
-          {
-            "goal": "Test pheromone deduplication reinforces instead of duplicating",
-            "id": "2.3",
-            "status": "pending",
-            "success_criteria": [
-              "Second write returns replaced:true, only 1 signal exists"
+              "go test ./cmd/ -run TestParallelMode passes"
             ]
           }
         ]
       },
       {
-        "description": "Fix colony-prime to include hive wisdom and user preferences (currently only in pr-context). Test budget enforcement and priority-based trimming.",
+        "description": "Update colony-state template to document the new field.",
         "id": 3,
-        "name": "Colony-Prime Context Parity",
-        "status": "completed",
+        "name": "Template update",
+        "status": "pending",
         "success_criteria": [
-          "colony-prime has parity with pr-context for wisdom/preferences",
-          "Budget enforcement tested"
+          "Template documents new field"
         ],
         "tasks": [
           {
-            "goal": "Add hive wisdom and user preferences loading to colony-prime context assembly",
+            "goal": "Add parallel_mode to colony-state.template.json with documentation",
             "id": "3.1",
             "status": "pending",
             "success_criteria": [
-              "colony-prime output includes HIVE WISDOM and USER PREFERENCES sections"
-            ]
-          },
-          {
-            "goal": "Test colony-prime respects 8000-char budget and trims low-priority sections first",
-            "id": "3.2",
-            "status": "pending",
-            "success_criteria": [
-              "Pheromones (priority 9) never trimmed before learnings (priority 3)"
-            ]
-          },
-          {
-            "goal": "Test compact mode uses 4000-char budget with correct trimming order",
-            "id": "3.3",
-            "status": "pending",
-            "success_criteria": [
-              "Compact mode trims correctly by priority"
+              "Template has _comment_parallel_mode and parallel_mode field"
             ]
           }
         ]
       },
       {
-        "description": "Fix colony-state.template.json to remove dead __PLACEHOLDER__ values. Document that init_cmd.go constructs state directly. Verify init produces clean state.",
+        "description": "Add mode selection to init.md for both Claude Code and OpenCode.",
         "id": 4,
-        "name": "Template and Placeholder Cleanup",
-        "status": "completed",
+        "name": "Init slash command user prompt",
+        "status": "pending",
         "success_criteria": [
-          "No placeholder strings in templates or generated state",
-          "Placeholder commands documented"
+          "User sees mode selection in both platforms",
+          "Choice persisted"
         ],
         "tasks": [
           {
-            "goal": "Update colony-state.template.json replacing __PLACEHOLDER__ with example values and add usage note",
+            "constraints": [
+              "Insert between Step 6 and 7",
+              "Default is in-repo"
+            ],
+            "goal": "Add Step 6.5 parallel strategy selection to Claude Code init.md",
             "id": "4.1",
             "status": "pending",
             "success_criteria": [
-              "Template contains no __PLACEHOLDER__ strings"
+              "Step 6.5 exists with mode selection prompt"
             ]
           },
           {
-            "goal": "Add test that init creates COLONY_STATE.json with zero placeholder strings",
+            "constraints": [
+              "Both Go init_cmd.go and init.md template paths"
+            ],
+            "goal": "Pass selected mode to state creation in Step 7 (both fresh and re-init)",
             "id": "4.2",
             "status": "pending",
             "success_criteria": [
-              "No __PLACEHOLDER__ in generated state"
+              "Selected mode persisted in both paths"
             ]
           },
           {
-            "goal": "Document or remove pheromone-snapshot-inject and pheromone-merge-back placeholder commands",
+            "goal": "Add mode display to Step 8 result output",
             "id": "4.3",
             "status": "pending",
             "success_criteria": [
-              "Commands either implemented or marked deferred in help text"
+              "Success output includes parallel strategy"
+            ]
+          },
+          {
+            "goal": "Add matching changes to OpenCode init.md",
+            "id": "4.4",
+            "status": "pending",
+            "success_criteria": [
+              "OpenCode init prompts for and persists parallel mode"
             ]
           }
         ]
       },
       {
-        "description": "Run full test suite with race detection, verify build, and smoke test the complete flow",
+        "description": "Wire build-wave.md to conditionally allocate worktrees when parallel_mode is worktree.",
         "id": 5,
-        "name": "Production Readiness Verification",
-        "status": "completed",
+        "name": "Build-wave conditional worktree wiring",
+        "status": "pending",
         "success_criteria": [
-          "Full test suite passes with -race",
-          "Binary builds cleanly",
-          "End-to-end smoke test succeeds"
+          "Build-wave conditionally uses worktrees",
+          "clean skip for in-repo"
         ],
         "tasks": [
           {
-            "goal": "Run full test suite with race detection (go test ./... -race)",
+            "constraints": [
+              "worktree-allocate already has --phase and --agent flags (cmd/worktree.go:757-758)",
+              "Queen executes bash from playbook directly"
+            ],
+            "goal": "Add pre-wave worktree allocation step to build-wave.md",
             "id": "5.1",
             "status": "pending",
             "success_criteria": [
-              "1075+ tests pass",
-              "Zero race conditions"
+              "Worktrees allocated when mode is worktree",
+              "skipped when in-repo"
             ]
           },
           {
-            "goal": "Run go vet and build verification",
+            "goal": "Inject worktree_path into Builder prompt when allocated",
             "id": "5.2",
             "status": "pending",
             "success_criteria": [
-              "Both exit 0 with no warnings"
+              "Builder prompt includes worktree path"
             ]
           },
           {
-            "goal": "Smoke test: install-\u003esetup-\u003einit-\u003epheromone-write-\u003ecolony-prime flow",
+            "constraints": [
+              "Non-blocking: failures create blockers"
+            ],
+            "goal": "Add post-wave merge-back using worktree-merge-back (NOT deprecated worktree-merge)",
             "id": "5.3",
             "status": "pending",
             "success_criteria": [
-              "All commands produce valid JSON with expected fields"
+              "Worktree branches merged after each wave"
+            ]
+          },
+          {
+            "goal": "Add parallel_mode read to build-prep.md",
+            "id": "5.4",
+            "status": "pending",
+            "success_criteria": [
+              "build-prep reads and displays parallel_mode"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Inject parallel_mode into worker context.",
+        "id": 6,
+        "name": "Colony-prime context injection",
+        "status": "pending",
+        "success_criteria": [
+          "Workers receive parallel mode via colony-prime"
+        ],
+        "tasks": [
+          {
+            "constraints": [
+              "Default to in-repo when empty"
+            ],
+            "goal": "Add parallel_mode to colony-prime prompt_section output",
+            "id": "6.1",
+            "status": "pending",
+            "success_criteria": [
+              "colony-prime includes Parallel Mode line"
+            ]
+          },
+          {
+            "goal": "Write test for colony-prime parallel_mode injection",
+            "id": "6.2",
+            "status": "pending",
+            "success_criteria": [
+              "Tests pass for set and unset cases"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Show parallel mode in status, resume commands.",
+        "id": 7,
+        "name": "Status and resume display",
+        "status": "pending",
+        "success_criteria": [
+          "Status and resume show parallel mode"
+        ],
+        "tasks": [
+          {
+            "goal": "Add parallel_mode display to status command output",
+            "id": "7.1",
+            "status": "pending",
+            "success_criteria": [
+              "Status shows parallel strategy"
+            ]
+          },
+          {
+            "goal": "Add parallel_mode to resume command context",
+            "id": "7.2",
+            "status": "pending",
+            "success_criteria": [
+              "Resume shows parallel strategy"
+            ]
+          },
+          {
+            "goal": "Update OpenCode status and resume for parity",
+            "id": "7.3",
+            "status": "pending",
+            "success_criteria": [
+              "OpenCode parity achieved"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Replace dead deprecation block with mode-aware worktree merge-back.",
+        "id": 8,
+        "name": "Continue-advance worktree awareness",
+        "status": "pending",
+        "success_criteria": [
+          "Clean mode-aware merge-back in continue-advance"
+        ],
+        "tasks": [
+          {
+            "constraints": [
+              "Preserve last_merged_branch/last_merge_sha for Steps 2.0.5/2.0.6"
+            ],
+            "goal": "Replace dead worktree-merge deprecation block (lines 331-377) with mode-aware merge using worktree-merge-back",
+            "id": "8.1",
+            "status": "pending",
+            "success_criteria": [
+              "Dead deprecation block replaced",
+              "calls worktree-merge-back when worktree mode"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "End-to-end verification.",
+        "id": 9,
+        "name": "Integration tests",
+        "status": "pending",
+        "success_criteria": [
+          "Full test suite passes"
+        ],
+        "tasks": [
+          {
+            "goal": "Write integration test for parallel-mode state round-trip",
+            "id": "9.1",
+            "status": "pending",
+            "success_criteria": [
+              "Round-trip set/get works"
+            ]
+          },
+          {
+            "goal": "Run full test suite: go test ./... -race, go vet, go build",
+            "id": "9.2",
+            "status": "pending",
+            "success_criteria": [
+              "All 1075+ tests pass",
+              "binary builds"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Update CLAUDE.md and colony rules.",
+        "id": 10,
+        "name": "Documentation updates",
+        "status": "pending",
+        "success_criteria": [
+          "Documentation updated"
+        ],
+        "tasks": [
+          {
+            "goal": "Update CLAUDE.md to document parallel_mode in colony state and init workflow",
+            "id": "10.1",
+            "status": "pending",
+            "success_criteria": [
+              "CLAUDE.md references parallel_mode"
+            ]
+          },
+          {
+            "goal": "Update .claude/rules/aether-colony.md if needed",
+            "id": "10.2",
+            "status": "pending",
+            "success_criteria": [
+              "Documentation consistent"
             ]
           }
         ]
@@ -209,99 +386,19 @@
   "memory": {
     "phase_learnings": [
       {
-        "id": "learning_1775767746",
+        "id": "learning_1775836415",
         "learnings": [
           {
-            "claim": "Pheromone deduplication had an off-by-one bug: ReinforcementCount initialized to 1 instead of 0, causing first reinforcement to read as 2",
+            "claim": "String enum types in Go should follow the PlanGranularity pattern: type alias + constants + Valid() method + ErrInvalid* sentinel",
             "disproven_by": null,
-            "evidence": "8 dedup tests confirmed the fix works correctly after changing initial value to 0",
-            "status": "validated",
-            "tested": true
-          },
-          {
-            "claim": "pheromone-display outputs text table before JSON envelope, requiring first-brace extraction for test parsing",
-            "disproven_by": null,
-            "evidence": "10 lifecycle tests parse display output by finding first brace character",
-            "status": "validated",
-            "tested": true
-          },
-          {
-            "claim": "colony-prime --compact correctly injects pheromone signals into assembled context with type markers [FOCUS] [REDIRECT] [FEEDBACK]",
-            "disproven_by": null,
-            "evidence": "TestColonyPrime_IncludesPheromoneSignals verifies all three types appear with formatted content",
-            "status": "validated",
+            "evidence": "ParallelMode type implemented following PlanGranularity pattern, all tests pass",
+            "status": "hypothesis",
             "tested": true
           }
         ],
-        "phase": 2,
-        "phase_name": "Pheromone Pipeline Verification",
-        "timestamp": "2026-04-09T20:55:49Z"
-      },
-      {
-        "id": "learning_1775769601",
-        "learnings": [
-          {
-            "claim": "colony-prime can share readHiveWisdom and readUserPreferences helpers with pr-context for code reuse",
-            "disproven_by": null,
-            "evidence": "Both commands use the same helpers from context.go, maintaining parity",
-            "status": "validated",
-            "tested": true
-          },
-          {
-            "claim": "Priority-based budget trimming works by sorting sections ascending and fitting within budget",
-            "disproven_by": null,
-            "evidence": "17 budget tests verify trim order: learnings(2) \u003c decisions(3) \u003c hive(4) \u003c state(5) \u003c instincts(6) \u003c prefs(7) \u003c pheromones(9)",
-            "status": "validated",
-            "tested": true
-          }
-        ],
-        "phase": 3,
-        "phase_name": "Colony-Prime Context Parity",
-        "timestamp": "2026-04-09T21:20:01Z"
-      },
-      {
-        "id": "learning_1775770456",
-        "learnings": [
-          {
-            "claim": "Stub commands should be marked Deprecated in Cobra to hide from help while remaining accessible",
-            "disproven_by": null,
-            "evidence": "pheromone-snapshot-inject and pheromone-merge-back marked deprecated, 4 tests verify",
-            "status": "validated",
-            "tested": true
-          },
-          {
-            "claim": "Templates should have concrete example values, not fill-in-the-blank placeholders, to serve as reference",
-            "disproven_by": null,
-            "evidence": "TestInitCmd_NoPlaceholderStrings verifies generated state has zero placeholder patterns",
-            "status": "validated",
-            "tested": true
-          }
-        ],
-        "phase": 4,
-        "phase_name": "Template and Placeholder Cleanup",
-        "timestamp": "2026-04-09T21:34:16Z"
-      },
-      {
-        "id": "learning_1775822856",
-        "learnings": [
-          {
-            "claim": "state-mutate can corrupt the events field by writing the jq expression as a literal string instead of evaluating it",
-            "disproven_by": null,
-            "evidence": "COLONY_STATE.json events field was a string containing the jq expression; fixed by passing events array via --argjson",
-            "status": "validated",
-            "tested": true
-          },
-          {
-            "claim": "Test assertions should accept variable data from real files (e.g., wisdom XML with 0+ entries) rather than hardcoded counts",
-            "disproven_by": null,
-            "evidence": "TestImportWisdomFromRealShellXML expected 0 entries but real XML had 41; changed to t.Log for empty case",
-            "status": "validated",
-            "tested": true
-          }
-        ],
-        "phase": 5,
-        "phase_name": "Production Readiness Verification",
-        "timestamp": "2026-04-10T12:07:36Z"
+        "phase": 1,
+        "phase_name": "Data Model and Constants",
+        "timestamp": "2026-04-10T15:53:35Z"
       }
     ],
     "decisions": null,
@@ -313,24 +410,14 @@
   },
   "signals": [],
   "graveyards": [],
-  "events": [
-    "2026-04-09T16:40:15Z|colony_initialized|init|Colony initialized",
-    "2026-04-09T17:00:00Z|plan_generated|plan|Generated 5 phases with 92% confidence",
-    "2026-04-09T17:01:58Z|phase_started|build|Phase 1: Cleanup and Distribution Tests started",
-    "2026-04-09T20:17:02Z|phase_advanced|continue|Completed Phase 1, advancing to Phase 2",
-    "2026-04-09T20:27:25Z|phase_started|build|Phase 2: Pheromone Pipeline Verification started",
-    "2026-04-09T20:56:18Z|phase_started|build|Phase 3: Colony-Prime Context Parity started",
-    "2026-04-09T21:20:01Z|phase_advanced|continue|Completed Phase 3, advancing to Phase 4",
-    "2026-04-09T21:22:40Z|phase_started|build|Phase 4: Template and Placeholder Cleanup started",
-    "2026-04-09T21:34:16Z|phase_advanced|continue|Completed Phase 4, advancing to Phase 5",
-    "2026-04-09T21:44:31Z|phase_started|build|Phase 5: Production Readiness Verification started",
-    ""
-  ],
-  "created_at": "2026-04-09T16:40:15Z",
-  "updated_at": "2026-04-09T17:00:00Z",
-  "phase_learnings": [],
-  "instincts": [],
-  "build_baseline_sha": "f5bf2733442003108b93dacd75cb23b961283459",
-  "milestone": "Crowned Anthill"
+  "events": null,
+  "plan_granularity": "quarter",
+  "milestone": ""
 }
+
+
+
+
+
+
 

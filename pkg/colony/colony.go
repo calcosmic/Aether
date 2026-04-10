@@ -69,6 +69,26 @@ func (g PlanGranularity) Valid() bool {
 // ErrInvalidGranularity is returned when a granularity value is not recognized.
 var ErrInvalidGranularity = fmt.Errorf("invalid plan granularity")
 
+// ParallelMode represents the parallel execution strategy for colony work.
+type ParallelMode string
+
+const (
+	ModeInRepo    ParallelMode = "in-repo"
+	ModeWorktree  ParallelMode = "worktree"
+)
+
+// Valid reports whether m is a recognized parallel mode.
+func (m ParallelMode) Valid() bool {
+	switch m {
+	case ModeInRepo, ModeWorktree:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidParallelMode is returned when a parallel mode value is not recognized.
+var ErrInvalidParallelMode = fmt.Errorf("invalid parallel mode")
+
 // WorktreeEntry tracks a single worktree's lifecycle in COLONY_STATE.json.
 type WorktreeEntry struct {
 	ID           string         `json:"id"`
@@ -105,6 +125,7 @@ type ColonyState struct {
 	Events             []string    `json:"events"`
 	ColonyDepth        string           `json:"colony_depth,omitempty"`
 	PlanGranularity    PlanGranularity  `json:"plan_granularity,omitempty"`
+	ParallelMode       ParallelMode     `json:"parallel_mode,omitempty"`
 	Milestone          string           `json:"milestone"`
 	MilestoneUpdatedAt *string         `json:"milestone_updated_at,omitempty"`
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`

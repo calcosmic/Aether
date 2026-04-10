@@ -207,6 +207,13 @@ func executeFieldMode(cmd *cobra.Command, field string) error {
 		state.PlanGranularity = g
 	case "colony_name":
 		state.ColonyName = &value
+	case "parallel_mode":
+		pm := colony.ParallelMode(value)
+		if !pm.Valid() {
+			outputError(1, fmt.Sprintf("invalid parallel mode %q: must be in-repo or worktree", value), nil)
+			return nil
+		}
+		state.ParallelMode = pm
 	default:
 		data, err := json.Marshal(state)
 		if err != nil {
@@ -817,6 +824,8 @@ var stateReadFieldCmd = &cobra.Command{
 			result = state.ColonyName
 		case "session_id":
 			result = state.SessionID
+		case "parallel_mode":
+			result = string(state.ParallelMode)
 		default:
 			outputError(1, fmt.Sprintf("unknown field %q", field), nil)
 			return nil
