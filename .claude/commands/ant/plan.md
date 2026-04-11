@@ -672,7 +672,7 @@ Ready to build.
 Update the session tracking file to enable `/ant:resume` after context clear:
 
 ```bash
-aether session-update --command "/ant:plan" --worker "/ant:build 1" --summary "Plan generated with {confidence}% confidence, {N} phases"
+aether session-update --command "/ant:plan" --suggested-next "/ant:build 1" --summary "Plan generated with {confidence}% confidence, {N} phases"
 ```
 
 ### Step 7: Display Plan

@@ -89,7 +89,7 @@ aether spawn-complete --id "{scout_name}" --status "completed" --summary "Quick 
 
 Run using the Bash tool with description "Updating session...":
 ```bash
-aether session-update --command "/ant:quick" --worker "" --summary "Quick query: {query truncated to 60 chars}" 2>/dev/null || true
+aether session-update --command "/ant:quick" --summary "Quick query: {query truncated to 60 chars}" 2>/dev/null || true
 ```
 
 **NOTE:** This command does NOT:

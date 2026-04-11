@@ -230,7 +230,7 @@ Pending decisions: {N} — run `pending-decision-list` to review
 ```
 
 Update session:
-`aether session-update --command "/ant:run" --worker "/ant:run" --summary "Autopilot: {N} phases, now Phase {current}"`
+`aether session-update --command "/ant:run" --suggested-next "/ant:run" --summary "Autopilot: {N} phases, now Phase {current}"`
 
 ## Execution Contract
 

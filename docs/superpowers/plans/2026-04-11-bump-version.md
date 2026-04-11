@@ -1,0 +1,244 @@
+# `/ant:bump-version` Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Create a slash command that bumps the version across all files, rebuilds the binary, commits, pushes, and tags to trigger GoReleaser.
+
+**Architecture:** Single Claude command file (`.claude/commands/ant/bump-version.md`) that orchestrates the bump using Edit, Bash, and git tools. No Go code changes. The command reads the current version from `package.json`, validates the target version, updates 6 file locations, rebuilds, installs, commits, pushes, and tags.
+
+**Tech Stack:** Claude Code slash command (markdown), bash, git, make
+
+---
+
+### Task 1: Create the bump-version command
+
+**Files:**
+- Create: `.claude/commands/ant/bump-version.md`
+
+- [ ] **Step 1: Write the command file**
+
+Create `.claude/commands/ant/bump-version.md` with this content:
+
+```markdown
+---
+name: ant:bump-version
+description: "🚀🐜 Bump version across all files, rebuild, push, and tag for release"
+---
+
+You are the **Queen Ant Colony**. Bump the Aether version everywhere and trigger a release.
+
+## Instructions
+
+Parse `$ARGUMENTS` to extract the target version string (e.g. "1.1.0").
+If no argument provided, display:
+```
+Usage: /ant:bump-version <semver>
+Example: /ant:bump-version 1.1.0
+```
+Stop here.
+
+### Step 1: Validate
+
+1. Check the argument matches semver pattern `^[0-9]+\.[0-9]+\.[0-9]+$`. If not, display "Invalid version format. Use X.Y.Z (e.g. 1.1.0)" and stop.
+2. Read the current version from `package.json` (the `"version"` field).
+3. If the target version equals the current version, display "Already at v{version}. Nothing to do." and stop.
+
+Store `old_version` and `new_version` for use in replacements.
+
+### Step 2: Verify Files Exist
+
+Check that all target files exist before making any changes. If any are missing, report which one and stop:
+
+```bash
+for f in package.json .aether/version.json README.md CLAUDE.md docs/phase3-section-roadmap.md; do
+  test -f "$f" || echo "MISSING: $f"
+done
+```
+
+If any file is missing, display "Cannot proceed: {file} not found." and stop.
+
+### Step 3: Update package.json
+
+Use the Edit tool to replace `"version": "{old_version}"` with `"version": "{new_version}"` in `package.json`.
+
+### Step 4: Update .aether/version.json
+
+Use the Edit tool to replace `"version":"{old_version}"` with `"version":"{new_version}"` in `.aether/version.json`.
+
+### Step 5: Update CLAUDE.md (3 replacements)
+
+Use the Edit tool on `CLAUDE.md` for these three replacements:
+
+1. Header: `> **Current Version:** v{old_version}` → `> **Current Version:** v{new_version}`
+2. Table: `| Version | v{old_version} |` → `| Version | v{new_version} |`
+3. Footer: `*Updated for Aether v{old_version}` → `*Updated for Aether v{new_version} — {current date in YYYY-MM-DD}`
+
+### Step 6: Update README.md (2 replacements)
+
+Use the Edit tool on `README.md` for these two replacements:
+
+1. Roadmap header: `### 🎉 v{old_version} -- Released (Current)` → `### 🎉 v{new_version} -- Released (Current)`
+2. Colony badge: `badge/colony-v{old_version}-gold` → `badge/colony-v{new_version}-gold`
+
+### Step 7: Update docs/phase3-section-roadmap.md
+
+Use the Edit tool to replace `### v{old_version} -- Released (Current)` with `### v{new_version} -- Released (Current)` in `docs/phase3-section-roadmap.md`.
+
+### Step 8: Rebuild Binary
+
+Run using the Bash tool:
+```bash
+make build
+```
+
+If it fails, display the error and stop before committing.
+
+### Step 9: Update Hub
+
+Run using the Bash tool:
+```bash
+aether install
+```
+
+### Step 10: Verify Consistency
+
+Run a quick check that all files agree on the new version:
+```bash
+echo "package.json:" && grep '"version"' package.json
+echo ".aether/version.json:" && cat .aether/version.json
+echo "hub:" && cat ~/.aether/version.json
+echo "binary:" && ./aether version
+```
+
+If any file still shows the old version, report the mismatch and stop.
+
+### Step 11: Commit and Push
+
+```bash
+git add package.json .aether/version.json CLAUDE.md README.md docs/phase3-section-roadmap.md
+git commit -m "bump version to v{new_version}"
+git push origin main
+```
+
+If push fails, display the error and tell the user to push manually.
+
+### Step 12: Tag and Push Tag
+
+```bash
+git tag v{new_version}
+git push origin v{new_version}
+```
+
+If the tag already exists, display "Tag v{new_version} already exists." and stop before pushing.
+
+### Step 13: Summary
+
+Display in plain English:
+
+```
+Done! Version bumped to v{new_version}.
+
+What happened:
+- Updated 6 files (package.json, version.json, CLAUDE.md, README.md, roadmap, hub)
+- Rebuilt the aether binary
+- Committed and pushed to main
+- Tagged v{new_version} and pushed
+
+What happens next:
+GoReleaser is now building binaries for Mac, Windows, and Linux.
+The release will appear in a few minutes at:
+https://github.com/calcosmic/Aether/releases/tag/v{new_version}
+```
+
+<failure_modes>
+### Build Failure
+If `make build` fails:
+- Do NOT commit or tag
+- Display the build error
+- Revert all file changes (restore old_version)
+- Tell user to fix the build issue and retry
+
+### Push Failure
+If `git push` fails:
+- Changes are committed locally but not pushed
+- Display the error
+- Tell user: "Changes are committed locally. Fix the push issue and run: git push origin main && git push origin v{new_version}"
+
+### Tag Already Exists
+If `git tag v{new_version}` fails because the tag exists:
+- All file changes are committed and pushed (good)
+- Display: "Tag v{new_version} already exists locally or remotely. Delete it first if you want to re-release."
+</failure_modes>
+
+<success_criteria>
+Command is complete when:
+- All 6 files show the new version
+- Go binary reports the new version
+- Hub version.json shows the new version
+- Commit is pushed to main
+- Tag is pushed to origin
+- User sees the summary with release link
+</success_criteria>
+```
+
+- [ ] **Step 2: Verify the command is discoverable**
+
+Run:
+```bash
+ls -la .claude/commands/ant/bump-version.md
+```
+
+Expected: file exists, readable.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add .claude/commands/ant/bump-version.md
+git commit -m "feat: add /ant:bump-version slash command"
+```
+
+---
+
+### Task 2: Test the command manually (dry run verification)
+
+This task verifies the command works by testing each step manually before the user runs it for real.
+
+**Files:**
+- No new files — manual verification only
+
+- [ ] **Step 1: Verify all replacement patterns exist in current files**
+
+Run these grep checks to confirm the patterns the command targets actually exist:
+
+```bash
+echo "=== CLAUDE.md header ===" && grep "Current Version" CLAUDE.md
+echo "=== CLAUDE.md table ===" && grep "| Version |" CLAUDE.md
+echo "=== CLAUDE.md footer ===" && grep "Updated for Aether" CLAUDE.md
+echo "=== README roadmap ===" && grep "Released (Current)" README.md
+echo "=== README badge ===" && grep "colony-v" README.md
+echo "=== roadmap doc ===" && grep "Released (Current)" docs/phase3-section-roadmap.md
+echo "=== package.json ===" && grep '"version"' package.json
+echo "=== .aether/version.json ===" && cat .aether/version.json
+```
+
+Expected: every grep returns a match containing "1.0.0".
+
+- [ ] **Step 2: Verify make build works with current state**
+
+```bash
+make build && ./aether version
+```
+
+Expected: outputs "1.0.0" (or whatever the current version is).
+
+- [ ] **Step 3: Verify aether install updates hub correctly**
+
+```bash
+aether install && cat ~/.aether/version.json
+```
+
+Expected: hub version matches package.json.
+
+- [ ] **Step 4: No commit needed**
+
+This task is verification only — no changes to commit.

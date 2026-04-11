@@ -1193,5 +1193,5 @@ aether print-next-up
 Update the session tracking file to enable `/ant:resume` after context clear:
 
 ```bash
-aether session-update --command "/ant:build {phase_id}" --worker "/ant:continue" --summary "Phase {phase_id} build completed: {synthesis.status}"
+aether session-update --command "/ant:build {phase_id}" --suggested-next "/ant:continue" --summary "Phase {phase_id} build completed: {synthesis.status}"
 ```

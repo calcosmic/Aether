@@ -1427,4 +1427,4 @@ Output:
 
 Update the session tracking file to enable `/ant:resume` after context clear:
 
-Run using the Bash tool with description "Saving session state...": `aether session-update --command "/ant:continue" --worker "/ant:build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"`
+Run using the Bash tool with description "Saving session state...": `aether session-update --command "/ant:continue" --suggested-next "/ant:build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"`
