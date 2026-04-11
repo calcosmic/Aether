@@ -417,4 +417,4 @@ aether print-next-up "$state" "$current_phase" "$total_phases"
 
 Update the session tracking file to enable `/ant:resume` after context clear:
 
-Run using the Bash tool with description "Saving build session...": `aether session-update "/ant:build {phase_id}" "/ant:continue" "Phase {phase_id} build completed: {synthesis.status}"`
+Run using the Bash tool with description "Saving build session...": `aether session-update --command "/ant:build {phase_id}" --suggested-next "/ant:continue" --summary "Phase {phase_id} build completed: {synthesis.status}"`

@@ -753,6 +753,12 @@ Display result: `Pushed to origin/{current_branch}` on success, or `Push skipped
 
 **Safety:** Never auto-push. Always require explicit user approval via AskUserQuestion.
 
+### Step 7.5: Update Session
+
+Update the session tracking file to reflect the completed seal:
+
+Run using the Bash tool with description "Saving seal session...": `aether session-update --command "/ant:seal" --suggested-next "/ant:entomb" --summary "Colony sealed at Crowned Anthill"`
+
 ### Edge Cases
 
 **Colony already at Crowned Anthill:**
