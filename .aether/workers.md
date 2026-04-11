@@ -32,9 +32,9 @@ When logging activity, include the ant name:
 
 ```bash
 # Log with personality
-aether activity-log "CREATED" "Hammer-42 (Builder)" "Constructed auth module with JWT support"
-aether activity-log "RESEARCH" "Swift-7 (Scout)" "Discovered existing validation patterns in src/utils"
-aether activity-log "MODIFIED" "Vigil-23 (Watcher)" "Inspected test coverage: 87% achieved"
+aether activity-log --command "CREATED" --details "Hammer-42 (Builder): Constructed auth module with JWT support"
+aether activity-log --command "RESEARCH" --details "Swift-7 (Scout): Discovered existing validation patterns in src/utils"
+aether activity-log --command "MODIFIED" --details "Vigil-23 (Watcher): Inspected test coverage: 87% achieved"
 ```
 
 ### Spawn Tracking
@@ -43,10 +43,10 @@ Always log spawns to the spawn tree for visualization:
 
 ```bash
 # When spawning a worker
-aether spawn-log "Prime-1" "builder" "Hammer-42" "implementing auth module"
+aether spawn-log --parent "Prime-1" --caste "builder" --name "Hammer-42" --task "implementing auth module" --depth 0
 
 # When worker completes
-aether spawn-complete "Hammer-42" "completed" "auth module with 5 tests"
+aether spawn-complete --name "Hammer-42" --status "completed" --summary "auth module with 5 tests"
 ```
 
 ---
@@ -239,7 +239,7 @@ See `.aether/docs/disciplines/coding-standards.md` for full discipline reference
 Log progress as you work:
 
 ```bash
-aether activity-log "ACTION" "{caste}" "description"
+aether activity-log --command "ACTION" --details "{caste}: description"
 ```
 
 Actions: CREATED (path + lines), MODIFIED (path), RESEARCH (finding), SPAWN (caste + reason), ERROR (description)
@@ -325,7 +325,7 @@ child_name=$(aether generate-ant-name "{caste}" | jq -r '.result')
 
 **Step 3: Log the spawn and update swarm display**
 ```bash
-aether spawn-log "{your_name}" "{child_caste}" "{child_name}" "{task_summary}"
+aether spawn-log --parent "{your_name}" --caste "{child_caste}" --name "{child_name}" --task "{task_summary}" --depth 0
 aether swarm-display-update "{child_name}" "{child_caste}" "excavating" "{task_summary}" "{your_name}" '{"read":0,"grep":0,"edit":0,"bash":0}' 0 "fungus_garden" 10
 ```
 
@@ -372,7 +372,7 @@ Return a compressed summary:
 **Step 5: Log completion and update swarm display**
 ```bash
 # After Task tool returns
-aether spawn-complete "{child_name}" "{status}" "{summary}"
+aether spawn-complete --name "{child_name}" --status "{status}" --summary "{summary}"
 aether swarm-display-update "{child_name}" "{child_caste}" "completed" "{summary}" "{your_name}" '{"read":5,"grep":3,"edit":2,"bash":1}' 100 "fungus_garden" 100
 ```
 

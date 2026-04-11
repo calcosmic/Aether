@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
@@ -536,6 +537,118 @@ func TestSpawnComplete(t *testing.T) {
 	}
 	if result["status"] != "completed" {
 		t.Errorf("status = %v, want completed", result["status"])
+	}
+}
+
+func TestSpawnCompleteWithSummary(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Create spawn tree with an active entry
+	s.AtomicWrite("spawn-tree.txt", []byte("2026-01-01T00:00:00Z|queen|builder|worker-1|build|1|spawned\n"))
+
+	rootCmd.SetArgs([]string{"spawn-complete", "--name", "worker-1", "--summary", "All tests passing"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["completed"] != true {
+		t.Errorf("completed = %v, want true", result["completed"])
+	}
+	if result["status"] != "completed" {
+		t.Errorf("status = %v, want completed", result["status"])
+	}
+	if result["summary"] != "All tests passing" {
+		t.Errorf("summary = %v, want 'All tests passing'", result["summary"])
+	}
+}
+
+func TestSpawnCompleteSummaryStoredInRecord(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Create spawn tree with an active entry
+	s.AtomicWrite("spawn-tree.txt", []byte("2026-01-01T00:00:00Z|queen|builder|worker-1|build|1|spawned\n"))
+
+	rootCmd.SetArgs([]string{"spawn-complete", "--name", "worker-1", "--summary", "Fixed 3 bugs"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the summary is persisted in the spawn tree file
+	st := agent.NewSpawnTree(s, "spawn-tree.txt")
+	entries, err := st.Parse()
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Summary != "Fixed 3 bugs" {
+		t.Errorf("entry summary = %q, want %q", entries[0].Summary, "Fixed 3 bugs")
+	}
+}
+
+func TestSpawnCompleteWithoutSummaryBackwardCompat(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Create spawn tree with an active entry
+	s.AtomicWrite("spawn-tree.txt", []byte("2026-01-01T00:00:00Z|queen|builder|worker-1|build|1|spawned\n"))
+
+	rootCmd.SetArgs([]string{"spawn-complete", "--name", "worker-1"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["completed"] != true {
+		t.Errorf("completed = %v, want true", result["completed"])
+	}
+
+	// Summary should not appear in output when not provided
+	if _, exists := result["summary"]; exists {
+		t.Errorf("summary should not be present in output when not provided, got %v", result["summary"])
+	}
+
+	// Verify the spawn tree file is valid and can be re-parsed
+	st := agent.NewSpawnTree(s, "spawn-tree.txt")
+	entries, err := st.Parse()
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Status != "completed" {
+		t.Errorf("status = %q, want completed", entries[0].Status)
 	}
 }
 

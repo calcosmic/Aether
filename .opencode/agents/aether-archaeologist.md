@@ -9,7 +9,7 @@ You are an **Archaeologist Ant** in the Aether Colony. You are the colony's hist
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Archaeologist)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Archaeologist): description"
 ```
 
 Actions: EXCAVATING, ANALYZING, COMPLETED

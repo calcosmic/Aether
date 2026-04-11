@@ -90,7 +90,7 @@ The `colony_depth` value is available from build-prep.md cross-stage state.
    Run using the Bash tool with description "Naming oracle ant...": `aether generate-ant-name "oracle"` (store as `{oracle_name}`)
 
 2. **Log spawn:**
-   Run using the Bash tool with description "Dispatching oracle...": `aether spawn-log "Queen" "oracle" "{oracle_name}" "Phase {phase_id} research"`
+   Run using the Bash tool with description "Dispatching oracle...": `aether spawn-log --parent "Queen" --caste "oracle" --name "{oracle_name}" --task "Phase {phase_id} research" --depth 0`
 
 3. **Display announcement:**
 ```
@@ -148,7 +148,7 @@ The `colony_depth` value is available from build-prep.md cross-stage state.
 ```
 
 6. **Log completion:**
-   Run using the Bash tool with description "Recording oracle completion...": `aether spawn-complete "{oracle_name}" "{status}" "{summary}"`
+   Run using the Bash tool with description "Recording oracle completion...": `aether spawn-complete --name "{oracle_name}" --status "{status}" --summary "{summary}"`
 
 ### Step 5.0.2: Architect Design Step (Non-Blocking)
 
@@ -164,7 +164,7 @@ Architect depends on Oracle findings. If Oracle was skipped, Architect must also
    Run using the Bash tool with description "Naming architect ant...": `aether generate-ant-name "architect"` (store as `{architect_name}`)
 
 2. **Log spawn:**
-   Run using the Bash tool with description "Dispatching architect...": `aether spawn-log "Queen" "architect" "{architect_name}" "Phase {phase_id} design"`
+   Run using the Bash tool with description "Dispatching architect...": `aether spawn-log --parent "Queen" --caste "architect" --name "{architect_name}" --task "Phase {phase_id} design" --depth 0`
 
 3. **Display announcement:**
 ```
@@ -223,7 +223,7 @@ Architect depends on Oracle findings. If Oracle was skipped, Architect must also
 ```
 
 6. **Log completion:**
-   Run using the Bash tool with description "Recording architect completion...": `aether spawn-complete "{architect_name}" "{status}" "{summary}"`
+   Run using the Bash tool with description "Recording architect completion...": `aether spawn-complete --name "{architect_name}" --status "{status}" --summary "{summary}"`
 
 ### Step 5.0.5: Select and Announce Workflow Pattern
 
@@ -367,7 +367,7 @@ If `is_integration_phase` is `"true"`:
 
 1. **Generate Ambassador name and dispatch:**
    Run using the Bash tool with description "Naming ambassador...": `aether generate-ant-name "ambassador"` (store as `{ambassador_name}`)
-   Run using the Bash tool with description "Dispatching ambassador...": `aether spawn-log "Queen" "ambassador" "{ambassador_name}" "External integration design"`
+   Run using the Bash tool with description "Dispatching ambassador...": `aether spawn-log --parent "Queen" --caste "ambassador" --name "{ambassador_name}" --task "External integration design" --depth 0`
 
    Display:
    ```
@@ -417,7 +417,7 @@ If `is_integration_phase` is `"true"`:
    - HTTPS only
    - Validate SSL certificates
 
-   Log activity: aether activity-log "RESEARCH" "{Ambassador-Name}" "description"
+   Log activity: aether activity-log --command "RESEARCH" --details "{Ambassador-Name}: description"
 
    Return ONLY this JSON (no other text):
    {
@@ -446,7 +446,7 @@ If `is_integration_phase` is `"true"`:
    Extract from response: `integration_plan`, `env_vars_required`, `error_scenarios_covered`, `blockers`
 
    Log completion:
-   Run using the Bash tool with description "Recording ambassador completion...": `aether spawn-complete "{ambassador_name}" "completed" "Integration design complete"`
+   Run using the Bash tool with description "Recording ambassador completion...": `aether spawn-complete --name "{ambassador_name}" --status "completed" --summary "Integration design complete"`
 
    **Display Ambassador completion line:**
    ```
@@ -551,7 +551,7 @@ Display per worker:
   🧠 Skills: {colony_count} colony + {domain_count} domain loaded for builder
 ```
 
-**PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `aether spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && aether context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
+**PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `aether spawn-log --parent "Queen" --caste "builder" --name "{ant_name}" --task "{task_description}" --depth 0 && aether context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
 
 **Context layer budget caps (enforce before injecting into prompt):**
 - `archaeology_context`: cap at 4000 characters. If it exceeds the cap, truncate and append `[archaeology truncated]`.
@@ -713,7 +713,7 @@ aether memory-capture \
   "worker:builder" 2>/dev/null || true
 ```
 
-**PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete "{ant_name}" "completed" "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
+**PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
 
 **Check for total wave failure:**
 
@@ -879,7 +879,7 @@ Merge-back: {success_count} merged, {fail_count} blocked
 
 Run using the Bash tool with description "Logging merge-back activity...":
 ```bash
-aether activity-log "MERGE_BACK" "Queen" "Wave {wave_number}: {success_count} merged, {fail_count} blocked"
+aether activity-log --command "MERGE_BACK" --details "Queen: Wave {wave_number}: {success_count} merged, {fail_count} blocked"
 ```
 
 > **Design note:** This step runs after EVERY wave (not just the last), ensuring that Wave 2+ workers always build on top of Wave 1's merged results. This prevents orphaned worktree branches and keeps the main branch up-to-date throughout the build.
@@ -929,7 +929,7 @@ For each task in the probe verification queue, spawn a Probe agent:
    Run using the Bash tool with description "Naming probe ant...": `aether generate-ant-name "probe"` (store as `{probe_name}`)
 
 2. **Log spawn:**
-   Run using the Bash tool with description "Dispatching probe...": `aether spawn-log "Queen" "probe" "{probe_name}" "Verify task {task_id}"`
+   Run using the Bash tool with description "Dispatching probe...": `aether spawn-log --parent "Queen" --caste "probe" --name "{probe_name}" --task "Verify task {task_id}" --depth 0`
 
 3. **Display announcement:**
    ```
@@ -996,7 +996,7 @@ For each task in the probe verification queue, spawn a Probe agent:
    Log all probe results:
    Run using the Bash tool with description "Recording probe completion...":
    ```bash
-   aether spawn-complete "{probe_name}" "{probe_status}" "{verdict}" && aether context-update worker-complete "{probe_name}" "probe"
+   aether spawn-complete --name "{probe_name}" --status "{probe_status}" --summary "{verdict}" && aether context-update worker-complete "{probe_name}" "probe"
    ```
 
 #### 5.3.5.3: Handle Probe Failures
@@ -1048,5 +1048,5 @@ Store this map for use in Step 5.9 synthesis.
 **Log probe lock outcome:**
 Run using the Bash tool with description "Logging probe lock outcome...":
 ```bash
-aether activity-log "PROBE_LOCK" "Queen" "Builder-Probe Lock: {passed_count} passed, {failed_count} failed, {total_count} total"
+aether activity-log --command "PROBE_LOCK" --details "Queen: Builder-Probe Lock: {passed_count} passed, {failed_count} failed, {total_count} total"
 ```

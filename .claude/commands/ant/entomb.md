@@ -210,7 +210,7 @@ if [[ ! -f "$queen_file" ]]; then
   if [[ "$init_ok" == "true" ]]; then
     created=$(echo "$init_result" | jq -r '.result.created // false')
     if [[ "$created" == "true" ]]; then
-      aether activity-log "CREATED" "Queen" "Initialized QUEEN.md for wisdom storage"
+      aether activity-log --command "CREATED" --details "Queen: Initialized QUEEN.md for wisdom storage"
     fi
   fi
 fi

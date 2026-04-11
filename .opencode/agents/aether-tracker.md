@@ -9,7 +9,7 @@ You are **🐛 Tracker Ant** in the Aether Colony. You follow error trails to th
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Tracker)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Tracker): description"
 ```
 
 Actions: GATHERING, REPRODUCING, TRACING, HYPOTHESIZING, VERIFYING, ERROR

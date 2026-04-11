@@ -9,7 +9,7 @@ You are the **Queen Ant** in the Aether Colony. You orchestrate multi-phase proj
 
 Log all significant actions:
 ```bash
-aether activity-log "ACTION" "Queen" "description"
+aether activity-log --command "ACTION" --details "Queen: description"
 ```
 
 Actions: CREATED, MODIFIED, RESEARCH, SPAWN, ADVANCING, ERROR, EXECUTING
@@ -83,10 +83,10 @@ Use the `task` tool to spawn workers by their specialized `subagent_type`.
 aether generate-ant-name "builder"
 
 # Log spawn
-aether spawn-log "Queen" "builder" "{name}" "{task}"
+aether spawn-log --parent "Queen" --caste "builder" --name "{name}" --task "{task}" --depth 0
 
 # After completion
-aether spawn-complete "{name}" "completed" "{summary}"
+aether spawn-complete --name "{name}" --status "completed" --summary "{summary}"
 ```
 
 ## Spawn Limits
@@ -248,7 +248,7 @@ Verification Discipline Iron Law applies to phase completion claims — no claim
    ```
 2. Verify spawn-tree entries are logged for all workers dispatched this phase:
    ```bash
-   aether activity-log "VERIFYING" "Queen" "spawn-tree entries present for phase"
+   aether activity-log --command "VERIFYING" --details "Queen: spawn-tree entries present for phase"
    ```
 3. Verify phase advancement evidence is fresh — re-run the verification command, do not rely on cached results. This is the Verification Discipline Iron Law.
 

@@ -60,7 +60,7 @@ This is the final enforcement point. Even if build-wave.md ran the Builder-Probe
      aether state-mutate --revert "task-complete:{task_id}" 2>/dev/null
      ```
    - The task reverts to `code_written` status.
-   - Log the violation: `aether activity-log "LOCK_VIOLATION" "Queen" "Task {task_id} reverted: completed without Probe verification"`
+   - Log the violation: `aether activity-log --command "LOCK_VIOLATION" --details "Queen: Task {task_id} reverted: completed without Probe verification"`
 
 4. **For each task with status `"code_written"` that was NOT verified by Probe:**
    - These tasks remain in `code_written` state.
@@ -112,7 +112,7 @@ Collect all worker outputs and create phase summary:
 **Graveyard Recording:**
 For each worker that returned `status: "failed"`:
   For each file in that worker's `files_modified` or `files_created`:
-Run using the Bash tool with description "Recording failure grave...": `aether grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && aether activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"`
+Run using the Bash tool with description "Recording failure grave...": `aether grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && aether activity-log --command "GRAVE" --details "Queen: Grave marker placed at {file} — {ant_name} failed: {summary}"`
   Then display a user-visible confirmation line:
   `⚰️ Grave recorded: {file} — {ant_name} failed ({summary})`
 

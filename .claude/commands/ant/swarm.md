@@ -295,7 +295,7 @@ Inject learnings:
 Set solution in swarm findings and log success:
 ```bash
 aether swarm-solution-set "{swarm_id}" '{solution_json}'
-aether activity-log "SWARM_SUCCESS" "Queen" "Swarm {swarm_id} fixed: {brief description}"
+aether activity-log --command "SWARM_SUCCESS" --details "Queen: Swarm {swarm_id} fixed: {brief description}"
 ```
 
 **If verification fails:**
@@ -311,7 +311,7 @@ Attempting rollback...
 Rollback and log failure:
 ```bash
 aether autofix-rollback --type "{checkpoint_type}" --ref "{checkpoint_ref}"
-aether activity-log "SWARM_FAILED" "Queen" "Swarm {swarm_id} fix failed verification"
+aether activity-log --command "SWARM_FAILED" --details "Queen: Swarm {swarm_id} fix failed verification"
 ```
 
 Track attempt count. If this is the 3rd failure on the same issue:

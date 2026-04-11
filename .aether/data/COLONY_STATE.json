@@ -1,382 +1,298 @@
 {
   "version": "3.0",
-  "goal": "Add worktree mode selection to colony init: prompt user to choose parallel strategy (worktrees vs in-repo), save preference to colony state",
-  "colony_name": null,
+  "goal": "Fix all ~120 broken CLI calls in markdown \u2014 add missing flags and subcommands to Go CLI so pheromones, learning, midden, spawn tracking, activity log, flags, and registry actually work",
+  "colony_name": "cli-flag-fix",
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 10,
-  "session_id": "add_1775830632",
-  "initialized_at": "2026-04-10T16:17:12.987162+02:00",
+  "current_phase": 4,
+  "session_id": "session_1775934297_cli691",
+  "initialized_at": "2026-04-11T19:04:58Z",
   "build_started_at": null,
   "plan": {
-    "generated_at": "2026-04-10T15:01:54Z",
-    "confidence": 95,
+    "generated_at": "2026-04-11T19:22:33Z",
+    "confidence": 92,
     "phases": [
       {
-        "description": "Add ParallelMode type and field to ColonyState, wire into state-mutate.",
+        "description": "Create comprehensive inventory of all broken CLI calls and establish baseline tests",
         "id": 1,
-        "name": "Data Model and Constants",
+        "name": "Audit and Baseline",
         "status": "completed",
         "success_criteria": [
-          "ParallelMode type with Valid() exists",
-          "ColonyState has parallel_mode field",
-          "state-mutate validates parallel_mode"
+          "Complete inventory of all broken calls by category",
+          "Baseline test count established"
         ],
         "tasks": [
           {
-            "constraints": [
-              "Follow PlanGranularity pattern",
-              "Valid values: in-repo and worktree only"
-            ],
-            "goal": "Add ParallelMode type with constants (worktree, in-repo) and Valid() method to pkg/colony/colony.go",
-            "hints": [
-              "See PlanGranularity type at pkg/colony/colony.go:50-70"
-            ],
+            "goal": "Grep-inventory every broken CLI call pattern across all markdown files",
             "id": "1.1",
             "status": "completed",
             "success_criteria": [
-              "ParallelMode type exists with Valid() method",
-              "go build ./pkg/colony/ succeeds"
+              "Count per category matches route-setter findings",
+              "CSV output with file:line:pattern for each broken call"
             ]
           },
           {
-            "constraints": [
-              "json tag parallel_mode,omitempty",
-              "Backward compatible"
-            ],
-            "goal": "Add ParallelMode field to ColonyState struct with omitempty",
-            "hints": [
-              "See Worktrees field at pkg/colony/colony.go:110"
-            ],
+            "goal": "Verify existing Go tests pass and establish baseline",
             "id": "1.2",
             "status": "completed",
             "success_criteria": [
-              "ColonyState has ParallelMode field",
-              "JSON without parallel_mode deserializes"
-            ]
-          },
-          {
-            "constraints": [
-              "Validate against ParallelMode constants"
-            ],
-            "goal": "Add parallel_mode to state-mutate field whitelist with validation",
-            "hints": [
-              "state-write at cmd/state_extra.go:80-116"
-            ],
-            "id": "1.3",
-            "status": "completed",
-            "success_criteria": [
-              "state-mutate accepts worktree/in-repo",
-              "rejects invalid values"
-            ]
-          },
-          {
-            "goal": "Write tests for ParallelMode type, validation, backward compat, state-mutate",
-            "id": "1.4",
-            "status": "completed",
-            "success_criteria": [
-              "All new tests pass"
+              "go test ./... -race passes",
+              "Test count recorded as baseline"
             ]
           }
         ]
       },
       {
-        "description": "Add CLI subcommands following plan-granularity pattern.",
+        "description": "Fix spawn-log and spawn-complete flag mismatches in Go and ~20 markdown files",
         "id": 2,
-        "name": "parallel-mode get/set subcommand",
+        "name": "Fix Spawn Tracking Calls",
         "status": "completed",
         "success_criteria": [
-          "parallel-mode get/set work",
-          "defaults to in-repo"
+          "All spawn-log calls use correct flags",
+          "All spawn-complete calls use correct flags"
         ],
         "tasks": [
           {
-            "constraints": [
-              "Follow colony-depth pattern",
-              "get returns default in-repo when unset"
-            ],
-            "goal": "Add parallel-mode get/set subcommands to cmd/colony_cmds.go",
-            "hints": [
-              "See cmd/colony_cmds.go:148"
-            ],
+            "goal": "Add --summary flag to spawn-complete Go command",
             "id": "2.1",
             "status": "completed",
             "success_criteria": [
-              "parallel-mode get returns mode",
-              "parallel-mode set --mode worktree persists"
+              "go test ./cmd -run TestSpawnComplete passes",
+              "--summary flag accepted"
             ]
           },
           {
-            "goal": "Write tests for parallel-mode get/set",
+            "goal": "Fix all ~13 markdown files with broken spawn-log calls (--id -\u003e --name, --description -\u003e --task)",
             "id": "2.2",
             "status": "completed",
             "success_criteria": [
-              "go test ./cmd/ -run TestParallelMode passes"
+              "grep for spawn-log --id returns zero results"
+            ]
+          },
+          {
+            "goal": "Fix all ~7 markdown files with broken spawn-complete calls (--id -\u003e --name)",
+            "id": "2.3",
+            "status": "completed",
+            "success_criteria": [
+              "grep for spawn-complete --id returns zero results"
             ]
           }
         ]
       },
       {
-        "description": "Update colony-state template to document the new field.",
+        "description": "Fix activity-log positional arg mismatches across ~48 markdown files",
         "id": 3,
-        "name": "Template update",
+        "name": "Fix Activity Log Calls",
         "status": "completed",
         "success_criteria": [
-          "Template documents new field"
+          "No activity-log call uses positional arguments"
         ],
         "tasks": [
           {
-            "goal": "Add parallel_mode to colony-state.template.json with documentation",
+            "goal": "Fix all markdown files using positional-arg activity-log calls to use --command/--phase/--details flags",
             "id": "3.1",
             "status": "completed",
             "success_criteria": [
-              "Template has _comment_parallel_mode and parallel_mode field"
+              "grep for activity-log with positional args returns zero"
             ]
           }
         ]
       },
       {
-        "description": "Add mode selection to init.md for both Claude Code and OpenCode.",
+        "description": "Fix midden-write positional arg mismatches across ~7 markdown files",
         "id": 4,
-        "name": "Init slash command user prompt",
-        "status": "completed",
+        "name": "Fix Midden Write Calls",
+        "status": "pending",
         "success_criteria": [
-          "User sees mode selection in both platforms",
-          "Choice persisted"
+          "No midden-write call uses positional arguments"
         ],
         "tasks": [
           {
-            "constraints": [
-              "Insert between Step 6 and 7",
-              "Default is in-repo"
-            ],
-            "goal": "Add Step 6.5 parallel strategy selection to Claude Code init.md",
+            "goal": "Fix all markdown files using positional-arg midden-write calls to use --category/--message/--source flags",
             "id": "4.1",
-            "status": "completed",
+            "status": "pending",
             "success_criteria": [
-              "Step 6.5 exists with mode selection prompt"
-            ]
-          },
-          {
-            "constraints": [
-              "Both Go init_cmd.go and init.md template paths"
-            ],
-            "goal": "Pass selected mode to state creation in Step 7 (both fresh and re-init)",
-            "id": "4.2",
-            "status": "completed",
-            "success_criteria": [
-              "Selected mode persisted in both paths"
-            ]
-          },
-          {
-            "goal": "Add mode display to Step 8 result output",
-            "id": "4.3",
-            "status": "completed",
-            "success_criteria": [
-              "Success output includes parallel strategy"
-            ]
-          },
-          {
-            "goal": "Add matching changes to OpenCode init.md",
-            "id": "4.4",
-            "status": "completed",
-            "success_criteria": [
-              "OpenCode init prompts for and persists parallel mode"
+              "grep for midden-write with positional args returns zero"
             ]
           }
         ]
       },
       {
-        "description": "Wire build-wave.md to conditionally allocate worktrees when parallel_mode is worktree.",
+        "description": "Add --source/--reason/--ttl flags to Go pheromone-write and fix positional args in markdown",
         "id": 5,
-        "name": "Build-wave conditional worktree wiring",
-        "status": "completed",
+        "name": "Fix Pheromone Write Calls",
+        "status": "pending",
         "success_criteria": [
-          "Build-wave conditionally uses worktrees",
-          "clean skip for in-repo"
+          "Go accepts --source/--reason/--ttl",
+          "No positional pheromone-write calls"
         ],
         "tasks": [
           {
-            "constraints": [
-              "worktree-allocate already has --phase and --agent flags (cmd/worktree.go:757-758)",
-              "Queen executes bash from playbook directly"
-            ],
-            "goal": "Add pre-wave worktree allocation step to build-wave.md",
+            "goal": "Add --source, --reason, --ttl flags to pheromone-write Go command",
             "id": "5.1",
-            "status": "completed",
+            "status": "pending",
             "success_criteria": [
-              "Worktrees allocated when mode is worktree",
-              "skipped when in-repo"
+              "go test passes with new flags",
+              "TTL parsed into ExpiresAt"
             ]
           },
           {
-            "goal": "Inject worktree_path into Builder prompt when allocated",
+            "goal": "Fix all markdown pheromone-write calls: positional type -\u003e --type, positional content -\u003e --content",
             "id": "5.2",
-            "status": "completed",
+            "status": "pending",
             "success_criteria": [
-              "Builder prompt includes worktree path"
-            ]
-          },
-          {
-            "constraints": [
-              "Non-blocking: failures create blockers"
-            ],
-            "goal": "Add post-wave merge-back using worktree-merge-back (NOT deprecated worktree-merge)",
-            "id": "5.3",
-            "status": "completed",
-            "success_criteria": [
-              "Worktree branches merged after each wave"
-            ]
-          },
-          {
-            "goal": "Add parallel_mode read to build-prep.md",
-            "id": "5.4",
-            "status": "completed",
-            "success_criteria": [
-              "build-prep reads and displays parallel_mode"
+              "grep for positional pheromone-write returns zero"
             ]
           }
         ]
       },
       {
-        "description": "Inject parallel_mode into worker context.",
+        "description": "Fix memory-capture positional arg mismatches across ~5 markdown files",
         "id": 6,
-        "name": "Colony-prime context injection",
-        "status": "completed",
+        "name": "Fix Memory Capture Calls",
+        "status": "pending",
         "success_criteria": [
-          "Workers receive parallel mode via colony-prime"
+          "No memory-capture call uses positional arguments"
         ],
         "tasks": [
           {
-            "constraints": [
-              "Default to in-repo when empty"
-            ],
-            "goal": "Add parallel_mode to colony-prime prompt_section output",
+            "goal": "Fix all markdown files using positional-arg memory-capture calls to use --type/--content flags",
             "id": "6.1",
-            "status": "completed",
+            "status": "pending",
             "success_criteria": [
-              "colony-prime includes Parallel Mode line"
-            ]
-          },
-          {
-            "goal": "Write test for colony-prime parallel_mode injection",
-            "id": "6.2",
-            "status": "completed",
-            "success_criteria": [
-              "Tests pass for set and unset cases"
+              "grep for positional memory-capture returns zero"
             ]
           }
         ]
       },
       {
-        "description": "Show parallel mode in status, resume commands.",
+        "description": "Add --description flag to Go flag-add and remove --phase from markdown calls",
         "id": 7,
-        "name": "Status and resume display",
-        "status": "completed",
+        "name": "Fix Flag Add Calls",
+        "status": "pending",
         "success_criteria": [
-          "Status and resume show parallel mode"
+          "Go accepts --description",
+          "No flag-add call uses --phase"
         ],
         "tasks": [
           {
-            "goal": "Add parallel_mode display to status command output",
+            "goal": "Add --description flag to flag-add Go command",
             "id": "7.1",
-            "status": "completed",
+            "status": "pending",
             "success_criteria": [
-              "Status shows parallel strategy"
+              "go test passes with --description flag"
             ]
           },
           {
-            "goal": "Add parallel_mode to resume command context",
+            "goal": "Remove --phase from all flag-add markdown calls",
             "id": "7.2",
-            "status": "completed",
+            "status": "pending",
             "success_criteria": [
-              "Resume shows parallel strategy"
+              "grep for flag-add --phase returns zero"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Fix broken CLI calls in all 19 OpenCode agent .md files and Claude agent mirrors",
+        "id": 8,
+        "name": "Fix OpenCode Agent Templates",
+        "status": "pending",
+        "success_criteria": [
+          "All agent template CLI calls are correct"
+        ],
+        "tasks": [
+          {
+            "goal": "Fix all broken spawn-log and activity-log calls in OpenCode agent templates",
+            "id": "8.1",
+            "status": "pending",
+            "success_criteria": [
+              "grep for broken patterns in .opencode/agents/ returns zero"
             ]
           },
           {
-            "goal": "Update OpenCode status and resume for parity",
-            "id": "7.3",
-            "status": "completed",
+            "goal": "Fix broken calls in Claude agent mirrors (.claude/agents/ant/ and .aether/agents-claude/)",
+            "id": "8.2",
+            "status": "pending",
             "success_criteria": [
-              "OpenCode parity achieved"
+              "grep for broken patterns in agent mirrors returns zero"
             ]
           }
         ]
       },
       {
-        "description": "Replace dead deprecation block with mode-aware worktree merge-back.",
-        "id": 8,
-        "name": "Continue-advance worktree awareness",
-        "status": "completed",
-        "success_criteria": [
-          "Clean mode-aware merge-back in continue-advance"
-        ],
-        "tasks": [
-          {
-            "constraints": [
-              "Preserve last_merged_branch/last_merge_sha for Steps 2.0.5/2.0.6"
-            ],
-            "goal": "Replace dead worktree-merge deprecation block (lines 331-377) with mode-aware merge using worktree-merge-back",
-            "id": "8.1",
-            "status": "completed",
-            "success_criteria": [
-              "Dead deprecation block replaced",
-              "calls worktree-merge-back when worktree mode"
-            ]
-          }
-        ]
-      },
-      {
-        "description": "End-to-end verification.",
+        "description": "Fix all broken CLI calls in command playbooks (build-full, continue-full, and split playbooks)",
         "id": 9,
-        "name": "Integration tests",
-        "status": "completed",
+        "name": "Fix Playbooks",
+        "status": "pending",
         "success_criteria": [
-          "Full test suite passes"
+          "All playbook CLI calls are correct"
         ],
         "tasks": [
           {
-            "goal": "Write integration test for parallel-mode state round-trip",
+            "goal": "Fix build-full.md, continue-full.md, and all 6 split playbooks",
             "id": "9.1",
             "status": "pending",
             "success_criteria": [
-              "Round-trip set/get works"
-            ]
-          },
-          {
-            "goal": "Run full test suite: go test ./... -race, go vet, go build",
-            "id": "9.2",
-            "status": "pending",
-            "success_criteria": [
-              "All 1075+ tests pass",
-              "binary builds"
+              "Audit confirms zero discrepancies in all playbook files"
             ]
           }
         ]
       },
       {
-        "description": "Update CLAUDE.md and colony rules.",
+        "description": "Fix workers.md, docs/, and any remaining edge-case files",
         "id": 10,
-        "name": "Documentation updates",
-        "status": "completed",
+        "name": "Fix Documentation and Edge Cases",
+        "status": "pending",
         "success_criteria": [
-          "Documentation updated"
+          "All documentation CLI calls are correct"
         ],
         "tasks": [
           {
-            "goal": "Update CLAUDE.md to document parallel_mode in colony state and init workflow",
+            "goal": "Fix workers.md and docs/ files with broken CLI patterns",
             "id": "10.1",
-            "status": "completed",
+            "status": "pending",
             "success_criteria": [
-              "CLAUDE.md references parallel_mode"
+              "No broken calls in workers.md or docs/"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Run complete test suite and final audit to confirm zero broken calls remain",
+        "id": 11,
+        "name": "Full Regression Test",
+        "status": "pending",
+        "success_criteria": [
+          "All tests pass",
+          "Zero broken calls in any .md file",
+          "Binary builds cleanly"
+        ],
+        "tasks": [
+          {
+            "goal": "Run go test ./... -race and confirm zero regressions",
+            "id": "11.1",
+            "status": "pending",
+            "success_criteria": [
+              "All tests pass",
+              "Race detection clean"
             ]
           },
           {
-            "goal": "Update .claude/rules/aether-colony.md if needed",
-            "id": "10.2",
-            "status": "completed",
+            "goal": "Run final grep audit across all categories confirming zero broken calls",
+            "id": "11.2",
+            "status": "pending",
             "success_criteria": [
-              "Documentation consistent"
+              "Every broken-call grep returns zero results"
+            ]
+          },
+          {
+            "goal": "Verify Go binary builds and all new flags appear in --help",
+            "id": "11.3",
+            "status": "pending",
+            "success_criteria": [
+              "Binary builds",
+              "All new flags discoverable"
             ]
           }
         ]
@@ -386,154 +302,49 @@
   "memory": {
     "phase_learnings": [
       {
-        "id": "learning_1775836415",
+        "id": "learning_1775937483",
         "learnings": [
           {
-            "claim": "String enum types in Go should follow the PlanGranularity pattern: type alias + constants + Valid() method + ErrInvalid* sentinel",
+            "claim": "Aether CLI commands silently ignore positional args when flags are required - grep for positional usage in markdown to find all broken calls",
             "disproven_by": null,
-            "evidence": "ParallelMode type implemented following PlanGranularity pattern, all tests pass",
+            "evidence": "226 broken calls found via grep inventory matching Go CLI source verification",
             "status": "hypothesis",
             "tested": true
           }
         ],
         "phase": 1,
-        "phase_name": "Data Model and Constants",
-        "timestamp": "2026-04-10T15:53:35Z"
+        "phase_name": "Audit and Baseline",
+        "timestamp": "2026-04-11T19:58:03Z"
       },
       {
-        "id": "learning_1775838506",
+        "id": "learning_1775939057",
         "learnings": [
           {
-            "claim": "CLI get/set subcommands should follow the colony-depth pattern: nil store guard, LoadJSON with default fallback, set validates and persists",
+            "claim": "spawn-log and spawn-complete both use cobra.NoArgs — positional args silently fail. Adding --summary to spawn-complete required updating both the CLI flag and the spawn tree persistence layer with backward-compatible parsing.",
             "disproven_by": null,
-            "evidence": "parallel-mode get/set implemented following colony-depth pattern, 8 tests pass, Probe and Watcher verified",
+            "evidence": "62 broken calls fixed across 29 files, 6 new Go tests pass, Watcher verified zero remaining broken patterns",
             "status": "hypothesis",
             "tested": true
           }
         ],
         "phase": 2,
-        "phase_name": "parallel-mode get/set subcommand",
-        "timestamp": "2026-04-10T16:28:26Z"
+        "phase_name": "Fix Spawn Tracking Calls",
+        "timestamp": "2026-04-11T20:24:17Z"
       },
       {
-        "id": "learning_1775840113",
+        "id": "learning_'$timestamp'",
         "learnings": [
           {
-            "claim": "JSON template files should include _comment_ prefixed fields to document new configuration options, following the existing field documentation pattern",
+            "claim": "activity-log positional args silently ignored — all 48 markdown files converted to --command/--details flags with source+details merged into --details field",
             "disproven_by": null,
-            "evidence": "Both colony-state templates updated with _comment_parallel_mode and parallel_mode fields, validated by Probe and Watcher",
+            "evidence": "0 positional calls remain, 78 flag-based calls verified, all Go tests pass",
             "status": "hypothesis",
             "tested": true
           }
         ],
         "phase": 3,
-        "phase_name": "Template update",
-        "timestamp": "2026-04-10T16:55:13Z"
-      },
-      {
-        "id": "learning_1775843759",
-        "learnings": [
-          {
-            "claim": "Cross-platform init changes should follow the same step structure in both Claude Code and OpenCode init.md files, with state-mutate for persisting user choices after template write",
-            "disproven_by": null,
-            "evidence": "Both init.md files updated with identical Step 6.5, state-mutate calls in both re-init and fresh paths, and Step 8 display. Probe and Watcher verified.",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 4,
-        "phase_name": "Init slash command user prompt",
-        "timestamp": "2026-04-10T17:55:59Z"
-      },
-      {
-        "id": "learning_1775846550",
-        "learnings": [
-          {
-            "claim": "Build-wave conditional steps should read parallel_mode and branch cleanly: skip with empty allocations for in-repo, allocate per-worker for worktree, with graceful fallback on allocation failure",
-            "disproven_by": null,
-            "evidence": "Step 5.0.7 in build-wave.md implements conditional worktree allocation, all tests pass, Watcher verified",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 5,
-        "phase_name": "Build-wave conditional worktree wiring",
-        "timestamp": "2026-04-10T18:42:30Z"
-      },
-      {
-        "id": "learning_1775847905.853743",
-        "learnings": [
-          {
-            "claim": "Context injection into colony-prime should read parallel_mode from state with a default fallback to in-repo, matching the parallel-mode get subcommand pattern",
-            "disproven_by": null,
-            "evidence": "Parallel mode injected into colony-prime at pheromone_mgmt.go:164-168, defaults to ModeInRepo when empty, 2 tests pass, Watcher verified 1167 tests pass",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 6,
-        "phase_name": "Colony-prime context injection",
-        "timestamp": "2026-04-10T19:05:05Z"
-      },
-      {
-        "id": "learning_1775849306",
-        "learnings": [
-          {
-            "claim": "Display commands (status, resume) should read parallel_mode from colony state with in-repo default fallback, following the same pattern as colony-depth and plan-granularity displays",
-            "disproven_by": null,
-            "evidence": "Parallel mode displayed in status.go, context.go resume-dashboard, and both Claude Code and OpenCode command files. 4 tests pass covering default and explicit modes.",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 7,
-        "phase_name": "Status and resume display",
-        "timestamp": "2026-04-10T19:28:26Z"
-      },
-      {
-        "id": "learning_1775850858",
-        "learnings": [
-          {
-            "claim": "Mode-aware branching in playbooks should read parallel_mode from state, branch cleanly between in-repo (skip) and worktree (execute), with safe defaults for unknown modes",
-            "disproven_by": null,
-            "evidence": "Dead worktree-merge deprecation block replaced with mode-aware merge using worktree-merge-back, all tests pass, Watcher verified 9/10 quality",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 8,
-        "phase_name": "Continue-advance worktree awareness",
-        "timestamp": "2026-04-10T19:54:18Z"
-      },
-      {
-        "id": "learning_1775852416",
-        "learnings": [
-          {
-            "claim": "Integration tests for state round-trip should verify: set mode, persist, read back, survive unrelated mutations, mode switching, defaults, and invalid value rejection",
-            "disproven_by": null,
-            "evidence": "11 integration subtests for parallel-mode round-trip all pass with -race, covering the full lifecycle",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 9,
-        "phase_name": "Integration tests",
-        "timestamp": "2026-04-10T20:20:16Z"
-      },
-      {
-        "id": "learning_1775853595",
-        "phase": 10,
-        "phase_name": "Documentation updates",
-        "learnings": [
-          {
-            "claim": "Documentation phases should update both CLAUDE.md (developer reference) and aether-colony.md (user-facing rules) in parallel, keeping feature descriptions consistent across both files",
-            "status": "hypothesis",
-            "tested": true,
-            "evidence": "Both CLAUDE.md and aether-colony.md updated consistently for parallel_mode feature, verified by Watcher (9/10) and Auditor (92/100)",
-            "disproven_by": null
-          }
-        ],
-        "timestamp": "2026-04-10T20:39:55Z"
+        "phase_name": "Fix Activity Log Calls",
+        "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
       }
     ],
     "decisions": null,
@@ -546,13 +357,20 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    "2026-04-10T20:06:00Z|phase_started|build|Phase 9: Integration tests started",
-    "",
-    "2026-04-10T20:48:17Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
+    "2026-04-11T19:04:58Z|colony_initialized|init|Colony initialized with goal: Fix all ~120 broken CLI calls in markdown",
+    "2026-04-11T19:22:33Z|plan_generated|plan|Generated 11 phases with 92% confidence",
+    "2026-04-11T19:45:00Z|phase_started|build|Phase 1: Audit and Baseline started",
+    "2026-04-11T19:58:03Z|phase_completed|continue|Phase 1: Audit and Baseline completed - 226 broken calls inventoried",
+    "2026-04-11T19:59:12Z|phase_started|build|Phase 2: Fix Spawn Tracking Calls started",
+    "2026-04-11T20:24:17Z|phase_completed|continue|Phase 2: Fix Spawn Tracking Calls completed - 62 calls fixed",
+    "2026-04-11T20:26:45Z|phase_started|build|Phase 3: Fix Activity Log Calls started",
+    ""
   ],
   "plan_granularity": "quarter",
   "parallel_mode": "in-repo",
-  "milestone": "Crowned Anthill",
-  "build_baseline_sha": "16603cfe931d6cbc39c207ed95c11eef42522605",
-  "milestone_updated_at": "2026-04-10T20:48:17Z"
+  "milestone": ""
 }
+
+
+
+

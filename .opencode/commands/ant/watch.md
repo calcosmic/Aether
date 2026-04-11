@@ -177,21 +177,21 @@ Attaching now...
 Workers and commands update watch files as they work:
 
 ### Activity Log
-Workers write via: `aether activity-log "ACTION" "caste" "description"`
+Workers write via: `aether activity-log --command "ACTION" --details "caste: description"`
 
 For named ants (recommended):
 ```bash
 # Generate a name first
 ant_name=$(aether generate-ant-name --caste "builder" | jq -r '.result')
 # Log with ant name
-aether activity-log "CREATED" "$ant_name (Builder)" "Implemented auth module"
+aether activity-log --command "CREATED" --details "$ant_name (Builder): Implemented auth module"
 ```
 
 ### Spawn Tracking
 Log spawns for tree visualization:
 ```bash
 aether spawn-log --name "Prime" --caste "builder" --id "Hammer-42" --description "implementing auth"
-aether spawn-complete --id "Hammer-42" --status "completed" --summary "auth module done"
+aether spawn-complete --name "Hammer-42" --status "completed" --summary "auth module done"
 ```
 
 ### Status File

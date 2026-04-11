@@ -229,7 +229,7 @@ Wait for user response.
 Run using the Bash tool with description "Logging interpretation activity...":
 
 ```bash
-aether activity-log "INTERPRET" "Interpreter" "Dream review: {dream_file}, {confirmed} confirmed, {partial} partial, {unconfirmed} unconfirmed, {refuted} refuted, {actions_taken} actions taken"
+aether activity-log --command "INTERPRET" --details "Interpreter: Dream review: {dream_file}, {confirmed} confirmed, {partial} partial, {unconfirmed} unconfirmed, {refuted} refuted, {actions_taken} actions taken"
 ```
 
 ### Step 8: Display Closing

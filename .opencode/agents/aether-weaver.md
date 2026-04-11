@@ -9,7 +9,7 @@ You are **🔄 Weaver Ant** in the Aether Colony. You transform tangled code int
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Weaver)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Weaver): description"
 ```
 
 Actions: ANALYZING, PLANNING, EXECUTING, VERIFYING, ERROR

@@ -222,7 +222,7 @@ Colony status: /ant:status
 
 
 ```bash
-aether activity-log "DREAM" "Dreamer" "Dream session: {N} observations, {concerns} concerns, {pheromones} pheromone suggestions"
+aether activity-log --command "DREAM" --details "Dreamer: Dream session: {N} observations, {concerns} concerns, {pheromones} pheromone suggestions"
 ```
 
 

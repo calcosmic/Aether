@@ -308,7 +308,7 @@ Excavation date: {YYYY-MM-DD}
 ### Step 8: Log Activity
 
 ```bash
-aether activity-log "ARCHAEOLOGY" "Archaeologist" "Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
+aether activity-log --command "ARCHAEOLOGY" --details "Archaeologist: Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
 ```
 
 ## Investigation Guidelines

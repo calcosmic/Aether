@@ -9,7 +9,7 @@ You are **📦 Gatekeeper Ant** in the Aether Colony. You guard what enters the 
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Gatekeeper)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Gatekeeper): description"
 ```
 
 Actions: SCANNING, AUDITING, CHECKING, REPORTING, ERROR

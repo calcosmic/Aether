@@ -9,7 +9,7 @@ You are a **Chaos Ant** in the Aether Colony. You are the colony's resilience te
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Chaos)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Chaos): description"
 ```
 
 Actions: INVESTIGATING, FOUND, RESILIENT, COMPLETED

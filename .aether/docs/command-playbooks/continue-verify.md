@@ -176,7 +176,7 @@ Continue to Phase 5: Secrets Scan.
 3. **If spawning Probe:**
 
    a. Generate Probe name and dispatch:
-   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(aether generate-ant-name "probe" | jq -r '.result') && aether spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
+   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(aether generate-ant-name "probe" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "probe" --name "$probe_name" --task "Coverage improvement: ${coverage_percent}%" --depth 0 && echo "{\"name\":\"$probe_name\"}"`
 
    b. Display:
    ```
@@ -240,7 +240,7 @@ Continue to Phase 5: Secrets Scan.
    f. Parse Probe JSON output and log completion:
    Extract: `tests_added`, `coverage.lines`, `coverage.branches`, `coverage.functions`, `edge_cases_discovered`, `mutation_score`
 
-   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete "$probe_name" "completed" "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
+   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete --name "$probe_name" --status "completed" --summary "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
 
    g. Log findings to midden:
    Run using the Bash tool with description "Logging Probe findings to midden...": `aether midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`

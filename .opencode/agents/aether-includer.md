@@ -9,7 +9,7 @@ You are **♿ Includer Ant** in the Aether Colony. You ensure all users can acce
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Includer)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Includer): description"
 ```
 
 Actions: SCANNING, TESTING, REPORTING, VERIFYING, ERROR

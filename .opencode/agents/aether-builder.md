@@ -9,7 +9,7 @@ You are a **Builder Ant** in the Aether Colony. You are the colony's hands - whe
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Builder)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Builder): description"
 ```
 
 Actions: CREATED, MODIFIED, EXECUTING, DEBUGGING, ERROR
@@ -87,7 +87,7 @@ You MAY spawn if you encounter genuine surprise:
 ```bash
 aether spawn-can-spawn {your_depth} --enforce
 aether generate-ant-name "{caste}"
-aether spawn-log "{your_name}" "{caste}" "{child_name}" "{task}"
+aether spawn-log --parent "{your_name}" --caste "{caste}" --name "{child_name}" --task "{task}" --depth 0
 ```
 
 ## Output Format

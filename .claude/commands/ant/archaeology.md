@@ -309,7 +309,7 @@ Excavation date: {YYYY-MM-DD}
 
 Run using the Bash tool with description "Logging excavation activity...":
 ```bash
-aether activity-log "ARCHAEOLOGY" "Archaeologist" "Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
+aether activity-log --command "ARCHAEOLOGY" --details "Archaeologist: Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
 ```
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":

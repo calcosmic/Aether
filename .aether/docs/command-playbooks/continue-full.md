@@ -147,7 +147,7 @@ Continue to Phase 5: Secrets Scan.
 3. **If spawning Probe:**
 
    a. Generate Probe name and dispatch:
-   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(aether generate-ant-name "probe" | jq -r '.result') && aether spawn-log "Queen" "probe" "$probe_name" "Coverage improvement: ${coverage_percent}%" && echo "{\"name\":\"$probe_name\"}"`
+   Run using the Bash tool with description "Generating Probe name...": `probe_name=$(aether generate-ant-name "probe" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "probe" --name "$probe_name" --task "Coverage improvement: ${coverage_percent}%" --depth 0 && echo "{\"name\":\"$probe_name\"}"`
 
 
    c. Display: `🧪🐜 Probe {probe_name} spawning — Coverage at {coverage_percent}%, generating tests for uncovered paths...`
@@ -208,7 +208,7 @@ Continue to Phase 5: Secrets Scan.
    f. Parse Probe JSON output and log completion:
    Extract: `tests_added`, `coverage.lines`, `coverage.branches`, `coverage.functions`, `edge_cases_discovered`, `mutation_score`
 
-   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete "$probe_name" "completed" "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
+   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete --name "$probe_name" --status "completed" --summary "{\"tests_added\":${#tests_added[@]},\"coverage\":{\"lines\":${coverage_lines},\"branches\":${coverage_branches},\"functions\":${coverage_functions}}}"`
 
    g. Log findings to midden:
    Run using the Bash tool with description "Logging Probe findings to midden...": `aether midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
@@ -351,7 +351,7 @@ The phase will NOT advance until spawning occurs.
 **CRITICAL:** Do NOT proceed to Step 1.7. Do NOT advance the phase.
 Log the violation:
 ```bash
-aether activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
+aether activity-log --command "BLOCKED" --details "colony: Spawn gate failed: {task_count} tasks, 0 spawns"
 aether error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
 ```
 
@@ -503,7 +503,7 @@ If no CRITICAL issues, continue to Step 1.7.1.
    Run using the Bash tool with description "Establishing test baseline...": `test_output_before=$(npm test 2>&1 || echo "TEST_FAILED") && tests_passing_before=$(echo "$test_output_before" | grep -oE '[0-9]+ passing' | grep -oE '[0-9]+' || echo "0") && echo "Baseline: $tests_passing_before tests passing"`
 
    b. **Generate Weaver name and dispatch:**
-   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(aether generate-ant-name "weaver" | jq -r '.result') && aether spawn-log "Queen" "weaver" "$weaver_name" "Proactive refactoring" && echo "{\"name\":\"$weaver_name\"}"`
+   Run using the Bash tool with description "Generating Weaver name...": `weaver_name=$(aether generate-ant-name "weaver" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "weaver" --name "$weaver_name" --task "Proactive refactoring" --depth 0 && echo "{\"name\":\"$weaver_name\"}"`
 
 
    d. **Display:** `🔄🐜 Weaver {weaver_name} spawning — Refactoring complex code...`
@@ -585,7 +585,7 @@ If no CRITICAL issues, continue to Step 1.7.1.
    ```
 
    g. **Log completion:**
-   Run using the Bash tool with description "Logging Weaver completion...": `aether spawn-complete "$weaver_name" "$weaver_status" "Refactoring $weaver_status"`
+   Run using the Bash tool with description "Logging Weaver completion...": `aether spawn-complete --name "$weaver_name" --status "$weaver_status" --summary "Refactoring $weaver_status"`
 
 
    i. **Log to midden:**
@@ -618,7 +618,7 @@ Continue to Step 1.9.
 **If package.json exists:**
 
 1. Generate Gatekeeper name and log spawn:
-Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(aether generate-ant-name "gatekeeper" | jq -r '.result') && aether spawn-log "Queen" "gatekeeper" "$gatekeeper_name" "Supply chain security audit" && echo "{\"name\":\"$gatekeeper_name\"}"`
+Run using the Bash tool with description "Generating Gatekeeper name...": `gatekeeper_name=$(aether generate-ant-name "gatekeeper" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "gatekeeper" --name "$gatekeeper_name" --task "Supply chain security audit" --depth 0 && echo "{\"name\":\"$gatekeeper_name\"}"`
 
 2. Display: `📦🐜 Gatekeeper {name} spawning — Scanning dependencies for CVEs and license compliance...`
 
@@ -663,7 +663,7 @@ Provide JSON output matching this schema:
 5. Parse Gatekeeper JSON output and log completion:
 Extract: `security.critical`, `security.high`, `status`
 
-Run using the Bash tool with description "Logging Gatekeeper completion...": `aether spawn-complete "$gatekeeper_name" "completed" "{\"security\":{\"critical\":$critical_count,\"high\":$high_count}}"`
+Run using the Bash tool with description "Logging Gatekeeper completion...": `aether spawn-complete --name "$gatekeeper_name" --status "completed" --summary "{\"security\":{\"critical\":$critical_count,\"high\":$high_count}}"`
 
 **Gate Decision Logic:**
 
@@ -707,7 +707,7 @@ Continue to Step 1.9.
 **Code quality audit — runs on every `/ant:continue` for consistent coverage.**
 
 1. Generate Auditor name and log spawn:
-Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(aether generate-ant-name "auditor" | jq -r '.result') && aether spawn-log "Queen" "auditor" "$auditor_name" "Code quality audit" && echo "{\"name\":\"$auditor_name\"}"`
+Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(aether generate-ant-name "auditor" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "auditor" --name "$auditor_name" --task "Code quality audit" --depth 0 && echo "{\"name\":\"$auditor_name\"}"`
 
 2. Display: `👥🐜 Auditor {name} spawning — Reviewing code with multi-lens analysis...`
 
@@ -764,7 +764,7 @@ Provide JSON output matching this schema:
 6. Parse Auditor JSON output and log completion:
 Extract: `findings.critical`, `findings.high`, `findings.medium`, `findings.low`, `findings.info`, `overall_score`, `dimensions_audited`
 
-Run using the Bash tool with description "Logging Auditor completion...": `aether spawn-complete "$auditor_name" "completed" "{\"findings\":{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"info\":$info_count},\"score\":$overall_score}"`
+Run using the Bash tool with description "Logging Auditor completion...": `aether spawn-complete --name "$auditor_name" --status "completed" --summary "{\"findings\":{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"info\":$info_count},\"score\":$overall_score}"`
 
 **Gate Decision Logic:**
 

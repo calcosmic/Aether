@@ -59,7 +59,7 @@ func TestSpawnTreeUpdateStatus(t *testing.T) {
 	st := NewSpawnTree(store, "spawn-tree.txt")
 	st.RecordSpawn("colony-prime", "builder", "worker-1", "build task", 1)
 
-	err = st.UpdateStatus("worker-1", "completed")
+	err = st.UpdateStatus("worker-1", "completed", "")
 	if err != nil {
 		t.Fatalf("UpdateStatus() error: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestSpawnTreeUpdateStatus(t *testing.T) {
 	}
 
 	// Test updating non-existent agent
-	err = st.UpdateStatus("nonexistent", "failed")
+	err = st.UpdateStatus("nonexistent", "failed", "")
 	if err == nil {
 		t.Error("expected error for non-existent agent")
 	}
@@ -146,9 +146,7 @@ func TestSpawnTreeParseRoundTrip(t *testing.T) {
 	// Record multiple entries
 	st.RecordSpawn("colony-prime", "builder", "worker-1", "build task", 1)
 	st.RecordSpawn("colony-prime", "watcher", "worker-2", "watch task", 1)
-	st.UpdateStatus("worker-1", "completed")
-
-	// Parse the file
+	st.UpdateStatus("worker-1", "completed", "")
 	entries, err := st.Parse()
 	if err != nil {
 		t.Fatalf("Parse() error: %v", err)
@@ -233,7 +231,7 @@ func TestSpawnTreeActive(t *testing.T) {
 	st.RecordSpawn("colony-prime", "builder", "worker-1", "build", 1)
 	st.RecordSpawn("colony-prime", "builder", "worker-2", "build", 1)
 	st.RecordSpawn("colony-prime", "watcher", "worker-3", "watch", 1)
-	st.UpdateStatus("worker-1", "completed")
+	st.UpdateStatus("worker-1", "completed", "")
 
 	active := st.Active()
 	if len(active) != 2 {
@@ -262,7 +260,7 @@ func TestSpawnTreeToJSON(t *testing.T) {
 	st := NewSpawnTree(store, "spawn-tree.txt")
 	st.RecordSpawn("colony-prime", "builder", "worker-1", "build task", 1)
 	st.RecordSpawn("colony-prime", "watcher", "worker-2", "watch task", 1)
-	st.UpdateStatus("worker-1", "completed")
+	st.UpdateStatus("worker-1", "completed", "")
 
 	data, err := st.ToJSON()
 	if err != nil {
@@ -311,6 +309,121 @@ func TestSpawnTreeToJSON(t *testing.T) {
 	}
 	if len(spawns) != 2 {
 		t.Fatalf("spawns has %d entries, want 2", len(spawns))
+	}
+}
+
+func TestSpawnTreeUpdateStatusWithSummary(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+
+	st := NewSpawnTree(store, "spawn-tree.txt")
+	st.RecordSpawn("colony-prime", "builder", "worker-1", "build task", 1)
+
+	err = st.UpdateStatus("worker-1", "completed", "Task completed successfully")
+	if err != nil {
+		t.Fatalf("UpdateStatus() error: %v", err)
+	}
+
+	if st.entries[0].Status != "completed" {
+		t.Errorf("Status = %q, want %q", st.entries[0].Status, "completed")
+	}
+
+	if len(st.completions) != 1 {
+		t.Fatalf("expected 1 completion line, got %d", len(st.completions))
+	}
+	if st.completions[0].Name != "worker-1" {
+		t.Errorf("completion name = %q, want %q", st.completions[0].Name, "worker-1")
+	}
+	if st.completions[0].Status != "completed" {
+		t.Errorf("completion status = %q, want %q", st.completions[0].Status, "completed")
+	}
+	if st.completions[0].Summary != "Task completed successfully" {
+		t.Errorf("completion summary = %q, want %q", st.completions[0].Summary, "Task completed successfully")
+	}
+
+	// Verify the summary is persisted to the entry as well
+	if st.entries[0].Summary != "Task completed successfully" {
+		t.Errorf("entry summary = %q, want %q", st.entries[0].Summary, "Task completed successfully")
+	}
+
+	// Verify round-trip: re-parse the file and check summary
+	st2 := NewSpawnTree(store, "spawn-tree.txt")
+	entries, err := st2.Parse()
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry after re-parse, got %d", len(entries))
+	}
+	if entries[0].Summary != "Task completed successfully" {
+		t.Errorf("re-parsed entry summary = %q, want %q", entries[0].Summary, "Task completed successfully")
+	}
+}
+
+func TestSpawnTreeUpdateStatusEmptySummary(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+
+	st := NewSpawnTree(store, "spawn-tree.txt")
+	st.RecordSpawn("colony-prime", "builder", "worker-1", "build task", 1)
+
+	// Call with empty summary (backward compatibility)
+	err = st.UpdateStatus("worker-1", "completed", "")
+	if err != nil {
+		t.Fatalf("UpdateStatus() error: %v", err)
+	}
+
+	if st.completions[0].Summary != "" {
+		t.Errorf("completion summary = %q, want empty string", st.completions[0].Summary)
+	}
+
+	// Verify the file can still be parsed by a new SpawnTree instance
+	st2 := NewSpawnTree(store, "spawn-tree.txt")
+	entries, err := st2.Parse()
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Status != "completed" {
+		t.Errorf("re-parsed status = %q, want completed", entries[0].Status)
+	}
+}
+
+func TestSpawnTreeParseOldFormatCompletion(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+
+	// Write old-format completion line (no summary field): timestamp|name|status|
+	shellContent := `2026-04-01T12:00:00Z|colony-prime|builder|worker-1|build task|1|spawned
+2026-04-01T12:05:00Z|worker-1|completed|
+`
+	store.AtomicWrite("spawn-tree.txt", []byte(shellContent))
+
+	st := NewSpawnTree(store, "spawn-tree.txt")
+	entries, err := st.Parse()
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	if len(entries) != 1 {
+		t.Fatalf("Parse() returned %d entries, want 1", len(entries))
+	}
+	if entries[0].Status != "completed" {
+		t.Errorf("Status = %q, want completed", entries[0].Status)
+	}
+	if entries[0].Summary != "" {
+		t.Errorf("Summary = %q, want empty for old format", entries[0].Summary)
 	}
 }
 

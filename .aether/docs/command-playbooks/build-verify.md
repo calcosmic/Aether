@@ -25,7 +25,7 @@ REVIEW_CONTEXT=$(bash "$AETHER_UTILS" pr-context --compact 2>/dev/null) || true
 
 Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
-Run using the Bash tool with description "Dispatching watcher...": `aether spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"`
+Run using the Bash tool with description "Dispatching watcher...": `aether spawn-log --parent "Queen" --caste "watcher" --name "{watcher_name}" --task "Independent verification" --depth 0`
 
 **Load skills for the Watcher role (NON-BLOCKING):**
 
@@ -139,7 +139,7 @@ For failed verification:
 3. **Generate Measurer name and dispatch:**
 
    Run using the Bash tool with description "Naming measurer...": `aether generate-ant-name "measurer"` (store as `{measurer_name}`)
-   Run using the Bash tool with description "Dispatching measurer...": `aether spawn-log "Queen" "measurer" "{measurer_name}" "Performance baseline measurement"`
+   Run using the Bash tool with description "Dispatching measurer...": `aether spawn-log --parent "Queen" --caste "measurer" --name "{measurer_name}" --task "Performance baseline measurement" --depth 0`
 
    Display:
    ```
@@ -184,7 +184,7 @@ For failed verification:
 
    **IMPORTANT:** You are strictly read-only. Do not modify any files.
 
-   Log activity: aether activity-log "BENCHMARKING" "{Measurer-Name}" "description"
+   Log activity: aether activity-log --command "BENCHMARKING" --details "{Measurer-Name}: description"
 
    Return ONLY this JSON (no other text):
    {
@@ -216,7 +216,7 @@ For failed verification:
    Extract from response: `baselines_established`, `bottlenecks_identified`, `recommendations`, `tool_count`
 
    Log completion:
-   Run using the Bash tool with description "Recording measurer completion...": `aether spawn-complete "{measurer_name}" "completed" "Baselines established, bottlenecks identified"`
+   Run using the Bash tool with description "Recording measurer completion...": `aether spawn-complete --name "{measurer_name}" --status "completed" --summary "Baselines established, bottlenecks identified"`
 
    **Display Measurer completion line:**
    ```
@@ -268,7 +268,7 @@ Generate a chaos ant name and dispatch:
 Run using the Bash tool with description "Naming chaos ant...": `aether generate-ant-name "chaos"` (store as `{chaos_name}`)
 Run using the Bash tool with description "Loading existing flags...": `aether flag-list --phase {phase_number}`
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
-Run using the Bash tool with description "Dispatching chaos ant...": `aether spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"`
+Run using the Bash tool with description "Dispatching chaos ant...": `aether spawn-log --parent "Queen" --caste "chaos" --name "{chaos_name}" --task "Resilience testing of Phase {id} work" --depth 0`
 
 **Announce the resilience testing wave:**
 ```
@@ -324,7 +324,7 @@ Return ONLY this JSON:
 **Flag critical/high findings:**
 
 If any findings have severity `"critical"` or `"high"`:
-Run using the Bash tool with description "Flagging {finding.title}...": `aether flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number} && aether activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"`
+Run using the Bash tool with description "Flagging {finding.title}...": `aether flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number} && aether activity-log --command "FLAG" --details "Chaos: Created blocker: {finding.title}"`
 
 **Log resilience finding to midden (MEM-02):**
 
@@ -359,7 +359,7 @@ aether memory-capture \
 ```
 
 Log chaos ant completion:
-Run using the Bash tool with description "Recording chaos completion...": `aether spawn-complete "{chaos_name}" "completed" "{summary}"`
+Run using the Bash tool with description "Recording chaos completion...": `aether spawn-complete --name "{chaos_name}" --status "completed" --summary "{summary}"`
 
 **Success capture: chaos resilience (MEM-01):**
 
@@ -381,7 +381,7 @@ This records the resilience success in learning-observations.json via the existi
 If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
 
 For each issue in `issues_found`:
-Run using the Bash tool with description "Flagging {issue_title}...": `aether flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number} && aether activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"`
+Run using the Bash tool with description "Flagging {issue_title}...": `aether flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number} && aether activity-log --command "FLAG" --details "Watcher: Created blocker: {issue_title}"`
 
 **Log verification failure to midden (MEM-02):**
 

@@ -300,7 +300,7 @@ aether flag-add --severity "blocker" --title "{scenario.title}" --description "{
 
 Log each flag creation by running using the Bash tool with description "Logging chaos flag...":
 ```bash
-aether activity-log "FLAG" "Chaos Ant" "Created blocker: {scenario.title}"
+aether activity-log --command "FLAG" --details "Chaos Ant: Created blocker: {scenario.title}"
 ```
 
 The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aether/data/COLONY_STATE.json` field `current_phase`).
@@ -311,7 +311,7 @@ The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aet
 
 Run using the Bash tool with description "Logging chaos activity...":
 ```bash
-aether activity-log "CHAOS" "Chaos Ant" "Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
+aether activity-log --command "CHAOS" --details "Chaos Ant: Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
 ```
 
 Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":

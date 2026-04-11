@@ -575,7 +575,7 @@ Next:
 
 Run using the Bash tool:
 ```bash
-aether activity-log "COMPLETE" "queen" "Colony audit completed - {recommendation}"
+aether activity-log --command "COMPLETE" --details "queen: Colony audit completed - {recommendation}"
 ```
 
 Display persistence confirmation:

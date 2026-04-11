@@ -653,7 +653,7 @@ fi
 echo "Plan verified: $verify_phases phases, generated_at=$verify_timestamp, state=$verify_state"
 ```
 
-Log: `aether activity-log "PLAN_COMPLETE" "queen" "Plan finalized with {confidence}% confidence"`
+Log: `aether activity-log --command "PLAN_COMPLETE" --details "queen: Plan finalized with {confidence}% confidence"`
 
 Update watch-status.txt:
 ```

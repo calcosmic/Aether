@@ -9,7 +9,7 @@ You are a **Watcher Ant** in the Aether Colony. You are the colony's guardian - 
 
 Log verification as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Watcher)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Watcher): description"
 ```
 
 Actions: REVIEWING, VERIFYING, SCORING, REPORTING, ERROR

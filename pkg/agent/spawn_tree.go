@@ -12,7 +12,8 @@ import (
 )
 
 // SpawnEntry represents a single agent spawn record, matching the shell
-// spawn-tree.txt format with exactly 7 pipe-delimited fields.
+// spawn-tree.txt format with exactly 7 pipe-delimited fields plus an
+// optional summary from completion lines.
 type SpawnEntry struct {
 	Timestamp  string // Field 1: ISO 8601 UTC (2006-01-02T15:04:05Z)
 	ParentName string // Field 2: parent agent name
@@ -21,14 +22,16 @@ type SpawnEntry struct {
 	Task       string // Field 5: task description
 	Depth      int    // Field 6: spawn depth
 	Status     string // Field 7: "spawned", "active", "completed", "failed", "blocked"
+	Summary    string // Completion summary (set via spawn-complete --summary)
 }
 
 // completionLine represents a status update line in the spawn tree file.
-// Format: timestamp|name|status|
+// Format: timestamp|name|status|summary (summary is empty for backward compat)
 type completionLine struct {
 	Timestamp string
 	Name      string
 	Status    string
+	Summary   string
 }
 
 // SpawnTree tracks running agents in the same pipe-delimited format as the
@@ -79,7 +82,8 @@ func (st *SpawnTree) RecordSpawn(parent, caste, name, task string, depth int) er
 
 // UpdateStatus finds an entry by agent name and updates its status.
 // It adds a completion line to the file matching the shell's second awk rule.
-func (st *SpawnTree) UpdateStatus(name string, status string) error {
+// The summary is an optional description stored alongside the completion.
+func (st *SpawnTree) UpdateStatus(name string, status string, summary string) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 
@@ -88,6 +92,7 @@ func (st *SpawnTree) UpdateStatus(name string, status string) error {
 	for i := range st.entries {
 		if st.entries[i].AgentName == name {
 			st.entries[i].Status = status
+			st.entries[i].Summary = summary
 			found = true
 			break
 		}
@@ -101,6 +106,7 @@ func (st *SpawnTree) UpdateStatus(name string, status string) error {
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Name:      name,
 		Status:    status,
+		Summary:   summary,
 	})
 
 	return st.persistLocked()
@@ -124,9 +130,10 @@ func (st *SpawnTree) persistLocked() error {
 		lines = append(lines, line)
 	}
 
-	// Completion lines: timestamp|name|status|
+	// Completion lines: timestamp|name|status|summary
+	// When summary is empty, format is timestamp|name|status| (backward compat)
 	for _, c := range st.completions {
-		line := fmt.Sprintf("%s|%s|%s|", c.Timestamp, c.Name, c.Status)
+		line := fmt.Sprintf("%s|%s|%s|%s", c.Timestamp, c.Name, c.Status, c.Summary)
 		lines = append(lines, line)
 	}
 
@@ -177,18 +184,24 @@ func (st *SpawnTree) parseFile() ([]SpawnEntry, []completionLine, error) {
 			nameToIdx[fields[3]] = len(entries)
 			entries = append(entries, entry)
 		} else if fieldCount >= 4 {
-			// Completion line: timestamp|name|status|
-			// Check if field 3 matches known statuses
+			// Completion line: timestamp|name|status|summary
+			// Old format (no summary): timestamp|name|status|  -> field[3] = ""
+			// New format (with summary): timestamp|name|status|summary -> field[3] = summary
 			status := fields[2]
 			if status == "completed" || status == "failed" || status == "blocked" {
+				summary := fields[3]
 				completions = append(completions, completionLine{
 					Timestamp: fields[0],
 					Name:      fields[1],
 					Status:    status,
+					Summary:   summary,
 				})
-				// Merge status into the matching spawn entry
+				// Merge status and summary into the matching spawn entry
 				if idx, ok := nameToIdx[fields[1]]; ok {
 					entries[idx].Status = status
+					if summary != "" {
+						entries[idx].Summary = summary
+					}
 				}
 			}
 		}

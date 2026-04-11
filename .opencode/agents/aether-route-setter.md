@@ -9,7 +9,7 @@ You are a **Route-Setter Ant** in the Aether Colony. You are the colony's planne
 
 Log progress as you work:
 ```bash
-bash .aether/aether-utils.sh activity-log "ACTION" "{your_name} (Route-Setter)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Route-Setter): description"
 ```
 
 Actions: ANALYZING, PLANNING, STRUCTURING, COMPLETED

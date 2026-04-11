@@ -211,7 +211,7 @@ Continue to Phase 5: Secrets Scan.
    f. Parse Probe JSON output and log completion:
    Extract: `tests_added`, `coverage.lines`, `coverage.branches`, `coverage.functions`, `edge_cases_discovered`
 
-   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete --id "$probe_name" --status "completed" --summary "{probe_summary}"`
+   Run using the Bash tool with description "Logging Probe completion...": `aether spawn-complete --name "$probe_name" --status "completed" --summary "{probe_summary}"`
 
    g. Log findings to midden:
    Run using the Bash tool with description "Logging Probe findings to midden...": `aether midden-write "coverage" "Probe generated tests, coverage: ${coverage_lines}%/${coverage_branches}%/${coverage_functions}%" "probe"`
@@ -363,7 +363,7 @@ The phase will NOT advance until spawning occurs.
 **CRITICAL:** Do NOT proceed to Step 1.7. Do NOT advance the phase.
 Log the violation:
 ```bash
-aether activity-log "BLOCKED" "colony" "Spawn gate failed: {task_count} tasks, 0 spawns"
+aether activity-log --command "BLOCKED" --details "colony: Spawn gate failed: {task_count} tasks, 0 spawns"
 aether error-flag-pattern "no-spawn-violation" "Prime Worker completed phase without spawning specialists" "critical"
 ```
 
@@ -560,7 +560,7 @@ If no CRITICAL issues, continue to Step 1.7.1.
    ```
 
    g. **Log completion:**
-   Run using the Bash tool with description "Logging Weaver completion...": `aether spawn-complete --id "$weaver_name" --status "$weaver_status" --summary "Refactoring $weaver_status"`
+   Run using the Bash tool with description "Logging Weaver completion...": `aether spawn-complete --name "$weaver_name" --status "$weaver_status" --summary "Refactoring $weaver_status"`
 
    h. **Log to midden:**
    Run using the Bash tool with description "Logging refactoring activity to midden...": `aether midden-write "refactoring" "Weaver refactored files, complexity before/after: ${complexity_before}/${complexity_after}" "weaver"`
@@ -614,7 +614,7 @@ Gatekeeper mission: Perform supply chain security audit on this codebase.
 5. Parse Gatekeeper JSON output and log completion:
 Extract: `security.critical`, `security.high`, `status`
 
-Run using the Bash tool with description "Logging Gatekeeper completion...": `aether spawn-complete --id "$gatekeeper_name" --status "completed" --summary "{gatekeeper_summary}"`
+Run using the Bash tool with description "Logging Gatekeeper completion...": `aether spawn-complete --name "$gatekeeper_name" --status "completed" --summary "{gatekeeper_summary}"`
 
 **Gate Decision Logic:**
 
@@ -681,7 +681,7 @@ Auditor mission: Perform comprehensive code quality audit on this codebase.
 6. Parse Auditor JSON output and log completion:
 Extract: `findings.critical`, `findings.high`, `findings.medium`, `findings.low`, `findings.info`, `overall_score`, `dimensions_audited`
 
-Run using the Bash tool with description "Logging Auditor completion...": `aether spawn-complete --id "$auditor_name" --status "completed" --summary "{auditor_summary}"`
+Run using the Bash tool with description "Logging Auditor completion...": `aether spawn-complete --name "$auditor_name" --status "completed" --summary "{auditor_summary}"`
 
 **Gate Decision Logic:**
 

@@ -9,7 +9,7 @@ You are **📝 Chronicler Ant** in the Aether Colony. You document code wisdom f
 
 Log progress as you work:
 ```bash
-aether activity-log "ACTION" "{your_name} (Chronicler)" "description"
+aether activity-log --command "ACTION" --details "{your_name} (Chronicler): description"
 ```
 
 Actions: SURVEYING, DOCUMENTING, UPDATING, REVIEWING, ERROR

@@ -349,7 +349,7 @@ aether pheromone-read 2>/dev/null
    4. Run: git blame "{file_path}" | head -40 for authorship
    5. Note TODO/FIXME/HACK markers
 
-   Log activity: aether activity-log "READ" "{Ant-Name}" "description"
+   Log activity: aether activity-log --command "READ" --details "{Ant-Name}: description"
 
    Report (plain text):
    - WHY key code sections exist (from commits)
@@ -363,7 +363,7 @@ aether pheromone-read 2>/dev/null
 
    Log completion:
    ```bash
-   aether spawn-complete --id "{archaeologist_name}" --status "completed" --summary "Pre-build archaeology scan"
+   aether spawn-complete --name "{archaeologist_name}" --status "completed" --summary "Pre-build archaeology scan"
    ```
 
 3. **Store and display findings:**
@@ -529,7 +529,7 @@ Goal: "{colony_goal}"
 Work:
 1. Read .aether/workers.md for Builder discipline
 2. Implement task, write tests
-3. Log activity: aether activity-log "ACTION" "{Ant-Name}" "description"
+3. Log activity: aether activity-log --command "ACTION" --details "{Ant-Name}: description"
 
 Spawn sub-workers ONLY if 3x complexity:
 - Check: aether spawn-can-spawn {depth} --enforce
@@ -638,7 +638,7 @@ Where `tool_count` comes from the worker's returned JSON `tool_count` field, and
 
 Log and update swarm display:
 ```bash
-aether spawn-complete --id "{ant_name}" --status "completed" --summary "{summary}"
+aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}"
 aether context-update worker-complete "{ant_name}" "completed"
 ```
 
@@ -848,12 +848,12 @@ aether flag-add --severity "blocker" --title "{finding.title}" --description "{f
 
 Log the flag:
 ```bash
-aether activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"
+aether activity-log --command "FLAG" --details "Chaos: Created blocker: {finding.title}"
 ```
 
 Log chaos ant completion and update swarm display:
 ```bash
-aether spawn-complete --id "{chaos_name}" --status "completed" --summary "{summary}"
+aether spawn-complete --name "{chaos_name}" --status "completed" --summary "{summary}"
 ```
 
 ### Step 5.8: Create Flags for Verification Failures
@@ -868,7 +868,7 @@ aether flag-add --severity "blocker" --title "{issue_title}" --description "{iss
 
 Log the flag creation:
 ```bash
-aether activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"
+aether activity-log --command "FLAG" --details "Watcher: Created blocker: {issue_title}"
 ```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
@@ -951,7 +951,7 @@ aether grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or su
 ```
   Log the grave marker:
 ```bash
-aether activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"
+aether activity-log --command "GRAVE" --details "Queen: Grave marker placed at {file} — {ant_name} failed: {summary}"
 ```
 
 **Error Handoff Update:**

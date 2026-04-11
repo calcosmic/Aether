@@ -410,7 +410,7 @@ fi
 
    Generate archaeologist name and dispatch:
    Run using the Bash tool with description "Naming archaeologist...": `aether generate-ant-name "archaeologist"` (store as `{archaeologist_name}`)
-   Run using the Bash tool with description "Dispatching archaeologist...": `aether spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"`
+   Run using the Bash tool with description "Dispatching archaeologist...": `aether spawn-log --parent "Queen" --caste "scout" --name "{archaeologist_name}" --task "Pre-build archaeology scan" --depth 0`
 
    Display:
    ```
@@ -435,7 +435,7 @@ fi
    4. Run: git blame "{file_path}" | head -40 for authorship
    5. Note TODO/FIXME/HACK markers
 
-   Log activity: aether activity-log "READ" "{Ant-Name}" "description"
+   Log activity: aether activity-log --command "READ" --details "{Ant-Name}: description"
 
    Report (plain text):
    - WHY key code sections exist (from commits)
@@ -448,7 +448,7 @@ fi
    **Wait for results** (blocking — use TaskOutput with `block: true`).
 
    Log completion and update swarm display:
-   Run using the Bash tool with description "Recording archaeologist findings...": `aether spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"`
+   Run using the Bash tool with description "Recording archaeologist findings...": `aether spawn-complete --name "{archaeologist_name}" --status "completed" --summary "Pre-build archaeology scan"`
 
 3. **Store and display findings:**
 
@@ -473,7 +473,7 @@ fi
 **Log phase start:**
 Run using the Bash tool with description "Logging phase start...":
 ```bash
-aether activity-log "EXECUTING" "Queen" "Phase {id}: {name} - Queen dispatching workers"
+aether activity-log --command "EXECUTING" --details "Queen: Phase {id}: {name} - Queen dispatching workers"
 ```
 
 **Show real-time display header:**
@@ -617,7 +617,7 @@ If `is_integration_phase` is `"true"`:
 
 1. **Generate Ambassador name and dispatch:**
    Run using the Bash tool with description "Naming ambassador...": `aether generate-ant-name "ambassador"` (store as `{ambassador_name}`)
-   Run using the Bash tool with description "Dispatching ambassador...": `aether spawn-log "Queen" "ambassador" "{ambassador_name}" "External integration design"`
+   Run using the Bash tool with description "Dispatching ambassador...": `aether spawn-log --parent "Queen" --caste "ambassador" --name "{ambassador_name}" --task "External integration design" --depth 0`
 
    Display:
    ```
@@ -666,7 +666,7 @@ If `is_integration_phase` is `"true"`:
    - HTTPS only
    - Validate SSL certificates
 
-   Log activity: aether activity-log "RESEARCH" "{Ambassador-Name}" "description"
+   Log activity: aether activity-log --command "RESEARCH" --details "{Ambassador-Name}: description"
 
    Return ONLY this JSON (no other text):
    {
@@ -695,7 +695,7 @@ If `is_integration_phase` is `"true"`:
    Extract from response: `integration_plan`, `env_vars_required`, `error_scenarios_covered`, `blockers`
 
    Log completion and update swarm display:
-   Run using the Bash tool with description "Recording ambassador completion...": `aether spawn-complete "{ambassador_name}" "completed" "Integration design complete"`
+   Run using the Bash tool with description "Recording ambassador completion...": `aether spawn-complete --name "{ambassador_name}" --status "completed" --summary "Integration design complete"`
 
    **Display Ambassador completion line:**
    ```
@@ -745,7 +745,7 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
 - If `grave_context` is non-empty, display a visible line before spawning that worker:
   `⚰️ Graveyard caution for {ant_name}: {file_1} ({level_1}), {file_2} ({level_2})`
 
-**PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `aether spawn-log "Queen" "builder" "{ant_name}" "{task_description}" && aether context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
+**PER WORKER:** Run using the Bash tool with description "Preparing worker {name}...": `aether spawn-log --parent "Queen" --caste "builder" --name "{ant_name}" --task "{task_description}" --depth 0 && aether context-update worker-spawn "{ant_name}" "builder" "{task_description}"`
 
 **Builder Worker Prompt (CLEAN OUTPUT):**
 ```
@@ -887,7 +887,7 @@ aether memory-capture \
   "worker:builder" 2>/dev/null || true
 ```
 
-**PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete "{ant_name}" "completed" "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
+**PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
 
 **Check for total wave failure:**
 
@@ -1024,7 +1024,7 @@ Repeat Step 5.1-5.2 for each subsequent wave, waiting for previous wave to compl
 
 Spawn the Watcher using Task tool with `subagent_type="aether-watcher"`, include `description: "👁️ Watcher {Watcher-Name}: Independent verification"` (DO NOT use run_in_background - task blocks until complete):
 
-Run using the Bash tool with description "Dispatching watcher...": `aether spawn-log "Queen" "watcher" "{watcher_name}" "Independent verification"`
+Run using the Bash tool with description "Dispatching watcher...": `aether spawn-log --parent "Queen" --caste "watcher" --name "{watcher_name}" --task "Independent verification" --depth 0`
 
 **Watcher Worker Prompt (CLEAN OUTPUT):**
 ```
@@ -1120,7 +1120,7 @@ For failed verification:
 3. **Generate Measurer name and dispatch:**
 
    Run using the Bash tool with description "Naming measurer...": `aether generate-ant-name "measurer"` (store as `{measurer_name}`)
-   Run using the Bash tool with description "Dispatching measurer...": `aether spawn-log "Queen" "measurer" "{measurer_name}" "Performance baseline measurement"`
+   Run using the Bash tool with description "Dispatching measurer...": `aether spawn-log --parent "Queen" --caste "measurer" --name "{measurer_name}" --task "Performance baseline measurement" --depth 0`
 
    Display:
    ```
@@ -1164,7 +1164,7 @@ For failed verification:
 
    **IMPORTANT:** You are strictly read-only. Do not modify any files.
 
-   Log activity: aether activity-log "BENCHMARKING" "{Measurer-Name}" "description"
+   Log activity: aether activity-log --command "BENCHMARKING" --details "{Measurer-Name}: description"
 
    Return ONLY this JSON (no other text):
    {
@@ -1196,7 +1196,7 @@ For failed verification:
    Extract from response: `baselines_established`, `bottlenecks_identified`, `recommendations`, `tool_count`
 
    Log completion and update swarm display:
-   Run using the Bash tool with description "Recording measurer completion...": `aether spawn-complete "{measurer_name}" "completed" "Baselines established, bottlenecks identified"`
+   Run using the Bash tool with description "Recording measurer completion...": `aether spawn-complete --name "{measurer_name}" --status "completed" --summary "Baselines established, bottlenecks identified"`
 
    **Display Measurer completion line:**
    ```
@@ -1243,7 +1243,7 @@ Generate a chaos ant name and dispatch:
 Run using the Bash tool with description "Naming chaos ant...": `aether generate-ant-name "chaos"` (store as `{chaos_name}`)
 Run using the Bash tool with description "Loading existing flags...": `aether flag-list --phase {phase_number}`
 Parse the result and extract unresolved flag titles into a list: `{existing_flag_titles}` (comma-separated titles from `.result.flags[].title`). If no flags exist, set `{existing_flag_titles}` to "None".
-Run using the Bash tool with description "Dispatching chaos ant...": `aether spawn-log "Queen" "chaos" "{chaos_name}" "Resilience testing of Phase {id} work"`
+Run using the Bash tool with description "Dispatching chaos ant...": `aether spawn-log --parent "Queen" --caste "chaos" --name "{chaos_name}" --task "Resilience testing of Phase {id} work" --depth 0`
 
 **Announce the resilience testing wave:**
 ```
@@ -1297,7 +1297,7 @@ Return ONLY this JSON:
 **Flag critical/high findings:**
 
 If any findings have severity `"critical"` or `"high"`:
-Run using the Bash tool with description "Flagging {finding.title}...": `aether flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number} && aether activity-log "FLAG" "Chaos" "Created blocker: {finding.title}"`
+Run using the Bash tool with description "Flagging {finding.title}...": `aether flag-add "blocker" "{finding.title}" "{finding.description}" "chaos-testing" {phase_number} && aether activity-log --command "FLAG" --details "Chaos: Created blocker: {finding.title}"`
 
 **Log resilience finding to midden (MEM-02):**
 
@@ -1332,14 +1332,14 @@ aether memory-capture \
 ```
 
 Log chaos ant completion and update swarm display:
-Run using the Bash tool with description "Recording chaos completion...": `aether spawn-complete "{chaos_name}" "completed" "{summary}"`
+Run using the Bash tool with description "Recording chaos completion...": `aether spawn-complete --name "{chaos_name}" --status "completed" --summary "{summary}"`
 
 ### Step 5.8: Create Flags for Verification Failures
 
 If the Watcher reported `verification_passed: false` or `recommendation: "fix_required"`:
 
 For each issue in `issues_found`:
-Run using the Bash tool with description "Flagging {issue_title}...": `aether flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number} && aether activity-log "FLAG" "Watcher" "Created blocker: {issue_title}"`
+Run using the Bash tool with description "Flagging {issue_title}...": `aether flag-add "blocker" "{issue_title}" "{issue_description}" "verification" {phase_number} && aether activity-log --command "FLAG" --details "Watcher: Created blocker: {issue_title}"`
 
 **Log verification failure to midden (MEM-02):**
 
@@ -1418,7 +1418,7 @@ Collect all worker outputs and create phase summary:
 **Graveyard Recording:**
 For each worker that returned `status: "failed"`:
   For each file in that worker's `files_modified` or `files_created`:
-Run using the Bash tool with description "Recording failure grave...": `aether grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && aether activity-log "GRAVE" "Queen" "Grave marker placed at {file} — {ant_name} failed: {summary}"`
+Run using the Bash tool with description "Recording failure grave...": `aether grave-add "{file}" "{ant_name}" "{task_id}" {phase} "{first blocker or summary}" && aether activity-log --command "GRAVE" --details "Queen: Grave marker placed at {file} — {ant_name} failed: {summary}"`
   Then display a user-visible confirmation line:
   `⚰️ Grave recorded: {file} — {ant_name} failed ({summary})`
 

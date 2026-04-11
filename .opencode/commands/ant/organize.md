@@ -207,7 +207,7 @@ Next:
 
 Use the Bash tool to run:
 ```
-aether activity-log "COMPLETE" "queen" "Hygiene report generated"
+aether activity-log --command "COMPLETE" --details "queen: Hygiene report generated"
 ```
 
 Display persistence confirmation:

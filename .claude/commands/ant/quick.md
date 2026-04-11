@@ -82,7 +82,7 @@ Display the Scout's answer directly to the user.
 
 Run using the Bash tool with description "Recording scout completion...":
 ```bash
-aether spawn-complete --id "{scout_name}" --status "completed" --summary "Quick query answered"
+aether spawn-complete --name "{scout_name}" --status "completed" --summary "Quick query answered"
 ```
 
 ### Step 5: Update Session (lightweight)

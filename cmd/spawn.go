@@ -72,18 +72,23 @@ var spawnCompleteCmd = &cobra.Command{
 		if status == "" {
 			status = "completed"
 		}
+		summary, _ := cmd.Flags().GetString("summary")
 
 		st := agent.NewSpawnTree(store, "spawn-tree.txt")
-		if err := st.UpdateStatus(name, status); err != nil {
+		if err := st.UpdateStatus(name, status, summary); err != nil {
 			outputError(1, fmt.Sprintf("failed to update status: %v", err), nil)
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"completed": true,
 			"name":      name,
 			"status":    status,
-		})
+		}
+		if summary != "" {
+			result["summary"] = summary
+		}
+		outputOK(result)
 		return nil
 	},
 }
@@ -285,6 +290,7 @@ func init() {
 
 	spawnCompleteCmd.Flags().String("name", "", "Agent name to complete (required)")
 	spawnCompleteCmd.Flags().String("status", "", "Status: completed, failed, blocked (default: completed)")
+	spawnCompleteCmd.Flags().String("summary", "", "Completion summary (optional)")
 
 	spawnCanSpawnCmd.Flags().Int("depth", 0, "Spawn depth to check (required)")
 

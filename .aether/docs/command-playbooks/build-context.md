@@ -229,7 +229,7 @@ Display to user:
 
    Generate archaeologist name and dispatch:
    Run using the Bash tool with description "Naming archaeologist...": `aether generate-ant-name "archaeologist"` (store as `{archaeologist_name}`)
-   Run using the Bash tool with description "Dispatching archaeologist...": `aether spawn-log "Queen" "scout" "{archaeologist_name}" "Pre-build archaeology scan"`
+   Run using the Bash tool with description "Dispatching archaeologist...": `aether spawn-log --parent "Queen" --caste "scout" --name "{archaeologist_name}" --task "Pre-build archaeology scan" --depth 0`
 
    Display:
    ```
@@ -256,7 +256,7 @@ Display to user:
    4. Run: git blame "{file_path}" | head -40 for authorship
    5. Note TODO/FIXME/HACK markers
 
-   Log activity: aether activity-log "READ" "{Ant-Name}" "description"
+   Log activity: aether activity-log --command "READ" --details "{Ant-Name}: description"
 
    Report (plain text):
    - WHY key code sections exist (from commits)
@@ -269,7 +269,7 @@ Display to user:
    **Wait for results** (blocking — use TaskOutput with `block: true`).
 
    Log completion:
-   Run using the Bash tool with description "Recording archaeologist findings...": `aether spawn-complete "{archaeologist_name}" "completed" "Pre-build archaeology scan"`
+   Run using the Bash tool with description "Recording archaeologist findings...": `aether spawn-complete --name "{archaeologist_name}" --status "completed" --summary "Pre-build archaeology scan"`
 
 3. **Store and display findings:**
 
