@@ -20,7 +20,7 @@ if [[ -f "$obs_file" ]]; then
       colony=$(echo "$encoded" | base64 -d | jq -r '.colonies[0] // "unknown"')
       [[ -z "$content" ]] && continue
 
-      result=$(aether learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
+      result=$(aether learning-promote-auto 2>/dev/null || echo '{}')
       was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
       if [[ "$was_promoted" == "true" ]]; then
         promoted_count=$((promoted_count + 1))

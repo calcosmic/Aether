@@ -979,7 +979,7 @@ Update COLONY_STATE.json:
      echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
        if [[ -n "$claim" ]]; then
          # Default wisdom_type to "pattern" (threshold: 3 observations)
-         aether memory-capture "learning" "$claim" "pattern" "worker:continue" 2>/dev/null || true
+         aether memory-capture --type "learning" --content "$claim" 2>/dev/null || true
        fi
      done
      echo "Recorded observations for threshold tracking"
@@ -1104,10 +1104,8 @@ Also capture each recurring pattern as a resolution candidate:
 
 ```bash
 aether memory-capture \
-  "resolution" \
-  "$pattern_text" \
-  "pattern" \
-  "worker:continue" 2>/dev/null || true
+  --type "resolution" \
+  --content "$pattern_text" 2>/dev/null || true
 ```
 
 If `errors.flagged_patterns` doesn't exist or is empty, skip silently.

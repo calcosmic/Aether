@@ -204,10 +204,8 @@ while IFS= read -r question; do
     "oracle-research" \
     "oracle,research" 2>/dev/null || true
 
-  aether memory-capture learning \
-    "Oracle research finding: $q_text (${q_confidence}%)" \
-    "pattern" \
-    "oracle:promote" 2>/dev/null || true
+  aether memory-capture --type "learning" \
+    --content "Oracle research finding: $q_text (${q_confidence}%)" 2>/dev/null || true
 
   promoted=$((promoted + 1))
 done < <(jq -c '[.questions[] | select(.status == "answered" and .confidence >= 80)] | .[]' "$ORACLE_DIR/plan.json")

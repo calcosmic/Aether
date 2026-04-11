@@ -1056,7 +1056,7 @@ Update COLONY_STATE.json:
   if [[ -n "$current_phase_learnings" ]]; then
     echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
       if [[ -n "$claim" ]]; then
-        aether memory-capture "learning" "$claim" "pattern" "worker:continue"
+        aether memory-capture --type "learning" --content "$claim"
       fi
     done
     echo "Recorded observations for threshold tracking"
@@ -1252,10 +1252,8 @@ if [[ "$midden_count" -gt 0 ]]; then
 
       # Capture as resolution candidate for promotion tracking
       aether memory-capture \
-        "resolution" \
-        "Recurring error pattern: $category ($count occurrences)" \
-        "pattern" \
-        "worker:continue" 2>/dev/null || true
+        --type "resolution" \
+        --content "Recurring error pattern: $category ($count occurrences)" 2>/dev/null || true
     fi
   done
 fi
@@ -1388,7 +1386,7 @@ if [[ -f "$obs_file" ]]; then
       colony=$(echo "$encoded" | base64 -d | jq -r '.colonies[0] // "unknown"')
       [[ -z "$content" ]] && continue
 
-      result=$(aether learning-promote-auto "$wisdom_type" "$content" "$colony" "learning" 2>/dev/null || echo '{}')
+      result=$(aether learning-promote-auto 2>/dev/null || echo '{}')
       was_promoted=$(echo "$result" | jq -r '.result.promoted // false' 2>/dev/null || echo "false")
       if [[ "$was_promoted" == "true" ]]; then
         promoted_count=$((promoted_count + 1))

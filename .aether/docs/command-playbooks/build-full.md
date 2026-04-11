@@ -815,10 +815,8 @@ aether midden-write --category "abandoned-approach" --message "Tried: initial ap
 
 # Enter memory pipeline for learning observation tracking (MID-02)
 aether memory-capture \
-  "failure" \
-  "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)" \
-  "failure" \
-  "worker:builder" 2>/dev/null || true
+  --type "failure" \
+  --content "Approach abandoned: initial approach that failed -> new approach (reason it didn't work)" 2>/dev/null || true
 ```
 
 Spawn sub-workers ONLY if 3x complexity:
@@ -881,10 +879,8 @@ aether midden-write --category "worker_failure" --message "Builder ${ant_name} f
 
 # Capture failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
-  "failure" \
-  "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" \
-  "failure" \
-  "worker:builder" 2>/dev/null || true
+  --type "failure" \
+  --content "Builder ${ant_name} failed on task ${task_id}: ${blockers[0]:-$failure_reason}" 2>/dev/null || true
 ```
 
 **PER WORKER:** Run using the Bash tool with description "Recording {name} completion...": `aether spawn-complete --name "{ant_name}" --status "completed" --summary "{summary}" && aether context-update worker-complete "{ant_name}" "completed"`
@@ -1325,10 +1321,8 @@ aether midden-write --category "resilience" --message "Chaos finding: ${finding.
 
 # Capture resilience failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
-  "failure" \
-  "Resilience issue found: ${finding.title} (${finding.severity})" \
-  "failure" \
-  "worker:chaos" 2>/dev/null || true
+  --type "failure" \
+  --content "Resilience issue found: ${finding.title} (${finding.severity})" 2>/dev/null || true
 ```
 
 Log chaos ant completion and update swarm display:
@@ -1367,10 +1361,8 @@ aether midden-write --category "verification" --message "Watcher verification fa
 
 # Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
-  "failure" \
-  "Verification failed: ${issue_title} - ${issue_description}" \
-  "failure" \
-  "worker:watcher" 2>/dev/null || true
+  --type "failure" \
+  --content "Verification failed: ${issue_title} - ${issue_description}" 2>/dev/null || true
 ```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.

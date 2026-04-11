@@ -1,17 +1,211 @@
 {
   "version": "3.0",
-  "goal": "Fix all ~120 broken CLI calls in markdown \u2014 add missing flags and subcommands to Go CLI so pheromones, learning, midden, spawn tracking, activity log, flags, and registry actually work",
+  "goal": "Fix all ~120 broken CLI calls in markdown — add missing flags and subcommands to Go CLI so pheromones, learning, midden, spawn tracking, activity log, flags, and registry actually work",
   "colony_name": "cli-flag-fix",
   "colony_version": 1,
   "state": "READY",
-  "current_phase": 6,
+  "current_phase": 7,
   "session_id": "session_1775934297_cli691",
   "initialized_at": "2026-04-11T19:04:58Z",
   "build_started_at": null,
   "plan": {
     "generated_at": "2026-04-11T19:22:33Z",
     "confidence": 92,
-    "phases": []
+    "phases": [
+      {
+        "id": 1,
+        "name": "Audit and Baseline",
+        "status": "completed",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Audit all broken CLI calls",
+            "id": "126",
+            "status": "completed"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Fix Spawn Tracking Calls",
+        "status": "completed",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix spawn-log and spawn-complete calls",
+            "id": "238",
+            "status": "completed"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Fix Activity Log Calls",
+        "status": "completed",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix activity-log positional args",
+            "id": "332",
+            "status": "completed"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Fix Midden Write Calls",
+        "status": "completed",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix midden-write calls",
+            "id": "422",
+            "status": "completed"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "name": "Fix Pheromone Write Calls",
+        "status": "completed",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix pheromone-write positional args",
+            "id": "535",
+            "status": "completed"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "name": "Fix Learning and Memory Pipeline Calls",
+        "status": "completed",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix memory-capture positional args to --content/--type flags",
+            "id": "660",
+            "status": "completed"
+          },
+          {
+            "goal": "Fix learning-promote-auto positional args",
+            "id": "641",
+            "status": "completed"
+          },
+          {
+            "goal": "Fix trust-score-compute calls",
+            "id": "629",
+            "status": "completed"
+          },
+          {
+            "goal": "Fix event-bus-publish calls",
+            "id": "627",
+            "status": "completed"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "name": "Fix Flag System Calls",
+        "status": "pending",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix flag-add positional args to --severity/--title/--source flags",
+            "id": "765",
+            "status": "pending"
+          },
+          {
+            "goal": "Fix flag-resolve and flag-acknowledge calls",
+            "id": "743",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "name": "Fix Registry and Context-Update Calls",
+        "status": "pending",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix registry-add wrong flags",
+            "id": "828",
+            "status": "pending"
+          },
+          {
+            "goal": "Fix context-update positional args",
+            "id": "834",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "name": "Fix Instinct-Create and Remaining Calls",
+        "status": "pending",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Fix instinct-create flag verification",
+            "id": "937",
+            "status": "pending"
+          },
+          {
+            "goal": "Fix remaining broken calls in oracle, seal, and other commands",
+            "id": "962",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "name": "Comprehensive Verification",
+        "status": "pending",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Run full grep audit for remaining positional CLI calls",
+            "id": "1054",
+            "status": "pending"
+          },
+          {
+            "goal": "Run all Go tests",
+            "id": "1016",
+            "status": "pending"
+          },
+          {
+            "goal": "Verify all markdown calls match CLI flags",
+            "id": "1041",
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "name": "Final Cleanup and Documentation",
+        "status": "pending",
+        "success_criteria": [],
+        "tasks": [
+          {
+            "goal": "Clean up stale worktree references",
+            "id": "1134",
+            "status": "pending"
+          },
+          {
+            "goal": "Update known-issues documentation",
+            "id": "1133",
+            "status": "pending"
+          },
+          {
+            "goal": "Verify colony data integrity",
+            "id": "1128",
+            "status": "pending"
+          }
+        ]
+      }
+    ]
   },
   "memory": {
     "phase_learnings": [
@@ -34,7 +228,7 @@
         "id": "learning_1775939057",
         "learnings": [
           {
-            "claim": "spawn-log and spawn-complete both use cobra.NoArgs \u2014 positional args silently fail. Adding --summary to spawn-complete required updating both the CLI flag and the spawn tree persistence layer with backward-compatible parsing.",
+            "claim": "spawn-log and spawn-complete both use cobra.NoArgs — positional args silently fail. Adding --summary to spawn-complete required updating both the CLI flag and the spawn tree persistence layer with backward-compatible parsing.",
             "disproven_by": null,
             "evidence": "62 broken calls fixed across 29 files, 6 new Go tests pass, Watcher verified zero remaining broken patterns",
             "status": "hypothesis",
@@ -49,7 +243,7 @@
         "id": "learning_1775942247",
         "learnings": [
           {
-            "claim": "activity-log positional args silently ignored \u2014 all 48 markdown files converted to --command/--details flags with source+details merged into --details field",
+            "claim": "activity-log positional args silently ignored — all 48 markdown files converted to --command/--details flags with source+details merged into --details field",
             "disproven_by": null,
             "evidence": "0 positional calls remain, 78 flag-based calls verified, all Go tests pass",
             "status": "hypothesis",
@@ -64,7 +258,7 @@
         "id": "learning_1775942968",
         "learnings": [
           {
-            "claim": "Midden-write calls were already fixed during prior phases \u2014 the broad markdown sweep for activity-log and spawn-log also covered midden-write files. grep confirms zero positional midden-write calls remain.",
+            "claim": "Midden-write calls were already fixed during prior phases — the broad markdown sweep for activity-log and spawn-log also covered midden-write files. grep confirms zero positional midden-write calls remain.",
             "disproven_by": null,
             "evidence": "0 positional midden-write calls found via grep across all .md files; all use --category/--message/--source flags",
             "status": "hypothesis",
@@ -89,6 +283,21 @@
         "phase": 5,
         "phase_name": "Fix Pheromone Write Calls",
         "timestamp": "2026-04-11T22:21:53Z"
+      },
+      {
+        "id": "learning_1775948510",
+        "phase": 6,
+        "phase_name": "Fix Learning and Memory Pipeline Calls",
+        "learnings": [
+          {
+            "claim": "memory-capture, learning-promote-auto, trust-score-compute, and event-bus-publish calls were already fixed during phases 2-5 broad sweeps",
+            "status": "hypothesis",
+            "tested": true,
+            "evidence": "grep confirms all memory-capture calls use --type/--content flags, learning-promote-auto needs no positional args, trust-score-compute/event-bus-publish have zero markdown calls",
+            "disproven_by": null
+          }
+        ],
+        "timestamp": "2026-04-11T23:01:50Z"
       }
     ],
     "decisions": null,
@@ -101,20 +310,12 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    "2026-04-11T19:04:58Z|colony_initialized|init|Colony initialized with goal: Fix all ~120 broken CLI calls in markdown",
-    "2026-04-11T19:22:33Z|plan_generated|plan|Generated 11 phases with 92% confidence",
-    "2026-04-11T19:45:00Z|phase_started|build|Phase 1: Audit and Baseline started",
-    "2026-04-11T19:58:03Z|phase_completed|continue|Phase 1: Audit and Baseline completed - 226 broken calls inventoried",
-    "2026-04-11T19:59:12Z|phase_started|build|Phase 2: Fix Spawn Tracking Calls started",
-    "2026-04-11T20:24:17Z|phase_completed|continue|Phase 2: Fix Spawn Tracking Calls completed - 62 calls fixed",
-    "2026-04-11T20:26:45Z|phase_started|build|Phase 3: Fix Activity Log Calls started",
-    "2026-04-11T21:17:27Z|phase_completed|continue|Phase 3: Fix Activity Log Calls completed",
-    "2026-04-11T21:20:13Z|phase_started|build|Phase 4: Fix Midden Write Calls started",
-    "2026-04-11T21:29:28Z|phase_completed|continue|Phase 4: Fix Midden Write Calls completed",
-    "2026-04-11T21:59:28Z|phase_started|build|Phase 5: Fix Pheromone Write Calls started"
+    ""
   ],
   "plan_granularity": "quarter",
   "parallel_mode": "in-repo",
   "milestone": "",
-  "build_baseline_sha": "0fe7b5977c312ffe5f270dfb9f300a69d17316bd"
+  "build_baseline_sha": "bc9b0009da1a954f7288e63f4b6c925078e92e6c"
 }
+
+

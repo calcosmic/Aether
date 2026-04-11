@@ -127,10 +127,8 @@ For each pattern in `learning.patterns_observed`:
 - Run using the Bash tool with description "Capturing synthesis pattern success...":
 ```bash
 aether memory-capture \
-  "success" \
-  "${pattern.trigger}: ${pattern.action} (evidence: ${pattern.evidence})" \
-  "pattern" \
-  "worker:builder" 2>/dev/null || true
+  --type "success" \
+  --content "${pattern.trigger}: ${pattern.action} (evidence: ${pattern.evidence})" 2>/dev/null || true
 ```
 - Increment `success_capture_count`
 
