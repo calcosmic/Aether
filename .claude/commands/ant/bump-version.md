@@ -20,6 +20,7 @@ Stop here.
 1. Check the argument matches semver pattern `^[0-9]+\.[0-9]+\.[0-9]+$`. If not, display "Invalid version format. Use X.Y.Z (e.g. 1.1.0)" and stop.
 2. Read the current version from `package.json` (the `"version"` field).
 3. If the target version equals the current version, display "Already at v{version}. Nothing to do." and stop.
+4. Compare major, then minor, then patch numerically. If the target version is not greater than the current version, display "Current version is v{old_version}. v{new_version} is not newer. Nothing to do." and stop.
 
 Store `old_version` and `new_version` for use in replacements.
 
