@@ -28,15 +28,26 @@ type registryData struct {
 // --- registry-add ---
 
 var registryAddCmd = &cobra.Command{
-	Use:   "registry-add",
+	Use:   "registry-add [version]",
 	Short: "Register a colony repository",
-	Args:  cobra.NoArgs,
+	Args:  cobra.MaximumNArgs(1), // accept optional positional version arg (ignored)
 	RunE: func(cmd *cobra.Command, args []string) error {
-		repo := mustGetString(cmd, "repo")
+		// --path takes priority over --repo
+		repo, _ := cmd.Flags().GetString("repo")
+		if path, _ := cmd.Flags().GetString("path"); path != "" {
+			repo = path
+		}
 		if repo == "" {
 			return nil
 		}
+
+		// --tags takes priority over --domain
 		domainsStr, _ := cmd.Flags().GetString("domain")
+		if tags, _ := cmd.Flags().GetString("tags"); tags != "" {
+			domainsStr = tags
+		}
+
+		goal, _ := cmd.Flags().GetString("goal")
 		active, _ := cmd.Flags().GetBool("active")
 
 		hub := resolveHubPath()
@@ -56,6 +67,10 @@ var registryAddCmd = &cobra.Command{
 					for j := range rd.Colonies[i].Domains {
 						rd.Colonies[i].Domains[j] = strings.TrimSpace(rd.Colonies[i].Domains[j])
 					}
+				}
+				// Update goal if provided
+				if goal != "" {
+					rd.Colonies[i].LastGoal = goal
 				}
 				rd.Colonies[i].Active = active
 				if err := writeRegistry(registryPath, rd); err != nil {
@@ -80,6 +95,7 @@ var registryAddCmd = &cobra.Command{
 			Domains:      domains,
 			Active:       active,
 			RegisteredAt: time.Now().UTC().Format(time.RFC3339),
+			LastGoal:     goal,
 		}
 
 		rd.Colonies = append(rd.Colonies, entry)
@@ -126,8 +142,11 @@ func writeRegistry(path string, rd registryData) error {
 }
 
 func init() {
-	registryAddCmd.Flags().String("repo", "", "Repository path (required)")
+	registryAddCmd.Flags().String("repo", "", "Repository path")
+	registryAddCmd.Flags().String("path", "", "Repository path (alias for --repo)")
 	registryAddCmd.Flags().String("domain", "", "Comma-separated domain tags")
+	registryAddCmd.Flags().String("tags", "", "Comma-separated domain tags (alias for --domain)")
+	registryAddCmd.Flags().String("goal", "", "Colony goal")
 	registryAddCmd.Flags().Bool("active", true, "Set colony as active (default: true)")
 
 	rootCmd.AddCommand(registryAddCmd)

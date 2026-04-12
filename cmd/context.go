@@ -729,6 +729,9 @@ func init() {
 
 	contextUpdateCmd.Flags().String("summary", "", "Summary text to append")
 	contextUpdateCmd.Flags().Bool("append", false, "Append to existing summary (default: replace)")
+	contextUpdateCmd.Flags().String("section", "", "Section to update (e.g., constraint)")
+	contextUpdateCmd.Flags().String("key", "", "Key within section (e.g., redirect, focus, feedback)")
+	contextUpdateCmd.Flags().String("content", "", "Content for section update")
 
 	rootCmd.AddCommand(resumeDashboardCmd)
 	rootCmd.AddCommand(contextCapsuleCmd)
@@ -1269,6 +1272,14 @@ var contextUpdateCmd = &cobra.Command{
 			return nil
 		}
 
+		// Check for --section flag first (takes priority over positional args)
+		section, _ := cmd.Flags().GetString("section")
+		if section != "" {
+			key, _ := cmd.Flags().GetString("key")
+			secContent, _ := cmd.Flags().GetString("content")
+			return runContextSectionUpdate(section, key, secContent, args)
+		}
+
 		// If positional arg provided, dispatch to sub-action
 		if len(args) > 0 {
 			return runContextSubAction(args)
@@ -1279,7 +1290,7 @@ var contextUpdateCmd = &cobra.Command{
 		appendMode, _ := cmd.Flags().GetBool("append")
 
 		if summary == "" {
-			outputErrorMessage("flag --summary is required (or provide a sub-action)")
+			outputErrorMessage("flag --summary is required (or provide a sub-action or --section)")
 			return nil
 		}
 

@@ -26,8 +26,16 @@ func runContextSubAction(args []string) error {
 		return runContextWorkerSpawn(rest)
 	case "worker-complete":
 		return runContextWorkerComplete(rest)
+	case "activity":
+		return runContextActivity(rest)
+	case "update-phase":
+		return runContextUpdatePhase(rest)
+	case "decision":
+		return runContextDecision(rest)
+	case "safe-to-clear":
+		return runContextSafeToClear(rest)
 	default:
-		outputError(1, fmt.Sprintf("unknown context-update action: %q. Use one of: init, build-start, build-progress, build-complete, worker-spawn, worker-complete", action), nil)
+		outputError(1, fmt.Sprintf("unknown context-update action: %q. Use one of: init, build-start, build-progress, build-complete, worker-spawn, worker-complete, activity, update-phase, decision, safe-to-clear", action), nil)
 		return nil
 	}
 }
@@ -365,6 +373,223 @@ func runContextWorkerComplete(args []string) error {
 	return nil
 }
 
+// runContextActivity appends an entry to the "Recent Activity" table in CONTEXT.md.
+func runContextActivity(args []string) error {
+	if len(args) < 3 {
+		outputErrorMessage("activity requires: <command> <status> <detail>")
+		return nil
+	}
+
+	data, err := store.ReadFile(contextFileName)
+	if err != nil {
+		outputErrorMessage("CONTEXT.md not found. Run 'context-update init' first.")
+		return nil
+	}
+
+	command := args[0]
+	status := args[1]
+	detail := args[2]
+	ts := time.Now().UTC().Format(time.RFC3339)
+
+	content := string(data)
+	content = appendActivityEntry(content, ts, command, status, detail)
+
+	if err := store.AtomicWrite(contextFileName, []byte(content)); err != nil {
+		outputErrorMessage(fmt.Sprintf("failed to write CONTEXT.md: %v", err))
+		return nil
+	}
+
+	outputOK(map[string]interface{}{
+		"updated": true,
+		"action":  "activity",
+	})
+	return nil
+}
+
+// runContextUpdatePhase updates the Current Phase, Phase Name, and Safe to Clear fields.
+func runContextUpdatePhase(args []string) error {
+	if len(args) < 4 {
+		outputErrorMessage("update-phase requires: <phase_id> <phase_name> <safe_to_clear> <note>")
+		return nil
+	}
+
+	data, err := store.ReadFile(contextFileName)
+	if err != nil {
+		outputErrorMessage("CONTEXT.md not found. Run 'context-update init' first.")
+		return nil
+	}
+
+	phaseID := args[0]
+	phaseName := args[1]
+	safeToClear := args[2]
+	note := args[3]
+
+	content := string(data)
+	content = replaceContextTableRow(content, "Last Updated", time.Now().UTC().Format(time.RFC3339))
+	content = replaceContextTableRow(content, "Current Phase", phaseID)
+	content = replaceContextTableRow(content, "Phase Name", phaseName)
+	content = replaceContextTableRow(content, "Safe to Clear?", fmt.Sprintf("%s — %s", safeToClear, note))
+
+	if err := store.AtomicWrite(contextFileName, []byte(content)); err != nil {
+		outputErrorMessage(fmt.Sprintf("failed to write CONTEXT.md: %v", err))
+		return nil
+	}
+
+	outputOK(map[string]interface{}{
+		"updated":  true,
+		"action":   "update-phase",
+		"phase_id": phaseID,
+	})
+	return nil
+}
+
+// runContextDecision appends an entry to the "Recent Decisions" table in CONTEXT.md.
+func runContextDecision(args []string) error {
+	if len(args) < 3 {
+		outputErrorMessage("decision requires: <description> <rationale> <made_by>")
+		return nil
+	}
+
+	data, err := store.ReadFile(contextFileName)
+	if err != nil {
+		outputErrorMessage("CONTEXT.md not found. Run 'context-update init' first.")
+		return nil
+	}
+
+	description := args[0]
+	rationale := args[1]
+	madeBy := args[2]
+	ts := time.Now().UTC().Format("2006-01-02")
+
+	content := string(data)
+	content = appendDecisionEntry(content, ts, description, rationale, madeBy)
+
+	if err := store.AtomicWrite(contextFileName, []byte(content)); err != nil {
+		outputErrorMessage(fmt.Sprintf("failed to write CONTEXT.md: %v", err))
+		return nil
+	}
+
+	outputOK(map[string]interface{}{
+		"updated": true,
+		"action":  "decision",
+	})
+	return nil
+}
+
+// runContextSafeToClear updates the "Safe to Clear?" field in CONTEXT.md.
+func runContextSafeToClear(args []string) error {
+	if len(args) < 1 {
+		outputErrorMessage("safe-to-clear requires: <yes_or_no> [note]")
+		return nil
+	}
+
+	data, err := store.ReadFile(contextFileName)
+	if err != nil {
+		outputErrorMessage("CONTEXT.md not found. Run 'context-update init' first.")
+		return nil
+	}
+
+	value := args[0]
+	note := ""
+	if len(args) > 1 {
+		note = args[1]
+	}
+
+	var displayValue string
+	if note != "" {
+		displayValue = fmt.Sprintf("%s — %s", value, note)
+	} else {
+		displayValue = value
+	}
+
+	content := string(data)
+	content = replaceContextTableRow(content, "Safe to Clear?", displayValue)
+
+	if err := store.AtomicWrite(contextFileName, []byte(content)); err != nil {
+		outputErrorMessage(fmt.Sprintf("failed to write CONTEXT.md: %v", err))
+		return nil
+	}
+
+	outputOK(map[string]interface{}{
+		"updated": true,
+		"action":  "safe-to-clear",
+	})
+	return nil
+}
+
+// runContextSectionUpdate updates a constraint/signal section in CONTEXT.md.
+// This handles the --section/--key/--content flags used by focus/redirect/feedback commands.
+func runContextSectionUpdate(section, key, contentText string, args []string) error {
+	if key == "" || contentText == "" {
+		outputErrorMessage("--section requires both --key and --content flags")
+		return nil
+	}
+
+	data, err := store.ReadFile(contextFileName)
+	if err != nil {
+		outputErrorMessage("CONTEXT.md not found. Run 'context-update init' first.")
+		return nil
+	}
+
+	ts := time.Now().UTC().Format("2006-01-02")
+	content := string(data)
+
+	switch section {
+	case "constraint":
+		content = appendConstraintEntry(content, ts, contentText, "user", strings.ToUpper(key))
+	default:
+		content = appendConstraintEntry(content, ts, contentText, "user", strings.ToUpper(key))
+	}
+
+	if err := store.AtomicWrite(contextFileName, []byte(content)); err != nil {
+		outputErrorMessage(fmt.Sprintf("failed to write CONTEXT.md: %v", err))
+		return nil
+	}
+
+	outputOK(map[string]interface{}{
+		"updated": true,
+		"section": section,
+		"key":     key,
+	})
+	return nil
+}
+
+// appendConstraintEntry appends a row to the Active Constraints table in CONTEXT.md.
+func appendConstraintEntry(content, date, constraintText, source, signalType string) string {
+	lines := strings.Split(content, "\n")
+
+	// Find the last row in the "Active Constraints" table
+	var lastTableRowIdx = -1
+	inConstraints := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "Active Constraints") && strings.HasPrefix(line, "## ") {
+			inConstraints = true
+			continue
+		}
+		if inConstraints && (strings.HasPrefix(trimmed, "## ") || trimmed == "---") {
+			break
+		}
+		if inConstraints && strings.HasPrefix(trimmed, "| ") && !strings.HasPrefix(trimmed, "| Constraint") && !strings.HasPrefix(trimmed, "|---") {
+			lastTableRowIdx = i
+		}
+	}
+
+	if lastTableRowIdx >= 0 {
+		newRow := fmt.Sprintf("| %s | %s | %s |", constraintText, source, date)
+		result := make([]string, 0, len(lines)+1)
+		for i, line := range lines {
+			result = append(result, line)
+			if i == lastTableRowIdx {
+				result = append(result, newRow)
+			}
+		}
+		return strings.Join(result, "\n")
+	}
+
+	return content
+}
+
 // --- CONTEXT.md manipulation helpers ---
 
 // replaceContextTableRow replaces the value in a markdown table row matching "| **fieldName** | ... |".
@@ -503,4 +728,76 @@ func markWorkerComplete(content, antName, status, ts string) string {
 	}
 
 	return strings.Join(result, "\n")
+}
+
+// appendActivityEntry appends a row to the "Recent Activity" table in CONTEXT.md.
+func appendActivityEntry(content, ts, command, status, detail string) string {
+	lines := strings.Split(content, "\n")
+
+	// Find the last row (including separator) in the "Recent Activity" table
+	var insertAfterIdx = -1
+	inActivity := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "Recent Activity") && strings.HasPrefix(line, "## ") {
+			inActivity = true
+			continue
+		}
+		if inActivity && (strings.HasPrefix(trimmed, "## ") || trimmed == "---") {
+			break
+		}
+		if inActivity && strings.HasPrefix(trimmed, "| ") {
+			insertAfterIdx = i
+		}
+	}
+
+	if insertAfterIdx >= 0 {
+		newRow := fmt.Sprintf("| %s | %s | %s | %s |", ts, command, status, detail)
+		result := make([]string, 0, len(lines)+1)
+		for i, line := range lines {
+			result = append(result, line)
+			if i == insertAfterIdx {
+				result = append(result, newRow)
+			}
+		}
+		return strings.Join(result, "\n")
+	}
+
+	return content
+}
+
+// appendDecisionEntry appends a row to the "Recent Decisions" table in CONTEXT.md.
+func appendDecisionEntry(content, date, description, rationale, madeBy string) string {
+	lines := strings.Split(content, "\n")
+
+	// Find the last row (including separator) in the "Recent Decisions" table
+	var insertAfterIdx = -1
+	inDecisions := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "Recent Decisions") && strings.HasPrefix(line, "## ") {
+			inDecisions = true
+			continue
+		}
+		if inDecisions && (strings.HasPrefix(trimmed, "## ") || trimmed == "---") {
+			break
+		}
+		if inDecisions && strings.HasPrefix(trimmed, "| ") {
+			insertAfterIdx = i
+		}
+	}
+
+	if insertAfterIdx >= 0 {
+		newRow := fmt.Sprintf("| %s | %s | %s | %s |", date, description, rationale, madeBy)
+		result := make([]string, 0, len(lines)+1)
+		for i, line := range lines {
+			result = append(result, line)
+			if i == insertAfterIdx {
+				result = append(result, newRow)
+			}
+		}
+		return strings.Join(result, "\n")
+	}
+
+	return content
 }

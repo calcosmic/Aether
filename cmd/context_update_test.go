@@ -405,3 +405,204 @@ Nothing yet.
 		t.Errorf("action = %v, want \"init\" (positional should take priority)", result["action"])
 	}
 }
+
+// --- activity sub-action ---
+
+func TestContextUpdateActivity(t *testing.T) {
+	_, dataDir := setupContextUpdateTest(t)
+
+	content := `# Aether Colony
+
+| **Last Updated** | old-ts |
+| **Safe to Clear?** | YES |
+
+---
+
+## Recent Activity (Last 10 Actions)
+
+| Timestamp | Command | Result | Files Changed |
+|-----------|---------|--------|---------------|
+
+---
+
+## Next Steps
+`
+	os.WriteFile(filepath.Join(dataDir, "CONTEXT.md"), []byte(content), 0644)
+
+	rootCmd.SetArgs([]string{"context-update", "activity", "build 3", "completed", "5"})
+	out := executeContextCmd(t)
+	s := getStore(t)
+
+	result := parseResult(t, out)
+	if result["action"] != "activity" {
+		t.Errorf("action = %v, want \"activity\"", result["action"])
+	}
+
+	updated := readContextFile(t, s)
+	if !strings.Contains(updated, "| build 3 |") {
+		t.Error("CONTEXT.md should contain 'build 3' in activity table")
+	}
+	if !strings.Contains(updated, "| completed |") {
+		t.Error("CONTEXT.md should contain 'completed' in activity table")
+	}
+	if !strings.Contains(updated, "| 5 |") {
+		t.Error("CONTEXT.md should contain '5' in Files Changed column")
+	}
+}
+
+// --- update-phase sub-action ---
+
+func TestContextUpdatePhase(t *testing.T) {
+	_, dataDir := setupContextUpdateTest(t)
+
+	content := `# Aether Colony
+
+| Field | Value |
+|-------|-------|
+| **Last Updated** | old-ts |
+| **Current Phase** | 1 |
+| **Phase Name** | initialization |
+| **Safe to Clear?** | NO — Build in progress |
+
+---
+
+## Next Steps
+`
+	os.WriteFile(filepath.Join(dataDir, "CONTEXT.md"), []byte(content), 0644)
+
+	rootCmd.SetArgs([]string{"context-update", "update-phase", "3", "feature work", "YES", "Phase advanced"})
+	out := executeContextCmd(t)
+	s := getStore(t)
+
+	result := parseResult(t, out)
+	if result["action"] != "update-phase" {
+		t.Errorf("action = %v, want \"update-phase\"", result["action"])
+	}
+
+	updated := readContextFile(t, s)
+	if !strings.Contains(updated, "| **Current Phase** | 3 |") {
+		t.Error("CONTEXT.md should have Current Phase = 3")
+	}
+	if !strings.Contains(updated, "| **Phase Name** | feature work |") {
+		t.Error("CONTEXT.md should have Phase Name = feature work")
+	}
+	if !strings.Contains(updated, "YES") {
+		t.Error("CONTEXT.md should have Safe to Clear = YES")
+	}
+}
+
+// --- decision sub-action ---
+
+func TestContextUpdateDecision(t *testing.T) {
+	_, dataDir := setupContextUpdateTest(t)
+
+	content := `# Aether Colony
+
+---
+
+## Recent Decisions
+
+| Date | Decision | Rationale | Made By |
+|------|----------|-----------|---------|
+
+---
+
+## Next Steps
+`
+	os.WriteFile(filepath.Join(dataDir, "CONTEXT.md"), []byte(content), 0644)
+
+	rootCmd.SetArgs([]string{"context-update", "decision", "Use React for frontend", "Better component model", "Queen"})
+	out := executeContextCmd(t)
+	s := getStore(t)
+
+	result := parseResult(t, out)
+	if result["action"] != "decision" {
+		t.Errorf("action = %v, want \"decision\"", result["action"])
+	}
+
+	updated := readContextFile(t, s)
+	if !strings.Contains(updated, "| Use React for frontend |") {
+		t.Error("CONTEXT.md should contain decision text")
+	}
+	if !strings.Contains(updated, "| Better component model |") {
+		t.Error("CONTEXT.md should contain rationale")
+	}
+	if !strings.Contains(updated, "| Queen |") {
+		t.Error("CONTEXT.md should contain 'Queen' as Made By")
+	}
+}
+
+// --- safe-to-clear sub-action ---
+
+func TestContextUpdateSafeToClear(t *testing.T) {
+	_, dataDir := setupContextUpdateTest(t)
+
+	content := `# Aether Colony
+
+| Field | Value |
+|-------|-------|
+| **Last Updated** | old-ts |
+| **Safe to Clear?** | NO — Build in progress |
+
+---
+
+## Next Steps
+`
+	os.WriteFile(filepath.Join(dataDir, "CONTEXT.md"), []byte(content), 0644)
+
+	rootCmd.SetArgs([]string{"context-update", "safe-to-clear", "YES", "Build complete, ready to continue"})
+	out := executeContextCmd(t)
+	s := getStore(t)
+
+	result := parseResult(t, out)
+	if result["action"] != "safe-to-clear" {
+		t.Errorf("action = %v, want \"safe-to-clear\"", result["action"])
+	}
+
+	updated := readContextFile(t, s)
+	if !strings.Contains(updated, "| **Safe to Clear?** | YES — Build complete, ready to continue |") {
+		t.Errorf("Safe to Clear? row not updated correctly, got: %s", updated)
+	}
+}
+
+// --- --section/--key/--content flags ---
+
+func TestContextUpdateSectionKeyContent(t *testing.T) {
+	_, dataDir := setupContextUpdateTest(t)
+
+	content := `# Aether Colony
+
+---
+
+## Active Constraints (REDIRECT Signals)
+
+| Constraint | Source | Date Set |
+|------------|--------|----------|
+| Existing constraint | CLAUDE.md | Permanent |
+
+---
+
+## Active Pheromones (FOCUS Signals)
+
+*None active*
+
+---
+
+## Next Steps
+`
+	os.WriteFile(filepath.Join(dataDir, "CONTEXT.md"), []byte(content), 0644)
+
+	rootCmd.SetArgs([]string{"context-update", "--section", "constraint", "--key", "redirect", "--content", "avoid pattern X", "user"})
+	out := executeContextCmd(t)
+	s := getStore(t)
+
+	result := parseResult(t, out)
+	if result["updated"] != true {
+		t.Errorf("updated = %v, want true", result["updated"])
+	}
+
+	updated := readContextFile(t, s)
+	if !strings.Contains(updated, "avoid pattern X") {
+		t.Error("CONTEXT.md should contain the constraint content")
+	}
+}
