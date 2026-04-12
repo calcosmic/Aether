@@ -1,6 +1,6 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.0
+> **Current Version:** v1.0.1
 > **Last Updated:** 2026-04-12
 
 ---
@@ -9,7 +9,7 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.0 |
+| Version | v1.0.1 |
 | Slash commands | 46 (Claude) + 46 (OpenCode) |
 | Agent definitions | 24 |
 | Skills | 28 (10 colony + 18 domain) |
@@ -722,4 +722,4 @@ For OpenCode-specific rules and agents, see `.opencode/OPENCODE.md`
 
 ---
 
-*Updated for Aether v1.0.0 — 2026-04-10*
+*Updated for Aether v1.0.1 — 2026-04-12*

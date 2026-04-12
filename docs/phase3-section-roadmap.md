@@ -1,6 +1,6 @@
 ## Roadmap
 
-### v1.0.0 -- Released (Current)
+### v1.0.1 -- Released (Current)
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
 - 45 slash commands across the full colony lifecycle
