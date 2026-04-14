@@ -1,206 +1,233 @@
 {
   "version": "3.0",
-  "goal": "Fix all ~120 broken CLI calls in markdown — add missing flags and subcommands to Go CLI so pheromones, learning, midden, spawn tracking, activity log, flags, and registry actually work",
-  "colony_name": "cli-flag-fix",
-  "colony_version": 2,
+  "goal": "Make Aether work for Codex CLI — research Codex's extension format, create command and agent files, update setup flow, and test end-to-end",
+  "colony_name": "codex-integration",
+  "colony_version": 1,
   "state": "READY",
-  "current_phase": 12,
-  "session_id": "session_1775934297_cli691",
-  "initialized_at": "2026-04-11T19:04:58Z",
+  "current_phase": 4,
+  "session_id": "session_1776180339_codex171",
+  "initialized_at": "2026-04-14T15:25:39Z",
   "build_started_at": null,
   "plan": {
-    "generated_at": "2026-04-11T19:22:33Z",
-    "confidence": 92,
+    "generated_at": "2026-04-14T16:00:00Z",
+    "confidence": 82,
     "phases": [
       {
         "id": 1,
-        "name": "Audit and Baseline",
+        "name": "Codex Format Validation",
         "status": "completed",
-        "success_criteria": [],
         "tasks": [
           {
-            "goal": "Audit all broken CLI calls",
-            "id": "126",
+            "goal": "Read Codex source to confirm AGENTS.md schema",
+            "id": "1.1",
+            "status": "completed"
+          },
+          {
+            "goal": "Document exact tool names per model",
+            "id": "1.2",
+            "status": "completed"
+          },
+          {
+            "goal": "Confirm skill discovery paths",
+            "id": "1.3",
             "status": "completed"
           }
         ]
       },
       {
         "id": 2,
-        "name": "Fix Spawn Tracking Calls",
+        "name": "Create Codex Agent Definitions",
         "status": "completed",
-        "success_criteria": [],
         "tasks": [
           {
-            "goal": "Fix spawn-log and spawn-complete calls",
-            "id": "238",
+            "goal": "Create Codex agent template",
+            "id": "2.1",
+            "status": "completed"
+          },
+          {
+            "goal": "Generate all 24 agent .toml files",
+            "id": "2.2",
+            "status": "completed"
+          },
+          {
+            "goal": "Verify zero Claude references",
+            "id": "2.3",
             "status": "completed"
           }
         ]
       },
       {
         "id": 3,
-        "name": "Fix Activity Log Calls",
+        "name": "Create AGENTS.md Project File",
         "status": "completed",
-        "success_criteria": [],
         "tasks": [
           {
-            "goal": "Fix activity-log positional args",
-            "id": "332",
+            "goal": "Create AGENTS.md at project root",
+            "id": "3.1",
+            "status": "completed"
+          },
+          {
+            "goal": "Create .codex/CODEX.md developer guide",
+            "id": "3.2",
             "status": "completed"
           }
         ]
       },
       {
         "id": 4,
-        "name": "Fix Midden Write Calls",
-        "status": "completed",
-        "success_criteria": [],
+        "name": "Adapt Skills for Codex",
+        "status": "pending",
         "tasks": [
           {
-            "goal": "Fix midden-write calls",
-            "id": "422",
-            "status": "completed"
+            "goal": "Create 10 colony skill SKILL.md files",
+            "id": "4.1",
+            "status": "pending"
+          },
+          {
+            "goal": "Create 18 domain skill SKILL.md files",
+            "id": "4.2",
+            "status": "pending"
+          },
+          {
+            "goal": "Verify all 28 SKILL.md files",
+            "id": "4.3",
+            "status": "pending"
           }
         ]
       },
       {
         "id": 5,
-        "name": "Fix Pheromone Write Calls",
-        "status": "completed",
-        "success_criteria": [],
+        "name": "Create Hub Packaging Mirror",
+        "status": "pending",
         "tasks": [
           {
-            "goal": "Fix pheromone-write positional args",
-            "id": "535",
-            "status": "completed"
+            "goal": "Create .aether/skills-codex/ directory",
+            "id": "5.1",
+            "status": "pending"
+          },
+          {
+            "goal": "Create agent template",
+            "id": "5.2",
+            "status": "pending"
+          },
+          {
+            "goal": "Verify packaging mirror matches",
+            "id": "5.3",
+            "status": "pending"
           }
         ]
       },
       {
         "id": 6,
-        "name": "Fix Learning and Memory Pipeline Calls",
-        "status": "completed",
-        "success_criteria": [],
+        "name": "Update Go Install Command",
+        "status": "pending",
         "tasks": [
           {
-            "goal": "Fix memory-capture positional args to --content/--type flags",
-            "id": "660",
-            "status": "completed"
+            "goal": "Add Codex sync pair to install_cmd.go",
+            "id": "6.1",
+            "status": "pending"
           },
           {
-            "goal": "Fix learning-promote-auto positional args",
-            "id": "641",
-            "status": "completed"
+            "goal": "Add Codex hub sync",
+            "id": "6.2",
+            "status": "pending"
           },
           {
-            "goal": "Fix trust-score-compute calls",
-            "id": "629",
-            "status": "completed"
-          },
-          {
-            "goal": "Fix event-bus-publish calls",
-            "id": "627",
-            "status": "completed"
+            "goal": "Write install test",
+            "id": "6.3",
+            "status": "pending"
           }
         ]
       },
       {
         "id": 7,
-        "name": "Fix Flag System Calls",
-        "status": "completed",
-        "success_criteria": [],
+        "name": "Update Go Setup and Update Commands",
+        "status": "pending",
         "tasks": [
           {
-            "goal": "Fix flag-add positional args to --severity/--title/--source flags",
-            "id": "765",
-            "status": "completed"
+            "goal": "Add Codex sync pair to setup_cmd.go",
+            "id": "7.1",
+            "status": "pending"
           },
           {
-            "goal": "Fix flag-resolve and flag-acknowledge calls",
-            "id": "743",
-            "status": "completed"
+            "goal": "Add Codex sync pair to update_cmd.go",
+            "id": "7.2",
+            "status": "pending"
+          },
+          {
+            "goal": "Add AGENTS.md template generation",
+            "id": "7.3",
+            "status": "pending"
           }
         ]
       },
       {
         "id": 8,
-        "name": "Fix Registry and Context-Update Calls",
-        "status": "completed",
-        "success_criteria": [],
+        "name": "E2E Tests and Package Distribution",
+        "status": "pending",
         "tasks": [
           {
-            "goal": "Fix registry-add wrong flags",
-            "id": "828",
+            "goal": "Extend E2E tests for Codex",
+            "id": "8.1",
             "status": "pending"
           },
           {
-            "goal": "Fix context-update positional args",
-            "id": "834",
+            "goal": "Add .codex/ to package.json",
+            "id": "8.2",
+            "status": "pending"
+          },
+          {
+            "goal": "Verify .npmignore",
+            "id": "8.3",
             "status": "pending"
           }
         ]
       },
       {
         "id": 9,
-        "name": "Fix Instinct-Create and Remaining Calls",
-        "status": "completed",
-        "success_criteria": [],
+        "name": "Documentation Updates",
+        "status": "pending",
         "tasks": [
           {
-            "goal": "Fix instinct-create flag verification",
-            "id": "937",
+            "goal": "Update CLAUDE.md for Codex",
+            "id": "9.1",
             "status": "pending"
           },
           {
-            "goal": "Fix remaining broken calls in oracle, seal, and other commands",
-            "id": "962",
+            "goal": "Update aether-colony.md",
+            "id": "9.2",
+            "status": "pending"
+          },
+          {
+            "goal": "Update source-of-truth-map.md",
+            "id": "9.3",
             "status": "pending"
           }
         ]
       },
       {
         "id": 10,
-        "name": "Comprehensive Verification",
-        "status": "completed",
-        "success_criteria": [],
+        "name": "Full Verification",
+        "status": "pending",
         "tasks": [
           {
-            "goal": "Run full grep audit for remaining positional CLI calls",
-            "id": "1054",
+            "goal": "Run go test ./... -race",
+            "id": "10.1",
             "status": "pending"
           },
           {
-            "goal": "Run all Go tests",
-            "id": "1016",
+            "goal": "Verify file parity across 3 platforms",
+            "id": "10.2",
             "status": "pending"
           },
           {
-            "goal": "Verify all markdown calls match CLI flags",
-            "id": "1041",
-            "status": "pending"
-          }
-        ]
-      },
-      {
-        "id": 11,
-        "name": "Final Cleanup and Documentation",
-        "status": "completed",
-        "success_criteria": [],
-        "tasks": [
-          {
-            "goal": "Clean up stale worktree references",
-            "id": "1134",
+            "goal": "Run full install-setup-update cycle",
+            "id": "10.3",
             "status": "pending"
           },
           {
-            "goal": "Update known-issues documentation",
-            "id": "1133",
-            "status": "pending"
-          },
-          {
-            "goal": "Verify colony data integrity",
-            "id": "1128",
+            "goal": "Verify npm pack includes .codex/",
+            "id": "10.4",
             "status": "pending"
           }
         ]
@@ -208,143 +235,9 @@
     ]
   },
   "memory": {
-    "phase_learnings": [
-      {
-        "id": "learning_1775937483",
-        "learnings": [
-          {
-            "claim": "Aether CLI commands silently ignore positional args when flags are required - grep for positional usage in markdown to find all broken calls",
-            "disproven_by": null,
-            "evidence": "226 broken calls found via grep inventory matching Go CLI source verification",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 1,
-        "phase_name": "Audit and Baseline",
-        "timestamp": "2026-04-11T19:58:03Z"
-      },
-      {
-        "id": "learning_1775939057",
-        "learnings": [
-          {
-            "claim": "spawn-log and spawn-complete both use cobra.NoArgs — positional args silently fail. Adding --summary to spawn-complete required updating both the CLI flag and the spawn tree persistence layer with backward-compatible parsing.",
-            "disproven_by": null,
-            "evidence": "62 broken calls fixed across 29 files, 6 new Go tests pass, Watcher verified zero remaining broken patterns",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 2,
-        "phase_name": "Fix Spawn Tracking Calls",
-        "timestamp": "2026-04-11T20:24:17Z"
-      },
-      {
-        "id": "learning_1775942247",
-        "learnings": [
-          {
-            "claim": "activity-log positional args silently ignored — all 48 markdown files converted to --command/--details flags with source+details merged into --details field",
-            "disproven_by": null,
-            "evidence": "0 positional calls remain, 78 flag-based calls verified, all Go tests pass",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 3,
-        "phase_name": "Fix Activity Log Calls",
-        "timestamp": "2026-04-11T21:17:27Z"
-      },
-      {
-        "id": "learning_1775942968",
-        "learnings": [
-          {
-            "claim": "Midden-write calls were already fixed during prior phases — the broad markdown sweep for activity-log and spawn-log also covered midden-write files. grep confirms zero positional midden-write calls remain.",
-            "disproven_by": null,
-            "evidence": "0 positional midden-write calls found via grep across all .md files; all use --category/--message/--source flags",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 4,
-        "phase_name": "Fix Midden Write Calls",
-        "timestamp": "2026-04-11T21:29:28Z"
-      },
-      {
-        "id": "learning_1775946113",
-        "learnings": [
-          {
-            "claim": "pheromone-write used cobra.NoArgs so positional type/content args silently failed. Added --source/--reason/--ttl flags to Go with TTL parsing (Nd/Nh/Nw format). All 12 positional calls across 6 markdown files converted to --type/--content flags. Init.md files were missed by builder but caught by Watcher.",
-            "disproven_by": null,
-            "evidence": "54 pheromone tests pass, zero positional calls remain, all 3 new flags work",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 5,
-        "phase_name": "Fix Pheromone Write Calls",
-        "timestamp": "2026-04-11T22:21:53Z"
-      },
-      {
-        "id": "learning_1775948510",
-        "learnings": [
-          {
-            "claim": "memory-capture, learning-promote-auto, trust-score-compute, and event-bus-publish calls were already fixed during phases 2-5 broad sweeps",
-            "disproven_by": null,
-            "evidence": "grep confirms all memory-capture calls use --type/--content flags, learning-promote-auto needs no positional args, trust-score-compute/event-bus-publish have zero markdown calls",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 6,
-        "phase_name": "Fix Learning and Memory Pipeline Calls",
-        "timestamp": "2026-04-11T23:01:50Z"
-      },
-      {
-        "id": "learning_1775992999",
-        "learnings": [
-          {
-            "claim": "Phase 1-9 broad sweeps fixed .aether/docs/command-playbooks/ files but missed .claude/commands/ant/ and .opencode/commands/ant/ — per-directory systematic grep is needed, not broad sweeps",
-            "disproven_by": null,
-            "evidence": "89 broken positional CLI calls remain across 30 files in .claude/ and .opencode/ directories; all .aether/docs/command-playbooks/ files are clean",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 10,
-        "phase_name": "Comprehensive Verification",
-        "timestamp": "2026-04-12T11:23:19Z"
-      },
-      {
-        "id": "learning_1775994852",
-        "learnings": [
-          {
-            "claim": "Colony cleanup phases benefit from parallel builders: worktree cleanup, docs update, and data verification can run independently with zero conflicts",
-            "disproven_by": null,
-            "evidence": "3 builders completed in parallel, all verified by independent Watcher with quality 8/10",
-            "status": "hypothesis",
-            "tested": true
-          },
-          {
-            "claim": "Pheromone data accumulates noise from test signals and imports — regular cleanup (removing empty content, expired signals) keeps the signal-to-noise ratio healthy",
-            "disproven_by": null,
-            "evidence": "pheromones.json cleaned from 174 to 61 valid signals, all Go tests still pass",
-            "status": "hypothesis",
-            "tested": true
-          }
-        ],
-        "phase": 11,
-        "phase_name": "Final Cleanup and Documentation",
-        "timestamp": "2026-04-12T11:54:12Z"
-      }
-    ],
-    "decisions": null,
-    "instincts": [],
-    "events": [
-      "2026-04-12T11:15:16Z|state_reconciled|continue|Reconciled phases 8-10 as completed",
-      "2026-04-12T11:24:08Z|phase_advanced|continue|Completed Phase 10, advancing to Phase 11",
-      "2026-04-12T13:00:00Z|phase_started|build|Phase 11: Final Cleanup and Documentation started",
-      ""
-    ]
+    "phase_learnings": "(.memory.phase_learnings // [] | .[-20:])",
+    "decisions": "(.memory.decisions // [] | .[-30:])",
+    "instincts": "(.memory.instincts // [] | sort_by(.confidence) | .[-30:])"
   },
   "errors": {
     "records": [],
@@ -353,15 +246,21 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    "2026-04-12T11:15:16Z|state_reconciled|continue|Reconciled phases 8-10 as completed",
-    "2026-04-12T11:24:08Z|phase_advanced|continue|Completed Phase 10, advancing to Phase 11",
-    "2026-04-12T13:00:00Z|phase_started|build|Phase 11: Final Cleanup and Documentation started",
-    "",
-    "2026-04-12T12:24:07Z|milestone_reached|seal|Achieved Crowned Anthill milestone"
+    "2026-04-14T15:25:39Z|colony_initialized|init|Colony initialized with goal: Make Aether work for Codex CLI",
+    "2026-04-14T16:00:00Z|plan_generated|plan|Generated 10 phases with 82% confidence",
+    "2026-04-14T16:04:41Z|phase_started|build|Phase 1: Codex Format Validation started",
+    "2026-04-14T16:40:47Z|phase_started|build|Phase 2: Create Codex Agent Definitions started",
+    "2026-04-14T16:56:00Z|phase_completed|build|Phase 2: Create Codex Agent Definitions completed",
+    "2026-04-14T17:05:00Z|phase_advanced|continue|Completed Phase 2, advancing to Phase 3",
+    "2026-04-14T17:10:00Z|phase_started|build|Phase 3: Create AGENTS.md Project File started",
+    ""
   ],
   "plan_granularity": "quarter",
   "parallel_mode": "in-repo",
-  "milestone": "Crowned Anthill",
-  "build_baseline_sha": "ec138ffc4e7b913b6ce549e39ae781fab0179133",
-  "milestone_updated_at": "2026-04-12T12:24:07Z"
+  "milestone": "",
+  "build_baseline_sha": "191fe84fc049c5fa75ed25e449ef8854e019b683"
 }
+
+
+
+
