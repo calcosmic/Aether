@@ -442,6 +442,156 @@ func TestSetupCommandRespectsProtectedDirs(t *testing.T) {
 	}
 }
 
+// TestSetupSyncsCodexAgents verifies that setup syncs the Codex agents
+// directory from hub system/codex/ to the local .codex/agents/ directory.
+func TestSetupSyncsCodexAgents(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+	repoDir := t.TempDir()
+
+	// Create hub structure with a codex/ directory containing agent files
+	hubSystem := filepath.Join(homeDir, ".aether", "system")
+	codexDir := filepath.Join(hubSystem, "codex")
+	if err := os.MkdirAll(codexDir, 0755); err != nil {
+		t.Fatalf("failed to create hub codex dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(homeDir, ".aether", "version.json"), []byte(`{"version":"1.0.0"}`), 0644); err != nil {
+		t.Fatalf("failed to create hub version: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(codexDir, "aether-builder.md"), []byte("# Builder Agent"), 0644); err != nil {
+		t.Fatalf("failed to create codex agent file: %v", err)
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"setup", "--repo-dir", repoDir, "--home-dir", homeDir})
+	defer rootCmd.SetArgs([]string{})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("setup command failed: %v", err)
+	}
+
+	// Verify codex agent file was copied to .codex/agents/
+	destFile := filepath.Join(repoDir, ".codex", "agents", "aether-builder.md")
+	if _, err := os.Stat(destFile); os.IsNotExist(err) {
+		t.Errorf("expected %s to exist after setup (Codex sync pair missing)", destFile)
+	}
+
+	// Verify output mentions the Codex sync
+	output := buf.String()
+	if !strings.Contains(output, "codex") && !strings.Contains(output, "Codex") {
+		t.Errorf("expected output to mention Codex agents, got: %s", output)
+	}
+}
+
+// TestSetupGeneratesAgentsMD verifies that setup creates AGENTS.md in the
+// repo root when it does not already exist, using the hub template.
+func TestSetupGeneratesAgentsMD(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+	repoDir := t.TempDir()
+
+	// Create hub structure
+	hubSystem := filepath.Join(homeDir, ".aether", "system")
+	hubTemplates := filepath.Join(hubSystem, "templates")
+	if err := os.MkdirAll(hubTemplates, 0755); err != nil {
+		t.Fatalf("failed to create hub templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(homeDir, ".aether", "version.json"), []byte(`{"version":"1.0.0"}`), 0644); err != nil {
+		t.Fatalf("failed to create hub version: %v", err)
+	}
+
+	// Create AGENTS.md template with placeholders
+	templateContent := "# {COLONY_NAME}\n\nColony goal: {COLONY_GOAL}\n\n## Aether CLI\n\nUse `aether` commands.\n"
+	if err := os.WriteFile(filepath.Join(hubTemplates, "agents-md-template.md"), []byte(templateContent), 0644); err != nil {
+		t.Fatalf("failed to create template: %v", err)
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"setup", "--repo-dir", repoDir, "--home-dir", homeDir})
+	defer rootCmd.SetArgs([]string{})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("setup command failed: %v", err)
+	}
+
+	// Verify AGENTS.md was created
+	agentsMD := filepath.Join(repoDir, "AGENTS.md")
+	content, err := os.ReadFile(agentsMD)
+	if err != nil {
+		t.Fatalf("AGENTS.md was not created: %v", err)
+	}
+
+	// Placeholders should be replaced with empty strings
+	result := string(content)
+	if strings.Contains(result, "{COLONY_NAME}") {
+		t.Error("expected {COLONY_NAME} placeholder to be replaced, but it remains")
+	}
+	if strings.Contains(result, "{COLONY_GOAL}") {
+		t.Error("expected {COLONY_GOAL} placeholder to be replaced, but it remains")
+	}
+}
+
+// TestSetupSkipsExistingAgentsMD verifies that setup does not overwrite an
+// existing AGENTS.md file.
+func TestSetupSkipsExistingAgentsMD(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+	repoDir := t.TempDir()
+
+	// Create hub structure
+	hubSystem := filepath.Join(homeDir, ".aether", "system")
+	hubTemplates := filepath.Join(hubSystem, "templates")
+	if err := os.MkdirAll(hubTemplates, 0755); err != nil {
+		t.Fatalf("failed to create hub templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(homeDir, ".aether", "version.json"), []byte(`{"version":"1.0.0"}`), 0644); err != nil {
+		t.Fatalf("failed to create hub version: %v", err)
+	}
+
+	templateContent := "# {COLONY_NAME}\n\nTemplate content\n"
+	if err := os.WriteFile(filepath.Join(hubTemplates, "agents-md-template.md"), []byte(templateContent), 0644); err != nil {
+		t.Fatalf("failed to create template: %v", err)
+	}
+
+	// Pre-create AGENTS.md with user content
+	userContent := "# My Project\n\nCustom AGENTS.md content\n"
+	if err := os.WriteFile(filepath.Join(repoDir, "AGENTS.md"), []byte(userContent), 0644); err != nil {
+		t.Fatalf("failed to create user AGENTS.md: %v", err)
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"setup", "--repo-dir", repoDir, "--home-dir", homeDir})
+	defer rootCmd.SetArgs([]string{})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("setup command failed: %v", err)
+	}
+
+	// AGENTS.md should be preserved
+	content, err := os.ReadFile(filepath.Join(repoDir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("failed to read AGENTS.md: %v", err)
+	}
+	if string(content) != userContent {
+		t.Errorf("existing AGENTS.md was overwritten\ngot:  %s\nwant: %s", string(content), userContent)
+	}
+}
+
 // TestSetupSkipsUnchangedFiles verifies that identical files are skipped.
 func TestSetupSkipsUnchangedFiles(t *testing.T) {
 	saveGlobals(t)

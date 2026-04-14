@@ -723,6 +723,111 @@ func TestUpdateSyncForceDoesNotRemoveProtectedStale(t *testing.T) {
 	}
 }
 
+// TestUpdateSyncCodexPair verifies the Codex sync pair is present and functional.
+func TestUpdateSyncCodexPair(t *testing.T) {
+	saveGlobals(t)
+
+	hubDir := t.TempDir()
+	repoDir := t.TempDir()
+
+	hubSystem := filepath.Join(hubDir, "system")
+	codexDir := filepath.Join(hubSystem, "codex")
+	if err := os.MkdirAll(codexDir, 0755); err != nil {
+		t.Fatalf("failed to create codex dir: %v", err)
+	}
+	codexContent := []byte("# Codex agent file")
+	if err := os.WriteFile(filepath.Join(codexDir, "agent.md"), codexContent, 0644); err != nil {
+		t.Fatalf("failed to write codex agent: %v", err)
+	}
+
+	result := runUpdateSync(hubDir, repoDir, false)
+
+	// Verify Codex sync pair produced a detail entry
+	foundCodex := false
+	for _, detail := range result.details {
+		if label, ok := detail["label"].(string); ok && label == "Agents (codex)" {
+			foundCodex = true
+			break
+		}
+	}
+	if !foundCodex {
+		t.Error("expected sync details to include 'Agents (codex)' label")
+	}
+
+	// Verify the file was copied to the correct destination
+	destFile := filepath.Join(repoDir, ".codex", "agents", "agent.md")
+	content, err := os.ReadFile(destFile)
+	if err != nil {
+		t.Fatalf("expected codex agent file at %s: %v", destFile, err)
+	}
+	if string(content) != string(codexContent) {
+		t.Errorf("codex agent content mismatch\ngot:  %s\nwant: %s", string(content), string(codexContent))
+	}
+}
+
+// TestUpdateDryRunIncludesCodexAction verifies dry-run output mentions .codex/agents/.
+func TestUpdateDryRunIncludesCodexAction(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+
+	hubDir := filepath.Join(homeDir, ".aether")
+	hubSystem := filepath.Join(hubDir, "system")
+	if err := os.MkdirAll(hubSystem, 0755); err != nil {
+		t.Fatalf("failed to create hub system dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.0"}`), 0644); err != nil {
+		t.Fatalf("failed to create hub version: %v", err)
+	}
+
+	repoDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repoDir, ".aether"), 0755); err != nil {
+		t.Fatalf("failed to create local .aether dir: %v", err)
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	t.Setenv("HOME", homeDir)
+	oldDir, _ := os.Getwd()
+	if err := os.Chdir(repoDir); err != nil {
+		t.Fatalf("failed to chdir to repo: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	rootCmd.SetArgs([]string{"update", "--dry-run"})
+	defer rootCmd.SetArgs([]string{})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("update dry-run failed: %v", err)
+	}
+
+	output := buf.String()
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("expected valid JSON output: %v, output: %s", err, output)
+	}
+
+	inner, _ := result["result"].(map[string]interface{})
+	actions, ok := inner["actions"].([]interface{})
+	if !ok {
+		t.Fatal("expected actions to be an array")
+	}
+
+	foundCodexAction := false
+	for _, action := range actions {
+		if actionStr, ok := action.(string); ok && strings.Contains(actionStr, ".codex/agents") {
+			foundCodexAction = true
+			break
+		}
+	}
+	if !foundCodexAction {
+		t.Errorf("expected dry-run actions to include '.codex/agents/', got: %v", actions)
+	}
+}
+
 // TestRunUpdateSyncMultipleSyncPairs verifies that all sync pairs (commands,
 // agents, rules) are processed.
 func TestUpdateSyncMultipleSyncPairs(t *testing.T) {

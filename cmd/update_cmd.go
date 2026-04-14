@@ -84,6 +84,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 				"Sync .aether/ system files (commands, agents, skills, templates, docs)",
 				"Sync .claude/commands/ant/",
 				"Sync .claude/agents/ant/",
+				"Sync .codex/agents/",
 				"Sync .opencode/commands/ant/",
 				"Sync .opencode/agents/",
 			},
@@ -165,6 +166,7 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 		{"commands/opencode", "../.opencode/commands/ant", "Commands (opencode)"},
 		{"agents", "../.opencode/agents", "Agents (opencode)"},
 		{"agents-claude", "../.claude/agents/ant", "Agents (claude)"},
+		{"codex", "../.codex/agents", "Agents (codex)"},
 		{"rules", "../.claude/rules", "Rules (claude)"},
 	}
 
