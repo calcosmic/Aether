@@ -57,9 +57,9 @@ End with specific, actionable steps the user can take:
 
 ```
 What you can do:
-- Run /ant:status to see the current state
-- Run /ant:build 3 to retry this phase
-- Run /ant:flag "blocked on X" to mark a blocker
+- Run /ant:status or `aether status` to see the current state
+- Run /ant:build 3 or `aether build 3` to retry this phase
+- Run /ant:flag "blocked on X" or `aether flag "blocked on X"` to mark a blocker
 ```
 
 Always provide at least one actionable command. Never end an error with just "Something went wrong."

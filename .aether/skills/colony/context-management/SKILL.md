@@ -39,7 +39,7 @@ Freshness matters because state files from a previous session may contain outdat
 
 ## HANDOFF.md Requirements
 
-When creating a handoff (via `/ant:pause-colony` or session end), HANDOFF.md must include all five sections:
+When creating a handoff (via `/ant:pause-colony` or `aether pause-colony` or session end), HANDOFF.md must include all five sections:
 
 1. **Goal** -- The active colony goal, exactly as stated in COLONY_STATE.json.
 2. **Phase** -- Current phase number and name, plus completion percentage.
@@ -65,7 +65,8 @@ At natural breaks (phase completion, verification pass, seal), prompt the user t
 
 ```
 This session has been running for a while. Consider running /ant:pause-colony
-to save state, then start fresh with /ant:resume-colony.
+or `aether pause-colony` to save state, then start fresh with /ant:resume-colony
+or `aether resume-colony`.
 ```
 
 This helps prevent context window degradation in long sessions.

@@ -54,7 +54,7 @@ Auto-emitted FEEDBACK: "prefer composition over inheritance" [70%]
 
 ## Signal Changes Summary
 
-At the end of every `/ant:continue` execution, display a "Signal Changes" summary table:
+At the end of every `/ant:continue` or `aether continue` execution, display a "Signal Changes" summary table:
 
 ```
 ━━ S I G N A L   C H A N G E S ━━

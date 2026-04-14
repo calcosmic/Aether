@@ -1,7 +1,7 @@
 # Domain Skills
 
 Drop a folder here with a SKILL.md to add custom domain skills.
-Skills created with `/ant:skill-create` are placed here automatically.
+Skills created with `/ant:skill-create` (Claude Code/OpenCode) or `aether skill-create` (Codex CLI) are placed here automatically.
 
 ## Creating a Custom Skill
 
@@ -30,4 +30,4 @@ Your best practices and guidance here.
 
 - Your custom skills are **never overwritten** by `aether update`
 - Only skills listed in `.manifest.json` are managed by Aether
-- Use `/ant:skill-create "<topic>"` for Oracle-powered skill generation
+- Use `/ant:skill-create "<topic>"` (Claude Code/OpenCode) or `aether skill-create "<topic>"` (Codex CLI) for Oracle-powered skill generation

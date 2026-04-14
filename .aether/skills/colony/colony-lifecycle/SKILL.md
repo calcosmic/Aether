@@ -24,12 +24,12 @@ IDLE -> READY -> PLANNING -> EXECUTING -> SEALED -> ENTOMBED -> IDLE
 
 | State | Meaning | Entered By | Next Action |
 |-------|---------|------------|-------------|
-| IDLE | No active colony | Default / after entomb | `/ant:init` |
-| READY | Colony initialized, no plan | `/ant:init` | `/ant:plan` |
-| PLANNING | Plan being generated | `/ant:plan` | `/ant:build 1` |
-| EXECUTING | Phases being built | `/ant:build` | `/ant:continue` |
-| SEALED | Colony marked complete | `/ant:seal` | `/ant:entomb` |
-| ENTOMBED | Colony archived | `/ant:entomb` | `/ant:init` (new goal) |
+| IDLE | No active colony | Default / after entomb | `/ant:init` or `aether init` |
+| READY | Colony initialized, no plan | `/ant:init` or `aether init` | `/ant:plan` or `aether plan` |
+| PLANNING | Plan being generated | `/ant:plan` or `aether plan` | `/ant:build 1` or `aether build 1` |
+| EXECUTING | Phases being built | `/ant:build` or `aether build` | `/ant:continue` or `aether continue` |
+| SEALED | Colony marked complete | `/ant:seal` or `aether seal` | `/ant:entomb` or `aether entomb` |
+| ENTOMBED | Colony archived | `/ant:entomb` or `aether entomb` | `/ant:init` or `aether init` (new goal) |
 
 ## Next Up Block
 
@@ -39,7 +39,7 @@ Every command output must end with a "Next Up" block. This block tells the user 
 
 ```
 ━━ N E X T   U P ━━
-Run /ant:continue to verify work and advance to the next phase.
+Run /ant:continue or `aether continue` to verify work and advance to the next phase.
 ```
 
 ### Rules
@@ -54,12 +54,12 @@ Run /ant:continue to verify work and advance to the next phase.
 
 | Current State | Primary Next Up | Alternatives |
 |---------------|-----------------|--------------|
-| READY | `/ant:plan` | `/ant:colonize` (if existing code) |
-| PLANNING | `/ant:build 1` | `/ant:focus` / `/ant:redirect` (to set signals first) |
-| EXECUTING (just built) | `/ant:continue` | `/ant:status` (to review) |
-| EXECUTING (just verified) | `/ant:build N+1` | `/ant:seal` (if last phase) |
-| SEALED | `/ant:entomb` | -- |
-| ENTOMBED | `/ant:init "new goal"` | -- |
+| READY | `/ant:plan` or `aether plan` | `/ant:colonize` or `aether colonize` (if existing code) |
+| PLANNING | `/ant:build 1` or `aether build 1` | `/ant:focus` or `aether focus` / `/ant:redirect` or `aether redirect` (to set signals first) |
+| EXECUTING (just built) | `/ant:continue` or `aether continue` | `/ant:status` or `aether status` (to review) |
+| EXECUTING (just verified) | `/ant:build N+1` or `aether build N+1` | `/ant:seal` or `aether seal` (if last phase) |
+| SEALED | `/ant:entomb` or `aether entomb` | -- |
+| ENTOMBED | `/ant:init "new goal"` or `aether init "new goal"` | -- |
 
 ## Command Chaining Awareness
 
