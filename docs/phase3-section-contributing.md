@@ -15,7 +15,7 @@ cd Aether
 make build
 ```
 
-That's it. The `make build` target compiles the binary with version injection from `package.json`. You will find the `aether` binary in the project root.
+That's it. The `make build` target compiles the binary with version injection from `.aether/version.json`. You will find the `aether` binary in the project root.
 
 ### Build, Test, Lint
 

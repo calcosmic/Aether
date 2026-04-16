@@ -37,7 +37,9 @@ func colonyPrimeTestEnv(t *testing.T, pheromones *colony.PheromoneFile) (*colony
 }
 
 // runColonyPrime executes colony-prime with the given flags and returns parsed output.
-func runColonyPrime(t *testing.T, s interface{ SaveJSON(string, interface{}) error }, flags []string) map[string]interface{} {
+func runColonyPrime(t *testing.T, s interface {
+	SaveJSON(string, interface{}) error
+}, flags []string) map[string]interface{} {
 	t.Helper()
 	var buf bytes.Buffer
 	stdout = &buf
@@ -89,6 +91,9 @@ func TestColonyPrime_IncludesPheromoneSignals(t *testing.T) {
 	if !strings.Contains(contextStr, "## Pheromone Signals") {
 		t.Error("colony-prime context missing '## Pheromone Signals' section header")
 	}
+	if !strings.Contains(contextStr, "Colony is EXECUTING. Signals are active implementation constraints.") {
+		t.Error("colony-prime context missing EXECUTING lifecycle framing")
+	}
 
 	// Verify all three signal type markers appear in the output
 	for _, sigType := range []string{"FOCUS", "REDIRECT", "FEEDBACK"} {
@@ -123,6 +128,104 @@ func TestColonyPrime_IncludesPheromoneSignals(t *testing.T) {
 	sections := result["sections"].(float64)
 	if sections < 2 {
 		t.Errorf("expected at least 2 sections (state + pheromones), got %f", sections)
+	}
+}
+
+func TestColonyPrime_LifecycleContextChangesWithState(t *testing.T) {
+	cases := []struct {
+		name         string
+		state        colony.State
+		currentPhase int
+		phases       []colony.Phase
+		want         string
+		flags        []string
+	}{
+		{
+			name:         "ready without plan",
+			state:        colony.StateREADY,
+			currentPhase: 0,
+			phases:       nil,
+			want:         "Colony is READY. Signals should guide planning scope and approach.",
+		},
+		{
+			name:  "ready with plan",
+			state: colony.StateREADY,
+			phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: colony.PhaseReady},
+			},
+			want: "Colony is READY. Signals are pre-build guidance for upcoming execution.",
+		},
+		{
+			name:  "built",
+			state: colony.StateBUILT,
+			phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+			},
+			want: "Colony is BUILT. Signals guide verification and learning extraction.",
+		},
+		{
+			name:  "executing compact",
+			state: colony.StateEXECUTING,
+			phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: colony.PhaseInProgress},
+			},
+			want:  "Colony is EXECUTING. Signals are active implementation constraints.",
+			flags: []string{"--compact"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+
+			s, tmpDir := newTestStoreCmd(t)
+			defer os.RemoveAll(tmpDir)
+			store = s
+
+			goal := "lifecycle framing test"
+			currentPhase := tc.currentPhase
+			if currentPhase == 0 && len(tc.phases) > 0 {
+				currentPhase = 1
+			}
+
+			state := colony.ColonyState{
+				Version:      "1.0",
+				Goal:         &goal,
+				State:        tc.state,
+				CurrentPhase: currentPhase,
+				Plan: colony.Plan{
+					Phases: tc.phases,
+				},
+			}
+
+			now := time.Now().Format(time.RFC3339)
+			s0_9 := 0.9
+			pheromones := colony.PheromoneFile{
+				Signals: []colony.PheromoneSignal{
+					{ID: "s1", Type: "FOCUS", Priority: "normal", Source: "user", CreatedAt: now, Active: true, Strength: &s0_9, Content: json.RawMessage(`{"text": "Focus on lifecycle framing"}`)},
+				},
+			}
+
+			if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.SaveJSON("pheromones.json", pheromones); err != nil {
+				t.Fatal(err)
+			}
+
+			envelope := runColonyPrime(t, s, tc.flags)
+			result := envelope["result"].(map[string]interface{})
+			contextStr := result["context"].(string)
+			promptSection := result["prompt_section"].(string)
+
+			if !strings.Contains(contextStr, tc.want) {
+				t.Fatalf("context missing lifecycle framing %q\ncontext:\n%s", tc.want, contextStr)
+			}
+			if !strings.Contains(promptSection, tc.want) {
+				t.Fatalf("prompt_section missing lifecycle framing %q\nprompt_section:\n%s", tc.want, promptSection)
+			}
+		})
 	}
 }
 
@@ -425,6 +528,18 @@ func TestColonyPrime_OutputStructure(t *testing.T) {
 	state, _ := colonyPrimeTestEnv(t, nil)
 	now := time.Now().Format(time.RFC3339)
 	s0_9 := 0.9
+	state.Memory.Instincts = []colony.Instinct{
+		{
+			ID:         "inst1",
+			Trigger:    "old signal pileup",
+			Action:     "prune low-value signals",
+			Confidence: 0.9,
+			Status:     "active",
+			Domain:     "go",
+			Source:     "test",
+			CreatedAt:  now,
+		},
+	}
 
 	pf := colony.PheromoneFile{
 		Signals: []colony.PheromoneSignal{
@@ -449,7 +564,7 @@ func TestColonyPrime_OutputStructure(t *testing.T) {
 	result := envelope["result"].(map[string]interface{})
 
 	// Required fields
-	requiredFields := []string{"context", "budget", "used", "sections", "trimmed"}
+	requiredFields := []string{"context", "prompt_section", "signal_count", "instinct_count", "log_line", "budget", "used", "sections", "trimmed"}
 	for _, field := range requiredFields {
 		if _, exists := result[field]; !exists {
 			t.Errorf("colony-prime result missing required field '%s'", field)
@@ -460,6 +575,18 @@ func TestColonyPrime_OutputStructure(t *testing.T) {
 	contextStr, ok := result["context"].(string)
 	if !ok || contextStr == "" {
 		t.Error("colony-prime result.context must be a non-empty string")
+	}
+	if promptSection, ok := result["prompt_section"].(string); !ok || promptSection != contextStr {
+		t.Errorf("colony-prime result.prompt_section = %v, want same content as context", result["prompt_section"])
+	}
+	if result["signal_count"] != float64(1) {
+		t.Errorf("colony-prime result.signal_count = %v, want 1", result["signal_count"])
+	}
+	if result["instinct_count"] != float64(1) {
+		t.Errorf("colony-prime result.instinct_count = %v, want 1", result["instinct_count"])
+	}
+	if logLine, ok := result["log_line"].(string); !ok || !strings.Contains(logLine, "1 signal(s), 1 instinct(s)") {
+		t.Errorf("colony-prime result.log_line = %v, want counts summary", result["log_line"])
 	}
 
 	// trimmed should be an array (may be empty)

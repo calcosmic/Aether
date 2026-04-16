@@ -165,14 +165,15 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"state":    string(colony.StateREADY),
 			"goal":     goal,
 			"version":  "3.0",
 			"phase":    0,
 			"session":  sessionID,
 			"data_dir": dataDir,
-		})
+		}
+		outputWorkflow(result, renderInitVisual(goal, sessionID, dataDir))
 		return nil
 	},
 }

@@ -102,7 +102,7 @@ Purpose: Capture interested visitors for launch updates.
 - [Website](https://aetherantcolony.com)
 - [Documentation](https://github.com/calcosmic/Aether#readme)
 - [Quick Start](https://github.com/calcosmic/Aether#install)
-- [npm Companion Files](https://www.npmjs.com/package/aether-colony)
+- [GitHub Releases](https://github.com/calcosmic/Aether/releases)
 
 **Column 3: Community**
 

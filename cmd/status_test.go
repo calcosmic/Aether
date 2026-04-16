@@ -93,7 +93,7 @@ func TestStatusOutput(t *testing.T) {
 
 	// Check essential sections exist
 	checks := []string{
-		"AETHER COLONY",
+		"C O L O N Y   S T A T U S",
 		"Goal:",
 		"Progress",
 		"Phase:",
@@ -109,11 +109,11 @@ func TestStatusOutput(t *testing.T) {
 	}
 
 	// Check progress bar format
-	if !strings.Contains(output, "2/3 phases") {
-		t.Errorf("expected '2/3 phases' in output, got:\n%s", output)
+	if !strings.Contains(output, "[Phase 2/3]") {
+		t.Errorf("expected '[Phase 2/3]' in output, got:\n%s", output)
 	}
-	if !strings.Contains(output, "2/4 tasks") {
-		t.Errorf("expected '2/4 tasks' in output, got:\n%s", output)
+	if !strings.Contains(output, "[Tasks 2/4]") {
+		t.Errorf("expected '[Tasks 2/4]' in output, got:\n%s", output)
 	}
 
 	// Check instinct counts

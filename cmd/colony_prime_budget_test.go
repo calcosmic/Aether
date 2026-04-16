@@ -301,7 +301,8 @@ func TestColonyPrimeCompactTrimsLowPriorityFirst(t *testing.T) {
 		}
 	}
 
-	// If both are trimmed, learnings must be listed first (lower priority = trimmed first)
+	// If both are trimmed, decisions appear first because high-priority
+	// sections are considered for inclusion before lower-priority ones.
 	if trimmedLearnings && trimmedDecisions {
 		learningsIdx := -1
 		decisionsIdx := -1
@@ -313,8 +314,8 @@ func TestColonyPrimeCompactTrimsLowPriorityFirst(t *testing.T) {
 				decisionsIdx = i
 			}
 		}
-		if learningsIdx > decisionsIdx {
-			t.Errorf("learnings (priority 2) should be trimmed before decisions (priority 3), but learnings was at index %d and decisions at %d", learningsIdx, decisionsIdx)
+		if decisionsIdx > learningsIdx {
+			t.Errorf("decisions (priority 3) should be evaluated before learnings (priority 2), but decisions was at index %d and learnings at %d", decisionsIdx, learningsIdx)
 		}
 	}
 }
@@ -641,17 +642,11 @@ func TestColonyPrimeFullTrimPriorityOrder(t *testing.T) {
 		trimmedSet[name.(string)] = true
 	}
 
-	// The trimming algorithm processes sections in ascending priority order.
-	// A section is trimmed if adding it would exceed the remaining budget.
+	// The trimming algorithm packs higher-priority sections first, then trims
+	// later sections when they do not fit into the remaining budget.
 	//
-	// This means the trimmed list should be in ascending priority order (since
-	// sections are sorted that way and trimmed as they fail to fit).
-	// It does NOT mean that all trimmed sections have lower priority than all
-	// non-trimmed sections -- a large high-priority section can be trimmed while
-	// a small low-priority section fits.
-	//
-	// The key invariant we CAN verify: the trimmed list is sorted by ascending
-	// priority (matching the sort order of the input sections).
+	// That means the trimmed list follows the evaluation order, which is
+	// non-increasing priority.
 	type sectionInfo struct {
 		name     string
 		priority int
@@ -666,14 +661,14 @@ func TestColonyPrimeFullTrimPriorityOrder(t *testing.T) {
 		"pheromones":       9,
 	}
 
-	// Verify trimmed list is in ascending priority order
+	// Verify trimmed list is in non-increasing priority order.
 	for i := 1; i < len(trimmed); i++ {
 		prevName := trimmed[i-1].(string)
 		currName := trimmed[i].(string)
 		prevPri := priorityOf[prevName]
 		currPri := priorityOf[currName]
-		if prevPri > currPri {
-			t.Errorf("trimmed list not in priority order: %s (priority %d) trimmed before %s (priority %d)",
+		if prevPri < currPri {
+			t.Errorf("trimmed list not in evaluation order: %s (priority %d) trimmed before %s (priority %d)",
 				prevName, prevPri, currName, currPri)
 		}
 	}

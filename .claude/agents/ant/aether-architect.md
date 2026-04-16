@@ -71,7 +71,7 @@ Every component in your design must have: a clear responsibility, defined interf
 <pheromone_protocol>
 ## Pheromone Signal Response Protocol
 
-Your spawn context may include a `--- COMPACT SIGNALS ---` or `--- ACTIVE SIGNALS ---`
+Your spawn context may include a `## Pheromone Signals` or `## ACTIVE REDIRECT SIGNALS`
 section containing colony guidance. These signals are injected by the Queen via colony-prime
 and represent live colony intelligence.
 

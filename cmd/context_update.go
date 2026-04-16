@@ -84,7 +84,7 @@ Colony initialization in progress...
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
-| In the Aether repo, ` + "`" + `.aether/` + "`" + ` IS the source of truth — published directly via npm (private dirs excluded by .npmignore) | CLAUDE.md | Permanent |
+| In the Aether repo, ` + "`" + `.aether/` + "`" + ` IS the source of truth — shipped via the Go binary and refreshed with ` + "`" + `aether install --package-dir "$PWD"` + "`" + ` | CLAUDE.md | Permanent |
 | Never push without explicit user approval | CLAUDE.md Safety | Permanent |
 
 ---

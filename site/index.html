@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Aether — Multi-Agent Development for AI Coding Assistants</title>
-  <meta name="description" content="Aether is an npm package that brings ant-colony intelligence to AI-assisted development. Coordinate multiple AI agents, track colony state, and ship faster." />
+  <meta name="description" content="Aether is a Go-based multi-agent development system for AI coding assistants. Coordinate multiple AI agents, track colony state, and ship faster." />
   <meta property="og:title" content="Aether — Multi-Agent Development" />
   <meta property="og:description" content="Coordinate multiple AI agents like an ant colony. Build faster, learn continuously." />
   <meta property="og:type" content="website" />
@@ -27,7 +27,6 @@
       </a>
       <ul class="nav-links" role="list">
         <li><a href="index.html" class="active" aria-current="page">Home</a></li>
-        <li><a href="metrics.html" class="nav-hide-mobile">Metrics</a></li>
         <li><a href="sponsor.html" class="nav-hide-mobile">Sponsor</a></li>
         <li>
           <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
@@ -36,10 +35,10 @@
              class="nav-hide-mobile">GitHub</a>
         </li>
         <li>
-          <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+          <a href="https://github.com/calcosmic/Aether/releases?utm_source=site&utm_medium=web&utm_campaign=aether"
              target="_blank"
              rel="noopener noreferrer"
-             class="nav-cta">npm install</a>
+             class="nav-cta">Get Aether</a>
         </li>
       </ul>
     </div>
@@ -62,12 +61,12 @@
         learn from every build — so each project gets smarter over time.
       </p>
       <div class="hero-actions">
-        <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+        <a href="https://github.com/calcosmic/Aether/releases?utm_source=site&utm_medium=web&utm_campaign=aether"
            target="_blank"
            rel="noopener noreferrer"
            class="btn btn-primary plausible-event-name=Install+Click">
           <span aria-hidden="true">📦</span>
-          Get on npm
+          Get the Binary
         </a>
         <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
            target="_blank"
@@ -80,7 +79,9 @@
 
       <div class="mt-48">
         <div class="code-block" role="region" aria-label="Quick start command">
-          <span class="prompt">$ </span><span class="command">npm install -g aether-colony</span>
+          <span class="prompt">$ </span><span class="command">go install github.com/calcosmic/Aether@latest</span>
+          <br />
+          <span class="prompt">$ </span><span class="command">aether install</span>
           <br />
           <span class="prompt">$ </span><span class="command">aether init "Build my next big thing"</span>
           <br />
@@ -94,8 +95,8 @@
       <div class="section-eyebrow">What is Aether?</div>
       <h2 class="section-title" id="what-heading">An operating system for AI agents</h2>
       <p class="section-body">
-        Aether is an npm package that adds a persistent, learning colony layer
-        on top of Claude Code and OpenCode. Instead of isolated sessions,
+        Aether adds a persistent, learning colony layer on top of AI coding
+        assistants. Instead of isolated sessions,
         your AI agents share memory, coordinate work, and get smarter with every
         phase they complete.
       </p>
@@ -168,10 +169,10 @@
             <span class="prompt">$ </span><span class="command">aether init "Build payment flow"</span><br />
             <br />
             <span class="comment"># 2. Plan phases automatically</span><br />
-            <span class="prompt">$ </span><span class="command">/ant:plan</span><br />
+            <span class="prompt">$ </span><span class="command">aether plan</span><br />
             <br />
-            <span class="comment"># 3. Run autopilot</span><br />
-            <span class="prompt">$ </span><span class="command">/ant:run</span><br />
+            <span class="comment"># 3. Build and advance</span><br />
+            <span class="prompt">$ </span><span class="command">aether build 1</span><br />
             <br />
             <span class="comment"># Workers build, test, and verify</span><br />
             <span class="comment"># each phase — then advance</span>
@@ -226,16 +227,16 @@
       <div class="section-eyebrow">Get started in 60 seconds</div>
       <h2 class="section-title" id="cta-heading">Ready to build with the colony?</h2>
       <p class="section-body" style="margin: 0 auto 40px;">
-        Install Aether globally, point it at your project, and let the colony
+        Install the binary, point it at your project, and let the colony
         coordinate your AI agents from day one.
       </p>
       <div class="hero-actions">
-        <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+        <a href="https://github.com/calcosmic/Aether/releases?utm_source=site&utm_medium=web&utm_campaign=aether"
            target="_blank"
            rel="noopener noreferrer"
            class="btn btn-primary plausible-event-name=Install+Click">
           <span aria-hidden="true">📦</span>
-          Install from npm
+          View Releases
         </a>
         <a href="sponsor.html" class="btn btn-outline">
           <span aria-hidden="true">💛</span>
@@ -253,7 +254,6 @@
         Aether Ant Colony
       </div>
       <ul class="footer-links" role="list">
-        <li><a href="metrics.html">Metrics</a></li>
         <li><a href="sponsor.html">Sponsor</a></li>
         <li>
           <a href="https://github.com/calcosmic/Aether?utm_source=site&utm_medium=web&utm_campaign=aether"
@@ -261,9 +261,9 @@
              rel="noopener noreferrer">GitHub</a>
         </li>
         <li>
-          <a href="https://www.npmjs.com/package/aether-colony?utm_source=site&utm_medium=web&utm_campaign=aether"
+          <a href="https://github.com/calcosmic/Aether/releases?utm_source=site&utm_medium=web&utm_campaign=aether"
              target="_blank"
-             rel="noopener noreferrer">npm</a>
+             rel="noopener noreferrer">Releases</a>
         </li>
       </ul>
       <p class="footer-copy">

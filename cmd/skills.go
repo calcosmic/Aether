@@ -5,29 +5,45 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
-// Skill types.
-
 type skillFrontmatter struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Category    string   `json:"category"`
-	Detect      []string `json:"detect,omitempty"`
-	Roles       []string `json:"roles,omitempty"`
+	Name           string   `json:"name" yaml:"name"`
+	Description    string   `json:"description" yaml:"description"`
+	Type           string   `json:"type,omitempty" yaml:"type"`
+	Category       string   `json:"category,omitempty" yaml:"category"`
+	Domains        []string `json:"domains,omitempty" yaml:"domains"`
+	AgentRoles     []string `json:"agent_roles,omitempty" yaml:"agent_roles"`
+	Roles          []string `json:"roles,omitempty" yaml:"roles"`
+	DetectFiles    []string `json:"detect_files,omitempty" yaml:"detect_files"`
+	DetectPackages []string `json:"detect_packages,omitempty" yaml:"detect_packages"`
+	Detect         []string `json:"detect,omitempty" yaml:"detect"`
+	Priority       string   `json:"priority,omitempty" yaml:"priority"`
+	Version        string   `json:"version,omitempty" yaml:"version"`
 }
 
 type skillIndexEntry struct {
-	Name          string   `json:"name"`
-	Category      string   `json:"category"`
-	Path          string   `json:"path"`
-	IsUserCreated bool     `json:"is_user_created"`
-	Detect        []string `json:"detect,omitempty"`
-	Roles         []string `json:"roles,omitempty"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Type           string   `json:"type"`
+	Category       string   `json:"category"`
+	Domains        []string `json:"domains,omitempty"`
+	AgentRoles     []string `json:"agent_roles,omitempty"`
+	Roles          []string `json:"roles,omitempty"`
+	DetectFiles    []string `json:"detect_files,omitempty"`
+	DetectPackages []string `json:"detect_packages,omitempty"`
+	Detect         []string `json:"detect,omitempty"`
+	Priority       string   `json:"priority,omitempty"`
+	Version        string   `json:"version,omitempty"`
+	Path           string   `json:"path"`
+	IsUserCreated  bool     `json:"is_user_created"`
+	Source         string   `json:"source,omitempty"`
 }
 
 type skillIndexData struct {
@@ -46,7 +62,25 @@ type skillManifestData struct {
 	UpdatedAt string               `json:"updated_at"`
 }
 
-// --- skill-parse-frontmatter ---
+type skillScanRoot struct {
+	Path          string
+	Source        string
+	IsUserCreated bool
+}
+
+type scoredSkill struct {
+	entry skillIndexEntry
+	score int
+}
+
+type skillMatchResult struct {
+	Role         string            `json:"role"`
+	Task         string            `json:"task,omitempty"`
+	ColonySkills []skillIndexEntry `json:"colony_skills"`
+	DomainSkills []skillIndexEntry `json:"domain_skills"`
+	Matched      []string          `json:"matched"`
+	Count        int               `json:"count"`
+}
 
 var skillParseFrontmatterCmd = &cobra.Command{
 	Use:   "skill-parse-frontmatter",
@@ -75,8 +109,6 @@ var skillParseFrontmatterCmd = &cobra.Command{
 	},
 }
 
-// --- skill-index ---
-
 var skillIndexCmd = &cobra.Command{
 	Use:   "skill-index",
 	Short: "Build skills index from installed skills",
@@ -90,18 +122,21 @@ var skillIndexCmd = &cobra.Command{
 			UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 		}
 
-		// Save to hub
 		indexPath := filepath.Join(hub, "skills", "index.json")
-		os.MkdirAll(filepath.Dir(indexPath), 0755)
+		if err := os.MkdirAll(filepath.Dir(indexPath), 0755); err != nil {
+			outputError(2, fmt.Sprintf("failed to create index directory: %v", err), nil)
+			return nil
+		}
 		encoded, _ := json.MarshalIndent(data, "", "  ")
-		os.WriteFile(indexPath, append(encoded, '\n'), 0644)
+		if err := os.WriteFile(indexPath, append(encoded, '\n'), 0644); err != nil {
+			outputError(2, fmt.Sprintf("failed to write index: %v", err), nil)
+			return nil
+		}
 
 		outputOK(map[string]interface{}{"indexed": len(entries), "path": indexPath})
 		return nil
 	},
 }
-
-// --- skill-index-read ---
 
 var skillIndexReadCmd = &cobra.Command{
 	Use:   "skill-index-read",
@@ -128,160 +163,82 @@ var skillIndexReadCmd = &cobra.Command{
 	},
 }
 
-// --- skill-detect ---
-
 var skillDetectCmd = &cobra.Command{
 	Use:   "skill-detect",
 	Short: "Detect domain skills matching codebase file patterns",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hub := resolveHubPath()
-		indexPath := filepath.Join(hub, "skills", "index.json")
-
-		var data skillIndexData
-		if raw, err := os.ReadFile(indexPath); err == nil {
-			json.Unmarshal(raw, &data)
-		}
+		entries := loadSkillIndexOrBuild(hub)
+		root := skillWorkspaceRoot()
 
 		var matched []skillIndexEntry
-		for _, e := range data.Entries {
-			for _, pattern := range e.Detect {
-				if matches, _ := filepath.Glob(pattern); len(matches) > 0 {
-					matched = append(matched, e)
-					break
-				}
-			}
-		}
-
-		outputOK(map[string]interface{}{"matched": matched, "total": len(matched)})
-		return nil
-	},
-}
-
-// --- skill-match ---
-
-var skillMatchCmd = &cobra.Command{
-	Use:   "skill-match",
-	Short: "Match skills to worker role and task",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		role := mustGetString(cmd, "role")
-		if role == "" {
-			return nil
-		}
-		task, _ := cmd.Flags().GetString("task")
-
-		hub := resolveHubPath()
-		indexPath := filepath.Join(hub, "skills", "index.json")
-
-		var data skillIndexData
-		if raw, err := os.ReadFile(indexPath); err == nil {
-			json.Unmarshal(raw, &data)
-		}
-
-		// Score each skill
-		type scored struct {
-			entry skillIndexEntry
-			score int
-		}
-		var results []scored
-		for _, e := range data.Entries {
-			score := 0
-			for _, r := range e.Roles {
-				if r == role {
-					score += 2
-				}
-			}
-			if task != "" && strings.Contains(strings.ToLower(e.Category), strings.ToLower(task)) {
-				score += 1
-			}
-			if score > 0 {
-				results = append(results, scored{entry: e, score: score})
-			}
-		}
-
-		// Sort by score desc
-		for i := 0; i < len(results)-1; i++ {
-			for j := i + 1; j < len(results); j++ {
-				if results[j].score > results[i].score {
-					results[i], results[j] = results[j], results[i]
-				}
-			}
-		}
-
-		// Top 3
-		top := results
-		if len(top) > 3 {
-			top = top[:3]
-		}
-
-		var names []string
-		for _, s := range top {
-			names = append(names, s.entry.Name)
-		}
-
-		outputOK(map[string]interface{}{"matched": names, "count": len(names), "role": role})
-		return nil
-	},
-}
-
-// --- skill-inject ---
-
-var skillInjectCmd = &cobra.Command{
-	Use:   "skill-inject",
-	Short: "Load matched skills into prompt section text",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		role := mustGetString(cmd, "role")
-		if role == "" {
-			return nil
-		}
-
-		hub := resolveHubPath()
-		indexPath := filepath.Join(hub, "skills", "index.json")
-
-		var data skillIndexData
-		if raw, err := os.ReadFile(indexPath); err == nil {
-			json.Unmarshal(raw, &data)
-		}
-
-		var sections []string
-		for _, e := range data.Entries {
-			roleMatch := false
-			for _, r := range e.Roles {
-				if r == role {
-					roleMatch = true
-					break
-				}
-			}
-			if !roleMatch {
+		for _, e := range entries {
+			if e.Type != "domain" {
 				continue
 			}
-
-			// Read the skill file content
-			skillPath := filepath.Join(hub, "skills", e.Category, "SKILL.md")
-			if _, err := os.Stat(skillPath); err != nil {
-				skillPath = e.Path
-			}
-			if content, err := os.ReadFile(skillPath); err == nil {
-				sections = append(sections, fmt.Sprintf("### Skill: %s\n\n%s", e.Name, string(content)))
+			if skillMatchesWorkspace(root, e) {
+				matched = append(matched, e)
 			}
 		}
 
-		if len(sections) == 0 {
-			outputOK(map[string]interface{}{"section": "", "skill_count": 0})
+		outputOK(map[string]interface{}{"matched": matched, "total": len(matched), "root": root})
+		return nil
+	},
+}
+
+var skillMatchCmd = &cobra.Command{
+	Use:   "skill-match [role] [task]",
+	Short: "Match skills to worker role and task",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		role, task := resolveSkillMatchInput(cmd, args)
+		if role == "" {
+			outputError(1, "worker role is required", nil)
 			return nil
 		}
 
+		result := matchSkills(resolveHubPath(), role, task)
+		outputOK(result)
+		return nil
+	},
+}
+
+var skillInjectCmd = &cobra.Command{
+	Use:   "skill-inject [role] [task]",
+	Short: "Load matched skills into prompt section text",
+	Args:  cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		role, task := resolveSkillMatchInput(cmd, args)
+		if role == "" {
+			outputError(1, "worker role is required", nil)
+			return nil
+		}
+
+		match := matchSkills(resolveHubPath(), role, task)
+		sections := []string{}
+
+		for _, e := range append(match.ColonySkills, match.DomainSkills...) {
+			content, err := os.ReadFile(e.Path)
+			if err != nil {
+				continue
+			}
+			sections = append(sections, fmt.Sprintf("### Skill: %s\n\n%s", e.Name, string(content)))
+		}
+
+		section := strings.Join(sections, "\n\n---\n\n")
 		outputOK(map[string]interface{}{
-			"section":     strings.Join(sections, "\n\n---\n\n"),
-			"skill_count": len(sections),
+			"section":       section,
+			"skill_section": section,
+			"skill_count":   len(sections),
+			"colony_count":  len(match.ColonySkills),
+			"domain_count":  len(match.DomainSkills),
+			"colony_skills": extractSkillNames(match.ColonySkills),
+			"domain_skills": extractSkillNames(match.DomainSkills),
 		})
 		return nil
 	},
 }
-
-// --- skill-list ---
 
 var skillListCmd = &cobra.Command{
 	Use:   "skill-list",
@@ -290,26 +247,21 @@ var skillListCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hub := resolveHubPath()
 		entries := buildFullIndex(hub)
-
 		outputOK(map[string]interface{}{"skills": entries, "total": len(entries)})
 		return nil
 	},
 }
-
-// --- skill-manifest-read ---
 
 var skillManifestReadCmd = &cobra.Command{
 	Use:   "skill-manifest-read",
 	Short: "Read the skills manifest",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Try hub manifest first
 		hub := resolveHubPath()
 		manifestPath := filepath.Join(hub, "skills", "manifest.json")
 
 		raw, err := os.ReadFile(manifestPath)
 		if err != nil {
-			// Try local
 			manifestPath = ".aether/skills/manifest.json"
 			raw, err = os.ReadFile(manifestPath)
 			if err != nil {
@@ -329,8 +281,6 @@ var skillManifestReadCmd = &cobra.Command{
 	},
 }
 
-// --- skill-cache-rebuild ---
-
 var skillCacheRebuildCmd = &cobra.Command{
 	Use:   "skill-cache-rebuild",
 	Short: "Force rebuild of skills index cache",
@@ -345,7 +295,10 @@ var skillCacheRebuildCmd = &cobra.Command{
 			UpdatedAt: time.Now().UTC().Format(time.RFC3339),
 		}
 
-		os.MkdirAll(filepath.Dir(indexPath), 0755)
+		if err := os.MkdirAll(filepath.Dir(indexPath), 0755); err != nil {
+			outputError(2, fmt.Sprintf("failed to create index directory: %v", err), nil)
+			return nil
+		}
 		encoded, _ := json.MarshalIndent(data, "", "  ")
 		if err := os.WriteFile(indexPath, append(encoded, '\n'), 0644); err != nil {
 			outputError(2, fmt.Sprintf("failed to write: %v", err), nil)
@@ -356,8 +309,6 @@ var skillCacheRebuildCmd = &cobra.Command{
 		return nil
 	},
 }
-
-// --- skill-diff ---
 
 var skillDiffCmd = &cobra.Command{
 	Use:   "skill-diff",
@@ -399,8 +350,6 @@ var skillDiffCmd = &cobra.Command{
 	},
 }
 
-// --- skill-is-user-created ---
-
 var skillIsUserCreatedCmd = &cobra.Command{
 	Use:   "skill-is-user-created",
 	Short: "Check if a skill was user-created or shipped",
@@ -418,9 +367,7 @@ var skillIsUserCreatedCmd = &cobra.Command{
 		_, userExists := os.Stat(userPath)
 		_, shippedExists := os.Stat(shippedPath)
 
-		// User-created = exists in hub but not in shipped
 		isUserCreated := userExists == nil && shippedExists != nil
-
 		outputOK(map[string]interface{}{
 			"skill":           name,
 			"is_user_created": isUserCreated,
@@ -431,85 +378,156 @@ var skillIsUserCreatedCmd = &cobra.Command{
 	},
 }
 
-// Helper functions.
-
-// buildFullIndex scans both the local shipped skills directory (.aether/skills/)
-// and the hub user skills directory (<hub>/skills/), returning all indexed
-// entries. This is the single source of truth for directory scanning used by
-// skill-index, skill-list, and skill-cache-rebuild.
 func buildFullIndex(hub string) []skillIndexEntry {
 	entries := []skillIndexEntry{}
+	seen := map[string]bool{}
 
-	if localSkills := findSkillDirs(".aether/skills"); len(localSkills) > 0 {
-		for _, d := range localSkills {
-			if e := indexSkillDir(d, false); e != nil {
-				entries = append(entries, *e)
+	for _, root := range skillScanRoots(hub) {
+		for _, d := range findSkillDirs(root.Path) {
+			entry := indexSkillDir(d, root.IsUserCreated, root.Source)
+			if entry == nil {
+				continue
 			}
+			key := entry.Type + ":" + entry.Name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			entries = append(entries, *entry)
 		}
 	}
 
-	if hubSkills := findSkillDirs(filepath.Join(hub, "skills")); len(hubSkills) > 0 {
-		for _, d := range hubSkills {
-			if e := indexSkillDir(d, true); e != nil {
-				entries = append(entries, *e)
-			}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Type != entries[j].Type {
+			return entries[i].Type < entries[j].Type
 		}
-	}
+		return entries[i].Name < entries[j].Name
+	})
 
 	return entries
 }
 
 func parseSkillFrontmatter(content string) *skillFrontmatter {
 	lines := strings.Split(content, "\n")
-	inFrontmatter := false
-	var fmLines []string
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "---" {
-			if inFrontmatter {
-				break
-			}
-			inFrontmatter = true
-			continue
-		}
-		if inFrontmatter {
-			fmLines = append(fmLines, line)
-		}
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return nil
 	}
 
+	var fmLines []string
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) == "---" {
+			break
+		}
+		fmLines = append(fmLines, line)
+	}
 	if len(fmLines) == 0 {
 		return nil
 	}
 
 	var fm skillFrontmatter
-	for _, line := range fmLines {
-		if strings.HasPrefix(line, "name:") {
-			fm.Name = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
-		} else if strings.HasPrefix(line, "description:") {
-			fm.Description = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
-		} else if strings.HasPrefix(line, "category:") {
-			fm.Category = strings.TrimSpace(strings.TrimPrefix(line, "category:"))
-		} else if strings.HasPrefix(line, "detect:") {
-			val := strings.TrimSpace(strings.TrimPrefix(line, "detect:"))
-			if val != "" {
-				fm.Detect = strings.Split(val, ",")
-				for i := range fm.Detect {
-					fm.Detect[i] = strings.TrimSpace(fm.Detect[i])
-				}
-			}
-		} else if strings.HasPrefix(line, "roles:") {
-			val := strings.TrimSpace(strings.TrimPrefix(line, "roles:"))
-			if val != "" {
-				fm.Roles = strings.Split(val, ",")
-				for i := range fm.Roles {
-					fm.Roles[i] = strings.TrimSpace(fm.Roles[i])
-				}
+	raw := strings.Join(fmLines, "\n")
+	if err := yaml.Unmarshal([]byte(raw), &fm); err != nil {
+		fm = skillFrontmatter{}
+		for _, line := range fmLines {
+			line = strings.TrimSpace(line)
+			switch {
+			case strings.HasPrefix(line, "name:"):
+				fm.Name = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+			case strings.HasPrefix(line, "description:"):
+				fm.Description = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
+			case strings.HasPrefix(line, "category:"):
+				fm.Category = strings.TrimSpace(strings.TrimPrefix(line, "category:"))
+			case strings.HasPrefix(line, "type:"):
+				fm.Type = strings.TrimSpace(strings.TrimPrefix(line, "type:"))
+			case strings.HasPrefix(line, "detect:"):
+				fm.Detect = parseLegacyCSV(strings.TrimSpace(strings.TrimPrefix(line, "detect:")))
+			case strings.HasPrefix(line, "roles:"):
+				fm.Roles = parseLegacyCSV(strings.TrimSpace(strings.TrimPrefix(line, "roles:")))
 			}
 		}
 	}
-
+	fm.normalize()
 	return &fm
+}
+
+func parseLegacyCSV(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
+}
+
+func (fm *skillFrontmatter) normalize() {
+	fm.Type = strings.TrimSpace(fm.Type)
+	fm.Category = strings.TrimSpace(fm.Category)
+	if fm.Type == "" {
+		fm.Type = fm.Category
+	}
+	if fm.Category == "" {
+		fm.Category = fm.Type
+	}
+	if len(fm.AgentRoles) == 0 {
+		fm.AgentRoles = append([]string{}, fm.Roles...)
+	}
+	if len(fm.Roles) == 0 {
+		fm.Roles = append([]string{}, fm.AgentRoles...)
+	}
+	if len(fm.DetectFiles) == 0 {
+		fm.DetectFiles = append([]string{}, fm.Detect...)
+	}
+	if len(fm.Detect) == 0 {
+		fm.Detect = append([]string{}, fm.DetectFiles...)
+	}
+	if fm.Priority == "" {
+		fm.Priority = "normal"
+	}
+}
+
+func skillScanRoots(hub string) []skillScanRoot {
+	roots := []skillScanRoot{
+		{Path: ".codex/skills/aether", Source: "repo-codex", IsUserCreated: false},
+		{Path: ".agents/skills/aether", Source: "repo-agents", IsUserCreated: false},
+		{Path: ".aether/skills-codex", Source: "repo-aether-codex", IsUserCreated: false},
+		{Path: ".aether/skills", Source: "repo-aether", IsUserCreated: false},
+		{Path: filepath.Join(hub, "skills"), Source: "hub-aether", IsUserCreated: true},
+		{Path: filepath.Join(hub, "skills-codex"), Source: "hub-aether-codex", IsUserCreated: false},
+	}
+
+	includeUserRoots := true
+	if envHub := strings.TrimSpace(os.Getenv("AETHER_HUB_DIR")); envHub != "" {
+		includeUserRoots = false
+	} else if defaultHub := resolveHubPath(); defaultHub != "" && !samePathOrAncestor(defaultHub, hub) && !samePathOrAncestor(hub, defaultHub) {
+		includeUserRoots = false
+	}
+
+	if includeUserRoots {
+		home, err := os.UserHomeDir()
+		if err == nil {
+		roots = append(roots,
+			skillScanRoot{Path: filepath.Join(home, ".codex", "skills", "aether"), Source: "user-codex", IsUserCreated: true},
+			skillScanRoot{Path: filepath.Join(home, ".agents", "skills", "aether"), Source: "user-agents", IsUserCreated: true},
+		)
+		}
+	}
+
+	deduped := make([]skillScanRoot, 0, len(roots))
+	seen := map[string]bool{}
+	for _, root := range roots {
+		if root.Path == "" || seen[root.Path] {
+			continue
+		}
+		seen[root.Path] = true
+		deduped = append(deduped, root)
+	}
+	return deduped
 }
 
 func findSkillDirs(baseDir string) []string {
@@ -523,18 +541,16 @@ func findSkillDirs(baseDir string) []string {
 			continue
 		}
 		dirPath := filepath.Join(baseDir, e.Name())
-		// If this directory contains SKILL.md, it's a skill directory
 		if _, err := os.Stat(filepath.Join(dirPath, "SKILL.md")); err == nil {
 			dirs = append(dirs, dirPath)
 			continue
 		}
-		// Otherwise recurse into it (e.g., colony/ and domain/ category folders)
 		dirs = append(dirs, findSkillDirs(dirPath)...)
 	}
 	return dirs
 }
 
-func indexSkillDir(dir string, isUserCreated bool) *skillIndexEntry {
+func indexSkillDir(dir string, isUserCreated bool, source ...string) *skillIndexEntry {
 	skillPath := filepath.Join(dir, "SKILL.md")
 	raw, err := os.ReadFile(skillPath)
 	if err != nil {
@@ -546,21 +562,262 @@ func indexSkillDir(dir string, isUserCreated bool) *skillIndexEntry {
 		return nil
 	}
 
-	return &skillIndexEntry{
-		Name:          fm.Name,
-		Category:      fm.Category,
-		Path:          skillPath,
-		IsUserCreated: isUserCreated,
-		Detect:        fm.Detect,
-		Roles:         fm.Roles,
+	sourceName := ""
+	if len(source) > 0 {
+		sourceName = source[0]
 	}
+
+	return &skillIndexEntry{
+		Name:           fm.Name,
+		Description:    fm.Description,
+		Type:           fm.Type,
+		Category:       fm.Category,
+		Domains:        fm.Domains,
+		AgentRoles:     fm.AgentRoles,
+		Roles:          fm.Roles,
+		DetectFiles:    fm.DetectFiles,
+		DetectPackages: fm.DetectPackages,
+		Detect:         fm.Detect,
+		Priority:       fm.Priority,
+		Version:        fm.Version,
+		Path:           skillPath,
+		IsUserCreated:  isUserCreated,
+		Source:         sourceName,
+	}
+}
+
+func loadSkillIndexOrBuild(hub string) []skillIndexEntry {
+	indexPath := filepath.Join(hub, "skills", "index.json")
+	raw, err := os.ReadFile(indexPath)
+	if err != nil {
+		return buildFullIndex(hub)
+	}
+	var data skillIndexData
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return buildFullIndex(hub)
+	}
+	if len(data.Entries) == 0 {
+		return buildFullIndex(hub)
+	}
+	return data.Entries
+}
+
+func resolveSkillMatchInput(cmd *cobra.Command, args []string) (string, string) {
+	role, _ := cmd.Flags().GetString("role")
+	task, _ := cmd.Flags().GetString("task")
+	if role == "" && len(args) > 0 {
+		role = args[0]
+	}
+	if task == "" && len(args) > 1 {
+		task = strings.Join(args[1:], " ")
+	}
+	return strings.TrimSpace(role), strings.TrimSpace(task)
+}
+
+func matchSkills(hub, role, task string) skillMatchResult {
+	entries := loadSkillIndexOrBuild(hub)
+	root := skillWorkspaceRoot()
+
+	var colonyMatches []scoredSkill
+	var domainMatches []scoredSkill
+	taskLower := strings.ToLower(task)
+
+	for _, e := range entries {
+		score := 0
+		if containsString(e.AgentRoles, role) || containsString(e.Roles, role) {
+			score += 3
+		}
+		if skillMatchesWorkspace(root, e) {
+			score += 2
+		}
+		if taskLower != "" {
+			if strings.Contains(strings.ToLower(e.Name), taskLower) || strings.Contains(taskLower, strings.ToLower(e.Name)) {
+				score++
+			}
+			for _, domain := range e.Domains {
+				if strings.Contains(taskLower, strings.ToLower(domain)) {
+					score++
+					break
+				}
+			}
+		}
+
+		if score == 0 {
+			continue
+		}
+
+		scored := scoredSkill{entry: e, score: score}
+		switch e.Type {
+		case "colony":
+			colonyMatches = append(colonyMatches, scored)
+		case "domain":
+			domainMatches = append(domainMatches, scored)
+		default:
+			domainMatches = append(domainMatches, scored)
+		}
+	}
+
+	sortScoredSkills(colonyMatches)
+	sortScoredSkills(domainMatches)
+
+	colonySkills := topSkillEntries(colonyMatches, 3)
+	domainSkills := topSkillEntries(domainMatches, 3)
+	matched := append(extractSkillNames(colonySkills), extractSkillNames(domainSkills)...)
+
+	return skillMatchResult{
+		Role:         role,
+		Task:         task,
+		ColonySkills: colonySkills,
+		DomainSkills: domainSkills,
+		Matched:      matched,
+		Count:        len(matched),
+	}
+}
+
+func sortScoredSkills(skills []scoredSkill) {
+	sort.Slice(skills, func(i, j int) bool {
+		if skills[i].score != skills[j].score {
+			return skills[i].score > skills[j].score
+		}
+		return skills[i].entry.Name < skills[j].entry.Name
+	})
+}
+
+func topSkillEntries(skills []scoredSkill, limit int) []skillIndexEntry {
+	if len(skills) > limit {
+		skills = skills[:limit]
+	}
+	result := make([]skillIndexEntry, 0, len(skills))
+	for _, item := range skills {
+		result = append(result, item.entry)
+	}
+	return result
+}
+
+func extractSkillNames(entries []skillIndexEntry) []string {
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name)
+	}
+	return names
+}
+
+func skillWorkspaceRoot() string {
+	if wd, err := os.Getwd(); err == nil {
+		if store != nil {
+			storeRoot := filepath.Dir(filepath.Dir(store.BasePath()))
+			if samePathOrAncestor(storeRoot, wd) || samePathOrAncestor(wd, storeRoot) {
+				return storeRoot
+			}
+		}
+		return wd
+	}
+	if store != nil {
+		return filepath.Dir(filepath.Dir(store.BasePath()))
+	}
+	return "."
+}
+
+func samePathOrAncestor(base, target string) bool {
+	baseAbs, err := filepath.Abs(base)
+	if err != nil {
+		return false
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return false
+	}
+	if baseAbs == targetAbs {
+		return true
+	}
+	return strings.HasPrefix(targetAbs, baseAbs+string(filepath.Separator))
+}
+
+func skillMatchesWorkspace(root string, entry skillIndexEntry) bool {
+	if len(entry.DetectFiles) == 0 && len(entry.DetectPackages) == 0 && len(entry.Detect) == 0 {
+		return entry.Type == "colony"
+	}
+	for _, pattern := range append(entry.DetectFiles, entry.Detect...) {
+		if pattern != "" && repoMatchesFilePattern(root, pattern) {
+			return true
+		}
+	}
+	for _, pkg := range entry.DetectPackages {
+		if pkg != "" && repoContainsPackage(root, pkg) {
+			return true
+		}
+	}
+	return false
+}
+
+func repoMatchesFilePattern(root, pattern string) bool {
+	matched := false
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || matched {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if name == ".git" || name == "node_modules" || name == ".aether" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		base := filepath.Base(rel)
+		if ok, _ := filepath.Match(pattern, base); ok {
+			matched = true
+			return nil
+		}
+		if ok, _ := filepath.Match(pattern, filepath.ToSlash(rel)); ok {
+			matched = true
+		}
+		return nil
+	})
+	return matched
+}
+
+func repoContainsPackage(root, pkg string) bool {
+	manifestPaths := []string{
+		filepath.Join(root, "package.json"),
+		filepath.Join(root, "go.mod"),
+		filepath.Join(root, "requirements.txt"),
+		filepath.Join(root, "pyproject.toml"),
+		filepath.Join(root, "Gemfile"),
+		filepath.Join(root, "Cargo.toml"),
+	}
+	for _, path := range manifestPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(strings.ToLower(string(data)), strings.ToLower(pkg)) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(items []string, want string) bool {
+	want = strings.TrimSpace(strings.ToLower(want))
+	for _, item := range items {
+		if strings.ToLower(strings.TrimSpace(item)) == want {
+			return true
+		}
+	}
+	return false
 }
 
 func init() {
 	skillParseFrontmatterCmd.Flags().String("file", "", "Path to SKILL.md (required)")
-	skillMatchCmd.Flags().String("role", "", "Worker role (required)")
+	skillMatchCmd.Flags().String("role", "", "Worker role")
 	skillMatchCmd.Flags().String("task", "", "Task description")
-	skillInjectCmd.Flags().String("role", "", "Worker role (required)")
+	skillInjectCmd.Flags().String("role", "", "Worker role")
+	skillInjectCmd.Flags().String("task", "", "Task description")
 	skillDiffCmd.Flags().String("skill", "", "Skill name (required)")
 	skillIsUserCreatedCmd.Flags().String("skill", "", "Skill name (required)")
 

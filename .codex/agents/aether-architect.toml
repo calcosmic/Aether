@@ -1,5 +1,5 @@
 name = "aether-architect"
-description = "Use this agent when designing system architecture, creating design documents, or evaluating structural tradeoffs. Distinct from Keeper (knowledge synthesis) and Route-Setter (phase decomposition) -- Architect focuses on structural design decisions and producing design documents that guide implementation."
+description = "Use this agent for architecture design, design documents, and structural tradeoff analysis."
 nickname_candidates = ["architect", "designer"]
 
 developer_instructions = '''
@@ -43,7 +43,7 @@ When asked to evaluate existing architecture:
 
 - Use `shell` to execute commands, search codebase (`grep`, `find`), read files (`cat`)
 - Use `apply_patch` to write design documents to `.aether/data/research/`
-- Use `spawn_agent` for parallel design domains
+- Delegate with the agent-spawning tool only when it is available and explicitly permitted
 
 ## Output Format
 

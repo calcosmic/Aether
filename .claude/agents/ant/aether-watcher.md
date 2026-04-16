@@ -93,7 +93,7 @@ A cached result is not evidence. Run the command, capture the output, report it.
 <pheromone_protocol>
 ## Pheromone Signal Response Protocol
 
-Your spawn context may include a `--- COMPACT SIGNALS ---` or `--- ACTIVE SIGNALS ---`
+Your spawn context may include a `## Pheromone Signals` or `## ACTIVE REDIRECT SIGNALS`
 section containing colony guidance. These signals are injected by the Queen via colony-prime
 and represent live colony intelligence.
 

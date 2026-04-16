@@ -118,8 +118,8 @@ vim .aether/workers.md
 git add .
 git commit -m "your message"
 
-# 3. Validate and push to hub
-npm install -g .   # Runs postinstall, then run `aether install`
+# 3. Refresh the hub from this source checkout
+aether install --package-dir "$PWD"
 
 # 4. In other repos, pull updates
 aether update      # or /ant:update

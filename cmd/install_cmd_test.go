@@ -71,6 +71,54 @@ func TestIsAetherSourceCheckoutFalseForCompanionOnlyPackage(t *testing.T) {
 	}
 }
 
+func TestResolveInstallPackageDirRejectsInvalidExplicitPath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	resolved, cleanup, err := resolveInstallPackageDir(tmpDir)
+	if err == nil {
+		if cleanup != nil {
+			cleanup()
+		}
+		t.Fatalf("expected invalid explicit path to fail, got resolved path %q", resolved)
+	}
+}
+
+func TestInstallUsesEmbeddedAssetsWithoutPackageDir(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"install", "--home-dir", homeDir})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("install command failed: %v", err)
+	}
+
+	codexAgent := filepath.Join(homeDir, ".codex", "agents", "aether-builder.toml")
+	if _, err := os.Stat(codexAgent); os.IsNotExist(err) {
+		t.Fatalf("expected embedded codex agent %s to exist after install", codexAgent)
+	}
+
+	hubWorkers := filepath.Join(homeDir, ".aether", "system", "workers.md")
+	if _, err := os.Stat(hubWorkers); os.IsNotExist(err) {
+		t.Fatalf("expected embedded hub file %s to exist after install", hubWorkers)
+	}
+}
+
 // TestInstallCopiesClaudeCommands verifies that install copies .claude/commands/ant/
 // files to the target directory.
 func TestInstallCopiesClaudeCommands(t *testing.T) {
@@ -229,6 +277,12 @@ func TestInstallSetsUpHub(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
+		t.Fatalf("failed to create .aether dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".aether", "workers.md"), []byte("# Workers"), 0644); err != nil {
+		t.Fatalf("failed to create workers.md: %v", err)
+	}
 
 	var buf bytes.Buffer
 	stdout = &buf
@@ -397,6 +451,12 @@ func TestInstallOutputJSON(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
+		t.Fatalf("failed to create .aether dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".aether", "workers.md"), []byte("# Workers"), 0644); err != nil {
+		t.Fatalf("failed to create workers.md: %v", err)
+	}
 
 	var buf bytes.Buffer
 	stdout = &buf
@@ -428,7 +488,13 @@ func TestInstallSkipsMissingSource(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
-	// Don't create any source directories
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
+		t.Fatalf("failed to create .aether dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".aether", "workers.md"), []byte("# Workers"), 0644); err != nil {
+		t.Fatalf("failed to create workers.md: %v", err)
+	}
+	// Leave all other source directories absent.
 
 	var buf bytes.Buffer
 	stdout = &buf
@@ -490,7 +556,7 @@ func TestInstallCopiesCodexAgents(t *testing.T) {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(srcDir, "test-agent.toml"), []byte("[agent]\nname = \"test\""), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "test-agent.toml"), validCodexAgentTOML("test-agent", "tester"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -525,7 +591,7 @@ func TestInstallCopiesCodexAgentsToHub(t *testing.T) {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(srcDir, "test-agent.toml"), []byte("[agent]\nname = \"test\""), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "test-agent.toml"), validCodexAgentTOML("test-agent", "tester"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 

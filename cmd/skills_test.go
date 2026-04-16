@@ -285,8 +285,13 @@ func TestSkillParseFrontmatterEmptyFile(t *testing.T) {
 func setupSkillTestHub(t *testing.T) string {
 	t.Helper()
 	tmpHub := t.TempDir()
-	os.Setenv("AETHER_HUB_DIR", tmpHub)
-	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
+	testHome := filepath.Join(tmpHub, "home")
+	if err := os.MkdirAll(testHome, 0755); err != nil {
+		t.Fatalf("failed to create test home: %v", err)
+	}
+	t.Setenv("HOME", testHome)
+	t.Setenv("USERPROFILE", testHome)
 
 	// Create local shipped skills in .aether/skills/ relative to a temp working dir.
 	// skill-index reads from ".aether/skills" (relative to CWD), so we create
@@ -406,9 +411,9 @@ func TestSkillDetect(t *testing.T) {
 		t.Fatalf("skill-index failed: %v", err)
 	}
 
-	// Create a file that matches the detect pattern in CWD
+	// Create a file that matches the domain detect pattern in CWD
 	// (setupSkillTestHub already chdir'd to tmpHub/local)
-	os.WriteFile("some_test.go", []byte("package test"), 0644)
+	os.WriteFile("some.custom", []byte("custom"), 0644)
 
 	// Read and detect
 	var detectBuf bytes.Buffer
@@ -422,7 +427,7 @@ func TestSkillDetect(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	total := int(result["total"].(float64))
 	if total < 1 {
-		t.Errorf("total = %d, want >= 1 (should match *_test.go)", total)
+		t.Errorf("total = %d, want >= 1 (should match *.custom domain skill)", total)
 	}
 }
 

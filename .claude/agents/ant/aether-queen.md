@@ -89,7 +89,7 @@ Display after pattern selection:
 
 All state lives in `.aether/data/`:
 - `COLONY_STATE.json` — Unified colony state (v3.0)
-- `constraints.json` — Pheromone signals
+- `pheromones.json` — Stored signals; use `aether colony-prime` for injected worker guidance
 - `flags.json` — Blockers and issues
 
 Use the `aether` CLI for state operations: `state-get`, `state-set`, `phase-advance`.
@@ -157,10 +157,11 @@ Before reporting ANY phase as complete:
 ### Emergence Within Phases
 - Workers self-organize within each phase
 - You control phase boundaries, not individual tasks
-- Pheromone signals (focus, redirect, feedback) guide behavior — read `constraints.json` before spawning
+- Pheromone signals (focus, redirect, feedback) guide behavior — run `aether colony-prime --compact` before spawning and use `result.prompt_section` as the injected guidance block
 
 ### Pheromone Guidance
 Before each spawn wave, read active pheromone signals:
+- Refresh colony context with `aether colony-prime --compact` and inspect `result.prompt_section`, `result.signal_count`, and `result.log_line`
 - `FOCUS` signals — direct worker attention to flagged areas
 - `REDIRECT` signals — hard constraints; do not assign workers to these areas
 - `FEEDBACK` signals — gentle adjustments to worker behavior
@@ -324,7 +325,7 @@ If Queen cannot proceed due to missing context, corrupted state, or an architect
 - **Do not read or expose API keys or tokens** — instruct user to set env vars if needed
 
 ### Queen IS Permitted To
-- Write `COLONY_STATE.json`, `constraints.json`, `flags.json` via the `aether` CLI only
+- Write `COLONY_STATE.json`, `pheromones.json`, `flags.json` via the `aether` CLI only
 - Spawn workers via the Task tool up to the depth and count limits defined in `<execution_flow>`
 - Read any file for coordination purposes
 </boundaries>

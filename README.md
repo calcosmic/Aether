@@ -92,6 +92,17 @@ go install github.com/calcosmic/Aether@latest
 
 Requires [Go 1.22+](https://go.dev/dl/).
 
+After installing the binary, publish the bundled companion files to your local
+hub:
+
+```bash
+aether install
+```
+
+That single command populates `~/.aether/` and the platform-specific agent
+directories from assets embedded in the Go binary. npm is not required for the
+normal install path.
+
 **Option 2: Download from GitHub Releases**
 
 Pre-built binaries for all platforms — no Go toolchain needed.
@@ -104,45 +115,54 @@ Pre-built binaries for all platforms — no Go toolchain needed.
 
 Built with [GoReleaser](https://goreleaser.com).
 
-**Option 3: Companion files (npm)**
+After downloading the binary, run:
 
 ```bash
-npm install -g aether-colony
+aether install
 ```
-
-> **Note:** This installs companion/template files only — it does **not** include the Aether binary. Install the binary first (Option 1 or 2), then use `aether setup` to sync companion files.
 
 ### ⚡ Quick start after install
 
 ```bash
-aether install            # Populate the colony hub
-aether setup             # Sync companion files to local repo
+# One-time per machine
+aether install
 
-# Ignite the colony swarm
-/ant:lay-eggs            # One-time nest setup
-/ant:init "Build X"      # State the colony goal
-/ant:plan                # Generate phased roadmap
-/ant:build 1             # Deploy worker wave to phase one
-/ant:continue            # Verify, learn, advance
-/ant:seal                # Colony crowned — archive the work
+# One-time per repo
+cd ~/projects/my-app
+aether lay-eggs
+
+# Codex CLI
+aether init "Build X"
+aether plan
+aether build 1
+aether continue
+aether seal
+
+# Claude Code / OpenCode
+/ant:init "Build X"
+/ant:plan
+/ant:build 1
+/ant:continue
+/ant:seal
 ```
 
-Five commands from zero to shipped.
+The Go binary is the source of truth. Claude Code and OpenCode also expose the
+same lifecycle through slash commands after the repo is bootstrapped.
 
 ## ✨ Key Features
 
 | | Feature | Description |
 |---|---------|-------------|
 | **Agents** | 24 Specialized Workers | Builder, Watcher, Scout, Tracker, Archaeologist, Oracle, and more |
-| **Commands** | 45 Slash Commands | Full lifecycle for Claude Code and OpenCode |
+| **Commands** | 45 Slash Commands + Native CLI | Slash workflow for Claude Code and OpenCode, native `aether` lifecycle for Codex CLI |
 | **Signals** | Pheromone System | FOCUS, REDIRECT, FEEDBACK — guide colony attention |
 | **Memory** | Colony Wisdom | Learnings and instincts persist via QUEEN.md |
 | **Hive Brain** | Cross-colony | Domain-scoped wisdom sharing |
-| **Autopilot** | `/ant:run` | Build-verify-advance loop with smart pause |
+| **Autopilot** | `/ant:run` | Build-verify-advance loop with smart pause on Claude Code and OpenCode |
 | **Skills** | 28 Skills | 10 colony + 18 domain knowledge for workers |
 | **Research** | Oracle + Scouts | Deep autonomous research before task decomposition |
 | **Quality Gates** | 6-phase verification before advancing |
-| **Platforms** | Claude Code + OpenCode | Binary + agent support |
+| **Platforms** | Claude Code + OpenCode + Codex CLI | Shared Go binary with platform-specific agents |
 
 ### 🐜 Worker Castes
 
@@ -180,11 +200,11 @@ Five commands from zero to shipped.
 | **Memory / Learning** | Colony Wisdom — learnings persist as instincts, promote to QUEEN.md, share cross-colony via Hive Brain | Short-term memory + optional long-term via integration | No built-in persistent memory | Checkpoint-based state persistence |
 | **Agent Coordination** | Pheromone signals (FOCUS, REDIRECT, FEEDBACK) guide attention without rewriting prompts | Hierarchical task delegation between role-assigned agents | Turn-based conversation between agents | Explicit graph edges define control flow |
 | **Workers / Agents** | 24 specialized castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, etc.) | User-defined roles with goals and backstories | Configurable assistant and user proxy agents | Nodes as functions or LangChain runnables |
-| **Commands / Control** | 45 slash commands across full lifecycle | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
-| **Autopilot** | `/ant:run` — automated build-verify-advance loop with smart pause | Sequential task execution, no built-in loop | No built-in loop | Can loop via graph cycles, not opinionated |
+| **Commands / Control** | 45 slash commands on Claude/OpenCode + native `aether` CLI workflow on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
+| **Autopilot** | `/ant:run` on Claude/OpenCode, explicit build/continue loop on Codex | Sequential task execution, no built-in loop | No built-in loop | Can loop via graph cycles, not opinionated |
 | **Quality Gates** | 6-phase verification before advancing phases | Optional human-in-the-loop review | No built-in gates | Manual checkpoint implementation |
 | **Research** | Oracle + Scouts — autonomous deep research before task decomposition | No dedicated research agents | Group chat can approximate research | No built-in research pattern |
-| **Platform Support** | Claude Code, OpenCode (binary + agent definitions) | Any Python environment | Any Python environment | Any Python environment |
+| **Platform Support** | Claude Code, OpenCode, Codex CLI | Any Python environment | Any Python environment | Any Python environment |
 
 ## 🏗️ Architecture
 
@@ -192,14 +212,19 @@ Five commands from zero to shipped.
 .aether/                        Colony files (repo-local)
 ├── commands/                   45 YAML command sources
 ├── agents-claude/               Claude agent definitions
+├── skills-codex/               Codex skill mirror
 ├── skills/                     28 skills (10 colony + 18 domain)
 ├── exchange/                   XML exchange modules
 ├── docs/                       Documentation
 ├── templates/                  12 templates
 └── data/                       Colony state (local only)
 
+.codex/                         Codex CLI agent definitions
+└── agents/                     24 TOML agent files
+
 ~/.aether/                     Hub (cross-colony, user-level)
 ├── system/                   Companion file source (populated by install)
+├── system/codex/             Codex agent mirror
 ├── QUEEN.md                 Wisdom + preferences
 ├── hive/wisdom.json         Cross-colony wisdom (200 cap)
 ```
@@ -208,9 +233,11 @@ Five commands from zero to shipped.
 **Distribution:** GoReleaser (Linux, macOS, Windows / amd64 + arm64)
 
   
-**Package:** `aether-colony` on npm (companion files only)
-
 ### 🔄 Colony Lifecycle
+
+Claude Code and OpenCode expose this flow as slash commands. Codex uses the
+same core stages via `aether lay-eggs`, `aether init`, `aether plan`,
+`aether build`, `aether continue`, and `aether seal`.
 
 ```mermaid
 flowchart TD
@@ -273,7 +300,7 @@ flowchart TD
 ```
 
 <div align="center">
-<i>Five commands from zero to shipped. Workers self-organize around your goal.</i>
+<i>Bootstrap once, then drive the colony from goal to shipped.</i>
 </div>
 
 ## 📡 Pheromone System
@@ -368,10 +395,10 @@ Aether keeps colony context alive across `/clear`, context switches, and long co
 aether context-capsule
 
 # Resume colony after a /clear or session break
-/ant:resume
+aether resume
 ```
 
-## 🚀 Autopilot Mode
+## 🚀 Autopilot Mode (Claude Code / OpenCode)
 
 `/ant:run` chains the build-verify-advance loop across multiple phases with intelligent pause conditions. Instead of running each command by hand, you engage autopilot and it handles the cycle automatically.
 
@@ -399,17 +426,24 @@ It pauses — not crashes — when something needs attention: test failures, cri
 
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - 45 slash commands + 24 agent definitions
 - **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - 45 slash commands + agent definitions
+- **Codex CLI** - native `aether` lifecycle + 24 TOML agent definitions
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
 </div>
 
-## 📋 Command Reference
+## 📋 Command Reference (Claude Code / OpenCode)
 
 <details>
-<summary>45 commands across 7 categories — click to expand</summary>
+<summary>45 slash commands for Claude Code and OpenCode — click to expand</summary>
 
-Aether provides 45 slash commands organized into seven categories. Each command is invoked via `/ant:<name>` in your Claude session. This section is a complete quick-reference for every command, including syntax, description, and key options.
+Aether provides 45 slash commands organized into seven categories for Claude
+Code and OpenCode. This section is the slash-command reference.
+
+Codex CLI uses the native Go binary instead. The core Codex workflow is:
+`aether install`, `aether lay-eggs`, `aether init`, `aether plan`,
+`aether build <phase>`, `aether continue`, `aether seal`, `aether focus`,
+`aether redirect`, `aether feedback`, `aether status`, and `aether update`.
 
 ---
 
@@ -537,19 +571,24 @@ You have a blank directory and an idea: a REST API for a task management app. Us
 
 Here is what it looks like to build it with Aether, start to finish.
 
-> 📍 **The Roadmap:** 🔧 Install → 🥚 Lay Eggs → 🎯 Goal → 🔍 Colonize → 🗺️ Plan → 🧭 Steer → 🔨 Build → ✅ Continue → 🔨 Build → 📋 Phases → 🔨 Build → 👑 Seal → 🪦 Entomb → ⚡ Autopilot
+> 📍 **The Roadmap:** 🔧 Install → 🥚 Lay Eggs → 🎯 Goal → 🔍 Colonize → 🗺️ Plan → 🧭 Steer → 🔨 Build → ✅ Continue → 🔁 Repeat Per Phase → 👑 Seal
 
 ---
+
+The walkthrough below uses the shared `aether` CLI for the core lifecycle so it
+works in Codex as written. Claude Code and OpenCode also expose equivalent
+slash commands for the same phases.
 
 ### 🔧 Step 0 -- Install Aether
 
 ```bash
 go install github.com/calcosmic/Aether@latest
-aether install        # Populate the colony hub
-aether setup          # Sync companion files to local repo
+aether install        # Publish the bundled companion files to your local hub
 ```
 
-One-time setup. The colony hub lives at `~/.aether/` and persists across every project you ever work on. Companion files (agent definitions, commands, skills) land in `.aether/` inside your repo.
+One-time machine setup. The colony hub lives at `~/.aether/` and persists
+across every project you work on. Companion files are published there from the
+Go binary itself.
 
 ---
 
@@ -557,7 +596,7 @@ One-time setup. The colony hub lives at `~/.aether/` and persists across every p
 
 ```bash
 cd ~/projects/task-api
-/ant:lay-eggs
+aether lay-eggs
 ```
 
 ```
@@ -576,7 +615,7 @@ This creates the nest -- the directory structure the colony needs to operate. Yo
 ### 🎯 Step 2 -- State the Goal
 
 ```bash
-/ant:init "Build a REST API for task management with user auth, project CRUD, and task tracking"
+aether init "Build a REST API for task management with user auth, project CRUD, and task tracking"
 ```
 
 ```
@@ -593,7 +632,7 @@ The colony now has a purpose. Every worker that spawns from this point knows the
 ### 🔍 Step 3 -- Colonize (Optional, but Smart)
 
 ```bash
-/ant:colonize
+aether colonize
 ```
 
 ```
@@ -615,7 +654,7 @@ Since this is a new project, there is not much to map. But if you were adding Ae
 ### 🗺️ Step 4 -- Plan
 
 ```bash
-/ant:plan
+aether plan
 ```
 
 <details><summary>Generated phased roadmap (click to expand)</summary>
@@ -662,9 +701,9 @@ You can adjust the plan. Add phases, remove them, merge them. The colony follows
 Before the first build, you set the guardrails:
 
 ```bash
-/ant:focus "database migrations -- use versioned migrations, no schema drift"
-/ant:redirect "No raw SQL in application code -- use parameterized queries only"
-/ant:feedback "Prefer standard library where possible -- minimize dependencies"
+aether focus "database migrations -- use versioned migrations, no schema drift"
+aether redirect "No raw SQL in application code -- use parameterized queries only"
+aether feedback "Prefer standard library where possible -- minimize dependencies"
 ```
 
 ```
@@ -687,7 +726,7 @@ Signals expire at the end of the current phase. You can also set a wall-clock ex
 ### 🔨 Step 6 -- Build Phase 1
 
 ```bash
-/ant:build 1
+aether build 1
 ```
 
 <details><summary>Phase 1 build output (click to expand)</summary>
@@ -725,7 +764,7 @@ Behind the scenes, multiple builder ants worked in parallel. A Probe ant wrote t
 ### ✅ Step 7 -- Continue (Verify, Learn, Advance)
 
 ```bash
-/ant:continue
+aether continue
 ```
 
 ```
@@ -753,9 +792,9 @@ The FOCUS signal about migrations expired because the phase ended. If you want i
 You emit new signals for the auth phase:
 
 ```bash
-/ant:focus "JWT token security -- use short expiry, secure refresh flow"
-/ant:redirect "Never store passwords in plain text -- always bcrypt"
-/ant:build 2
+aether focus "JWT token security -- use short expiry, secure refresh flow"
+aether redirect "Never store passwords in plain text -- always bcrypt"
+aether build 2
 ```
 
 <details><summary>Phase 2 build output (click to expand)</summary>
@@ -789,42 +828,35 @@ The REDIRECT signal about bcrypt was active. The Watcher explicitly verified no 
 
 ### 📋 Steps 9-12 -- Phases 3, 4, and 5
 
-The pattern repeats. `/ant:build N`, then `/ant:continue`. Each phase builds on the verified output of the last. Instincts accumulate. The colony gets smarter about your project's patterns.
+The pattern repeats. `aether build N`, then `aether continue`. Each phase
+builds on the verified output of the last. Instincts accumulate. The colony
+gets smarter about your project's patterns.
 
-For phases 3 and 4, you decide to let autopilot handle it:
+On Codex, you keep using the explicit loop:
 
 ```bash
-/ant:run --max-phases 2
+aether build 3
+aether continue
+aether build 4
+aether continue
 ```
 
-<details><summary>Autopilot output (click to expand)</summary>
+<details><summary>Phase progression output (click to expand)</summary>
 
 ```
-Autopilot engaged. Max phases: 2.
-Current phase: 3 (Projects)
-
 [Phase 3: Projects]
-  Spawning builders... Chip-42, Chip-67
-  Spawning probe... Chip-91
-  Spawning watcher... Dot-22
-  Building... (4 files, 14 tests)
-  Verifying... PASS
-  Advancing to Phase 4.
+  Building... PASS
+  Continue... advanced to Phase 4
 
 [Phase 4: Tasks]
-  Spawning builders... Chip-05, Chip-33
-  Spawning probe... Chip-78
-  Spawning watcher... Dot-31
-  Building... (5 files, 18 tests)
-  Verifying... PASS
-
-Autopilot paused. Max phases reached (2/2).
-Run /ant:run to continue, or /ant:continue to advance manually.
+  Building... PASS
+  Continue... advanced to Phase 5
 ```
 
 </details>
 
-Autopilot ran two phases without you touching the keyboard. It paused gracefully at the limit instead of running off into the distance. You review what landed, emit any new signals if needed, and decide whether to continue.
+Claude Code and OpenCode also support `/ant:run` for autopilot on top of this
+same phase model.
 
 ---
 
@@ -833,7 +865,7 @@ Autopilot ran two phases without you touching the keyboard. It paused gracefully
 Now suppose you close your laptop. The next morning, you open Claude Code in the same directory. You have lost your conversation context. No problem.
 
 ```bash
-/ant:resume
+aether resume
 ```
 
 ```
@@ -847,7 +879,7 @@ Restoring context...
   Open flags: 0
 
 Resume from Phase 5: Integration and Polish
-  /ant:build 5 to continue
+  aether build 5 to continue
 ```
 
 The colony reconstructed its full context from the colony state file, active signals, and accumulated instincts. You did not need to re-explain the project or paste your plan. The colony remembered.
@@ -857,8 +889,8 @@ The colony reconstructed its full context from the colony state file, active sig
 ### 🏁 Step 13 -- Build Phase 5 (Final)
 
 ```bash
-/ant:focus "API documentation -- generate OpenAPI spec from handlers"
-/ant:build 5
+aether focus "API documentation -- generate OpenAPI spec from handlers"
+aether build 5
 ```
 
 <details><summary>Phase 5 build output (click to expand)</summary>
@@ -889,7 +921,7 @@ Phase 5 status: VERIFIED
 ### 👑 Step 14 -- Seal the Colony
 
 ```bash
-/ant:seal
+aether seal
 ```
 
 <details><summary>Colony seal output (click to expand)</summary>
@@ -913,33 +945,20 @@ Colony status: CROWNED
 
 </details>
 
-The colony ran a final curation pass. High-confidence instincts were promoted to QUEEN.md -- your personal wisdom file that primes future colonies. The highest-scoring instincts also flowed into the Hive Brain, making them available to other projects on your machine.
+The colony ran a final curation pass. High-confidence instincts were promoted to
+QUEEN.md -- your personal wisdom file that primes future colonies. The
+highest-scoring instincts also flowed into the Hive Brain, making them
+available to other projects on your machine.
 
 ---
 
-### 🪦 Step 15 -- Entomb
+### ⚡ The Shortcut: Autopilot from Start (Claude Code / OpenCode)
+
+If you trust the plan and want hands-off execution on Claude Code or OpenCode,
+you can skip the manual loop entirely:
 
 ```bash
-/ant:entomb
-```
-
-```
-Colony entombed.
-  Archive: .aether/chambers/task-api-2026-04-08/
-  Colony state: cleared
-  Wisdom: preserved in QUEEN.md and Hive Brain
-```
-
-The colony's work is archived. The directory is clean. But the knowledge persists -- next time you start a Go API project, the colony will already know that pgxpool works well, versioned migrations prevent drift, and bcrypt cost 12 is your standard.
-
----
-
-### ⚡ The Shortcut: Autopilot from Start
-
-If you trust the plan and want hands-off execution, you can skip the manual loop entirely:
-
-```bash
-/ant:lay-eggs
+aether lay-eggs
 /ant:init "Build a REST API for task management"
 /ant:plan
 /ant:focus "database migrations -- use versioned migrations"
@@ -947,9 +966,12 @@ If you trust the plan and want hands-off execution, you can skip the manual loop
 /ant:run
 ```
 
-Autopilot runs every remaining phase, pausing only when something needs your attention -- a test failure, a security concern, a blocker it cannot resolve. Fix the issue, run `/ant:run` again, and it resumes.
+Autopilot runs every remaining phase, pausing only when something needs your
+attention -- a test failure, a security concern, a blocker it cannot resolve.
+Fix the issue, run `/ant:run` again, and it resumes.
 
-That is five commands from zero to shipped. The colony handles the rest.
+Codex currently uses the explicit `aether build` -> `aether continue` loop
+instead of a top-level autopilot command.
 
 ---
 
@@ -976,17 +998,17 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 ### 🎉 v1.0.1 -- Released (Current)
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
-- 45 slash commands across the full colony lifecycle
+- 45 slash commands across the full colony lifecycle, plus native Codex CLI workflow
 - Pheromone signal system (FOCUS, REDIRECT, FEEDBACK) for steering workers without rewriting prompts
 - Colony wisdom pipeline -- observations flow through trust scoring into instincts, QUEEN.md, and the Hive Brain
 - Context continuity across sessions via compact context capsules
-- Autopilot mode (`/ant:run`) for automated build-verify-advance loops with smart pause
-- Claude Code and OpenCode support
+- Autopilot mode (`/ant:run`) for automated build-verify-advance loops with smart pause on Claude Code and OpenCode
+- Claude Code, OpenCode, and Codex CLI support
 - Go binary distribution across Linux, macOS, and Windows (amd64 + arm64)
 
 ### 📅 Near-Term
 
-- Additional platform support -- expanding beyond Claude Code and OpenCode to more AI coding tools
+- Additional platform support beyond Claude Code, OpenCode, and Codex CLI
 - Enhanced Hive Brain cross-colony sharing -- richer wisdom exchange between projects with domain scoping
 - More domain skills -- expanding the 18 domain knowledge skills to cover additional frameworks, languages, and ecosystems
 - Community-contributed castes -- allowing teams to define and share custom worker roles
@@ -1022,7 +1044,7 @@ cd Aether
 make build
 ```
 
-That's it. The `make build` target compiles the binary with version injection from `package.json`. You will find the `aether` binary in the project root.
+That's it. The `make build` target compiles the binary with version injection from `.aether/version.json`. You will find the `aether` binary in the project root.
 
 ### 🏗️ Build, Test, Lint
 

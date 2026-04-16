@@ -73,8 +73,8 @@ var ErrInvalidGranularity = fmt.Errorf("invalid plan granularity")
 type ParallelMode string
 
 const (
-	ModeInRepo    ParallelMode = "in-repo"
-	ModeWorktree  ParallelMode = "worktree"
+	ModeInRepo   ParallelMode = "in-repo"
+	ModeWorktree ParallelMode = "worktree"
 )
 
 // Valid reports whether m is a recognized parallel mode.
@@ -108,25 +108,26 @@ type WorktreeEntry struct {
 
 // ColonyState is the top-level colony state matching COLONY_STATE.json.
 type ColonyState struct {
-	Version            string      `json:"version"`
-	Goal               *string     `json:"goal"`
-	ColonyName         *string     `json:"colony_name"`
-	ColonyVersion      int         `json:"colony_version"`
-	State              State       `json:"state"`
-	CurrentPhase       int         `json:"current_phase"`
-	SessionID          *string     `json:"session_id"`
-	InitializedAt      *time.Time  `json:"initialized_at"`
-	BuildStartedAt     *time.Time  `json:"build_started_at"`
-	Plan               Plan        `json:"plan"`
-	Memory             Memory      `json:"memory"`
-	Errors             Errors      `json:"errors"`
-	Signals            []Signal    `json:"signals"`
-	Graveyards         []Graveyard `json:"graveyards"`
-	Events             []string    `json:"events"`
-	ColonyDepth        string           `json:"colony_depth,omitempty"`
-	PlanGranularity    PlanGranularity  `json:"plan_granularity,omitempty"`
-	ParallelMode       ParallelMode     `json:"parallel_mode,omitempty"`
-	Milestone          string           `json:"milestone"`
+	Version            string          `json:"version"`
+	Goal               *string         `json:"goal"`
+	ColonyName         *string         `json:"colony_name"`
+	ColonyVersion      int             `json:"colony_version"`
+	State              State           `json:"state"`
+	CurrentPhase       int             `json:"current_phase"`
+	SessionID          *string         `json:"session_id"`
+	InitializedAt      *time.Time      `json:"initialized_at"`
+	BuildStartedAt     *time.Time      `json:"build_started_at"`
+	Plan               Plan            `json:"plan"`
+	Memory             Memory          `json:"memory"`
+	Errors             Errors          `json:"errors"`
+	Signals            []Signal        `json:"signals"`
+	Graveyards         []Graveyard     `json:"graveyards"`
+	Events             []string        `json:"events"`
+	ColonyDepth        string          `json:"colony_depth,omitempty"`
+	PlanGranularity    PlanGranularity `json:"plan_granularity,omitempty"`
+	ParallelMode       ParallelMode    `json:"parallel_mode,omitempty"`
+	TerritorySurveyed  *string         `json:"territory_surveyed,omitempty"`
+	Milestone          string          `json:"milestone"`
 	MilestoneUpdatedAt *string         `json:"milestone_updated_at,omitempty"`
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
 }

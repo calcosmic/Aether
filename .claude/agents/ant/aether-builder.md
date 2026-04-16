@@ -76,7 +76,7 @@ The 2-attempt retry limit applies to individual task failures (file not found, c
 <pheromone_protocol>
 ## Pheromone Signal Response Protocol
 
-Your spawn context may include a `--- COMPACT SIGNALS ---` or `--- ACTIVE SIGNALS ---`
+Your spawn context may include a `## Pheromone Signals` or `## ACTIVE REDIRECT SIGNALS`
 section containing colony guidance. These signals are injected by the Queen via colony-prime
 and represent live colony intelligence.
 

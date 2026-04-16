@@ -6,9 +6,10 @@ import (
 )
 
 var memoryMetricsCmd = &cobra.Command{
-	Use:   "memory-metrics",
-	Short: "Show memory health metrics",
-	Args:  cobra.NoArgs,
+	Use:     "memory-metrics",
+	Short:   "Show memory health metrics",
+	Aliases: []string{"memory-details"},
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
@@ -45,7 +46,7 @@ var memoryMetricsCmd = &cobra.Command{
 			}
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"wisdom": map[string]interface{}{
 				"total": wisdomTotal,
 			},
@@ -60,15 +61,17 @@ var memoryMetricsCmd = &cobra.Command{
 				"learning_captured": lastCapture,
 				"last_failure":      lastFailure,
 			},
-		})
+		}
+		outputOK(result)
 		return nil
 	},
 }
 
 var colonyVitalSignsCmd = &cobra.Command{
-	Use:   "colony-vital-signs",
-	Short: "Show colony vital signs",
-	Args:  cobra.NoArgs,
+	Use:     "colony-vital-signs",
+	Short:   "Show colony vital signs",
+	Aliases: []string{"patrol"},
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
@@ -146,7 +149,7 @@ var colonyVitalSignsCmd = &cobra.Command{
 			memoryStatus = "building"
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"build_velocity": map[string]interface{}{
 				"phases_per_day": 0,
 				"trend":          "starting",
@@ -166,7 +169,8 @@ var colonyVitalSignsCmd = &cobra.Command{
 			"colony_age_hours": 0,
 			"overall_health":   healthScore,
 			"health_label":     healthLabel,
-		})
+		}
+		outputWorkflow(result, renderPatrolVisual(result))
 		return nil
 	},
 }

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,27 +75,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Define sync pairs: hub source -> local destination
 	hubSystem := filepath.Join(hubDir, "system")
 	localAether := filepath.Join(repoDir, ".aether")
-
-	syncPairs := []struct {
-		srcRel  string // relative to hubSystem
-		destRel string // relative to localAether
-		label   string
-	}{
-		{".", ".", "System files"},
-		{"commands/claude", "../.claude/commands/ant", "Commands (claude)"},
-		{"commands/opencode", "../.opencode/commands/ant", "Commands (opencode)"},
-		{"agents", "../.opencode/agents", "Agents (opencode)"},
-		{"agents-claude", "../.claude/agents/ant", "Agents (claude)"},
-		{"codex", "../.codex/agents", "Agents (codex)"},
-		{"rules", "../.claude/rules", "Rules (claude)"},
-	}
 
 	results := []map[string]interface{}{}
 	totalCopied := 0
 	totalSkipped := 0
+	var syncErrors []string
 
 	// Directories to never overwrite or remove (user data)
 	protectedDirs := map[string]bool{
@@ -104,12 +89,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		"dreams": true,
 	}
 	protectedFiles := map[string]bool{
-		"QUEEN.md":          true,
+		"QUEEN.md":           true,
 		"CROWNED-ANTHILL.md": true,
 	}
 
-	for _, pair := range syncPairs {
-		srcDir := filepath.Join(hubSystem, filepath.FromSlash(pair.srcRel))
+	for _, pair := range repoSyncPairs() {
+		srcDir := filepath.Join(hubSystem, filepath.FromSlash(pair.hubRel))
 		destDir := filepath.Join(localAether, filepath.FromSlash(pair.destRel))
 
 		// Normalize destDir to be under repoDir (handle ../ correctly)
@@ -127,12 +112,23 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		result := setupSyncDir(srcDir, destDir, protectedDirs, protectedFiles)
-		results = append(results, map[string]interface{}{
+		result := syncDir(srcDir, destDir, syncOptions{
+			cleanup:              pair.cleanup,
+			preserveLocalChanges: true,
+			protectedDirs:        protectedDirs,
+			protectedFiles:       protectedFiles,
+			validate:             pair.validate,
+		})
+		entry := map[string]interface{}{
 			"label":   pair.label,
 			"copied":  result.copied,
 			"skipped": result.skipped,
-		})
+		}
+		if len(result.errors) > 0 {
+			entry["errors"] = result.errors
+			syncErrors = append(syncErrors, result.errors...)
+		}
+		results = append(results, entry)
 		totalCopied += result.copied
 		totalSkipped += result.skipped
 	}
@@ -179,90 +175,27 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	outputOK(map[string]interface{}{
+	if len(syncErrors) > 0 {
+		outputError(2, fmt.Sprintf("setup failed with %d sync error(s)", len(syncErrors)), map[string]interface{}{"details": results})
+		return nil
+	}
+
+	result := map[string]interface{}{
 		"message": fmt.Sprintf("Setup complete: %d files copied, %d unchanged", totalCopied, totalSkipped),
 		"details": results,
-	})
+	}
+	outputWorkflow(result, renderSetupVisual(repoDir, results, totalCopied, totalSkipped))
 
 	return nil
-}
-
-// setupSyncDir copies files from src to dest, skipping identical files
-// (by SHA-256 hash). Unlike syncDirWithCleanup (used by install), this
-// does NOT remove stale files -- local files take precedence.
-// Protected directories and files are skipped entirely.
-func setupSyncDir(src, dest string, protectedDirs, protectedFiles map[string]bool) syncResult {
-	result := syncResult{}
-
-	// Check source exists
-	srcInfo, err := os.Stat(src)
-	if err != nil || !srcInfo.IsDir() {
-		return result
-	}
-
-	// Create destination
-	if err := os.MkdirAll(dest, 0755); err != nil {
-		return result
-	}
-
-	// Walk source and copy files
-	srcFiles := listFilesRecursive(src)
-	for _, relPath := range srcFiles {
-		// Skip protected paths
-		firstComponent := relPath
-		if idx := strings.Index(relPath, string(filepath.Separator)); idx >= 0 {
-			firstComponent = relPath[:idx]
-		}
-		if protectedDirs[firstComponent] {
-			result.skipped++
-			continue
-		}
-		if protectedFiles[filepath.Base(relPath)] {
-			result.skipped++
-			continue
-		}
-
-		srcPath := filepath.Join(src, relPath)
-		destPath := filepath.Join(dest, relPath)
-
-		// Create parent directories
-		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-			continue
-		}
-
-		// Check if file is unchanged
-		if _, err := os.Stat(destPath); err == nil {
-			srcHash, srcErr := fileSHA256(srcPath)
-			destHash, destErr := fileSHA256(destPath)
-			if srcErr == nil && destErr == nil && srcHash == destHash {
-				result.skipped++
-				continue
-			}
-			// File exists but is different -- skip, local takes precedence
-			result.skipped++
-			continue
-		}
-
-		// Copy file
-		if err := copyFile(srcPath, destPath); err != nil {
-			continue
-		}
-
-		// Make .sh files executable
-		if strings.HasSuffix(relPath, ".sh") {
-			if err := os.Chmod(destPath, 0755); err != nil {
-				log.Printf("setup: failed to chmod %s: %v", destPath, err)
-			}
-		}
-
-		result.copied++
-	}
-
-	return result
 }
 
 // setupSyncDirProtected is the exported-internal variant of setupSyncDir
 // used by tests. It delegates to setupSyncDir with protection parameters.
 func setupSyncDirProtected(src, dest string, protectedDirs, protectedFiles map[string]bool) syncResult {
-	return setupSyncDir(src, dest, protectedDirs, protectedFiles)
+	return syncDir(src, dest, syncOptions{
+		cleanup:              false,
+		preserveLocalChanges: true,
+		protectedDirs:        protectedDirs,
+		protectedFiles:       protectedFiles,
+	})
 }

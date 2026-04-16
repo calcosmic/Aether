@@ -460,7 +460,7 @@ func TestSetupSyncsCodexAgents(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(homeDir, ".aether", "version.json"), []byte(`{"version":"1.0.0"}`), 0644); err != nil {
 		t.Fatalf("failed to create hub version: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(codexDir, "aether-builder.md"), []byte("# Builder Agent"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(codexDir, "aether-builder.toml"), validCodexAgentTOML("aether-builder", "builder"), 0644); err != nil {
 		t.Fatalf("failed to create codex agent file: %v", err)
 	}
 
@@ -476,7 +476,7 @@ func TestSetupSyncsCodexAgents(t *testing.T) {
 	}
 
 	// Verify codex agent file was copied to .codex/agents/
-	destFile := filepath.Join(repoDir, ".codex", "agents", "aether-builder.md")
+	destFile := filepath.Join(repoDir, ".codex", "agents", "aether-builder.toml")
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected %s to exist after setup (Codex sync pair missing)", destFile)
 	}

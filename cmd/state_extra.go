@@ -116,9 +116,10 @@ var stateWriteCmd = &cobra.Command{
 }
 
 var phaseInsertCmd = &cobra.Command{
-	Use:   "phase-insert",
-	Short: "Insert a corrective phase into the active plan",
-	Args:  cobra.NoArgs,
+	Use:     "phase-insert",
+	Short:   "Insert a corrective phase into the active plan",
+	Args:    cobra.NoArgs,
+	Aliases: []string{"insert-phase"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")

@@ -735,8 +735,8 @@ func TestUpdateSyncCodexPair(t *testing.T) {
 	if err := os.MkdirAll(codexDir, 0755); err != nil {
 		t.Fatalf("failed to create codex dir: %v", err)
 	}
-	codexContent := []byte("# Codex agent file")
-	if err := os.WriteFile(filepath.Join(codexDir, "agent.md"), codexContent, 0644); err != nil {
+	codexContent := validCodexAgentTOML("agent", "builder")
+	if err := os.WriteFile(filepath.Join(codexDir, "agent.toml"), codexContent, 0644); err != nil {
 		t.Fatalf("failed to write codex agent: %v", err)
 	}
 
@@ -755,7 +755,7 @@ func TestUpdateSyncCodexPair(t *testing.T) {
 	}
 
 	// Verify the file was copied to the correct destination
-	destFile := filepath.Join(repoDir, ".codex", "agents", "agent.md")
+	destFile := filepath.Join(repoDir, ".codex", "agents", "agent.toml")
 	content, err := os.ReadFile(destFile)
 	if err != nil {
 		t.Fatalf("expected codex agent file at %s: %v", destFile, err)
@@ -840,11 +840,11 @@ func TestUpdateSyncMultipleSyncPairs(t *testing.T) {
 
 	// Create files for multiple sync pairs
 	syncDirs := map[string]string{
-		"commands/claude": "../.claude/commands/ant",
+		"commands/claude":   "../.claude/commands/ant",
 		"commands/opencode": "../.opencode/commands/ant",
-		"agents": "../.opencode/agents",
-		"agents-claude": "../.claude/agents/ant",
-		"rules": "../.claude/rules",
+		"agents":            "../.opencode/agents",
+		"agents-claude":     "../.claude/agents/ant",
+		"rules":             "../.claude/rules",
 	}
 
 	for hubRel, _ := range syncDirs {

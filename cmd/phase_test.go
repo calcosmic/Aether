@@ -125,6 +125,7 @@ func TestPhaseCurrentPhase(t *testing.T) {
 	resetRootCmd(t)
 	var buf bytes.Buffer
 	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -142,6 +143,9 @@ func TestPhaseCurrentPhase(t *testing.T) {
 
 	output := buf.String()
 	// Current phase is 2 ("Core Features")
+	if !strings.Contains(output, "🧱") {
+		t.Errorf("expected visual banner, got: %s", output)
+	}
 	if !strings.Contains(output, "Phase 2") {
 		t.Errorf("expected 'Phase 2', got: %s", output)
 	}
@@ -162,6 +166,7 @@ func TestPhaseSpecificNumber(t *testing.T) {
 	resetRootCmd(t)
 	var buf bytes.Buffer
 	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -220,6 +225,7 @@ func TestPhaseTaskCompletion(t *testing.T) {
 	resetRootCmd(t)
 	var buf bytes.Buffer
 	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)

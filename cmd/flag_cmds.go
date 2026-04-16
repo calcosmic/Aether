@@ -9,22 +9,29 @@ import (
 )
 
 var flagAddCmd = &cobra.Command{
-	Use:   "flag-add",
+	Use:   "flag-add [title]",
 	Short: "Create a new flag",
-	Args:  cobra.NoArgs,
+	Args:  cobra.MaximumNArgs(1),
+	Aliases: []string{
+		"flag",
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
 
-		title := mustGetString(cmd, "title")
+		title, _ := cmd.Flags().GetString("title")
+		if title == "" && len(args) > 0 {
+			title = args[0]
+		}
 		if title == "" {
+			outputError(1, "flag title is required", nil)
 			return nil
 		}
-		severity := mustGetString(cmd, "severity")
+		severity, _ := cmd.Flags().GetString("severity")
 		if severity == "" {
-			return nil
+			severity = "high"
 		}
 		source, _ := cmd.Flags().GetString("source")
 		flagType, _ := cmd.Flags().GetString("type")

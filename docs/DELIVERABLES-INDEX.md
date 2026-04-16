@@ -223,7 +223,7 @@ This section describes how deliverables connect to each other.
 ```
 README.md
   |
-  +-- "Install" section --> GitHub Releases, npm package
+  +-- "Install" section --> GitHub Releases, Go install path
   |
   +-- "Key Features" table --> Landing page features grid (landing-hero.md)
   |

@@ -483,8 +483,10 @@ To support large libraries (100+ skills) without slow startup:
 
 ### Distribution Changes
 
-`package.json` includes `.aether/skills/` in the npm package.
-`setupHub()` in the post-install script copies skills to `~/.aether/skills/`, respecting the manifest (never overwriting user-created skills).
+Release binaries embed the shipped skill sources alongside the other companion
+files.
+`aether install` copies skills to `~/.aether/skills/`, respecting the manifest
+(never overwriting user-created skills).
 
 ---
 

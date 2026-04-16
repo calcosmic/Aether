@@ -29,13 +29,14 @@ reference for humans and agents working within the Codex platform. Think of AGEN
 |  Edit system files there and publish directly.                  |
 |                                                                 |
 |  .aether/           -> SOURCE OF TRUTH (edit this, published)   |
-|  .aether/data/      -> LOCAL ONLY (excluded by .npmignore)       |
-|  .aether/dreams/    -> LOCAL ONLY (excluded by .npmignore)       |
+|  .aether/data/      -> LOCAL ONLY (never distributed)            |
+|  .aether/dreams/    -> LOCAL ONLY (never distributed)            |
 |                                                                 |
 |  .codex/agents/     -> SOURCE OF TRUTH (Codex agent TOML defs)  |
 |  AGENTS.md          -> SOURCE OF TRUTH (Codex system prompt)    |
 |                                                                 |
-|  npm install -g . validates .aether/ and pushes to hub.         |
+|  `aether install --package-dir "$PWD"` refreshes hub files      |
+|  and Codex assets from this checkout.                           |
 +----------------------------------------------------------------+
 ```
 
@@ -45,39 +46,41 @@ reference for humans and agents working within the Codex platform. Think of AGEN
 | System prompt | `AGENTS.md` (project root) | Codex reads this automatically |
 | Colony rules | `.aether/workers.md` | Source of truth |
 | Aether CLI | `cmd/` (Go binary) | Platform-agnostic |
-| User docs | `.aether/docs/` | Distributed via npm |
+| User docs | `.aether/docs/` | Synced via `aether install` / `aether update` |
 
 **After editing:**
 ```bash
 git add .
 git commit -m "your message"
-npm install -g .   # Validates .aether/, then pushes to hub
+aether install --package-dir "$PWD"
 ```
 
 ---
 
 ## Critical Architecture
 
-**`.aether/` + `.codex/` are the source of truth.** `.aether/` is packaged directly into the
-npm package; private directories are excluded by `.aether/.npmignore`. Codex agent TOML files
-live in `.codex/agents/` and sync to the hub alongside the other platform files.
+**`.aether/` + `.codex/` are the source of truth.** Release binaries embed the shipped
+companion files, and local development can publish directly from this checkout with
+`aether install --package-dir "$PWD"`. Codex agent TOML files live in `.codex/agents/`
+and sync to the hub alongside the other platform files.
 
 ```
 Aether Repo (this repo)
-+-- .aether/ (SOURCE OF TRUTH -- packaged into npm)
++-- .aether/ (SOURCE OF TRUTH -- embedded in release binaries)
 |   +-- workers.md, utils/, docs/
 |   +-- data/          <- LOCAL ONLY (excluded)
 |   +-- dreams/        <- LOCAL ONLY (excluded)
 |
 +-- .codex/  ----------------------------------------------+
-|   +-- agents/*.toml     Codex agent definitions           |-> npm package
+|   +-- agents/*.toml     Codex agent definitions           |-> embedded install assets
 |                                                          |
 +-- AGENTS.md              Codex system prompt              |
                                                            v
                                                      ~/.aether/ (THE HUB)
                                                      +-- system/      <- .aether/
-                                                     +-- agents/      <- .claude/agents/
-                                                     +-- skills-codex/ <- .codex/agents/
+                                                     |   +-- codex/   <- .codex/agents/
+                                                     |   +-- skills-codex/
+                                                     +-- agents/      <- user-level Claude/OpenCode assets
                                                      +-- commands/
                                                      |     +-- claude/
                                                      |     +-- opencode/
@@ -87,8 +90,9 @@ Aether Repo (this repo)
   aether setup   (initializes colony)
 
 v
-any-repo/.codex/ (WORKING COPY -- gets overwritten on update)
-+-- agents/          <- from hub (skills-codex/)
+any-repo/.codex/ (WORKING COPY)
++-- agents/          <- from hub system/codex/
++-- skills/aether/   <- from hub system/skills-codex/
 +-- data/            <- LOCAL (never touched by updates)
 ```
 
@@ -98,7 +102,7 @@ any-repo/.codex/ (WORKING COPY -- gets overwritten on update)
 
 | Directory | Purpose | Syncs to Hub |
 |-----------|---------|--------------|
-| `.codex/agents/` | Codex agent definitions (TOML) | -> `~/.aether/system/skills-codex/` |
+| `.codex/agents/` | Codex agent definitions (TOML) | -> `~/.aether/system/codex/` |
 | `AGENTS.md` | Codex system instructions | Template-generated at setup |
 | `.aether/` (system files) | Source of truth for workers, utils, docs | -> `~/.aether/system/` |
 | `.aether/data/` | Colony state | **NEVER touched** |
@@ -156,13 +160,12 @@ You are a **Builder Ant** in the Aether Colony...
 
 ### Skills
 
-Skills are loaded from `.aether/skills/` via colony-prime, same as Claude Code and OpenCode.
-The skills system is platform-agnostic -- colony/ (10 behavioral) and domain/ (18 technical)
-skills match against the current worker role and codebase patterns.
+The shared skill sources live in `.aether/skills/` and `.aether/skills-codex/`.
+For Codex, installed skills are copied into `.codex/skills/aether/` and matched by
+the `aether skill-*` commands against worker role, workspace files, and package manifests.
 
-Skills are NOT stored in Codex plugin format (`SKILL.md` + `agents/openai.yaml`). Instead,
-the `.codex/agents/*.toml` files serve as the agent definition layer, and skills are injected
-by the Go binary at runtime.
+Skills are not a separate Codex plugin bundle. Codex agent definitions remain in
+`.codex/agents/*.toml`, and the Go CLI handles skill indexing, matching, and injection.
 
 ### Pheromone Signals
 
@@ -204,10 +207,8 @@ aether build 1
 # Verify, learn, advance
 aether continue
 
-# Repeat or use autopilot
-aether run              # All remaining phases
-aether run --max-phases 2
-aether run --dry-run    # Preview plan
+# Finish the colony
+aether seal
 ```
 
 ### Status and Monitoring
@@ -242,22 +243,17 @@ aether import-signals --file signals.xml   # Import signals
 
 ```bash
 aether seal              # Seal colony (Crowned Anthill)
-aether entomb            # Archive completed colony
-aether maturity          # View maturity journey
 aether update            # Pull latest from hub
-aether bump-version      # Bump version, rebuild, push
+aether resume            # Restore saved session context
 ```
 
 ### Advanced
 
 ```bash
-aether oracle            # Deep research (RALF loop)
-aether chaos             # Resilience testing
-aether archaeology       # Git history analysis
-aether swarm "bug desc"  # Parallel bug investigation
-aether council           # Intent clarification
 aether preferences "prefer verbose output"
-aether skill-create      # Create custom domain skill
+aether phase-insert --after 1 --name "Fix auth" --description "Stabilize auth flow"
+aether skill-match --role builder --task "react form validation"
+aether skill-inject --role builder --task "react form validation"
 aether data-clean        # Clean test artifacts
 ```
 
@@ -355,8 +351,8 @@ ls .codex/agents/*.toml | wc -l  # Should be 24
 git add .
 git commit -m "update codex agent definitions"
 
-# 3. Validate and push to hub
-npm install -g .   # Runs postinstall, then aether install
+# 3. Refresh the hub from this source checkout
+aether install --package-dir "$PWD"
 
 # 4. In other repos, pull updates
 aether update
@@ -400,7 +396,7 @@ aether update
 | Focus signal | `/ant:focus "area"` | `/ant:focus "area"` | `aether focus "area"` |
 | Update Aether | `/ant:update` | `/ant:update` | `aether update` |
 | Seal colony | `/ant:seal` | `/ant:seal` | `aether seal` |
-| Deep research | `/ant:oracle` | `/ant:oracle` | `aether oracle` |
+| Deep research | `/ant:oracle` | `/ant:oracle` | Use the `aether-oracle` agent plus `aether skill-*` and research commands |
 | View pheromones | `/ant:pheromones` | `/ant:pheromones` | `aether pheromone-display` |
 
 ---

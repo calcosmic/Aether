@@ -23,6 +23,7 @@ func init() {
 var pheromoneExportXMLCmd = &cobra.Command{
 	Use:          "pheromone-export-xml",
 	Short:        "Export pheromone signals to XML (alias for export pheromones)",
+	Aliases:      []string{"export-signals"},
 	SilenceUsage: true,
 	RunE:         runExportPheromones,
 }
@@ -30,6 +31,7 @@ var pheromoneExportXMLCmd = &cobra.Command{
 var pheromoneImportXMLCmd = &cobra.Command{
 	Use:          "pheromone-import-xml <file>",
 	Short:        "Import pheromone signals from XML (alias for import pheromones)",
+	Aliases:      []string{"import-signals"},
 	Args:         cobra.ExactArgs(1),
 	SilenceUsage: true,
 	RunE:         runImportPheromones,

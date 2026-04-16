@@ -39,12 +39,12 @@ Use the `shell` tool for investigation:
 - Execute commands: `git log`, etc.
 
 For external research:
-- Use `web_search` for documentation searches
+- Use the available web-search or browser tool for external documentation
 - Use `shell` with `curl` to fetch specific pages
 
 ## Spawning
 
-You MAY use `spawn_agent` for parallel research domains.
+You MAY delegate with the agent-spawning tool when it is available and explicitly permitted.
 
 ## Output Format
 

@@ -74,7 +74,7 @@ When you encounter ANY bug:
 
 ## Spawning Sub-Workers
 
-You MAY use `spawn_agent` if you encounter genuine surprise:
+You MAY delegate with the agent-spawning tool if it is available and explicitly permitted, especially when you encounter genuine surprise:
 - Task is 3x larger than expected
 - Discovered sub-domain requiring different expertise
 - Found blocking dependency needing parallel investigation
@@ -87,7 +87,7 @@ You MAY use `spawn_agent` if you encounter genuine surprise:
 
 - Use `shell` to execute commands, read files (`cat`), search (`grep`, `rg`, `find`)
 - Use `apply_patch` to create new files and modify existing ones
-- Use `spawn_agent` to delegate sub-tasks to specialized workers
+- Delegate only when the runtime allows agent spawning and the sub-task is clearly bounded
 
 ## Output Format
 

@@ -14,12 +14,12 @@ This is critical work - issues you identify may become future phases.
 
 ## Consumption
 
-**`/ant:plan`** reads PATHOGENS.md first to:
+**`aether plan`** reads PATHOGENS.md first to:
 - Understand known concerns before planning
 - Avoid creating more technical debt
 - Potentially create phases to address issues
 
-**`/ant:build`** references PATHOGENS.md to:
+**`aether build`** references PATHOGENS.md to:
 - Avoid fragile areas when modifying code
 - Understand known workarounds
 

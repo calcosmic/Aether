@@ -113,20 +113,22 @@ parallel mode, and context capsule -- all within a token budget (see Token Budge
 | Your notes | `.aether/dreams/` | Never distributed |
 | Dev docs | `.aether/docs/known-issues.md` | Distributed |
 
-### Autopilot
+### Core Workflow
 
-The `aether run` command chains build-verify-advance automatically:
+Codex currently exposes the core colony lifecycle directly:
 
 ```bash
-aether run                       # Run all remaining phases
-aether run --max-phases 2        # Run at most 2 phases then stop
-aether run --replan-interval 3   # Suggest replan every 3 phases
-aether run --continue            # Resume after replan pause
-aether run --dry-run             # Preview the autopilot plan
+aether lay-eggs
+aether init "Build feature X"
+aether colonize
+aether plan
+aether build 1
+aether continue
+aether seal
 ```
 
-Smart pause conditions: test failures, critical Chaos findings, security gate
-failures, quality gate failures, runtime verification needed, replan suggestions.
+Additional automation and specialized flows still use lower-level `aether`
+subcommands rather than a single top-level autopilot command.
 
 ### Publishing Changes
 
@@ -138,8 +140,8 @@ vim .aether/workers.md
 git add .
 git commit -m "your message"
 
-# 3. Validate and push to hub
-npm install -g .   # Runs postinstall, then run `aether install`
+# 3. Refresh the installed hub files from this source checkout
+aether install --package-dir "$PWD"
 
 # 4. In other repos, pull updates
 aether update
@@ -189,8 +191,6 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 
 | Command | Purpose |
 |---------|---------|
-| `aether pause-colony` | Save state and create handoff |
-| `aether resume-colony` | Restore from pause |
 | `aether resume` | Quick session restore |
 
 ### Lifecycle
@@ -198,32 +198,20 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 | Command | Purpose |
 |---------|---------|
 | `aether seal` | Seal colony (Crowned Anthill) |
-| `aether entomb` | Archive completed colony |
-| `aether maturity` | View colony maturity journey |
 | `aether update` | Update system files from hub |
-| `aether migrate-state` | Migrate colony state between versions |
 
 ### Advanced
 
 | Command | Purpose |
 |---------|---------|
-| `aether run` | Autopilot -- build, verify, advance automatically |
-| `aether quick` | Quick one-shot task |
-| `aether swarm "<bug>"` | Parallel bug investigation |
-| `aether oracle` | Deep research (RALF loop) |
-| `aether dream` | Philosophical observation |
-| `aether interpret` | Review dreams, discuss actions |
-| `aether chaos` | Resilience testing |
-| `aether archaeology` | Git history analysis |
-| `aether organize` | Codebase hygiene report |
-| `aether council` | Intent clarification |
 | `aether preferences "text"` | Set user preference |
-| `aether skill-create` | Create a custom skill |
 | `aether insert-phase` | Insert phase into plan |
-| `aether tunnels` | View colony communication tunnels |
 | `aether data-clean` | Clean test artifacts from data files |
-| `aether verify-castes` | Verify worker caste assignments |
-| `aether bump-version` | Bump version, rebuild, push, and tag |
+| `aether parallel-mode get` | Show the active parallel execution mode |
+| `aether parallel-mode set <mode>` | Change between `in-repo` and `worktree` execution |
+| `aether skill-list` | List installed skills |
+| `aether skill-match --role <role> --task "<task>"` | Match skills for a worker |
+| `aether skill-inject --role <role> --task "<task>"` | Render injected skill context |
 
 ### Typical Workflow
 
@@ -239,15 +227,13 @@ aether focus "security"                  # optional guidance
 aether build 1
 aether continue
 aether build 2                           # repeat until complete
-aether run                               # or use autopilot for all phases
 
 # After a session break
-aether resume-colony
+aether resume
 aether status
 
 # After completing a colony
 aether seal
-aether entomb
 aether init "next project goal"
 ```
 
@@ -439,13 +425,14 @@ on demand. Two categories:
 
 ### Custom Skills
 
-- `aether skill-create` -- Oracle-powered skill generation from a description
 - Manual creation: add a `SKILL.md` file to `~/.aether/skills/domain/`
+- Use `aether skill-list`, `aether skill-match`, and `aether skill-diff` to validate custom skill behavior
 
 ### Update Safety
 
-- Manifest-based tracking ensures shipped skills update cleanly
-- User-created or user-modified skills are never overwritten during `aether update`
+- Repo-local Codex skill copies are preserved during normal `aether update`
+- `aether update --force` refreshes tracked files from the hub and may discard local edits
+- User skills stored outside the tracked Aether paths remain untouched
 
 ---
 
@@ -458,16 +445,15 @@ Colony-prime assembles worker context within a character budget to avoid prompt 
 | Normal | 8,000 chars | Default |
 | Compact | 4,000 chars | `--compact` flag or auto-detected |
 
-**Trim order** (first trimmed = lowest retention priority):
-1. Rolling summary
-2. Phase learnings
-3. Key decisions
-4. Hive wisdom
-5. Context capsule
-6. User preferences
-7. QUEEN.md wisdom
-8. Pheromone signals (trimmed last -- highest retention priority)
-9. Blockers (NEVER trimmed)
+**Retention priority** (highest packed first):
+1. Blockers (never trimmed)
+2. Pheromone signals
+3. User preferences
+4. Instincts
+5. Colony state
+6. Hive wisdom
+7. Key decisions
+8. Phase learnings
 
 ---
 
@@ -590,7 +576,7 @@ All stateful commands use timestamp verification to detect stale sessions:
 3. Auto-clear stale files or prompt user based on command type
 4. Verify files are fresh after spawning
 
-**Protected Commands** (never auto-clear): `init`, `seal`, `entomb`
+**Protected Commands** (never auto-clear): `init`, `seal`
 
 ---
 
@@ -685,7 +671,7 @@ The system's pieces are now **connected**:
 - Instincts promote to hive at seal (confidence >= 0.8 -> hive-promote)
 - Multi-repo confirmation boosts confidence (2 repos = 0.7, 4+ = 0.95)
 - User preferences shape worker behavior (QUEEN.md -> colony-prime)
-- Autopilot chains build-verify-advance with smart pausing (`aether run`)
+- Codex uses the direct `build` -> `continue` -> `seal` lifecycle
 
 **The ongoing challenge is maintenance** -- keeping documentation accurate,
 data files clean, and test coverage comprehensive as features evolve.

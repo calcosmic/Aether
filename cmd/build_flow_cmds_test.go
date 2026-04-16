@@ -369,8 +369,8 @@ func TestPrintNextUpExecuting(t *testing.T) {
 	if !strings.Contains(output, `"ok":true`) {
 		t.Errorf("expected ok:true, got: %s", output)
 	}
-	if !strings.Contains(output, "/ant:continue") {
-		t.Errorf("expected /ant:continue suggestion, got: %s", output)
+	if !strings.Contains(output, "aether continue") {
+		t.Errorf("expected aether continue suggestion, got: %s", output)
 	}
 }
 
@@ -401,8 +401,8 @@ func TestPrintNextUpCompleted(t *testing.T) {
 	}
 
 	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, `/ant:seal`) {
-		t.Errorf("expected /ant:seal suggestion, got: %s", output)
+	if !strings.Contains(output, `aether seal`) {
+		t.Errorf("expected aether seal suggestion, got: %s", output)
 	}
 }
 

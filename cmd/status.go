@@ -49,11 +49,8 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	var b strings.Builder
 
 	// Banner
-	b.WriteString("       .-.\n")
-	b.WriteString("      (o o)  AETHER COLONY\n")
-	b.WriteString("      | O |  Status Report\n")
-	b.WriteString("       `-'\n")
-	b.WriteString("========================================\n\n")
+	b.WriteString(renderBanner("📊", "Colony Status"))
+	b.WriteString(visualDivider)
 
 	// Goal (truncated to 60 chars)
 	goal := *state.Goal
@@ -66,7 +63,18 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	totalPhases := len(state.Plan.Phases)
 	phaseBar := generateProgressBar(state.CurrentPhase, totalPhases, 20)
 	fmt.Fprintf(&b, "Progress\n")
-	fmt.Fprintf(&b, "   Phase: %s %d/%d phases\n", phaseBar, state.CurrentPhase, totalPhases)
+	phasePercent := 0
+	if totalPhases > 0 {
+		cappedPhase := state.CurrentPhase
+		if cappedPhase < 0 {
+			cappedPhase = 0
+		}
+		if cappedPhase > totalPhases {
+			cappedPhase = totalPhases
+		}
+		phasePercent = cappedPhase * 100 / totalPhases
+	}
+	fmt.Fprintf(&b, "   Phase: [Phase %d/%d] %s %d%%\n", state.CurrentPhase, totalPhases, phaseBar, phasePercent)
 
 	// Task progress in current phase
 	var tasksCompleted, tasksTotal int
@@ -82,10 +90,21 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		}
 	}
 	taskBar := generateProgressBar(tasksCompleted, tasksTotal, 20)
+	taskPercent := 0
+	if tasksTotal > 0 {
+		cappedTasks := tasksCompleted
+		if cappedTasks < 0 {
+			cappedTasks = 0
+		}
+		if cappedTasks > tasksTotal {
+			cappedTasks = tasksTotal
+		}
+		taskPercent = cappedTasks * 100 / tasksTotal
+	}
 	if phaseName != "" {
-		fmt.Fprintf(&b, "   Tasks: %s %d/%d tasks in Phase %d (%s)\n\n", taskBar, tasksCompleted, tasksTotal, state.CurrentPhase, phaseName)
+		fmt.Fprintf(&b, "   Tasks: [Tasks %d/%d] %s %d%% in Phase %d (%s)\n\n", tasksCompleted, tasksTotal, taskBar, taskPercent, state.CurrentPhase, phaseName)
 	} else {
-		fmt.Fprintf(&b, "   Tasks: %s %d/%d tasks in Phase %d\n\n", taskBar, tasksCompleted, tasksTotal, state.CurrentPhase)
+		fmt.Fprintf(&b, "   Tasks: [Tasks %d/%d] %s %d%% in Phase %d\n\n", tasksCompleted, tasksTotal, taskBar, taskPercent, state.CurrentPhase)
 	}
 
 	// Constraints
@@ -150,6 +169,8 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 
 	// State
 	fmt.Fprintf(&b, "\nState: %s\n", state.State)
+	primary, alternatives := workflowSuggestionsForState(state)
+	b.WriteString(renderNextUp(primary, alternatives...))
 
 	return b.String()
 }

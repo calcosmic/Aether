@@ -97,6 +97,7 @@ func TestHistoryDefault(t *testing.T) {
 	resetRootCmd(t)
 	var buf bytes.Buffer
 	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -115,6 +116,9 @@ func TestHistoryDefault(t *testing.T) {
 	output := buf.String()
 
 	// Testdata has 3 events
+	if !strings.Contains(output, "📜") {
+		t.Errorf("expected visual banner, got: %s", output)
+	}
 	if !strings.Contains(output, "init") {
 		t.Errorf("expected 'init' event type, got: %s", output)
 	}
@@ -141,6 +145,7 @@ func TestHistoryWithLimit(t *testing.T) {
 	resetRootCmd(t)
 	var buf bytes.Buffer
 	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -180,6 +185,7 @@ func TestHistoryWithFilter(t *testing.T) {
 	resetRootCmd(t)
 	var buf bytes.Buffer
 	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -206,6 +212,7 @@ func TestHistoryEmpty(t *testing.T) {
 	resetRootCmd(t)
 	var buf bytes.Buffer
 	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	// Create store with colony state but no events
 	tmpDir := t.TempDir()

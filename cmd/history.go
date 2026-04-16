@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +31,7 @@ var historyCmd = &cobra.Command{
 				})
 				return nil
 			}
-			fmt.Fprintln(stdout, "No colony history found.")
+			outputWorkflow(map[string]interface{}{"events": []interface{}{}}, renderHistoryVisual(map[string]interface{}{"events": []interface{}{}, "empty_message": "No colony history found."}))
 			return nil
 		}
 
@@ -45,7 +43,7 @@ var historyCmd = &cobra.Command{
 				})
 				return nil
 			}
-			fmt.Fprintln(stdout, "No events recorded.")
+			outputWorkflow(map[string]interface{}{"events": []interface{}{}}, renderHistoryVisual(map[string]interface{}{"events": []interface{}{}, "empty_message": "No events recorded."}))
 			return nil
 		}
 
@@ -66,28 +64,14 @@ var historyCmd = &cobra.Command{
 		}
 
 		if historyJSON {
-			type historyEntry struct {
-				Timestamp string `json:"timestamp"`
-				Type      string `json:"type"`
-				Source    string `json:"source"`
-				Message   string `json:"message"`
-			}
-			var entries []historyEntry
-			for i := len(events) - 1; i >= 0; i-- {
-				ts, et, src, msg := parseEvent(events[i])
-				entries = append(entries, historyEntry{Timestamp: ts, Type: et, Source: src, Message: msg})
-			}
-			if entries == nil {
-				entries = []historyEntry{}
-			}
-			outputOK(map[string]interface{}{
-				"events": entries,
-			})
+			outputOK(buildHistoryResult(events))
 			return nil
 		}
 
-		// Display events in reverse chronological order
-		renderHistoryTable(events)
+		result := buildHistoryResult(events)
+		result["filter"] = historyFilter
+		result["limit"] = historyLimit
+		outputWorkflow(result, renderHistoryVisual(result))
 		return nil
 	},
 }
@@ -115,28 +99,20 @@ func parseEvent(event string) (timestamp, eventType, source, message string) {
 	}
 }
 
-// renderHistoryTable displays events in a formatted table.
-func renderHistoryTable(events []string) {
-	if len(events) == 0 {
-		fmt.Fprintln(stdout, "No events to display.")
-		return
-	}
-
-	t := table.NewWriter()
-	t.AppendHeader(table.Row{"Timestamp", "Type", "Source", "Message"})
-
-	// Display newest first
+func buildHistoryResult(events []string) map[string]interface{} {
+	entries := make([]map[string]interface{}, 0, len(events))
 	for i := len(events) - 1; i >= 0; i-- {
-		timestamp, eventType, source, message := parseEvent(events[i])
-		// Format timestamp for display
-		ts := formatTimestamp(timestamp)
-		// Truncate message for display
-		if len(message) > 50 {
-			message = message[:47] + "..."
-		}
-		t.AppendRow(table.Row{ts, eventType, source, message})
+		ts, et, src, msg := parseEvent(events[i])
+		entries = append(entries, map[string]interface{}{
+			"timestamp": ts,
+			"type":      et,
+			"source":    src,
+			"message":   msg,
+		})
 	}
-	t.SetStyle(table.StyleRounded)
 
-	fmt.Fprintln(stdout, t.Render())
+	return map[string]interface{}{
+		"events": entries,
+		"count":  len(entries),
+	}
 }

@@ -2,14 +2,17 @@ package cmd
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	aetherassets "github.com/calcosmic/Aether"
 	"github.com/calcosmic/Aether/pkg/downloader"
 	"github.com/spf13/cobra"
 )
@@ -18,9 +21,11 @@ import (
 // and sets up the hub directory for global Aether access.
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Install commands and agents to ~/.claude/ and set up distribution hub",
-	Long: `Install Aether globally by copying slash commands and agent definitions
-to their respective directories and setting up the distribution hub.
+	Short: "Install platform assets and refresh the shared Aether hub",
+	Long: `Install Aether globally by copying platform assets to their respective
+directories and setting up the distribution hub. By default, Aether installs
+the companion files embedded in the Go binary. Use --package-dir only when
+developing from a local source checkout.
 
 Copies:
   .claude/commands/ant/  -> ~/.claude/commands/ant/
@@ -28,6 +33,7 @@ Copies:
   .opencode/commands/ant/ -> ~/.opencode/command/
   .opencode/agents/      -> ~/.opencode/agent/
   .codex/agents/         -> ~/.codex/agents/
+  .aether/skills-codex/  -> ~/.codex/skills/aether/
 
 Also creates the hub directory at ~/.aether/ for cross-repo coordination.`,
 	Args: cobra.NoArgs,
@@ -45,7 +51,7 @@ var (
 )
 
 func init() {
-	installCmd.Flags().String("package-dir", "", "Path to the Aether package directory (contains .claude/, .opencode/, .aether/)")
+	installCmd.Flags().String("package-dir", "", "Override the embedded install assets with a local Aether checkout or package directory")
 	installCmd.Flags().String("home-dir", "", "User home directory (default: $HOME)")
 	installCmd.Flags().Bool("download-binary", false, "Also download the Go binary from GitHub Releases")
 	installCmd.Flags().String("binary-dest", "", "Destination directory for binary (default: ~/.aether/bin)")
@@ -78,50 +84,49 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Resolve package directory (directory containing the aether binary or CWD)
-	if packageDir == "" {
-		// Try to find the package root by looking for .claude/commands/ant/
-		wd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("cannot determine working directory: %w", err)
-		}
-		packageDir = wd
+	resolvedPackageDir, cleanupPackageDir, err := resolveInstallPackageDir(packageDir)
+	if err != nil {
+		return err
 	}
-
-	// Define sync pairs: source subpath -> destination subpath (relative to packageDir/homeDir)
-	syncPairs := []struct {
-		srcRel  string // relative to packageDir
-		destRel string // relative to homeDir
-		label   string // human-readable label
-	}{
-		{".claude/commands/ant", ".claude/commands/ant", "Commands (claude)"},
-		{".claude/agents/ant", ".claude/agents/ant", "Agents (claude)"},
-		{".opencode/commands/ant", ".opencode/command", "Commands (opencode)"},
-		{".opencode/agents", ".opencode/agent", "Agents (opencode)"},
-		{".codex/agents", ".codex/agents", "Agents (codex)"},
+	if cleanupPackageDir != nil {
+		defer cleanupPackageDir()
 	}
+	packageDir = resolvedPackageDir
 
 	results := []map[string]interface{}{}
+	var syncErrors []string
 
-	for _, pair := range syncPairs {
+	for _, pair := range installSyncPairs() {
 		srcDir := filepath.Join(packageDir, filepath.FromSlash(pair.srcRel))
 		destDir := filepath.Join(homeDir, filepath.FromSlash(pair.destRel))
 
-		result := syncDirWithCleanup(srcDir, destDir)
-		results = append(results, map[string]interface{}{
+		result := syncDir(srcDir, destDir, syncOptions{
+			cleanup:              pair.cleanup,
+			preserveLocalChanges: pair.preserveLocalChanges,
+			validate:             pair.validate,
+		})
+		entry := map[string]interface{}{
 			"label":   pair.label,
 			"src":     pair.srcRel,
 			"dest":    pair.destRel,
 			"copied":  result.copied,
 			"skipped": result.skipped,
 			"removed": len(result.removed),
-		})
+		}
+		if len(result.errors) > 0 {
+			entry["errors"] = result.errors
+			syncErrors = append(syncErrors, result.errors...)
+		}
+		results = append(results, entry)
 	}
 
 	// Set up hub directory
 	hubDir := filepath.Join(homeDir, ".aether")
 	hubResult := setupInstallHub(hubDir, packageDir)
 	results = append(results, hubResult)
+	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
+		syncErrors = append(syncErrors, errVal)
+	}
 
 	totalCopied := 0
 	totalSkipped := 0
@@ -134,10 +139,16 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	outputOK(map[string]interface{}{
+	if len(syncErrors) > 0 {
+		outputError(2, fmt.Sprintf("install failed with %d sync error(s)", len(syncErrors)), map[string]interface{}{"details": results})
+		return nil
+	}
+
+	result := map[string]interface{}{
 		"message": fmt.Sprintf("Install complete: %d files copied, %d unchanged", totalCopied, totalSkipped),
 		"details": results,
-	})
+	}
+	outputWorkflow(result, renderInstallVisual(homeDir, results, totalCopied, totalSkipped))
 
 	// In a source checkout, install should keep the local binary in sync with
 	// the companion files it just published to the hub. Otherwise fast-moving
@@ -161,53 +172,157 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func resolveInstallPackageDir(explicit string) (string, func(), error) {
+	if explicit != "" {
+		resolved := normalizeInstallPackageDir(explicit)
+		if resolved == "" {
+			return "", nil, fmt.Errorf("--package-dir %q does not contain Aether companion files", explicit)
+		}
+		return resolved, nil, nil
+	}
+
+	if wd, err := os.Getwd(); err == nil {
+		if resolved := normalizeInstallPackageDir(wd); resolved != "" {
+			return resolved, nil, nil
+		}
+	}
+
+	tempDir, err := os.MkdirTemp("", "aether-install-assets-*")
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp install package: %w", err)
+	}
+	if err := aetherassets.MaterializeInstallPackage(tempDir); err != nil {
+		os.RemoveAll(tempDir)
+		return "", nil, fmt.Errorf("materialize embedded install assets: %w", err)
+	}
+	return tempDir, func() { _ = os.RemoveAll(tempDir) }, nil
+}
+
+func normalizeInstallPackageDir(candidate string) string {
+	if candidate == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(candidate)
+	if err == nil {
+		candidate = abs
+	}
+	if isInstallPackageDir(candidate) {
+		return candidate
+	}
+	if root := findAetherModuleRoot(candidate); root != "" && isInstallPackageDir(root) {
+		return root
+	}
+	return ""
+}
+
+func isInstallPackageDir(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	knownPaths := []string{
+		filepath.Join(dir, ".aether", "workers.md"),
+		filepath.Join(dir, ".codex", "agents"),
+		filepath.Join(dir, ".claude", "commands", "ant"),
+		filepath.Join(dir, ".claude", "agents", "ant"),
+		filepath.Join(dir, ".opencode", "commands", "ant"),
+		filepath.Join(dir, ".opencode", "agents"),
+		filepath.Join(dir, ".aether", "skills"),
+		filepath.Join(dir, ".aether", "docs"),
+	}
+	for _, path := range knownPaths {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // syncResult holds the outcome of a directory sync operation.
 type syncResult struct {
 	copied  int
 	skipped int
 	removed []string
+	errors  []string
 }
 
-// syncDirWithCleanup copies files from src to dest, skipping unchanged files
-// (by SHA-256 hash), and removing stale files that no longer exist in src.
-func syncDirWithCleanup(src, dest string) syncResult {
+type syncOptions struct {
+	cleanup              bool
+	preserveLocalChanges bool
+	protectedDirs        map[string]bool
+	protectedFiles       map[string]bool
+	validate             syncValidator
+}
+
+// syncDir copies files from src to dest, optionally preserving changed local
+// files, validating source files, and removing stale files.
+func syncDir(src, dest string, opts syncOptions) syncResult {
 	result := syncResult{}
 
 	// Check source exists
 	srcInfo, err := os.Stat(src)
-	if err != nil || !srcInfo.IsDir() {
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", src, err))
+		return result
+	}
+	if !srcInfo.IsDir() {
+		result.errors = append(result.errors, fmt.Sprintf("%s is not a directory", src))
 		return result
 	}
 
 	// Create destination
 	if err := os.MkdirAll(dest, 0755); err != nil {
+		result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", dest, err))
 		return result
 	}
 
 	// Walk source and copy files
 	srcFiles := listFilesRecursive(src)
 	for _, relPath := range srcFiles {
+		if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
+			result.skipped++
+			continue
+		}
 		srcPath := filepath.Join(src, relPath)
 		destPath := filepath.Join(dest, relPath)
 
 		// Create parent directories
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", filepath.Dir(destPath), err))
 			continue
 		}
 
-		// Check if file is unchanged
-		if info, err := os.Stat(destPath); err == nil {
+		srcData, err := os.ReadFile(srcPath)
+		if err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("read %s: %v", srcPath, err))
+			continue
+		}
+		if opts.validate != nil {
+			if err := opts.validate(srcPath, relPath, srcData); err != nil {
+				result.errors = append(result.errors, err.Error())
+				continue
+			}
+		}
+
+		// Check if file is unchanged or locally modified
+		if _, err := os.Stat(destPath); err == nil {
 			srcHash, srcErr := fileSHA256(srcPath)
 			destHash, destErr := fileSHA256(destPath)
 			if srcErr == nil && destErr == nil && srcHash == destHash {
 				result.skipped++
 				continue
 			}
-			_ = info // used for size comparison in the future if needed
+			if opts.preserveLocalChanges {
+				result.skipped++
+				continue
+			}
 		}
 
 		// Copy file
 		if err := copyFile(srcPath, destPath); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("copy %s -> %s: %v", srcPath, destPath, err))
 			continue
 		}
 
@@ -221,28 +336,49 @@ func syncDirWithCleanup(src, dest string) syncResult {
 		result.copied++
 	}
 
-	// Remove stale files (in dest but not in src)
-	destFiles := listFilesRecursive(dest)
-	srcSet := make(map[string]struct{}, len(srcFiles))
-	for _, f := range srcFiles {
-		srcSet[f] = struct{}{}
-	}
+	if opts.cleanup {
+		// Remove stale files (in dest but not in src)
+		destFiles := listFilesRecursive(dest)
+		srcSet := make(map[string]struct{}, len(srcFiles))
+		for _, f := range srcFiles {
+			srcSet[f] = struct{}{}
+		}
 
-	for _, relPath := range destFiles {
-		if _, exists := srcSet[relPath]; !exists {
-			destPath := filepath.Join(dest, relPath)
-			if err := os.Remove(destPath); err == nil {
-				result.removed = append(result.removed, relPath)
+		for _, relPath := range destFiles {
+			if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
+				continue
 			}
+			if _, exists := srcSet[relPath]; !exists {
+				destPath := filepath.Join(dest, relPath)
+				if err := os.Remove(destPath); err == nil {
+					result.removed = append(result.removed, relPath)
+				} else {
+					result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", destPath, err))
+				}
+			}
+		}
+
+		// Clean empty directories
+		if len(result.removed) > 0 {
+			cleanEmptyDirs(dest)
 		}
 	}
 
-	// Clean empty directories
-	if len(result.removed) > 0 {
-		cleanEmptyDirs(dest)
-	}
-
 	return result
+}
+
+func syncPathProtected(relPath string, protectedDirs, protectedFiles map[string]bool) bool {
+	if len(protectedDirs) == 0 && len(protectedFiles) == 0 {
+		return false
+	}
+	firstComponent := relPath
+	if idx := strings.Index(relPath, string(filepath.Separator)); idx >= 0 {
+		firstComponent = relPath[:idx]
+	}
+	if protectedDirs[firstComponent] {
+		return true
+	}
+	return protectedFiles[filepath.Base(relPath)]
 }
 
 // listFilesRecursive returns all file paths relative to baseDir.
@@ -305,23 +441,35 @@ func copyFile(src, dest string) error {
 
 // cleanEmptyDirs removes empty directories under baseDir, bottom-up.
 func cleanEmptyDirs(baseDir string) {
+	var dirs []string
 	_ = filepath.WalkDir(baseDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || !d.IsDir() {
+		if err != nil || !d.IsDir() || path == baseDir {
 			return nil
 		}
-		if path == baseDir {
-			return nil
-		}
-		// Try to remove; will fail if not empty
-		if err := os.Remove(path); err != nil {
-			log.Printf("install: cleanEmptyDirs failed to remove %s: %v", path, err)
-		}
+		dirs = append(dirs, path)
 		return nil
 	})
+
+	sort.Slice(dirs, func(i, j int) bool {
+		return strings.Count(dirs[i], string(filepath.Separator)) > strings.Count(dirs[j], string(filepath.Separator))
+	})
+
+	for _, dir := range dirs {
+		if err := os.Remove(dir); err != nil && !os.IsNotExist(err) {
+			if errors.Is(err, os.ErrExist) || strings.Contains(strings.ToLower(err.Error()), "directory not empty") {
+				continue
+			}
+			if entries, readErr := os.ReadDir(dir); readErr == nil && len(entries) > 0 {
+				continue
+			}
+			log.Printf("install: cleanEmptyDirs failed to remove %s: %v", dir, err)
+		}
+	}
 }
 
 // hubExcludeDirs are .aether/ subdirectories that should never be synced to the hub.
-// These match .npmignore — private/local data that belongs to individual colonies.
+// These are private/local paths that belong to individual colonies and should
+// never be published into the shared hub.
 var hubExcludeDirs = map[string]bool{
 	"data":        true,
 	"dreams":      true,
@@ -357,6 +505,9 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 	result["copied"] = hubSyncResult.copied
 	result["skipped"] = hubSyncResult.skipped
 	result["removed"] = len(hubSyncResult.removed)
+	if len(hubSyncResult.errors) > 0 {
+		result["errors"] = hubSyncResult.errors
+	}
 
 	// Sync Codex agents to hub system directory
 	// Sync only .codex/agents/ to avoid nesting: syncing .codex/ preserves agents/ subdir
@@ -364,9 +515,13 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 	// landing at .codex/agents/agents/*.toml. Syncing just agents/ fixes this.
 	codexSrc := filepath.Join(packageDir, ".codex", "agents")
 	codexDest := filepath.Join(systemDir, "codex")
-	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil)
+	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil, validateCodexAgentFile)
 	result["codex_copied"] = codexSyncResult.copied
 	result["codex_skipped"] = codexSyncResult.skipped
+	if len(codexSyncResult.errors) > 0 {
+		existing, _ := result["errors"].([]string)
+		result["errors"] = append(existing, codexSyncResult.errors...)
+	}
 
 	// Create registry.json if it doesn't exist
 	registryPath := filepath.Join(hubDir, "registry.json")
@@ -396,12 +551,12 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 // skipping excluded directories and unchanged files (by SHA-256 hash).
 // Also removes stale files in dest that no longer exist in src.
 func syncDirToHub(src, dest string) syncResult {
-	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs)
+	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, nil)
 }
 
 // syncDirToHubWithExclusion is like syncDirToHub but accepts a custom exclusion map.
 // Pass nil to exclude nothing.
-func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool) syncResult {
+func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, validate syncValidator) syncResult {
 	// Default to no exclusions if nil
 	if exclude == nil {
 		exclude = map[string]bool{}
@@ -409,11 +564,20 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool) syncRe
 	result := syncResult{}
 
 	srcInfo, err := os.Stat(src)
-	if err != nil || !srcInfo.IsDir() {
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", src, err))
+		return result
+	}
+	if !srcInfo.IsDir() {
+		result.errors = append(result.errors, fmt.Sprintf("%s is not a directory", src))
 		return result
 	}
 
 	if err := os.MkdirAll(dest, 0755); err != nil {
+		result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", dest, err))
 		return result
 	}
 
@@ -424,7 +588,20 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool) syncRe
 		destPath := filepath.Join(dest, relPath)
 
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", filepath.Dir(destPath), err))
 			continue
+		}
+
+		srcData, err := os.ReadFile(srcPath)
+		if err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("read %s: %v", srcPath, err))
+			continue
+		}
+		if validate != nil {
+			if err := validate(srcPath, relPath, srcData); err != nil {
+				result.errors = append(result.errors, err.Error())
+				continue
+			}
 		}
 
 		// Check if file is unchanged
@@ -438,6 +615,7 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool) syncRe
 		}
 
 		if err := copyFile(srcPath, destPath); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("copy %s -> %s: %v", srcPath, destPath, err))
 			continue
 		}
 		result.copied++
@@ -459,6 +637,8 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool) syncRe
 			destPath := filepath.Join(dest, relPath)
 			if err := os.Remove(destPath); err == nil {
 				result.removed = append(result.removed, relPath)
+			} else {
+				result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", destPath, err))
 			}
 		}
 	}
@@ -509,11 +689,11 @@ func runBinaryDownloadFromInstall(cmd *cobra.Command, homeDir string) error {
 		destDir = filepath.Join(homeDir, downloader.DefaultDestSubdir())
 	}
 
-	outputOK(map[string]interface{}{
+	outputWorkflow(map[string]interface{}{
 		"message": fmt.Sprintf("Downloading aether v%s binary...", version),
 		"version": version,
 		"dest":    destDir,
-	})
+	}, renderBinaryActionVisual("Binary Download", fmt.Sprintf("Downloading aether v%s binary...", version), version, destDir))
 
 	result, err := downloader.DownloadBinary(version, destDir)
 	if err != nil {
@@ -523,11 +703,11 @@ func runBinaryDownloadFromInstall(cmd *cobra.Command, homeDir string) error {
 		return err
 	}
 
-	outputOK(map[string]interface{}{
+	outputWorkflow(map[string]interface{}{
 		"message": fmt.Sprintf("Binary installed to %s", result.Path),
 		"path":    result.Path,
 		"version": result.Version,
-	})
+	}, renderBinaryActionVisual("Binary Ready", fmt.Sprintf("Binary installed to %s", result.Path), result.Version, result.Path))
 
 	return nil
 }
@@ -564,11 +744,11 @@ func runLocalBinaryBuildFromInstall(cmd *cobra.Command, homeDir, packageDir stri
 		return err
 	}
 
-	outputOK(map[string]interface{}{
+	outputWorkflow(map[string]interface{}{
 		"message": fmt.Sprintf("Built local aether binary to %s", result.Path),
 		"path":    result.Path,
 		"version": result.Version,
-	})
+	}, renderBinaryActionVisual("Binary Build", fmt.Sprintf("Built local aether binary to %s", result.Path), result.Version, result.Path))
 	return nil
 }
 

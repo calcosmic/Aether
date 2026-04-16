@@ -233,22 +233,23 @@ var printNextUpCmd = &cobra.Command{
 		switch colonyState {
 		case "READY":
 			nextPhase := state.CurrentPhase + 1
-			suggestions = append(suggestions, fmt.Sprintf("Run /ant:build %d to start the next phase", nextPhase))
+			suggestions = append(suggestions, fmt.Sprintf("Run `aether build %d` to start the next phase", nextPhase))
 		case "EXECUTING":
-			suggestions = append(suggestions, "Run /ant:continue to verify work and advance")
+			suggestions = append(suggestions, "Run `aether continue` to verify work and advance")
 		case "BUILT":
-			suggestions = append(suggestions, "Run /ant:continue to verify and advance")
+			suggestions = append(suggestions, "Run `aether continue` to verify and advance")
 		case "COMPLETED":
-			suggestions = append(suggestions, "Colony complete! Run /ant:seal to finalize")
+			suggestions = append(suggestions, "Colony complete. Run `aether seal` to finalize.")
 		default:
-			suggestions = append(suggestions, "Run /ant:status to check colony state")
+			suggestions = append(suggestions, "Run `aether status` to check colony state")
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"suggestions":   suggestions,
 			"current_phase": state.CurrentPhase,
 			"state":         colonyState,
-		})
+		}
+		outputWorkflow(result, renderNextUpVisual(suggestions))
 		return nil
 	},
 }

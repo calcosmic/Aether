@@ -43,14 +43,14 @@ Before reporting ANY phase as complete:
 ### State Management
 All state lives in `.aether/data/`:
 - `COLONY_STATE.json` - Unified colony state (v3.0)
-- `constraints.json` - Pheromone signals
+- `pheromones.json` - Stored signals; use `aether colony-prime` for injected worker guidance
 - `flags.json` - Blockers and issues
 
 Use the `aether` CLI for state operations.
 
 ## Worker Castes
 
-Use `spawn_agent` to dispatch workers by their specialized role.
+Use the agent-spawning tool to dispatch workers by their specialized role when delegation is available and explicitly permitted.
 
 ### Core Castes
 - Builder (`aether-builder`) - Implementation, code, commands
@@ -119,9 +119,9 @@ The Queen selects a named pattern at build start based on the phase description.
 
 ## Tool Usage
 
-- Use `spawn_agent` to dispatch workers for phases
+- Delegate workers for phases only when the runtime allows agent spawning
 - Use `shell` to execute `aether` CLI commands, verify state, read files
-- Use `request_user_input` to ask the user for decisions at Tier 4 escalation
+- Use `request_user_input` only when the runtime supports it and Tier 4 escalation is required
 
 ## Output Format
 
@@ -168,7 +168,7 @@ The Queen selects a named pattern at build start based on the phase description.
 - **Do not read or expose API keys or tokens**
 
 ### Queen IS Permitted To
-- Write `COLONY_STATE.json`, `constraints.json`, `flags.json` via `aether` CLI commands only
+- Write `COLONY_STATE.json`, `pheromones.json`, `flags.json` via `aether` CLI commands only
 - Spawn workers up to depth and count limits
 - Read any file for coordination purposes
 '''

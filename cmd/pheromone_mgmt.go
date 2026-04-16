@@ -173,6 +173,7 @@ var colonyPrimeCmd = &cobra.Command{
 		}{"state", stateSection.String(), 5})
 
 		// 2. Load pheromones (via session cache, shared loader)
+		activeSignalCount := 0
 		pf, phErr := loadPheromonesOnce(store, sc)
 		if phErr == nil && len(pf.Signals) > 0 {
 			var active []colony.PheromoneSignal
@@ -181,9 +182,12 @@ var colonyPrimeCmd = &cobra.Command{
 					active = append(active, sig)
 				}
 			}
+			activeSignalCount = len(active)
 			if len(active) > 0 {
 				var phSB strings.Builder
 				phSB.WriteString("## Pheromone Signals\n\n")
+				phSB.WriteString(colonyLifecycleSignalContext(state))
+				phSB.WriteString("\n\n")
 				for _, sig := range active {
 					text := extractText(sig.Content)
 					phSB.WriteString(fmt.Sprintf("- [%s] %s\n", sig.Type, text))
@@ -241,6 +245,7 @@ var colonyPrimeCmd = &cobra.Command{
 				priority int
 			}{"instincts", instSB.String(), 6})
 		}
+		instinctCount := len(instincts)
 
 		// 4. Load decisions from state
 		if state.Memory.Decisions != nil && len(state.Memory.Decisions) > 0 {
@@ -306,9 +311,38 @@ var colonyPrimeCmd = &cobra.Command{
 			}{"user_preferences", prefsSB.String(), 7})
 		}
 
-		// Sort by priority (lowest priority = trimmed first)
+		// 8. Load active blockers from flags/pending decisions. Blockers are
+		// highest priority and must survive budget trimming.
+		var blockerFile colony.FlagsFile
+		if err := store.LoadJSON("pending-decisions.json", &blockerFile); err != nil {
+			_ = store.LoadJSON("flags.json", &blockerFile)
+		}
+		if len(blockerFile.Decisions) > 0 {
+			var blockerSB strings.Builder
+			for _, blocker := range blockerFile.Decisions {
+				if blocker.Resolved || blocker.Type != "blocker" {
+					continue
+				}
+				if blockerSB.Len() == 0 {
+					blockerSB.WriteString("## Active Blockers\n\n")
+				}
+				blockerSB.WriteString(fmt.Sprintf("- %s\n", blocker.Description))
+			}
+			if blockerSB.Len() > 0 {
+				sections = append(sections, struct {
+					name     string
+					content  string
+					priority int
+				}{"blockers", blockerSB.String(), 10})
+			}
+		}
+
+		// Sort by priority (highest priority packed first).
 		sort.Slice(sections, func(i, j int) bool {
-			return sections[i].priority < sections[j].priority
+			if sections[i].priority != sections[j].priority {
+				return sections[i].priority > sections[j].priority
+			}
+			return sections[i].name < sections[j].name
 		})
 
 		// Assemble within budget
@@ -317,6 +351,12 @@ var colonyPrimeCmd = &cobra.Command{
 		currentLen := 0
 		for _, sec := range sections {
 			if currentLen+len(sec.content) > budget {
+				if sec.name == "blockers" {
+					assembled.WriteString(sec.content)
+					assembled.WriteString("\n")
+					currentLen += len(sec.content)
+					continue
+				}
 				trimmed = append(trimmed, sec.name)
 				continue
 			}
@@ -325,12 +365,19 @@ var colonyPrimeCmd = &cobra.Command{
 			currentLen += len(sec.content)
 		}
 
+		context := strings.TrimSpace(assembled.String())
+		logLine := fmt.Sprintf("colony-prime loaded %d signal(s), %d instinct(s), used %d/%d chars", activeSignalCount, instinctCount, currentLen, budget)
+
 		result := map[string]interface{}{
-			"context":  strings.TrimSpace(assembled.String()),
-			"budget":   budget,
-			"used":     currentLen,
-			"sections": len(sections),
-			"trimmed":  trimmed,
+			"context":        context,
+			"prompt_section": context,
+			"signal_count":   activeSignalCount,
+			"instinct_count": instinctCount,
+			"log_line":       logLine,
+			"budget":         budget,
+			"used":           currentLen,
+			"sections":       len(sections),
+			"trimmed":        trimmed,
 		}
 
 		outputOK(result)
@@ -342,6 +389,7 @@ var colonyPrimeCmd = &cobra.Command{
 var pheromoneDisplayCmd = &cobra.Command{
 	Use:          "pheromone-display",
 	Short:        "Display active pheromone signals in formatted table",
+	Aliases:      []string{"pheromones"},
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -481,6 +529,25 @@ func init() {
 	rootCmd.AddCommand(pheromoneSnapshotInjectCmd)
 	rootCmd.AddCommand(pheromoneMergeBackCmd)
 	rootCmd.AddCommand(pheromoneDisplayCmd)
+}
+
+func colonyLifecycleSignalContext(state colony.ColonyState) string {
+	lifecycleLine := fmt.Sprintf("Colony is %s. ", state.State)
+	switch state.State {
+	case colony.StateREADY:
+		if len(state.Plan.Phases) == 0 {
+			lifecycleLine += "Signals should guide planning scope and approach."
+		} else {
+			lifecycleLine += "Signals are pre-build guidance for upcoming execution."
+		}
+	case colony.StateEXECUTING:
+		lifecycleLine += "Signals are active implementation constraints."
+	case colony.StateBUILT:
+		lifecycleLine += "Signals guide verification and learning extraction."
+	default:
+		lifecycleLine += "Signals provide ongoing context."
+	}
+	return lifecycleLine
 }
 
 // extractText extracts the text field from JSON content like {"text":"..."}.

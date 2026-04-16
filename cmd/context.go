@@ -32,119 +32,131 @@ type ContextCapsuleOutput struct {
 
 // resumeDashboardCmd returns session restore information for /ant:resume (CMD-15).
 var resumeDashboardCmd = &cobra.Command{
-	Use:   "resume-dashboard",
-	Short: "Return session restore information for /ant:resume",
-	Args:  cobra.NoArgs,
+	Use:     "resume-dashboard",
+	Short:   "Return session restore information for `aether resume`",
+	Aliases: []string{"resume"},
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
 
-		// Load COLONY_STATE.json. If missing, return defaults.
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			outputOK(map[string]interface{}{
-				"current": map[string]interface{}{
-					"phase":      0,
-					"phase_name": "",
-					"state":      "UNKNOWN",
-					"goal":          "",
-					"parallel_mode": "in-repo",
-				},
-				"memory_health": map[string]interface{}{
-					"wisdom_count":       0,
-					"pending_promotions": 0,
-					"recent_failures":    0,
-				},
-				"data_safety": map[string]interface{}{},
-				"recent": map[string]interface{}{
-					"decisions": []interface{}{},
-					"events":    []interface{}{},
-				},
-				"drill_down": map[string]interface{}{
-					"command":   "/ant:memory-details",
-					"available": true,
-				},
-			})
-			return nil
-		}
-
-		// Extract core state fields
-		currentPhase := state.CurrentPhase
-		stateStr := string(state.State)
-		goal := "No goal set"
-		if state.Goal != nil {
-			goal = *state.Goal
-		}
-
-		// Extract parallel_mode with default fallback
-		parallelMode := string(state.ParallelMode)
-		if parallelMode == "" {
-			parallelMode = "in-repo"
-		}
-
-		// Compute memory health inline
-		wisdomCount := 0
-		pendingCount := 0
-		var learnings colony.LearningFile
-		if err := store.LoadJSON("learning-observations.json", &learnings); err == nil {
-			for _, obs := range learnings.Observations {
-				if obs.TrustScore != nil {
-					wisdomCount++
-				} else {
-					pendingCount++
-				}
-			}
-		}
-
-		failureCount := 0
-		var midden colony.MiddenFile
-		if err := store.LoadJSON("midden/midden.json", &midden); err == nil {
-			failureCount = len(midden.Entries)
-		}
-
-		// Extract recent decisions (last 5, reversed)
-		recentDecisions := extractRecentDecisions(state.Memory.Decisions, 5)
-
-		// Extract recent events (last 10, wrapped as objects)
-		recentEvents := extractRecentEvents(state.Events, 10)
-
-		// Load data safety stats
-		dataSafety := map[string]interface{}{}
-		var safetyStats map[string]interface{}
-		if raw, err := store.ReadFile("safety-stats.json"); err == nil {
-			json.Unmarshal(raw, &safetyStats)
-			if safetyStats != nil {
-				dataSafety = safetyStats
-			}
-		}
-
-		outputOK(map[string]interface{}{
-			"current": map[string]interface{}{
-				"phase":      currentPhase,
-				"phase_name": goal,
-				"state":      stateStr,
-				"goal":          goal,
-				"parallel_mode": parallelMode,
-			},
-			"memory_health": map[string]interface{}{
-				"wisdom_count":       wisdomCount,
-				"pending_promotions": pendingCount,
-				"recent_failures":    failureCount,
-			},
-			"data_safety": dataSafety,
-			"recent": map[string]interface{}{
-				"decisions": recentDecisions,
-				"events":    recentEvents,
-			},
-			"drill_down": map[string]interface{}{
-				"command":   "/ant:memory-details",
-				"available": true,
-			},
-		})
+		result := buildResumeDashboardResult()
+		outputWorkflow(result, renderResumeVisual(result, "", false))
 		return nil
 	},
+}
+
+func buildResumeDashboardResult() map[string]interface{} {
+	// Load COLONY_STATE.json. If missing, return defaults.
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return map[string]interface{}{
+			"current": map[string]interface{}{
+				"phase":         0,
+				"phase_name":    "",
+				"total_phases":  0,
+				"state":         "UNKNOWN",
+				"goal":          "",
+				"parallel_mode": "in-repo",
+			},
+			"memory_health": map[string]interface{}{
+				"wisdom_count":       0,
+				"pending_promotions": 0,
+				"recent_failures":    0,
+			},
+			"data_safety": map[string]interface{}{},
+			"recent": map[string]interface{}{
+				"decisions": []interface{}{},
+				"events":    []interface{}{},
+			},
+			"drill_down": map[string]interface{}{
+				"command":   "aether memory-details",
+				"available": true,
+			},
+		}
+	}
+
+	// Extract core state fields
+	currentPhase := state.CurrentPhase
+	stateStr := string(state.State)
+	goal := "No goal set"
+	if state.Goal != nil && *state.Goal != "" {
+		goal = *state.Goal
+	}
+	totalPhases := len(state.Plan.Phases)
+	phaseName := lookupPhaseName(state, currentPhase)
+	if currentPhase <= 0 {
+		phaseName = ""
+	}
+
+	// Extract parallel_mode with default fallback
+	parallelMode := string(state.ParallelMode)
+	if parallelMode == "" {
+		parallelMode = "in-repo"
+	}
+
+	// Compute memory health inline
+	wisdomCount := 0
+	pendingCount := 0
+	var learnings colony.LearningFile
+	if err := store.LoadJSON("learning-observations.json", &learnings); err == nil {
+		for _, obs := range learnings.Observations {
+			if obs.TrustScore != nil {
+				wisdomCount++
+			} else {
+				pendingCount++
+			}
+		}
+	}
+
+	failureCount := 0
+	var midden colony.MiddenFile
+	if err := store.LoadJSON("midden/midden.json", &midden); err == nil {
+		failureCount = len(midden.Entries)
+	}
+
+	// Extract recent decisions (last 5, reversed)
+	recentDecisions := extractRecentDecisions(state.Memory.Decisions, 5)
+
+	// Extract recent events (last 10, wrapped as objects)
+	recentEvents := extractRecentEvents(state.Events, 10)
+
+	// Load data safety stats
+	dataSafety := map[string]interface{}{}
+	var safetyStats map[string]interface{}
+	if raw, err := store.ReadFile("safety-stats.json"); err == nil {
+		json.Unmarshal(raw, &safetyStats)
+		if safetyStats != nil {
+			dataSafety = safetyStats
+		}
+	}
+
+	return map[string]interface{}{
+		"current": map[string]interface{}{
+			"phase":         currentPhase,
+			"phase_name":    phaseName,
+			"total_phases":  totalPhases,
+			"state":         stateStr,
+			"goal":          goal,
+			"parallel_mode": parallelMode,
+		},
+		"memory_health": map[string]interface{}{
+			"wisdom_count":       wisdomCount,
+			"pending_promotions": pendingCount,
+			"recent_failures":    failureCount,
+		},
+		"data_safety": dataSafety,
+		"recent": map[string]interface{}{
+			"decisions": recentDecisions,
+			"events":    recentEvents,
+		},
+		"drill_down": map[string]interface{}{
+			"command":   "aether memory-details",
+			"available": true,
+		},
+	}
 }
 
 // contextCapsuleCmd assembles worker context for prompt injection (CMD-16).
@@ -902,19 +914,19 @@ func extractRecentEvents(events []string, n int) []interface{} {
 func computeNextAction(stateStr string, currentPhase, totalPhases int) string {
 	switch {
 	case totalPhases == 0:
-		return "/ant:plan"
+		return "aether plan"
 	case stateStr == "EXECUTING":
-		return "/ant:continue"
+		return "aether continue"
 	case stateStr == "READY" && currentPhase == 0:
-		return "/ant:build 1"
+		return "aether build 1"
 	case stateStr == "READY" && currentPhase < totalPhases:
-		return fmt.Sprintf("/ant:build %d", currentPhase+1)
+		return fmt.Sprintf("aether build %d", currentPhase+1)
 	case stateStr == "READY" && currentPhase >= totalPhases:
-		return "/ant:seal"
+		return "aether seal"
 	case stateStr == "BUILT":
-		return "/ant:continue"
+		return "aether continue"
 	default:
-		return "/ant:status"
+		return "aether status"
 	}
 }
 
@@ -1066,6 +1078,9 @@ var _ = os.ReadFile
 
 // resolveAetherRootPath returns the Aether root directory.
 func resolveAetherRootPath() string {
+	if root := strings.TrimSpace(os.Getenv("AETHER_ROOT")); root != "" {
+		return root
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), GeneralTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
@@ -1248,9 +1263,17 @@ func removePRSection(prompt, header string) string {
 func detectGitBranch() string {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
-	if out, err := cmd.Output(); err == nil {
-		return strings.TrimSpace(string(out))
+	for _, args := range [][]string{
+		{"rev-parse", "--abbrev-ref", "HEAD"},
+		{"symbolic-ref", "--short", "HEAD"},
+	} {
+		cmd := exec.CommandContext(ctx, "git", args...)
+		if out, err := cmd.Output(); err == nil {
+			branch := strings.TrimSpace(string(out))
+			if branch != "" && branch != "HEAD" {
+				return branch
+			}
+		}
 	}
 	return "unknown"
 }

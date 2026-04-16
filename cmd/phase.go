@@ -2,10 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -45,32 +43,12 @@ var phaseCmd = &cobra.Command{
 		phase := state.Plan.Phases[phaseNum-1]
 
 		if phaseJSON {
-			type taskEntry struct {
-				ID     string `json:"id"`
-				Goal   string `json:"goal"`
-				Status string `json:"status"`
-			}
-			var tasks []taskEntry
-			for _, t := range phase.Tasks {
-				id := ""
-				if t.ID != nil {
-					id = *t.ID
-				}
-				tasks = append(tasks, taskEntry{ID: id, Goal: t.Goal, Status: t.Status})
-			}
-			if tasks == nil {
-				tasks = []taskEntry{}
-			}
-			outputOK(map[string]interface{}{
-				"name":        phase.Name,
-				"status":      phase.Status,
-				"description": phase.Description,
-				"tasks":       tasks,
-			})
+			outputOK(buildPhaseResult(phase, phaseNum, len(state.Plan.Phases)))
 			return nil
 		}
 
-		renderPhaseDetails(phase, phaseNum)
+		result := buildPhaseResult(phase, phaseNum, len(state.Plan.Phases))
+		outputWorkflow(result, renderPhaseVisual(result))
 		return nil
 	},
 }
@@ -82,45 +60,38 @@ func init() {
 }
 
 // renderPhaseDetails displays phase details with a task list table.
-func renderPhaseDetails(phase colony.Phase, num int) {
-	var b strings.Builder
-
-	fmt.Fprintf(&b, "Phase %d: %s\n", num, phase.Name)
-	fmt.Fprintf(&b, "Status: %s\n", phase.Status)
-	if phase.Description != "" {
-		fmt.Fprintf(&b, "Description: %s\n", phase.Description)
-	}
-	b.WriteString("\n")
-
-	// Task table
-	if len(phase.Tasks) > 0 {
-		completed := 0
-		for _, task := range phase.Tasks {
-			if task.Status == "completed" {
-				completed++
-			}
+func buildPhaseResult(phase colony.Phase, num, total int) map[string]interface{} {
+	tasks := make([]map[string]interface{}, 0, len(phase.Tasks))
+	completed := 0
+	for _, t := range phase.Tasks {
+		id := ""
+		if t.ID != nil {
+			id = *t.ID
 		}
-		pct := 0
-		if len(phase.Tasks) > 0 {
-			pct = completed * 100 / len(phase.Tasks)
+		if t.Status == colony.TaskCompleted {
+			completed++
 		}
-		fmt.Fprintf(&b, "Tasks (%d/%d completed, %d%%)\n", completed, len(phase.Tasks), pct)
-
-		t := table.NewWriter()
-		t.AppendHeader(table.Row{"ID", "Goal", "Status"})
-
-		for _, task := range phase.Tasks {
-			id := ""
-			if task.ID != nil {
-				id = *task.ID
-			}
-			t.AppendRow(table.Row{id, task.Goal, task.Status})
-		}
-		t.SetStyle(table.StyleRounded)
-		b.WriteString(t.Render() + "\n")
-	} else {
-		b.WriteString("No tasks defined for this phase.\n")
+		tasks = append(tasks, map[string]interface{}{
+			"id":     id,
+			"goal":   t.Goal,
+			"status": t.Status,
+		})
 	}
 
-	fmt.Fprint(stdout, b.String())
+	pct := 0
+	if len(tasks) > 0 {
+		pct = completed * 100 / len(tasks)
+	}
+
+	return map[string]interface{}{
+		"number":       num,
+		"total_phases": total,
+		"name":         phase.Name,
+		"status":       phase.Status,
+		"description":  phase.Description,
+		"tasks":        tasks,
+		"completed":    completed,
+		"task_count":   len(tasks),
+		"progress_pct": pct,
+	}
 }

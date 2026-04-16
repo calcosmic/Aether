@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
@@ -26,6 +27,10 @@ func outputOK(result interface{}) {
 //
 // This matches the shell's json_err() function format for playbook compatibility.
 func outputError(code int, message string, details interface{}) {
+	if shouldRenderVisualOutput(stderr) {
+		fmt.Fprint(stderr, renderVisualError(message, details))
+		return
+	}
 	msgJSON, _ := json.Marshal(message)
 	fmt.Fprintf(stderr, "{\"ok\":false,\"error\":%s,\"code\":%d}\n", string(msgJSON), code)
 }
@@ -106,4 +111,20 @@ func hubStore() *storage.Store {
 		return nil
 	}
 	return s
+}
+
+func renderVisualError(message string, details interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner("❌", "Error"))
+	b.WriteString(visualDivider)
+	b.WriteString(strings.TrimSpace(message))
+	b.WriteString("\n")
+	if details != nil {
+		detailText := strings.TrimSpace(fmt.Sprint(details))
+		if detailText != "" && detailText != "<nil>" {
+			b.WriteString(detailText)
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }

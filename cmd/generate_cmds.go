@@ -15,6 +15,7 @@ var castePrefixes = map[string][]string{
 	"builder":       {"Chip", "Hammer", "Forge", "Mason", "Brick", "Anvil", "Weld", "Bolt"},
 	"watcher":       {"Vigil", "Sentinel", "Guard", "Keen", "Sharp", "Hawk", "Watch", "Alert"},
 	"scout":         {"Swift", "Dash", "Ranger", "Track", "Seek", "Path", "Roam", "Quest"},
+	"surveyor":      {"Survey", "Map", "Chart", "Atlas", "Grid", "Plot", "Trace", "Scope"},
 	"colonizer":     {"Pioneer", "Map", "Chart", "Venture", "Explore", "Compass", "Atlas", "Trek"},
 	"architect":     {"Blueprint", "Draft", "Design", "Plan", "Schema", "Frame", "Sketch", "Model"},
 	"prime":         {"Prime", "Alpha", "Lead", "Chief", "First", "Core", "Apex", "Crown"},

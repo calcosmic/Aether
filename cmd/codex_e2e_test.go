@@ -24,7 +24,7 @@ func TestCodexInstallCopiesAgents(t *testing.T) {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), []byte("[agent]\nname = \"builder\""), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), validCodexAgentTOML("aether-builder", "builder"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestCodexInstallCopiesAgentsToHub(t *testing.T) {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), []byte("[agent]\nname = \"builder\""), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), validCodexAgentTOML("aether-builder", "builder"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -86,6 +86,12 @@ func TestCodexInstallAgentsEmpty(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
+		t.Fatalf("failed to create .aether dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".aether", "workers.md"), []byte("# Workers"), 0644); err != nil {
+		t.Fatalf("failed to create workers.md: %v", err)
+	}
 	// Intentionally do NOT create .codex/ directory
 
 	var buf bytes.Buffer
@@ -129,7 +135,7 @@ func TestCodexInstallAgentContent(t *testing.T) {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
 
-	expectedContent := []byte("[agent]\nname = \"aether-builder\"\nrole = \"builder\"\n[agent.instructions]\nprompt = \"You are a builder ant.\"\n")
+	expectedContent := validCodexAgentTOML("aether-builder", "builder")
 	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), expectedContent, 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -182,7 +188,7 @@ func TestCodexSetupCopiesAgents(t *testing.T) {
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
-	agentContent := []byte("[agent]\nname = \"aether-builder\"")
+	agentContent := validCodexAgentTOML("aether-builder", "builder")
 	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), agentContent, 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -251,7 +257,7 @@ func TestCodexUpdateCopiesAgents(t *testing.T) {
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
-	agentContent := []byte("[agent]\nname = \"aether-builder\"")
+	agentContent := validCodexAgentTOML("aether-builder", "builder")
 	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), agentContent, 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -291,7 +297,7 @@ func TestCodexUpdateCopiesAgents(t *testing.T) {
 	if err := os.MkdirAll(hubCodexDir, 0755); err != nil {
 		t.Fatalf("failed to create hub codex dir: %v", err)
 	}
-	newAgentContent := []byte("[agent]\nname = \"aether-watcher\"")
+	newAgentContent := validCodexAgentTOML("aether-watcher", "watcher")
 	if err := os.WriteFile(filepath.Join(hubCodexDir, "aether-watcher.toml"), newAgentContent, 0644); err != nil {
 		t.Fatalf("failed to write new codex agent to hub: %v", err)
 	}
@@ -346,11 +352,11 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 	if err := os.MkdirAll(pkgCodex, 0755); err != nil {
 		t.Fatalf("failed to create codex agents dir: %v", err)
 	}
-	builderContent := []byte("[agent]\nname = \"aether-builder\"\nrole = \"builder\"")
+	builderContent := validCodexAgentTOML("aether-builder", "builder")
 	if err := os.WriteFile(filepath.Join(pkgCodex, "aether-builder.toml"), builderContent, 0644); err != nil {
 		t.Fatalf("failed to create builder.toml: %v", err)
 	}
-	watcherContent := []byte("[agent]\nname = \"aether-watcher\"\nrole = \"watcher\"")
+	watcherContent := validCodexAgentTOML("aether-watcher", "watcher")
 	if err := os.WriteFile(filepath.Join(pkgCodex, "aether-watcher.toml"), watcherContent, 0644); err != nil {
 		t.Fatalf("failed to create watcher.toml: %v", err)
 	}
@@ -451,7 +457,7 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 		if err := os.MkdirAll(hubCodex, 0755); err != nil {
 			t.Fatalf("failed to create hub codex dir: %v", err)
 		}
-		sageContent := []byte("[agent]\nname = \"aether-sage\"\nrole = \"sage\"")
+		sageContent := validCodexAgentTOML("aether-sage", "sage")
 		if err := os.WriteFile(filepath.Join(hubCodex, "aether-sage.toml"), sageContent, 0644); err != nil {
 			t.Fatalf("failed to write sage.toml to hub: %v", err)
 		}
@@ -515,14 +521,14 @@ func TestCodexInstallMultipleAgents(t *testing.T) {
 	}
 
 	// Create multiple agent files
-	agents := map[string]string{
-		"aether-builder.toml":  "[agent]\nname = \"builder\"",
-		"aether-watcher.toml":  "[agent]\nname = \"watcher\"",
-		"aether-scout.toml":    "[agent]\nname = \"scout\"",
-		"aether-chronicler.toml": "[agent]\nname = \"chronicler\"",
+	agents := map[string][]byte{
+		"aether-builder.toml":    validCodexAgentTOML("aether-builder", "builder"),
+		"aether-watcher.toml":    validCodexAgentTOML("aether-watcher", "watcher"),
+		"aether-scout.toml":      validCodexAgentTOML("aether-scout", "scout"),
+		"aether-chronicler.toml": validCodexAgentTOML("aether-chronicler", "chronicler"),
 	}
 	for name, content := range agents {
-		if err := os.WriteFile(filepath.Join(srcDir, name), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(srcDir, name), content, 0644); err != nil {
 			t.Fatalf("failed to create %s: %v", name, err)
 		}
 	}
