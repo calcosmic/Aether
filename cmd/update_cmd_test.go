@@ -258,6 +258,19 @@ func TestUpdateRefreshesManagedCodexProjectDocs(t *testing.T) {
 		t.Fatalf("update failed: %v", err)
 	}
 
+	var result map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v, output: %s", err, buf.String())
+	}
+	inner, _ := result["result"].(map[string]interface{})
+	if got, _ := inner["codex_restart_required"].(bool); !got {
+		t.Fatalf("expected codex_restart_required=true, got: %#v", inner["codex_restart_required"])
+	}
+	message, _ := inner["message"].(string)
+	if !strings.Contains(message, "Close this Codex chat and start a new one in this repo") {
+		t.Fatalf("expected restart guidance in update message, got: %q", message)
+	}
+
 	agentsContent, err := os.ReadFile(filepath.Join(repoDir, "AGENTS.md"))
 	if err != nil {
 		t.Fatalf("failed to read AGENTS.md: %v", err)

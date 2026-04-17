@@ -576,6 +576,19 @@ func TestSetupGeneratesCodexMD(t *testing.T) {
 		t.Fatalf("setup command failed: %v", err)
 	}
 
+	var result map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("expected JSON output, got parse error: %v, output: %s", err, buf.String())
+	}
+	inner, _ := result["result"].(map[string]interface{})
+	if got, _ := inner["codex_restart_required"].(bool); !got {
+		t.Fatalf("expected codex_restart_required=true, got: %#v", inner["codex_restart_required"])
+	}
+	message, _ := inner["message"].(string)
+	if !strings.Contains(message, "Close this Codex chat and start a new one in this repo") {
+		t.Fatalf("expected restart guidance in setup message, got: %q", message)
+	}
+
 	codexPath := filepath.Join(repoDir, ".codex", "CODEX.md")
 	content, err := os.ReadFile(codexPath)
 	if err != nil {

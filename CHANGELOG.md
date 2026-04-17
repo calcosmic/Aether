@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-04-17
+
+Codex session-reload guidance for repo setup and updates.
+
+### Changed
+- `aether setup` and `aether update` now report when refreshed Codex repo files require a new Codex chat before the changes take effect
+- Codex-facing setup and update visuals now route the user to reopen Codex first whenever repo instructions, Codex agents, or Codex skills changed
+
+### Fixed
+- Updated repos no longer look "broken" to non-technical users after `aether update`; the CLI now explicitly explains that Codex must be reopened to load refreshed `AGENTS.md`, `.codex/CODEX.md`, agents, or skills
+
 ## [1.0.6] - 2026-04-17
 
 Codex repo-update delivery fix for lifecycle orchestration and visual output.

@@ -170,11 +170,18 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	result := map[string]interface{}{
-		"message": fmt.Sprintf("Setup complete: %d files copied, %d unchanged", totalCopied, totalSkipped),
-		"details": results,
+	restartTargets := codexRestartTargets(results)
+	message := fmt.Sprintf("Setup complete: %d files copied, %d unchanged", totalCopied, totalSkipped)
+	if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
+		message += ". " + restartNote
 	}
-	outputWorkflow(result, renderSetupVisual(repoDir, results, totalCopied, totalSkipped))
+	result := map[string]interface{}{
+		"message":                message,
+		"details":                results,
+		"codex_restart_required": len(restartTargets) > 0,
+		"codex_restart_targets":  restartTargets,
+	}
+	outputWorkflow(result, renderSetupVisual(repoDir, results, totalCopied, totalSkipped, restartTargets))
 
 	return nil
 }

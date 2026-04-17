@@ -98,7 +98,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			{"label": "Skills (codex)", "copied": 0, "skipped": 0},
 			{"label": "Commands (opencode)", "copied": 0, "skipped": 0},
 			{"label": "Agents (opencode)", "copied": 0, "skipped": 0},
-		}, 0, 0))
+		}, 0, 0, nil))
 	} else {
 		syncResult := runUpdateSync(hubDir, repoDir, force)
 		if len(syncResult.errors) > 0 {
@@ -128,15 +128,22 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if restored, err := ensureLegacySessionMirror(store); err == nil {
 			mirrorRestored = restored
 		}
+		restartTargets := codexRestartTargets(syncResult.details)
+		message := fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped)
+		if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
+			message += ". " + restartNote
+		}
 		result := map[string]interface{}{
-			"message":                 fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped),
+			"message":                 message,
 			"hub_version":             hubVersion,
 			"local_version":           resolveVersion(),
 			"force":                   force,
 			"details":                 syncResult.details,
 			"legacy_session_restored": mirrorRestored,
+			"codex_restart_required":  len(restartTargets) > 0,
+			"codex_restart_targets":   restartTargets,
 		}
-		outputWorkflow(result, renderUpdateVisual(repoDir, hubVersion, resolveVersion(), force, false, syncResult.details, syncResult.copied, syncResult.skipped))
+		outputWorkflow(result, renderUpdateVisual(repoDir, hubVersion, resolveVersion(), force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets))
 	}
 
 	// Download binary if requested

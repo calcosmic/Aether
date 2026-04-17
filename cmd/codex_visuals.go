@@ -828,7 +828,7 @@ func renderInstallVisual(homeDir string, results []map[string]interface{}, total
 	return b.String()
 }
 
-func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCopied, totalSkipped int) string {
+func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🥚", "Lay Eggs"))
 	b.WriteString(visualDivider)
@@ -838,14 +838,26 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Assets: %d copied, %d unchanged\n\n", totalCopied, totalSkipped))
 	b.WriteString(renderSyncSummary(results))
+	if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
+		b.WriteString("\nCodex Refresh\n")
+		b.WriteString("  ")
+		b.WriteString(restartNote)
+		b.WriteString("\n")
+	}
+	primaryNext := `Run ` + "`aether init \"your goal\"`" + ` to start a colony.`
+	secondaryNext := `Run ` + "`aether colonize`" + ` after init if you want a quick territory scan before planning.`
+	if len(restartTargets) > 0 {
+		primaryNext = `Close this Codex chat, start a new Codex session in this repo, then run ` + "`aether init \"your goal\"`" + `.`
+		secondaryNext = `After reopening Codex, run ` + "`aether colonize`" + ` if you want a quick territory scan before planning.`
+	}
 	b.WriteString(renderNextUp(
-		`Run `+"`aether init \"your goal\"`"+` to start a colony.`,
-		`Run `+"`aether colonize`"+` after init if you want a quick territory scan before planning.`,
+		primaryNext,
+		secondaryNext,
 	))
 	return b.String()
 }
 
-func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int) string {
+func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🔄", "Update"))
 	b.WriteString(visualDivider)
@@ -889,9 +901,21 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 		b.WriteString(renderNextUp(next, alt))
 		return b.String()
 	}
+	if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
+		b.WriteString("\nCodex Refresh\n")
+		b.WriteString("  ")
+		b.WriteString(restartNote)
+		b.WriteString("\n")
+	}
+	primaryNext := `Run ` + "`aether status`" + ` to inspect the colony after the refresh.`
+	secondaryNext := `Run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
+	if len(restartTargets) > 0 {
+		primaryNext = `Close this Codex chat, start a new Codex session in this repo, then run ` + "`aether status`" + `.`
+		secondaryNext = `After reopening Codex, run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
+	}
 	b.WriteString(renderNextUp(
-		`Run `+"`aether status`"+` to inspect the colony after the refresh.`,
-		`Run `+"`aether init \"next goal\"`"+` if this repo does not have an active colony yet.`,
+		primaryNext,
+		secondaryNext,
 	))
 	return b.String()
 }
