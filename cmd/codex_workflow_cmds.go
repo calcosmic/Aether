@@ -122,9 +122,9 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			outputError(1, "No colony initialized. Run `aether init \"goal\"` first.", nil)
+		state, err := loadActiveColonyState()
+		if err != nil {
+			outputError(1, colonyStateLoadMessage(err), nil)
 			return nil
 		}
 		if len(state.Plan.Phases) == 0 {

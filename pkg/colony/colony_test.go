@@ -360,6 +360,46 @@ func TestNullableFields_JSONNull(t *testing.T) {
 	}
 }
 
+func TestPlanConfidence_LegacyObjectCompatibility(t *testing.T) {
+	raw := `{
+		"version":"3.0",
+		"state":"READY",
+		"current_phase":0,
+		"goal":"Recover legacy colony",
+		"colony_name":"Legacy Colony",
+		"colony_version":1,
+		"plan":{
+			"generated_at":"2026-04-17T10:00:00Z",
+			"confidence":{
+				"knowledge":85,
+				"requirements":80,
+				"risks":65,
+				"dependencies":70,
+				"effort":78,
+				"overall":76
+			},
+			"phases":[]
+		},
+		"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},
+		"errors":{"records":[],"flagged_patterns":[]},
+		"signals":[],
+		"graveyards":[],
+		"events":[]
+	}`
+
+	var state ColonyState
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		t.Fatalf("unmarshal legacy confidence object: %v", err)
+	}
+
+	if state.Plan.Confidence == nil {
+		t.Fatal("expected plan confidence to be populated")
+	}
+	if *state.Plan.Confidence != 0.76 {
+		t.Fatalf("expected normalized plan confidence 0.76, got %v", *state.Plan.Confidence)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Instinct nullable field tests
 // ---------------------------------------------------------------------------

@@ -73,9 +73,9 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("no store initialized")
 	}
 
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		return nil, fmt.Errorf("No colony initialized. Run `aether init \"goal\"` first.")
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, fmt.Errorf("No project plan. Run `aether plan` first.")

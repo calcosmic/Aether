@@ -101,12 +101,9 @@ func runCodexPlan(root string, refresh bool) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("no store initialized")
 	}
 
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		return nil, fmt.Errorf("No colony initialized. Run `aether init \"goal\"` first.")
-	}
-	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
-		return nil, fmt.Errorf("No colony goal found. Run `aether init \"goal\"` first.")
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 
 	granularity := normalizedGranularity(state.PlanGranularity)

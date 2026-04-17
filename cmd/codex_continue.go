@@ -80,9 +80,9 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
 
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No colony initialized. Run `aether init \"goal\"` first.")
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No project plan. Run `aether plan` first.")

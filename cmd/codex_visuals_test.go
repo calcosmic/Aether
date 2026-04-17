@@ -240,6 +240,31 @@ func TestInstallVisualOutput(t *testing.T) {
 	}
 }
 
+func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
+	output := renderUpdateVisual(
+		"/tmp/example",
+		"1.0.7",
+		"1.0.7",
+		false,
+		false,
+		[]map[string]interface{}{
+			{"label": "System files", "copied": 0, "skipped": 10},
+			{"label": "AGENTS.md", "skipped": 1, "reason": "unchanged"},
+			{"label": ".codex/CODEX.md", "skipped": 1, "reason": "unchanged"},
+		},
+		0,
+		12,
+		nil,
+	)
+
+	if !strings.Contains(output, "No follow-up is required.") {
+		t.Fatalf("expected no-follow-up guidance, got:\n%s", output)
+	}
+	if strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
+		t.Fatalf("expected generic next-step guidance to be suppressed, got:\n%s", output)
+	}
+}
+
 func TestSetupVisualOutput(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

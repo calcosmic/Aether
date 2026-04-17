@@ -470,12 +470,9 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 }
 
 func loadCompatibilityColonyState() (colony.ColonyState, error) {
-	if store == nil {
-		return colony.ColonyState{}, fmt.Errorf("no store initialized")
-	}
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		return colony.ColonyState{}, fmt.Errorf("No colony initialized. Run `aether init \"goal\"` first.")
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return colony.ColonyState{}, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	return state, nil
 }

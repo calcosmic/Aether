@@ -4,6 +4,7 @@
 package colony
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -142,6 +143,88 @@ type Plan struct {
 	GeneratedAt *time.Time `json:"generated_at"`
 	Confidence  *float64   `json:"confidence"`
 	Phases      []Phase    `json:"phases"`
+}
+
+// UnmarshalJSON preserves compatibility with legacy plan confidence payloads.
+// Older colonies may store confidence as an object with per-axis percentages and
+// an "overall" field rather than the newer single numeric value.
+func (p *Plan) UnmarshalJSON(data []byte) error {
+	type rawPlan struct {
+		GeneratedAt *time.Time      `json:"generated_at"`
+		Confidence  json.RawMessage `json:"confidence"`
+		Phases      []Phase         `json:"phases"`
+	}
+
+	var raw rawPlan
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	p.GeneratedAt = raw.GeneratedAt
+	p.Phases = raw.Phases
+
+	confidence, err := decodePlanConfidence(raw.Confidence)
+	if err != nil {
+		return err
+	}
+	p.Confidence = confidence
+	return nil
+}
+
+func decodePlanConfidence(raw json.RawMessage) (*float64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+
+	var numeric float64
+	if err := json.Unmarshal(raw, &numeric); err == nil {
+		return &numeric, nil
+	}
+
+	var legacy struct {
+		Overall      *float64 `json:"overall"`
+		Knowledge    *float64 `json:"knowledge"`
+		Requirements *float64 `json:"requirements"`
+		Risks        *float64 `json:"risks"`
+		Dependencies *float64 `json:"dependencies"`
+		Effort       *float64 `json:"effort"`
+	}
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		return nil, err
+	}
+
+	if legacy.Overall != nil {
+		value := *legacy.Overall
+		if value > 1 {
+			value /= 100.0
+		}
+		return &value, nil
+	}
+
+	var sum float64
+	var count float64
+	for _, candidate := range []*float64{
+		legacy.Knowledge,
+		legacy.Requirements,
+		legacy.Risks,
+		legacy.Dependencies,
+		legacy.Effort,
+	} {
+		if candidate == nil {
+			continue
+		}
+		value := *candidate
+		if value > 1 {
+			value /= 100.0
+		}
+		sum += value
+		count++
+	}
+	if count == 0 {
+		return nil, nil
+	}
+	average := sum / count
+	return &average, nil
 }
 
 // Phase represents a single phase in the colony plan.

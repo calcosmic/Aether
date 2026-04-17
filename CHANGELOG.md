@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-04-17
+
+Legacy colony-state compatibility and clearer update guidance.
+
+### Changed
+- `aether update` no longer implies that `aether status` is the required next step when nothing changed
+- Colony load failures now report as state-load errors instead of always collapsing into "No colony initialized"
+
+### Fixed
+- Legacy colonies that store `plan.confidence` as a structured object now load correctly in the Go CLI again
+- `status`, `continue`, `build`, `plan`, `seal`, `entomb`, `resume`, and compatibility flows no longer misreport a parse failure as a missing colony
+
 ## [1.0.7] - 2026-04-17
 
 Codex session-reload guidance for repo setup and updates.

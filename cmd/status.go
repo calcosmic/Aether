@@ -19,19 +19,9 @@ var statusCmd = &cobra.Command{
 	Short: "Display colony dashboard",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			fmt.Fprintln(stdout, "No colony initialized. Run aether init first.")
-			return nil
-		}
-
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			fmt.Fprintln(stdout, "No colony initialized. Run aether init first.")
-			return nil
-		}
-
-		if state.Goal == nil {
-			fmt.Fprintln(stdout, "No colony initialized. Run aether init first.")
+		state, err := loadActiveColonyState()
+		if err != nil {
+			fmt.Fprintln(stdout, colonyStateLoadMessage(err))
 			return nil
 		}
 

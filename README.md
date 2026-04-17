@@ -25,7 +25,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-24-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-46-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.7-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.8-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -1006,7 +1006,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.7 -- Released (Current)
+### 🎉 v1.0.8 -- Released (Current)
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
 - 46 slash commands across the full colony lifecycle, plus native Codex CLI workflow
@@ -1019,6 +1019,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 - Literal `aether ...` commands now execute directly in Codex guidance, sealed colonies can be archived with `aether entomb`, and upgraded repos restore session recovery mirrors cleanly
 - `aether update` now refreshes managed `AGENTS.md` and `.codex/CODEX.md` so Codex lifecycle commands run with visual CLI output in updated repos
 - `aether setup` and `aether update` now explicitly tell Codex users to reopen the chat whenever refreshed repo instructions, Codex agents, or Codex skills need a new session to load
+- Legacy colonies with object-shaped `plan.confidence` now recover cleanly in the Go CLI, and no-change updates no longer pretend `aether status` is a required next command
 - Go binary distribution across Linux, macOS, and Windows (amd64 + arm64)
 
 ### 📅 Near-Term

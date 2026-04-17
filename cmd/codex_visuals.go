@@ -907,6 +907,13 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 		b.WriteString(restartNote)
 		b.WriteString("\n")
 	}
+	if totalCopied == 0 && len(restartTargets) == 0 {
+		b.WriteString(renderNextUp(
+			`No follow-up is required. Run `+"`aether status`"+` only if you want to inspect the colony.`,
+			`Run `+"`aether init \"next goal\"`"+` only if this repo does not have an active colony yet.`,
+		))
+		return b.String()
+	}
 	primaryNext := `Run ` + "`aether status`" + ` to inspect the colony after the refresh.`
 	secondaryNext := `Run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
 	if len(restartTargets) > 0 {

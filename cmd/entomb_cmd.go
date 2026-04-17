@@ -32,13 +32,9 @@ var entombCmd = &cobra.Command{
 			return nil
 		}
 
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			outputError(1, "No colony initialized. Run `aether init \"goal\"` first.", nil)
-			return nil
-		}
-		if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
-			outputError(1, "No active colony to entomb. Run `aether init \"goal\"` first.", nil)
+		state, err := loadActiveColonyState()
+		if err != nil {
+			outputError(1, colonyStateLoadMessage(err), nil)
 			return nil
 		}
 		if strings.TrimSpace(state.Milestone) != "Crowned Anthill" {
