@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-04-17
+
+Final release packaging pass for the Codex parity rollout.
+
+### Fixed
+- `go mod tidy` normalization is now committed so `goreleaser release --clean` no longer fails on a dirty `go.mod`
+- Release metadata, docs, and hub versioning now point at the final `v1.0.4` patch tag for Codex CLI support
+
 ## [1.0.3] - 2026-04-17
 
 Codex CLI release hardening and parity update. This release closes the remaining
