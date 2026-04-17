@@ -28,6 +28,10 @@ directly. Do not reinterpret it as a vague workflow request or inspect
 `.aether/commands/*.yaml` first. The local `aether` binary and
 `aether --help` are the source of truth for available commands.
 
+When running those commands from Codex, prefer `AETHER_OUTPUT_MODE=visual aether ...`
+for lifecycle operations so the CLI can render caste emojis, color, and workflow
+ceremony even when command execution is non-TTY.
+
 Agent definitions live in `.codex/agents/*.toml` (TOML format).
 
 ---

@@ -23,6 +23,7 @@ When the user message is already a literal `aether ...` command, treat it as an 
 - Use `aether --help` or `aether <subcommand> --help` only to confirm availability or flags.
 - Treat the installed `aether` binary as the source of truth if docs and runtime disagree.
 - If the binary does not expose a documented command, say so plainly and follow the binary's actual command surface.
+- When invoking lifecycle commands through Codex shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants JSON.
 
 ## State Machine
 

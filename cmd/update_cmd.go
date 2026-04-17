@@ -81,6 +81,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"force":         force,
 			"actions": []string{
 				"Sync .aether/ system files (commands, agents, skills, templates, docs)",
+				"Refresh repo-level Codex guidance (AGENTS.md, .codex/CODEX.md) when managed by Aether",
 				"Sync .claude/commands/ant/",
 				"Sync .claude/agents/ant/",
 				"Sync .codex/agents/",
@@ -101,6 +102,20 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	} else {
 		syncResult := runUpdateSync(hubDir, repoDir, force)
 		if len(syncResult.errors) > 0 {
+			outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
+				"hub_version":   hubVersion,
+				"local_version": resolveVersion(),
+				"force":         force,
+				"details":       syncResult.details,
+			})
+			return nil
+		}
+		docResults, docCopied, docSkipped, docErrors := syncCodexProjectDocs(filepath.Join(hubDir, "system"), repoDir)
+		syncResult.details = append(syncResult.details, docResults...)
+		syncResult.copied += docCopied
+		syncResult.skipped += docSkipped
+		if len(docErrors) > 0 {
+			syncResult.errors = append(syncResult.errors, docErrors...)
 			outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
 				"hub_version":   hubVersion,
 				"local_version": resolveVersion(),

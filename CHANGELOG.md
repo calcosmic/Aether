@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-04-17
+
+Codex repo-update delivery fix for lifecycle orchestration and visual output.
+
+### Added
+- Managed `.codex/CODEX.md` template generation for Aether-enabled repos
+- Regression coverage for Codex project-doc refresh during `setup` and `update`
+
+### Changed
+- `aether setup` and `aether update` now refresh Aether-managed `AGENTS.md` and `.codex/CODEX.md` in target repos
+- Codex repo guidance and lifecycle skills now tell Codex to run lifecycle commands as `AETHER_OUTPUT_MODE=visual aether ...` unless JSON is explicitly requested
+
+### Fixed
+- Updated repos now receive the repo-level Codex instructions needed to execute `aether build`, `aether continue`, and related lifecycle commands directly instead of roleplaying them
+- Codex lifecycle commands executed through the shell now default to Aether’s own visual renderer, restoring caste emojis and ANSI ceremony in non-TTY execution
+
 ## [1.0.5] - 2026-04-17
 
 Codex CLI workflow hardening for real updated repos.

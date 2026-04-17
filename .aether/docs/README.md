@@ -8,8 +8,11 @@ Runtime/behavior authority remains in:
 - `.claude/commands/ant/*.md` and `.opencode/commands/ant/*.md` (slash-command surfaces)
 
 Codex release note:
-- `aether run`, `aether watch`, and `aether oracle` are now part of the shipped
-  Codex CLI surface and arrive in target repos through `aether update`.
+- `aether run`, `aether watch`, and `aether oracle` are part of the shipped
+  Codex CLI surface.
+- `aether update` now also refreshes Aether-managed `AGENTS.md` and
+  `.codex/CODEX.md` in target repos so literal `aether ...` commands keep using
+  the live CLI workflow instead of stale repo guidance.
 
 Docs in this directory are explanatory references and should not override runtime behavior.
 

@@ -157,22 +157,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Generate AGENTS.md from template if it doesn't exist
-	agentsMDPath := filepath.Join(repoDir, "AGENTS.md")
-	if _, err := os.Stat(agentsMDPath); os.IsNotExist(err) {
-		templatePath := filepath.Join(hubSystem, "templates", "agents-md-template.md")
-		if tmplContent, err := os.ReadFile(templatePath); err == nil {
-			// Replace placeholders with empty strings (colony not initialized yet)
-			content := strings.ReplaceAll(string(tmplContent), "{COLONY_NAME}", "")
-			content = strings.ReplaceAll(content, "{COLONY_GOAL}", "")
-			if err := os.WriteFile(agentsMDPath, []byte(content), 0644); err == nil {
-				results = append(results, map[string]interface{}{
-					"label":  "AGENTS.md",
-					"copied": 1,
-				})
-				totalCopied++
-			}
-		}
+	docResults, docCopied, docSkipped, docErrors := syncCodexProjectDocs(hubSystem, repoDir)
+	results = append(results, docResults...)
+	totalCopied += docCopied
+	totalSkipped += docSkipped
+	if len(docErrors) > 0 {
+		syncErrors = append(syncErrors, docErrors...)
 	}
 
 	if len(syncErrors) > 0 {
