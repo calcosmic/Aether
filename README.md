@@ -25,7 +25,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-24-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-46-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.4-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.5-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -1006,7 +1006,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.4 -- Released (Current)
+### 🎉 v1.0.5 -- Released (Current)
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
 - 46 slash commands across the full colony lifecycle, plus native Codex CLI workflow
@@ -1016,6 +1016,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 - Autopilot mode via `/ant:run` on Claude/OpenCode and `aether run` on Codex
 - Live worker visibility via `aether watch` / `aether swarm --watch`, plus Codex oracle workspace support via `aether oracle`
 - Claude Code, OpenCode, and Codex CLI support with aligned release workflows
+- Literal `aether ...` commands now execute directly in Codex guidance, sealed colonies can be archived with `aether entomb`, and upgraded repos restore session recovery mirrors cleanly
 - Go binary distribution across Linux, macOS, and Windows (amd64 + arm64)
 
 ### 📅 Near-Term

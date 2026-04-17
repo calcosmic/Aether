@@ -109,12 +109,17 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			})
 			return nil
 		}
+		mirrorRestored := false
+		if restored, err := ensureLegacySessionMirror(store); err == nil {
+			mirrorRestored = restored
+		}
 		result := map[string]interface{}{
-			"message":       fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped),
-			"hub_version":   hubVersion,
-			"local_version": resolveVersion(),
-			"force":         force,
-			"details":       syncResult.details,
+			"message":                 fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped),
+			"hub_version":             hubVersion,
+			"local_version":           resolveVersion(),
+			"force":                   force,
+			"details":                 syncResult.details,
+			"legacy_session_restored": mirrorRestored,
 		}
 		outputWorkflow(result, renderUpdateVisual(repoDir, hubVersion, resolveVersion(), force, false, syncResult.details, syncResult.copied, syncResult.skipped))
 	}

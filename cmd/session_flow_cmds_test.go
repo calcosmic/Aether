@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -193,5 +194,73 @@ func TestResumeDashboardShowsNextPlannedPhaseAndSessionTodos(t *testing.T) {
 	todos := stringSliceValue(session["active_todos"])
 	if len(todos) != 1 || todos[0] != "Implement the durable resume path" {
 		t.Fatalf("active_todos = %v, want seeded phase task", todos)
+	}
+}
+
+func TestResumeDashboardRestoresLegacySessionMirror(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Resume dashboard recovery"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Recovered phase", Status: colony.PhaseReady},
+			},
+		},
+	})
+
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	legacyRoot := filepath.Join(aetherRoot, ".aether", "data", "colonies")
+	if err := os.MkdirAll(filepath.Join(legacyRoot, "older-colony"), 0755); err != nil {
+		t.Fatalf("create older colony dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(legacyRoot, "resume-dashboard-recovery"), 0755); err != nil {
+		t.Fatalf("create matching colony dir: %v", err)
+	}
+
+	writeLegacy := func(path string, session colony.SessionFile) {
+		t.Helper()
+		data, err := json.MarshalIndent(session, "", "  ")
+		if err != nil {
+			t.Fatalf("marshal session: %v", err)
+		}
+		if err := os.WriteFile(path, append(data, '\n'), 0644); err != nil {
+			t.Fatalf("write legacy session: %v", err)
+		}
+	}
+	writeLegacy(filepath.Join(legacyRoot, "older-colony", "session.json"), colony.SessionFile{
+		SessionID:     "older",
+		ColonyGoal:    "Older colony",
+		Summary:       "stale",
+		SuggestedNext: "aether init \"other\"",
+	})
+	writeLegacy(filepath.Join(legacyRoot, "resume-dashboard-recovery", "session.json"), colony.SessionFile{
+		SessionID:      "matching",
+		ColonyGoal:     goal,
+		Summary:        "Recovered from colony-scoped session",
+		SuggestedNext:  "aether entomb",
+		ContextCleared: true,
+	})
+
+	result := buildResumeDashboardResult()
+	sessionBlock, ok := result["session"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected session block, got %v", result)
+	}
+	if summary := stringValue(sessionBlock["summary"]); summary != "Recovered from colony-scoped session" {
+		t.Fatalf("summary = %q, want restored legacy session summary", summary)
+	}
+
+	var mirrored colony.SessionFile
+	if err := store.LoadJSON("session.json", &mirrored); err != nil {
+		t.Fatalf("expected top-level session mirror to be restored: %v", err)
+	}
+	if mirrored.SessionID != "matching" {
+		t.Fatalf("restored session id = %q, want matching", mirrored.SessionID)
 	}
 }

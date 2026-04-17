@@ -50,6 +50,11 @@ var resumeDashboardCmd = &cobra.Command{
 func buildResumeDashboardResult() map[string]interface{} {
 	var session colony.SessionFile
 	sessionFound := store.LoadJSON("session.json", &session) == nil
+	if !sessionFound {
+		if restored, err := ensureLegacySessionMirror(store); err == nil && restored {
+			sessionFound = store.LoadJSON("session.json", &session) == nil
+		}
+	}
 	handoffExists := false
 	if _, err := os.Stat(handoffDocumentPath()); err == nil {
 		handoffExists = true
@@ -964,10 +969,14 @@ func extractRecentEvents(events []string, n int) []interface{} {
 // computeNextAction determines the recommended next action based on colony state.
 func computeNextAction(stateStr string, currentPhase, totalPhases int) string {
 	switch {
+	case stateStr == "IDLE":
+		return `aether init "goal"`
 	case totalPhases == 0:
 		return "aether plan"
 	case stateStr == "EXECUTING":
 		return "aether continue"
+	case stateStr == "COMPLETED":
+		return "aether entomb"
 	case stateStr == "READY" && currentPhase == 0:
 		return "aether build 1"
 	case stateStr == "READY" && currentPhase < totalPhases:

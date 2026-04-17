@@ -1,6 +1,6 @@
 # AGENTS.md -- Aether Development Guide (Codex CLI)
 
-> **Current Version:** v1.0.4
+> **Current Version:** v1.0.5
 > **Last Updated:** 2026-04-17
 > **Platform:** Codex CLI (OpenAI)
 
@@ -14,7 +14,7 @@ OpenCode, and Codex CLI.
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.4 |
+| Version | v1.0.5 |
 | Agent definitions | 24 (TOML in `.codex/agents/`) |
 | Skills | 28 (10 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -36,6 +36,10 @@ aether init "Build feature X"
 aether continue
 aether status
 ```
+
+When the user types a literal `aether ...` command in Codex, execute that exact
+CLI command first. Do not reinterpret it as a fuzzy workflow prompt, and use
+`aether --help` as the runtime source of truth if markdown docs disagree.
 
 Agent definitions live in `.codex/agents/*.toml` (TOML format) and Codex reads
 them as part of its agent discovery system.
@@ -710,4 +714,4 @@ data files clean, and test coverage comprehensive as features evolve.
 
 ---
 
-*Updated for Aether v1.0.4 -- 2026-04-17*
+*Updated for Aether v1.0.5 -- 2026-04-17*

@@ -107,6 +107,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 				tasksCompleted++
 			}
 		}
+		// Sealed/completed colonies should not show stale incomplete task counts
+		// when the phase itself has already been marked completed.
+		if state.State == colony.StateCOMPLETED && phase.Status == colony.PhaseCompleted && tasksCompleted < tasksTotal {
+			tasksCompleted = tasksTotal
+		}
 	}
 	taskBar := generateProgressBar(tasksCompleted, tasksTotal, 20)
 	taskPercent := 0

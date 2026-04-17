@@ -16,6 +16,7 @@ import (
 type State string
 
 const (
+	StateIDLE      State = "IDLE"
 	StateREADY     State = "READY"
 	StateEXECUTING State = "EXECUTING"
 	StateBUILT     State = "BUILT"
@@ -291,7 +292,9 @@ var ErrInvalidTransition = fmt.Errorf("invalid state transition")
 
 // legalTransitions defines the allowed state transitions.
 var legalTransitions = map[State][]State{
+	StateIDLE:      {StateREADY},
 	StateREADY:     {StateEXECUTING, StateCOMPLETED},
 	StateEXECUTING: {StateBUILT, StateCOMPLETED},
 	StateBUILT:     {StateREADY, StateCOMPLETED},
+	StateCOMPLETED: {StateIDLE},
 }

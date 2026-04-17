@@ -377,3 +377,42 @@ func TestStatusShowsActiveWorkersFromSpawnTree(t *testing.T) {
 		}
 	}
 }
+
+func TestStatusCompletedColonyShowsFullTaskProgress(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Show completed final phase cleanly"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateCOMPLETED,
+		CurrentPhase: 1,
+		Milestone:    "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Finish line",
+					Status: colony.PhaseCompleted,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Wrap up remaining task markers", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"status"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "[Tasks 1/1]") {
+		t.Fatalf("expected completed colony to show full task progress, got:\n%s", output)
+	}
+}

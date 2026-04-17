@@ -44,6 +44,11 @@ var initCmd = &cobra.Command{
 			// Colony already initialized -- load and inspect
 			var existing colony.ColonyState
 			if loadErr := store.LoadJSON("COLONY_STATE.json", &existing); loadErr == nil {
+				// An entombed/reset colony leaves the state scaffold in place but
+				// clears the goal. Treat that as no active colony.
+				if existing.Goal == nil || strings.TrimSpace(ptrStr(existing.Goal)) == "" || existing.State == colony.StateIDLE {
+					goto createFreshColony
+				}
 				// If colony is sealed, check for in-progress seal (uncommitted changes)
 				if existing.Milestone == "Crowned Anthill" {
 					if sealInProgress(dataDir) {
@@ -61,6 +66,7 @@ var initCmd = &cobra.Command{
 			}
 		}
 
+	createFreshColony:
 		now := time.Now()
 		nowStr := now.Format(time.RFC3339)
 

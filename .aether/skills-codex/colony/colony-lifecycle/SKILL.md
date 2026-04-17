@@ -14,6 +14,16 @@ version: "1.0"
 
 Every command must leave the user with a clear next action. No dead ends. The colony has a defined state machine, and every output must orient the user within it.
 
+## Literal CLI Commands
+
+When the user message is already a literal `aether ...` command, treat it as an instruction to run that command directly.
+
+- Do not inspect repo files first to infer what the command "might mean".
+- Do not translate the command into `/ant:` language in Codex.
+- Use `aether --help` or `aether <subcommand> --help` only to confirm availability or flags.
+- Treat the installed `aether` binary as the source of truth if docs and runtime disagree.
+- If the binary does not expose a documented command, say so plainly and follow the binary's actual command surface.
+
 ## State Machine
 
 The colony progresses through these states in order:
@@ -21,6 +31,11 @@ The colony progresses through these states in order:
 ```
 IDLE -> READY -> PLANNING -> EXECUTING -> SEALED -> ENTOMBED -> IDLE
 ```
+
+In Codex, the authoritative runtime values in `COLONY_STATE.json` are `IDLE`,
+`READY`, `EXECUTING`, `BUILT`, and `COMPLETED`. Terms like "planning",
+"sealed", and "entombed" describe lifecycle moments and next steps, not always
+literal persisted state values.
 
 | State | Meaning | Entered By | Next Action |
 |-------|---------|------------|-------------|
@@ -39,7 +54,7 @@ Every command output must end with a "Next Up" block. This block tells the user 
 
 ```
 ━━ N E X T   U P ━━
-Run /ant:continue or `aether continue` to verify work and advance to the next phase.
+Run `aether continue` to verify work and advance to the next phase.
 ```
 
 ### Rules
@@ -54,12 +69,12 @@ Run /ant:continue or `aether continue` to verify work and advance to the next ph
 
 | Current State | Primary Next Up | Alternatives |
 |---------------|-----------------|--------------|
-| READY | `/ant:plan` or `aether plan` | `/ant:colonize` or `aether colonize` (if existing code) |
-| PLANNING | `/ant:build 1` or `aether build 1` | `/ant:focus` or `aether focus` / `/ant:redirect` or `aether redirect` (to set signals first) |
-| EXECUTING (just built) | `/ant:continue` or `aether continue` | `/ant:status` or `aether status` (to review) |
-| EXECUTING (just verified) | `/ant:build N+1` or `aether build N+1` | `/ant:seal` or `aether seal` (if last phase) |
-| SEALED | `/ant:entomb` or `aether entomb` | -- |
-| ENTOMBED | `/ant:init "new goal"` or `aether init "new goal"` | -- |
+| READY | `aether plan` | `aether colonize` (if existing code) |
+| PLANNING | `aether build 1` | `aether focus` / `aether redirect` (to set signals first) |
+| EXECUTING (just built) | `aether continue` | `aether status` (to review) |
+| EXECUTING (just verified) | `aether build N+1` | `aether seal` (if last phase) |
+| SEALED | `aether entomb` | -- |
+| ENTOMBED | `aether init "new goal"` | -- |
 
 ## Command Chaining Awareness
 

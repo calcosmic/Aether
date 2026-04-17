@@ -14,6 +14,15 @@ version: "1.0"
 
 Every command must leave the user with a clear next action. No dead ends. The colony has a defined state machine, and every output must orient the user within it.
 
+## Literal CLI Commands
+
+When the user message is already a literal `aether ...` command, treat it as an instruction to run that command directly.
+
+- Do not inspect repo files first to infer what the command "might mean".
+- Use `aether --help` or `aether <subcommand> --help` only to confirm availability or flags.
+- Treat the installed `aether` binary as the source of truth if docs and runtime disagree.
+- If the binary does not expose a documented command, say so plainly and follow the binary's actual command surface.
+
 ## State Machine
 
 The colony progresses through these states in order:
@@ -21,6 +30,11 @@ The colony progresses through these states in order:
 ```
 IDLE -> READY -> PLANNING -> EXECUTING -> SEALED -> ENTOMBED -> IDLE
 ```
+
+The authoritative runtime values in `COLONY_STATE.json` are `IDLE`, `READY`,
+`EXECUTING`, `BUILT`, and `COMPLETED`. Terms like "planning", "sealed", and
+"entombed" describe lifecycle moments and next steps, not always literal
+persisted state values.
 
 | State | Meaning | Entered By | Next Action |
 |-------|---------|------------|-------------|

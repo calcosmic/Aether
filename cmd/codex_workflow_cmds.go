@@ -156,7 +156,7 @@ var sealCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
 			return nil
 		}
-		updateSessionSummary("seal", "aether init \"next goal\"", "Colony sealed")
+		updateSessionSummary("seal", "aether entomb", "Colony sealed")
 
 		result := map[string]interface{}{
 			"sealed":    true,

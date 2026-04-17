@@ -179,8 +179,9 @@ func renderIndentedList(lines []string) string {
 }
 
 func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
-	if state.Milestone == "Crowned Anthill" {
-		return `Run ` + "`aether init \"next goal\"`" + ` to start the next colony.`, nil
+	if colonyNeedsEntomb(state) {
+		return `Run ` + "`aether entomb`" + ` to archive this sealed colony into chambers.`,
+			[]string{`Run ` + "`aether init \"next goal\"`" + ` if you want to skip archiving and start fresh immediately.`}
 	}
 
 	if len(state.Plan.Phases) == 0 {
@@ -193,7 +194,7 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 		return `Run ` + "`aether continue`" + ` to verify the phase and advance.`,
 			[]string{`Run ` + "`aether status`" + ` to inspect the colony dashboard first.`}
 	case colony.StateCOMPLETED:
-		return `Run ` + "`aether seal`" + ` to finalize the colony at Crowned Anthill.`, nil
+		return `Run ` + "`aether entomb`" + ` to archive this sealed colony into chambers.`, nil
 	default:
 		nextPhase := state.CurrentPhase + 1
 		if nextPhase < 1 {
@@ -759,8 +760,8 @@ func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	b.WriteString(summaryPath)
 	b.WriteString("\n")
 	b.WriteString(renderNextUp(
-		`Run `+"`aether init \"next goal\"`"+` to found the next colony.`,
-		`Run `+"`aether entomb`"+` if you want to archive this completed colony first.`,
+		`Run `+"`aether entomb`"+` to archive this completed colony into chambers.`,
+		`Run `+"`aether init \"next goal\"`"+` if you want to start the next colony immediately.`,
 	))
 	return b.String()
 }

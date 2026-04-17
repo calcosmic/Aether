@@ -181,11 +181,14 @@ func syncColonyArtifacts(state colony.ColonyState, opts colonyArtifactOptions) (
 }
 
 func nextCommandFromState(state colony.ColonyState) string {
+	if colonyNeedsEntomb(state) {
+		return "aether entomb"
+	}
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
 		return "aether continue"
 	case colony.StateCOMPLETED:
-		return "aether seal"
+		return "aether entomb"
 	case colony.StateREADY:
 		if len(state.Plan.Phases) == 0 {
 			return "aether plan"

@@ -14,6 +14,15 @@ version: "1.0"
 
 The colony workflow must not run autonomously past major decision points. Users want to feel in control of direction. This skill teaches you when and how to pause for user input.
 
+## Literal Command Exemption
+
+These touchpoints do not apply when the user already gave an explicit literal CLI command such as `aether update`, `aether status`, `aether entomb`, or `aether build 2`.
+
+- Execute the literal command first.
+- Do not convert it into a planning conversation or repo archaeology pass.
+- Do not ask for extra confirmation for read-only or maintenance commands the user explicitly named.
+- If the command itself fails or needs unavailable arguments, report the concrete CLI issue and the exact follow-up command.
+
 ## Mandatory Touchpoints
 
 Stop and present a multiple-choice question at each of these moments:

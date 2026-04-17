@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-04-17
+
+Codex CLI workflow hardening for real updated repos.
+
+### Added
+- `aether entomb` and `aether tunnels` for sealing follow-through and archived chamber browsing in the Go CLI
+- Regression coverage for entomb, legacy session recovery, and completed-colony status rendering
+
+### Changed
+- Codex lifecycle skills and generated AGENTS guidance now treat literal `aether ...` input as an exact CLI command, not a vague workflow request
+- Updated repos now restore the top-level `session.json` mirror from legacy colony-scoped sessions more reliably during `update` and `resume`
+
+### Fixed
+- Sealed colonies now route to `aether entomb` consistently across status, seal, resume, and next-step guidance
+- Completed colonies no longer show stale incomplete task counts in the final phase display
+- Entomb now archives legacy colony-scoped session state before clearing active runtime files
+
 ## [1.0.4] - 2026-04-17
 
 Final release packaging pass for the Codex parity rollout.

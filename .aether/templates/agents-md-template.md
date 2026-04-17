@@ -23,6 +23,11 @@ aether status                     # Colony dashboard
 aether run                        # Autopilot mode
 ```
 
+When a user types a literal `aether ...` command, execute that command
+directly. Do not reinterpret it as a vague workflow request or inspect
+`.aether/commands/*.yaml` first. The local `aether` binary and
+`aether --help` are the source of truth for available commands.
+
 Agent definitions live in `.codex/agents/*.toml` (TOML format).
 
 ---

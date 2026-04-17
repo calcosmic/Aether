@@ -134,6 +134,10 @@ aether status
 aether pheromone-display
 ```
 
+When the user message is already a literal `aether ...` command, execute that exact CLI
+command first. Do not inspect repo files to infer intent, and do not treat command-doc
+mirrors as more authoritative than the installed `aether` binary.
+
 ### Agent Definitions (TOML Format)
 
 Codex agent definitions live in `.codex/agents/*.toml` using the TOML configuration format.
@@ -422,4 +426,4 @@ aether update
 
 ---
 
-*Updated for Aether v1.0.4 -- 2026-04-17*
+*Updated for Aether v1.0.5 -- 2026-04-17*
