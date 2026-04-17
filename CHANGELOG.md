@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.2] - 2026-04-17
+## [1.0.3] - 2026-04-17
 
 Codex CLI release hardening and parity update. This release closes the remaining
-runtime gaps between the Codex workflow and the established colony lifecycle.
+runtime gaps between the Codex workflow and the established colony lifecycle,
+and fixes clean-checkout packaging for the GoReleaser path.
 
 ### Added
 - Native Codex compatibility commands: `aether run`, `aether watch`, and `aether oracle`
@@ -26,6 +27,7 @@ runtime gaps between the Codex workflow and the established colony lifecycle.
 - Final Codex worker prompts now enforce a global end-to-end budget instead of only budgeting individual sections
 - Packaged agent mirrors for Claude and Codex were resynchronized with canonical agent definitions
 - Codex worker schema serialization now returns errors instead of panicking on marshal failure
+- Clean-source GoReleaser builds now succeed because `.aether/commands/` ships with a tracked placeholder file for `go:embed`
 - Full validation stayed clean for release: `go test ./...`, `go vet ./...`, and `go test ./... -race`
 
 ## [5.3.0] - 2026-03-31
