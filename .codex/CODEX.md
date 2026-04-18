@@ -428,4 +428,4 @@ aether update
 
 ---
 
-*Updated for Aether v1.0.10 -- 2026-04-18*
+*Updated for Aether v1.0.11 -- 2026-04-18*

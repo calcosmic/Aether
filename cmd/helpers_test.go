@@ -89,6 +89,34 @@ func TestOutputError(t *testing.T) {
 	}
 }
 
+func TestOutputErrorIncludesDetails(t *testing.T) {
+	var buf bytes.Buffer
+	stderr = &buf
+	defer func() { stderr = os.Stderr }()
+
+	outputError(2, "update failed with 2 sync error(s)", map[string]interface{}{
+		"details": []map[string]interface{}{
+			{"label": "System files", "errors": []string{"permission denied"}},
+		},
+	})
+
+	got := strings.TrimSpace(buf.String())
+
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(got), &m); err != nil {
+		t.Fatalf("outputError produced invalid JSON: %v", err)
+	}
+	if m["ok"] != false {
+		t.Errorf("ok = %v, want false", m["ok"])
+	}
+	if m["error"] != "update failed with 2 sync error(s)" {
+		t.Errorf("error = %v, want expected message", m["error"])
+	}
+	if _, ok := m["details"].(map[string]interface{}); !ok {
+		t.Fatalf("details missing or wrong type: %#v", m["details"])
+	}
+}
+
 func TestOutputErrorMessage(t *testing.T) {
 	var buf bytes.Buffer
 	stderr = &buf

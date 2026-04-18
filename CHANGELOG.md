@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-04-18
+
+Update error visibility fix.
+
+### Fixed
+- JSON error envelopes now preserve structured `details`, so commands like `aether update` expose the actual sync failures instead of only reporting a count
+- Codex can now see file-level update errors directly instead of guessing at hidden causes from a generic `"update failed with N sync error(s)"` message
+
 ## [1.0.10] - 2026-04-18
 
 Colony lifecycle restore and Codex runtime hardening.

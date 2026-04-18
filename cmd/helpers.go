@@ -35,8 +35,26 @@ func outputError(code int, message string, details interface{}) {
 		fmt.Fprint(stderr, renderVisualError(message, details))
 		return
 	}
-	msgJSON, _ := json.Marshal(message)
-	fmt.Fprintf(stderr, "{\"ok\":false,\"error\":%s,\"code\":%d}\n", string(msgJSON), code)
+	envelope := struct {
+		OK      bool        `json:"ok"`
+		Error   string      `json:"error"`
+		Code    int         `json:"code"`
+		Details interface{} `json:"details,omitempty"`
+	}{
+		OK:    false,
+		Error: message,
+		Code:  code,
+	}
+	if details != nil {
+		envelope.Details = details
+	}
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		msgJSON, _ := json.Marshal(message)
+		fmt.Fprintf(stderr, "{\"ok\":false,\"error\":%s,\"code\":%d}\n", string(msgJSON), code)
+		return
+	}
+	fmt.Fprintf(stderr, "%s\n", string(payload))
 }
 
 // outputErrorMessage is a convenience wrapper for outputError with code 1.
