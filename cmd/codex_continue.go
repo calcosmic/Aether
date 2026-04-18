@@ -90,9 +90,6 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 	if state.State != colony.StateEXECUTING && state.State != colony.StateBUILT {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active phase to continue. Run `aether build <phase>` first.")
 	}
-	if state.BuildStartedAt == nil {
-		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
-	}
 	if state.CurrentPhase < 1 || state.CurrentPhase > len(state.Plan.Phases) {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active phase to continue. Run `aether build <phase>` first.")
 	}
@@ -103,6 +100,9 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
 	manifest := loadCodexContinueManifest(phase.ID)
+	if state.BuildStartedAt == nil && !manifest.Present {
+		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
+	}
 	now := time.Now().UTC()
 
 	verification := runCodexContinueVerification(root, phase.ID, manifest)

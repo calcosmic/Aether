@@ -26,7 +26,31 @@ func loadActiveColonyState() (colony.ColonyState, error) {
 	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 		return colony.ColonyState{}, errNoColonyInitialized
 	}
-	return state, nil
+	return normalizeLegacyColonyState(state), nil
+}
+
+func normalizeLegacyColonyState(state colony.ColonyState) colony.ColonyState {
+	rawState := strings.ToUpper(strings.TrimSpace(string(state.State)))
+	hasGoal := state.Goal != nil && strings.TrimSpace(*state.Goal) != ""
+	hasPlanContext := len(state.Plan.Phases) > 0 || state.CurrentPhase > 0
+
+	switch rawState {
+	case "PAUSED":
+		state.State = colony.StateREADY
+		state.Paused = true
+	case "PLANNED", "PLANNING":
+		state.State = colony.StateREADY
+	case "SEALED":
+		state.State = colony.StateCOMPLETED
+	case "ENTOMBED":
+		state.State = colony.StateIDLE
+	case "IDLE":
+		if hasGoal && hasPlanContext {
+			state.State = colony.StateREADY
+		}
+	}
+
+	return state
 }
 
 func colonyStateLoadMessage(err error) string {

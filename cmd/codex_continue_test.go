@@ -274,6 +274,52 @@ func TestContinueBlocksWhenWatcherGateFails(t *testing.T) {
 	}
 }
 
+func TestContinueUsesManifestWhenBuildStartedAtIsMissing(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Continue from built manifest without timestamp"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Manifest-backed phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Finish from manifest", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-51", Task: "Finish from manifest", Status: "spawned", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-52", Task: "Independent verification before advancement", Status: "spawned"},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Manifest-backed phase", goal, dispatches)
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if completed, _ := result["completed"].(bool); !completed {
+		t.Fatalf("expected completed:true, got %v", result)
+	}
+}
+
 func seedContinueBuildPacket(t *testing.T, dataDir string, phase int, phaseName, goal string, dispatches []codexBuildDispatch) {
 	t.Helper()
 

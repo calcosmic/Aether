@@ -378,6 +378,48 @@ func TestStatusShowsActiveWorkersFromSpawnTree(t *testing.T) {
 	}
 }
 
+func TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to load colony state: %v", err)
+	}
+	state.State = colony.State("PAUSED")
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("failed to save colony state: %v", err)
+	}
+
+	spawnTree := agent.NewSpawnTree(s, "spawn-tree.txt")
+	if err := spawnTree.RecordSpawn("Queen", "builder", "Ghost-41", "Old worker from previous session", 1); err != nil {
+		t.Fatalf("failed to record ghost spawn: %v", err)
+	}
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	for _, unwanted := range []string{"Active Workers", "Ghost-41", "active workers", "in-flight command"} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("status should not show stale workers for paused colony; found %q in output:\n%s", unwanted, output)
+		}
+	}
+}
+
 func TestStatusCompletedColonyShowsFullTaskProgress(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

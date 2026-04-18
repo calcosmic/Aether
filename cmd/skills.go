@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -80,6 +82,45 @@ type skillMatchResult struct {
 	DomainSkills []skillIndexEntry `json:"domain_skills"`
 	Matched      []string          `json:"matched"`
 	Count        int               `json:"count"`
+}
+
+type workspaceFileSnapshot struct {
+	RelPaths      []string
+	BaseNames     []string
+	PatternResult map[string]bool
+}
+
+var workspaceFileSnapshotCache = struct {
+	mu        sync.Mutex
+	snapshots map[string]*workspaceFileSnapshot
+}{
+	snapshots: map[string]*workspaceFileSnapshot{},
+}
+
+var skillScanSkipDirs = map[string]struct{}{
+	".git":          {},
+	".aether":       {},
+	".claude":       {},
+	".codex":        {},
+	".opencode":     {},
+	".idea":         {},
+	".vscode":       {},
+	".cache":        {},
+	".next":         {},
+	".nuxt":         {},
+	".svelte-kit":   {},
+	".venv":         {},
+	".tox":          {},
+	".pytest_cache": {},
+	".mypy_cache":   {},
+	"node_modules":  {},
+	"vendor":        {},
+	"dist":          {},
+	"build":         {},
+	"coverage":      {},
+	"tmp":           {},
+	"temp":          {},
+	"venv":          {},
 }
 
 var skillParseFrontmatterCmd = &cobra.Command{
@@ -511,10 +552,10 @@ func skillScanRoots(hub string) []skillScanRoot {
 	if includeUserRoots {
 		home, err := os.UserHomeDir()
 		if err == nil {
-		roots = append(roots,
-			skillScanRoot{Path: filepath.Join(home, ".codex", "skills", "aether"), Source: "user-codex", IsUserCreated: true},
-			skillScanRoot{Path: filepath.Join(home, ".agents", "skills", "aether"), Source: "user-agents", IsUserCreated: true},
-		)
+			roots = append(roots,
+				skillScanRoot{Path: filepath.Join(home, ".codex", "skills", "aether"), Source: "user-codex", IsUserCreated: true},
+				skillScanRoot{Path: filepath.Join(home, ".agents", "skills", "aether"), Source: "user-agents", IsUserCreated: true},
+			)
 		}
 	}
 
@@ -751,34 +792,119 @@ func skillMatchesWorkspace(root string, entry skillIndexEntry) bool {
 }
 
 func repoMatchesFilePattern(root, pattern string) bool {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return false
+	}
+
+	snapshot := getWorkspaceFileSnapshot(root)
+	workspaceFileSnapshotCache.mu.Lock()
+	if matched, ok := snapshot.PatternResult[pattern]; ok {
+		workspaceFileSnapshotCache.mu.Unlock()
+		return matched
+	}
+	workspaceFileSnapshotCache.mu.Unlock()
+
 	matched := false
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || matched {
+	for i, rel := range snapshot.RelPaths {
+		if ok, _ := filepath.Match(pattern, snapshot.BaseNames[i]); ok {
+			matched = true
+			break
+		}
+		if ok, _ := filepath.Match(pattern, rel); ok {
+			matched = true
+			break
+		}
+	}
+
+	workspaceFileSnapshotCache.mu.Lock()
+	snapshot.PatternResult[pattern] = matched
+	workspaceFileSnapshotCache.mu.Unlock()
+	return matched
+}
+
+func getWorkspaceFileSnapshot(root string) *workspaceFileSnapshot {
+	cacheKey := root
+	if abs, err := filepath.Abs(root); err == nil {
+		cacheKey = abs
+	}
+
+	workspaceFileSnapshotCache.mu.Lock()
+	if snapshot, ok := workspaceFileSnapshotCache.snapshots[cacheKey]; ok {
+		workspaceFileSnapshotCache.mu.Unlock()
+		return snapshot
+	}
+	workspaceFileSnapshotCache.mu.Unlock()
+
+	snapshot := &workspaceFileSnapshot{
+		RelPaths:      []string{},
+		BaseNames:     []string{},
+		PatternResult: map[string]bool{},
+	}
+
+	if populateWorkspaceSnapshotFromGit(cacheKey, snapshot) {
+		workspaceFileSnapshotCache.mu.Lock()
+		workspaceFileSnapshotCache.snapshots[cacheKey] = snapshot
+		workspaceFileSnapshotCache.mu.Unlock()
+		return snapshot
+	}
+
+	_ = filepath.WalkDir(cacheKey, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
 			return nil
 		}
 		if d.IsDir() {
-			name := d.Name()
-			if name == ".git" || name == "node_modules" || name == ".aether" {
+			if _, skip := skillScanSkipDirs[d.Name()]; skip {
 				return filepath.SkipDir
 			}
 			return nil
 		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
 
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
+		rel, relErr := filepath.Rel(cacheKey, path)
+		if relErr != nil {
 			return nil
 		}
-		base := filepath.Base(rel)
-		if ok, _ := filepath.Match(pattern, base); ok {
-			matched = true
-			return nil
-		}
-		if ok, _ := filepath.Match(pattern, filepath.ToSlash(rel)); ok {
-			matched = true
-		}
+		appendWorkspaceSnapshotPath(snapshot, rel)
 		return nil
 	})
-	return matched
+
+	workspaceFileSnapshotCache.mu.Lock()
+	workspaceFileSnapshotCache.snapshots[cacheKey] = snapshot
+	workspaceFileSnapshotCache.mu.Unlock()
+	return snapshot
+}
+
+func populateWorkspaceSnapshotFromGit(root string, snapshot *workspaceFileSnapshot) bool {
+	cmd := exec.Command("git", "-C", root, "ls-files", "-co", "--exclude-standard")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	for _, rel := range strings.Split(string(output), "\n") {
+		appendWorkspaceSnapshotPath(snapshot, rel)
+	}
+	return len(snapshot.RelPaths) > 0
+}
+
+func appendWorkspaceSnapshotPath(snapshot *workspaceFileSnapshot, rel string) {
+	rel = filepath.ToSlash(strings.TrimSpace(rel))
+	if rel == "" || shouldSkipSkillScanPath(rel) {
+		return
+	}
+	snapshot.RelPaths = append(snapshot.RelPaths, rel)
+	snapshot.BaseNames = append(snapshot.BaseNames, filepath.Base(rel))
+}
+
+func shouldSkipSkillScanPath(rel string) bool {
+	for _, part := range strings.Split(rel, "/") {
+		if _, skip := skillScanSkipDirs[part]; skip {
+			return true
+		}
+	}
+	return false
 }
 
 func repoContainsPackage(root, pkg string) bool {

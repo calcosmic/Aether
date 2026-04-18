@@ -10,3 +10,5 @@ Use the Go `aether` CLI as the source of truth.
 - Do not hand-write `.aether/HANDOFF.md` or mutate `COLONY_STATE.json` yourself.
 - The runtime owns session, context, and handoff synchronization.
 - Report the CLI result directly.
+- Keep any wrapper summary to at most 2 short sentences.
+- Do not add extra option menus or manual state-edit instructions unless the runtime itself explicitly asks for them.

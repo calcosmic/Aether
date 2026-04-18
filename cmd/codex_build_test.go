@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -365,7 +366,109 @@ func TestBuildRollsBackStateWhenDispatchFails(t *testing.T) {
 	}
 }
 
+func TestBuildAllowsRetryWhenBuiltPhaseHasFailedDispatches(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Retry a poisoned built phase"
+	taskID := "1.1"
+	startedAt := mustParseRFC3339(t, "2026-04-17T12:00:00Z")
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		BuildStartedAt: func() *time.Time {
+			ts := startedAt
+			return &ts
+		}(),
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Retry phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Recover the failed build", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("build/phase-1/manifest.json", codexBuildManifest{
+		Phase:        1,
+		PhaseName:    "Retry phase",
+		DispatchMode: "real",
+		Dispatches: []codexBuildDispatch{
+			{Name: "Brick-60", Caste: "builder", Status: "failed", Task: "Recover the failed build"},
+			{Name: "Sentinel-29", Caste: "watcher", Status: "failed", Task: "Verify the failed build"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed manifest: %v", err)
+	}
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		BuildPhase: 1,
+		Timestamp:  startedAt.Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("failed to seed empty claims: %v", err)
+	}
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	if _, err := runCodexBuild(root, 1); err != nil {
+		t.Fatalf("build retry returned error: %v", err)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("state = %s, want BUILT after retry", state.State)
+	}
+	if state.CurrentPhase != 1 {
+		t.Fatalf("current phase = %d, want 1", state.CurrentPhase)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to reload manifest: %v", err)
+	}
+	if len(manifest.Dispatches) == 0 {
+		t.Fatal("expected retried dispatches in manifest")
+	}
+	if len(manifest.WorkerBriefs) == 0 {
+		t.Fatal("expected retried build to regenerate worker briefs")
+	}
+	for _, dispatch := range manifest.Dispatches {
+		if dispatch.Status == "failed" {
+			t.Fatalf("expected retried dispatches to avoid seeded failed status, got %+v", dispatch)
+		}
+	}
+}
+
 func floatPtr(v float64) *float64 { return &v }
+
+func mustParseRFC3339(t *testing.T, value string) time.Time {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatalf("failed to parse timestamp %q: %v", value, err)
+	}
+	return parsed
+}
 
 func TestResolvePheromoneSection_GroupsSignalsByType(t *testing.T) {
 	saveGlobals(t)

@@ -12,3 +12,5 @@ Use the Go `aether` CLI as the source of truth.
 - Do not replay verification loops, read build packets, or advance colony state by hand from this command spec.
 - Do not write `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, or `HANDOFF.md` directly.
 - Report the CLI verification result and next-step routing directly.
+- Keep any wrapper summary to at most 2 short sentences.
+- Do not add extra option menus or manual state surgery unless the runtime itself explicitly asks for them.

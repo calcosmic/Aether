@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -428,6 +429,71 @@ func TestSkillDetect(t *testing.T) {
 	total := int(result["total"].(float64))
 	if total < 1 {
 		t.Errorf("total = %d, want >= 1 (should match *.custom domain skill)", total)
+	}
+}
+
+func TestRepoMatchesFilePattern_UsesWorkspaceSnapshotAndSkipsIgnoredDirs(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0755); err != nil {
+		t.Fatalf("failed to create src dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "node_modules", "left-pad"), 0755); err != nil {
+		t.Fatalf("failed to create node_modules dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "pipeline.py"), []byte("print('ok')\n"), 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "node_modules", "left-pad", "index.ts"), []byte("export {};\n"), 0644); err != nil {
+		t.Fatalf("failed to write ignored ts file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git", "config"), []byte("[core]\n"), 0644); err != nil {
+		t.Fatalf("failed to write ignored git file: %v", err)
+	}
+
+	if !repoMatchesFilePattern(root, "*.py") {
+		t.Fatal("expected *.py to match source file in workspace snapshot")
+	}
+	if !repoMatchesFilePattern(root, "src/*.py") {
+		t.Fatal("expected relative pattern src/*.py to match source file")
+	}
+	if repoMatchesFilePattern(root, "*.ts") {
+		t.Fatal("expected *.ts to stay false when only node_modules contains matching files")
+	}
+	if repoMatchesFilePattern(root, "config") {
+		t.Fatal("expected ignored .git/config not to influence workspace pattern matches")
+	}
+}
+
+func TestRepoMatchesFilePattern_UsesGitIndexSnapshot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "src"), 0755); err != nil {
+		t.Fatalf("failed to create src dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "node_modules", "left-pad"), 0755); err != nil {
+		t.Fatalf("failed to create node_modules dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "pipeline.py"), []byte("print('ok')\n"), 0644); err != nil {
+		t.Fatalf("failed to write source file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "node_modules", "left-pad", "index.ts"), []byte("export {};\n"), 0644); err != nil {
+		t.Fatalf("failed to write ignored ts file: %v", err)
+	}
+
+	if out, err := exec.Command("git", "-C", root, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, string(out))
+	}
+	if out, err := exec.Command("git", "-C", root, "add", "src/pipeline.py").CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, string(out))
+	}
+
+	if !repoMatchesFilePattern(root, "*.py") {
+		t.Fatal("expected *.py to match tracked source file through git snapshot")
+	}
+	if repoMatchesFilePattern(root, "*.ts") {
+		t.Fatal("expected *.ts to stay false when only ignored node_modules contains matching files")
 	}
 }
 

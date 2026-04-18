@@ -12,3 +12,5 @@ Use the Go `aether` CLI as the source of truth.
 - Do not load continue playbooks or reimplement verification gates from this command spec.
 - Do not mutate `COLONY_STATE.json`, `session.json`, or handoff files by hand.
 - If the CLI stops on a blocker or asks for a follow-up action, report that result directly.
+- Keep any wrapper summary to at most 2 short sentences.
+- Do not add extra option menus or manual state surgery unless the runtime itself explicitly asks for them.

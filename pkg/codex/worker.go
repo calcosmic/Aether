@@ -195,6 +195,30 @@ func NewRealInvoker() *RealInvoker {
 	return &RealInvoker{binaryName: name}
 }
 
+func codexWritableDirs() []string {
+	var dirs []string
+	if dir := strings.TrimSpace(os.Getenv("CODEX_HOME")); dir != "" {
+		dirs = append(dirs, filepath.Clean(dir))
+	} else if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+		dirs = append(dirs, filepath.Join(home, ".codex"))
+	}
+
+	seen := make(map[string]struct{}, len(dirs))
+	out := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
+		}
+		if _, ok := seen[dir]; ok {
+			continue
+		}
+		seen[dir] = struct{}{}
+		out = append(out, dir)
+	}
+	return out
+}
+
 // IsAvailable checks whether the codex CLI binary is reachable via exec.LookPath.
 func (r *RealInvoker) IsAvailable(ctx context.Context) bool {
 	_, err := exec.LookPath(r.binaryName)
@@ -316,6 +340,9 @@ func (r *RealInvoker) Invoke(ctx context.Context, config WorkerConfig) (WorkerRe
 		"--ephemeral",
 		"--output-last-message", lastMessagePath,
 		"--output-schema", schemaPath,
+	}
+	for _, dir := range codexWritableDirs() {
+		args = append(args, "--add-dir", dir)
 	}
 	for _, override := range compactStrings(config.ConfigOverrides) {
 		args = append(args, "-c", override)

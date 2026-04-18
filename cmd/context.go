@@ -116,6 +116,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 		}
 		return result
 	}
+	state = normalizeLegacyColonyState(state)
 
 	phaseName := lookupPhaseName(state, state.CurrentPhase)
 	if state.CurrentPhase <= 0 {
@@ -132,6 +133,9 @@ func buildResumeDashboardResult() map[string]interface{} {
 	// Extract core state fields
 	currentPhase := state.CurrentPhase
 	stateStr := string(state.State)
+	if state.Paused {
+		stateStr += " (paused)"
+	}
 	goal := "No goal set"
 	if state.Goal != nil && *state.Goal != "" {
 		goal = *state.Goal

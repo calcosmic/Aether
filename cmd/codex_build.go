@@ -45,6 +45,7 @@ type codexBuildManifest struct {
 	PhaseName       string               `json:"phase_name"`
 	Goal            string               `json:"goal,omitempty"`
 	Root            string               `json:"root"`
+	ParallelMode    string               `json:"parallel_mode,omitempty"`
 	ColonyDepth     string               `json:"colony_depth"`
 	DispatchMode    string               `json:"dispatch_mode,omitempty"`
 	GeneratedAt     string               `json:"generated_at"`
@@ -103,6 +104,7 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	parallelMode := effectiveParallelMode(state)
 	parallelWaves := buildParallelWaves(dispatches)
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
@@ -131,13 +133,16 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 	}
 	emitVisualProgress(renderBuildDispatchPreview(updatedState, updatedPhase, dispatches))
 
-	dispatches, claims, mode, err := executeCodexBuildDispatches(context.Background(), root, updatedPhase, dispatches, playbooks, startedAt, newCodexWorkerInvoker())
+	dispatches, claims, mode, err := executeCodexBuildDispatches(context.Background(), root, updatedPhase, dispatches, playbooks, startedAt, newCodexWorkerInvoker(), parallelMode)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
 	}
 	if err := writeCodexBuildClaims(claimsRel, phaseNum, startedAt, claims); err != nil {
 		return nil, err
+	}
+	if latestState, loadErr := loadActiveColonyState(); loadErr == nil {
+		updatedState.Worktrees = latestState.Worktrees
 	}
 	updatedState.State = colony.StateBUILT
 	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode); err != nil {
@@ -196,6 +201,7 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 		"dispatches":     dispatchMaps,
 		"dispatch_count": len(dispatches),
 		"parallel_waves": parallelWaves,
+		"parallel_mode":  string(parallelMode),
 		"dispatch_mode":  mode,
 		"checkpoint":     displayDataPath(checkpointRel),
 		"build_dir":      displayDataPath(buildDirRel),
@@ -207,6 +213,7 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 }
 
 func validateCodexBuildState(state colony.ColonyState, phaseNum int) error {
+	retryBuiltPhase := false
 	switch state.State {
 	case colony.StateEXECUTING:
 		if state.CurrentPhase > 0 {
@@ -214,6 +221,10 @@ func validateCodexBuildState(state colony.ColonyState, phaseNum int) error {
 		}
 		return fmt.Errorf("a build is already in progress; run `aether continue` before dispatching phase %d", phaseNum)
 	case colony.StateBUILT:
+		if canRetryBuiltPhase(state, phaseNum) {
+			retryBuiltPhase = true
+			break
+		}
 		if state.CurrentPhase > 0 {
 			return fmt.Errorf("phase %d is already built; run `aether continue` before dispatching another build", state.CurrentPhase)
 		}
@@ -231,10 +242,57 @@ func validateCodexBuildState(state colony.ColonyState, phaseNum int) error {
 		return fmt.Errorf("phase %d is already completed", phaseNum)
 	}
 
+	if retryBuiltPhase {
+		return nil
+	}
 	if err := colony.Transition(state.State, colony.StateEXECUTING); err != nil {
 		return err
 	}
 	return nil
+}
+
+func canRetryBuiltPhase(state colony.ColonyState, phaseNum int) bool {
+	if state.State != colony.StateBUILT || state.CurrentPhase != phaseNum {
+		return false
+	}
+	manifest := loadCodexContinueManifest(phaseNum)
+	if !manifest.Present {
+		return true
+	}
+	if !allDispatchesCompleted(manifest) {
+		return true
+	}
+	if !manifestRequiresBuilderClaims(manifest) || manifestAllowsEmptyBuilderClaims(manifest) {
+		return false
+	}
+	claims, ok := loadCodexBuildClaims()
+	if !ok || claims.BuildPhase != phaseNum {
+		return true
+	}
+	return countCodexBuildClaimPaths(claims) == 0
+}
+
+func loadCodexBuildClaims() (codexBuildClaims, bool) {
+	var claims codexBuildClaims
+	if store == nil {
+		return codexBuildClaims{}, false
+	}
+	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
+		return codexBuildClaims{}, false
+	}
+	return claims, true
+}
+
+func countCodexBuildClaimPaths(claims codexBuildClaims) int {
+	total := 0
+	for _, values := range [][]string{claims.FilesCreated, claims.FilesModified, claims.TestsWritten} {
+		for _, value := range values {
+			if strings.TrimSpace(value) != "" {
+				total++
+			}
+		}
+	}
+	return total
 }
 
 func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt time.Time) {
@@ -391,7 +449,7 @@ func buildTaskID(task colony.Task, idx int) string {
 	return fmt.Sprintf("task-%d", idx+1)
 }
 
-func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
+func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
 	}
@@ -400,7 +458,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := ""
+	pheromoneSection := resolvePheromoneSection()
 	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
 	indexByName := make(map[string]int, len(dispatches))
 	for i, dispatch := range dispatches {
@@ -421,7 +479,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		indexByName[dispatch.Name] = i
 	}
 
-	results, err := codex.DispatchBatch(ctx, invoker, workerDispatches)
+	results, err := dispatchCodexBuildWorkers(ctx, root, phase, workerDispatches, invoker, startedAt, parallelMode)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("dispatch build workers: %w", err)
 	}
@@ -524,6 +582,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 		PhaseName:       phase.Name,
 		Goal:            goal,
 		Root:            root,
+		ParallelMode:    string(effectiveParallelMode(state)),
 		ColonyDepth:     normalizedBuildDepth(state.ColonyDepth),
 		DispatchMode:    strings.TrimSpace(dispatchMode),
 		GeneratedAt:     startedAt.Format(time.RFC3339),

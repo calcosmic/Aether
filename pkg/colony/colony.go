@@ -131,6 +131,8 @@ type ColonyState struct {
 	TerritorySurveyed  *string         `json:"territory_surveyed,omitempty"`
 	Milestone          string          `json:"milestone"`
 	MilestoneUpdatedAt *string         `json:"milestone_updated_at,omitempty"`
+	Paused             bool            `json:"paused,omitempty"`
+	PausedAt           *string         `json:"paused_at,omitempty"`
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
 }
 

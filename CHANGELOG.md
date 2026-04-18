@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-04-18
+
+Colony lifecycle restore and Codex runtime hardening.
+
+### Added
+- Real `parallel-mode worktree` execution for Codex builds, with isolated git worktrees, sync-back, and regression coverage
+- A real `aether swarm` investigate/fix/verify flow with structured results and worker-wave coverage
+- Legacy colony-state compatibility tests covering paused and broken idle colonies
+
+### Changed
+- Paused colonies now resume through a recoverable pause flag instead of leaving the colony trapped in an unusable lifecycle state
+- Claude and OpenCode lifecycle wrappers now stay shorter and route users back into the runtime CLI without long conversational detours
+- Build, plan, and colonize consistently inject dedicated pheromone sections into Codex worker prompts
+
+### Fixed
+- `aether resume`, `aether status`, and next-step routing now restore older paused colonies into a runnable state instead of dead-ending on `PAUSED`
+- Paused colonies no longer show ghost active workers, and interrupted phases route back to the correct current build
+- Nested Codex workers now receive access to the Codex home/session directory, so real worker dispatches can create session state reliably
+- Poisoned `BUILT` phases can be retried instead of wedging behind "already built" errors
+- Large repos no longer spend excessive time rescanning the workspace on every Codex skill match
+- `continue` can verify a valid build packet from persisted manifest data even when `BuildStartedAt` is missing
+
 ## [1.0.9] - 2026-04-17
 
 Codex orchestration hardening, autonomous Oracle execution, and parity-doc cleanup.

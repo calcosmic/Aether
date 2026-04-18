@@ -179,9 +179,14 @@ func renderIndentedList(lines []string) string {
 }
 
 func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
+	state = normalizeLegacyColonyState(state)
 	if colonyNeedsEntomb(state) {
 		return `Run ` + "`aether entomb`" + ` to archive this sealed colony into chambers.`,
 			[]string{`Run ` + "`aether init \"next goal\"`" + ` if you want to skip archiving and start fresh immediately.`}
+	}
+	if state.Paused {
+		return `Run ` + "`aether resume`" + ` to restore the paused colony into a runnable state.`,
+			[]string{`Run ` + "`aether status`" + ` if you only want to inspect the saved colony first.`}
 	}
 
 	if len(state.Plan.Phases) == 0 {
@@ -191,12 +196,16 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
+		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
+			return fmt.Sprintf("Run `aether build %d` to restart the interrupted phase.", state.CurrentPhase),
+				[]string{`Run ` + "`aether status`" + ` if you want to inspect the saved colony first.`}
+		}
 		return `Run ` + "`aether continue`" + ` to verify the phase and advance.`,
 			[]string{`Run ` + "`aether status`" + ` to inspect the colony dashboard first.`}
 	case colony.StateCOMPLETED:
 		return `Run ` + "`aether entomb`" + ` to archive this sealed colony into chambers.`, nil
 	default:
-		nextPhase := state.CurrentPhase + 1
+		nextPhase := state.CurrentPhase
 		if nextPhase < 1 {
 			nextPhase = 1
 		}

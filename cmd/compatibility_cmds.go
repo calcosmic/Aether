@@ -31,7 +31,7 @@ var watchCmd = &cobra.Command{
 			return nil
 		}
 
-		result := buildSwarmCompatibilityResult("", true)
+		result := buildSwarmWatchResult("", true)
 		visual := renderSwarmCompatibilityVisual(result)
 		_ = writeWatchArtifacts(result, visual)
 		outputWorkflow(result, visual)

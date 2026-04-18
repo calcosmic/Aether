@@ -265,6 +265,65 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 	}
 }
 
+func TestWorkflowSuggestionsForPausedCurrentPhaseUsesCurrentPhaseNumber(t *testing.T) {
+	goal := "Keep the phase suggestion sane"
+	primary, _ := workflowSuggestionsForState(colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.State("PAUSED"),
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Reproduce and isolate", Status: colony.PhaseInProgress},
+				{ID: 2, Name: "Targeted fix", Status: colony.PhasePending},
+			},
+		},
+	})
+
+	if !strings.Contains(primary, "aether resume") {
+		t.Fatalf("expected paused colony to suggest resume, got: %s", primary)
+	}
+	if strings.Contains(primary, "aether build 2") {
+		t.Fatalf("expected paused colony not to skip ahead, got: %s", primary)
+	}
+}
+
+func TestWorkflowSuggestionsForPausedFlagSuggestsResume(t *testing.T) {
+	goal := "Pause should route to resume"
+	primary, _ := workflowSuggestionsForState(colony.ColonyState{
+		Goal:   &goal,
+		State:  colony.StateREADY,
+		Paused: true,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Reproduce and isolate", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	if !strings.Contains(primary, "aether resume") {
+		t.Fatalf("expected paused colony to suggest resume, got: %s", primary)
+	}
+}
+
+func TestWorkflowSuggestionsForInterruptedExecutingSuggestsRestartBuild(t *testing.T) {
+	goal := "Interrupted build should restart clearly"
+	primary, _ := workflowSuggestionsForState(colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Done", Status: colony.PhaseCompleted},
+				{ID: 2, Name: "Interrupted", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	if !strings.Contains(primary, "aether build 2") {
+		t.Fatalf("expected interrupted executing colony to suggest restarting build 2, got: %s", primary)
+	}
+}
+
 func TestSetupVisualOutput(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -433,7 +492,7 @@ func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
 	}
 
 	checkVisual([]string{"pause-colony"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "aether resume")
-	checkVisual([]string{"resume-colony"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "aether continue")
+	checkVisual([]string{"resume-colony"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "aether build 1")
 	checkVisual([]string{"patrol"}, "📊", "P A T R O L", "Signals: 1 active")
 	checkVisual([]string{"phase"}, "🧱", "Session UX", "Write resume-colony")
 	checkVisual([]string{"history"}, "📜", "Colony initialized", "Worker wave launched")

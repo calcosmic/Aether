@@ -24,6 +24,13 @@ var pauseColonyCmd = &cobra.Command{
 			outputError(1, colonyStateLoadMessage(err), nil)
 			return nil
 		}
+		pausedAt := time.Now().UTC().Format(time.RFC3339)
+		state.Paused = true
+		state.PausedAt = &pausedAt
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			outputError(2, fmt.Sprintf("failed to mark colony paused: %v", err), nil)
+			return nil
+		}
 
 		nextAction := "aether resume"
 		contextCleared := true
@@ -75,8 +82,21 @@ var resumeColonyCmd = &cobra.Command{
 		handoffData, _ := readHandoffDocument()
 		handoffText := strings.TrimSpace(string(handoffData))
 
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err == nil {
+		var rawState colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &rawState); err == nil {
+			state := normalizeLegacyColonyState(rawState)
+			state.Paused = false
+			state.PausedAt = nil
+			if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil {
+				state.State = colony.StateREADY
+			}
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				outputError(2, fmt.Sprintf("failed to restore runnable colony state: %v", err), nil)
+				return nil
+			}
+			if state.State != colony.StateEXECUTING || state.BuildStartedAt == nil {
+				rotateSpawnTree(store)
+			}
 			contextCleared := false
 			if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
 				CommandName:    "resume-colony",

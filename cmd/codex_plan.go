@@ -378,7 +378,7 @@ func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex
 
 	dispatches := make([]codex.WorkerDispatch, 0, len(planningWorkerSpecs))
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := ""
+	pheromoneSection := resolvePheromoneSection()
 	for i, spec := range planningWorkerSpecs {
 		tomlPath := filepath.Join(codexAgentsDir, spec.AgentFile)
 

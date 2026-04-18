@@ -495,8 +495,7 @@ func getGitHEAD() string {
 // rotateSpawnTree archives spawn-tree.txt if it exists and is non-empty.
 // Keeps only the 5 most recent archive files.
 func rotateSpawnTree(s *storage.Store) {
-	spawnTreePath := s.BasePath() + "/../spawn-tree.txt"
-	spawnTreePath = filepath.Clean(spawnTreePath)
+	spawnTreePath := filepath.Join(s.BasePath(), "spawn-tree.txt")
 
 	data, err := os.ReadFile(spawnTreePath)
 	if err != nil || len(bytes.TrimSpace(data)) == 0 {

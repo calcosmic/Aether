@@ -182,14 +182,21 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		renderTopInstincts(&b, instincts)
 	}
 
-	activeWorkers := loadActiveSpawnEntries(s)
+	activeWorkers := []agent.SpawnEntry{}
+	if state.State == colony.StateEXECUTING && !state.Paused && state.BuildStartedAt != nil {
+		activeWorkers = loadActiveSpawnEntries(s)
+	}
 	if len(activeWorkers) > 0 {
 		b.WriteString("\nActive Workers\n")
 		renderActiveWorkers(&b, activeWorkers)
 	}
 
 	// State
-	fmt.Fprintf(&b, "\nState: %s", state.State)
+	stateLabel := string(state.State)
+	if state.Paused {
+		stateLabel += " (paused)"
+	}
+	fmt.Fprintf(&b, "\nState: %s", stateLabel)
 	if len(activeWorkers) > 0 {
 		fmt.Fprintf(&b, " (%d active workers)", len(activeWorkers))
 	}

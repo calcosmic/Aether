@@ -397,7 +397,7 @@ func dispatchRealSurveyors(ctx context.Context, root string, invoker codex.Worke
 
 	dispatches := make([]codex.WorkerDispatch, 0, len(surveyorSpecs))
 	capsule := resolveCodexWorkerContext()
-	pheromoneSection := ""
+	pheromoneSection := resolvePheromoneSection()
 	for i, spec := range surveyorSpecs {
 		tomlFile := fmt.Sprintf("aether-surveyor-%s.toml", spec.AgentSuffix)
 		tomlPath := filepath.Join(codexAgentsDir, tomlFile)

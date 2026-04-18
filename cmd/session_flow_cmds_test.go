@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -21,12 +22,14 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 
 	goal := "Pause this colony cleanly"
 	taskID := "task-1"
+	now := time.Now().UTC()
 	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateEXECUTING,
-		CurrentPhase: 1,
-		Milestone:    "Open Chambers",
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateEXECUTING,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Milestone:      "Open Chambers",
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
@@ -57,6 +60,20 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 	}
 	if !session.ContextCleared {
 		t.Fatal("expected ContextCleared to be true after pause")
+	}
+
+	var paused colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &paused); err != nil {
+		t.Fatalf("expected paused state to be written: %v", err)
+	}
+	if paused.State != colony.StateEXECUTING {
+		t.Fatalf("paused lifecycle state = %q, want EXECUTING preserved", paused.State)
+	}
+	if !paused.Paused {
+		t.Fatal("expected paused flag to be set")
+	}
+	if paused.PausedAt == nil || *paused.PausedAt == "" {
+		t.Fatal("expected paused_at to be set")
 	}
 
 	handoffPath := filepath.Join(os.Getenv("AETHER_ROOT"), ".aether", "HANDOFF.md")
@@ -138,6 +155,130 @@ func TestResumeColonyRestoresSessionAndClearsHandoff(t *testing.T) {
 	}
 	if updated.ResumedAt == nil || *updated.ResumedAt == "" {
 		t.Fatal("expected ResumedAt to be populated")
+	}
+
+	var resumed colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &resumed); err != nil {
+		t.Fatalf("failed to reload resumed state: %v", err)
+	}
+	if resumed.Paused {
+		t.Fatal("expected paused flag to be cleared on resume")
+	}
+	if resumed.PausedAt != nil {
+		t.Fatalf("expected paused_at to be cleared on resume, got %v", *resumed.PausedAt)
+	}
+}
+
+func TestResumeColonyRotatesStaleSpawnTreeForPausedColony(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume should clear ghost workers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.State("PAUSED"),
+		CurrentPhase: 1,
+		Milestone:    "Open Chambers",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Execution", Status: colony.PhaseReady},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID:      "resume-rotate-test",
+		StartedAt:      "2026-04-15T10:00:00Z",
+		ColonyGoal:     goal,
+		CurrentPhase:   1,
+		SuggestedNext:  "aether status",
+		ContextCleared: true,
+		Summary:        "Paused with stale worker history",
+	}); err != nil {
+		t.Fatalf("failed to seed session: %v", err)
+	}
+
+	spawnTreePath := filepath.Join(dataDir, "spawn-tree.txt")
+	if err := os.WriteFile(spawnTreePath, []byte("2026-04-18T10:00:00Z|Queen|builder|Ghost-41|old worker|1|spawned\n"), 0644); err != nil {
+		t.Fatalf("failed to seed spawn tree: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(spawnTreePath)
+	if err != nil {
+		t.Fatalf("failed to read rotated spawn tree: %v", err)
+	}
+	if strings.TrimSpace(string(data)) != "" {
+		t.Fatalf("expected spawn-tree.txt to be rotated on resume, got:\n%s", string(data))
+	}
+
+	archiveDir := filepath.Join(dataDir, "spawn-tree-archive")
+	entries, err := os.ReadDir(archiveDir)
+	if err != nil {
+		t.Fatalf("expected spawn-tree archive dir: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected rotated spawn-tree archive to be created")
+	}
+}
+
+func TestResumeColonyNormalizesLegacyPausedStateToReady(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume broken paused colony"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.State("PAUSED"),
+		CurrentPhase: 1,
+		Milestone:    "Open Chambers",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Recoverable phase", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID:      "legacy-paused",
+		StartedAt:      "2026-04-15T10:00:00Z",
+		ColonyGoal:     goal,
+		CurrentPhase:   1,
+		SuggestedNext:  "aether build 1",
+		ContextCleared: true,
+		Summary:        "Legacy paused colony",
+	}); err != nil {
+		t.Fatalf("failed to seed session: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	var resumed colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &resumed); err != nil {
+		t.Fatalf("failed to reload resumed state: %v", err)
+	}
+	if resumed.State != colony.StateREADY {
+		t.Fatalf("state = %q, want READY", resumed.State)
+	}
+	if resumed.Paused {
+		t.Fatal("expected paused flag to be cleared on resume")
 	}
 }
 
