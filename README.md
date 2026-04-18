@@ -25,7 +25,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-24-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-46-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.12-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.13-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -1006,10 +1006,12 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.12 -- Released (Current)
+### 🎉 v1.0.13 -- Released (Current)
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
 - 46 slash commands across the full colony lifecycle, plus native Codex CLI workflow
+- Codex now splits literal `aether ...` commands into direct pass-through versus mediated colony-shaping flows, so `aether init` once again does a short foundation pass and approval checkpoint instead of immediately creating the colony
+- `aether init-research` now returns basic repo shape data (`file_count`, `top_level_dirs`, `is_git_repo`) so approval prompts can stay grounded in the runtime
 - JSON error envelopes now include structured details again, so failed updates expose the real file-level sync problems instead of only a count
 - Codex guidance now tells literal `aether ...` commands to run with near-zero wrapper text, and no-colony `aether status` now still renders with Aether’s own visual style
 - Pheromone signal system (FOCUS, REDIRECT, FEEDBACK) for steering workers without rewriting prompts

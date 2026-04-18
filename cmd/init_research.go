@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,9 @@ var initResearchCmd = &cobra.Command{
 		languages := []string{}
 		frameworks := []string{}
 		detected := ""
+		topLevelDirs := []string{}
+		isGitRepo := false
+		fileCount := 0
 
 		entries, err := os.ReadDir(target)
 		if err != nil {
@@ -55,7 +59,14 @@ var initResearchCmd = &cobra.Command{
 
 		entryNames := make(map[string]bool)
 		for _, e := range entries {
-			if !e.IsDir() {
+			if e.IsDir() {
+				if !strings.HasPrefix(e.Name(), ".") {
+					topLevelDirs = append(topLevelDirs, e.Name())
+				}
+				if e.Name() == ".git" {
+					isGitRepo = true
+				}
+			} else {
 				entryNames[e.Name()] = true
 			}
 		}
@@ -86,11 +97,31 @@ var initResearchCmd = &cobra.Command{
 			detected = "unknown"
 		}
 
+		filepath.WalkDir(target, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				switch d.Name() {
+				case ".git", "node_modules", ".next", "dist", "build", "vendor", ".venv", "venv", "coverage":
+					if path != target {
+						return filepath.SkipDir
+					}
+				}
+				return nil
+			}
+			fileCount++
+			return nil
+		})
+
 		outputOK(map[string]interface{}{
-			"detected_type": detected,
-			"languages":     languages,
-			"frameworks":    frameworks,
-			"goal":          goal,
+			"detected_type":  detected,
+			"languages":      languages,
+			"frameworks":     frameworks,
+			"goal":           goal,
+			"top_level_dirs": topLevelDirs,
+			"file_count":     fileCount,
+			"is_git_repo":    isGitRepo,
 		})
 		return nil
 	},

@@ -39,6 +39,12 @@ func TestInitResearchGo(t *testing.T) {
 	if result["goal"] != "build CLI" {
 		t.Errorf("goal = %v, want 'build CLI'", result["goal"])
 	}
+	if result["is_git_repo"] != false {
+		t.Errorf("is_git_repo = %v, want false", result["is_git_repo"])
+	}
+	if result["file_count"].(float64) < 1 {
+		t.Errorf("file_count = %v, want >= 1", result["file_count"])
+	}
 }
 
 func TestInitResearchNode(t *testing.T) {
@@ -96,6 +102,48 @@ func TestInitResearchUnknown(t *testing.T) {
 	langs := result["languages"].([]interface{})
 	if len(langs) != 0 {
 		t.Errorf("languages = %v, want empty", langs)
+	}
+	dirs := result["top_level_dirs"].([]interface{})
+	if len(dirs) != 0 {
+		t.Errorf("top_level_dirs = %v, want empty", dirs)
+	}
+}
+
+func TestInitResearchCapturesGitAndDirs(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	projectRoot := filepath.Dir(filepath.Dir(s.BasePath()))
+	if err := os.Mkdir(filepath.Join(projectRoot, ".git"), 0755); err != nil {
+		t.Fatalf("mkdir .git: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(projectRoot, "src"), 0755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projectRoot, "src", "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write main.go: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "ship feature", "--target", projectRoot})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["is_git_repo"] != true {
+		t.Errorf("is_git_repo = %v, want true", result["is_git_repo"])
+	}
+	dirs := result["top_level_dirs"].([]interface{})
+	if len(dirs) != 1 || dirs[0] != "src" {
+		t.Errorf("top_level_dirs = %v, want [src]", dirs)
 	}
 }
 

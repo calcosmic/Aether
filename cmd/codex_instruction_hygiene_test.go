@@ -22,6 +22,8 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 			required: []string{
 				"Do not announce skill usage, intent interpretation, or a preflight summary before running the command.",
 				"After the command returns, keep your own wrapper to one short sentence at most.",
+				"Do not fast-path colony-shaping commands like `aether init`, `aether plan`,",
+				"For `aether init \"<goal>\"`, run a short foundation pass first:",
 			},
 		},
 		{
@@ -29,6 +31,8 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 			required: []string{
 				"Do not prepend exploratory narration like \"I'm checking the repo\" or \"I'm treating this as...\"",
 				"If the `aether` CLI already rendered the result, do not restate the same guidance in a second synthetic \"Next Up\" block.",
+				"Mediated commands:",
+				"run `aether init-research --goal \"<goal>\" --target .`, assemble a",
 			},
 		},
 		{
@@ -41,8 +45,10 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 		{
 			path: ".aether/templates/codex-md-template.md",
 			required: []string{
-				"Do not announce that you are \"checking the repo\", \"interpreting the workflow\",",
+				"do not announce that you are \"checking the repo\", \"interpreting the workflow\",",
 				"your own wrapper should be at most one short sentence.",
+				"mediated workflow: `aether init`, `aether plan`, `aether build`,",
+				"if a user asks for `aether dream` or another command the binary does not expose",
 			},
 		},
 		{
@@ -50,6 +56,24 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 			required: []string{
 				"do not preface execution with \"I'm checking the repo\" or similar commentary",
 				"keep any extra explanation to one short sentence unless the user asks for more",
+				"mediated workflow: `aether init`, `aether plan`, `aether build`,",
+				"if a user asks for `aether dream` or another command the binary does not expose",
+			},
+		},
+		{
+			path: ".codex/CODEX.md",
+			required: []string{
+				"Command split:",
+				"mediated workflow: `aether init`, `aether plan`, `aether build`,",
+				"another command the binary does not expose, say",
+			},
+		},
+		{
+			path: "AGENTS.md",
+			required: []string{
+				"Command split:",
+				"mediated workflow: `aether init`, `aether plan`, `aether build`,",
+				"another command the binary does not expose, say",
 			},
 		},
 	}

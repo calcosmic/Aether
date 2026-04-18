@@ -16,17 +16,45 @@ Every command must leave the user with a clear next action. No dead ends. The co
 
 ## Literal CLI Commands
 
-When the user message is already a literal `aether ...` command, treat it as an instruction to run that command directly.
+When the user message is already a literal `aether ...` command, treat the
+installed binary as the runtime source of truth, but preserve the older
+Claude-style wrapper behavior for commands that shape the colony.
 
+Direct commands:
+- `aether status`
+- `aether update`
+- `aether version`
+- `aether history`
+- `aether pheromones`
+- `aether colonize`
+- `aether oracle status`
+- `aether oracle stop`
+
+For those direct commands:
 - Do not inspect repo files first to infer what the command "might mean".
 - Do not translate the command into `/ant:` language in Codex.
 - Use `aether --help` or `aether <subcommand> --help` only to confirm availability or flags.
-- Treat the installed `aether` binary as the source of truth if docs and runtime disagree.
 - If the binary does not expose a documented command, say so plainly and follow the binary's actual command surface.
 - When invoking lifecycle commands through Codex shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants JSON.
 - Do not prepend exploratory narration like "I'm checking the repo" or "I'm treating this as..."
 - Do not append a generic "Next Up" explanation when the CLI already printed the result.
 - For read-only commands like `aether status`, `aether history`, `aether version`, or `aether pheromones`, your own post-command summary should be zero or one short sentence.
+
+Mediated commands:
+- `aether init`
+- `aether plan`
+- `aether build`
+- `aether continue`
+- `aether run`
+- `aether seal`
+- `aether oracle "<topic>"`
+
+For mediated commands, keep the Claude-style wrapper semantics: do the bounded
+research or decision checkpoint first, ask for approval when the command
+changes colony direction, then invoke the CLI. `aether init` is the strongest
+example: run `aether init-research --goal "<goal>" --target .`, assemble a
+short foundation summary, and wait for explicit approval before running the
+real init.
 
 ## State Machine
 

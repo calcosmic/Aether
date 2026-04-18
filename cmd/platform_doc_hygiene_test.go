@@ -71,14 +71,15 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 		{
 			path: ".claude/commands/ant/init.md",
 			required: []string{
-				"Use the Go `aether` CLI as the source of truth.",
+				"Use the Go `aether` CLI as the source of truth, but do not skip the init",
+				"AETHER_OUTPUT_MODE=json aether init-research --goal",
 				"AETHER_OUTPUT_MODE=visual aether init",
+				"AskUserQuestion with 3 options: proceed, revise goal, cancel.",
 			},
 			forbidden: []string{
 				"Read `.aether/data/COLONY_STATE.json`.",
 				"Write COLONY_STATE.json",
 				"queen-init",
-				"init-research",
 				".aether/aether-utils.sh",
 			},
 		},
@@ -302,14 +303,15 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 		{
 			path: ".opencode/commands/ant/init.md",
 			required: []string{
-				"Use the Go `aether` CLI as the source of truth.",
+				"Use the Go `aether` CLI as the source of truth, but do not skip the init",
+				"AETHER_OUTPUT_MODE=json aether init-research --goal",
 				"AETHER_OUTPUT_MODE=visual aether init",
+				"Ask with 3 options: proceed, revise goal, cancel.",
 			},
 			forbidden: []string{
 				"Read `.aether/data/COLONY_STATE.json`.",
 				"Write COLONY_STATE.json",
 				"queen-init",
-				"init-research",
 				".aether/aether-utils.sh",
 			},
 		},

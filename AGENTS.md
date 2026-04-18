@@ -1,6 +1,6 @@
 # AGENTS.md -- Aether Development Guide (Codex CLI)
 
-> **Current Version:** v1.0.12
+> **Current Version:** v1.0.13
 > **Last Updated:** 2026-04-18
 > **Platform:** Codex CLI (OpenAI)
 
@@ -14,7 +14,7 @@ OpenCode, and Codex CLI.
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.12 |
+| Version | v1.0.13 |
 | Agent definitions | 24 (TOML in `.codex/agents/`) |
 | Skills | 28 (10 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -37,14 +37,29 @@ aether continue
 aether status
 ```
 
-When the user types a literal `aether ...` command in Codex, execute that exact
-CLI command first. Do not reinterpret it as a fuzzy workflow prompt, and use
-`aether --help` as the runtime source of truth if markdown docs disagree. For
-lifecycle commands run through Codex shell execution, prefer
-`AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants JSON.
-Do not preface literal commands with repo archaeology, skill narration, or
-"I'm checking..." commentary. The CLI output is primary; your own wrapper
-should be zero or one short sentence.
+When the user types a literal `aether ...` command in Codex, treat the local
+`aether` binary and `aether --help` as the runtime source of truth if markdown
+docs disagree. For lifecycle commands run through Codex shell execution,
+prefer `AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants
+JSON.
+
+Command split:
+- direct pass-through: `aether status`, `aether update`, `aether version`,
+  `aether history`, `aether pheromones`, `aether colonize`, `aether oracle status`,
+  `aether oracle stop`
+- mediated workflow: `aether init`, `aether plan`, `aether build`,
+  `aether continue`, `aether run`, `aether seal`, `aether oracle "<topic>"`
+
+For direct pass-through commands, do not preface execution with repo
+archaeology, skill narration, or "I'm checking..." commentary. The CLI output
+is primary; your own wrapper should be zero or one short sentence.
+
+For mediated workflow commands, preserve the older Claude-style wrapper
+behavior before invoking the CLI. `aether init` is the clearest example: first
+run `AETHER_OUTPUT_MODE=json aether init-research --goal "<goal>" --target .`,
+gather bounded repo context, and ask for approval before the real init. If a
+user asks for `aether dream` or another command the binary does not expose, say
+so plainly instead of inventing a fake runtime.
 
 Agent definitions live in `.codex/agents/*.toml` (TOML format) and Codex reads
 them as part of its agent discovery system.
@@ -719,4 +734,4 @@ data files clean, and test coverage comprehensive as features evolve.
 
 ---
 
-*Updated for Aether v1.0.12 -- 2026-04-18*
+*Updated for Aether v1.0.13 -- 2026-04-18*

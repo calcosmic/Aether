@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.13] - 2026-04-18
+
+Codex command-class parity restore for colony-shaping commands.
+
+### Changed
+- Codex guidance now splits literal `aether ...` commands into direct pass-through versus mediated workflow commands instead of flattening every command into the same fast path
+- `aether init` guidance once again performs a short foundation pass and approval checkpoint before the real colony initialization, matching the older Claude-style experience more closely
+
+### Fixed
+- Codex no longer auto-runs colony-shaping commands like `init`, `plan`, `build`, `continue`, `run`, and `seal` as if they were read-only status commands
+- Repo-level Codex instructions, generated templates, and platform command docs now consistently tell the model to say plainly when a requested command such as `aether dream` is not actually exposed by the binary
+- `aether init-research` now returns basic repo shape data (`file_count`, `top_level_dirs`, `is_git_repo`) so approval prompts can stay grounded in the Aether runtime instead of ad hoc shell probing
+
 ## [1.0.12] - 2026-04-18
 
 Codex command-wrapper simplification and visual no-colony status.
