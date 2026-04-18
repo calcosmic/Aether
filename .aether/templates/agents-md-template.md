@@ -23,30 +23,18 @@ aether status                     # Colony dashboard
 aether run                        # Autopilot mode
 ```
 
-When a user types a literal `aether ...` command, treat the local `aether`
-binary and `aether --help` as the source of truth for available commands.
+When a user types a literal `aether ...` command, execute that command
+directly. Do not reinterpret it as a vague workflow request or inspect
+`.aether/commands/*.yaml` first. The local `aether` binary and
+`aether --help` are the source of truth for available commands.
 
 When running those commands from Codex, prefer `AETHER_OUTPUT_MODE=visual aether ...`
 for lifecycle operations so the CLI can render caste emojis, color, and workflow
 ceremony even when command execution is non-TTY.
 
-Command split:
-- direct pass-through: `aether status`, `aether update`, `aether version`,
-  `aether history`, `aether pheromones`, `aether colonize`, `aether oracle status`,
-  `aether oracle stop`
-- mediated workflow: `aether init`, `aether plan`, `aether build`,
-  `aether continue`, `aether run`, `aether seal`, `aether oracle "<topic>"`
-
-For direct pass-through commands:
 - do not preface execution with "I'm checking the repo" or similar commentary
 - do not summarize obvious command output in multiple paragraphs afterward
 - keep any extra explanation to one short sentence unless the user asks for more
-
-For mediated workflow commands:
-- preserve the older Claude-style wrapper behavior before invoking the CLI
-- for `aether init`, first run `AETHER_OUTPUT_MODE=json aether init-research --goal "<goal>" --target .`, gather bounded repo context, and ask for approval before the real init
-- for `aether plan`, `aether build`, `aether continue`, `aether run`, and `aether seal`, keep the normal approval/decision touchpoints instead of auto-running immediately
-- if a user asks for `aether dream` or another command the binary does not expose, say so plainly instead of inventing a fake runtime
 
 Agent definitions live in `.codex/agents/*.toml` (TOML format).
 

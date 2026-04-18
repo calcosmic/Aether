@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.14] - 2026-04-18
+
+Codex wrapper rollback with visuals and worker spawning preserved.
+
+### Changed
+- Codex guidance now routes literal `aether ...` commands back through the direct CLI path instead of trying to recreate Claude-style pre-command wrapper flows in repo instructions and skill text
+- Codex repo templates and project instructions keep `AETHER_OUTPUT_MODE=visual` guidance so the CLI still owns banners, caste visuals, and workflow ceremony
+
+### Fixed
+- `aether init`, `aether plan`, `aether build`, `aether continue`, `aether run`, and `aether seal` in Codex no longer trigger large repo archaeology passes or approval theater before the real CLI command
+- Codex guidance tests now enforce the minimal-wrapper contract again, reducing the chance of another instruction-layer regression like `v1.0.13`
+
 ## [1.0.13] - 2026-04-18
 
 Codex command-class parity restore for colony-shaping commands.

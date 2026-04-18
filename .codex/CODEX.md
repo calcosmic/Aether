@@ -134,30 +134,14 @@ aether status
 aether pheromone-display
 ```
 
-When the user message is already a literal `aether ...` command, treat the
-installed `aether` binary and `aether --help` as the source of truth rather
-than the markdown mirrors. For lifecycle commands run through Codex shell
-execution, prefer `AETHER_OUTPUT_MODE=visual aether ...` unless the user
-explicitly wants JSON output.
-
-Command split:
-- direct pass-through: `aether status`, `aether update`, `aether version`,
-  `aether history`, `aether pheromones`, `aether colonize`, `aether oracle status`,
-  `aether oracle stop`
-- mediated workflow: `aether init`, `aether plan`, `aether build`,
-  `aether continue`, `aether run`, `aether seal`, `aether oracle "<topic>"`
-
-For direct pass-through commands, do not preface execution with repo
-archaeology, skill narration, or "I'm checking..." commentary. Let the CLI
-output stand on its own and keep any extra explanation to one short sentence
-unless the user asks for more.
-
-For mediated workflow commands, preserve the older Claude-style wrapper
-behavior before invoking the CLI. `aether init` is the clearest example: first
-run `AETHER_OUTPUT_MODE=json aether init-research --goal "<goal>" --target .`,
-gather bounded repo context, and ask for approval before the real init. If a
-user asks for `aether dream` or another command the binary does not expose, say
-so plainly instead of inventing a fake runtime.
+When the user message is already a literal `aether ...` command, execute that exact CLI
+command first. Do not inspect repo files to infer intent, and do not treat command-doc
+mirrors as more authoritative than the installed `aether` binary. For lifecycle commands
+run through Codex shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...` unless the
+user explicitly wants JSON output.
+Do not preface literal commands with repo archaeology, skill narration, or
+"I'm checking..." commentary. Let the CLI output stand on its own and keep any
+extra explanation to one short sentence unless the user asks for more.
 
 ### Agent Definitions (TOML Format)
 
@@ -447,4 +431,4 @@ aether update
 
 ---
 
-*Updated for Aether v1.0.13 -- 2026-04-18*
+*Updated for Aether v1.0.14 -- 2026-04-18*

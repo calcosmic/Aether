@@ -14,31 +14,17 @@ version: "1.0"
 
 The colony workflow must not run autonomously past major decision points. Users want to feel in control of direction. This skill teaches you when and how to pause for user input.
 
-## Literal Command Split
+## Literal Command Exemption
 
-Not all literal `aether ...` commands should be treated the same way.
-
-Safe read-only or maintenance commands such as `aether update`, `aether status`,
-`aether version`, `aether history`, and `aether pheromones` still use the fast
-path:
+These touchpoints do not apply when the user already gave an explicit literal CLI command such as `aether update`, `aether status`, `aether entomb`, or `aether build 2`.
 
 - Execute the literal command first.
 - Do not convert it into a planning conversation or repo archaeology pass.
 - Do not announce skill usage, intent interpretation, or a preflight summary before running the command.
 - Do not inspect repo files first unless the command itself fails and you need evidence to explain that failure.
-- Do not ask for extra confirmation for safe commands the user explicitly named.
+- Do not ask for extra confirmation for read-only or maintenance commands the user explicitly named.
 - If the command itself fails or needs unavailable arguments, report the concrete CLI issue and the exact follow-up command.
 - After the command returns, keep your own wrapper to one short sentence at most. The CLI output is the primary result.
-
-Do not fast-path colony-shaping commands like `aether init`, `aether plan`,
-`aether build`, `aether continue`, `aether run`, or `aether seal`. These still
-need the touchpoints below.
-
-For `aether init "<goal>"`, run a short foundation pass first: use
-`aether init-research --goal "<goal>" --target .`, gather bounded repo context,
-and present an approval summary before running the real init. If your platform
-can spawn helpers, use Scout + Architect in read-only mode; otherwise do the
-same analysis locally.
 
 ## Mandatory Touchpoints
 
