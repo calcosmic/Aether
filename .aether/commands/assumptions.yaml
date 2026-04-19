@@ -1,0 +1,12 @@
+name: ant:assumptions
+description: "🧠🐜📐🐜🧠 Surface plan assumptions through the Aether CLI runtime"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether assumptions-analyze $ARGUMENTS"
+guardrails:
+  - "Do not write `assumptions.json` or `pheromones.json` by hand from this command spec."
+  - "If the runtime reports unclear assumptions, surface them honestly instead of silently deciding for the user."
+  - "If docs and runtime disagree, runtime wins."
+follow_up:
+  inspect: "AETHER_OUTPUT_MODE=visual aether assumption-list"
+  validate: "AETHER_OUTPUT_MODE=visual aether assumption-validate --id <id> --note \"<evidence>\""

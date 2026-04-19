@@ -1,0 +1,12 @@
+name: ant:profile
+description: "🧠🐜👤🐜🧠 Inspect or refresh the behavioral profile through the Aether CLI runtime"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether profile-read $ARGUMENTS"
+guardrails:
+  - "Do not write `profile.json`, `behavior-observations.jsonl`, or `QUEEN.md` by hand from this command spec."
+  - "If the user wants the latest observations consolidated first, run `AETHER_OUTPUT_MODE=visual aether profile-update` before reading."
+  - "If docs and runtime disagree, runtime wins."
+follow_up:
+  update: "AETHER_OUTPUT_MODE=visual aether profile-update"
+  observe: "AETHER_OUTPUT_MODE=visual aether behavior-observe --dimension <name> --signal \"<signal>\" --strength <0-1> --evidence \"<evidence>\""

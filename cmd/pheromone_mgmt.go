@@ -209,45 +209,58 @@ var pheromoneDisplayCmd = &cobra.Command{
 }
 
 var pheromoneSnapshotInjectCmd = &cobra.Command{
-	Use:        "pheromone-snapshot-inject",
-	Short:      "Inject pheromone snapshot into colony state (deferred -- returns placeholder response)",
-	Args:       cobra.NoArgs,
-	Deprecated: "deferred -- not yet implemented, returns placeholder response",
+	Use:   "pheromone-snapshot-inject",
+	Short: "Copy active pheromone signals from one repo/worktree root into another",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
 
-		var pf colony.PheromoneFile
-		if err := store.LoadJSON("pheromones.json", &pf); err != nil {
-			outputOK(map[string]interface{}{"injected": false, "reason": "no pheromones file"})
+		sourceRoot, _ := cmd.Flags().GetString("source-root")
+		targetRoot, _ := cmd.Flags().GetString("target-root")
+		if strings.TrimSpace(targetRoot) == "" {
+			outputError(1, "--target-root is required", nil)
 			return nil
 		}
 
-		active := 0
-		for _, sig := range pf.Signals {
-			if sig.Active {
-				active++
-			}
+		result, err := syncPheromoneStores(sourceRoot, targetRoot, pheromoneSyncOptions{ActiveOnly: true})
+		if err != nil {
+			outputError(2, fmt.Sprintf("failed to inject pheromone snapshot: %v", err), nil)
+			return nil
 		}
 
 		outputOK(map[string]interface{}{
-			"injected":     true,
-			"active_count": active,
-			"total_count":  len(pf.Signals),
+			"injected": true,
+			"result":   result,
 		})
 		return nil
 	},
 }
 
 var pheromoneMergeBackCmd = &cobra.Command{
-	Use:        "pheromone-merge-back",
-	Short:      "Merge pheromone changes back from worktree (deferred -- returns placeholder response)",
-	Args:       cobra.NoArgs,
-	Deprecated: "deferred -- not yet implemented, returns placeholder response",
+	Use:   "pheromone-merge-back",
+	Short: "Merge pheromone changes from one repo/worktree root back into another",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		outputOK(map[string]interface{}{"merged": true})
+		sourceRoot, _ := cmd.Flags().GetString("source-root")
+		targetRoot, _ := cmd.Flags().GetString("target-root")
+		if strings.TrimSpace(sourceRoot) == "" {
+			outputError(1, "--source-root is required", nil)
+			return nil
+		}
+
+		result, err := syncPheromoneStores(sourceRoot, targetRoot, pheromoneSyncOptions{})
+		if err != nil {
+			outputError(2, fmt.Sprintf("failed to merge pheromones: %v", err), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"merged": true,
+			"result": result,
+		})
 		return nil
 	},
 }
@@ -257,6 +270,10 @@ func init() {
 
 	pheromoneDisplayCmd.Flags().String("type", "", "Filter by signal type (FOCUS/REDIRECT/FEEDBACK)")
 	pheromoneDisplayCmd.Flags().Bool("active-only", true, "Only show active signals")
+	pheromoneSnapshotInjectCmd.Flags().String("source-root", "", "Repo or worktree root to copy active pheromones from (default current AETHER_ROOT)")
+	pheromoneSnapshotInjectCmd.Flags().String("target-root", "", "Repo or worktree root to inject active pheromones into")
+	pheromoneMergeBackCmd.Flags().String("source-root", "", "Repo or worktree root to merge pheromones from")
+	pheromoneMergeBackCmd.Flags().String("target-root", "", "Repo or worktree root to merge pheromones into (default current AETHER_ROOT)")
 
 	rootCmd.AddCommand(pheromonePrimeCmd)
 	rootCmd.AddCommand(colonyPrimeCmd)

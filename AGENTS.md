@@ -8,6 +8,12 @@ This file provides project-level instructions for Codex CLI, equivalent to
 `CLAUDE.md` for Claude Code. Aether supports three platforms: Claude Code,
 OpenCode, and Codex CLI.
 
+## Platform Policy
+
+- **Primary platforms:** Claude Code and OpenCode. These are the main maintained user surfaces.
+- **Secondary platform:** Codex CLI. Codex has best-effort support for the direct `aether` workflow.
+- **What that means for Codex:** keep the native CLI lifecycle, install/update flow, state integrity, and worker dispatch safe and usable. Codex UX polish and wrapper semantics may lag behind Claude/OpenCode.
+
 ---
 
 ## Quick Reference
@@ -132,6 +138,7 @@ Codex currently exposes the core colony lifecycle directly:
 ```bash
 aether lay-eggs
 aether init "Build feature X"
+aether discuss
 aether colonize
 aether plan
 aether run --dry-run
@@ -145,6 +152,8 @@ aether oracle "release concern"
 Codex also exposes compatibility entrypoints for the flows users reach for most:
 `aether run` for autopilot-style build/continue looping, `aether watch` for live
 worker visibility, and `aether oracle` for the autonomous Oracle RALF research loop.
+Treat these as supported best-effort compatibility entrypoints within Codex's
+native CLI workflow, rather than strict mirrors of Claude/OpenCode slash-command UX.
 
 ### Publishing Changes
 
@@ -175,6 +184,7 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 |---------|---------|
 | `aether lay-eggs` | Set up Aether in this repo (one-time, creates .aether/) |
 | `aether init "Build feature X"` | Start a colony with a goal |
+| `aether discuss` | Surface unresolved intent questions before planning and store clarifications |
 | `aether colonize` | Analyze existing codebase |
 | `aether plan` | Generate project phases |
 | `aether build <phase>` | Execute a phase with Codex worker dispatch |
@@ -241,6 +251,7 @@ aether lay-eggs
 
 # Starting a colony
 aether init "Build feature X"
+aether discuss                           # optional but recommended before planning
 aether colonize                          # if existing codebase
 aether plan
 aether watch                             # optional live worker view
@@ -326,7 +337,7 @@ Authority note:
 - Build/continue execution behavior is defined in `.aether/docs/command-playbooks/*.md`.
 - OpenCode maintains separate command specs in `.opencode/commands/ant/*.md`.
 - Codex CLI uses the `aether` CLI binary directly (no slash command mechanism).
-- Agent parity model: `.claude/agents/ant/*.md` is canonical, `.aether/agents-claude/*.md` is a byte-identical packaging mirror, `.opencode/agents/*.md` maintains structural parity, `.codex/agents/*.toml` maintains content parity in TOML format.
+- Agent parity model: `.claude/agents/ant/*.md` is canonical, `.aether/agents-claude/*.md` is a byte-identical packaging mirror, `.opencode/agents/*.md` maintains structural parity, and `.codex/agents/*.toml` is a supported Codex translation aligned on core role intent and maintained on a best-effort basis.
 
 ---
 
@@ -680,13 +691,14 @@ Aether supports two parallel execution strategies:
 | Mode | Value | Description |
 |------|-------|-------------|
 | In-repo (default) | `"in-repo"` | Workers share the working tree directly |
-| Worktree | `"worktree"` | Each worker gets an isolated git worktree branch |
+| Worktree | `"worktree"` | Each worker gets an isolated git worktree, then file and pheromone changes sync back into the main root |
 
 - `aether parallel-mode get` -- Read current mode
 - `aether parallel-mode set <mode>` -- Change mode
 
 **In-repo** is simpler for most projects. **Worktree** provides isolation for
-larger tasks with multiple workers touching different files.
+larger tasks with multiple workers touching different files, while keeping the
+main root as the final source of truth after sync-back.
 
 ---
 

@@ -440,10 +440,10 @@ func ParseWorkerOutput(output string) (workerClaims, error) {
 	}
 
 	if direct, ok := unmarshalWorkerClaims(trimmed); ok {
-		return direct, nil
+		return normalizeWorkerClaims(direct, WorkerConfig{}), nil
 	}
 	if fenced, ok := unmarshalWorkerClaims(stripCodeFence(trimmed)); ok {
-		return fenced, nil
+		return normalizeWorkerClaims(fenced, WorkerConfig{}), nil
 	}
 
 	// Find all JSON-like substrings (objects starting with { and ending with })
@@ -481,7 +481,7 @@ func ParseWorkerOutput(output string) (workerClaims, error) {
 		return claims, fmt.Errorf("parse worker output: invalid JSON: %w", err)
 	}
 
-	return claims, nil
+	return normalizeWorkerClaims(claims, WorkerConfig{}), nil
 }
 
 // --- Factory ---
@@ -530,16 +530,20 @@ func renderResponseContract(config WorkerConfig) string {
 	if root == "" {
 		root = "."
 	}
+	statusLine := "completed, failed, blocked"
+	if strings.EqualFold(strings.TrimSpace(config.Caste), "builder") {
+		statusLine = "code_written, completed, failed, blocked"
+	}
 	return strings.TrimSpace(fmt.Sprintf(`
 ## Final Response Contract
 
 Return ONLY a single JSON object as your final response.
 - Do not wrap the JSON in markdown code fences.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
-- Set status to one of: completed, failed, blocked.
+- Set status to one of: %s.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Keep summary concise and concrete.
-`, filepath.Clean(root)))
+`, filepath.Clean(root), statusLine))
 }
 
 func workerClaimsSchema() jsonSchema {
@@ -571,7 +575,7 @@ func workerClaimsSchema() jsonSchema {
 			"task_id":  map[string]interface{}{"type": "string"},
 			"status": map[string]interface{}{
 				"type": "string",
-				"enum": []string{"completed", "failed", "blocked"},
+				"enum": []string{"completed", "code_written", "failed", "blocked"},
 			},
 			"summary":        map[string]interface{}{"type": "string"},
 			"files_created":  stringArray,
@@ -629,6 +633,8 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 	switch status {
 	case "completed", "failed", "blocked":
 		claims.Status = status
+	case "code_written":
+		claims.Status = "completed"
 	default:
 		if len(claims.Blockers) > 0 {
 			claims.Status = "blocked"

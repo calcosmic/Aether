@@ -107,6 +107,12 @@ func runCodexPlan(root string, refresh bool) (map[string]interface{}, error) {
 	}
 
 	granularity := normalizedGranularity(state.PlanGranularity)
+	pending := loadPendingDecisionFile()
+	unresolvedClarifications := countPendingClarifications(pending)
+	clarificationWarning := ""
+	if unresolvedClarifications > 0 {
+		clarificationWarning = "Unresolved clarifications exist. Run `aether discuss` to resolve them before planning, or proceed with implicit assumptions."
+	}
 
 	if len(state.Plan.Phases) > 0 && !refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
@@ -116,13 +122,15 @@ func runCodexPlan(root string, refresh bool) (map[string]interface{}, error) {
 		}
 		updateSessionSummary("plan", nextCommand, fmt.Sprintf("Loaded existing plan (%d phases)", len(state.Plan.Phases)))
 		return map[string]interface{}{
-			"planned":       true,
-			"existing_plan": true,
-			"goal":          *state.Goal,
-			"phases":        state.Plan.Phases,
-			"count":         len(state.Plan.Phases),
-			"granularity":   string(granularity),
-			"next":          nextCommand,
+			"planned":                   true,
+			"existing_plan":             true,
+			"goal":                      *state.Goal,
+			"phases":                    state.Plan.Phases,
+			"count":                     len(state.Plan.Phases),
+			"granularity":               string(granularity),
+			"unresolved_clarifications": unresolvedClarifications,
+			"clarification_warning":     clarificationWarning,
+			"next":                      nextCommand,
 		}, nil
 	}
 
@@ -268,28 +276,30 @@ func runCodexPlan(root string, refresh bool) (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"planned":              true,
-		"existing_plan":        false,
-		"refreshed":            refresh,
-		"goal":                 *state.Goal,
-		"phases":               phases,
-		"count":                len(phases),
-		"granularity":          string(granularity),
-		"granularity_min":      granularityMin(granularity),
-		"granularity_max":      granularityMax(granularity),
-		"confidence":           confidence,
-		"planning_dir":         planningDir,
-		"planning_files":       []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
-		"plan_artifact":        filepath.Base(planArtifactFile),
-		"phase_research_dir":   phaseResearchDir,
-		"phase_research_files": phaseResearchFiles,
-		"dispatches":           dispatchMaps,
-		"dispatch_mode":        dispatchMode,
-		"artifact_source":      artifactSource,
-		"plan_source":          planSource,
-		"gaps":                 unresolvedGaps,
-		"survey_docs":          survey.SurveyDocs,
-		"next":                 nextCommand,
+		"planned":                   true,
+		"existing_plan":             false,
+		"refreshed":                 refresh,
+		"goal":                      *state.Goal,
+		"phases":                    phases,
+		"count":                     len(phases),
+		"granularity":               string(granularity),
+		"granularity_min":           granularityMin(granularity),
+		"granularity_max":           granularityMax(granularity),
+		"confidence":                confidence,
+		"planning_dir":              planningDir,
+		"planning_files":            []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
+		"plan_artifact":             filepath.Base(planArtifactFile),
+		"phase_research_dir":        phaseResearchDir,
+		"phase_research_files":      phaseResearchFiles,
+		"dispatches":                dispatchMaps,
+		"dispatch_mode":             dispatchMode,
+		"artifact_source":           artifactSource,
+		"plan_source":               planSource,
+		"gaps":                      unresolvedGaps,
+		"survey_docs":               survey.SurveyDocs,
+		"unresolved_clarifications": unresolvedClarifications,
+		"clarification_warning":     clarificationWarning,
+		"next":                      nextCommand,
 	}, nil
 }
 

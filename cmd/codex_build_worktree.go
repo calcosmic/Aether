@@ -115,6 +115,18 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 					dr.Status = "failed"
 					dr.Error = syncErr
 					finalStatus = colony.WorktreeOrphaned
+				} else if pheromoneResult, pheromoneErr := syncPheromoneStores(session.AbsPath, root, pheromoneSyncOptions{}); pheromoneErr != nil {
+					dr.Status = "failed"
+					dr.Error = pheromoneErr
+					finalStatus = colony.WorktreeOrphaned
+				} else if dr.WorkerResult != nil {
+					if summary := formatPheromoneSyncSummary(pheromoneResult); summary != "" {
+						if strings.TrimSpace(dr.WorkerResult.Summary) == "" {
+							dr.WorkerResult.Summary = summary
+						} else {
+							dr.WorkerResult.Summary = strings.TrimSpace(dr.WorkerResult.Summary) + " " + summary
+						}
+					}
 				}
 			}
 

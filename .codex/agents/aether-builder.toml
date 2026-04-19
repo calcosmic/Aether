@@ -96,7 +96,7 @@ You MAY delegate with the agent-spawning tool if it is available and explicitly 
   "ant_name": "{your name}",
   "caste": "builder",
   "task_id": "{task_id}",
-  "status": "completed | failed | blocked",
+  "status": "code_written | failed | blocked",
   "summary": "What you accomplished",
   "files_created": [],
   "files_modified": [],
@@ -111,6 +111,13 @@ You MAY delegate with the agent-spawning tool if it is available and explicitly 
   "spawns": []
 }
 ```
+
+**Status values:**
+- `code_written` - Code is implemented and self-tested; awaiting verification/colony reconciliation before the phase is treated as complete
+- `failed` - Unrecoverable error; blockers field explains what
+- `blocked` - Scope exceeded or architectural decision required; escalate clearly in blockers
+
+**IMPORTANT:** Builders should prefer `"code_written"` over `"completed"`. The Codex runtime accepts both and normalizes `code_written` as a successful builder result.
 
 ## Failure Handling
 

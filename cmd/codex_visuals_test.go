@@ -885,6 +885,38 @@ func TestRenderPlanVisual_ExistingPlan(t *testing.T) {
 	}
 }
 
+func TestRenderPlanVisual_ShowsClarificationWarning(t *testing.T) {
+	phaseMaps := []interface{}{
+		map[string]interface{}{
+			"id":     1,
+			"name":   "Phase 1",
+			"status": colony.PhaseReady,
+			"tasks": []interface{}{
+				map[string]interface{}{"goal": "Task A", "status": colony.TaskPending},
+			},
+		},
+	}
+
+	result := map[string]interface{}{
+		"existing_plan":             true,
+		"goal":                      "Previous goal",
+		"phases":                    phaseMaps,
+		"unresolved_clarifications": 2,
+		"clarification_warning":     "Unresolved clarifications exist. Run `aether discuss` to resolve them before planning, or proceed with implicit assumptions.",
+	}
+
+	output := renderPlanVisual(result)
+	if !strings.Contains(output, "Clarifications") {
+		t.Fatalf("expected clarifications section in plan output\n%s", output)
+	}
+	if !strings.Contains(output, "2 unresolved clarification(s)") {
+		t.Fatalf("expected unresolved clarification count in plan output\n%s", output)
+	}
+	if !strings.Contains(output, "Run `aether discuss`") {
+		t.Fatalf("expected discuss guidance in plan output\n%s", output)
+	}
+}
+
 // phaseToMap converts a colony.Phase to a map[string]interface{} for test construction.
 func phaseToMap(p colony.Phase) map[string]interface{} {
 	tasks := make([]interface{}, len(p.Tasks))

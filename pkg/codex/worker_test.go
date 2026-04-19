@@ -175,6 +175,18 @@ Final output text
 	}
 }
 
+func TestParseWorkerOutput_NormalizesBuilderCodeWrittenToCompleted(t *testing.T) {
+	output := `{"ant_name":"Hammer-23","caste":"builder","task_id":"2.1","status":"code_written","summary":"Implemented and self-tested","files_created":[],"files_modified":["file.go"],"tests_written":["file_test.go"],"tool_count":2,"blockers":[],"spawns":[]}`
+
+	result, err := ParseWorkerOutput(output)
+	if err != nil {
+		t.Fatalf("ParseWorkerOutput returned error: %v", err)
+	}
+	if result.Status != "completed" {
+		t.Errorf("Status = %q, want %q", result.Status, "completed")
+	}
+}
+
 func TestParseWorkerOutput_HandlesInvalidJSON(t *testing.T) {
 	output := `text
 {not valid json at all}`

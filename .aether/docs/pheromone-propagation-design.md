@@ -607,7 +607,11 @@ File: `.aether/data/pheromone-merge-log.json` (gitignored, appended on main)
 
 ## 8. Integration Points
 
-> Status note: this section is still design intent, not current default runtime behavior. `pheromone-snapshot-inject` and `pheromone-merge-back` remain deferred placeholders, and the main Codex build/continue/run loop does not invoke them automatically today.
+> Status note: the runtime now supports direct repo/worktree-root snapshot inject
+> and merge-back of `pheromones.json`, and worktree Codex builds merge pheromone
+> changes back into the main root before cleanup. The broader PR export/import
+> flow in this section is still design intent rather than the default runtime
+> path today.
 
 ### 8.1 New Subcommands
 

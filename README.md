@@ -150,7 +150,14 @@ aether seal
 ```
 
 The Go binary is the source of truth. Claude Code and OpenCode also expose the
-same lifecycle through slash commands after the repo is bootstrapped.
+same lifecycle through slash commands after the repo is bootstrapped on the
+primary platforms.
+
+## Platform Support Policy
+
+- **Primary platforms:** Claude Code and OpenCode. These are the main user surfaces.
+- **Secondary platform:** Codex CLI. Codex has best-effort support for the native `aether` workflow.
+- **Expectation:** Codex should stay safe, usable, and honest about its capabilities. When tradeoffs appear, prioritize Claude/OpenCode parity and treat Codex UX alignment as best-effort.
 
 ## ✨ Key Features
 
@@ -165,7 +172,7 @@ same lifecycle through slash commands after the repo is bootstrapped.
 | **Skills** | 28 Skills | 10 colony + 18 domain knowledge for workers |
 | **Research** | Oracle + Scouts | Deep autonomous research before task decomposition |
 | **Quality Gates** | 6-phase verification before advancing |
-| **Platforms** | Claude Code + OpenCode + Codex CLI | Shared Go binary with platform-specific agents |
+| **Platforms** | Primary: Claude Code + OpenCode. Secondary: Codex CLI | Shared Go binary with platform-specific agents |
 
 ### 🐜 Worker Castes
 
@@ -207,7 +214,7 @@ same lifecycle through slash commands after the repo is bootstrapped.
 | **Autopilot** | `/ant:run` on Claude/OpenCode, `aether run` on Codex | Sequential task execution, no built-in loop | No built-in loop | Can loop via graph cycles, not opinionated |
 | **Quality Gates** | 6-phase verification before advancing phases | Optional human-in-the-loop review | No built-in gates | Manual checkpoint implementation |
 | **Research** | Oracle + Scouts — autonomous deep research before task decomposition | No dedicated research agents | Group chat can approximate research | No built-in research pattern |
-| **Platform Support** | Claude Code, OpenCode, Codex CLI | Any Python environment | Any Python environment | Any Python environment |
+| **Platform Support** | Primary: Claude Code + OpenCode. Secondary: Codex CLI | Any Python environment | Any Python environment | Any Python environment |
 
 ## 🏗️ Architecture
 
@@ -427,9 +434,9 @@ It pauses — not crashes — when something needs attention: test failures, cri
 
 ## 🔌 Works With
 
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - 46 slash commands + 24 agent definitions
-- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - 46 slash commands + agent definitions
-- **Codex CLI** - native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 24 TOML agent definitions
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 46 slash commands + 24 agent definitions
+- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 46 slash commands + agent definitions
+- **Codex CLI** - secondary platform, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 24 TOML agent definitions
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
@@ -441,9 +448,11 @@ It pauses — not crashes — when something needs attention: test failures, cri
 <summary>46 slash commands for Claude Code and OpenCode — click to expand</summary>
 
 Aether provides 46 slash commands organized into seven categories for Claude
-Code and OpenCode. This section is the slash-command reference.
+Code and OpenCode. This section is the slash-command reference for the primary
+platforms.
 
-Codex CLI uses the native Go binary instead. The core Codex workflow is:
+Codex CLI uses the native Go binary instead. It is a supported secondary surface
+rather than a strict slash-command mirror. The core Codex workflow is:
 `aether install`, `aether lay-eggs`, `aether init`, `aether plan`,
 `aether run`, `aether watch`, `aether build <phase>`, `aether continue`,
 `aether oracle`, `aether seal`, `aether focus`, `aether redirect`,
@@ -1009,7 +1018,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 ### 🎉 v1.0.14 -- Released (Current)
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
-- 46 slash commands across the full colony lifecycle, plus native Codex CLI workflow
+- 46 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow
 - Codex now keeps literal `aether ...` commands on the direct CLI path again, avoiding fake pre-command repo archaeology while preserving Aether’s visual output and worker-spawning runtime
 - The richer Codex UX now comes from the Aether CLI itself rather than instruction-layer wrapper theater, which keeps colony behavior aligned with the real binary
 - JSON error envelopes now include structured details again, so failed updates expose the real file-level sync problems instead of only a count
@@ -1019,7 +1028,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 - Context continuity across sessions via compact colony-prime context and persisted handoff artifacts
 - Autopilot mode via `/ant:run` on Claude/OpenCode and `aether run` on Codex
 - Live worker visibility via `aether watch` / `aether swarm --watch`, plus Codex oracle workspace support via `aether oracle`
-- Claude Code, OpenCode, and Codex CLI support with aligned release workflows
+- Primary support for Claude Code and OpenCode, with secondary Codex CLI support for the native `aether` workflow
 - Paused colonies now recover cleanly back into a runnable state, restoring the simpler Claude-style lifecycle contract in Codex instead of trapping colonies in `PAUSED`
 - `aether swarm` now runs a real investigate/fix/verify worker flow, and `parallel-mode worktree` now changes actual Codex build execution
 - Literal `aether ...` commands now execute directly in Codex guidance, sealed colonies can be archived with `aether entomb`, and upgraded repos restore session recovery mirrors cleanly

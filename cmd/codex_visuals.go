@@ -190,8 +190,11 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	}
 
 	if len(state.Plan.Phases) == 0 {
-		return `Run ` + "`aether plan`" + ` to map the colony into executable phases.`,
-			[]string{`Run ` + "`aether colonize`" + ` first if you want a quick repo scan.`}
+		return `Run ` + "`aether discuss`" + ` to capture intent clarifications before planning.`,
+			[]string{
+				`Run ` + "`aether plan`" + ` if you already know the tradeoffs and want phases now.`,
+				`Run ` + "`aether colonize`" + ` first if you want a quick repo scan.`,
+			}
 	}
 
 	switch state.State {
@@ -229,7 +232,8 @@ func renderInitVisual(goal, sessionID, dataDir string) string {
 	b.WriteString(dataDir)
 	b.WriteString("\n")
 	b.WriteString(renderNextUp(
-		`Run `+"`aether plan`"+` to generate the first phase map.`,
+		`Run `+"`aether discuss`"+` to lock down key clarifications before planning.`,
+		`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
 		`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
 	))
 	return b.String()
@@ -499,6 +503,13 @@ func renderPlanVisual(result map[string]interface{}) string {
 	phases := phaseSliceValue(result["phases"])
 	b.WriteString("Plan size: ")
 	b.WriteString(fmt.Sprintf("%d phases\n\n", len(phases)))
+	if warning := strings.TrimSpace(stringValue(result["clarification_warning"])); warning != "" {
+		b.WriteString("Clarifications\n")
+		b.WriteString(fmt.Sprintf("  - %d unresolved clarification(s)\n", intValue(result["unresolved_clarifications"])))
+		b.WriteString("  - ")
+		b.WriteString(warning)
+		b.WriteString("\n\n")
+	}
 	if dispatches, ok := result["dispatches"].([]interface{}); ok && len(dispatches) > 0 {
 		parsed := parsePlanningDispatchMaps(dispatches)
 		hasRealData := hasRealPlanningExecutionData(parsed)

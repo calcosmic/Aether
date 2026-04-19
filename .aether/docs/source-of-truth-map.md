@@ -1,8 +1,14 @@
 # Aether Source-of-Truth Map
 
-Updated: 2026-04-17
+Updated: 2026-04-18
 
 This document defines which files are authoritative for runtime behavior, which files are distribution mirrors, and which docs are explanatory only.
+
+## Platform Support Policy
+
+- **Primary platforms:** Claude Code and OpenCode. Their command and agent surfaces are the main maintained UX.
+- **Secondary platform:** Codex CLI. Codex has best-effort support for the native `aether` workflow.
+- **Release expectation:** Codex should remain safe, usable, and honest about what it supports. Claude/OpenCode parity drift is still higher priority than Codex UX drift.
 
 ## Authority Order
 
@@ -15,14 +21,14 @@ This document defines which files are authoritative for runtime behavior, which 
    - `AGENTS.md`
    - `.codex/CODEX.md`
    - `.codex/agents/*.toml`
-   - Why: Codex uses the direct CLI plus TOML agents, not slash commands.
+   - Why: Codex uses the direct CLI plus TOML agents, not slash commands. This is a supported secondary surface.
 
 3. **Slash-command platform surfaces**
    - `.claude/commands/ant/*.md`
    - `.opencode/commands/ant/*.md`
    - `.claude/agents/ant/*.md`
    - `.opencode/agents/*.md`
-   - Why: these are the user-facing contracts for Claude Code and OpenCode.
+   - Why: these are the primary user-facing contracts for Claude Code and OpenCode.
 
 4. **Packaged mirrors**
    - `.aether/agents-claude/*.md`
@@ -78,7 +84,7 @@ This document defines which files are authoritative for runtime behavior, which 
 ## Maintenance Rules
 
 1. Change runtime behavior in `cmd/` / `pkg/` first.
-2. Update Codex docs (`AGENTS.md`, `.codex/CODEX.md`) in the same change.
-3. Update the Claude/OpenCode markdown mirrors when command syntax or UX changes.
+2. Update the Claude/OpenCode markdown mirrors in the same change when command syntax or UX changes.
+3. Update Codex docs (`AGENTS.md`, `.codex/CODEX.md`) when native CLI semantics, install/update behavior, safety guarantees, or Codex-specific guidance changes.
 4. Keep packaged mirrors synchronized with their source trees.
 5. Treat `.aether/data/` and generated handoff/context files as outputs, not specs.

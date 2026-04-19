@@ -136,7 +136,7 @@
 //	  "ant_name": "string",           // Worker's assigned name (e.g., "Hammer-23")
 //	  "caste": "string",              // Worker caste (builder, watcher, scout, etc.)
 //	  "task_id": "string",            // Task identifier from the dispatch
-//	  "status": "string",             // One of: "completed", "failed", "blocked"
+//	  "status": "string",             // One of: "completed", "code_written", "failed", "blocked"
 //	  "summary": "string",            // Plain-English summary of what was accomplished
 //	  "files_created": ["string"],    // Absolute paths of files the worker created
 //	  "files_modified": ["string"],   // Absolute paths of files the worker modified
@@ -233,7 +233,7 @@
 //	    WorkerName    string        // The worker's assigned name
 //	    Caste         string        // Worker caste
 //	    TaskID        string        // Task identifier
-//	    Status        string        // "completed", "failed", or "blocked"
+//	    Status        string        // "completed", "failed", or "blocked" ("code_written" normalizes to "completed")
 //	    Summary       string        // Worker's self-reported summary
 //	    FilesCreated  []string      // Files the worker claims to have created
 //	    FilesModified []string      // Files the worker claims to have modified

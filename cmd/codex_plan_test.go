@@ -225,6 +225,59 @@ func TestPlanRefreshRejectsActivePhase(t *testing.T) {
 	}
 }
 
+func TestPlanIncludesClarificationWarningWhenPendingClarificationsExist(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Reuse the current plan carefully"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Existing phase",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Use the existing plan", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{
+		Decisions: []PendingDecision{{
+			ID:          "pd_clarify",
+			Type:        clarificationDecisionType,
+			Description: "Which verification bar do you want?",
+			Source:      discussSource("verification", false),
+			Resolved:    false,
+			CreatedAt:   "2026-04-19T10:00:00Z",
+		}},
+	}); err != nil {
+		t.Fatalf("seed pending decisions: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse plan output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	result := envelope["result"].(map[string]interface{})
+	if got := int(result["unresolved_clarifications"].(float64)); got != 1 {
+		t.Fatalf("unresolved_clarifications = %d, want 1", got)
+	}
+	if warning := stringValue(result["clarification_warning"]); !strings.Contains(warning, "Unresolved clarifications exist") {
+		t.Fatalf("expected clarification warning in plan result, got %q", warning)
+	}
+}
+
 func TestPlanUsesWorkerWrittenArtifactsWhenProvided(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

@@ -396,8 +396,9 @@ This step sets `$last_merged_branch` and `$last_merge_sha` which are consumed by
 
 ### Step 2.0.5: Pheromone Merge-Back (SILENT, NON-BLOCKING)
 
-> **Note:** `pheromone-merge-back` is currently a deferred placeholder. This step
-> will become functional once the command is fully implemented.
+> **Note:** direct root/worktree `pheromone-merge-back` is implemented, but this
+> exported-file PR merge path is still design intent rather than the default
+> Codex runtime flow.
 
 If a `pheromone-branch-export.json` exists in `.aether/exchange/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This entire step is silent and non-blocking -- continue proceeds even if merge-back fails.
 

@@ -131,6 +131,61 @@ func TestColonyPrime_IncludesPheromoneSignals(t *testing.T) {
 	}
 }
 
+func TestColonyPrime_IncludesResolvedClarifiedIntent(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	state, pheromones := colonyPrimeTestEnv(t, nil)
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON("pheromones.json", pheromones); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON(pendingDecisionsFile, PendingDecisionFile{
+		Decisions: []PendingDecision{
+			{
+				ID:          "pd_1",
+				Type:        clarificationDecisionType,
+				Description: formatClarificationDescription("Which existing surface should own the first implementation slice?", []string{"admin-app", "new-module", "research-first"}),
+				Source:      discussSource("surface", true),
+				Resolution:  "Use the existing admin-app surface",
+				Resolved:    true,
+				CreatedAt:   "2026-04-19T10:00:00Z",
+				ResolvedAt:  "2026-04-19T10:05:00Z",
+			},
+			{
+				ID:          "pd_2",
+				Type:        clarificationDecisionType,
+				Description: formatClarificationDescription("What verification bar do you want on the first pass?", []string{"focused tests", "broad coverage", "prototype first"}),
+				Source:      discussSource("verification", false),
+				Resolved:    false,
+				CreatedAt:   "2026-04-19T10:06:00Z",
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	envelope := runColonyPrime(t, s, nil)
+	result := envelope["result"].(map[string]interface{})
+	contextStr := result["context"].(string)
+
+	if !strings.Contains(contextStr, "## CLARIFIED INTENT") {
+		t.Fatal("colony-prime context missing clarified intent section")
+	}
+	if !strings.Contains(contextStr, "Which existing surface should own the first implementation slice? => Use the existing admin-app surface") {
+		t.Fatal("colony-prime context missing resolved clarification content")
+	}
+	if strings.Contains(contextStr, "What verification bar do you want on the first pass?") {
+		t.Fatal("colony-prime context should not include unresolved clarification questions")
+	}
+}
+
 func TestColonyPrime_LifecycleContextChangesWithState(t *testing.T) {
 	cases := []struct {
 		name         string

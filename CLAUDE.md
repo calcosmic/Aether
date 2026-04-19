@@ -10,12 +10,18 @@
 | What | Count/Status |
 |------|--------------|
 | Version | v1.0.1 |
-| Slash commands | 46 (Claude) + 46 (OpenCode) + 24 agents (Codex) |
+| Slash commands | 46 (Claude) + 46 (OpenCode); Codex uses native CLI + 24 TOML agents |
 | Agent definitions | 24 |
 | Skills | 28 (10 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Tests | 2900+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
+
+## Platform Policy
+
+- **Primary platforms:** Claude Code and OpenCode. These are the main maintained user surfaces.
+- **Secondary platform:** Codex CLI. Codex has best-effort support for the direct `aether` workflow.
+- **Expectation:** keep Claude/OpenCode command and agent UX aligned first. Keep Codex safe, usable, and accurate about its native CLI capabilities.
 
 ---
 
@@ -206,7 +212,7 @@ Authority note:
 - In Claude Code, `.claude/commands/ant/build.md` and `.claude/commands/ant/continue.md` are orchestrators only.
 - Build/continue execution behavior is defined in `.aether/docs/command-playbooks/*.md`.
 - OpenCode maintains separate command specs in `.opencode/commands/ant/*.md`.
-- Agent parity model: `.claude/agents/ant/*.md` is canonical, `.aether/agents-claude/*.md` is a byte-identical packaging mirror, `.opencode/agents/*.md` maintains structural parity (same filenames/count), `.codex/agents/*.toml` is user-facing (TOML format), `.aether/agents-codex/*.toml` is a packaging mirror.
+- Agent parity model: `.claude/agents/ant/*.md` is canonical, `.aether/agents-claude/*.md` is a byte-identical packaging mirror, `.opencode/agents/*.md` maintains structural parity (same filenames/count), and `.codex/agents/*.toml` is a supported Codex translation plus packaging mirror maintained on a best-effort basis.
 
 ---
 
@@ -693,7 +699,7 @@ Aether supports two parallel execution strategies, selected at colony init:
 | Mode | Value | Description |
 |------|-------|-------------|
 | In-repo (default) | `"in-repo"` | Workers share the working tree directly |
-| Worktree | `"worktree"` | Each worker gets an isolated git worktree branch |
+| Worktree | `"worktree"` | Each worker gets an isolated git worktree, then file and pheromone changes sync back into the main root |
 
 ### How It Works
 
@@ -701,7 +707,7 @@ Aether supports two parallel execution strategies, selected at colony init:
 2. The choice is saved as `parallel_mode` in `COLONY_STATE.json` (omitempty, defaults to `"in-repo"`)
 3. **Colony-prime** injects the current parallel mode into worker context
 4. **Build-wave playbook** conditionally allocates worktrees when mode is `"worktree"`
-5. **Continue-advance playbook** performs mode-aware merge-back (worktree branches merge to main; in-repo skips merge step)
+5. **Continue-advance playbook** performs mode-aware cleanup/merge checks after build-wave sync-back
 6. **Status and resume** commands display the active parallel mode
 
 ### CLI Subcommands
@@ -714,7 +720,7 @@ Aether supports two parallel execution strategies, selected at colony init:
 ### Choosing a Mode
 
 - **In-repo** is simpler and works well for most projects. Workers write directly to the repo.
-- **Worktree** provides isolation -- each worker gets its own branch, preventing file conflicts during parallel builds. Requires a clean working tree and is best for larger tasks with multiple workers touching different files.
+- **Worktree** provides isolation -- each worker gets its own git worktree, and successful file plus pheromone changes are synced back into the main root. Requires a clean working tree and is best for larger tasks with multiple workers touching different files.
 
 ---
 

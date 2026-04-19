@@ -186,6 +186,16 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		sections = append(sections, colonyPrimeSection{name: "user_preferences", content: prefsSB.String(), priority: 7})
 	}
 
+	if clarifications := clarifiedIntentPromptEntries(); len(clarifications) > 0 {
+		var clarifySB strings.Builder
+		clarifySB.WriteString("## CLARIFIED INTENT\n\n")
+		for _, clarification := range clarifications {
+			clarifySB.WriteString(clarification)
+			clarifySB.WriteString("\n")
+		}
+		sections = append(sections, colonyPrimeSection{name: "clarified_intent", content: clarifySB.String(), priority: 8})
+	}
+
 	var blockerFile colony.FlagsFile
 	if err := store.LoadJSON("pending-decisions.json", &blockerFile); err != nil {
 		_ = store.LoadJSON("flags.json", &blockerFile)
