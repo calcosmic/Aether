@@ -10,7 +10,7 @@
 | What | Count/Status |
 |------|--------------|
 | Version | v1.0.1 |
-| Slash commands | 46 (Claude) + 46 (OpenCode); Codex uses native CLI + 24 TOML agents |
+| Slash commands | 49 (Claude) + 49 (OpenCode); Codex uses native CLI + 24 TOML agents |
 | Agent definitions | 24 |
 | Skills | 28 (10 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -75,7 +75,8 @@
 
 Colony-prime assembles worker context from: QUEEN.md wisdom, eternal memory,
 pheromone signals, phase learnings, key decisions, blocker flags, user preferences,
-parallel mode, and context capsule — all within a token budget (see Token Budget below).
+clarified intent, parallel mode, and context capsule — all within a token budget
+(see Token Budget below).
 
 **See `RUNTIME UPDATE ARCHITECTURE.md` for complete distribution flow.**
 
@@ -113,6 +114,29 @@ parallel mode, and context capsule — all within a token budget (see Token Budg
 ```
 
 Smart pause conditions: test failures, critical Chaos findings, security gate failures, quality gate failures, runtime verification needed, replan suggestions.
+
+### Intent Capture and Learning
+
+Claude now exposes three pre-build intent commands that route through the shared
+Go runtime:
+
+| Command | When to use it | What it does |
+|---------|----------------|--------------|
+| `/ant:discuss` | After `/ant:init`, before `/ant:plan` | Captures clarifications, stores them as pending decisions, and emits `REDIRECT` pheromones for hard constraints once resolved |
+| `/ant:assumptions` | After `/ant:plan`, before `/ant:build` | Surfaces current plan assumptions, writes `assumptions.json`, and emits `FOCUS` / `FEEDBACK` pheromones from the analysis |
+| `/ant:profile` | When reviewing or refreshing learned user behavior | Reads or refreshes the behavioral profile and promotes top `[profiled]` directives into `QUEEN.md` |
+
+Typical guided flow:
+
+```bash
+/ant:init "Build feature X"
+/ant:discuss
+/ant:plan
+/ant:assumptions
+/ant:build 1
+/ant:continue
+/ant:profile
+```
 
 ### Publishing Changes
 
@@ -153,6 +177,9 @@ aether update      # or /ant:update
 ├── commands/            # YAML source definitions for slash commands
 ├── data/                # LOCAL ONLY (never distributed)
 │   ├── COLONY_STATE.json  # Colony state with phase tracking + parallel_mode
+│   ├── pending-decisions.json
+│   ├── assumptions.json
+│   ├── behavior-observations.jsonl
 │   ├── pheromones.json
 │   ├── constraints.json
 │   ├── midden/          # Failure tracking
@@ -165,11 +192,14 @@ aether update      # or /ant:update
 
 ```
 .claude/
-├── commands/ant/        # 46 slash commands
+├── commands/ant/        # 49 slash commands
 │   ├── init.md          # Colony initialization
+│   ├── discuss.md       # Clarify intent before planning
 │   ├── plan.md          # Phase planning
+│   ├── assumptions.md   # Surface plan assumptions
 │   ├── build.md         # Build orchestrator (loads split playbooks)
 │   ├── continue.md      # Continue orchestrator (loads split playbooks)
+│   ├── profile.md       # Inspect or refresh the behavioral profile
 │   └── ...
 ├── agents/ant/          # 24 agent definitions
 │   ├── aether-builder.md
@@ -468,6 +498,7 @@ User preferences are stored in the hub `~/.aether/QUEEN.md` under the `## User P
 
 - Preferences capture communication style, expertise level, and decision patterns
 - Colony-prime injects user preferences into worker context
+- `/ant:profile` promotes learned directives into the same section with a `[profiled]` prefix
 - Max 500 characters per preference entry
 
 ---
