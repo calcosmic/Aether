@@ -872,8 +872,8 @@ func TestUpdateSyncCodexPair(t *testing.T) {
 	if err := os.MkdirAll(codexDir, 0755); err != nil {
 		t.Fatalf("failed to create codex dir: %v", err)
 	}
-	codexContent := validCodexAgentTOML("agent", "builder")
-	if err := os.WriteFile(filepath.Join(codexDir, "agent.toml"), codexContent, 0644); err != nil {
+	codexContent := validCodexAgentTOML("aether-builder", "builder")
+	if err := os.WriteFile(filepath.Join(codexDir, "aether-builder.toml"), codexContent, 0644); err != nil {
 		t.Fatalf("failed to write codex agent: %v", err)
 	}
 
@@ -892,7 +892,7 @@ func TestUpdateSyncCodexPair(t *testing.T) {
 	}
 
 	// Verify the file was copied to the correct destination
-	destFile := filepath.Join(repoDir, ".codex", "agents", "agent.toml")
+	destFile := filepath.Join(repoDir, ".codex", "agents", "aether-builder.toml")
 	content, err := os.ReadFile(destFile)
 	if err != nil {
 		t.Fatalf("expected codex agent file at %s: %v", destFile, err)

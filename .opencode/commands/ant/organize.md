@@ -10,6 +10,10 @@ You are the **Queen Ant Colony**. Spawn an archivist to analyze codebase hygiene
 
 ## Instructions
 
+Parse `$ARGUMENTS`:
+- If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
+- Otherwise: set `visual_mode = true`
+
 ### Step 1: Read State
 
 Use the Read tool to read these files (in parallel):
@@ -19,7 +23,6 @@ Use the Read tool to read these files (in parallel):
 From COLONY_STATE.json, extract:
 - `goal` from top level
 - `plan.phases` for phase data
-- `signals` for pheromone data
 - `errors.records` for error patterns
 - `memory` for decisions/learnings
 - `events` for activity
@@ -28,7 +31,7 @@ From COLONY_STATE.json, extract:
 
 ### Step 2: Compute Active Pheromones
 
-Run using the Bash tool:
+Run using the Bash tool with description "Loading active pheromones...":
 ```bash
 aether pheromone-read
 ```
@@ -51,7 +54,7 @@ If no active signals after filtering:
 Read `.aether/workers.md` and extract the `## Keeper` section.
 
 Spawn via **Task tool** with `subagent_type="aether-keeper"`:
-# NOTE: Claude Code uses aether-keeper; OpenCode now uses same specialist agent
+# FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Keeper Ant - curates knowledge and synthesizes patterns."
 
 ```
 --- WORKER SPEC ---
@@ -118,14 +121,14 @@ Check for configuration that may not be connected:
 Produce your report in this exact structure:
 
 CODEBASE HYGIENE REPORT
-========================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Project: {goal}
 Scanned: {timestamp}
 Confidence threshold: HIGH findings are actionable, MEDIUM/LOW are informational
 
 HIGH CONFIDENCE FINDINGS
--------------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {For each HIGH confidence finding:}
   [{category}] {description}
     Evidence: {what data/observation supports this}
@@ -134,7 +137,7 @@ HIGH CONFIDENCE FINDINGS
 {If no HIGH findings: "No high-confidence hygiene issues detected."}
 
 MEDIUM CONFIDENCE OBSERVATIONS
--------------------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {For each MEDIUM confidence finding:}
   [{category}] {description}
     Evidence: {what data/observation supports this}
@@ -143,14 +146,14 @@ MEDIUM CONFIDENCE OBSERVATIONS
 {If no MEDIUM findings: "No medium-confidence observations."}
 
 LOW CONFIDENCE NOTES
----------------------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {For each LOW confidence finding:}
   [{category}] {description}
 
 {If no LOW findings: "No low-confidence notes."}
 
 SUMMARY
---------
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   High: {count} actionable findings
   Medium: {count} observations
   Low: {count} notes
@@ -170,17 +173,16 @@ CONSTRAINTS:
 After the keeper-ant returns, display header:
 
 ```
-🧹🐜🏛️🐜🧹 ═══════════════════════════════════════════════════
+🧹🐜🏛️🐜🧹 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    C O D E B A S E   H Y G I E N E   R E P O R T
-═══════════════════════════════════════════════════ 🧹🐜🏛️🐜🧹
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🧹🐜🏛️🐜🧹
 ```
 
-Then display using Bash tool (white -- architect color):
-
-```
-bash -c 'printf "\e[37m+=====================================================+\e[0m\n"'
-bash -c 'printf "\e[37m|  CODEBASE HYGIENE REPORT                            |\e[0m\n"'
-bash -c 'printf "\e[37m+=====================================================+\e[0m\n\n"'
+Then display using Bash tool with description "Displaying hygiene report header...":
+```bash
+bash -c 'printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"'
+bash -c 'printf "   C O D E B A S E   H Y G I E N E   R E P O R T\n"'
+bash -c 'printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"'
 ```
 
 Then display the keeper-ant's full report verbatim.
@@ -205,7 +207,7 @@ Next:
 
 ### Step 6: Log Activity
 
-Use the Bash tool to run:
+Use the Bash tool with description "Logging hygiene activity..." to run:
 ```
 aether activity-log --command "COMPLETE" --details "queen: Hygiene report generated"
 ```
@@ -217,4 +219,14 @@ Display persistence confirmation:
 All state persisted. Safe to /clear context if needed.
   Report: .aether/data/hygiene-report.md
   Resume: /ant:resume-colony
+```
+
+### Step 7: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
 ```

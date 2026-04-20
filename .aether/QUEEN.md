@@ -9,8 +9,6 @@
 
 Communication style, expertise level, and decision-making patterns observed from the user (the Queen). These shape how the colony communicates and what it prioritizes. User decisions are the most important wisdom.
 
-- **test-colony** (2026-03-29T06:03:45Z): test content
-
 - [charter] **Intent**: Review the last 15 commits (3019dec to d1754ea) for correctness, then implement Aether Structural Learning Stack — the memory consolidation pipeline that fixes the broken bridge between short-term ... (Colony: Aether Colony)
 - [charter] **Vision**: Fix Aether broken learning loop. Currently, observations die in short-term memory — nothing reliably flows to instincts or QUEEN.md. Build production-ready infrastructure so the colony genuinely le... (Colony: Aether Colony)
 ---
@@ -118,14 +116,13 @@ What worked and what failed during builds. Captures the full picture of colony e
 ### Phase 1: Enforce non-skippable playbook execution in build orchestrators
 - [general] Adding pre-synthesis verification gates to build orchestrators catches incomplete builds before synthesis — gate should name all prerequisite stages explicitly -- *Phase 1 (Enforce non-skippable playbook execution in build orchestrators)* (2026-03-31)
 - [general] Parallel swarm audits (4 scouts) are effective for commit review — each scout can deeply examine a specific area while cross-referencing findings -- *Phase 1 (Commit Audit)* (2026-03-31)
-- [general] Untracked test files can encode wrong assumptions — test-colony-data-dir.sh expected COLONY_DATA_DIR for COLONY_STATE.json but the architecture requires DATA_DIR -- *Phase 1 (Commit Audit)* (2026-03-31)
+- [general] Untracked test files can encode wrong assumptions — a temporary colony-data-dir test script expected COLONY_DATA_DIR for COLONY_STATE.json but the architecture requires DATA_DIR -- *Phase 1 (Commit Audit)* (2026-03-31)
 
 ### Phase 2: Trust Scoring Engine and Event Bus Foundation
 - [general] Shell utility modules with pure calculation logic (no side effects) can be built independently by parallel builders without merge conflicts -- *Phase 2 (Trust Scoring Engine and Event Bus Foundation)* (2026-04-01)
 - [general] Builders that self-register their dispatcher entries eliminate Wave 2 dependency — the registration task becomes implicit -- *Phase 2 (Trust Scoring Engine and Event Bus Foundation)* (2026-04-01)
 
 ### Phase 3: Trust-Scored Storage and Graph Layer
-- [general] Running lint:sync and lint as a dedicated verification phase after code changes confirms no sync drift — useful as a final gate before colony seal -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
 - [general] Modifying existing code (learning.sh) and creating new modules (graph.sh, instinct-store.sh) can safely run in parallel when the modifications are additive (new fields, new function args) -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
 
 - [general] Standalone instinct storage with full schema (trust_score, trust_tier, provenance, application_history, related_instincts) is cleaner than embedding instincts in COLONY_STATE.json — enables independent queries and decay without touching colony state -- *Phase 3 (Trust-Scored Storage and Graph Layer)* (2026-04-01)
@@ -209,7 +206,6 @@ High-confidence behavioral patterns that have been validated through repeated co
 | 2026-03-29T17:38:41Z | 1774204068 | promoted_pattern | Added: Distribution pipeline has three independent exclus... |
 | 2026-03-29T17:38:37Z | 1774204068 | promoted_pattern | Added: SCRIPT_DIR references in test harness setup are ea... |
 | 2026-03-29T17:38:33Z | 1774204068 | promoted_pattern | Added: Anchor .npmignore patterns with leading slash when... |
-| 2026-03-29T06:03:45Z | test-colony | promoted_decree | Added: test content... |
 | 2026-03-29T02:47:07Z | 1774204068 | promoted_pattern | Added: Separate infrastructure from state using distinct ... |
 | 2026-03-29T02:47:00Z | 1774204068 | promoted_pattern | Added: Watcher independently catches state-path bugs that... |
 | 2026-03-29T02:46:52Z | 1774178419 | promoted_pattern | Added: TDD with parallel background agents speeds up Phas... |

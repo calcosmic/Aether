@@ -17,6 +17,7 @@ type installSyncPair struct {
 	cleanup              bool
 	preserveLocalChanges bool
 	validate             syncValidator
+	include              syncFilter
 }
 
 type repoSyncPair struct {
@@ -26,9 +27,11 @@ type repoSyncPair struct {
 	cleanup              bool
 	preserveLocalChanges bool
 	validate             syncValidator
+	include              syncFilter
 }
 
 type syncValidator func(srcPath, relPath string, data []byte) error
+type syncFilter func(relPath string) bool
 
 type codexAgentDefinition struct {
 	Name                  string   `toml:"name"`
@@ -43,7 +46,7 @@ func installSyncPairs() []installSyncPair {
 		{srcRel: ".claude/agents/ant", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
 		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode)", cleanup: true},
 		{srcRel: ".opencode/agents", destRel: ".opencode/agent", label: "Agents (opencode)", cleanup: false},
-		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile},
+		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 		{srcRel: ".aether/skills-codex", destRel: ".codex/skills/aether", label: "Skills (codex)", cleanup: false, preserveLocalChanges: true},
 	}
 }
@@ -55,10 +58,15 @@ func repoSyncPairs() []repoSyncPair {
 		{hubRel: "commands/opencode", destRel: "../.opencode/commands/ant", label: "Commands (opencode)"},
 		{hubRel: "agents", destRel: "../.opencode/agents", label: "Agents (opencode)"},
 		{hubRel: "agents-claude", destRel: "../.claude/agents/ant", label: "Agents (claude)"},
-		{hubRel: "codex", destRel: "../.codex/agents", label: "Agents (codex)", preserveLocalChanges: true, validate: validateCodexAgentFile},
+		{hubRel: "codex", destRel: "../.codex/agents", label: "Agents (codex)", preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 		{hubRel: "skills-codex", destRel: "../.codex/skills/aether", label: "Skills (codex)", preserveLocalChanges: true},
 		{hubRel: "rules", destRel: "../.claude/rules", label: "Rules (claude)"},
 	}
+}
+
+func isShippedAetherCodexAgent(relPath string) bool {
+	base := filepath.Base(relPath)
+	return filepath.Ext(base) == ".toml" && strings.HasPrefix(base, "aether-")
 }
 
 func validateCodexAgentFile(srcPath, relPath string, data []byte) error {

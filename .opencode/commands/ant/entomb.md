@@ -4,11 +4,11 @@ name: ant:entomb
 description: "⚰️🐜⚰️ Entomb completed colony in chambers"
 ---
 
-You are the **Queen**. Archive the completed colony through the runtime CLI.
+You are the **Queen**. Archive the sealed colony through the runtime CLI.
 
 Use the Go `aether` CLI as the source of truth.
 
 - Execute `AETHER_OUTPUT_MODE=visual aether entomb $ARGUMENTS` directly.
-- Do not compute milestones, archive files, or reset active colony state by hand from this command spec.
-- Do not duplicate XML tooling or confirmation logic here; rely on the CLI behavior and report it honestly.
-- Report the CLI archive result and any next-step routing directly.
+- Do not copy chamber archives, reset active state, or clear sessions by hand from this command spec.
+- Do not perform a separate seal-state flow here; rely on the CLI gate and report its result.
+- Report the CLI archive location and next-step routing directly.

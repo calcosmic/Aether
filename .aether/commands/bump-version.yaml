@@ -1,0 +1,8 @@
+name: ant:bump-version
+description: "🚀🐜 Bump version across all files, rebuild, push, and tag for release"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether bump-version $ARGUMENTS"
+guardrails:
+  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "If docs and runtime disagree, runtime wins."

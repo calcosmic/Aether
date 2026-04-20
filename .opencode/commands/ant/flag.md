@@ -54,7 +54,7 @@ Stop here.
 
 ### Step 3: Create Flag
 
-Run:
+Run using the Bash tool with description "Raising colony flag...":
 ```bash
 aether flag-add --severity "{severity}" --type "{type}" --title "{title}" --description "{description}" --source "manual" --phase {phase_or_null}
 ```
@@ -68,30 +68,30 @@ Output header based on flag type:
 **For blocker:**
 ```
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚩🐜📋🐜🚩  B L O C K E R   F L A G   C R E A T E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🚩🐜📋🐜🚩 ═══════════════════════════════════════════════════
-   B L O C K E R   F L A G   C R E A T E D
-═══════════════════════════════════════════════════ 🚩🐜📋🐜🚩
 
 ```
 
 **For issue:**
 ```
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚩🐜📋🐜🚩  I S S U E   F L A G   C R E A T E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🚩🐜📋🐜🚩 ═══════════════════════════════════════════════════
-   I S S U E   F L A G   C R E A T E D
-═══════════════════════════════════════════════════ 🚩🐜📋🐜🚩
 
 ```
 
 **For note:**
 ```
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚩🐜📋🐜🚩  N O T E   F L A G   C R E A T E D
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🚩🐜📋🐜🚩 ═══════════════════════════════════════════════════
-   N O T E   F L A G   C R E A T E D
-═══════════════════════════════════════════════════ 🚩🐜📋🐜🚩
 
 ```
 
@@ -134,6 +134,14 @@ Then output based on flag type:
    Use /ant:flags to view all flags.
 ```
 
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
+```
 
 
 ---

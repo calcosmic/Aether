@@ -104,6 +104,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			cleanup:              pair.cleanup,
 			preserveLocalChanges: pair.preserveLocalChanges,
 			validate:             pair.validate,
+			include:              pair.include,
 		})
 		entry := map[string]interface{}{
 			"label":   pair.label,
@@ -251,6 +252,7 @@ type syncOptions struct {
 	protectedDirs        map[string]bool
 	protectedFiles       map[string]bool
 	validate             syncValidator
+	include              syncFilter
 }
 
 // syncDir copies files from src to dest, optionally preserving changed local
@@ -280,6 +282,9 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 
 	// Walk source and copy files
 	srcFiles := listFilesRecursive(src)
+	if opts.include != nil {
+		srcFiles = filterSyncFiles(srcFiles, opts.include)
+	}
 	for _, relPath := range srcFiles {
 		if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
 			result.skipped++
@@ -348,6 +353,9 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 			if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
 				continue
 			}
+			if opts.include != nil && !opts.include(relPath) {
+				continue
+			}
 			if _, exists := srcSet[relPath]; !exists {
 				destPath := filepath.Join(dest, relPath)
 				if err := os.Remove(destPath); err == nil {
@@ -365,6 +373,21 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 	}
 
 	return result
+}
+
+func filterSyncFiles(relPaths []string, include syncFilter) []string {
+	if include == nil {
+		return relPaths
+	}
+
+	filtered := make([]string, 0, len(relPaths))
+	for _, relPath := range relPaths {
+		if include(relPath) {
+			filtered = append(filtered, relPath)
+		}
+	}
+
+	return filtered
 }
 
 func syncPathProtected(relPath string, protectedDirs, protectedFiles map[string]bool) bool {
@@ -515,7 +538,7 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 	// landing at .codex/agents/agents/*.toml. Syncing just agents/ fixes this.
 	codexSrc := filepath.Join(packageDir, ".codex", "agents")
 	codexDest := filepath.Join(systemDir, "codex")
-	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil, validateCodexAgentFile)
+	codexSyncResult := syncDirToHubWithExclusion(codexSrc, codexDest, nil, validateCodexAgentFile, isShippedAetherCodexAgent)
 	result["codex_copied"] = codexSyncResult.copied
 	result["codex_skipped"] = codexSyncResult.skipped
 	if len(codexSyncResult.errors) > 0 {
@@ -551,12 +574,12 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 // skipping excluded directories and unchanged files (by SHA-256 hash).
 // Also removes stale files in dest that no longer exist in src.
 func syncDirToHub(src, dest string) syncResult {
-	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, nil)
+	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, nil, nil)
 }
 
 // syncDirToHubWithExclusion is like syncDirToHub but accepts a custom exclusion map.
 // Pass nil to exclude nothing.
-func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, validate syncValidator) syncResult {
+func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, validate syncValidator, include syncFilter) syncResult {
 	// Default to no exclusions if nil
 	if exclude == nil {
 		exclude = map[string]bool{}
@@ -583,6 +606,9 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 
 	// Walk source and copy files, skipping excluded directories
 	srcFiles := listFilesRecursiveWithExclusion(src, exclude)
+	if include != nil {
+		srcFiles = filterSyncFiles(srcFiles, include)
+	}
 	for _, relPath := range srcFiles {
 		srcPath := filepath.Join(src, relPath)
 		destPath := filepath.Join(dest, relPath)
@@ -631,6 +657,9 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 		// Don't remove files in excluded dirs (they may have been added manually)
 		parts := strings.SplitN(relPath, string(filepath.Separator), 2)
 		if len(parts) > 0 && exclude[parts[0]] {
+			continue
+		}
+		if include != nil && !include(relPath) {
 			continue
 		}
 		if _, exists := srcSet[relPath]; !exists {

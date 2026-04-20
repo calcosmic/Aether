@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -81,7 +82,52 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "🔨🐜", "👁️🐜", "aether continue"} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "aether continue"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("build visual output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Lock the build packet contract"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Contract mapping",
+					Status: colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &taskID, Goal: "Render the build contract", Status: colony.TaskPending},
+					},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"A R T I F A C T S",
+		".aether/data/build/phase-1/manifest.json",
+		".aether/data/last-build-claims.json",
+		".aether/data/spawn-tree.txt",
+	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -132,6 +178,242 @@ func TestColonizeVisualOutputShowsDispatchPreview(t *testing.T) {
 	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Surveyors", "C O L O N I Z E", "aether plan"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("colonize visual output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestColonizeVisualOutputShowsSpawnTreeContract(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+
+	goal := "Surface colonize contracts"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"colonize"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colonize returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	if !strings.Contains(output, ".aether/data/spawn-tree.txt") {
+		t.Errorf("colonize visual output missing spawn tree contract\n%s", output)
+	}
+}
+
+func TestPlanVisualOutputShowsSpawnTreeContract(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Surface planning contracts"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	if !strings.Contains(output, ".aether/data/spawn-tree.txt") {
+		t.Errorf("plan visual output missing spawn tree contract\n%s", output)
+	}
+}
+
+func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Surface continue contracts"
+	now := mustParseRFC3339(t, "2026-04-20T11:00:00Z")
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Verify contracts",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Verify the build packet", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Keep going", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-41", Task: "Verify the build packet", Status: "spawned", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Task: "Independent verification before advancement", Status: "spawned"},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Verify contracts", goal, dispatches)
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"── Verification ──",
+		"Phase 1 verified and completed: Verify contracts",
+		"── Housekeeping ──",
+		"A R T I F A C T S",
+		"Workers",
+		"Forge-41",
+		"Keen-42",
+		"Verification passed during continue",
+		"── Next Phase ──",
+		".aether/data/build/phase-1/verification.json",
+		".aether/data/build/phase-1/gates.json",
+		".aether/data/build/phase-1/continue.json",
+		".aether/data/spawn-tree.txt",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("continue visual output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Complete the colony honestly"
+	now := mustParseRFC3339(t, "2026-04-20T11:15:00Z")
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Finish the final slice",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Finish cleanly", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-51", Task: "Finish cleanly", Status: "spawned", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-52", Task: "Independent verification before advancement", Status: "spawned"},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Finish the final slice", goal, dispatches)
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"Phase 1 verified and completed: Finish the final slice",
+		"── Colony Complete ──",
+		"All planned phases are complete. The colony is ready for Crowned Anthill.",
+		"aether seal",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("continue visual output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestWatchVisualOutputShowsSnapshotArtifacts(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Watch snapshot contracts"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Execution", Status: colony.PhaseInProgress}},
+		},
+	})
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-9", "Inspect the watch contract", 1); err != nil {
+		t.Fatalf("record spawn: %v", err)
+	}
+	if err := spawnTree.UpdateStatus("Hammer-9", "active", "Running"); err != nil {
+		t.Fatalf("mark active: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"watch"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("watch returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		".aether/data/spawn-tree.txt",
+		".aether/data/watch-status.txt",
+		".aether/data/watch-progress.txt",
+		"one-shot snapshot",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("watch visual output missing %q\n%s", want, output)
 		}
 	}
 }
@@ -201,6 +483,42 @@ func TestShouldRenderVisualOutputTTYOverride(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	if shouldRenderVisualOutput(os.Stdout) {
 		t.Fatal("expected json mode override to disable visual output")
+	}
+}
+
+func TestColorizeCasteUsesANSIForVisualOutput(t *testing.T) {
+	saveGlobals(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("NO_COLOR", "")
+
+	got := colorizeCaste("builder", "builder")
+	if !strings.Contains(got, "\x1b[33m") {
+		t.Fatalf("expected ANSI-highlighted builder caste text, got %q", got)
+	}
+	if !strings.Contains(got, "builder") || !strings.Contains(got, "\x1b[0m") {
+		t.Fatalf("expected ANSI-highlighted builder label, got %q", got)
+	}
+}
+
+func TestShouldUseANSIColorsUsesVisualModeOrForce(t *testing.T) {
+	saveGlobals(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("NO_COLOR", "")
+
+	if !shouldUseANSIColors() {
+		t.Fatal("expected visual mode to allow ANSI colors for caste highlighting")
+	}
+
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	t.Setenv("AETHER_FORCE_COLOR", "1")
+	if !shouldUseANSIColors() {
+		t.Fatal("expected AETHER_FORCE_COLOR to override ANSI detection")
 	}
 }
 
@@ -652,9 +970,13 @@ func TestRenderSurveyorResults_Formatting(t *testing.T) {
 		t.Errorf("missing Prov-1\n%s", output)
 	}
 
-	// Should use caste emojis from casteEmojiMap (surveyor = bar chart + ant)
-	if !strings.Contains(output, "\U0001f4ca\U0001f41c") {
-		t.Errorf("missing surveyor caste emoji\n%s", output)
+	// Should use caste label "Surveyor" from casteLabelMap
+	if !strings.Contains(output, "Surveyor") {
+		t.Errorf("missing Surveyor caste label\n%s", output)
+	}
+	// Should use single emoji from casteEmojiMap (surveyor = bar chart)
+	if !strings.Contains(output, "\U0001f4ca") {
+		t.Errorf("missing surveyor emoji\n%s", output)
 	}
 
 	// Completed should have checkmark, failed should have X
@@ -684,6 +1006,63 @@ func TestRenderSurveyorResults_Empty(t *testing.T) {
 	output = renderSurveyorResults([]codexSurveyorDispatch{})
 	if output != "" {
 		t.Errorf("expected empty output for empty surveyors, got %q", output)
+	}
+}
+
+func TestCasteIdentitySurveyorSubtypes(t *testing.T) {
+	// Surveyor subtypes should resolve to the Surveyor emoji/label/color, not generic Ant.
+	os.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	subtypes := []string{"surveyor-nest", "surveyor-pathogens", "surveyor-provisions", "surveyor-disciplines"}
+	for _, subtype := range subtypes {
+		identity := casteIdentity(subtype)
+		if !strings.Contains(identity, "📊") {
+			t.Errorf("casteIdentity(%q): expected 📊 emoji, got %q", subtype, identity)
+		}
+		if !strings.Contains(identity, "Surveyor") {
+			t.Errorf("casteIdentity(%q): expected 'Surveyor' label, got %q", subtype, identity)
+		}
+		emoji := casteEmoji(subtype)
+		if emoji != "📊" {
+			t.Errorf("casteEmoji(%q): expected 📊, got %q", subtype, emoji)
+		}
+		label := casteLabel(subtype)
+		if !strings.Contains(label, "Surveyor") {
+			t.Errorf("casteLabel(%q): expected 'Surveyor', got %q", subtype, label)
+		}
+		color := casteANSIColor(subtype)
+		if color == "" {
+			t.Errorf("casteANSIColor(%q): expected a color code, got empty", subtype)
+		}
+	}
+}
+
+func TestCasteIdentityUnknownCaste(t *testing.T) {
+	os.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	// Unknown castes should fall back to generic Ant.
+	identity := casteIdentity("unknown-worker")
+	if !strings.Contains(identity, "🐜") {
+		t.Errorf("expected 🐜 fallback for unknown caste, got %q", identity)
+	}
+	if !strings.Contains(identity, "Ant") {
+		t.Errorf("expected 'Ant' fallback for unknown caste, got %q", identity)
+	}
+}
+
+func TestCasteIdentityExactMatchPreferred(t *testing.T) {
+	os.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	// Exact matches should be used, not prefix fallback.
+	identity := casteIdentity("builder")
+	if !strings.Contains(identity, "🔨") {
+		t.Errorf("expected 🔨 for builder, got %q", identity)
+	}
+	if !strings.Contains(identity, "Builder") {
+		t.Errorf("expected 'Builder' label, got %q", identity)
 	}
 }
 
@@ -914,6 +1293,54 @@ func TestRenderPlanVisual_ShowsClarificationWarning(t *testing.T) {
 	}
 	if !strings.Contains(output, "Run `aether discuss`") {
 		t.Fatalf("expected discuss guidance in plan output\n%s", output)
+	}
+}
+
+func TestRenderPlanVisual_IncludesTaskMetadata(t *testing.T) {
+	phaseMaps := []interface{}{
+		map[string]interface{}{
+			"id":               1,
+			"name":             "Planning orchestration",
+			"description":      "Add a scout plus route-setter planning pass.",
+			"status":           colony.PhaseReady,
+			"success_criteria": []interface{}{"Plan generation is ant-driven", "The colony has a grounded next phase"},
+			"tasks": []interface{}{
+				map[string]interface{}{
+					"id":               "1.1",
+					"goal":             "Generate a route-setter plan with task constraints, hints, and success criteria",
+					"status":           colony.TaskPending,
+					"constraints":      []interface{}{"The first phase must become ready", "The saved plan must match the displayed plan"},
+					"hints":            []interface{}{"COLONY_STATE.json", "renderPlanVisual"},
+					"success_criteria": []interface{}{"Plan generation is grounded in repo context", "Spawn records show scout and route-setter activity"},
+					"depends_on":       []interface{}{"0.2"},
+				},
+			},
+		},
+	}
+
+	result := map[string]interface{}{
+		"existing_plan": false,
+		"goal":          "Ground the plan in worker artifacts",
+		"phases":        phaseMaps,
+	}
+
+	output := renderPlanVisual(result)
+
+	for _, want := range []string{
+		"Task 1.1",
+		"Constraints:",
+		"The first phase must become ready",
+		"Hints:",
+		"COLONY_STATE.json",
+		"Success Criteria:",
+		"Plan generation is grounded in repo context",
+		"Depends on: 0.2",
+		"Phase Success Criteria:",
+		"The colony has a grounded next phase",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("expected plan visual to contain %q\n%s", want, output)
+		}
 	}
 }
 

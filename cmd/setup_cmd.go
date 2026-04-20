@@ -118,6 +118,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			protectedDirs:        protectedDirs,
 			protectedFiles:       protectedFiles,
 			validate:             pair.validate,
+			include:              pair.include,
 		})
 		entry := map[string]interface{}{
 			"label":   pair.label,

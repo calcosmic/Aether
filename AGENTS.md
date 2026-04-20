@@ -55,6 +55,51 @@ should be zero or one short sentence.
 Agent definitions live in `.codex/agents/*.toml` (TOML format) and Codex reads
 them as part of its agent discovery system.
 
+## UX Architecture
+
+Codex gets its colony identity entirely from the Go runtime visual renderer
+(`cmd/codex_visuals.go`). Unlike Claude/OpenCode, Codex does NOT use wrapper
+markdown — the CLI output IS the presentation.
+
+### Caste Identity System
+
+Each worker caste has:
+- **Emoji prefix** — decorative icon (e.g., `🔨` for Builder, `👁️` for Watcher)
+- **ANSI-colored label** — the primary identity, colored by caste (e.g., "Builder" in yellow, "Watcher" in cyan)
+- **Deterministic name** — hash-based per caste+task (e.g., "Mason-67", "Keen-6")
+
+Visual format: `🔨 Builder Mason-67  Task description`
+
+Color detection uses `NO_COLOR`, `AETHER_FORCE_COLOR`, `CLICOLOR_FORCE`, and TTY
+checks. In non-TTY or JSON mode, colors are disabled and only plain text appears.
+
+### Stage Markers
+
+Build and continue output uses stage transition markers:
+```
+── Context ──
+── Tasks ──
+── Dispatch ──
+── Verification ──
+── Housekeeping ──
+── Next Phase ──
+── Colony Complete ──
+```
+
+### Output Modes
+
+| Mode | When | Content |
+|------|------|---------|
+| Visual | `AETHER_OUTPUT_MODE=visual` or TTY | ANSI banners, emojis, colors, stage markers |
+| JSON | `AETHER_OUTPUT_MODE=json` or piped | Structured data envelopes for programmatic use |
+
+### What Codex Does NOT Get
+
+Claude/OpenCode wrappers add colony framing (Queen persona, pre-build context,
+post-build narration) on top of the runtime output. Codex sees only the raw
+runtime output. To improve Codex UX, change `cmd/codex_visuals.go` — not the
+wrapper markdown.
+
 ---
 
 ## Architecture Overview

@@ -33,14 +33,23 @@ Parse the returned JSON:
 ### Step 3: Confirm
 
 
-
-Output:
+Output (3-5 lines, no banners):
 ```
-Export colony pheromone signals to portable XML format
-
+Pheromone signals exported to XML
   Path: <output_path>
 
 Share this file with another colony using /ant:import-signals.
 ```
 
 
+
+
+### Step 4: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
+```

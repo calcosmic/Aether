@@ -37,6 +37,9 @@ Parse `$ARGUMENTS`:
 - Otherwise: set `visual_mode = true`
 
 
+### Step 0.5: Initialize Visual Mode (if enabled)
+
+
 ### Step 1: Awaken — Load Context
 
 Read these files in parallel to understand the world you're dreaming about:
@@ -57,11 +60,11 @@ Read these files in parallel to understand the world you're dreaming about:
 
 Display awakening:
 
-
 ```
-💭🐜🌙🐜💭 ═══════════════════════════════════════════════
-           T H E   D R E A M E R   A W A K E N S
-═══════════════════════════════════════════════ 💭🐜🌙🐜💭
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💭🐜🌙🐜💭  T H E   D R E A M E R   A W A K E N S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 
 Colony: {goal}
@@ -191,11 +194,11 @@ Concerns raised: {count}
 Output to the terminal:
 
 
-
 ```
-💭🐜🌙🐜💭 ═══════════════════════════════════════════════
-             D R E A M   C O M P L E T E
-═══════════════════════════════════════════════ 💭🐜🌙🐜💭
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💭🐜🌙🐜💭  D R E A M   C O M P L E T E
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 
 📓 {N} dreams recorded → .aether/dreams/{filename}.md
@@ -221,8 +224,19 @@ Colony status: /ant:status
 ### Step 6: Log Activity
 
 
+Run using the Bash tool with description "Logging dream activity...":
+
 ```bash
 aether activity-log --command "DREAM" --details "Dreamer: Dream session: {N} observations, {concerns} concerns, {pheromones} pheromone suggestions"
+```
+
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
 ```
 
 

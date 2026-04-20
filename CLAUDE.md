@@ -23,6 +23,52 @@
 - **Secondary platform:** Codex CLI. Codex has best-effort support for the direct `aether` workflow.
 - **Expectation:** keep Claude/OpenCode command and agent UX aligned first. Keep Codex safe, usable, and accurate about its native CLI capabilities.
 
+## UX Architecture
+
+Aether uses a hybrid UX model: the Go runtime owns truth, platform wrappers own presentation.
+
+### Ownership Model
+
+| Layer | Owner | What |
+|-------|-------|------|
+| State mutations | Go runtime (`cmd/`) | Colony state, phase transitions, verification, gating |
+| Visual rendering | Go runtime (`cmd/codex_visuals.go`) | Banners, progress bars, caste identity, stage markers |
+| Colony framing | Wrapper markdown (`.claude/`, `.opencode/`) | Queen persona, narration, pacing, pre/post-build context |
+| Codex UX | Go runtime only | No wrapper markdown — Codex is runtime-native |
+
+### Caste Identity System
+
+Each worker caste has three visual components:
+1. **Emoji prefix** — decorative icon (e.g., `🔨` for Builder, `👁️` for Watcher)
+2. **ANSI-colored label** — the primary identity, colored by caste (e.g., "Builder" in yellow)
+3. **Deterministic name** — hash-based per caste+task (e.g., "Mason-67")
+
+Format: `🔨 Builder Mason-67  Task description`
+
+Color maps in `cmd/codex_visuals.go`: `casteColorMap` (ANSI codes), `casteEmojiMap` (single emoji), `casteLabelMap` (human-readable name). Functions: `casteIdentity()`, `casteLabel()`, `casteEmoji()`.
+
+### Stage Markers
+
+Build and continue output uses `── Stage Name ──` separators between sections (Context, Tasks, Dispatch, Verification, Housekeeping, Next Phase, Colony Complete).
+
+### YAML Source Chain
+
+```
+.aether/commands/*.yaml          ← Source definitions (name, runtime command, guardrails)
+    ↓ (generation)
+.claude/commands/ant/*.md        ← Claude Code wrappers
+.opencode/commands/ant/*.md      ← OpenCode wrappers
+    ↓ (delegation)
+cmd/codex_*.go                   ← Go runtime (authoritative)
+```
+
+### Wrapper-Runtime Contract
+
+Full contract documented in `.aether/docs/wrapper-runtime-ux-contract.md`. Key rules:
+- Wrappers may add colony framing and narration but must not mutate state
+- Wrappers must not duplicate verification or gating logic
+- Codex gets UX improvements through the runtime renderer only
+
 ---
 
 ## Architecture Overview

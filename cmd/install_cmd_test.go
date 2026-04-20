@@ -556,7 +556,7 @@ func TestInstallCopiesCodexAgents(t *testing.T) {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(srcDir, "test-agent.toml"), validCodexAgentTOML("test-agent", "tester"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), validCodexAgentTOML("aether-builder", "builder"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -571,7 +571,7 @@ func TestInstallCopiesCodexAgents(t *testing.T) {
 		t.Fatalf("install command failed: %v", err)
 	}
 
-	destFile := filepath.Join(destDir, "test-agent.toml")
+	destFile := filepath.Join(destDir, "aether-builder.toml")
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", destFile)
 	}
@@ -591,7 +591,7 @@ func TestInstallCopiesCodexAgentsToHub(t *testing.T) {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(srcDir, "test-agent.toml"), validCodexAgentTOML("test-agent", "tester"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "aether-builder.toml"), validCodexAgentTOML("aether-builder", "builder"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -606,7 +606,7 @@ func TestInstallCopiesCodexAgentsToHub(t *testing.T) {
 		t.Fatalf("install command failed: %v", err)
 	}
 
-	hubCodexFile := filepath.Join(homeDir, ".aether", "system", "codex", "test-agent.toml")
+	hubCodexFile := filepath.Join(homeDir, ".aether", "system", "codex", "aether-builder.toml")
 	if _, err := os.Stat(hubCodexFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", hubCodexFile)
 	}

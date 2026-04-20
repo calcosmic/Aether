@@ -67,7 +67,7 @@ Example:
 
 ### Step 4: Insert Phase Safely
 
-Run:
+Run using the Bash tool with description "Inserting corrective phase...":
 
 ```bash
 aether phase-insert --after <phase_index> --name "<phase_name>" --description "<description>"

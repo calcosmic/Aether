@@ -78,9 +78,9 @@ Read in parallel to understand the archaeological site:
 
 Display awakening:
 ```
-🏺🐜🔍🐜🏺 ═══════════════════════════════════════════════
-          T H E   A R C H A E O L O G I S T   A W A K E N S
-═══════════════════════════════════════════════ 🏺🐜🔍🐜🏺
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏺🐜🔍🐜🏺  T H E   A R C H A E O L O G I S T   A W A K E N S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Target: {$ARGUMENTS}
 Type:   {file | directory}
@@ -210,9 +210,9 @@ Synthesize findings into patterns:
 Display the full report:
 
 ```
-🏺🐜🔍🐜🏺 ═══════════════════════════════════════════════
-          A R C H A E O L O G Y   R E P O R T
-═══════════════════════════════════════════════ 🏺🐜🔍🐜🏺
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏺🐜🔍🐜🏺  A R C H A E O L O G Y   R E P O R T
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Target: {path}
 Excavation date: {YYYY-MM-DD}
@@ -307,8 +307,17 @@ Excavation date: {YYYY-MM-DD}
 
 ### Step 8: Log Activity
 
+Run using the Bash tool with description "Logging excavation activity...":
 ```bash
 aether activity-log --command "ARCHAEOLOGY" --details "Archaeologist: Excavated {target}: {total_commits} commits, {author_count} authors, {findings_count} findings, {tech_debt_count} debt markers"
+```
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
 ```
 
 ## Investigation Guidelines

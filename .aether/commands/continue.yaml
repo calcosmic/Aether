@@ -1,0 +1,17 @@
+name: ant:continue
+description: "Verify build work, extract learnings, and advance the colony"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS"
+wrapper_additions:
+  on_success: "Frame what the colony accomplished. What did workers build? What was verified?"
+  on_blocked: "Explain what's blocking in plain language. Translate technical details to user action."
+  on_final: "Celebrate the colony's achievement. Guide toward `aether seal`."
+guardrails:
+  - "Do NOT replay verification loops or reimplement gate logic."
+  - "Do NOT write COLONY_STATE.json, session.json, CONTEXT.md, or HANDOFF.md directly."
+  - "Do NOT add extra option menus or manual state surgery unless the runtime explicitly asks."
+  - "If docs and runtime disagree, runtime wins."
+follow_up:
+  next_phase: "Run `aether build <next_phase>` to dispatch the next worker wave."
+  steer: "Run `aether focus \"...\"` or `aether feedback \"...\"` to steer the next phase."

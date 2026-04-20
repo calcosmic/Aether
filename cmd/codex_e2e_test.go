@@ -820,8 +820,27 @@ func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 	})
 }
 
-// TestCrossPlatformAgentParity verifies that all four agent directories have
-// exactly 24 entries with matching base names, confirming cross-platform parity.
+func listShippedAetherCodexAgentBaseNames(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("failed to read directory %s: %v", dir, err)
+	}
+
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() || !isShippedAetherCodexAgent(entry.Name()) {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(entry.Name(), ".toml"))
+	}
+
+	sort.Strings(names)
+	return names
+}
+
+// TestCrossPlatformAgentParity verifies that the shipped Aether Codex surface
+// stays in parity across Claude, OpenCode, Codex, and the packaged Codex mirror.
 func TestCrossPlatformAgentParity(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	if err != nil {
@@ -836,8 +855,8 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 
 	claudeNames := listAgentBaseNames(t, claudeDir, ".md")
 	opencodeNames := listAgentBaseNames(t, opencodeDir, ".md")
-	codexNames := listAgentBaseNames(t, codexDir, ".toml")
-	agentsCodexNames := listAgentBaseNames(t, agentsCodexMirrorDir, ".toml")
+	codexNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
+	agentsCodexNames := listShippedAetherCodexAgentBaseNames(t, agentsCodexMirrorDir)
 
 	// Verify each directory has exactly 24 entries.
 	const expectedCount = 24
@@ -859,12 +878,12 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 		t.Errorf("Claude and OpenCode agent names do not match.\nClaude:  %v\nOpenCode: %v", claudeNames, opencodeNames)
 	}
 	if !slicesEqual(claudeNames, codexNames) {
-		t.Errorf("Claude and Codex agent names do not match.\nClaude: %v\nCodex:  %v", claudeNames, codexNames)
+		t.Errorf("Claude and shipped Codex agent names do not match.\nClaude: %v\nCodex:  %v", claudeNames, codexNames)
 	}
 
-	// Verify agents-codex mirror matches .codex/agents/ exactly.
+	// Verify the packaging mirror matches the shipped Codex surface exactly.
 	if !slicesEqual(codexNames, agentsCodexNames) {
-		t.Errorf("Codex and agents-codex mirror names do not match.\nCodex:        %v\nAgents-codex: %v", codexNames, agentsCodexNames)
+		t.Errorf("Shipped Codex agents and agents-codex mirror names do not match.\nCodex:        %v\nAgents-codex: %v", codexNames, agentsCodexNames)
 	}
 }
 

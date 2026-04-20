@@ -34,17 +34,27 @@ func TestPackagedAgentMirrorsMatchCanonicalSources(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			srcEntries, err := os.ReadDir(tc.src)
-			if err != nil {
-				t.Fatalf("read %s: %v", tc.src, err)
+			var fileNames []string
+			if tc.name == "codex mirror" {
+				for _, baseName := range listShippedAetherCodexAgentBaseNames(t, tc.src) {
+					fileNames = append(fileNames, baseName+tc.ext)
+				}
+			} else {
+				srcEntries, err := os.ReadDir(tc.src)
+				if err != nil {
+					t.Fatalf("read %s: %v", tc.src, err)
+				}
+				for _, entry := range srcEntries {
+					if entry.IsDir() || filepath.Ext(entry.Name()) != tc.ext {
+						continue
+					}
+					fileNames = append(fileNames, entry.Name())
+				}
 			}
 
-			for _, entry := range srcEntries {
-				if entry.IsDir() || filepath.Ext(entry.Name()) != tc.ext {
-					continue
-				}
-				srcPath := filepath.Join(tc.src, entry.Name())
-				dstPath := filepath.Join(tc.dst, entry.Name())
+			for _, fileName := range fileNames {
+				srcPath := filepath.Join(tc.src, fileName)
+				dstPath := filepath.Join(tc.dst, fileName)
 
 				srcData, err := os.ReadFile(srcPath)
 				if err != nil {
@@ -55,7 +65,7 @@ func TestPackagedAgentMirrorsMatchCanonicalSources(t *testing.T) {
 					t.Fatalf("read %s: %v", dstPath, err)
 				}
 				if string(srcData) != string(dstData) {
-					t.Fatalf("mirror drift detected for %s", entry.Name())
+					t.Fatalf("mirror drift detected for %s", fileName)
 				}
 			}
 		})

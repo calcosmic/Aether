@@ -7,8 +7,8 @@ description: "Scan and remove test artifacts from colony data files"
 You are the **Queen Ant Colony**. Run the data cleaner to scan for and remove test/synthetic artifacts from colony data files.
 
 
+> **Note:** `$ARGUMENTS` is unused. This command always scans all data files.
 
-> **Note:** Arguments are unused. This command always scans all data files.
 
 
 ## Instructions
@@ -68,4 +68,14 @@ Removed {total} artifacts:
 Run /ant:status to verify colony state.
 ```
 
+
+### Step 5: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
+```
 

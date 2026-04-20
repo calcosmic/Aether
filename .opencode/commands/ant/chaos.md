@@ -65,6 +65,9 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
+### Step 0: Initialize Visual Mode (if enabled)
+
+If `visual_mode` is true, run using the Bash tool with description "Initializing chaos display...":
 ### Step 1: Awaken — Load Context
 
 Read these files in parallel to understand the colony and codebase:
@@ -81,7 +84,7 @@ Read these files in parallel to understand the colony and codebase:
 
 **If no relevant files can be found for the target:**
 ```
-🎲 Chaos Ant cannot locate target: $ARGUMENTS
+🎲🐜 Chaos Ant cannot locate target: $ARGUMENTS
    Searched for matching files and modules but found nothing.
    Please provide a valid file path, module name, or feature description.
 ```
@@ -89,9 +92,9 @@ Stop here.
 
 Display awakening:
 ```
-🎲🐜🔍🐜🎲 ═══════════════════════════════════════════════
-        R E S I L I E N C E   T E S T E R   A C T I V E
-═══════════════════════════════════════════════ 🎲🐜🔍🐜🎲
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎲🐜🔍🐜🎲  R E S I L I E N C E   T E S T E R   A C T I V E
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Target: {target description}
 Files:  {list of files being investigated}
@@ -211,12 +214,13 @@ For each scenario, produce a finding in this format. Display each to the termina
 
 ### Step 5: Produce the Chaos Report
 
+
 After all 5 scenarios, compile the structured report:
 
 ```
-🎲🐜🔍🐜🎲 ═══════════════════════════════════════════════
-             C H A O S   R E P O R T
-═══════════════════════════════════════════════ 🎲🐜🔍🐜🎲
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎲🐜🔍🐜🎲  C H A O S   R E P O R T
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Target: {target description}
 Files investigated: {count}
@@ -287,14 +291,14 @@ After the display report, output the machine-readable JSON summary:
 
 ### Step 6.5: Persist Blocker Flags for Critical/High Findings
 
-After outputting the JSON report, iterate through the chaos report scenarios. For each finding with severity `"CRITICAL"` or `"HIGH"`, persist a blocker flag so the colony tracks it:
+After outputting the JSON report, iterate through the chaos report scenarios. For each finding with severity `"CRITICAL"` or `"HIGH"`, persist a blocker flag so the colony tracks it by running using the Bash tool with description "Raising colony flag...":
 
 ```bash
 # For each scenario where status == "finding" AND severity is "CRITICAL" or "HIGH":
 aether flag-add --severity "critical" --type "blocker" --title "{scenario.title}" --description "{scenario.description}" --source "chaos-standalone" --phase {current_phase_number}
 ```
 
-Log each flag creation:
+Log each flag creation by running using the Bash tool with description "Logging chaos flag...":
 ```bash
 aether activity-log --command "FLAG" --details "Chaos Ant: Created blocker: {scenario.title}"
 ```
@@ -305,8 +309,17 @@ The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aet
 
 ### Step 7: Log Activity
 
+Run using the Bash tool with description "Logging chaos activity...":
 ```bash
 aether activity-log --command "CHAOS" --details "Chaos Ant: Resilience test on {target}: {findings_count} finding(s) ({critical} critical, {high} high, {medium} medium, {low} low), {resilient_count} resilient"
+```
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
 ```
 
 ## Investigation Guidelines

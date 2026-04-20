@@ -29,8 +29,8 @@ Examples:
 ### Step 2: Handle Resolution/Acknowledgment
 
 
+If `--resolve` was provided, run using the Bash tool with description "Resolving colony flag...":
 
-If `--resolve` was provided:
 
 ```bash
 aether flag-resolve --id "{flag_id}" --message "{resolution_message}"
@@ -44,8 +44,8 @@ Output:
 Stop here.
 
 
+If `--ack` was provided, run using the Bash tool with description "Acknowledging colony flag...":
 
-If `--ack` was provided:
 
 ```bash
 aether flag-acknowledge --id "{flag_id}"
@@ -61,8 +61,8 @@ Stop here.
 ### Step 3: List Flags
 
 
+Run using the Bash tool with description "Loading colony flags...":
 
-Run:
 
 ```bash
 aether flag-list {options}
@@ -75,11 +75,11 @@ Parse result for flags array.
 Output header:
 
 
-
 ```
-📋🐜🚩🐜📋 ═══════════════════════════════════════════════════
-   P R O J E C T   F L A G S
-═══════════════════════════════════════════════════ 📋🐜🚩🐜📋
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋🐜🚩🐜📋  P R O J E C T   F L A G S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 
 If no flags:
@@ -139,6 +139,14 @@ Commands:
   /ant:flag "description"               Create new flag
 ```
 
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
+```
 
 
 ---

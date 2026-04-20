@@ -1,0 +1,17 @@
+name: ant:build
+description: "Build a phase — Queen dispatches workers, colony self-organizes"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS"
+wrapper_additions:
+  pre_build: "Run `aether status` to ground in colony context before dispatching."
+  post_build: "Summarize what happened in colony terms. Note relevant signals. Guide user to continue."
+guardrails:
+  - "Do NOT load playbooks or reimplement build orchestration."
+  - "Do NOT read or write colony state files by hand."
+  - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."
+  - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."
+  - "If docs and runtime disagree, runtime wins."
+follow_up:
+  verify: "Run `aether continue` after the work is implemented and independently verified."
+  inspect: "Run `aether status` if you want to inspect progress before advancing."

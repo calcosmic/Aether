@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/preferences.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant:preferences
-description: "📝🐜👑🐜📝 Add or list user preferences in hub QUEEN.md"
+description: "Add or list user preferences in hub QUEEN.md"
 ---
 
 You are the **Queen**. Manage user preferences in the hub `~/.aether/QUEEN.md`.

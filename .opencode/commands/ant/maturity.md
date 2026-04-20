@@ -10,7 +10,7 @@ You are the **Queen**. Display the colony's maturity journey.
 
 ### Step 1: Detect Current Milestone
 
-Run:
+Run using the Bash tool with description "Detecting colony milestone...":
 `aether milestone-detect`
 
 Parse JSON result to get:
@@ -46,16 +46,17 @@ Display header:
 ### Step 4: Show ASCII Art Anthill
 
 
+Display the current milestone with its text description (no external file needed):
 
-Read the ASCII art file for the current milestone:
-- First Mound → `.aether/visualizations/anthill-stages/first-mound.txt`
-- Open Chambers → `.aether/visualizations/anthill-stages/open-chambers.txt`
-- Brood Stable → `.aether/visualizations/anthill-stages/brood-stable.txt`
-- Ventilated Nest → `.aether/visualizations/anthill-stages/ventilated-nest.txt`
-- Sealed Chambers → `.aether/visualizations/anthill-stages/sealed-chambers.txt`
-- Crowned Anthill → `.aether/visualizations/anthill-stages/crowned-anthill.txt`
+- First Mound -- "A small pile of earth. The colony has broken ground."
+- Open Chambers -- "Tunnels branch outward. Feature work is underway."
+- Brood Stable -- "The nursery hums. Tests are consistently green."
+- Ventilated Nest -- "Air flows freely. Performance and latency are acceptable."
+- Sealed Chambers -- "Walls are hardened. Interfaces are frozen."
+- Crowned Anthill -- "The spire rises. The colony is release-ready."
 
-Display the ASCII art with current milestone highlighted (bold/bright).
+Display the matching description for the current milestone.
+
 
 
 ### Step 5: Show Journey Progress Bar
@@ -93,10 +94,20 @@ Colony Statistics:
 ### Edge Cases
 
 
+- If milestone name is unrecognized: Show "Unknown milestone" with the raw name
 
-- If milestone file doesn't exist: Show error "Milestone visualization not found"
 
 - If COLONY_STATE.json missing: "No colony initialized. Run /ant:init first."
 - If phases_completed is 0: All milestones show as upcoming except First Mound
 
+
+### Step 7: Next Up
+
+Generate the state-based Next Up block by running using the Bash tool with description "Generating Next Up suggestions...":
+```bash
+state=$(jq -r '.state // "IDLE"' .aether/data/COLONY_STATE.json)
+current_phase=$(jq -r '.current_phase // 0' .aether/data/COLONY_STATE.json)
+total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json)
+aether print-next-up
+```
 

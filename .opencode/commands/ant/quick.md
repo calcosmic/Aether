@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/quick.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant:quick
-description: "🔍🐜⚡🐜🔍 Quick scout query — fast answers without build ceremony"
+description: "Quick scout query — fast answers without build ceremony"
 ---
 
 You are the **Queen**. Execute `/ant:quick` — a lightweight scout mission.
@@ -31,7 +31,7 @@ Stop here.
 
 ### Step 2: Generate Scout Name
 
-Run:
+Run using the Bash tool with description "Naming scout...":
 ```bash
 aether generate-ant-name --caste "scout"
 ```
@@ -46,33 +46,48 @@ Display:
 Spawning {scout_name} — {query truncated to 50 chars}
 ```
 
-Run:
+Run using the Bash tool with description "Dispatching scout...":
 ```bash
 aether spawn-log --name "Queen" --caste "scout" --id "{scout_name}" --description "Quick query: {query}"
 ```
 
 
+Spawn a Scout agent (using Task tool with subagent_type="aether-scout") with this prompt:
 
-Investigate the query directly using available tools (Grep, Glob, Read).
-Search the codebase and provide a clear, focused answer with file paths and line numbers for key findings.
-Keep your answer concise and actionable.
+```
+You are {scout_name}, a Scout Ant on a quick mission.
+
+Query: {query from ARGUMENTS}
+
+Work:
+1. Search the codebase to answer the query
+2. Use Grep, Glob, and Read tools to find relevant code
+3. Provide a clear, focused answer
+4. Include file paths and line numbers for key findings
+
+Keep your answer concise and actionable. This is a quick mission —
+don't explore exhaustively, focus on the most relevant answer.
+
+Return your findings as a clear text answer (not JSON).
+```
+
 
 
 ### Step 4: Display Results
 
 
+Display the Scout's answer directly to the user.
 
-Display your findings directly to the user.
 
 
-Run:
+Run using the Bash tool with description "Recording scout completion...":
 ```bash
 aether spawn-complete --name "{scout_name}" --status "completed" --summary "Quick query answered"
 ```
 
 ### Step 5: Update Session (lightweight)
 
-Run:
+Run using the Bash tool with description "Updating session...":
 ```bash
 aether session-update --command "/ant:quick" --summary "Quick query: {query truncated to 60 chars}" 2>/dev/null || true
 ```

@@ -217,6 +217,7 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 			protectedDirs:        protectedDirs,
 			protectedFiles:       protectedFiles,
 			validate:             pair.validate,
+			include:              pair.include,
 		})
 		entry := map[string]interface{}{
 			"label":   pair.label,
