@@ -4,14 +4,25 @@ source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS"
 wrapper_additions:
-  pre_build: "Run `aether status` to ground in colony context before dispatching."
-  post_build: "Summarize what happened in colony terms. Note relevant signals. Guide user to continue."
+  pre_build: |
+    Ground the build before dispatching:
+    1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
+    2. Surface active pheromones as a compact steering block with REDIRECT first, then FOCUS, then FEEDBACK.
+    3. Frame the requested work as `Phase N of M — Name` with a one-line purpose.
+    4. Deliver a short spawn ritual naming the likely castes such as Builder, Watcher, Scout, Architect, Oracle, or Chaos, without claiming dispatch truth before the runtime speaks.
+    5. Immediately before the runtime call, say: `Dispatching workers now...`
+  post_build: |
+    Close with a short colony-language synthesis:
+    1. Summarize what moved forward and which workers or castes the runtime actually dispatched.
+    2. Note only the most relevant signal or risk.
+    3. Route first to `/ant:continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
 guardrails:
   - "Do NOT load playbooks or reimplement build orchestration."
   - "Do NOT read or write colony state files by hand."
   - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."
+  - "Do NOT parse visual output as authoritative state."
   - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
-  verify: "Run `aether continue` after the work is implemented and independently verified."
+  verify: "Guide the user first to `/ant:continue`, with `aether continue` as the runtime source of truth."
   inspect: "Run `aether status` if you want to inspect progress before advancing."
