@@ -299,6 +299,7 @@ func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🥚", "Colony Init"))
 	b.WriteString(visualDivider)
+	b.WriteString(renderStageMarker("Colony"))
 	b.WriteString("Queen charter accepted.\n")
 	b.WriteString("Goal: ")
 	b.WriteString(goal)
@@ -317,6 +318,7 @@ func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 		`Run `+"`aether plan`"+` if you already know the tradeoffs and want the first phase map now.`,
 		`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
 	))
+	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
 
@@ -970,6 +972,7 @@ func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🏺", "Seal"))
 	b.WriteString(visualDivider)
+	b.WriteString(renderStageMarker("Summary"))
 	b.WriteString("Colony sealed at Crowned Anthill.\n")
 	if state.Goal != nil {
 		b.WriteString("Goal: ")
@@ -984,6 +987,7 @@ func renderSealVisual(state colony.ColonyState, summaryPath string) string {
 		`Run `+"`aether entomb`"+` to archive this completed colony into chambers.`,
 		`Run `+"`aether init \"next goal\"`"+` if you want to start the next colony immediately.`,
 	))
+	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
 
@@ -1238,6 +1242,7 @@ func renderPauseVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("💾", "Pause Colony"))
 	b.WriteString(visualDivider)
+	b.WriteString(renderStageMarker("Handoff"))
 	b.WriteString("Colony handoff saved for later resumption.\n")
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
 		b.WriteString("Goal: ")
@@ -1263,6 +1268,7 @@ func renderPauseVisual(result map[string]interface{}) string {
 		`Run `+"`aether resume`"+` when you want to restore the paused colony.`,
 		`Run `+"`aether resume`"+` for the compact dashboard view instead.`,
 	))
+	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
 
@@ -1274,6 +1280,7 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 	}
 	b.WriteString(renderBanner("💾", title))
 	b.WriteString(visualDivider)
+	b.WriteString(renderStageMarker("Restored"))
 
 	current, _ := result["current"].(map[string]interface{})
 	goal := strings.TrimSpace(stringValue(current["goal"]))
@@ -1471,6 +1478,7 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		fmt.Sprintf("Run `%s` to continue from the restored colony state.", nextCommand),
 		fmt.Sprintf("Run %s for additional inspection.", alt),
 	))
+	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
 
