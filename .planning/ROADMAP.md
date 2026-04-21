@@ -69,7 +69,7 @@
 - [x] **Phase 27: Medic Skill** — Healthy state specification skill file for all colony data (completed 2026-04-21)
 - [x] **Phase 28: Ceremony Integrity** — Verify wrapper/runtime parity, stage markers, emoji consistency (completed 2026-04-21)
 - [x] **Phase 29: Trace Diagnostics** — Remote debugging via trace export analysis (completed 2026-04-21)
-- [ ] **Phase 30: Medic Worker Integration** — Caste integration, auto-spawn on detected health issues
+- [x] **Phase 30: Medic Worker Integration** — Caste integration, auto-spawn on detected health issues (completed 2026-04-21)
 
 ## Phase Details
 
@@ -152,4 +152,4 @@
 | 27 | v1.4 | 0/1 | Complete    | 2026-04-21 |
 | 28 | v1.4 | 0/1 | Complete    | 2026-04-21 |
 | 29 | v1.4 | 0/1 | Complete    | 2026-04-21 |
-| 30 | v1.4 | 0/TBD | Not started | - |
+| 30 | v1.4 | 0/1 | Complete    | 2026-04-21 |
