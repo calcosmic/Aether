@@ -185,6 +185,9 @@ var resumeColonyCmd = &cobra.Command{
 			}
 		}
 
+		// Clean up any orphaned worktrees before resuming
+		gcCleaned, gcOrphaned, gcErr := gcOrphanedWorktrees()
+
 		result := buildResumeDashboardResult()
 		result["resumed"] = true
 		result["freshness"] = map[string]interface{}{
@@ -196,6 +199,15 @@ var resumeColonyCmd = &cobra.Command{
 		}
 		result["handoff_found"] = handoffText != ""
 		result["handoff_path"] = handoffPath
+		if gcErr != nil {
+			result["worktree_gc_error"] = gcErr.Error()
+		}
+		if gcCleaned > 0 || gcOrphaned > 0 {
+			result["worktree_gc"] = map[string]interface{}{
+				"cleaned":  gcCleaned,
+				"orphaned": gcOrphaned,
+			}
+		}
 
 		if handoffText != "" {
 			if err := removeHandoffDocument(); err == nil {

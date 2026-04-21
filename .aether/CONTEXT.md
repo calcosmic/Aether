@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-21T09:35:37Z |
+| **Last Updated** | 2026-04-21T12:37:26Z |
 | **Current Phase** | 6 |
 | **Phase Name** | End-to-end verification |
 | **Phase Status** | completed |
@@ -26,7 +26,7 @@ Comprehensive Aether colony review across the last three GSD milestones: v1.0, v
 
 ## What's In Progress
 
-Colony sealed
+Pre-compact snapshot (auto): state=COMPLETED phase=6 goal=Comprehensive Aether colony review across the last three GSD milestones: v1.0, v1.1, and v1.2. Audit whether the full system is actually working properly across Claude Code, OpenCode, and Codex CLI. Review runtime truth, worker dispatch and lifecycle, agent spawning visibility, caste identity, build/plan/colonize/continue/watch/status behavior, recovery and partial-success flows, context proof, skill routing, prompt integrity, wrapper honesty, install/update/versioning, and cross-platform parity. Verify that Claude/OpenCode ceremony is runtime-backed rather than fake, Codex reflects the same truth model, and all major implementations were completed correctly. Findings first: identify bugs, regressions, misleading UX, parity gaps, stale docs, missing tests, or anything not truly working as intended. task=End-to-end verification
 
 ---
 
@@ -87,7 +87,7 @@ Current Phase: 6
 
 ## Next Steps
 
-1. Run `aether entomb`
+1. Run `aether seal`
 2. Run `aether phase --number 6` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 

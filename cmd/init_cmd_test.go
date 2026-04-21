@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -786,6 +787,56 @@ func TestInitCmd_ParallelModeDefault(t *testing.T) {
 
 	if state.ParallelMode != colony.ModeInRepo {
 		t.Errorf("parallel_mode = %q, want %q (in-repo)", state.ParallelMode, colony.ModeInRepo)
+	}
+}
+
+func TestInitCmd_CleansWorktreesOnReInit(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+
+	// Init a git repo
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	// Write a sealed state so init allows re-init
+	writeSealedState(t, dataDir, "Old goal")
+
+	// Add a stale worktree entry to the sealed state
+	now := time.Now().UTC().Format(time.RFC3339)
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	state.Worktrees = []colony.WorktreeEntry{
+		{ID: "wt-old", Branch: "phase-1/old", Path: ".aether/worktrees/phase-1-old", Status: colony.WorktreeAllocated, Phase: 1, CreatedAt: now, UpdatedAt: now},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"init", "New goal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+
+	// Verify new state has no worktrees
+	var newState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &newState); err != nil {
+		t.Fatalf("load new state: %v", err)
+	}
+	if len(newState.Worktrees) > 0 {
+		t.Errorf("expected worktrees cleared on re-init, got %d", len(newState.Worktrees))
 	}
 }
 

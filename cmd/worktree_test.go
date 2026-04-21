@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1879,6 +1880,61 @@ func TestLifecycle(t *testing.T) {}
 				}
 			}
 		}
+	}
+}
+
+func TestReportOrphanBranches(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	os.Setenv("AETHER_ROOT", tmpDir)
+
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	store = s
+
+	// Init a git repo
+	runGit(t, tmpDir, "init")
+	runGit(t, tmpDir, "config", "user.email", "test@example.com")
+	runGit(t, tmpDir, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, tmpDir, "add", ".")
+	runGit(t, tmpDir, "commit", "-m", "initial")
+
+	// Create an agent-track branch with no worktree
+	runGit(t, tmpDir, "checkout", "-b", "phase-1/builder-1")
+	if err := os.WriteFile(filepath.Join(tmpDir, "feat.txt"), []byte("feat\n"), 0644); err != nil {
+		t.Fatalf("write feat: %v", err)
+	}
+	runGit(t, tmpDir, "add", ".")
+	runGit(t, tmpDir, "commit", "-m", "feat")
+	runGit(t, tmpDir, "checkout", "master")
+
+	// The branch phase-1/builder-1 exists but has no worktree
+	orphaned, err := reportOrphanBranches()
+	if err != nil {
+		t.Fatalf("reportOrphanBranches: %v", err)
+	}
+
+	found := false
+	for _, o := range orphaned {
+		if o["branch"] == "phase-1/builder-1" {
+			found = true
+			if o["cleanup_cmd"] != "git branch -D phase-1/builder-1" {
+				t.Errorf("cleanup_cmd = %q, want git branch -D phase-1/builder-1", o["cleanup_cmd"])
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected phase-1/builder-1 in orphaned branches, got %+v", orphaned)
 	}
 }
 

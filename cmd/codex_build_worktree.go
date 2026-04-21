@@ -12,6 +12,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func invokeCodexWorkerWithRuntimeProgress(
@@ -262,6 +263,13 @@ func allocateBuildWorktree(root string, phaseID int, dispatch codex.WorkerDispat
 	relPath := filepath.ToSlash(filepath.Join(worktreeBaseDir, sanitizeBranchPath(branch)))
 	absPath := filepath.Join(root, relPath)
 
+	// Clean up any leftover path from a previous failed allocation
+	if _, err := os.Stat(absPath); err == nil {
+		if rmErr := os.RemoveAll(absPath); rmErr != nil {
+			return nil, fmt.Errorf("worktree path %s already exists and cannot be removed: %v", absPath, rmErr)
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(absPath), 0755); err != nil {
 		return nil, err
 	}
@@ -351,15 +359,31 @@ func finalizeBuildWorktree(root string, session *buildWorktreeSession, status co
 	if err := updateBuildWorktreeStatus(session.Branch, status); err != nil {
 		return err
 	}
-	return removeGitWorktree(root, session.AbsPath, session.Branch)
+	if err := removeGitWorktree(root, session.AbsPath, session.Branch); err != nil {
+		// Removal failed — mark as orphaned and propagate the error
+		_ = updateBuildWorktreeStatus(session.Branch, colony.WorktreeOrphaned)
+		return err
+	}
+	return nil
 }
 
 func removeGitWorktree(root, absPath, branch string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", absPath, "--force").Run()
-	exec.CommandContext(ctx, "git", "-C", root, "worktree", "prune").Run()
-	exec.CommandContext(ctx, "git", "-C", root, "branch", "-D", branch).Run()
+
+	var errs []string
+	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", absPath, "--force").CombinedOutput(); err != nil {
+		errs = append(errs, fmt.Sprintf("worktree remove: %v (output: %s)", err, string(out)))
+	}
+	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "prune").CombinedOutput(); err != nil {
+		errs = append(errs, fmt.Sprintf("worktree prune: %v (output: %s)", err, string(out)))
+	}
+	if out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", "-D", branch).CombinedOutput(); err != nil {
+		errs = append(errs, fmt.Sprintf("branch delete: %v (output: %s)", err, string(out)))
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("worktree cleanup failed: %s", strings.Join(errs, "; "))
+	}
 	return nil
 }
 
@@ -521,4 +545,89 @@ func applyRelativePathStatus(srcRoot, dstRoot, rel, status string) error {
 		return err
 	}
 	return os.WriteFile(dst, data, info.Mode().Perm())
+}
+
+// cleanupBuildWorktrees removes any unfinalized worktrees for a phase.
+// It scans the colony state for worktree entries with Allocated or InProgress status,
+// attempts to remove them, and updates their status to Orphaned on failure.
+func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
+	var state colony.ColonyState
+	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
+		return 0, 0, loadErr
+	}
+
+	root := storage.ResolveAetherRoot(context.Background())
+	var remaining []colony.WorktreeEntry
+	for _, entry := range state.Worktrees {
+		if entry.Phase != phaseID {
+			remaining = append(remaining, entry)
+			continue
+		}
+		if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress {
+			remaining = append(remaining, entry)
+			continue
+		}
+
+		absPath := filepath.Join(root, entry.Path)
+		// If the path doesn't exist on disk, just remove the stale entry
+		if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
+			cleaned++
+			continue
+		}
+		if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+			entry.Status = colony.WorktreeOrphaned
+			remaining = append(remaining, entry)
+			orphaned++
+		} else {
+			cleaned++
+			// Don't append — entry is removed
+		}
+	}
+
+	state.Worktrees = remaining
+	if saveErr := store.SaveJSON("COLONY_STATE.json", state); saveErr != nil {
+		return cleaned, orphaned, saveErr
+	}
+	return cleaned, orphaned, nil
+}
+
+// gcOrphanedWorktrees scans all tracked worktrees and cleans up any that are
+// stale (Allocated, InProgress, or Orphaned status). It returns counts of
+// cleaned and orphaned worktrees. Unlike cleanupBuildWorktrees, it operates
+// across all phases and does not filter by phase ID.
+func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
+	var state colony.ColonyState
+	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
+		return 0, 0, loadErr
+	}
+
+	root := storage.ResolveAetherRoot(context.Background())
+	var remaining []colony.WorktreeEntry
+	for _, entry := range state.Worktrees {
+		if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress && entry.Status != colony.WorktreeOrphaned {
+			remaining = append(remaining, entry)
+			continue
+		}
+
+		absPath := filepath.Join(root, entry.Path)
+		// If the path doesn't exist on disk, just remove the stale entry
+		if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
+			cleaned++
+			continue
+		}
+		if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+			entry.Status = colony.WorktreeOrphaned
+			remaining = append(remaining, entry)
+			orphaned++
+		} else {
+			cleaned++
+			// Don't append — entry is removed
+		}
+	}
+
+	state.Worktrees = remaining
+	if saveErr := store.SaveJSON("COLONY_STATE.json", state); saveErr != nil {
+		return cleaned, orphaned, saveErr
+	}
+	return cleaned, orphaned, nil
 }

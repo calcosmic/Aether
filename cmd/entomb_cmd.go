@@ -439,6 +439,10 @@ func clearActiveColonyRuntimeFiles(aetherRoot, dataDir string) error {
 	if err := os.RemoveAll(filepath.Join(dataDir, "colonies")); err != nil {
 		return err
 	}
+	// Clean up worktrees directory and any tracked worktree entries
+	if err := os.RemoveAll(filepath.Join(aetherRoot, ".aether", "worktrees")); err != nil {
+		return err
+	}
 	return nil
 }
 

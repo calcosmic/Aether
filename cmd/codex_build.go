@@ -571,6 +571,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 
 	results, err := dispatchCodexBuildWorkers(ctx, root, phase, workerDispatches, invoker, startedAt, parallelMode)
+	// Clean up any worktrees that weren't properly finalized during dispatch
+	cleaned, orphaned, _ := cleanupBuildWorktrees(phase.ID)
+	if cleaned > 0 || orphaned > 0 {
+		emitVisualProgress(fmt.Sprintf("Worktree cleanup: %d cleaned, %d orphaned", cleaned, orphaned))
+	}
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("dispatch build workers: %w", err)
 	}

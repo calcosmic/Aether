@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -265,5 +267,113 @@ func TestBuildWorktreeModeMergesPheromoneChangesBackToRoot(t *testing.T) {
 	summary, _ := dispatches[0]["summary"].(string)
 	if !strings.Contains(summary, "Pheromone sync: 1 new") {
 		t.Fatalf("dispatch summary should mention pheromone sync, got %q", summary)
+	}
+}
+
+// --- Worktree Lifecycle Tests (Phase 23) ---
+
+func TestRemoveGitWorktreeErrorPropagation(t *testing.T) {
+	// Test with a non-existent path — should return error
+	err := removeGitWorktree("/nonexistent", "/nonexistent/path", "nonexistent-branch")
+	if err == nil {
+		t.Error("removeGitWorktree should return error for non-existent path")
+	}
+	if !strings.Contains(err.Error(), "worktree cleanup failed") {
+		t.Errorf("error should contain 'worktree cleanup failed': %v", err)
+	}
+}
+
+func TestCleanupBuildWorktrees(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	_ = setupBuildFlowTest(t)
+
+	// Create a state with a stale worktree entry
+	now := time.Now().UTC().Format(time.RFC3339)
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    strPtr("test"),
+		State:   colony.StateREADY,
+		Worktrees: []colony.WorktreeEntry{
+			{ID: "wt-1", Branch: "test-branch", Path: ".aether/worktrees/test", Status: colony.WorktreeAllocated, Phase: 1, CreatedAt: now, UpdatedAt: now},
+		},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	// Run cleanup for phase 1
+	cleaned, _, err := cleanupBuildWorktrees(1)
+	if err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+
+	// The worktree path doesn't exist on disk, so removal should "succeed" (no-op)
+	// and the entry should be removed from state
+	if cleaned != 1 {
+		t.Errorf("expected 1 cleaned, got %d", cleaned)
+	}
+
+	// Verify entry removed from state
+	var updated colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &updated); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(updated.Worktrees) > 0 {
+		t.Errorf("expected worktree entry removed, got %d entries", len(updated.Worktrees))
+	}
+}
+
+func TestAllocateBuildWorktreeCleansExistingPath(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupBuildFlowTest(t)
+
+	root := storage.ResolveAetherRoot(context.Background())
+	startedAt := time.Now().UTC()
+
+	// Init a git repo so worktree add works
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	// Create a minimal COLONY_STATE.json so appendBuildWorktreeEntry can load it
+	dataDir := filepath.Join(root, ".aether", "data")
+	goal := "test"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+	})
+
+	// Create a leftover directory at the expected worktree path
+	dispatch := codex.WorkerDispatch{WorkerName: "test-worker", Caste: "builder"}
+	branch := fmt.Sprintf("phase-1/%s-%d", sanitizeWorktreeLabel(dispatch.WorkerName), startedAt.UnixNano())
+	relPath := filepath.ToSlash(filepath.Join(worktreeBaseDir, sanitizeBranchPath(branch)))
+	absPath := filepath.Join(root, relPath)
+
+	// Create a leftover directory
+	if err := os.MkdirAll(absPath, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(absPath, "leftover.txt"), []byte("old"), 0644); err != nil {
+		t.Fatalf("write leftover: %v", err)
+	}
+
+	// Now allocate should clean it up first
+	_, err := allocateBuildWorktree(root, 1, dispatch, startedAt)
+	if err != nil {
+		t.Fatalf("allocate should succeed after cleaning leftover: %v", err)
+	}
+
+	// Verify the leftover file is gone (replaced by git worktree)
+	if _, err := os.Stat(filepath.Join(absPath, "leftover.txt")); err == nil {
+		t.Error("leftover file should have been cleaned up")
 	}
 }

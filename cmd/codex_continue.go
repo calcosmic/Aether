@@ -135,6 +135,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err != nil {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
+
+	// Background cleanup of orphaned worktrees — non-blocking
+	gcCleaned, gcOrphaned, _ := gcOrphanedWorktrees()
+	if gcCleaned > 0 || gcOrphaned > 0 {
+		emitVisualProgress(fmt.Sprintf("Worktree cleanup: %d cleaned, %d orphaned", gcCleaned, gcOrphaned))
+	}
+
 	if len(state.Plan.Phases) == 0 {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No project plan. Run `aether plan` first.")
 	}

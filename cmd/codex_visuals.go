@@ -1358,6 +1358,18 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 	}
 
+	// Worktree cleanup summary
+	if wtGC, ok := result["worktree_gc"].(map[string]interface{}); ok {
+		cleaned := intValue(wtGC["cleaned"])
+		orphaned := intValue(wtGC["orphaned"])
+		if cleaned > 0 {
+			b.WriteString(fmt.Sprintf("🧹 %d stale worktree(s) cleaned up\n", cleaned))
+		}
+		if orphaned > 0 {
+			b.WriteString(fmt.Sprintf("⚠️ %d worktree(s) could not be cleaned — run `aether worktree-cleanup`\n", orphaned))
+		}
+	}
+
 	current, _ := result["current"].(map[string]interface{})
 	goal := strings.TrimSpace(stringValue(current["goal"]))
 	state := strings.TrimSpace(stringValue(current["state"]))

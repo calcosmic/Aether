@@ -497,3 +497,87 @@ func TestResumeVisualFreshnessWarning(t *testing.T) {
 		t.Errorf("fresh resume visual should not show warning\n%s", output)
 	}
 }
+
+func TestResumeColonyGCOphanedWorktrees(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume with worktree cleanup"
+	now := time.Now().UTC().Format(time.RFC3339)
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Milestone:    "Open Chambers",
+		Worktrees: []colony.WorktreeEntry{
+			{ID: "wt-1", Branch: "test-branch", Path: ".aether/worktrees/test", Status: colony.WorktreeAllocated, Phase: 1, CreatedAt: now, UpdatedAt: now},
+		},
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Execution", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID:  "resume-wt-test",
+		StartedAt:  "2026-04-15T10:00:00Z",
+		ColonyGoal: goal,
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	// Verify worktree entry was removed from state
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if len(state.Worktrees) > 0 {
+		t.Errorf("expected worktree entry removed on resume, got %d", len(state.Worktrees))
+	}
+
+	// Verify resume output mentions worktree cleanup
+	output := buf.String()
+	if !strings.Contains(output, "worktree_gc") {
+		t.Errorf("expected worktree_gc in resume output, got: %s", output)
+	}
+}
+
+func TestResumeVisualWorktreeCleanup(t *testing.T) {
+	result := map[string]interface{}{
+		"freshness": map[string]interface{}{
+			"fresh":     true,
+			"age_hours": "1.0",
+		},
+		"current": map[string]interface{}{
+			"goal":         "Test",
+			"state":        "ready",
+			"phase":        1,
+			"total_phases": 2,
+		},
+		"worktree_gc": map[string]interface{}{
+			"cleaned":  2,
+			"orphaned": 1,
+		},
+		"blockers": []string{},
+		"signals":  map[string]interface{}{"items": []string{}, "count": 0},
+	}
+
+	output := renderResumeVisual(result, "", true)
+	if !strings.Contains(output, "2 stale worktree(s) cleaned up") {
+		t.Errorf("missing cleaned worktree message\n%s", output)
+	}
+	if !strings.Contains(output, "1 worktree(s) could not be cleaned") {
+		t.Errorf("missing orphaned worktree message\n%s", output)
+	}
+}

@@ -98,6 +98,13 @@ var initCmd = &cobra.Command{
 			}
 		}
 
+		// Clean up any leftover worktrees from previous colony
+		if cleaned, orphaned, err := gcOrphanedWorktrees(); err == nil && (cleaned > 0 || orphaned > 0) {
+			fmt.Fprintf(os.Stderr, "warning: cleaned %d stale worktree(s), %d orphaned\n", cleaned, orphaned)
+		}
+		// Also remove the worktrees directory entirely to ensure a clean slate
+		_ = os.RemoveAll(filepath.Join(aetherDir, "worktrees"))
+
 		// Create COLONY_STATE.json v3.0
 		state := colony.ColonyState{
 			Version:       "3.0",

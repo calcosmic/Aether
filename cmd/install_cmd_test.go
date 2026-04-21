@@ -649,3 +649,4 @@ func TestInstallShellScriptsGetExecutable(t *testing.T) {
 		t.Errorf("expected .sh file to be executable, got permissions %o", perm)
 	}
 }
+

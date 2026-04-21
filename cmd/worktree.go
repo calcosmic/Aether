@@ -460,14 +460,116 @@ var worktreeOrphanScanCmd = &cobra.Command{
 			untracked = []map[string]interface{}{}
 		}
 
+		// Detect orphaned branches (agent-track branches with no worktree)
+		orphanBranches, _ := reportOrphanBranches()
+		if orphanBranches == nil {
+			orphanBranches = []map[string]interface{}{}
+		}
+
 		outputOK(map[string]interface{}{
-			"orphaned":  orphaned,
-			"stale":     stale,
-			"untracked": untracked,
-			"threshold": thresholdHours,
+			"orphaned":        orphaned,
+			"stale":           stale,
+			"untracked":       untracked,
+			"orphan_branches": orphanBranches,
+			"threshold":       thresholdHours,
 		})
 		return nil
 	},
+}
+
+// ---------------------------------------------------------------------------
+// reportOrphanBranches
+// ---------------------------------------------------------------------------
+
+// reportOrphanBranches detects git branches matching the agent-track pattern
+// (phase-N/name) that have no corresponding worktree on disk. Returns a list
+// of orphaned branches with their age for user reporting.
+func reportOrphanBranches() ([]map[string]interface{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
+	defer cancel()
+
+	root := storage.ResolveAetherRoot(context.Background())
+
+	// List all branches
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", "-a", "--format=%(refname:short) %(committerdate:iso8601)").Output()
+	if err != nil {
+		return nil, fmt.Errorf("git branch: %w", err)
+	}
+
+	// Get on-disk worktrees
+	wtOut, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "list", "--porcelain").Output()
+	if err != nil {
+		return nil, fmt.Errorf("git worktree list: %w", err)
+	}
+	onDiskPaths := map[string]bool{}
+	for _, p := range parseWorktreePaths(string(wtOut)) {
+		onDiskPaths[p] = true
+	}
+
+	// Get tracked worktree branches from state
+	var state colony.ColonyState
+	trackedBranches := map[string]bool{}
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err == nil {
+		for _, wt := range state.Worktrees {
+			trackedBranches[wt.Branch] = true
+		}
+	}
+
+	var orphaned []map[string]interface{}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for _, line := range lines {
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) < 1 {
+			continue
+		}
+		branch := strings.TrimSpace(parts[0])
+		// Skip remote branches
+		if strings.HasPrefix(branch, "remotes/") {
+			continue
+		}
+		// Only check agent-track branches
+		if !agentBranchRe.MatchString(branch) {
+			continue
+		}
+		// Skip if tracked in state
+		if trackedBranches[branch] {
+			continue
+		}
+		// Check if branch has a worktree
+		branchHasWorktree := false
+		for path := range onDiskPaths {
+			// Worktree path contains sanitized branch name
+			sanitized := sanitizeBranchPath(branch)
+			if strings.Contains(path, sanitized) {
+				branchHasWorktree = true
+				break
+			}
+		}
+		if branchHasWorktree {
+			continue
+		}
+
+		// Calculate age from committer date
+		age := "unknown"
+		if len(parts) == 2 {
+			if t, err := time.Parse("2006-01-02 15:04:05 -0700", strings.TrimSpace(parts[1])); err == nil {
+				days := int(time.Since(t).Hours() / 24)
+				if days < 1 {
+					age = "< 1 day"
+				} else {
+					age = fmt.Sprintf("%d day(s)", days)
+				}
+			}
+		}
+
+		orphaned = append(orphaned, map[string]interface{}{
+			"branch":       branch,
+			"age":          age,
+			"cleanup_cmd":  fmt.Sprintf("git branch -D %s", branch),
+		})
+	}
+
+	return orphaned, nil
 }
 
 // ---------------------------------------------------------------------------
