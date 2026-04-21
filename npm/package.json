@@ -1,6 +1,6 @@
 {
   "name": "aether-colony",
-  "version": "5.4.1",
+  "version": "1.0.17",
   "description": "Bootstrap installer for the Aether ant colony CLI",
   "license": "Apache-2.0",
   "homepage": "https://github.com/calcosmic/Aether#readme",
@@ -13,7 +13,8 @@
     "url": "https://github.com/calcosmic/Aether/issues"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "keywords": [
     "aether",
@@ -39,6 +40,5 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.js"
-  },
-  "aetherVersion": "1.0.17"
+  }
 }

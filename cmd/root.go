@@ -21,8 +21,10 @@ var Version = "0.0.0-dev"
 
 // resolveVersion returns the best available version in priority order:
 // 1. ldflags Version (set by goreleaser for release builds)
-// 2. Nearest git tag from the given directory (for dev builds)
-// 3. Fallback "0.0.0-dev"
+// 2. Repo `.aether/version.json` when running from a source checkout
+// 3. Nearest git tag from the given directory (for dev builds)
+// 4. Installed hub version
+// 5. Fallback "0.0.0-dev"
 func resolveVersion(dir ...string) string {
 	// If ldflags set a real version (not the dev default), use it.
 	if Version != "0.0.0-dev" {
@@ -47,6 +49,10 @@ func resolveVersion(dir ...string) string {
 	}
 
 	if gitDir != "" {
+		if repoVersion := readRepoVersion(gitDir); repoVersion != "" {
+			return repoVersion
+		}
+
 		args := []string{"-C", gitDir, "describe", "--tags", "--abbrev=0"}
 		out, err := exec.Command("git", args...).Output()
 		if err == nil {
@@ -94,6 +100,20 @@ func readInstalledHubVersion() string {
 		return ""
 	}
 	data, err := os.ReadFile(filepath.Join(home, ".aether", "version.json"))
+	if err != nil {
+		return ""
+	}
+	var v struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return ""
+	}
+	return normalizeVersion(v.Version)
+}
+
+func readRepoVersion(root string) string {
+	data, err := os.ReadFile(filepath.Join(root, ".aether", "version.json"))
 	if err != nil {
 		return ""
 	}

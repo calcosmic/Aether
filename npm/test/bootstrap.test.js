@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const bootstrap = require("../lib/bootstrap");
+const packageJson = require("../package.json");
 
 test("detectPlatform maps supported platforms", () => {
   assert.deepEqual(bootstrap.detectPlatform("darwin", "arm64"), { os: "darwin", arch: "arm64" });
@@ -34,6 +35,11 @@ test("normalizeArgs separates bootstrap flags from passthrough args", () => {
   assert.equal(parsed.aetherVersion, "1.2.3");
   assert.equal(parsed.dest, "/tmp/aether");
   assert.deepEqual(parsed.passthrough, ["status"]);
+});
+
+test("bootstrap defaults to the published package version", () => {
+  const parsed = bootstrap.normalizeArgs([]);
+  assert.equal(parsed.aetherVersion, packageJson.version);
 });
 
 test("parseChecksum extracts the right checksum line", () => {

@@ -223,8 +223,10 @@ Runtime note:
 - `aether install --package-dir "$PWD"` is the step that publishes unreleased Go runtime fixes on this machine because it refreshes the shared hub and, from a source checkout, rebuilds the shared `aether` binary.
 - `aether update` in other repos only syncs companion files by default. It does not publish an unreleased local runtime change, and without `--force` it can leave stale Aether-managed files behind.
 - `aether update --force --download-binary` is the published-release path when you also need the release runtime binary.
+- `.aether/version.json` is the source-checkout release version file. `npm/package.json` must match it exactly for published releases.
 - If `aether update --force` shows `Commands (claude)` or `Commands (opencode)` as `0 copied, 0 unchanged`, the hub publish is incomplete. Republish from the Aether repo first, then rerun `aether update --force` in the target repo.
 - If the change you made modifies `aether install` itself, bootstrap once with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"` so the new install logic publishes the hub and rebuilds the shared binary from source.
+- Published release flow: bump `.aether/version.json` and `npm/package.json` to the same version, push the commit, then push tag `vX.Y.Z`.
 
 ---
 

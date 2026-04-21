@@ -12,8 +12,8 @@ const packageJson = require("../package.json");
 
 const REPO_OWNER = "calcosmic";
 const REPO_NAME = "Aether";
-const DEFAULT_AETHER_VERSION = packageJson.aetherVersion;
-const WRAPPER_VERSION = packageJson.version;
+const DEFAULT_AETHER_VERSION = packageJson.version;
+const PACKAGE_VERSION = packageJson.version;
 const MAX_REDIRECTS = 5;
 const BANNER = `
       █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗
@@ -234,7 +234,7 @@ function requestWithRedirects(url, redirectsLeft = MAX_REDIRECTS) {
       url,
       {
         headers: {
-          "User-Agent": `${packageJson.name}/${WRAPPER_VERSION}`
+          "User-Agent": `${packageJson.name}/${PACKAGE_VERSION}`
         }
       },
       (res) => {
@@ -391,7 +391,7 @@ async function main(argv) {
     return;
   }
   if (options.wrapperVersion) {
-    console.log(WRAPPER_VERSION);
+    console.log(PACKAGE_VERSION);
     return;
   }
 
@@ -408,7 +408,7 @@ async function main(argv) {
 
   console.log(BANNER.trimEnd());
   console.log("");
-  console.log(`Bootstrapping Aether ${aetherVersion} via npm package ${packageJson.name}@${WRAPPER_VERSION}`);
+  console.log(`Bootstrapping Aether ${aetherVersion} via npm package ${packageJson.name}@${PACKAGE_VERSION}`);
   console.log(`Install directory: ${destDir}`);
 
   if (needsInstall(binaryPath, aetherVersion)) {

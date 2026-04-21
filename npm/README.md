@@ -20,6 +20,10 @@ npx --yes aether-colony@latest
 
 `aether-colony` is the low-friction npm bootstrap for Aether. It is not a second runtime. It downloads the matching published Go `aether` binary for your platform, installs it into a stable local directory, and then hands off to the real CLI.
 
+The npm package version intentionally matches the published Go release version.
+There is one public Aether version, not one version for npm and another for the
+runtime.
+
 ## What happens on first run
 
 1. The wrapper resolves the matching Aether release for your platform.
@@ -46,6 +50,7 @@ npx --yes aether-colony@latest -- init "Build feature X"
 - `aether-colony` is the bootstrap and discovery path.
 - The real runtime is the Go `aether` binary.
 - After the first install, users should normally run `aether ...` directly.
+- `aether-colony@1.0.17` is expected to bootstrap Aether `1.0.17`.
 
 ## Source and docs
 

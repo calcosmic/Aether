@@ -8,6 +8,7 @@ This runbook is the authoritative workflow for publishing Aether changes and ver
 - `aether update` in another repo only pulls companion files from that hub. It does not publish source-checkout changes by itself.
 - `aether update --force` should be the default downstream refresh when you need stale Aether-managed files removed.
 - `aether update --download-binary` downloads a published release binary. Use it when you need the released runtime, not an unreleased local source change.
+- `.aether/version.json` is the source-checkout release version file. `npm/package.json` must use the exact same version.
 
 ## Standard Local Source Workflow
 
@@ -42,13 +43,12 @@ Use this when you are publishing the public `npx` entrypoint for non-Go users.
 
 Release order matters:
 
-1. Publish the Go GitHub release first.
-2. Verify the release assets exist for every supported platform.
-3. Update `npm/package.json`:
-   - bump `version` for the npm package itself
-   - set `aetherVersion` to the exact Go release version the wrapper should install
-4. Run npm package verification locally.
-5. Publish the npm package.
+1. Set `.aether/version.json` to the release version.
+2. Set `npm/package.json` `version` to the exact same release version.
+3. Commit the version change.
+4. Push the commit.
+5. Create and push the Git tag `vX.Y.Z`.
+6. Let the release workflow publish the Go release first, then the npm bootstrap if `NPM_TOKEN` is configured.
 
 Recommended verification:
 
@@ -57,15 +57,30 @@ npm --prefix npm test
 cd npm && npm pack --dry-run
 node bin/aether.js --bootstrap-version
 node bin/aether.js version
+test "$(node -p "require('./npm/package.json').version")" = "$(node -p "require('./.aether/version.json').version")"
 ```
 
 Why the order is strict:
 - The npm package is only a bootstrap wrapper.
-- It downloads a specific published Go release from GitHub Releases.
-- If npm is published before the matching Go release exists, the wrapper will point users at a missing or stale runtime.
+- It downloads the published Go release with the exact same version.
+- If the npm package version and the Aether release version diverge, users will see version drift immediately.
 
 User-facing rule:
-- `npx --yes aether-colony@latest` should always install the same published runtime that the current npm wrapper declares in `npm/package.json`.
+- `npx --yes aether-colony@latest` should always install the same published runtime as the current `latest` GitHub release.
+- The `latest` npm dist-tag should point at the same version as the current stable Aether release, even though historical npm versions like `5.x` still exist in the registry history.
+
+Manual fallback if npm is not automated in CI yet:
+
+```bash
+cd npm
+npm publish --access public
+```
+
+Then verify:
+
+```bash
+npm view aether-colony dist-tags --json
+```
 
 ## Bootstrap Workflow When `install` Itself Changed
 
@@ -127,6 +142,11 @@ Expected counts:
 - OpenCode agents: `25`
 - Codex agents: `25`
 - Codex skills: `29`
+
+Release metadata should also agree:
+- `.aether/version.json` version equals `npm/package.json` version
+- `aether version` equals the intended release version after rebuilding from source
+- `npm view aether-colony dist-tags --json` reports `latest` at the same stable release version
 
 In a downstream repo, a healthy refresh should no longer show `0/0` for Claude/OpenCode commands.
 

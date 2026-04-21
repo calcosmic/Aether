@@ -286,10 +286,17 @@ Legal transitions (from `pkg/colony/colony.go:490`):
 - If the change modified `aether install` itself: bootstrap with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`
 - For published release runtime updates: run `aether update --force --download-binary`
 
+## Release Version Integrity
+
+- `.aether/version.json` is the source-checkout release version file
+- `npm/package.json` version must equal `.aether/version.json`
+- If these differ, report release version drift before trusting docs or publish instructions
+- For public installs, `npx --yes aether-colony@latest` should resolve to the same stable version as the current GitHub release
+
 ## Version Compatibility
 
 - COLONY_STATE.json `version` field is "3.0" (string)
 - Legacy state names (PAUSED, PLANNED, SEALED, ENTOMBED) are auto-normalized on load
 - No structural migration framework exists
-- Version detection: git tags / ldflags (no `.aether/version.json`)
+- Source-checkout release version detection uses `.aether/version.json`; installed/runtime detection uses ldflags or the hub version
 - Cache files are expected and auto-rebuilt — not data corruption

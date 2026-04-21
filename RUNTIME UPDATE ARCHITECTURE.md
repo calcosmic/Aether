@@ -2,6 +2,11 @@
 
 > **Distribution note:** The Go `aether` binary is the only runtime. A thin npm bootstrap package now exists at `npm/` for `npx --yes aether-colony@latest`, but it only downloads and hands off to the published Go release.
 
+Version rule:
+- `.aether/version.json` is the source-checkout release version file.
+- `npm/package.json` must use the exact same version as `.aether/version.json`.
+- The public npm `latest` tag should point at the same stable release version as GitHub Releases.
+
 ## The Core Concept
 
 ```

@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -109,3 +111,32 @@ func TestPersistentPreRunStoreInit(t *testing.T) {
 var errStoreNil = func() error {
 	return os.ErrNotExist
 }()
+
+func TestResolveVersionPrefersRepoVersionFile(t *testing.T) {
+	originalVersion := Version
+	Version = "0.0.0-dev"
+	defer func() { Version = originalVersion }()
+
+	tmpDir := t.TempDir()
+	goMod := []byte("module github.com/calcosmic/Aether\n\ngo 1.26\n")
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), goMod, 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
+		t.Fatalf("failed to create .aether dir: %v", err)
+	}
+	versionPayload, err := json.Marshal(map[string]string{
+		"version":    "1.0.17",
+		"updated_at": "2026-04-22",
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal version payload: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".aether", "version.json"), versionPayload, 0644); err != nil {
+		t.Fatalf("failed to write version.json: %v", err)
+	}
+
+	if got := resolveVersion(tmpDir); got != "1.0.17" {
+		t.Fatalf("resolveVersion() = %q, want %q", got, "1.0.17")
+	}
+}

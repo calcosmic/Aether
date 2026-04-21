@@ -10,11 +10,13 @@
 
 ### [aetherantcolony.com](https://aetherantcolony.com?utm_source=github&utm_medium=readme&utm_campaign=aether)
 
-Aether is an open-source biomimetic AI colony that replaces deterministic agent frameworks with a self-organizing swarm. Instead of brittle DAGs where one failure crashes everything, 24 specialized worker castes communicate through stigmergy — leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) that let the colony dynamically pivot without catastrophic failure. A built-in OODA loop treats errors as observations, not crashes, and a "Synthetic SLA" verification loop mathematically drives reliability from ~80% model accuracy to 99.2%. The Hive Brain ensures knowledge compounds across sessions and projects — instincts extracted from real work are scored for trust, promoted to permanent memory, and shared colony-wide. The result: complex intelligence emerges from simple, localized rules, just like a real ant colony.
+Aether is an open-source biomimetic AI colony that replaces deterministic agent frameworks with a self-organizing swarm. Instead of brittle DAGs where one failure crashes everything, 25 specialized worker castes communicate through stigmergy — leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) that let the colony dynamically pivot without catastrophic failure. A built-in OODA loop treats errors as observations, not crashes, and a "Synthetic SLA" verification loop mathematically drives reliability from ~80% model accuracy to 99.2%. The Hive Brain ensures knowledge compounds across sessions and projects — instincts extracted from real work are scored for trust, promoted to permanent memory, and shared colony-wide. The result: complex intelligence emerges from simple, localized rules, just like a real ant colony.
 
 <br>
 
 [![GitHub release](https://img.shields.io/github/v/release/calcosmic/Aether.svg?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![npm](https://img.shields.io/npm/v/aether-colony?style=flat-square&label=npm)](https://www.npmjs.com/package/aether-colony)
+[![npm downloads](https://img.shields.io/npm/dm/aether-colony?style=flat-square&label=npm%20downloads)](https://www.npmjs.com/package/aether-colony)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-7B3FE4?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/calcosmic/Aether.svg?style=flat-square)](https://github.com/calcosmic/Aether/stargazers)
 [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-%23ea4aaa.svg?style=flat-square&logo=github)](https://github.com/sponsors/calcosmic?utm_source=github&utm_medium=readme&utm_campaign=aether)
@@ -23,8 +25,8 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/calcosmic/Aether.svg)](https://pkg.go.dev/github.com/calcosmic/Aether)
 
-[![agents](https://img.shields.io/badge/agents-24-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
-[![commands](https://img.shields.io/badge/commands-49-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
+[![agents](https://img.shields.io/badge/agents-25-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
+[![commands](https://img.shields.io/badge/commands-50-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
 [![colony](https://img.shields.io/badge/colony-v1.0.17-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
@@ -45,7 +47,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 Every AI coding tool now has "agents." Most of them are the same thing repackaged — a loop that plans, executes, and checks. LangGraph uses strict directed state machines (DAGs). CrewAI uses top-down hierarchical delegation. AutoGen uses conversational group chats. That's not a colony. That's one ant doing laps.
 
-Aether rejects all of these. It's an **Artificial Ecology** modeled on how real ant colonies work: no central brain, no single point of failure, no brittle JSON schemas. Instead, 24 specialized workers self-organize in parallel waves around your goal.
+Aether rejects all of these. It's an **Artificial Ecology** modeled on how real ant colonies work: no central brain, no single point of failure, no brittle JSON schemas. Instead, 25 specialized workers self-organize in parallel waves around your goal.
 
 ### Not Prompt Engineering — Stigmergy
 
@@ -92,7 +94,9 @@ npx --yes aether-colony@latest
 
 This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
-platform, installs it locally, and then runs `aether install` for you.
+platform, installs it locally, and then runs `aether install` for you. The npm
+package version intentionally matches the published Aether release version, so
+`aether-colony@1.0.17` bootstraps Aether `1.0.17`.
 
 **Option 1: Go binary**
 
@@ -189,8 +193,8 @@ primary platforms.
 
 | | Feature | Description |
 |---|---------|-------------|
-| **Agents** | 24 Specialized Workers | Builder, Watcher, Scout, Tracker, Archaeologist, Oracle, and more |
-| **Commands** | 49 Slash Commands + Native CLI | Slash workflow for Claude Code and OpenCode, native `aether` lifecycle for Codex CLI |
+| **Agents** | 25 Specialized Workers | Builder, Watcher, Scout, Tracker, Archaeologist, Oracle, Medic, and more |
+| **Commands** | 50 Slash Commands + Native CLI | Slash workflow for Claude Code and OpenCode, native `aether` lifecycle for Codex CLI |
 | **Signals** | Pheromone System | FOCUS, REDIRECT, FEEDBACK — guide colony attention |
 | **Memory** | Colony Wisdom | Learnings and instincts persist via QUEEN.md |
 | **Hive Brain** | Cross-colony | Domain-scoped wisdom sharing |
@@ -232,11 +236,11 @@ primary platforms.
 |-----------|--------|--------|---------|-----------|
 | **Language** | Go | Python | Python | Python |
 | **License** | Apache 2.0 | MIT | MIT | Open + paid tiers |
-| **Architecture** | Biological colony — 24 specialized workers self-organize via pheromone signals | Role-based agents with sequential/task delegation | Multi-agent conversation framework (Microsoft) | Graph-based state machines with conditional edges |
+| **Architecture** | Biological colony — 25 specialized workers self-organize via pheromone signals | Role-based agents with sequential/task delegation | Multi-agent conversation framework (Microsoft) | Graph-based state machines with conditional edges |
 | **Memory / Learning** | Colony Wisdom — learnings persist as instincts, promote to QUEEN.md, share cross-colony via Hive Brain | Short-term memory + optional long-term via integration | No built-in persistent memory | Checkpoint-based state persistence |
 | **Agent Coordination** | Pheromone signals (FOCUS, REDIRECT, FEEDBACK) guide attention without rewriting prompts | Hierarchical task delegation between role-assigned agents | Turn-based conversation between agents | Explicit graph edges define control flow |
-| **Workers / Agents** | 24 specialized castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, etc.) | User-defined roles with goals and backstories | Configurable assistant and user proxy agents | Nodes as functions or LangChain runnables |
-| **Commands / Control** | 49 slash commands on Claude/OpenCode + native `aether` CLI workflow on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
+| **Workers / Agents** | 25 specialized castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, etc.) | User-defined roles with goals and backstories | Configurable assistant and user proxy agents | Nodes as functions or LangChain runnables |
+| **Commands / Control** | 50 slash commands on Claude/OpenCode + native `aether` CLI workflow on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
 | **Autopilot** | `/ant:run` on Claude/OpenCode, `aether run` on Codex | Sequential task execution, no built-in loop | No built-in loop | Can loop via graph cycles, not opinionated |
 | **Quality Gates** | 6-phase verification before advancing phases | Optional human-in-the-loop review | No built-in gates | Manual checkpoint implementation |
 | **Research** | Oracle + Scouts — autonomous deep research before task decomposition | No dedicated research agents | Group chat can approximate research | No built-in research pattern |
@@ -249,14 +253,14 @@ primary platforms.
 ├── commands/                   Slash-command mirrors and platform command docs
 ├── agents-claude/               Claude agent definitions
 ├── skills-codex/               Codex skill mirror
-├── skills/                     28 skills (10 colony + 18 domain)
+├── skills/                     29 skills (11 colony + 18 domain)
 ├── exchange/                   XML exchange modules
 ├── docs/                       Documentation
 ├── templates/                  12 templates
 └── data/                       Colony state (local only)
 
 .codex/                         Codex CLI agent definitions
-└── agents/                     24 TOML agent files
+└── agents/                     25 TOML agent files
 
 ~/.aether/                     Hub (cross-colony, user-level)
 ├── system/                   Companion file source (populated by install)
@@ -460,9 +464,9 @@ It pauses — not crashes — when something needs attention: test failures, cri
 
 ## 🔌 Works With
 
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 49 slash commands + 24 agent definitions
-- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 49 slash commands + agent definitions
-- **Codex CLI** - secondary platform, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 24 TOML agent definitions
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 50 slash commands + 25 agent definitions
+- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 50 slash commands + 25 agent definitions
+- **Codex CLI** - secondary platform, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 25 TOML agent definitions
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
@@ -471,9 +475,9 @@ It pauses — not crashes — when something needs attention: test failures, cri
 ## 📋 Command Reference (Claude Code / OpenCode)
 
 <details>
-<summary>49 slash commands for Claude Code and OpenCode — click to expand</summary>
+<summary>50 slash commands for Claude Code and OpenCode — click to expand</summary>
 
-Aether provides 49 slash commands organized into seven categories for Claude
+Aether provides 50 slash commands organized into seven categories for Claude
 Code and OpenCode. This section is the slash-command reference for the primary
 platforms.
 
@@ -1052,8 +1056,8 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 - Claude/OpenCode blocked continue ceremony now follows runtime recovery commands honestly instead of always bouncing users back to generic `/ant:continue`
 - Codex keeps the same runtime truth, so other repos can now test the full dispatch/recovery finish work through the native CLI path
 
-- 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
-- 49 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow
+- 25 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, and more)
+- 50 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow
 - Codex now keeps literal `aether ...` commands on the direct CLI path again, avoiding fake pre-command repo archaeology while preserving Aether’s visual output and worker-spawning runtime
 - The richer Codex UX now comes from the Aether CLI itself rather than instruction-layer wrapper theater, which keeps colony behavior aligned with the real binary
 - JSON error envelopes now include structured details again, so failed updates expose the real file-level sync problems instead of only a count
