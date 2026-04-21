@@ -1,0 +1,38 @@
+{
+  "stack_cases": [
+    {
+      "name": "tailwind-app",
+      "workspace": "skill-fixtures/tailwind-app",
+      "task": "build the tailwind landing page",
+      "expected_skill": "tailwind",
+      "expected_evidence": [
+        "tailwind.config.js",
+        "package.json:tailwindcss"
+      ]
+    },
+    {
+      "name": "go-cli",
+      "workspace": "skill-fixtures/go-cli",
+      "task": "build the go cli",
+      "expected_skill": "golang",
+      "forbidden_skill": "tailwind"
+    }
+  ],
+  "safe_import": {
+    "name": "safe-pheromones",
+    "xml": "prompt-integrity-fixtures/imported-signals/safe-pheromones.xml",
+    "expected_action": "allow",
+    "expected_trust_class": "unknown"
+  },
+  "suspicious_import": {
+    "name": "suspicious-pheromones",
+    "xml": "prompt-integrity-fixtures/imported-signals/suspicious-pheromones.xml",
+    "expected_action": "block",
+    "expected_trust_class": "suspicious",
+    "expected_signal_id": "sig_suspicious"
+  },
+  "weighting_files": [
+    "fresh-vs-stale.json",
+    "protected-capsule.json"
+  ]
+}

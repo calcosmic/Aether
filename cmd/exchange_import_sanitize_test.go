@@ -237,7 +237,8 @@ func TestImportPheromonesSanitizeEscapesBrackets(t *testing.T) {
 func TestImportPheromonesFixtureSurfacesSafeIntegrity(t *testing.T) {
 	_, _ = setupExchangeTest(t)
 
-	xmlFile := filepath.Join("testdata", "prompt-integrity-fixtures", "imported-signals", "safe-pheromones.xml")
+	fixtures := loadCompetitiveProofFixtures(t)
+	xmlFile := filepath.Join("testdata", fixtures.SafeImport.XML)
 	rootCmd.SetArgs([]string{"import", "pheromones", xmlFile})
 	defer rootCmd.SetArgs([]string{})
 
@@ -256,18 +257,19 @@ func TestImportPheromonesFixtureSurfacesSafeIntegrity(t *testing.T) {
 		t.Fatalf("expected 1 integrity record, got %v", result["integrity"])
 	}
 	record := integrity[0].(map[string]interface{})
-	if record["action"] != string(colony.PromptIntegrityActionAllow) {
-		t.Fatalf("action = %v, want %q", record["action"], colony.PromptIntegrityActionAllow)
+	if record["action"] != fixtures.SafeImport.ExpectedAction {
+		t.Fatalf("action = %v, want %q", record["action"], fixtures.SafeImport.ExpectedAction)
 	}
-	if record["trust_class"] != string(colony.PromptTrustUnknown) {
-		t.Fatalf("trust_class = %v, want %q", record["trust_class"], colony.PromptTrustUnknown)
+	if record["trust_class"] != fixtures.SafeImport.ExpectedTrustClass {
+		t.Fatalf("trust_class = %v, want %q", record["trust_class"], fixtures.SafeImport.ExpectedTrustClass)
 	}
 }
 
 func TestImportPheromonesFixtureBlocksSuspiciousAndLogsEvent(t *testing.T) {
 	_, s := setupExchangeTest(t)
 
-	xmlFile := filepath.Join("testdata", "prompt-integrity-fixtures", "imported-signals", "suspicious-pheromones.xml")
+	fixtures := loadCompetitiveProofFixtures(t)
+	xmlFile := filepath.Join("testdata", fixtures.SuspiciousImport.XML)
 	rootCmd.SetArgs([]string{"import", "pheromones", xmlFile})
 	defer rootCmd.SetArgs([]string{})
 
@@ -291,11 +293,11 @@ func TestImportPheromonesFixtureBlocksSuspiciousAndLogsEvent(t *testing.T) {
 		t.Fatalf("expected 1 integrity record, got %v", result["integrity"])
 	}
 	record := integrity[0].(map[string]interface{})
-	if record["action"] != string(colony.PromptIntegrityActionBlock) {
-		t.Fatalf("action = %v, want %q", record["action"], colony.PromptIntegrityActionBlock)
+	if record["action"] != fixtures.SuspiciousImport.ExpectedAction {
+		t.Fatalf("action = %v, want %q", record["action"], fixtures.SuspiciousImport.ExpectedAction)
 	}
-	if record["trust_class"] != string(colony.PromptTrustSuspicious) {
-		t.Fatalf("trust_class = %v, want %q", record["trust_class"], colony.PromptTrustSuspicious)
+	if record["trust_class"] != fixtures.SuspiciousImport.ExpectedTrustClass {
+		t.Fatalf("trust_class = %v, want %q", record["trust_class"], fixtures.SuspiciousImport.ExpectedTrustClass)
 	}
 
 	var file colony.PheromoneFile
@@ -320,7 +322,7 @@ func TestImportPheromonesFixtureBlocksSuspiciousAndLogsEvent(t *testing.T) {
 			continue
 		}
 		payload := evt["payload"].(map[string]interface{})
-		if payload["name"] == "sig_suspicious" && payload["action"] == string(colony.PromptIntegrityActionBlock) {
+		if payload["name"] == fixtures.SuspiciousImport.ExpectedSignalID && payload["action"] == fixtures.SuspiciousImport.ExpectedAction {
 			foundEvent = true
 			break
 		}

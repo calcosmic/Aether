@@ -245,6 +245,32 @@ Fail fast: Return errors early rather than accumulating state.
 	return s
 }
 
+func copyBenchmarkProofFixture(b *testing.B, src, dst string) {
+	b.Helper()
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		b.Fatalf("read fixture dir %s: %v", src, err)
+	}
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		b.Fatalf("mkdir %s: %v", dst, err)
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		if entry.IsDir() {
+			copyBenchmarkProofFixture(b, srcPath, dstPath)
+			continue
+		}
+		data, err := os.ReadFile(srcPath)
+		if err != nil {
+			b.Fatalf("read %s: %v", srcPath, err)
+		}
+		if err := os.WriteFile(dstPath, data, 0644); err != nil {
+			b.Fatalf("write %s: %v", dstPath, err)
+		}
+	}
+}
+
 // joinLines joins strings with newlines.
 func joinLines(lines []string) string {
 	result := ""
@@ -328,6 +354,55 @@ func BenchmarkColonyPrime(b *testing.B) {
 		rootCmd.SetArgs([]string{"colony-prime"})
 		if err := rootCmd.Execute(); err != nil {
 			b.Fatalf("colony-prime failed: %v", err)
+		}
+		rootCmd.SetArgs([]string{})
+	}
+}
+
+func BenchmarkProof(b *testing.B) {
+	b.ReportAllocs()
+
+	s := setupBenchmarkStore(b)
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	copyBenchmarkProofFixture(b, filepath.Join("testdata", "skill-fixtures", "tailwind-app"), root)
+
+	hubDir := os.Getenv("AETHER_HUB_DIR")
+	copyBenchmarkProofFixture(b, filepath.Join("..", ".aether", "skills", "colony", "build-discipline"), filepath.Join(hubDir, "skills", "colony", "build-discipline"))
+	copyBenchmarkProofFixture(b, filepath.Join("..", ".aether", "skills", "domain", "tailwind"), filepath.Join(hubDir, "skills", "domain", "tailwind"))
+	copyBenchmarkProofFixture(b, filepath.Join("..", ".aether", "skills", "domain", "golang"), filepath.Join(hubDir, "skills", "domain", "golang"))
+
+	origStdout := stdout
+	origStderr := stderr
+	origStore := store
+	origDir, _ := os.Getwd()
+	defer func() {
+		stdout = origStdout
+		stderr = origStderr
+		store = origStore
+		if origDir != "" {
+			_ = os.Chdir(origDir)
+		}
+	}()
+
+	if err := os.Chdir(root); err != nil {
+		b.Fatalf("chdir proof benchmark root: %v", err)
+	}
+
+	var buf bytes.Buffer
+	var errBuf bytes.Buffer
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		errBuf.Reset()
+
+		stdout = &buf
+		stderr = &errBuf
+		store = s
+
+		rootCmd.SetArgs([]string{"proof"})
+		if err := rootCmd.Execute(); err != nil {
+			b.Fatalf("proof failed: %v", err)
 		}
 		rootCmd.SetArgs([]string{})
 	}

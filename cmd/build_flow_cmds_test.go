@@ -21,8 +21,15 @@ func setupBuildFlowTest(t *testing.T) string {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatalf("failed to create temp data dir: %v", err)
 	}
+	origRoot := os.Getenv("AETHER_ROOT")
 	os.Setenv("AETHER_ROOT", tmpDir)
-	t.Cleanup(func() { os.Unsetenv("AETHER_ROOT") })
+	t.Cleanup(func() {
+		if origRoot == "" {
+			os.Unsetenv("AETHER_ROOT")
+			return
+		}
+		os.Setenv("AETHER_ROOT", origRoot)
+	})
 
 	s, err := storage.NewStore(dataDir)
 	if err != nil {

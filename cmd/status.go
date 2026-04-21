@@ -188,6 +188,27 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 	fmt.Fprintf(&b, "Parallel: %s\n\n", parallelMode)
 
+	proof := buildProofOutput(skillWorkspaceRoot(), state)
+	b.WriteString("Proof\n")
+	fmt.Fprintf(&b, "   Context: %s | %d included | %d preserved | %d trimmed | %d blocked\n",
+		proof.Summary.ContextSurface,
+		proof.Summary.ContextIncluded,
+		proof.Summary.ContextPreserved,
+		proof.Summary.ContextTrimmed,
+		proof.Summary.ContextBlocked,
+	)
+	if proof.Summary.SkillDispatches > 0 {
+		fmt.Fprintf(&b, "   Skills: %s | %d dispatches | %d matched skills\n",
+			proof.Summary.SkillSource,
+			proof.Summary.SkillDispatches,
+			proof.Summary.SkillMatchedTotal,
+		)
+	} else {
+		b.WriteString("   Skills: no phase-aware skill proof yet\n")
+	}
+	b.WriteString("   Inspect: aether proof\n")
+	b.WriteString("\n")
+
 	// Memory Health table
 	b.WriteString("Memory Health\n")
 	renderMemoryHealthTable(&b, s)
@@ -236,12 +257,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	if len(activeWorkers) > 0 {
 		b.WriteString(renderNextUp(
 			"Active workers are still running. Wait for the in-flight command to finish.",
+			`Run `+"`aether proof`"+` to inspect the active context and skill proof.`,
 			`Run `+"`aether status`"+` again to refresh the spawn view.`,
 			`Run `+"`tail -f .aether/data/spawn-tree.txt`"+` in another terminal to watch status changes.`,
 		))
 		return b.String()
 	}
 	primary, alternatives := workflowSuggestionsForState(state)
+	alternatives = append(alternatives, `Run `+"`aether proof`"+` to inspect the current context and skill proof.`)
 	b.WriteString(renderNextUp(primary, alternatives...))
 
 	return b.String()

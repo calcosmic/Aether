@@ -1503,8 +1503,20 @@ func TestSkillMatchTailwindFixtureIncludesEvidence(t *testing.T) {
 	setupProofSkillHub(t)
 	store = nil
 
-	fixture := filepath.Join(t.TempDir(), "tailwind-app")
-	copyDirForTest(t, skillsFixturePath(t, "tailwind-app"), fixture)
+	fixtures := loadCompetitiveProofFixtures(t)
+	var stack competitiveProofStackCase
+	for _, candidate := range fixtures.StackCases {
+		if candidate.ExpectedSkill == "tailwind" {
+			stack = candidate
+			break
+		}
+	}
+	if stack.Name == "" {
+		t.Fatal("missing tailwind competitive proof fixture")
+	}
+
+	fixture := filepath.Join(t.TempDir(), stack.Name)
+	copyDirForTest(t, filepath.Join("testdata", stack.Workspace), fixture)
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(fixture); err != nil {
 		t.Fatalf("chdir fixture: %v", err)
@@ -1520,7 +1532,7 @@ func TestSkillMatchTailwindFixtureIncludesEvidence(t *testing.T) {
 
 	var matchBuf bytes.Buffer
 	stdout = &matchBuf
-	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "build the tailwind landing page"})
+	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", stack.Task})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("skill-match failed: %v", err)
 	}
@@ -1545,8 +1557,7 @@ func TestSkillMatchTailwindFixtureIncludesEvidence(t *testing.T) {
 	}
 
 	reasons := tailwind["reasons"].([]interface{})
-	foundFileEvidence := false
-	foundPackageEvidence := false
+	foundEvidence := make(map[string]bool, len(stack.ExpectedEvidence))
 	for _, raw := range reasons {
 		reason := raw.(map[string]interface{})
 		evidence := reason["evidence"].([]interface{})
@@ -1554,18 +1565,17 @@ func TestSkillMatchTailwindFixtureIncludesEvidence(t *testing.T) {
 		for _, item := range evidence {
 			values = append(values, item.(string))
 		}
-		if reason["code"] == "workspace_file" && strings.Contains(strings.Join(values, ","), "tailwind.config.js") {
-			foundFileEvidence = true
-		}
-		if reason["code"] == "workspace_package" && strings.Contains(strings.Join(values, ","), "package.json:tailwindcss") {
-			foundPackageEvidence = true
+		joined := strings.Join(values, ",")
+		for _, want := range stack.ExpectedEvidence {
+			if strings.Contains(joined, want) {
+				foundEvidence[want] = true
+			}
 		}
 	}
-	if !foundFileEvidence {
-		t.Fatal("expected tailwind workspace_file evidence")
-	}
-	if !foundPackageEvidence {
-		t.Fatal("expected tailwind workspace_package evidence")
+	for _, want := range stack.ExpectedEvidence {
+		if !foundEvidence[want] {
+			t.Fatalf("expected tailwind evidence %q in proof-bearing reasons", want)
+		}
 	}
 }
 
@@ -1575,8 +1585,20 @@ func TestSkillMatchGoFixtureAvoidsTailwind(t *testing.T) {
 	setupProofSkillHub(t)
 	store = nil
 
-	fixture := filepath.Join(t.TempDir(), "go-cli")
-	copyDirForTest(t, skillsFixturePath(t, "go-cli"), fixture)
+	fixtures := loadCompetitiveProofFixtures(t)
+	var stack competitiveProofStackCase
+	for _, candidate := range fixtures.StackCases {
+		if candidate.ExpectedSkill == "golang" {
+			stack = candidate
+			break
+		}
+	}
+	if stack.Name == "" {
+		t.Fatal("missing go competitive proof fixture")
+	}
+
+	fixture := filepath.Join(t.TempDir(), stack.Name)
+	copyDirForTest(t, filepath.Join("testdata", stack.Workspace), fixture)
 	origDir, _ := os.Getwd()
 	if err := os.Chdir(fixture); err != nil {
 		t.Fatalf("chdir fixture: %v", err)
@@ -1592,7 +1614,7 @@ func TestSkillMatchGoFixtureAvoidsTailwind(t *testing.T) {
 
 	var matchBuf bytes.Buffer
 	stdout = &matchBuf
-	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "build the go cli"})
+	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", stack.Task})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("skill-match failed: %v", err)
 	}
@@ -1604,10 +1626,10 @@ func TestSkillMatchGoFixtureAvoidsTailwind(t *testing.T) {
 	foundGo := false
 	for _, raw := range domainSkills {
 		skill := raw.(map[string]interface{})
-		if skill["name"] == "tailwind" {
+		if stack.ForbiddenSkill != "" && skill["name"] == stack.ForbiddenSkill {
 			t.Fatalf("did not expect tailwind skill for go fixture: %#v", domainSkills)
 		}
-		if skill["name"] == "golang" {
+		if skill["name"] == stack.ExpectedSkill {
 			foundGo = true
 		}
 	}

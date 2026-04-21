@@ -730,3 +730,46 @@ func TestStatusCompletedColonyShowsFullTaskProgress(t *testing.T) {
 		t.Fatalf("expected completed colony to show full task progress, got:\n%s", output)
 	}
 }
+
+func TestStatusShowsProofSummaryAndRoute(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Expose proof in status"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Proof slice",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Add the proof command", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"status"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	for _, want := range []string{"Proof", "Context:", "Inspect: aether proof", "aether proof"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("status output missing %q\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "## Colony State") {
+		t.Fatalf("status should not dump full proof ledger\n%s", output)
+	}
+}
