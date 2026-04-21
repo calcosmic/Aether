@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.16] - 2026-04-21
+
+Legacy colony-state compatibility hardening for cross-repo updates.
+
+### Fixed
+- The shared Go colony-state loader now accepts legacy JSON-encoded array strings for `memory.phase_learnings`, `memory.decisions`, and `memory.instincts` instead of failing at unmarshal time
+- Repos with older `COLONY_STATE.json` snapshots like `"phase_learnings":"[]"` can now load through the runtime normally across Codex, Claude Code, and OpenCode
+- Cross-repo updates no longer require manual JSON surgery just to recover old colonies after moving to the latest Aether patch release
+
 ## [1.0.15] - 2026-04-21
 
 Versioning cleanup, cross-platform parity hardening, and restored pheromone visibility.

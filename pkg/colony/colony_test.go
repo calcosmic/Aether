@@ -450,6 +450,79 @@ func TestPlanConfidence_LegacyObjectCompatibility(t *testing.T) {
 	}
 }
 
+func TestMemory_LegacyStringifiedSlicesCompatibility(t *testing.T) {
+	raw := `{
+		"version":"3.0",
+		"state":"READY",
+		"current_phase":1,
+		"goal":"Recover legacy memory",
+		"plan":{"phases":[]},
+		"memory":{
+			"phase_learnings":"[{\"id\":\"learning_1\",\"phase\":1,\"phase_name\":\"Phase 1\",\"learnings\":[{\"claim\":\"Keep compatibility\",\"status\":\"validated\",\"tested\":true,\"evidence\":\"legacy chamber state\",\"disproven_by\":null}],\"timestamp\":\"2026-04-21T00:00:00Z\"}]",
+			"decisions":"[{\"id\":\"decision_1\",\"phase\":1,\"claim\":\"Support stringified memory arrays\",\"rationale\":\"Older colonies persisted arrays as strings\",\"timestamp\":\"2026-04-21T00:00:00Z\"}]",
+			"instincts":"[{\"id\":\"instinct_1\",\"trigger\":\"legacy state load\",\"action\":\"decode JSON-encoded array strings\",\"confidence\":0.9,\"status\":\"validated\",\"domain\":\"compatibility\",\"source\":\"legacy migration\",\"evidence\":[\"chamber snapshot\"],\"tested\":true,\"created_at\":\"2026-04-21T00:00:00Z\",\"last_applied\":null,\"applications\":1,\"successes\":1,\"failures\":0}]"
+		},
+		"errors":{"records":[],"flagged_patterns":[]},
+		"signals":[],
+		"graveyards":[],
+		"events":[]
+	}`
+
+	var state ColonyState
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		t.Fatalf("unmarshal legacy stringified memory arrays: %v", err)
+	}
+
+	if len(state.Memory.PhaseLearnings) != 1 {
+		t.Fatalf("expected 1 phase learning, got %d", len(state.Memory.PhaseLearnings))
+	}
+	if got := state.Memory.PhaseLearnings[0].Learnings[0].Claim; got != "Keep compatibility" {
+		t.Fatalf("unexpected phase learning claim %q", got)
+	}
+	if len(state.Memory.Decisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(state.Memory.Decisions))
+	}
+	if got := state.Memory.Decisions[0].Claim; got != "Support stringified memory arrays" {
+		t.Fatalf("unexpected decision claim %q", got)
+	}
+	if len(state.Memory.Instincts) != 1 {
+		t.Fatalf("expected 1 instinct, got %d", len(state.Memory.Instincts))
+	}
+	if got := state.Memory.Instincts[0].Action; got != "decode JSON-encoded array strings" {
+		t.Fatalf("unexpected instinct action %q", got)
+	}
+}
+
+func TestMemory_LegacyEmptyStringifiedSlicesCompatibility(t *testing.T) {
+	raw := `{
+		"version":"3.0",
+		"state":"READY",
+		"current_phase":0,
+		"goal":"Recover empty legacy memory",
+		"plan":{"phases":[]},
+		"memory":{"phase_learnings":"[]","decisions":"[]","instincts":"[]"},
+		"errors":{"records":[],"flagged_patterns":[]},
+		"signals":[],
+		"graveyards":[],
+		"events":[]
+	}`
+
+	var state ColonyState
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		t.Fatalf("unmarshal legacy empty stringified memory arrays: %v", err)
+	}
+
+	if len(state.Memory.PhaseLearnings) != 0 {
+		t.Fatalf("expected empty phase learnings, got %d", len(state.Memory.PhaseLearnings))
+	}
+	if len(state.Memory.Decisions) != 0 {
+		t.Fatalf("expected empty decisions, got %d", len(state.Memory.Decisions))
+	}
+	if len(state.Memory.Instincts) != 0 {
+		t.Fatalf("expected empty instincts, got %d", len(state.Memory.Instincts))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Instinct nullable field tests
 // ---------------------------------------------------------------------------

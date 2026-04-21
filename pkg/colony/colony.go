@@ -306,6 +306,71 @@ type Memory struct {
 	Instincts      []Instinct      `json:"instincts"`
 }
 
+// UnmarshalJSON preserves compatibility with legacy memory payloads.
+// Older colonies may store memory arrays as JSON-encoded strings such as
+// "[]" or "[{...}]" instead of as proper arrays.
+func (m *Memory) UnmarshalJSON(data []byte) error {
+	if strings.TrimSpace(string(data)) == "" || strings.TrimSpace(string(data)) == "null" {
+		*m = Memory{}
+		return nil
+	}
+
+	type rawMemory struct {
+		PhaseLearnings json.RawMessage `json:"phase_learnings"`
+		Decisions      json.RawMessage `json:"decisions"`
+		Instincts      json.RawMessage `json:"instincts"`
+	}
+
+	var raw rawMemory
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	phaseLearnings, err := decodeLegacyJSONArray[PhaseLearning](raw.PhaseLearnings, "phase_learnings")
+	if err != nil {
+		return err
+	}
+	decisions, err := decodeLegacyJSONArray[Decision](raw.Decisions, "decisions")
+	if err != nil {
+		return err
+	}
+	instincts, err := decodeLegacyJSONArray[Instinct](raw.Instincts, "instincts")
+	if err != nil {
+		return err
+	}
+
+	m.PhaseLearnings = phaseLearnings
+	m.Decisions = decisions
+	m.Instincts = instincts
+	return nil
+}
+
+func decodeLegacyJSONArray[T any](raw json.RawMessage, fieldName string) ([]T, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+
+	var direct []T
+	if err := json.Unmarshal(raw, &direct); err == nil {
+		return direct, nil
+	}
+
+	var encoded string
+	if err := json.Unmarshal(raw, &encoded); err == nil {
+		encoded = strings.TrimSpace(encoded)
+		if encoded == "" || encoded == "null" {
+			return nil, nil
+		}
+
+		if err := json.Unmarshal([]byte(encoded), &direct); err != nil {
+			return nil, fmt.Errorf("%s string payload is not a valid JSON array: %w", fieldName, err)
+		}
+		return direct, nil
+	}
+
+	return nil, fmt.Errorf("%s must be an array or a JSON-encoded array string", fieldName)
+}
+
 // PhaseLearning captures learnings from a specific phase.
 type PhaseLearning struct {
 	ID        string     `json:"id"`
