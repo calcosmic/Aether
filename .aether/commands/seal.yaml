@@ -1,5 +1,5 @@
 name: ant:seal
-description: "🏺🐜🏺 Seal the colony with Crowned Anthill milestone"
+description: "🏺 Seal the colony with Crowned Anthill milestone"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS"

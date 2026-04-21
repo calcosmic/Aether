@@ -1,5 +1,5 @@
 name: ant:council
-description: "📜🐜🏛️🐜📜 Convene council for intent clarification via multi-choice questions"
+description: "📜 Convene council for intent clarification via multi-choice questions"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether council $ARGUMENTS"

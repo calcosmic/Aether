@@ -1,5 +1,5 @@
 name: ant:preferences
-description: "Add or list user preferences in hub QUEEN.md"
+description: "🧠 Add or list user preferences in hub QUEEN.md"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether preferences $ARGUMENTS"

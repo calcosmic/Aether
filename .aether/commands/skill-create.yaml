@@ -1,5 +1,5 @@
 name: ant:skill-create
-description: "Create a custom domain skill using Oracle mini-research and a guided wizard"
+description: "🧪 Create a custom domain skill using Oracle mini-research and a guided wizard"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether skill-create $ARGUMENTS"

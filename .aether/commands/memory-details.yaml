@@ -1,5 +1,5 @@
 name: ant:memory-details
-description: "Show detailed colony memory — wisdom, pending promotions, and recent failures"
+description: "📜 Show detailed colony memory — wisdom, pending promotions, and recent failures"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether memory-details $ARGUMENTS"

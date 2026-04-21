@@ -1,5 +1,5 @@
 name: ant:migrate-state
-description: "🚚🐜📦🐜🚚 One-time state migration from v1 to v2.0 format"
+description: "🚚 One-time state migration from v1 to v2.0 format"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether migrate-state $ARGUMENTS"

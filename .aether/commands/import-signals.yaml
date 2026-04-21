@@ -1,5 +1,5 @@
 name: ant:import-signals
-description: "Import pheromone signals from another colony's XML export"
+description: "📥 Import pheromone signals from another colony's XML export"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether import-signals $ARGUMENTS"

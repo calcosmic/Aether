@@ -1,5 +1,5 @@
 name: ant:chaos
-description: "🎲🐜🔍🐜🎲 The Chaos Ant - a resilience tester that probes edge cases, boundary conditions, and unexpected inputs to strengthen the colony's code"
+description: "🎲 Resilience tester — probes edge cases, boundary conditions, and unexpected inputs"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether chaos $ARGUMENTS"

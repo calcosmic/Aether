@@ -1,5 +1,5 @@
 name: ant:medic
-description: "🏥🐜💊🐜🏥 The Medic Ant - diagnose colony health by scanning all colony data for corruption, staleness, and configuration issues"
+description: "🩹 Diagnose colony health — scan all colony data for corruption, staleness, and configuration issues"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether medic $ARGUMENTS"
@@ -20,6 +20,9 @@ flags:
     description: "Include wrapper parity and ceremony checks"
     type: boolean
     default: false
+  - name: trace
+    description: "Analyze a trace export JSON file instead of active colony data"
+    type: string
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

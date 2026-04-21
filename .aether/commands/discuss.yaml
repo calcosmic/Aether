@@ -1,5 +1,5 @@
 name: ant:discuss
-description: "🧭🐜💬🐜🧭 Capture clarifications before planning through the Aether CLI runtime"
+description: "💬 Capture clarifications before planning through the Aether CLI runtime"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether discuss $ARGUMENTS"

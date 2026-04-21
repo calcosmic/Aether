@@ -1,5 +1,5 @@
 name: ant:flag
-description: "🚩🐜📋🐜🚩 Create a project-specific flag (blocker, issue, or note)"
+description: "🚩 Create a project-specific flag (blocker, issue, or note)"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether flag $ARGUMENTS"

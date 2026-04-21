@@ -1,5 +1,5 @@
 name: ant:quick
-description: "Quick scout query — fast answers without build ceremony"
+description: "⚡ Quick scout query — fast answers without build ceremony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether quick $ARGUMENTS"

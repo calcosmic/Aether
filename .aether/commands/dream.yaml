@@ -1,5 +1,5 @@
 name: ant:dream
-description: "💭🐜🌙🐜💭 The Dreamer - a philosophical wanderer that observes, imagines, and writes wisdom about the codebase"
+description: "💭 The Dreamer — observes, imagines, and writes wisdom about the codebase"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether dream $ARGUMENTS"

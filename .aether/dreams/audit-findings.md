@@ -17,7 +17,7 @@ Scope: v1.3 phases 17-24 and v1.4 phases 25-30
 - File path: `.aether/commands/*.yaml`
 - What's wrong: 47 of 50 command YAML `description` fields still use legacy decorative emoji prefixes or no leading command emoji at all, so they no longer match the runtime `commandEmojiMap` in `cmd/codex_visuals.go` or the committed Claude/OpenCode wrapper frontmatter. Examples include `medic.yaml`, `plan.yaml`, `status.yaml`, `focus.yaml`, and `build.yaml`.
 - What the fix would be: Normalize the YAML descriptions to the same single-emoji descriptions already committed in the wrapper frontmatter so the source definitions match runtime and wrapper truth.
-- Status: reported only
+- Status: fixed
 
 ## Finding 3
 - Category: parity
@@ -33,7 +33,7 @@ Scope: v1.3 phases 17-24 and v1.4 phases 25-30
 - File path: `.aether/commands/medic.yaml`, `.claude/commands/ant/medic.md`, `.opencode/commands/ant/medic.md`
 - What's wrong: The runtime exposes `aether medic --trace <export.json>` for trace diagnostics, but the command YAML and both wrapper docs omit that flag entirely. `medic.yaml` also still carries the old hospital-style emoji in its description while runtime and wrappers use `🩹`.
 - What the fix would be: Add the `trace` flag to the YAML and both wrapper docs, and align the YAML description with the runtime/wrapper `🩹` contract.
-- Status: reported only
+- Status: fixed
 
 ## Finding 5
 - Category: ceremony

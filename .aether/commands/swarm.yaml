@@ -1,5 +1,5 @@
 name: ant:swarm
-description: "🔥🐜🗡️🐜🔥 Real-time colony swarm display + stubborn bug destroyer"
+description: "🔥 Real-time colony swarm display + stubborn bug destroyer"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether swarm $ARGUMENTS"

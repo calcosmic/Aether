@@ -1,5 +1,5 @@
 name: ant:lay-eggs
-description: "🥚🐜🥚 Set up Aether in this repo — creates .aether/ with all system files"
+description: "🥚 Set up Aether in this repo — creates .aether/ with all system files"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether lay-eggs $ARGUMENTS"

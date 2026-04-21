@@ -1,5 +1,5 @@
 name: ant:continue
-description: "Verify build work, extract learnings, and advance the colony"
+description: "👁️ Verify build work, extract learnings, and advance the colony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS"

@@ -1,5 +1,5 @@
 name: ant:build
-description: "Build a phase — Queen dispatches workers, colony self-organizes"
+description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS"

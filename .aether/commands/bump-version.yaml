@@ -1,5 +1,5 @@
 name: ant:bump-version
-description: "🚀🐜 Bump version across all files, rebuild, push, and tag for release"
+description: "🚀 Bump version across all files, rebuild, push, and tag for release"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether bump-version $ARGUMENTS"

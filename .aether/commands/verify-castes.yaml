@@ -1,5 +1,5 @@
 name: ant:verify-castes
-description: "Verify colony caste assignments and system status"
+description: "✓ Verify colony caste assignments and system status"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether verify-castes $ARGUMENTS"

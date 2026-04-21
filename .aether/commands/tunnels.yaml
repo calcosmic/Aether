@@ -1,5 +1,5 @@
 name: ant:tunnels
-description: "🕳️🐜🕳️ Explore tunnels (browse archived colonies, compare chambers)"
+description: "🕳️ Explore tunnels (browse archived colonies, compare chambers)"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether tunnels $ARGUMENTS"
