@@ -12,7 +12,7 @@
 | Version | v1.0.18 |
 | Slash commands | 50 (Claude) + 50 (OpenCode); Codex uses native CLI + 25 TOML agents |
 | Agent definitions | 25 |
-| Skills | 28 (10 colony + 18 domain) |
+| Skills | 29 (11 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Tests | 2900+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
@@ -94,7 +94,7 @@ Full contract documented in `.aether/docs/wrapper-runtime-ux-contract.md`. Key r
 │   ├── commands/*.yaml   Slash command source definitions        │
 │   ├── agents-claude/    Agent definition mirror (Claude, packaging)│
 │   ├── agents-codex/     Agent definition mirror (Codex, packaging)│
-│   ├── skills/           colony/ (10) + domain/ (18)            │
+│   ├── skills/           colony/ (11) + domain/ (18)            │
 │   ├── skills-codex/     Codex skill mirror (packaging)          │
 │   ├── docs/             Distributed documentation              │
 │   └── templates/        Colony state, pheromones, etc.          │
@@ -213,7 +213,7 @@ aether update      # or /ant:update
 ├── utils/               # Runtime utilities
 │   ├── oracle/oracle.md # Oracle loop instructions (loaded by /ant:oracle)
 │   └── queen-to-md.xsl  # XSL transform for queen wisdom export
-├── skills/              # colony/ (10) + domain/ (18) skill definitions
+├── skills/              # colony/ (11) + domain/ (18) skill definitions
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
@@ -388,7 +388,7 @@ User-colony communication via signals:
 Skills provide reusable behavior modules and domain knowledge that workers can load
 on demand. They come in two categories:
 
-- **Colony skills** (10) — Behavioral patterns that shape how workers operate
+- **Colony skills** (11) — Behavioral patterns that shape how workers operate
   (e.g., TDD discipline, error handling conventions, commit style)
 - **Domain skills** (18) — Technical knowledge for specific frameworks, languages,
   or tools (e.g., React patterns, Go idioms, database optimization)
