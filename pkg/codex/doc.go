@@ -109,10 +109,11 @@
 //     colony-prime character budget (8000 normal, 4000 compact) before it is
 //     handed to the final prompt assembler.
 //
-//  3. Skill section (optional): Matched skill guidance assembled by skill-inject
-//     based on the worker's role, active pheromone signals, and detected codebase
-//     patterns. Provides reusable behavioral patterns and domain knowledge (e.g.,
-//     TDD discipline, framework idioms). Omitted when no skills match.
+//  3. Skill section (optional): Matched skill guidance assembled by Aether's
+//     shared runtime skill resolver and rendered through the skill-inject
+//     command path. Matching is deterministic and proof-bearing: each selected
+//     skill can carry score and evidence details even though only the rendered
+//     skill markdown is injected here. Omitted when no skills match.
 //
 //  4. Pheromone section (optional): Reserved for additional signal injection.
 //     In the current Codex workflow, pheromone guidance is already folded into

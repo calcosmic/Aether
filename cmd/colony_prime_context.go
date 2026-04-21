@@ -12,21 +12,47 @@ import (
 )
 
 type colonyPrimeOutput struct {
-	Context       string   `json:"context"`
-	PromptSection string   `json:"prompt_section"`
-	SignalCount   int      `json:"signal_count"`
-	InstinctCount int      `json:"instinct_count"`
-	LogLine       string   `json:"log_line"`
-	Budget        int      `json:"budget"`
-	Used          int      `json:"used"`
-	Sections      int      `json:"sections"`
-	Trimmed       []string `json:"trimmed"`
+	Context       string            `json:"context"`
+	PromptSection string            `json:"prompt_section"`
+	SignalCount   int               `json:"signal_count"`
+	InstinctCount int               `json:"instinct_count"`
+	LogLine       string            `json:"log_line"`
+	Budget        int               `json:"budget"`
+	Used          int               `json:"used"`
+	Sections      int               `json:"sections"`
+	Trimmed       []string          `json:"trimmed"`
+	Ledger        colonyPrimeLedger `json:"ledger"`
+}
+
+type colonyPrimeLedger struct {
+	Included []colonyPrimeLedgerItem `json:"included"`
+	Trimmed  []colonyPrimeLedgerItem `json:"trimmed"`
+}
+
+type colonyPrimeLedgerItem struct {
+	Name     string `json:"name"`
+	Title    string `json:"title"`
+	Source   string `json:"source"`
+	Priority int    `json:"priority"`
+	Chars    int    `json:"chars"`
 }
 
 type colonyPrimeSection struct {
 	name     string
+	title    string
+	source   string
 	content  string
 	priority int // lower = trimmed first
+}
+
+func (s colonyPrimeSection) ledgerItem() colonyPrimeLedgerItem {
+	return colonyPrimeLedgerItem{
+		Name:     s.name,
+		Title:    s.title,
+		Source:   filepath.ToSlash(s.source),
+		Priority: s.priority,
+		Chars:    len(s.content),
+	}
 }
 
 func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
@@ -37,6 +63,10 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	result := colonyPrimeOutput{
 		Budget:  budget,
 		Trimmed: []string{},
+		Ledger: colonyPrimeLedger{
+			Included: []colonyPrimeLedgerItem{},
+			Trimmed:  []colonyPrimeLedgerItem{},
+		},
 	}
 	if store == nil {
 		return result
@@ -75,7 +105,13 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		mode = colony.ModeInRepo
 	}
 	stateSection.WriteString(fmt.Sprintf("Parallel Mode: %s\n", mode))
-	sections = append(sections, colonyPrimeSection{name: "state", content: stateSection.String(), priority: 5})
+	sections = append(sections, colonyPrimeSection{
+		name:     "state",
+		title:    "Colony State",
+		source:   statePath,
+		content:  stateSection.String(),
+		priority: 5,
+	})
 
 	now := time.Now().UTC()
 	pf, phErr := loadPheromonesOnce(store, sc)
@@ -95,7 +131,13 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 				phSB.WriteString(fmt.Sprintf("- [%s] %s\n", sig.Type, text))
 			}
 			if strings.TrimSpace(phSB.String()) != "" {
-				sections = append(sections, colonyPrimeSection{name: "pheromones", content: phSB.String(), priority: 9})
+				sections = append(sections, colonyPrimeSection{
+					name:     "pheromones",
+					title:    "Pheromone Signals",
+					source:   filepath.Join(store.BasePath(), "pheromones.json"),
+					content:  phSB.String(),
+					priority: 9,
+				})
 			}
 		}
 	}
@@ -139,7 +181,17 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		for _, inst := range instincts {
 			instSB.WriteString(fmt.Sprintf("- [%s] %s (confidence: %.2f)\n", inst.trigger, inst.action, inst.confidence))
 		}
-		sections = append(sections, colonyPrimeSection{name: "instincts", content: instSB.String(), priority: 6})
+		source := instinctsPath
+		if !instinctsLoaded {
+			source = statePath
+		}
+		sections = append(sections, colonyPrimeSection{
+			name:     "instincts",
+			title:    "Active Instincts",
+			source:   source,
+			content:  instSB.String(),
+			priority: 6,
+		})
 	}
 	result.InstinctCount = len(instincts)
 
@@ -149,7 +201,13 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		for _, d := range state.Memory.Decisions {
 			decSB.WriteString(fmt.Sprintf("- Phase %d: %s — %s\n", d.Phase, d.Claim, d.Rationale))
 		}
-		sections = append(sections, colonyPrimeSection{name: "decisions", content: decSB.String(), priority: 3})
+		sections = append(sections, colonyPrimeSection{
+			name:     "decisions",
+			title:    "Key Decisions",
+			source:   statePath,
+			content:  decSB.String(),
+			priority: 3,
+		})
 	}
 
 	if state.Memory.PhaseLearnings != nil && len(state.Memory.PhaseLearnings) > 0 {
@@ -161,7 +219,13 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 				learnSB.WriteString(fmt.Sprintf("  - %s [%s]\n", l.Claim, l.Status))
 			}
 		}
-		sections = append(sections, colonyPrimeSection{name: "learnings", content: learnSB.String(), priority: 2})
+		sections = append(sections, colonyPrimeSection{
+			name:     "learnings",
+			title:    "Phase Learnings",
+			source:   statePath,
+			content:  learnSB.String(),
+			priority: 2,
+		})
 	}
 
 	hubDir := resolveHubPath()
@@ -173,17 +237,30 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		for _, entry := range hiveEntries {
 			hiveSB.WriteString(fmt.Sprintf("- %s\n", entry))
 		}
-		sections = append(sections, colonyPrimeSection{name: "hive_wisdom", content: hiveSB.String(), priority: 4})
+		sections = append(sections, colonyPrimeSection{
+			name:     "hive_wisdom",
+			title:    "Hive Wisdom",
+			source:   filepath.Join(hubDir, "hive", "wisdom.json"),
+			content:  hiveSB.String(),
+			priority: 4,
+		})
 	}
 
-	userPrefs := readUserPreferences(filepath.Join(hubDir, "QUEEN.md"))
+	queenPath := filepath.Join(hubDir, "QUEEN.md")
+	userPrefs := readUserPreferences(queenPath)
 	if len(userPrefs) > 0 {
 		var prefsSB strings.Builder
 		prefsSB.WriteString("## USER PREFERENCES\n\n")
 		for _, pref := range userPrefs {
 			prefsSB.WriteString(fmt.Sprintf("- %s\n", pref))
 		}
-		sections = append(sections, colonyPrimeSection{name: "user_preferences", content: prefsSB.String(), priority: 7})
+		sections = append(sections, colonyPrimeSection{
+			name:     "user_preferences",
+			title:    "User Preferences",
+			source:   queenPath,
+			content:  prefsSB.String(),
+			priority: 7,
+		})
 	}
 
 	if clarifications := clarifiedIntentPromptEntries(); len(clarifications) > 0 {
@@ -193,11 +270,19 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			clarifySB.WriteString(clarification)
 			clarifySB.WriteString("\n")
 		}
-		sections = append(sections, colonyPrimeSection{name: "clarified_intent", content: clarifySB.String(), priority: 8})
+		sections = append(sections, colonyPrimeSection{
+			name:     "clarified_intent",
+			title:    "Clarified Intent",
+			source:   filepath.Join(store.BasePath(), pendingDecisionsFile),
+			content:  clarifySB.String(),
+			priority: 8,
+		})
 	}
 
 	var blockerFile colony.FlagsFile
+	blockerSource := filepath.Join(store.BasePath(), pendingDecisionsFile)
 	if err := store.LoadJSON("pending-decisions.json", &blockerFile); err != nil {
+		blockerSource = filepath.Join(store.BasePath(), "flags.json")
 		_ = store.LoadJSON("flags.json", &blockerFile)
 	}
 	if len(blockerFile.Decisions) > 0 {
@@ -212,7 +297,13 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			blockerSB.WriteString(fmt.Sprintf("- %s\n", blocker.Description))
 		}
 		if blockerSB.Len() > 0 {
-			sections = append(sections, colonyPrimeSection{name: "blockers", content: blockerSB.String(), priority: 10})
+			sections = append(sections, colonyPrimeSection{
+				name:     "blockers",
+				title:    "Active Blockers",
+				source:   blockerSource,
+				content:  blockerSB.String(),
+				priority: 10,
+			})
 		}
 	}
 
@@ -232,14 +323,17 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 				assembled.WriteString(sec.content)
 				assembled.WriteString("\n")
 				currentLen += len(sec.content)
+				result.Ledger.Included = append(result.Ledger.Included, sec.ledgerItem())
 				continue
 			}
 			result.Trimmed = append(result.Trimmed, sec.name)
+			result.Ledger.Trimmed = append(result.Ledger.Trimmed, sec.ledgerItem())
 			continue
 		}
 		assembled.WriteString(sec.content)
 		assembled.WriteString("\n")
 		currentLen += len(sec.content)
+		result.Ledger.Included = append(result.Ledger.Included, sec.ledgerItem())
 	}
 
 	context := strings.TrimSpace(assembled.String())

@@ -675,7 +675,7 @@ func TestColonyPrime_OutputStructure(t *testing.T) {
 	result := envelope["result"].(map[string]interface{})
 
 	// Required fields
-	requiredFields := []string{"context", "prompt_section", "signal_count", "instinct_count", "log_line", "budget", "used", "sections", "trimmed"}
+	requiredFields := []string{"context", "prompt_section", "signal_count", "instinct_count", "log_line", "budget", "used", "sections", "trimmed", "ledger"}
 	for _, field := range requiredFields {
 		if _, exists := result[field]; !exists {
 			t.Errorf("colony-prime result missing required field '%s'", field)
@@ -704,5 +704,27 @@ func TestColonyPrime_OutputStructure(t *testing.T) {
 	_, ok = result["trimmed"].([]interface{})
 	if !ok {
 		t.Error("colony-prime result.trimmed must be an array")
+	}
+
+	ledger, ok := result["ledger"].(map[string]interface{})
+	if !ok {
+		t.Fatal("colony-prime result.ledger must be an object")
+	}
+	included, ok := ledger["included"].([]interface{})
+	if !ok || len(included) == 0 {
+		t.Fatal("colony-prime result.ledger.included must be a non-empty array")
+	}
+	firstIncluded := included[0].(map[string]interface{})
+	if firstIncluded["name"] == "" {
+		t.Error("ledger included entry missing name")
+	}
+	if firstIncluded["title"] == "" {
+		t.Error("ledger included entry missing title")
+	}
+	if firstIncluded["source"] == "" {
+		t.Error("ledger included entry missing source")
+	}
+	if _, ok := ledger["trimmed"].([]interface{}); !ok {
+		t.Error("colony-prime result.ledger.trimmed must be an array")
 	}
 }

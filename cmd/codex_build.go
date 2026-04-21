@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -921,27 +920,14 @@ func normalizedDispatchTaskID(dispatch codexBuildDispatch) string {
 	return strings.Trim(joined, "-")
 }
 
-// resolveSkillSection matches skills for the given role and task, then formats
-// them into a markdown section. Returns empty string if no matches.
-func resolveSkillSection(caste, task string) string {
-	result := matchSkills(resolveHubPath(), caste, task)
-	allSkills := append(result.ColonySkills, result.DomainSkills...)
-	if len(allSkills) == 0 {
-		return ""
-	}
+func resolveSkillSectionResult(caste, task string) skillInjectResult {
+	return renderSkillInjectResult(matchSkills(resolveHubPath(), caste, task))
+}
 
-	var sections []string
-	for _, entry := range allSkills {
-		content, err := os.ReadFile(entry.Path)
-		if err != nil {
-			continue
-		}
-		sections = append(sections, fmt.Sprintf("### Skill: %s\n\n%s", entry.Name, string(content)))
-	}
-	if len(sections) == 0 {
-		return ""
-	}
-	return strings.Join(sections, "\n---\n")
+// resolveSkillSection matches skills for the given role and task through the
+// shared runtime resolver and returns the rendered markdown section.
+func resolveSkillSection(caste, task string) string {
+	return resolveSkillSectionResult(caste, task).SkillSection
 }
 
 // resolvePheromoneSection extracts active pheromone signals, groups them by

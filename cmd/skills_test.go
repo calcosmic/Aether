@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -318,6 +319,80 @@ func setupSkillTestHub(t *testing.T) string {
 	return tmpHub
 }
 
+func skillsTestRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve skills_test.go path")
+	}
+	return filepath.Dir(filepath.Dir(file))
+}
+
+func skillsFixturePath(t *testing.T, parts ...string) string {
+	t.Helper()
+	items := append([]string{skillsTestRepoRoot(t), "cmd", "testdata", "skill-fixtures"}, parts...)
+	return filepath.Join(items...)
+}
+
+func copyFileForTest(t *testing.T, src, dst string) {
+	t.Helper()
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("read %s: %v", src, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(dst), err)
+	}
+	if err := os.WriteFile(dst, data, 0644); err != nil {
+		t.Fatalf("write %s: %v", dst, err)
+	}
+}
+
+func copyDirForTest(t *testing.T, src, dst string) {
+	t.Helper()
+	if err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0644)
+	}); err != nil {
+		t.Fatalf("copy dir %s -> %s: %v", src, dst, err)
+	}
+}
+
+func setupProofSkillHub(t *testing.T) string {
+	t.Helper()
+	tmpHub := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
+
+	repoRoot := skillsTestRepoRoot(t)
+	copyFileForTest(t,
+		filepath.Join(repoRoot, ".aether", "skills", "domain", "tailwind", "SKILL.md"),
+		filepath.Join(tmpHub, "skills", "domain", "tailwind", "SKILL.md"),
+	)
+	copyFileForTest(t,
+		filepath.Join(repoRoot, ".aether", "skills", "domain", "golang", "SKILL.md"),
+		filepath.Join(tmpHub, "skills", "domain", "golang", "SKILL.md"),
+	)
+	copyFileForTest(t,
+		filepath.Join(repoRoot, ".aether", "skills", "colony", "build-discipline", "SKILL.md"),
+		filepath.Join(tmpHub, "skills", "colony", "build-discipline", "SKILL.md"),
+	)
+	return tmpHub
+}
+
 func TestSkillIndexBuildAndRead(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -430,6 +505,16 @@ func TestSkillDetect(t *testing.T) {
 	if total < 1 {
 		t.Errorf("total = %d, want >= 1 (should match *.custom domain skill)", total)
 	}
+
+	matched := result["matched"].([]interface{})
+	first := matched[0].(map[string]interface{})
+	if first["score"] == nil || first["score"].(float64) <= 0 {
+		t.Fatalf("expected positive score in skill-detect result, got %#v", first["score"])
+	}
+	reasons := first["reasons"].([]interface{})
+	if len(reasons) == 0 {
+		t.Fatal("expected proof-bearing reasons in skill-detect result")
+	}
 }
 
 func TestRepoMatchesFilePattern_UsesWorkspaceSnapshotAndSkipsIgnoredDirs(t *testing.T) {
@@ -534,11 +619,36 @@ func TestSkillMatchByRole(t *testing.T) {
 	if len(matched) < 1 {
 		t.Error("expected at least 1 matched skill name")
 	}
-	// Verify the result is names (strings), not full entries
 	for _, m := range matched {
 		if _, ok := m.(string); !ok {
 			t.Errorf("matched entry %v is not a string (name), got %T", m, m)
 		}
+	}
+
+	colonySkills := result["colony_skills"].([]interface{})
+	if len(colonySkills) == 0 {
+		t.Fatal("expected proof-bearing colony skill entries")
+	}
+	first := colonySkills[0].(map[string]interface{})
+	if first["name"] != "TDD Discipline" {
+		t.Fatalf("first colony skill = %v, want TDD Discipline", first["name"])
+	}
+	if first["path"] == "" {
+		t.Fatal("expected skill path in match result")
+	}
+	if first["source"] == "" {
+		t.Fatal("expected skill source in match result")
+	}
+	if score := int(first["score"].(float64)); score < 3 {
+		t.Fatalf("score = %d, want >= 3 for role-matched builder skill", score)
+	}
+	reasons := first["reasons"].([]interface{})
+	if len(reasons) == 0 {
+		t.Fatal("expected reasons in match result")
+	}
+	reason := reasons[0].(map[string]interface{})
+	if reason["code"] != "role_match" {
+		t.Fatalf("first reason code = %v, want role_match", reason["code"])
 	}
 }
 
@@ -559,7 +669,7 @@ func TestSkillMatchWithTask(t *testing.T) {
 	// Match by role + task
 	var matchBuf bytes.Buffer
 	stdout = &matchBuf
-	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "colony"})
+	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "custom"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("skill-match failed: %v", err)
 	}
@@ -568,7 +678,22 @@ func TestSkillMatchWithTask(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	count := int(result["count"].(float64))
 	if count < 1 {
-		t.Errorf("count = %d, want >= 1 for role builder + task colony", count)
+		t.Errorf("count = %d, want >= 1 for role builder + task custom", count)
+	}
+
+	domainSkills := result["domain_skills"].([]interface{})
+	first := domainSkills[0].(map[string]interface{})
+	reasons := first["reasons"].([]interface{})
+	foundTaskOverlap := false
+	for _, raw := range reasons {
+		reason := raw.(map[string]interface{})
+		if reason["code"] == "task_name_overlap" || reason["code"] == "task_domain_overlap" {
+			foundTaskOverlap = true
+			break
+		}
+	}
+	if !foundTaskOverlap {
+		t.Fatal("expected task overlap proof in skill-match result")
 	}
 }
 
@@ -599,12 +724,12 @@ func TestSkillMatchTop3(t *testing.T) {
 	os.Setenv("AETHER_HUB_DIR", tmpHub)
 	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
 
-	// Create 5 skills that all match role "builder"
+	// Create 5 colony skills that all match role "builder"
 	for i := 0; i < 5; i++ {
-		skillDir := filepath.Join(tmpHub, "skills", "domain", "skill-"+string(rune('A'+i)))
+		skillDir := filepath.Join(tmpHub, "skills", "colony", "skill-"+string(rune('A'+i)))
 		os.MkdirAll(skillDir, 0755)
 		os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(
-			"---\nname: Skill "+string(rune('A'+i))+"\ncategory: domain\nroles: builder\n---\nContent\n",
+			"---\nname: Skill "+string(rune('A'+i))+"\ncategory: colony\nroles: builder\n---\nContent\n",
 		), 0644)
 	}
 
@@ -617,7 +742,7 @@ func TestSkillMatchTop3(t *testing.T) {
 	// Match should return at most 3
 	var matchBuf bytes.Buffer
 	stdout = &matchBuf
-	rootCmd.SetArgs([]string{"skill-match", "--role", "builder"})
+	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "custom"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("skill-match failed: %v", err)
 	}
@@ -651,7 +776,7 @@ func TestSkillInject(t *testing.T) {
 	// Inject skills for builder role
 	var injectBuf bytes.Buffer
 	stdout = &injectBuf
-	rootCmd.SetArgs([]string{"skill-inject", "--role", "builder"})
+	rootCmd.SetArgs([]string{"skill-inject", "--role", "builder", "--task", "fallback"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("skill-inject failed: %v", err)
 	}
@@ -669,6 +794,11 @@ func TestSkillInject(t *testing.T) {
 	}
 	if !strings.Contains(section, "TDD Discipline") {
 		t.Error("section missing TDD Discipline skill content")
+	}
+
+	colonySkills := result["colony_skills"].([]interface{})
+	if len(colonySkills) == 0 {
+		t.Fatal("expected injected result to preserve proof-bearing colony skills")
 	}
 }
 
@@ -702,7 +832,7 @@ func TestSkillInjectStatThenFallback(t *testing.T) {
 	// Verify that the fallback path still works.
 	var injectBuf bytes.Buffer
 	stdout = &injectBuf
-	rootCmd.SetArgs([]string{"skill-inject", "--role", "builder"})
+	rootCmd.SetArgs([]string{"skill-inject", "--role", "builder", "--task", "fallback"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("skill-inject failed: %v", err)
 	}
@@ -1315,15 +1445,10 @@ func TestResolveHubPathReturnsConsistentValue(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// skill-match returns only names documentation test
+// proof-bearing skill resolution regression tests
 // ---------------------------------------------------------------------------
 
-// TestSkillMatchReturnsOnlyNames documents the architectural issue:
-// skill-match returns []string of names, not full entries. This forces
-// skill-inject to re-read index.json and re-match by role, duplicating
-// work. Recommendation: skill-match should return full entries or
-// skill-inject should accept pre-matched names and look them up.
-func TestSkillMatchReturnsOnlyNamesNotEntries(t *testing.T) {
+func TestSkillMatchIncludesProofFields(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1340,7 +1465,7 @@ func TestSkillMatchReturnsOnlyNamesNotEntries(t *testing.T) {
 	// Match by role (capture this output)
 	var matchBuf bytes.Buffer
 	stdout = &matchBuf
-	rootCmd.SetArgs([]string{"skill-match", "--role", "builder"})
+	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "custom"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("skill-match failed: %v", err)
 	}
@@ -1349,13 +1474,144 @@ func TestSkillMatchReturnsOnlyNamesNotEntries(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	matched := result["matched"].([]interface{})
 
-	// Verify matched entries are strings (names), not objects
 	for i, m := range matched {
 		if _, ok := m.(string); !ok {
-			t.Errorf("matched[%d] = %v (%T), want string (name only)", i, m, m)
+			t.Errorf("matched[%d] = %v (%T), want string skill name", i, m, m)
 		}
 	}
 
-	// This means skill-inject cannot use skill-match output directly;
-	// it must re-read index.json and re-match by role (lines 262-277).
+	domainSkills := result["domain_skills"].([]interface{})
+	if len(domainSkills) == 0 {
+		t.Fatal("expected proof-bearing domain skill entries")
+	}
+	first := domainSkills[0].(map[string]interface{})
+	if first["path"] == "" {
+		t.Fatal("expected skill path in domain skill result")
+	}
+	if first["score"] == nil || first["score"].(float64) <= 0 {
+		t.Fatalf("expected positive score in domain skill result, got %#v", first["score"])
+	}
+	reasons := first["reasons"].([]interface{})
+	if len(reasons) == 0 {
+		t.Fatal("expected reasons in proof-bearing domain skill result")
+	}
+}
+
+func TestSkillMatchTailwindFixtureIncludesEvidence(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupProofSkillHub(t)
+	store = nil
+
+	fixture := filepath.Join(t.TempDir(), "tailwind-app")
+	copyDirForTest(t, skillsFixturePath(t, "tailwind-app"), fixture)
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(fixture); err != nil {
+		t.Fatalf("chdir fixture: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	var indexBuf bytes.Buffer
+	stdout = &indexBuf
+	rootCmd.SetArgs([]string{"skill-index"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("skill-index failed: %v", err)
+	}
+
+	var matchBuf bytes.Buffer
+	stdout = &matchBuf
+	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "build the tailwind landing page"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("skill-match failed: %v", err)
+	}
+
+	env := parseEnvelope(t, matchBuf.String())
+	result := env["result"].(map[string]interface{})
+	domainSkills := result["domain_skills"].([]interface{})
+
+	var tailwind map[string]interface{}
+	for _, raw := range domainSkills {
+		skill := raw.(map[string]interface{})
+		if skill["name"] == "tailwind" {
+			tailwind = skill
+			break
+		}
+	}
+	if tailwind == nil {
+		t.Fatalf("expected tailwind skill in matched domain skills: %#v", domainSkills)
+	}
+	if int(tailwind["score"].(float64)) < 4 {
+		t.Fatalf("tailwind score = %v, want >= 4", tailwind["score"])
+	}
+
+	reasons := tailwind["reasons"].([]interface{})
+	foundFileEvidence := false
+	foundPackageEvidence := false
+	for _, raw := range reasons {
+		reason := raw.(map[string]interface{})
+		evidence := reason["evidence"].([]interface{})
+		values := make([]string, 0, len(evidence))
+		for _, item := range evidence {
+			values = append(values, item.(string))
+		}
+		if reason["code"] == "workspace_file" && strings.Contains(strings.Join(values, ","), "tailwind.config.js") {
+			foundFileEvidence = true
+		}
+		if reason["code"] == "workspace_package" && strings.Contains(strings.Join(values, ","), "package.json:tailwindcss") {
+			foundPackageEvidence = true
+		}
+	}
+	if !foundFileEvidence {
+		t.Fatal("expected tailwind workspace_file evidence")
+	}
+	if !foundPackageEvidence {
+		t.Fatal("expected tailwind workspace_package evidence")
+	}
+}
+
+func TestSkillMatchGoFixtureAvoidsTailwind(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupProofSkillHub(t)
+	store = nil
+
+	fixture := filepath.Join(t.TempDir(), "go-cli")
+	copyDirForTest(t, skillsFixturePath(t, "go-cli"), fixture)
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(fixture); err != nil {
+		t.Fatalf("chdir fixture: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	var indexBuf bytes.Buffer
+	stdout = &indexBuf
+	rootCmd.SetArgs([]string{"skill-index"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("skill-index failed: %v", err)
+	}
+
+	var matchBuf bytes.Buffer
+	stdout = &matchBuf
+	rootCmd.SetArgs([]string{"skill-match", "--role", "builder", "--task", "build the go cli"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("skill-match failed: %v", err)
+	}
+
+	env := parseEnvelope(t, matchBuf.String())
+	result := env["result"].(map[string]interface{})
+	domainSkills := result["domain_skills"].([]interface{})
+
+	foundGo := false
+	for _, raw := range domainSkills {
+		skill := raw.(map[string]interface{})
+		if skill["name"] == "tailwind" {
+			t.Fatalf("did not expect tailwind skill for go fixture: %#v", domainSkills)
+		}
+		if skill["name"] == "golang" {
+			foundGo = true
+		}
+	}
+	if !foundGo {
+		t.Fatalf("expected golang skill for go fixture: %#v", domainSkills)
+	}
 }

@@ -70,24 +70,52 @@ type skillScanRoot struct {
 	IsUserCreated bool
 }
 
+type skillMatchReason struct {
+	Code     string   `json:"code"`
+	Score    int      `json:"score"`
+	Evidence []string `json:"evidence,omitempty"`
+}
+
+type skillResolvedEntry struct {
+	skillIndexEntry
+	Score   int                `json:"score"`
+	Reasons []skillMatchReason `json:"reasons,omitempty"`
+}
+
 type scoredSkill struct {
-	entry skillIndexEntry
+	entry skillResolvedEntry
 	score int
 }
 
 type skillMatchResult struct {
-	Role         string            `json:"role"`
-	Task         string            `json:"task,omitempty"`
-	ColonySkills []skillIndexEntry `json:"colony_skills"`
-	DomainSkills []skillIndexEntry `json:"domain_skills"`
-	Matched      []string          `json:"matched"`
-	Count        int               `json:"count"`
+	Role         string               `json:"role"`
+	Task         string               `json:"task,omitempty"`
+	Root         string               `json:"root,omitempty"`
+	ColonySkills []skillResolvedEntry `json:"colony_skills"`
+	DomainSkills []skillResolvedEntry `json:"domain_skills"`
+	Matched      []string             `json:"matched"`
+	Count        int                  `json:"count"`
+}
+
+type skillInjectResult struct {
+	Role         string               `json:"role"`
+	Task         string               `json:"task,omitempty"`
+	Root         string               `json:"root,omitempty"`
+	Section      string               `json:"section"`
+	SkillSection string               `json:"skill_section"`
+	SkillCount   int                  `json:"skill_count"`
+	ColonyCount  int                  `json:"colony_count"`
+	DomainCount  int                  `json:"domain_count"`
+	ColonySkills []skillResolvedEntry `json:"colony_skills"`
+	DomainSkills []skillResolvedEntry `json:"domain_skills"`
+	Matched      []string             `json:"matched"`
+	Count        int                  `json:"count"`
 }
 
 type workspaceFileSnapshot struct {
-	RelPaths      []string
-	BaseNames     []string
-	PatternResult map[string]bool
+	RelPaths       []string
+	BaseNames      []string
+	PatternMatches map[string][]string
 }
 
 var workspaceFileSnapshotCache = struct {
@@ -213,15 +241,22 @@ var skillDetectCmd = &cobra.Command{
 		entries := loadSkillIndexOrBuild(hub)
 		root := skillWorkspaceRoot()
 
-		var matched []skillIndexEntry
+		var matched []skillResolvedEntry
 		for _, e := range entries {
 			if e.Type != "domain" {
 				continue
 			}
-			if skillMatchesWorkspace(root, e) {
-				matched = append(matched, e)
+			reasons := skillWorkspaceMatchReasons(root, e)
+			if len(reasons) == 0 {
+				continue
 			}
+			matched = append(matched, skillResolvedEntry{
+				skillIndexEntry: e,
+				Score:           reasonScoreTotal(reasons),
+				Reasons:         reasons,
+			})
 		}
+		sortScoredResolvedEntries(matched)
 
 		outputOK(map[string]interface{}{"matched": matched, "total": len(matched), "root": root})
 		return nil
@@ -257,26 +292,7 @@ var skillInjectCmd = &cobra.Command{
 		}
 
 		match := matchSkills(resolveHubPath(), role, task)
-		sections := []string{}
-
-		for _, e := range append(match.ColonySkills, match.DomainSkills...) {
-			content, err := os.ReadFile(e.Path)
-			if err != nil {
-				continue
-			}
-			sections = append(sections, fmt.Sprintf("### Skill: %s\n\n%s", e.Name, string(content)))
-		}
-
-		section := strings.Join(sections, "\n\n---\n\n")
-		outputOK(map[string]interface{}{
-			"section":       section,
-			"skill_section": section,
-			"skill_count":   len(sections),
-			"colony_count":  len(match.ColonySkills),
-			"domain_count":  len(match.DomainSkills),
-			"colony_skills": extractSkillNames(match.ColonySkills),
-			"domain_skills": extractSkillNames(match.DomainSkills),
-		})
+		outputOK(renderSkillInjectResult(match))
 		return nil
 	},
 }
@@ -656,38 +672,34 @@ func resolveSkillMatchInput(cmd *cobra.Command, args []string) (string, string) 
 }
 
 func matchSkills(hub, role, task string) skillMatchResult {
-	entries := loadSkillIndexOrBuild(hub)
-	root := skillWorkspaceRoot()
+	return resolveSkillMatchesForRoot(hub, skillWorkspaceRoot(), role, task)
+}
 
+func resolveSkillMatchesForRoot(hub, root, role, task string) skillMatchResult {
+	entries := loadSkillIndexOrBuild(hub)
 	var colonyMatches []scoredSkill
 	var domainMatches []scoredSkill
-	taskLower := strings.ToLower(task)
+	taskLower := strings.ToLower(strings.TrimSpace(task))
 
 	for _, e := range entries {
-		score := 0
-		if containsString(e.AgentRoles, role) || containsString(e.Roles, role) {
-			score += 3
+		reasons := resolveSkillMatchReasons(root, e, role, taskLower)
+		if e.Type == "domain" && !skillHasNonRoleReason(reasons) {
+			continue
 		}
-		if skillMatchesWorkspace(root, e) {
-			score += 2
-		}
-		if taskLower != "" {
-			if strings.Contains(strings.ToLower(e.Name), taskLower) || strings.Contains(taskLower, strings.ToLower(e.Name)) {
-				score++
-			}
-			for _, domain := range e.Domains {
-				if strings.Contains(taskLower, strings.ToLower(domain)) {
-					score++
-					break
-				}
-			}
-		}
+		score := reasonScoreTotal(reasons)
 
 		if score == 0 {
 			continue
 		}
 
-		scored := scoredSkill{entry: e, score: score}
+		scored := scoredSkill{
+			entry: skillResolvedEntry{
+				skillIndexEntry: e,
+				Score:           score,
+				Reasons:         reasons,
+			},
+			score: score,
+		}
 		switch e.Type {
 		case "colony":
 			colonyMatches = append(colonyMatches, scored)
@@ -701,17 +713,139 @@ func matchSkills(hub, role, task string) skillMatchResult {
 	sortScoredSkills(colonyMatches)
 	sortScoredSkills(domainMatches)
 
-	colonySkills := topSkillEntries(colonyMatches, 3)
-	domainSkills := topSkillEntries(domainMatches, 3)
-	matched := append(extractSkillNames(colonySkills), extractSkillNames(domainSkills)...)
+	colonySkills := topResolvedSkillEntries(colonyMatches, 3)
+	domainSkills := topResolvedSkillEntries(domainMatches, 3)
+	matched := append(extractResolvedSkillNames(colonySkills), extractResolvedSkillNames(domainSkills)...)
 
 	return skillMatchResult{
 		Role:         role,
 		Task:         task,
+		Root:         root,
 		ColonySkills: colonySkills,
 		DomainSkills: domainSkills,
 		Matched:      matched,
 		Count:        len(matched),
+	}
+}
+
+func resolveSkillMatchReasons(root string, entry skillIndexEntry, role, taskLower string) []skillMatchReason {
+	reasons := []skillMatchReason{}
+	if role != "" && (containsString(entry.AgentRoles, role) || containsString(entry.Roles, role)) {
+		reasons = append(reasons, skillMatchReason{
+			Code:     "role_match",
+			Score:    3,
+			Evidence: []string{strings.ToLower(strings.TrimSpace(role))},
+		})
+	}
+
+	reasons = append(reasons, skillWorkspaceMatchReasons(root, entry)...)
+
+	if taskLower != "" {
+		nameLower := strings.ToLower(strings.TrimSpace(entry.Name))
+		if nameLower != "" && (strings.Contains(nameLower, taskLower) || strings.Contains(taskLower, nameLower)) {
+			reasons = append(reasons, skillMatchReason{
+				Code:     "task_name_overlap",
+				Score:    1,
+				Evidence: []string{nameLower},
+			})
+		}
+		if domains := skillTaskDomainEvidence(entry.Domains, taskLower); len(domains) > 0 {
+			reasons = append(reasons, skillMatchReason{
+				Code:     "task_domain_overlap",
+				Score:    1,
+				Evidence: domains,
+			})
+		}
+	}
+
+	return reasons
+}
+
+func skillWorkspaceMatchReasons(root string, entry skillIndexEntry) []skillMatchReason {
+	if len(entry.DetectFiles) == 0 && len(entry.DetectPackages) == 0 && len(entry.Detect) == 0 {
+		return nil
+	}
+
+	fileMatches := []string{}
+	for _, pattern := range append(entry.DetectFiles, entry.Detect...) {
+		fileMatches = append(fileMatches, repoFilePatternMatches(root, pattern)...)
+	}
+	fileMatches = uniqueSortedSkillStrings(fileMatches)
+
+	packageMatches := []string{}
+	for _, pkg := range entry.DetectPackages {
+		packageMatches = append(packageMatches, repoPackageMatches(root, pkg)...)
+	}
+	packageMatches = uniqueSortedSkillStrings(packageMatches)
+
+	reasons := []skillMatchReason{}
+	switch {
+	case len(fileMatches) > 0 && len(packageMatches) > 0:
+		reasons = append(reasons,
+			skillMatchReason{Code: "workspace_file", Score: 1, Evidence: fileMatches},
+			skillMatchReason{Code: "workspace_package", Score: 1, Evidence: packageMatches},
+		)
+	case len(fileMatches) > 0:
+		reasons = append(reasons, skillMatchReason{Code: "workspace_file", Score: 2, Evidence: fileMatches})
+	case len(packageMatches) > 0:
+		reasons = append(reasons, skillMatchReason{Code: "workspace_package", Score: 2, Evidence: packageMatches})
+	}
+
+	return reasons
+}
+
+func skillTaskDomainEvidence(domains []string, taskLower string) []string {
+	matched := []string{}
+	for _, domain := range domains {
+		domain = strings.ToLower(strings.TrimSpace(domain))
+		if domain != "" && strings.Contains(taskLower, domain) {
+			matched = append(matched, domain)
+		}
+	}
+	return uniqueSortedSkillStrings(matched)
+}
+
+func reasonScoreTotal(reasons []skillMatchReason) int {
+	total := 0
+	for _, reason := range reasons {
+		total += reason.Score
+	}
+	return total
+}
+
+func skillHasNonRoleReason(reasons []skillMatchReason) bool {
+	for _, reason := range reasons {
+		if reason.Code != "role_match" {
+			return true
+		}
+	}
+	return false
+}
+
+func renderSkillInjectResult(match skillMatchResult) skillInjectResult {
+	sections := []string{}
+	for _, entry := range append(match.ColonySkills, match.DomainSkills...) {
+		content, err := os.ReadFile(entry.Path)
+		if err != nil {
+			continue
+		}
+		sections = append(sections, fmt.Sprintf("### Skill: %s\n\n%s", entry.Name, string(content)))
+	}
+
+	section := strings.Join(sections, "\n\n---\n\n")
+	return skillInjectResult{
+		Role:         match.Role,
+		Task:         match.Task,
+		Root:         match.Root,
+		Section:      section,
+		SkillSection: section,
+		SkillCount:   len(sections),
+		ColonyCount:  len(match.ColonySkills),
+		DomainCount:  len(match.DomainSkills),
+		ColonySkills: match.ColonySkills,
+		DomainSkills: match.DomainSkills,
+		Matched:      match.Matched,
+		Count:        match.Count,
 	}
 }
 
@@ -720,27 +854,66 @@ func sortScoredSkills(skills []scoredSkill) {
 		if skills[i].score != skills[j].score {
 			return skills[i].score > skills[j].score
 		}
-		return skills[i].entry.Name < skills[j].entry.Name
+		if skills[i].entry.Name != skills[j].entry.Name {
+			return skills[i].entry.Name < skills[j].entry.Name
+		}
+		if skills[i].entry.Source != skills[j].entry.Source {
+			return skills[i].entry.Source < skills[j].entry.Source
+		}
+		return skills[i].entry.Path < skills[j].entry.Path
 	})
 }
 
-func topSkillEntries(skills []scoredSkill, limit int) []skillIndexEntry {
+func sortScoredResolvedEntries(entries []skillResolvedEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Score != entries[j].Score {
+			return entries[i].Score > entries[j].Score
+		}
+		if entries[i].Name != entries[j].Name {
+			return entries[i].Name < entries[j].Name
+		}
+		if entries[i].Source != entries[j].Source {
+			return entries[i].Source < entries[j].Source
+		}
+		return entries[i].Path < entries[j].Path
+	})
+}
+
+func topResolvedSkillEntries(skills []scoredSkill, limit int) []skillResolvedEntry {
 	if len(skills) > limit {
 		skills = skills[:limit]
 	}
-	result := make([]skillIndexEntry, 0, len(skills))
+	result := make([]skillResolvedEntry, 0, len(skills))
 	for _, item := range skills {
 		result = append(result, item.entry)
 	}
 	return result
 }
 
-func extractSkillNames(entries []skillIndexEntry) []string {
+func extractResolvedSkillNames(entries []skillResolvedEntry) []string {
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		names = append(names, e.Name)
 	}
 	return names
+}
+
+func uniqueSortedSkillStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(filepath.ToSlash(value))
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func skillWorkspaceRoot() string {
@@ -775,20 +948,7 @@ func samePathOrAncestor(base, target string) bool {
 }
 
 func skillMatchesWorkspace(root string, entry skillIndexEntry) bool {
-	if len(entry.DetectFiles) == 0 && len(entry.DetectPackages) == 0 && len(entry.Detect) == 0 {
-		return entry.Type == "colony"
-	}
-	for _, pattern := range append(entry.DetectFiles, entry.Detect...) {
-		if pattern != "" && repoMatchesFilePattern(root, pattern) {
-			return true
-		}
-	}
-	for _, pkg := range entry.DetectPackages {
-		if pkg != "" && repoContainsPackage(root, pkg) {
-			return true
-		}
-	}
-	return false
+	return len(skillWorkspaceMatchReasons(root, entry)) > 0
 }
 
 func repoMatchesFilePattern(root, pattern string) bool {
@@ -797,30 +957,40 @@ func repoMatchesFilePattern(root, pattern string) bool {
 		return false
 	}
 
+	return len(repoFilePatternMatches(root, pattern)) > 0
+}
+
+func repoFilePatternMatches(root, pattern string) []string {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return nil
+	}
+
 	snapshot := getWorkspaceFileSnapshot(root)
 	workspaceFileSnapshotCache.mu.Lock()
-	if matched, ok := snapshot.PatternResult[pattern]; ok {
+	if matches, ok := snapshot.PatternMatches[pattern]; ok {
+		cached := append([]string(nil), matches...)
 		workspaceFileSnapshotCache.mu.Unlock()
-		return matched
+		return cached
 	}
 	workspaceFileSnapshotCache.mu.Unlock()
 
-	matched := false
+	matches := []string{}
 	for i, rel := range snapshot.RelPaths {
 		if ok, _ := filepath.Match(pattern, snapshot.BaseNames[i]); ok {
-			matched = true
-			break
+			matches = append(matches, rel)
+			continue
 		}
 		if ok, _ := filepath.Match(pattern, rel); ok {
-			matched = true
-			break
+			matches = append(matches, rel)
 		}
 	}
+	matches = uniqueSortedSkillStrings(matches)
 
 	workspaceFileSnapshotCache.mu.Lock()
-	snapshot.PatternResult[pattern] = matched
+	snapshot.PatternMatches[pattern] = append([]string(nil), matches...)
 	workspaceFileSnapshotCache.mu.Unlock()
-	return matched
+	return matches
 }
 
 func getWorkspaceFileSnapshot(root string) *workspaceFileSnapshot {
@@ -837,9 +1007,9 @@ func getWorkspaceFileSnapshot(root string) *workspaceFileSnapshot {
 	workspaceFileSnapshotCache.mu.Unlock()
 
 	snapshot := &workspaceFileSnapshot{
-		RelPaths:      []string{},
-		BaseNames:     []string{},
-		PatternResult: map[string]bool{},
+		RelPaths:       []string{},
+		BaseNames:      []string{},
+		PatternMatches: map[string][]string{},
 	}
 
 	if populateWorkspaceSnapshotFromGit(cacheKey, snapshot) {
@@ -908,24 +1078,35 @@ func shouldSkipSkillScanPath(rel string) bool {
 }
 
 func repoContainsPackage(root, pkg string) bool {
-	manifestPaths := []string{
-		filepath.Join(root, "package.json"),
-		filepath.Join(root, "go.mod"),
-		filepath.Join(root, "requirements.txt"),
-		filepath.Join(root, "pyproject.toml"),
-		filepath.Join(root, "Gemfile"),
-		filepath.Join(root, "Cargo.toml"),
+	return len(repoPackageMatches(root, pkg)) > 0
+}
+
+func repoPackageMatches(root, pkg string) []string {
+	pkg = strings.TrimSpace(strings.ToLower(pkg))
+	if pkg == "" {
+		return nil
 	}
-	for _, path := range manifestPaths {
-		data, err := os.ReadFile(path)
+
+	manifestPaths := []string{
+		"package.json",
+		"go.mod",
+		"requirements.txt",
+		"pyproject.toml",
+		"Gemfile",
+		"Cargo.toml",
+	}
+
+	matches := []string{}
+	for _, rel := range manifestPaths {
+		data, err := os.ReadFile(filepath.Join(root, rel))
 		if err != nil {
 			continue
 		}
-		if strings.Contains(strings.ToLower(string(data)), strings.ToLower(pkg)) {
-			return true
+		if strings.Contains(strings.ToLower(string(data)), pkg) {
+			matches = append(matches, fmt.Sprintf("%s:%s", filepath.ToSlash(rel), pkg))
 		}
 	}
-	return false
+	return uniqueSortedSkillStrings(matches)
 }
 
 func containsString(items []string, want string) bool {

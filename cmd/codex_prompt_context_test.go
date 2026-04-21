@@ -116,4 +116,31 @@ func TestResolveCodexWorkerContextUsesColonyPrimeSections(t *testing.T) {
 	if strings.Contains(context, "--- CONTEXT CAPSULE ---") {
 		t.Fatalf("worker context should prefer colony-prime output over the small context capsule:\n%s", context)
 	}
+
+	ledger := buildColonyPrimeOutput(true).Ledger
+	if len(ledger.Included) == 0 {
+		t.Fatal("expected colony-prime ledger to record included sections")
+	}
+	foundHive := false
+	foundPrefs := false
+	foundBlockers := false
+	for _, item := range ledger.Included {
+		switch item.Name {
+		case "hive_wisdom":
+			foundHive = strings.Contains(item.Source, filepath.ToSlash(filepath.Join("hive", "wisdom.json")))
+		case "user_preferences":
+			foundPrefs = strings.Contains(item.Source, "QUEEN.md")
+		case "blockers":
+			foundBlockers = strings.Contains(item.Source, "flags.json")
+		}
+	}
+	if !foundHive {
+		t.Fatal("expected hive_wisdom ledger entry with source attribution")
+	}
+	if !foundPrefs {
+		t.Fatal("expected user_preferences ledger entry with source attribution")
+	}
+	if !foundBlockers {
+		t.Fatal("expected blockers ledger entry with source attribution")
+	}
 }

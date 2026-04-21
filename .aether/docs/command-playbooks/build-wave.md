@@ -541,8 +541,7 @@ For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, inclu
 **PER WORKER:** Match and inject skills for the worker's role and task:
 Run using the Bash tool with description "Matching skills for {ant_name}...":
 ```bash
-skill_match_result=$(aether skill-match "builder" "{task_description}" 2>/dev/null) || skill_match_result='{"result":{"colony_skills":[],"domain_skills":[]}}'
-skill_inject_result=$(aether skill-inject "$(printf '%s\n' "$skill_match_result" | jq -r '.result')" 2>/dev/null) || skill_inject_result='{"result":{"skill_section":"","colony_count":0,"domain_count":0}}'
+skill_inject_result=$(aether skill-inject --role "builder" --task "{task_description}" 2>/dev/null) || skill_inject_result='{"result":{"skill_section":"","colony_count":0,"domain_count":0}}'
 skill_section=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.skill_section // ""')
 skill_colony_count=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.colony_count // 0')
 skill_domain_count=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.domain_count // 0')
