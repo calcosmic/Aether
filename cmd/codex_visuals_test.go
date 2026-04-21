@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -1405,6 +1406,86 @@ func phaseToMap(p colony.Phase) map[string]interface{} {
 		"description": p.Description,
 		"status":      p.Status,
 		"tasks":       tasks,
+	}
+}
+
+func TestCasteIdentityAllCastes(t *testing.T) {
+	t.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	for caste := range casteEmojiMap {
+		identity := casteIdentity(caste)
+		emoji := casteEmoji(caste)
+		label := casteLabel(caste)
+
+		if !strings.Contains(identity, emoji) {
+			t.Errorf("casteIdentity(%q): expected emoji %q, got %q", caste, emoji, identity)
+		}
+		if !strings.Contains(identity, label) {
+			t.Errorf("casteIdentity(%q): expected label %q, got %q", caste, label, identity)
+		}
+	}
+}
+
+func TestBuildWaveProgressShowsCasteIdentity(t *testing.T) {
+	t.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	var buf bytes.Buffer
+	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	dispatches := []codex.WorkerDispatch{
+		{WorkerName: "Forge-41", Caste: "builder", TaskBrief: "Implement feature X"},
+		{WorkerName: "Keen-42", Caste: "watcher", TaskBrief: "Verify tests pass"},
+	}
+
+	emitCodexBuildWaveProgress(colony.Phase{ID: 1, Name: "Test Phase"}, 1, dispatches, colony.ModeInRepo)
+
+	output := buf.String()
+	for _, want := range []string{"🔨", "Builder", "Forge-41", "👁️", "Watcher", "Keen-42"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("wave progress missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestBuildWorkerStartedShowsCasteIdentity(t *testing.T) {
+	t.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	var buf bytes.Buffer
+	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Forge-41", Caste: "builder", TaskBrief: "Implement feature X"}
+	emitCodexBuildWorkerStarted(dispatch, 1)
+
+	output := buf.String()
+	for _, want := range []string{"🔨", "Builder", "Forge-41"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("worker started missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestBuildWorkerFinishedShowsCasteIdentity(t *testing.T) {
+	t.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	var buf bytes.Buffer
+	stdout = &buf
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Forge-41", Caste: "builder", TaskBrief: "Implement feature X"}
+	result := codex.DispatchResult{WorkerName: "Forge-41", Status: "completed", WorkerResult: &codex.WorkerResult{Duration: 5 * time.Second, Summary: "Done"}}
+	emitCodexBuildWorkerFinished(dispatch, result)
+
+	output := buf.String()
+	for _, want := range []string{"🔨", "Builder", "Forge-41", "completed"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("worker finished missing %q\n%s", want, output)
+		}
 	}
 }
 
