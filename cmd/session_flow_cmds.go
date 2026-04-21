@@ -6,8 +6,61 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
+
+const sessionStaleThreshold = 24 * time.Hour
+
+// sessionFreshnessResult describes how fresh a session is for resume.
+type sessionFreshnessResult struct {
+	Fresh       bool
+	Age         time.Duration
+	GitMatch    bool
+	GitCheck    bool   // whether git HEAD comparison was performed
+	SessionID   string
+	BaselineSHA string
+	CurrentSHA  string
+}
+
+// sessionVerifyFresh checks session age and git HEAD to detect stale sessions.
+func sessionVerifyFresh(s *storage.Store) sessionFreshnessResult {
+	var session colony.SessionFile
+	if err := store.LoadJSON("session.json", &session); err != nil {
+		return sessionFreshnessResult{Fresh: false}
+	}
+
+	result := sessionFreshnessResult{
+		SessionID:   session.SessionID,
+		BaselineSHA: session.BaselineCommit,
+	}
+
+	// Check age from started_at
+	if startedAt := strings.TrimSpace(session.StartedAt); startedAt != "" {
+		if t, err := time.Parse(time.RFC3339, startedAt); err == nil {
+			result.Age = time.Since(t)
+			result.Fresh = result.Age < sessionStaleThreshold
+		} else {
+			result.Fresh = false
+		}
+	} else {
+		result.Fresh = false
+	}
+
+	// Check git HEAD match
+	currentHEAD := getGitHEAD()
+	result.CurrentSHA = currentHEAD
+	if session.BaselineCommit != "" && currentHEAD != "" {
+		result.GitCheck = true
+		result.GitMatch = session.BaselineCommit == currentHEAD
+		// Git mismatch means repo changed since session — treat as stale
+		if !result.GitMatch {
+			result.Fresh = false
+		}
+	}
+
+	return result
+}
 
 var pauseColonyCmd = &cobra.Command{
 	Use:   "pause-colony",
@@ -82,6 +135,9 @@ var resumeColonyCmd = &cobra.Command{
 		handoffData, _ := readHandoffDocument()
 		handoffText := strings.TrimSpace(string(handoffData))
 
+		// Verify session freshness
+		freshness := sessionVerifyFresh(store)
+
 		var rawState colony.ColonyState
 		if err := store.LoadJSON("COLONY_STATE.json", &rawState); err == nil {
 			state := normalizeLegacyColonyState(rawState)
@@ -96,6 +152,14 @@ var resumeColonyCmd = &cobra.Command{
 			}
 			if state.State != colony.StateEXECUTING || state.BuildStartedAt == nil {
 				rotateSpawnTree(store)
+			}
+			// Clear stale spawn state if session is not fresh
+			if !freshness.Fresh {
+				state.BuildStartedAt = nil
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					outputError(2, fmt.Sprintf("failed to clear stale spawn state: %v", err), nil)
+					return nil
+				}
 			}
 			contextCleared := false
 			if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
@@ -123,6 +187,13 @@ var resumeColonyCmd = &cobra.Command{
 
 		result := buildResumeDashboardResult()
 		result["resumed"] = true
+		result["freshness"] = map[string]interface{}{
+			"fresh":      freshness.Fresh,
+			"age_hours":  fmt.Sprintf("%.1f", freshness.Age.Hours()),
+			"git_match":  freshness.GitMatch,
+			"git_check":  freshness.GitCheck,
+			"session_id": freshness.SessionID,
+		}
 		result["handoff_found"] = handoffText != ""
 		result["handoff_path"] = handoffPath
 

@@ -1349,6 +1349,15 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 	b.WriteString(visualDivider)
 	b.WriteString(renderStageMarker("Restored"))
 
+	// Freshness warning for stale sessions
+	if freshData, ok := result["freshness"].(map[string]interface{}); ok {
+		fresh, _ := freshData["fresh"].(bool)
+		if !fresh {
+			ageHours := stringValue(freshData["age_hours"])
+			b.WriteString(fmt.Sprintf("⚠️ Session is %s hours old — spawn state cleared\n", ageHours))
+		}
+	}
+
 	current, _ := result["current"].(map[string]interface{})
 	goal := strings.TrimSpace(stringValue(current["goal"]))
 	state := strings.TrimSpace(stringValue(current["state"]))

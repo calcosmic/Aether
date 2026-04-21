@@ -405,3 +405,95 @@ func TestResumeDashboardRestoresLegacySessionMirror(t *testing.T) {
 		t.Fatalf("restored session id = %q, want matching", mirrored.SessionID)
 	}
 }
+
+// --- Session Freshness Tests (Phase 22) ---
+
+func TestSessionFreshnessVerification(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+
+	// Test 1: Fresh session
+	now := time.Now().UTC().Format(time.RFC3339)
+	goal := "Fresh test"
+	session := colony.SessionFile{
+		SessionID:      "test-fresh",
+		StartedAt:      now,
+		ColonyGoal:     goal,
+		BaselineCommit: getGitHEAD(),
+	}
+	if err := store.SaveJSON("session.json", session); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	result := sessionVerifyFresh(store)
+	if !result.Fresh {
+		t.Errorf("session should be fresh: age=%v, gitMatch=%v", result.Age, result.GitMatch)
+	}
+	if result.SessionID != "test-fresh" {
+		t.Errorf("session ID: got %q, want test-fresh", result.SessionID)
+	}
+
+	// Test 2: Stale session (48 hours old)
+	staleTime := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339)
+	session.StartedAt = staleTime
+	if err := store.SaveJSON("session.json", session); err != nil {
+		t.Fatalf("save stale session: %v", err)
+	}
+
+	result = sessionVerifyFresh(store)
+	if result.Fresh {
+		t.Error("48-hour session should be stale")
+	}
+	if result.Age < 47*time.Hour {
+		t.Errorf("stale age too low: %v", result.Age)
+	}
+
+	// Test 3: Missing session
+	if err := os.Remove(filepath.Join(dataDir, "session.json")); err != nil {
+		t.Fatalf("remove session: %v", err)
+	}
+	result = sessionVerifyFresh(store)
+	if result.Fresh {
+		t.Error("missing session should not be fresh")
+	}
+}
+
+func TestResumeVisualFreshnessWarning(t *testing.T) {
+	// Test stale session shows warning
+	result := map[string]interface{}{
+		"freshness": map[string]interface{}{
+			"fresh":      false,
+			"age_hours":  "48.0",
+			"git_match":  false,
+			"git_check":  true,
+			"session_id": "test",
+		},
+		"current": map[string]interface{}{
+			"goal":    "Test goal",
+			"state":   "ready",
+			"phase":   1,
+			"total_phases": 3,
+		},
+		"blockers": []string{},
+		"signals": map[string]interface{}{"items": []string{}, "count": 0},
+	}
+
+	output := renderResumeVisual(result, "", true)
+	if !strings.Contains(output, "⚠️ Session is 48.0 hours old") {
+		t.Errorf("stale resume visual missing freshness warning\n%s", output)
+	}
+
+	// Test fresh session does NOT show warning
+	result["freshness"] = map[string]interface{}{
+		"fresh":      true,
+		"age_hours":  "1.0",
+		"git_match":  true,
+		"git_check":  true,
+		"session_id": "test",
+	}
+	output = renderResumeVisual(result, "", true)
+	if strings.Contains(output, "⚠️") {
+		t.Errorf("fresh resume visual should not show warning\n%s", output)
+	}
+}

@@ -357,6 +357,114 @@ func checkAllTasksCompleted(phaseNum int) gateCheck {
 	}
 }
 
+// runPreBuildGates checks preconditions before dispatching a build.
+// Returns an error with the specific gate name if any check fails.
+// Note: Phase state validation is handled by validateCodexBuildState;
+// this gate focuses on critical flags/blockers.
+func runPreBuildGates(dataDir string, phase int) error {
+	flagCheck := checkNoCriticalFlags()
+	if !flagCheck.Passed {
+		return fmt.Errorf("pre-build gate %q failed: %s", flagCheck.Name, flagCheck.Detail)
+	}
+	return nil
+}
+
+// runPreContinueGates checks preconditions before continuing a phase.
+// Returns an error with the specific gate name if any check fails.
+// Note: Phase state validation is handled by runCodexContinue;
+// this gate focuses on critical flags/blockers.
+func runPreContinueGates(dataDir string, phase int) error {
+	flagCheck := checkNoCriticalFlags()
+	if !flagCheck.Passed {
+		return fmt.Errorf("pre-continue gate %q failed: %s", flagCheck.Name, flagCheck.Detail)
+	}
+	return nil
+}
+
+// checkPhaseBuildable verifies a phase exists and is in a buildable state.
+func checkPhaseBuildable(phaseNum int) gateCheck {
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return gateCheck{
+			Name:   "phase_buildable",
+			Passed: false,
+			Detail: "COLONY_STATE.json not found",
+		}
+	}
+
+	var phase *colony.Phase
+	for i := range state.Plan.Phases {
+		if state.Plan.Phases[i].ID == phaseNum {
+			phase = &state.Plan.Phases[i]
+			break
+		}
+	}
+	if phase == nil {
+		return gateCheck{
+			Name:   "phase_buildable",
+			Passed: false,
+			Detail: fmt.Sprintf("phase %d not found in plan", phaseNum),
+		}
+	}
+
+	status := strings.ToLower(string(phase.Status))
+	if status == "completed" || status == "in_progress" {
+		return gateCheck{
+			Name:   "phase_buildable",
+			Passed: false,
+			Detail: fmt.Sprintf("phase %d already %s", phaseNum, status),
+		}
+	}
+
+	return gateCheck{
+		Name:   "phase_buildable",
+		Passed: true,
+		Detail: fmt.Sprintf("phase %d ready to build", phaseNum),
+	}
+}
+
+// checkPhaseBuilt verifies a phase has been built before continuing.
+func checkPhaseBuilt(phaseNum int) gateCheck {
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return gateCheck{
+			Name:   "phase_built",
+			Passed: false,
+			Detail: "COLONY_STATE.json not found",
+		}
+	}
+
+	var phase *colony.Phase
+	for i := range state.Plan.Phases {
+		if state.Plan.Phases[i].ID == phaseNum {
+			phase = &state.Plan.Phases[i]
+			break
+		}
+	}
+	if phase == nil {
+		return gateCheck{
+			Name:   "phase_built",
+			Passed: false,
+			Detail: fmt.Sprintf("phase %d not found in plan", phaseNum),
+		}
+	}
+
+	status := strings.ToLower(string(phase.Status))
+	if status == "completed" || status == "in_progress" {
+		return gateCheck{
+			Name:   "phase_built",
+			Passed: true,
+			Detail: fmt.Sprintf("phase %d status: %s", phaseNum, status),
+		}
+	}
+
+	return gateCheck{
+		Name:   "phase_built",
+		Passed: false,
+		Detail: fmt.Sprintf("phase %d not yet built (status: %s)", phaseNum, status),
+	}
+}
+
 func init() {
 	gateCheckCmd.Flags().String("action", "", "Action to check: task-complete or phase-advance (required)")
 	gateCheckCmd.Flags().String("task", "", "Task ID for task-complete action (e.g., 1.1)")

@@ -97,6 +97,10 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
 		return nil, err
 	}
+	// Run pre-build gates (critical flags, phase buildability)
+	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
+		return nil, err
+	}
 	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs); err != nil {
 		return nil, err
 	}

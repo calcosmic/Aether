@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -210,4 +212,95 @@ func TestResolveTestCommand_NoProject(t *testing.T) {
 	// resolveTestCommand uses ResolveAetherRoot which finds the git repo root.
 	// Just verify it doesn't panic.
 	_ = resolveTestCommand()
+}
+
+// --- Gate Integration Tests (Phase 22) ---
+
+func TestPreBuildGates(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+
+	goal := "Gate test"
+	taskID := "task-gate"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Gate test", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &taskID, Goal: "Gate task", Status: colony.TaskPending}}},
+			},
+		},
+	})
+
+	// Fresh state with no critical flags: should pass
+	if err := runPreBuildGates(dataDir, 1); err != nil {
+		t.Errorf("pre-build gates should pass with no critical flags: %v", err)
+	}
+
+	// Add a critical error record: should fail
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	state.Errors.Records = append(state.Errors.Records, colony.ErrorRecord{
+		ID:        "1",
+		Severity:  "CRITICAL",
+		Category:  "test",
+		Description:   "critical error",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	})
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+	if err := runPreBuildGates(dataDir, 1); err == nil {
+		t.Error("pre-build gates should fail with critical flags")
+	}
+}
+
+func TestPreContinueGates(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+
+	goal := "Gate test"
+	taskID := "task-gate"
+	now := time.Now().UTC()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Gate test", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "Gate task", Status: colony.TaskCompleted}}},
+			},
+		},
+		BuildStartedAt: &now,
+	})
+
+	// No critical flags: should pass
+	if err := runPreContinueGates(dataDir, 1); err != nil {
+		t.Errorf("pre-continue gates should pass with no critical flags: %v", err)
+	}
+
+	// Add a critical error record: should fail
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	state.Errors.Records = append(state.Errors.Records, colony.ErrorRecord{
+		ID:        "1",
+		Severity:  "CRITICAL",
+		Category:  "test",
+		Description:   "critical error",
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	})
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+	if err := runPreContinueGates(dataDir, 1); err == nil {
+		t.Error("pre-continue gates should fail with critical flags")
+	}
 }
