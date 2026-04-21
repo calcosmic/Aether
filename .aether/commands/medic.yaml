@@ -1,0 +1,28 @@
+name: ant:medic
+description: "🏥🐜💊🐜🏥 The Medic Ant - diagnose colony health by scanning all colony data for corruption, staleness, and configuration issues"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether medic $ARGUMENTS"
+flags:
+  - name: fix
+    description: "Enable repair mode (default: read-only scan)"
+    type: boolean
+    default: false
+  - name: force
+    description: "Allow destructive repairs (requires --fix)"
+    type: boolean
+    default: false
+  - name: json
+    description: "Output structured JSON report"
+    type: boolean
+    default: false
+  - name: deep
+    description: "Include wrapper parity and ceremony checks"
+    type: boolean
+    default: false
+guardrails:
+  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "If docs and runtime disagree, runtime wins."
+  - "Read-only by default; --fix required for any mutation."
+  - "Backs up before repair; --force required for destructive ops."
+  - "Exit codes: 0=healthy, 1=warnings, 2=critical."
