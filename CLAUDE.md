@@ -10,7 +10,7 @@
 | What | Count/Status |
 |------|--------------|
 | Version | v1.0.18 |
-| Slash commands | 49 (Claude) + 49 (OpenCode); Codex uses native CLI + 24 TOML agents |
+| Slash commands | 50 (Claude) + 50 (OpenCode); Codex uses native CLI + 25 TOML agents |
 | Agent definitions | 25 |
 | Skills | 28 (10 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -238,7 +238,7 @@ aether update      # or /ant:update
 
 ```
 .claude/
-├── commands/ant/        # 49 slash commands
+├── commands/ant/        # 50 slash commands
 │   ├── init.md          # Colony initialization
 │   ├── discuss.md       # Clarify intent before planning
 │   ├── plan.md          # Phase planning
@@ -247,7 +247,7 @@ aether update      # or /ant:update
 │   ├── continue.md      # Continue orchestrator (loads split playbooks)
 │   ├── profile.md       # Inspect or refresh the behavioral profile
 │   └── ...
-├── agents/ant/          # 24 agent definitions
+├── agents/ant/          # 25 agent definitions
 │   ├── aether-builder.md
 │   ├── aether-watcher.md
 │   ├── aether-scout.md
@@ -262,7 +262,7 @@ aether update      # or /ant:update
 
 ```
 .codex/
-├── agents/              # 24 agent definitions (TOML format)
+├── agents/              # 25 agent definitions (TOML format)
 │   ├── aether-builder.toml
 │   ├── aether-watcher.toml
 │   ├── aether-scout.toml
@@ -301,7 +301,7 @@ Consolidated guidelines in `.claude/rules/`:
 
 ---
 
-## The 24 Agents
+## The 25 Agents
 
 | Tier | Agent | Role |
 |------|-------|------|
