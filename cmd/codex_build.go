@@ -183,6 +183,23 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 	)
 	if tracer != nil && updatedState.RunID != nil {
 		_ = tracer.LogPhaseChange(*updatedState.RunID, phaseNum, string(colony.PhaseCompleted), "codex-build-complete")
+		for _, dispatch := range dispatches {
+			filesModified := 0
+			if dispatch.Status == "completed" {
+				for _, d := range dispatches {
+					if d.Name == dispatch.Name {
+						filesModified = len(d.Outputs)
+						break
+					}
+				}
+			}
+			_ = tracer.LogArtifact(*updatedState.RunID, "build.worker", map[string]interface{}{
+				"worker":         dispatch.Name,
+				"status":         dispatch.Status,
+				"files_modified": filesModified,
+				"summary":        dispatch.Summary,
+			})
+		}
 	}
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save built colony state: %w", err)

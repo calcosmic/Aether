@@ -170,6 +170,29 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now)
 
+	if tracer != nil && state.RunID != nil {
+		_ = tracer.LogArtifact(*state.RunID, "continue.verification", map[string]interface{}{
+			"phase":           phase.ID,
+			"checks_passed":   verification.ChecksPassed,
+			"steps_count":     len(verification.Steps),
+			"claims_present":  verification.Claims.Present,
+			"claims_passed":   verification.Claims.Passed,
+		})
+		_ = tracer.LogArtifact(*state.RunID, "continue.assessment", map[string]interface{}{
+			"phase":            phase.ID,
+			"passed":           assessment.Passed,
+			"partial_success":  assessment.PartialSuccess,
+			"tasks_count":      len(assessment.Tasks),
+			"operational_issues": len(assessment.OperationalIssues),
+		})
+		_ = tracer.LogArtifact(*state.RunID, "continue.gates", map[string]interface{}{
+			"phase":   phase.ID,
+			"passed":  gates.Passed,
+			"checks":  len(gates.Checks),
+			"blockers": len(gates.BlockingIssues),
+		})
+	}
+
 	verificationReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "verification.json"))
 	gateReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "gates.json"))
 	if err := store.SaveJSON(verificationReportRel, verification); err != nil {

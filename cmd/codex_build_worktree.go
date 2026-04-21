@@ -149,11 +149,22 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 					dr.Error = pheromoneErr
 					finalStatus = colony.WorktreeOrphaned
 				} else if dr.WorkerResult != nil {
-					if summary := formatPheromoneSyncSummary(pheromoneResult); summary != "" {
+					syncSummary := formatPheromoneSyncSummary(pheromoneResult)
+					if syncSummary != "" {
 						if strings.TrimSpace(dr.WorkerResult.Summary) == "" {
-							dr.WorkerResult.Summary = summary
+							dr.WorkerResult.Summary = syncSummary
 						} else {
-							dr.WorkerResult.Summary = strings.TrimSpace(dr.WorkerResult.Summary) + " " + summary
+							dr.WorkerResult.Summary = strings.TrimSpace(dr.WorkerResult.Summary) + " " + syncSummary
+						}
+					}
+					if tracer != nil {
+						var state colony.ColonyState
+						if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+							_ = tracer.LogArtifact(*state.RunID, "worktree.merge", map[string]interface{}{
+								"worker":       dispatch.WorkerName,
+								"files_synced": len(touched),
+								"pheromones":   syncSummary,
+							})
 						}
 					}
 				}
