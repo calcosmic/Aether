@@ -248,7 +248,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 
 			if blocked, _ := continueResult["blocked"].(bool); blocked {
 				_ = syncRunAutopilotState(state, opts, "paused")
-				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "blocked", "aether continue"), nil
+				next := strings.TrimSpace(stringValue(continueResult["next"]))
+				if next == "" {
+					next = "aether continue"
+				}
+				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "blocked", next), nil
 			}
 
 			phasesCompleted++

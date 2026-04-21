@@ -337,10 +337,13 @@ func canRetryBuiltPhase(state colony.ColonyState, phaseNum int) bool {
 	if !manifest.Present {
 		return true
 	}
+	if manifestUsesSyntheticDispatch(manifest) {
+		return true
+	}
 	if !allDispatchesCompleted(manifest) {
 		return true
 	}
-	if !manifestRequiresBuilderClaims(manifest) || manifestAllowsEmptyBuilderClaims(manifest) {
+	if !manifestRequiresBuilderClaims(manifest) {
 		return false
 	}
 	claims, ok := loadCodexBuildClaims()

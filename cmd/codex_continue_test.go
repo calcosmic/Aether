@@ -570,7 +570,7 @@ func seedContinueBuildPacket(t *testing.T, dataDir string, phase int, phaseName,
 		Goal:         goal,
 		Root:         filepath.Dir(filepath.Dir(dataDir)),
 		ColonyDepth:  "standard",
-		DispatchMode: "simulated",
+		DispatchMode: "real",
 		GeneratedAt:  time.Now().UTC().Format(time.RFC3339),
 		State:        string(colony.StateBUILT),
 		ClaimsPath:   displayDataPath("last-build-claims.json"),
@@ -624,7 +624,7 @@ func seedBlockedContinueReport(t *testing.T, dataDir string, phase int, generate
 	}
 }
 
-func TestVerifyCodexBuildClaims_SimulatedMode_AllCompleted_Passes(t *testing.T) {
+func TestVerifyCodexBuildClaims_SimulatedMode_AllCompleted_Fails(t *testing.T) {
 	saveGlobals(t)
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
@@ -658,11 +658,11 @@ func TestVerifyCodexBuildClaims_SimulatedMode_AllCompleted_Passes(t *testing.T) 
 	}
 
 	result := verifyCodexBuildClaims(tmpDir, manifest)
-	if !result.Passed {
-		t.Fatalf("expected Passed=true for simulated mode (all dispatches completed), got Passed=false: %s", result.Summary)
+	if result.Passed {
+		t.Fatalf("expected Passed=false for simulated mode, got Passed=true: %s", result.Summary)
 	}
-	if !strings.Contains(result.Summary, "simulated mode") {
-		t.Fatalf("expected summary to mention simulated mode, got: %s", result.Summary)
+	if !strings.Contains(result.Summary, "rerun `aether build <phase>` without `--synthetic`") {
+		t.Fatalf("expected summary to recommend rerunning without --synthetic, got: %s", result.Summary)
 	}
 }
 
@@ -743,6 +743,53 @@ func TestVerifyCodexBuildClaims_RealMode_EmptyClaimsFail(t *testing.T) {
 	}
 	if !strings.Contains(result.Summary, "real mode") {
 		t.Fatalf("expected summary to mention real mode, got: %s", result.Summary)
+	}
+}
+
+func TestAssessCodexContinue_SimulatedDispatchDoesNotCountAsEvidence(t *testing.T) {
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Synthetic phase",
+		Status: colony.PhaseInProgress,
+		Tasks: []colony.Task{
+			{Goal: "Implement the feature"},
+		},
+	}
+
+	manifest := codexContinueManifest{
+		Present: true,
+		Path:    "build/phase-1/manifest.json",
+		Data: codexBuildManifest{
+			Phase:        1,
+			DispatchMode: "simulated",
+			Dispatches: []codexBuildDispatch{
+				{Stage: "wave", Caste: "builder", Name: "Forge-1", Task: "Implement the feature", Status: "completed", TaskID: "task-1"},
+			},
+		},
+	}
+
+	verification := codexContinueVerificationReport{
+		ChecksPassed: true,
+		Passed:       true,
+		Claims: codexClaimVerification{
+			Present: true,
+			Passed:  false,
+			Summary: "builder claims file is empty because the build ran in simulated mode",
+		},
+	}
+
+	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{}, time.Now().UTC())
+	if assessment.Passed {
+		t.Fatalf("expected simulated dispatch assessment to fail, got passed=true: %+v", assessment)
+	}
+	if assessment.PositiveEvidence {
+		t.Fatalf("expected simulated dispatch not to count as positive evidence: %+v", assessment)
+	}
+	if len(assessment.RedispatchTasks) != 1 || assessment.RedispatchTasks[0] != "task-1" {
+		t.Fatalf("expected simulated task to require redispatch, got %+v", assessment.RedispatchTasks)
+	}
+	if len(assessment.Tasks) != 1 || assessment.Tasks[0].Outcome != "simulated" {
+		t.Fatalf("expected simulated task outcome, got %+v", assessment.Tasks)
 	}
 }
 

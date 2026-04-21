@@ -1324,21 +1324,24 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if result["completed"] != true {
-		t.Fatalf("expected completed:true, got %v", result)
+	if result["completed"] != false {
+		t.Fatalf("expected completed:false when run stops on a simulated build, got %v", result)
 	}
-	if result["next"] != "aether seal" {
-		t.Fatalf("next = %v, want aether seal", result["next"])
+	if result["stopped_reason"] != "blocked" {
+		t.Fatalf("stopped_reason = %v, want blocked", result["stopped_reason"])
 	}
-	if result["phases_completed"] != float64(1) {
-		t.Fatalf("phases_completed = %v, want 1", result["phases_completed"])
+	if result["next"] != "aether build 1 --task 1.1" {
+		t.Fatalf("next = %v, want task-scoped redispatch", result["next"])
+	}
+	if result["phases_completed"] != float64(0) {
+		t.Fatalf("phases_completed = %v, want 0", result["phases_completed"])
 	}
 
 	var autopilot autopilotState
 	if err := store.LoadJSON(autopilotStatePath, &autopilot); err != nil {
 		t.Fatalf("load autopilot state: %v", err)
 	}
-	if autopilot.Status != "completed" {
-		t.Fatalf("autopilot status = %q, want completed", autopilot.Status)
+	if autopilot.Status != "paused" {
+		t.Fatalf("autopilot status = %q, want paused", autopilot.Status)
 	}
 }

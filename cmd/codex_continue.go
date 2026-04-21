@@ -439,7 +439,8 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	}
 	operationalIssues = uniqueSortedStrings(operationalIssues)
 
-	positiveEvidence := verification.Claims.Passed || verification.Claims.Skipped || len(completedTaskIDs) > 0 || len(reconciled) > 0
+	dispatchEvidenceTrusted := !manifestUsesSyntheticDispatch(manifest)
+	positiveEvidence := verification.Claims.Passed || verification.Claims.Skipped || (dispatchEvidenceTrusted && len(completedTaskIDs) > 0) || len(reconciled) > 0
 	tasks := make([]codexContinueTaskAssessment, 0, len(phase.Tasks))
 	redispatchTasks := make([]string, 0, len(phase.Tasks))
 
@@ -447,7 +448,7 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 		taskID := buildTaskID(task, idx)
 		statuses := uniqueSortedStrings(dispatchStatuses[taskID])
 		_, reconciledTask := reconciled[taskID]
-		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, positiveEvidence, reconciledTask)
+		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, positiveEvidence, reconciledTask, dispatchEvidenceTrusted)
 		taskAssessment := codexContinueTaskAssessment{
 			TaskID:           taskID,
 			Goal:             strings.TrimSpace(task.Goal),
@@ -516,7 +517,7 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	}
 }
 
-func classifyContinueTaskAssessment(taskID string, statuses []string, verificationPassed, positiveEvidence, reconciled bool) (string, string, string) {
+func classifyContinueTaskAssessment(taskID string, statuses []string, verificationPassed, positiveEvidence, reconciled, dispatchEvidenceTrusted bool) (string, string, string) {
 	if reconciled {
 		if verificationPassed {
 			return "manually_reconciled", "Task was manually reconciled and the phase verification passed.", "reverify"
@@ -526,6 +527,9 @@ func classifyContinueTaskAssessment(taskID string, statuses []string, verificati
 
 	if verificationPassed {
 		if containsString(statuses, "completed") {
+			if !dispatchEvidenceTrusted {
+				return "simulated", "Workers only reported completion in simulated mode; rerun this phase without --synthetic or reconcile real manual work.", "redispatch"
+			}
 			return "verified", "Task has completed worker evidence and the phase verification passed.", ""
 		}
 		if len(statuses) == 0 {
@@ -540,6 +544,9 @@ func classifyContinueTaskAssessment(taskID string, statuses []string, verificati
 	if len(statuses) == 0 {
 		return "missing", "No dispatch evidence was recorded for this task.", "redispatch"
 	}
+	if !dispatchEvidenceTrusted {
+		return "simulated", fmt.Sprintf("Worker evidence is simulated and cannot satisfy continue advancement: %s.", strings.Join(statuses, ", ")), "redispatch"
+	}
 	if containsString(statuses, "completed") {
 		return "implemented_unverified", "A worker reported completion for this task, but phase verification failed.", "reverify"
 	}
@@ -550,7 +557,7 @@ func tasksNeedingRecovery(tasks []codexContinueTaskAssessment) []string {
 	taskIDs := make([]string, 0, len(tasks))
 	for _, task := range tasks {
 		switch task.Outcome {
-		case "missing", "needs_redispatch", "implemented_unverified":
+		case "missing", "needs_redispatch", "implemented_unverified", "simulated":
 			taskIDs = append(taskIDs, task.TaskID)
 		}
 	}
@@ -689,11 +696,11 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 	}
 
 	if checked == 0 && manifestRequiresBuilderClaims(manifest) {
-		if manifestAllowsEmptyBuilderClaims(manifest) {
+		if manifestUsesSyntheticDispatch(manifest) {
 			return codexClaimVerification{
 				Present: true,
-				Passed:  true,
-				Summary: "builder claims file is empty but the build ran in simulated mode",
+				Passed:  false,
+				Summary: "builder claims file is empty because the build ran in simulated mode; rerun `aether build <phase>` without `--synthetic` before `aether continue` can advance",
 				Checked: 0,
 			}
 		}
@@ -920,13 +927,6 @@ func allDispatchesCompleted(manifest codexContinueManifest) bool {
 	return true
 }
 
-func manifestAllowsEmptyBuilderClaims(manifest codexContinueManifest) bool {
-	if !manifestRequiresBuilderClaims(manifest) {
-		return true
-	}
-	return strings.EqualFold(strings.TrimSpace(manifest.Data.DispatchMode), "simulated") && allDispatchesCompleted(manifest)
-}
-
 func emptyClaimsFailureSummary(manifest codexContinueManifest) string {
 	if !manifest.Present {
 		return "builder claims file is empty but this phase dispatched builders"
@@ -936,6 +936,14 @@ func emptyClaimsFailureSummary(manifest codexContinueManifest) string {
 		return "builder claims file is empty and the build manifest does not record a simulated dispatch mode"
 	}
 	return fmt.Sprintf("builder claims file is empty but this phase dispatched builders in %s mode", mode)
+}
+
+func manifestUsesSyntheticDispatch(manifest codexContinueManifest) bool {
+	if !manifest.Present {
+		return false
+	}
+	mode := strings.ToLower(strings.TrimSpace(manifest.Data.DispatchMode))
+	return mode == "simulated" || mode == "synthetic"
 }
 
 func missingClaimsSummary(manifest codexContinueManifest) string {
