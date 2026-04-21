@@ -43,6 +43,31 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 ---
 
+## What Is Aether?
+
+# Open-source colony orchestration for AI software delivery
+
+If Claude Code, OpenCode, and Codex are the workers, Aether is the colony.
+
+Aether is a Go runtime plus companion-file system that orchestrates 25 specialized worker castes across planning, building, verification, recovery, and release hygiene. It gives you a shared engineering lifecycle instead of a pile of disconnected agent tabs, ad hoc prompts, and fragile one-off scripts.
+
+Manage engineering goals, not disconnected terminals.
+
+## Aether Is Right For You If
+
+- You run multiple AI coding sessions and keep losing track of who is doing what
+- You want planning, build, verification, recovery, and update workflows to stay on one runtime truth
+- You need Claude Code, OpenCode, and Codex CLI to stay aligned on the same system files and agent surfaces
+- You want user steering, memory, release discipline, and quality gates built into the workflow
+- You want a self-hosted open-source system for serious engineering work, not just prompt snippets
+
+## Aether Is Not
+
+- Not a drag-and-drop workflow builder
+- Not just a prompt pack or agent template collection
+- Not a hosted SaaS control plane
+- Not the right tool if you only want a single disposable chat and no persistent workflow state
+
 ## 🐜 Why Aether
 
 Every AI coding tool now has "agents." Most of them are the same thing repackaged — a loop that plans, executes, and checks. LangGraph uses strict directed state machines (DAGs). CrewAI uses top-down hierarchical delegation. AutoGen uses conversational group chats. That's not a colony. That's one ant doing laps.

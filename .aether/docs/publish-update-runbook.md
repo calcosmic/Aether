@@ -68,6 +68,8 @@ Why the order is strict:
 User-facing rule:
 - `npx --yes aether-colony@latest` should always install the same published runtime as the current `latest` GitHub release.
 - The `latest` npm dist-tag should point at the same version as the current stable Aether release, even though historical npm versions like `5.x` still exist in the registry history.
+- The npm package page README comes from `npm/README.md` in the published tarball, not from the root GitHub `README.md`.
+- Updating the npm website README requires publishing a new npm package version; editing `npm/README.md` in git alone does not change the live npm page.
 
 Manual fallback if npm is not automated in CI yet:
 
@@ -80,6 +82,41 @@ Then verify:
 
 ```bash
 npm view aether-colony dist-tags --json
+```
+
+## Go Binary Change Checklist
+
+Use this checklist any time the change touches `cmd/`, `pkg/`, `.goreleaser.yml`, version resolution, install/update flows, binary download logic, or anything else that can affect the shipped Go runtime.
+
+Required checks:
+
+```bash
+go test ./... -count=1
+go test ./... -race -count=1
+go build ./cmd/aether
+aether version
+```
+
+If the change touches `aether install`, `aether update`, version resolution, or binary publishing/bootstrap logic, also run:
+
+```bash
+go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"
+aether version
+```
+
+Then verify at least one downstream repo:
+
+```bash
+cd /path/to/target-repo
+aether update --force
+```
+
+If the public install path is affected, also verify:
+
+```bash
+cd /path/to/Aether/npm
+npm --prefix . test
+npm pack --dry-run
 ```
 
 ## Bootstrap Workflow When `install` Itself Changed

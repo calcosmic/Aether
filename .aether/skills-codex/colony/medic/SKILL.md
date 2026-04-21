@@ -292,6 +292,9 @@ Legal transitions (from `pkg/colony/colony.go:490`):
 - `npm/package.json` version must equal `.aether/version.json`
 - If these differ, report release version drift before trusting docs or publish instructions
 - For public installs, `npx --yes aether-colony@latest` should resolve to the same stable version as the current GitHub release
+- The npm package page README comes from `npm/README.md` in the published package, not the root repo README
+- Updating the npm website README requires a fresh npm publish; editing `npm/README.md` in git is not enough
+- If install/update/version/binary-download logic changed, treat downstream `aether update --force`, local `aether version`, and npm bootstrap verification as part of release integrity
 
 ## Version Compatibility
 

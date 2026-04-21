@@ -37,6 +37,8 @@ Never mutate colony data without explicit authorization. By default, the Medic o
 - If hub publish integrity is broken, recommend `aether install --package-dir <Aether checkout>` in the Aether repo and `aether update --force` in target repos
 - If the machine has no Aether hub yet and the user wants the published install path, recommend `npx --yes aether-colony@latest`
 - Treat `.aether/version.json` and `npm/package.json` version drift as a release integrity issue and surface it before recommending a publish
+- Remember that the npm website README comes from `npm/README.md` in the published package and only changes after a fresh npm publish
+- If install/update/version/binary-download logic changed, include local binary rebuild and downstream `aether update --force` verification in your release diagnosis
 
 ### Severity Levels
 - **critical** - Colony cannot function; immediate attention required

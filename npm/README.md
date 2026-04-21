@@ -24,6 +24,19 @@ The npm package version intentionally matches the published Go release version.
 There is one public Aether version, not one version for npm and another for the
 runtime.
 
+## What is Aether?
+
+If Claude Code, OpenCode, and Codex are the workers, Aether is the colony.
+
+Aether is a Go runtime plus companion-file system for AI software delivery. It orchestrates planning, build, verification, recovery, and update workflows across the supported platforms so the system stays aligned instead of drifting into disconnected agent sessions.
+
+## Aether is right for you if
+
+- You want the easiest first install path
+- You want the published Go runtime, not a separate Node runtime
+- You want one install path that can hand off to the real `aether` CLI immediately
+- You want the npm package version and the Aether release version to stay identical
+
 ## What happens on first run
 
 1. The wrapper resolves the matching Aether release for your platform.

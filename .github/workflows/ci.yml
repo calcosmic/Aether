@@ -19,6 +19,11 @@ jobs:
         with:
           go-version: "1.26"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Install goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -44,6 +49,13 @@ jobs:
 
       - name: Binary smoke test
         run: ./dist/Aether_linux_amd64_v1/Aether version
+
+      - name: Verify release metadata sync
+        run: |
+          test "$(node -p "require('./npm/package.json').version")" = "$(node -p "require('./.aether/version.json').version")"
+
+      - name: Run npm bootstrap tests
+        run: npm --prefix npm test
 
       - name: Parity tests
         run: go test ./cmd/... -run "TestParity|TestGoOnly" -count=1 -timeout 300s -v
