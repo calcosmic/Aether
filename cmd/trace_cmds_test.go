@@ -253,3 +253,170 @@ func TestTraceEndToEndResumeGeneratesNewRunID(t *testing.T) {
 	}
 }
 
+func TestTraceSummaryAndInspect(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	_ = setupBuildFlowTest(t)
+
+	// Seed a rich trace for run_e2e_full
+	runID := "run_e2e_full"
+	entries := []trace.TraceEntry{
+		{RunID: runID, Level: trace.TraceLevelState, Topic: "state.transition", Source: "init", Timestamp: "2026-04-21T10:00:00Z", Payload: map[string]interface{}{"from": "IDLE", "to": "READY"}},
+		{RunID: runID, Level: trace.TraceLevelPhase, Topic: "phase.start", Source: "build", Timestamp: "2026-04-21T10:01:00Z", Payload: map[string]interface{}{"phase": float64(1), "status": "in_progress"}},
+		{RunID: runID, Level: trace.TraceLevelToken, Topic: "token.usage", Source: "agent-pool", Timestamp: "2026-04-21T10:02:00Z", Payload: map[string]interface{}{"model": "claude-sonnet-4-20250514", "input_tokens": float64(1000), "output_tokens": float64(500), "usd_cost": 0.009}},
+		{RunID: runID, Level: trace.TraceLevelError, Topic: "error.add", Source: "build", Timestamp: "2026-04-21T10:03:00Z", Payload: map[string]interface{}{"phase": float64(1), "error_id": "err1", "severity": "warning"}},
+		{RunID: runID, Level: trace.TraceLevelArtifact, Topic: "build.worker", Source: "worker", Timestamp: "2026-04-21T10:04:00Z", Payload: map[string]interface{}{"worker": "Builder-1", "status": "completed", "files_modified": 3, "summary": "done"}},
+		{RunID: runID, Level: trace.TraceLevelIntervention, Topic: "resume.spawn-clear", Source: "resume-colony", Timestamp: "2026-04-21T10:05:00Z", Payload: map[string]interface{}{"reason": "stale_session"}},
+		{RunID: runID, Level: trace.TraceLevelPhase, Topic: "phase.complete", Source: "build", Timestamp: "2026-04-21T10:06:00Z", Payload: map[string]interface{}{"phase": float64(1), "status": "completed"}},
+	}
+	for _, e := range entries {
+		if err := store.AppendJSONL("trace.jsonl", e); err != nil {
+			t.Fatalf("seed trace: %v", err)
+		}
+	}
+
+	// Test trace-summary
+	rootCmd.SetArgs([]string{"trace-summary", "--run-id", runID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("trace-summary returned error: %v", err)
+	}
+	var summaryResult struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(stdout.(*bytes.Buffer).String()), &summaryResult); err != nil {
+		t.Fatalf("unmarshal summary: %v", err)
+	}
+	if summaryResult.Result["total_entries"] != float64(7) {
+		t.Errorf("expected 7 total entries, got %v", summaryResult.Result["total_entries"])
+	}
+	if summaryResult.Result["phase_count"] != float64(1) {
+		t.Errorf("expected 1 phase, got %v", summaryResult.Result["phase_count"])
+	}
+
+	tokenUsage, ok := summaryResult.Result["token_usage"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected token_usage in summary")
+	}
+	if tokenUsage["total_input_tokens"] != float64(1000) {
+		t.Errorf("expected 1000 input tokens, got %v", tokenUsage["total_input_tokens"])
+	}
+	if tokenUsage["total_usd_cost"] != float64(0.009) {
+		t.Errorf("expected $0.009 cost, got %v", tokenUsage["total_usd_cost"])
+	}
+
+	// Test trace-inspect --focus error
+	resetRootCmd(t)
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"trace-inspect", "--run-id", runID, "--focus", "error"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("trace-inspect returned error: %v", err)
+	}
+	var inspectResult struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(stdout.(*bytes.Buffer).String()), &inspectResult); err != nil {
+		t.Fatalf("unmarshal inspect: %v", err)
+	}
+	if inspectResult.Result["count"] != float64(1) {
+		t.Errorf("expected 1 error entry, got %v", inspectResult.Result["count"])
+	}
+
+	// Test trace-replay --level state filtering
+	resetRootCmd(t)
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"trace-replay", "--run-id", runID, "--level", "state"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("trace-replay returned error: %v", err)
+	}
+	var replayResult struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			Count int `json:"count"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(stdout.(*bytes.Buffer).String()), &replayResult); err != nil {
+		t.Fatalf("unmarshal replay: %v", err)
+	}
+	if replayResult.Result.Count != 1 {
+		t.Errorf("expected 1 state entry, got %d", replayResult.Result.Count)
+	}
+}
+
+func TestTraceRotateCommand(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+
+	// Create a trace.jsonl larger than 1MB to trigger rotation with max-size-mb=1
+	largeContent := strings.Repeat("a", 2*1024*1024)
+	if err := os.WriteFile(filepath.Join(dataDir, "trace.jsonl"), []byte(largeContent), 0644); err != nil {
+		t.Fatalf("write trace.jsonl: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"trace-rotate", "--max-size-mb", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("trace-rotate returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	var result struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("unmarshal rotate output: %v", err)
+	}
+	if !result.Result["rotated"].(bool) {
+		t.Errorf("expected rotation to occur, got: %v", result.Result["rotated"])
+	}
+
+	// Verify old trace was rotated and new one exists
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		t.Fatalf("read data dir: %v", err)
+	}
+	var foundRotated bool
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "trace.") && strings.HasSuffix(entry.Name(), ".jsonl") && entry.Name() != "trace.jsonl" {
+			foundRotated = true
+			break
+		}
+	}
+	if !foundRotated {
+		t.Error("expected rotated trace file to exist")
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "trace.jsonl")); err != nil {
+		t.Errorf("expected new trace.jsonl to exist: %v", err)
+	}
+}
+
+func TestTraceRotateNoOpWhenUnderLimit(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+
+	// Create a tiny trace.jsonl
+	if err := os.WriteFile(filepath.Join(dataDir, "trace.jsonl"), []byte("{}\n"), 0644); err != nil {
+		t.Fatalf("write trace.jsonl: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"trace-rotate", "--max-size-mb", "50"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("trace-rotate returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	var result struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("unmarshal rotate output: %v", err)
+	}
+	if result.Result["rotated"].(bool) {
+		t.Errorf("expected no rotation, got: %v", result.Result["rotated"])
+	}
+}
+
