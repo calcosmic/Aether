@@ -25,7 +25,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-24-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-49-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.16-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.17-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -1035,7 +1035,12 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.16 -- Released (Current)
+### 🎉 v1.0.17 -- Released (Current)
+
+- Shared dispatch-truth and recovery milestone now closes cleanly in the shipped runtime: `build`, `plan`, `colonize`, `status`, `watch`, and `continue` all share the same lifecycle and recovery model
+- Blocked `continue` no longer loses the right next step after the command exits: targeted redispatch or reconcile guidance now survives into `status`, `watch`, `print-next-up`, `resume`, `CONTEXT.md`, and `HANDOFF.md`
+- Claude/OpenCode blocked continue ceremony now follows runtime recovery commands honestly instead of always bouncing users back to generic `/ant:continue`
+- Codex keeps the same runtime truth, so other repos can now test the full dispatch/recovery finish work through the native CLI path
 
 - 24 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, and more)
 - 49 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.17] - 2026-04-21
+
+Shared dispatch-truth completion and recovery continuity across runtime surfaces.
+
+### Changed
+- `aether status`, `aether watch`, `aether resume-dashboard`, and `print-next-up` now reuse the same blocked-recovery guidance instead of falling back to generic `aether continue`
+- blocked continue flow now persists the targeted recovery command into session, context, and handoff artifacts so recovery survives context clears and resumed sessions
+- Claude/OpenCode blocked continue guidance now follows runtime-surfaced recovery commands first, keeping the wrapper beautiful but honest
+
+### Fixed
+- blocked phases no longer strand the right redispatch or reconcile command inside the immediate `aether continue` output
+- watch/status/resume surfaces now point at the same recovery doorway the runtime already computed, rather than drifting into stale or generic next steps
+- the completed `v1.2` dispatch-truth and recovery work is now packaged as a clean patch release for cross-repo testing
+
 ## [1.0.16] - 2026-04-21
 
 Legacy colony-state compatibility hardening for cross-repo updates.
