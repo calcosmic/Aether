@@ -90,7 +90,7 @@ Build and continue output uses stage transition markers:
 
 | Mode | When | Content |
 |------|------|---------|
-| Visual | `AETHER_OUTPUT_MODE=visual` or TTY | ANSI banners, emojis, colors, stage markers |
+| Visual | `AETHER_OUTPUT_MODE=visual` or TTY | ANSI banners, emojis, colors, stage markers, context-clear guidance |
 | JSON | `AETHER_OUTPUT_MODE=json` or piped | Structured data envelopes for programmatic use |
 
 ### What Codex Does NOT Get

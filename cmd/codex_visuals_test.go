@@ -1622,3 +1622,130 @@ func TestWrapperDescriptionEmojiConsistency(t *testing.T) {
 		}
 	}
 }
+
+// --- Codex Visual Parity Tests (Phase 21) ---
+
+func TestCodexVisualParity(t *testing.T) {
+	t.Run("CasteIdentity", func(t *testing.T) {
+		// Codex uses the same casteIdentity() function — verify it renders correctly
+		for _, caste := range []string{"builder", "watcher", "scout", "queen"} {
+			identity := casteIdentity(caste)
+			emoji := casteEmoji(caste)
+			label := casteLabel(caste)
+			if !strings.Contains(identity, emoji) {
+				t.Errorf("casteIdentity(%q) missing emoji %q: %s", caste, emoji, identity)
+			}
+			if !strings.Contains(identity, label) {
+				t.Errorf("casteIdentity(%q) missing label %q: %s", caste, label, identity)
+			}
+		}
+	})
+
+	t.Run("StageSeparators", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+		goal := "Codex parity check"
+		taskID := "task-parity"
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version: "3.0",
+			Goal:    &goal,
+			State:   colony.StateREADY,
+			Plan: colony.Plan{
+				Phases: []colony.Phase{
+					{ID: 1, Name: "Parity", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &taskID, Goal: "Check parity", Status: colony.TaskPending}}},
+				},
+			},
+		})
+
+		rootCmd.SetArgs([]string{"build", "1"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build error: %v", err)
+		}
+
+		output := stdout.(*bytes.Buffer).String()
+		for _, marker := range []string{"── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification ──", "── Housekeeping ──", "── Colony Complete ──"} {
+			if !strings.Contains(output, marker) {
+				t.Errorf("build visual missing stage marker %q (Codex parity)", marker)
+			}
+		}
+	})
+
+	t.Run("CommandEmojiParity", func(t *testing.T) {
+		// Verify commandEmoji returns expected values for key commands
+		parity := map[string]string{
+			"build":    "🔨",
+			"continue": "👁️",
+			"init":     "🥚",
+			"plan":     "📋",
+			"seal":     "🏺",
+			"status":   "📊",
+			"patrol":   "📊",
+			"history":  "📜",
+			"pause":    "💾",
+			"resume":   "💾",
+		}
+		for cmd, wantEmoji := range parity {
+			got := commandEmoji(cmd)
+			if got != wantEmoji {
+				t.Errorf("commandEmoji(%q) = %q, want %q", cmd, got, wantEmoji)
+			}
+		}
+	})
+
+	t.Run("SpawnListParity", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		dataDir := setupBuildFlowTest(t)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+		goal := "Spawn parity"
+		taskID := "task-spawn"
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version: "3.0",
+			Goal:    &goal,
+			State:   colony.StateREADY,
+			Plan: colony.Plan{
+				Phases: []colony.Phase{
+					{ID: 1, Name: "Spawn", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &taskID, Goal: "Spawn check", Status: colony.TaskPending}}},
+				},
+			},
+		})
+
+		rootCmd.SetArgs([]string{"build", "1"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build error: %v", err)
+		}
+
+		output := stdout.(*bytes.Buffer).String()
+		if !strings.Contains(output, "S P A W N   P L A N") {
+			t.Error("build visual missing SPAWN PLAN header (Codex parity)")
+		}
+		if !strings.Contains(output, "Builder") {
+			t.Error("build visual missing Builder in spawn list (Codex parity)")
+		}
+	})
+
+	t.Run("VisualModeRouting", func(t *testing.T) {
+		// Simulate Codex invocation: AETHER_OUTPUT_MODE=visual
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+		if !shouldRenderVisualOutput(stdout) {
+			t.Error("shouldRenderVisualOutput() false with AETHER_OUTPUT_MODE=visual (Codex parity)")
+		}
+
+		// JSON mode should not render visual
+		t.Setenv("AETHER_OUTPUT_MODE", "json")
+		if shouldRenderVisualOutput(stdout) {
+			t.Error("shouldRenderVisualOutput() true with AETHER_OUTPUT_MODE=json")
+		}
+	})
+
+	t.Run("ContextClearParity", func(t *testing.T) {
+		guidance := renderContextClearGuidance()
+		if !strings.Contains(guidance, "safe to clear") {
+			t.Errorf("renderContextClearGuidance() missing clear guidance: %s", guidance)
+		}
+	})
+}
