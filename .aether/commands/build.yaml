@@ -10,7 +10,7 @@ wrapper_additions:
     2. Surface active pheromones as a compact steering block with REDIRECT first, then FOCUS, then FEEDBACK.
     3. Include strength or remaining-life context so the user understands why each signal matters right now.
     4. Frame the requested work as `Phase N of M — Name` with a one-line purpose.
-    5. Deliver a short spawn ritual naming the likely castes such as Builder, Watcher, Scout, Architect, Oracle, or Chaos, without claiming dispatch truth before the runtime speaks.
+    5. Deliver a short dispatch preface that explains the colony is about to move, but do not guess the worker mix or name likely castes before the runtime speaks.
     6. Immediately before the runtime call, say: `Dispatching workers now...`
   post_build: |
     Close with a short colony-language synthesis:

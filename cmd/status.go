@@ -235,6 +235,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		b.WriteString("\nActive Workers\n")
 		renderActiveWorkers(&b, activeWorkers)
 	}
+	if len(spawnSummary.RecentOutcomeEntries) > 0 {
+		b.WriteString("\nRecent Outcomes\n")
+		renderRecentWorkerOutcomes(&b, spawnSummary.RecentOutcomeEntries)
+	}
 
 	if totalInstincts > 0 {
 		recentInstincts := loadRecentRuntimeInstincts(s, &state, 3)
@@ -275,15 +279,16 @@ func loadActiveSpawnEntries(s *storage.Store) []agent.SpawnEntry {
 }
 
 type spawnActivitySummary struct {
-	Entries        []agent.SpawnEntry
-	ActiveEntries  []agent.SpawnEntry
-	TotalCount     int
-	ActiveCount    int
-	CompletedCount int
-	BlockedCount   int
-	FailedCount    int
-	CurrentRunID   string
-	CurrentCommand string
+	Entries              []agent.SpawnEntry
+	ActiveEntries        []agent.SpawnEntry
+	RecentOutcomeEntries []agent.SpawnEntry
+	TotalCount           int
+	ActiveCount          int
+	CompletedCount       int
+	BlockedCount         int
+	FailedCount          int
+	CurrentRunID         string
+	CurrentCommand       string
 }
 
 func loadSpawnActivitySummary(s *storage.Store) spawnActivitySummary {
@@ -330,12 +335,16 @@ func loadSpawnActivitySummaryForState(s *storage.Store, state *colony.ColonyStat
 		case agent.IsLiveSpawnStatus(entry.Status):
 			summary.ActiveCount++
 			summary.ActiveEntries = append(summary.ActiveEntries, entry)
-		case entry.Status == "completed":
-			summary.CompletedCount++
-		case entry.Status == "blocked":
-			summary.BlockedCount++
-		case entry.Status == "failed" || entry.Status == "timeout":
-			summary.FailedCount++
+		case agent.IsTerminalSpawnStatus(entry.Status):
+			summary.RecentOutcomeEntries = append(summary.RecentOutcomeEntries, entry)
+			switch entry.Status {
+			case "completed", "manually-reconciled":
+				summary.CompletedCount++
+			case "blocked":
+				summary.BlockedCount++
+			case "failed", "timeout", "superseded":
+				summary.FailedCount++
+			}
 		}
 	}
 	return summary
@@ -368,25 +377,23 @@ func spawnEntryTimestamp(entry agent.SpawnEntry) time.Time {
 }
 
 func renderActiveWorkers(b *strings.Builder, entries []agent.SpawnEntry) {
+	renderSpawnEntrySection(b, entries, 6, "active workers")
+}
+
+func renderRecentWorkerOutcomes(b *strings.Builder, entries []agent.SpawnEntry) {
+	renderSpawnEntrySection(b, entries, 6, "recent outcomes")
+}
+
+func renderSpawnEntrySection(b *strings.Builder, entries []agent.SpawnEntry, maxEntries int, overflowLabel string) {
 	limit := len(entries)
-	if limit > 6 {
-		limit = 6
+	if limit > maxEntries {
+		limit = maxEntries
 	}
 	for i := 0; i < limit; i++ {
-		entry := entries[i]
-		fmt.Fprintf(b, "   %s %s (%s) — %s [%s]\n",
-			casteEmoji(entry.Caste),
-			entry.AgentName,
-			entry.Caste,
-			entry.Task,
-			entry.Status,
-		)
-		if summary := strings.TrimSpace(entry.Summary); summary != "" {
-			fmt.Fprintf(b, "      %s\n", summary)
-		}
+		renderSpawnEntry(b, entries[i])
 	}
 	if len(entries) > limit {
-		fmt.Fprintf(b, "   ... and %d more active workers\n", len(entries)-limit)
+		fmt.Fprintf(b, "   ... and %d more %s\n", len(entries)-limit, overflowLabel)
 	}
 }
 
@@ -405,51 +412,52 @@ func renderSpawnActivity(b *strings.Builder, summary spawnActivitySummary) {
 		parts = append(parts, fmt.Sprintf("%d failed", summary.FailedCount))
 	}
 	fmt.Fprintf(b, "   %s\n", strings.Join(parts, " | "))
-
-	limit := len(summary.Entries)
-	if limit > 6 {
-		limit = 6
-	}
-	for i := 0; i < limit; i++ {
-		entry := summary.Entries[i]
-		fmt.Fprintf(b, "   %s %s (%s) — %s [%s]\n",
-			casteEmoji(entry.Caste),
-			entry.AgentName,
-			entry.Caste,
-			entry.Task,
-			entry.Status,
-		)
-		if summary := strings.TrimSpace(entry.Summary); summary != "" {
-			fmt.Fprintf(b, "      %s\n", summary)
+	if command := strings.TrimSpace(summary.CurrentCommand); command != "" {
+		fmt.Fprintf(b, "   Current run: %s", command)
+		if runID := strings.TrimSpace(summary.CurrentRunID); runID != "" {
+			fmt.Fprintf(b, " (%s)", runID)
 		}
-	}
-	if len(summary.Entries) > limit {
-		fmt.Fprintf(b, "   ... and %d more recent workers\n", len(summary.Entries)-limit)
+		b.WriteString("\n")
 	}
 }
 
 func withoutLiveSpawnEntries(summary spawnActivitySummary) spawnActivitySummary {
 	filtered := spawnActivitySummary{
-		Entries:        make([]agent.SpawnEntry, 0, len(summary.Entries)),
-		CurrentRunID:   summary.CurrentRunID,
-		CurrentCommand: summary.CurrentCommand,
+		Entries:              make([]agent.SpawnEntry, 0, len(summary.Entries)),
+		RecentOutcomeEntries: make([]agent.SpawnEntry, 0, len(summary.RecentOutcomeEntries)),
+		CurrentRunID:         summary.CurrentRunID,
+		CurrentCommand:       summary.CurrentCommand,
 	}
 	for _, entry := range summary.Entries {
 		switch entry.Status {
-		case "completed":
+		case "completed", "manually-reconciled":
 			filtered.CompletedCount++
 		case "blocked":
 			filtered.BlockedCount++
-		case "failed":
+		case "failed", "timeout", "superseded":
 			filtered.FailedCount++
 		default:
 			continue
 		}
 		filtered.Entries = append(filtered.Entries, entry)
+		filtered.RecentOutcomeEntries = append(filtered.RecentOutcomeEntries, entry)
 	}
 	filtered.TotalCount = len(filtered.Entries)
 	filtered.ActiveEntries = []agent.SpawnEntry{}
 	return filtered
+}
+
+func renderSpawnEntry(b *strings.Builder, entry agent.SpawnEntry) {
+	fmt.Fprintf(b, "   %s %s %s — %s [%s]\n",
+		dispatchStatusIcon(entry.Status),
+		casteIdentity(entry.Caste),
+		entry.AgentName,
+		entry.Task,
+		entry.Status,
+	)
+	if summary := strings.TrimSpace(entry.Summary); summary != "" && summary != strings.TrimSpace(entry.Task) {
+		fmt.Fprintf(b, "      %s\n", summary)
+	}
 }
 
 // generateProgressBar creates a Unicode progress bar string.

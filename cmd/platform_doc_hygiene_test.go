@@ -177,6 +177,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"Dispatching workers now...",
 			},
 			forbidden: []string{
+				"Briefly name the castes the colony is likely to send",
+				"such as Builder, Watcher, Scout, Architect, Oracle, or Chaos",
 				"build-prep.md",
 				"build-wave.md",
 				"build-complete.md",

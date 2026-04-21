@@ -36,7 +36,7 @@ func TestPlanVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"📋", "P L A N", "P L A N   D I S P A T C H", "aether build 1"} {
+	for _, want := range []string{"📋", "P L A N", "P L A N   D I S P A T C H", "Planning Wave 1 starting", "✓", "aether build 1"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)
 		}
@@ -175,7 +175,7 @@ func TestColonizeVisualOutputShowsDispatchPreview(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Surveyors", "C O L O N I Z E", "aether plan"} {
+	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Survey Wave 1 starting", "Surveyors", "C O L O N I Z E", "aether plan"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("colonize visual output missing %q\n%s", want, output)
 		}
@@ -409,6 +409,7 @@ func TestWatchVisualOutputShowsSnapshotArtifacts(t *testing.T) {
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
 		"Scope: meta",
+		"Active Workers",
 		".aether/data/spawn-tree.txt",
 		".aether/data/watch-status.txt",
 		".aether/data/watch-progress.txt",
@@ -888,9 +889,9 @@ func TestRenderColonizeVisual_RealDispatch(t *testing.T) {
 		},
 		"survey_dir": "/tmp/test/.aether/data/survey",
 		"surveyors": []interface{}{
-			map[string]interface{}{"name": "Nest-42", "caste": "surveyor-nest", "task": "Map architecture", "status": "completed", "duration": 12.3},
+			map[string]interface{}{"name": "Nest-42", "caste": "surveyor-nest", "task": "Map architecture", "status": "completed", "summary": "Mapped the chamber layout", "duration": 12.3},
 			map[string]interface{}{"name": "Disc-7", "caste": "surveyor-disciplines", "task": "Map disciplines", "status": "completed", "duration": 8.1},
-			map[string]interface{}{"name": "Path-3", "caste": "surveyor-pathogens", "task": "Identify pathogens", "status": "failed", "duration": 5.2},
+			map[string]interface{}{"name": "Path-3", "caste": "surveyor-pathogens", "task": "Identify pathogens", "status": "failed", "summary": "Blocked on missing evidence", "duration": 5.2},
 			map[string]interface{}{"name": "Prov-1", "caste": "surveyor-provisions", "task": "Map provisions", "status": "completed", "duration": 15.7},
 		},
 		"survey_files": []interface{}{"BLUEPRINT.md", "CHAMBERS.md"},
@@ -912,6 +913,9 @@ func TestRenderColonizeVisual_RealDispatch(t *testing.T) {
 	// Should show durations
 	if !strings.Contains(output, "12.3s") {
 		t.Errorf("real dispatch output missing duration 12.3s\n%s", output)
+	}
+	if !strings.Contains(output, "Mapped the chamber layout") {
+		t.Errorf("real dispatch output missing worker summary\n%s", output)
 	}
 	if !strings.Contains(output, "8.1s") {
 		t.Errorf("real dispatch output missing duration 8.1s\n%s", output)
@@ -961,9 +965,9 @@ func TestRenderColonizeVisual_MixedResults(t *testing.T) {
 
 func TestRenderSurveyorResults_Formatting(t *testing.T) {
 	surveyors := []codexSurveyorDispatch{
-		{Caste: "surveyor-nest", Name: "Nest-42", Task: "Map architecture", Status: "completed", Duration: 12.3},
+		{Caste: "surveyor-nest", Name: "Nest-42", Task: "Map architecture", Status: "completed", Summary: "Mapped chamber layout", Duration: 12.3},
 		{Caste: "surveyor-disciplines", Name: "Disc-7", Task: "Map disciplines", Status: "completed", Duration: 8.1},
-		{Caste: "surveyor-pathogens", Name: "Path-3", Task: "Identify pathogens", Status: "failed", Duration: 5.2},
+		{Caste: "surveyor-pathogens", Name: "Path-3", Task: "Identify pathogens", Status: "failed", Summary: "Blocked by missing config", Duration: 5.2},
 		{Caste: "surveyor-provisions", Name: "Prov-1", Task: "Map provisions", Status: "completed", Duration: 15.7},
 	}
 
@@ -993,16 +997,22 @@ func TestRenderSurveyorResults_Formatting(t *testing.T) {
 	}
 
 	// Completed should have checkmark, failed should have X
-	if !strings.Contains(output, "\u2713 completed") {
-		t.Errorf("missing checkmark for completed surveyors\n%s", output)
+	if !strings.Contains(output, "\u2713") || !strings.Contains(output, "completed") {
+		t.Errorf("missing completed worker status details\n%s", output)
 	}
-	if !strings.Contains(output, "\u2717 failed") {
-		t.Errorf("missing X for failed surveyors\n%s", output)
+	if !strings.Contains(output, "\u2717") || !strings.Contains(output, "failed") {
+		t.Errorf("missing failed worker status details\n%s", output)
 	}
 
 	// Should have durations
 	if !strings.Contains(output, "12.3s") {
 		t.Errorf("missing duration 12.3s\n%s", output)
+	}
+	if !strings.Contains(output, "Task: Map architecture") {
+		t.Errorf("missing task detail line\n%s", output)
+	}
+	if !strings.Contains(output, "Mapped chamber layout") {
+		t.Errorf("missing worker summary line\n%s", output)
 	}
 
 	// Summary line at the end
@@ -1145,8 +1155,8 @@ func TestRenderPlanVisual_RealDispatch(t *testing.T) {
 		"confidence":    map[string]interface{}{"overall": 72},
 		"phases":        phaseMaps,
 		"dispatches": []interface{}{
-			map[string]interface{}{"name": "Scout-7", "caste": "scout", "task": "Survey the repo", "status": "completed", "duration": 3.5},
-			map[string]interface{}{"name": "Route-12", "caste": "route_setter", "task": "Convert findings into phases", "status": "completed", "duration": 2.1},
+			map[string]interface{}{"name": "Scout-7", "caste": "scout", "task": "Survey the repo", "status": "completed", "summary": "Mapped the runtime terrain", "duration": 3.5},
+			map[string]interface{}{"name": "Route-12", "caste": "route_setter", "task": "Convert findings into phases", "status": "completed", "summary": "Shaped the next phases", "duration": 2.1},
 		},
 	}
 
@@ -1166,6 +1176,9 @@ func TestRenderPlanVisual_RealDispatch(t *testing.T) {
 	}
 	if !strings.Contains(output, "2.1s") {
 		t.Errorf("real dispatch output missing duration 2.1s\n%s", output)
+	}
+	if !strings.Contains(output, "Mapped the runtime terrain") {
+		t.Errorf("real dispatch output missing scout summary\n%s", output)
 	}
 	// Should show summary line
 	if !strings.Contains(output, "2/2 workers completed") {
@@ -1195,8 +1208,8 @@ func TestRenderPlanVisual_RealDispatchWithFailure(t *testing.T) {
 		"confidence":    map[string]interface{}{"overall": 72},
 		"phases":        phaseMaps,
 		"dispatches": []interface{}{
-			map[string]interface{}{"name": "Scout-7", "caste": "scout", "task": "Survey the repo", "status": "completed", "duration": 4.0},
-			map[string]interface{}{"name": "Route-12", "caste": "route_setter", "task": "Convert findings into phases", "status": "failed", "duration": 1.2},
+			map[string]interface{}{"name": "Scout-7", "caste": "scout", "task": "Survey the repo", "status": "completed", "summary": "Captured the repo shape", "duration": 4.0},
+			map[string]interface{}{"name": "Route-12", "caste": "route_setter", "task": "Convert findings into phases", "status": "failed", "summary": "Blocked by missing planning file", "duration": 1.2},
 		},
 	}
 

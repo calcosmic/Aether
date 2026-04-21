@@ -722,7 +722,7 @@ func TestStatusShowsSpawnSummaryFromSpawnTree(t *testing.T) {
 	}
 
 	output := buf.String()
-	for _, want := range []string{"Spawn Activity", "1 active", "1 completed", "1 blocked", "Hammer-1", "Keen-2", "Map-3"} {
+	for _, want := range []string{"Spawn Activity", "1 active", "1 completed", "1 blocked", "Active Workers", "Recent Outcomes", "Hammer-1", "Keen-2", "Map-3"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("status output missing %q\n%s", want, output)
 		}

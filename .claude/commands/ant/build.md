@@ -38,10 +38,10 @@ Use the grounded status context to frame the requested work before dispatch:
 
 ## Spawn Ritual
 
-Before invoking the runtime, narrate the expected colony motion in Queen language:
+Before invoking the runtime, frame the colony motion in Queen language:
 
-- Briefly name the castes the colony is likely to send, such as Builder, Watcher, Scout, Architect, Oracle, or Chaos when relevant
-- Treat this as planned worker framing, not dispatch truth — the runtime decides the real worker mix
+- Keep the preface short and consequential, but do not guess the worker mix ahead of the runtime
+- Let the runtime reveal the actual castes, names, waves, and outcomes
 - Keep the ritual short and consequential, not theatrical filler
 
 ## Dispatch

@@ -345,8 +345,8 @@ developer_instructions = "You are a test surveyor."
 	}
 
 	for i, d := range got {
-		if d.Status != "failed" {
-			t.Errorf("dispatch[%d].Status = %q, want %q (timeout should map to failed)", i, d.Status, "failed")
+		if d.Status != "timeout" {
+			t.Errorf("dispatch[%d].Status = %q, want %q", i, d.Status, "timeout")
 		}
 	}
 }

@@ -262,8 +262,19 @@ func TestSwarmCompatibilityWatchReportsActiveWorkers(t *testing.T) {
 	if result["completed_count"] != float64(1) {
 		t.Fatalf("completed_count = %v, want 1", result["completed_count"])
 	}
+	if result["recent_count"] != float64(1) {
+		t.Fatalf("recent_count = %v, want 1", result["recent_count"])
+	}
 	if live, _ := result["live_refresh"].(bool); live {
 		t.Fatalf("expected snapshot-style swarm watch result, got live_refresh=true")
+	}
+	recentWorkers := result["recent_workers"].([]interface{})
+	if len(recentWorkers) != 1 {
+		t.Fatalf("recent_workers len = %d, want 1", len(recentWorkers))
+	}
+	recentWorker := recentWorkers[0].(map[string]interface{})
+	if recentWorker["name"] != "Keen-2" {
+		t.Fatalf("recent worker name = %v, want Keen-2", recentWorker["name"])
 	}
 }
 
@@ -339,6 +350,10 @@ func TestSwarmCompatibilityWatchPrefersCurrentRunWorkers(t *testing.T) {
 	worker := workers[0].(map[string]interface{})
 	if worker["name"] != "Hammer-1" {
 		t.Fatalf("worker name = %v, want Hammer-1", worker["name"])
+	}
+	recentWorkers := result["recent_workers"].([]interface{})
+	if len(recentWorkers) != 0 {
+		t.Fatalf("recent_workers len = %d, want 0", len(recentWorkers))
 	}
 }
 

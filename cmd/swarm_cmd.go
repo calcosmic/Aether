@@ -99,6 +99,7 @@ func buildSwarmWatchResult(target string, watch, liveRefresh bool) map[string]in
 	state, _ := loadColonyState()
 	spawnSummary := loadSpawnActivitySummaryForState(store, state)
 	active := spawnSummary.ActiveEntries
+	recent := spawnSummary.RecentOutcomeEntries
 
 	next := `aether init "describe the goal"`
 	phaseName := ""
@@ -118,16 +119,8 @@ func buildSwarmWatchResult(target string, watch, liveRefresh bool) map[string]in
 		}
 	}
 
-	workers := make([]map[string]interface{}, 0, len(active))
-	for _, entry := range active {
-		workers = append(workers, map[string]interface{}{
-			"name":    entry.AgentName,
-			"caste":   entry.Caste,
-			"task":    entry.Task,
-			"status":  entry.Status,
-			"summary": entry.Summary,
-		})
-	}
+	workers := spawnEntriesToWatchMaps(active)
+	recentWorkers := spawnEntriesToWatchMaps(recent)
 
 	return map[string]interface{}{
 		"mode":                "watch",
@@ -140,7 +133,9 @@ func buildSwarmWatchResult(target string, watch, liveRefresh bool) map[string]in
 		"current_run_id":      spawnSummary.CurrentRunID,
 		"current_run_command": spawnSummary.CurrentCommand,
 		"active_workers":      workers,
+		"recent_workers":      recentWorkers,
 		"active_count":        len(workers),
+		"recent_count":        len(recentWorkers),
 		"completed_count":     spawnSummary.CompletedCount,
 		"blocked_count":       spawnSummary.BlockedCount,
 		"failed_count":        spawnSummary.FailedCount,
@@ -148,6 +143,21 @@ func buildSwarmWatchResult(target string, watch, liveRefresh bool) map[string]in
 		"next":                next,
 		"watch":               watch || target == "",
 	}
+}
+
+func spawnEntriesToWatchMaps(entries []agent.SpawnEntry) []map[string]interface{} {
+	workers := make([]map[string]interface{}, 0, len(entries))
+	for _, entry := range entries {
+		workers = append(workers, map[string]interface{}{
+			"name":      entry.AgentName,
+			"caste":     entry.Caste,
+			"task":      entry.Task,
+			"status":    entry.Status,
+			"summary":   entry.Summary,
+			"timestamp": entry.Timestamp,
+		})
+	}
+	return workers
 }
 
 func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
@@ -756,6 +766,13 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 		if phaseName := strings.TrimSpace(stringValue(result["phase_name"])); phaseName != "" {
 			b.WriteString("Phase: " + phaseName + "\n")
 		}
+		if runCommand := strings.TrimSpace(stringValue(result["current_run_command"])); runCommand != "" {
+			b.WriteString("Current Run: " + runCommand)
+			if runID := strings.TrimSpace(stringValue(result["current_run_id"])); runID != "" {
+				b.WriteString(" (" + runID + ")")
+			}
+			b.WriteString("\n")
+		}
 		b.WriteString(fmt.Sprintf("Workers: %d active | %d completed | %d blocked",
 			intValue(result["active_count"]),
 			intValue(result["completed_count"]),
@@ -765,7 +782,8 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 			b.WriteString(fmt.Sprintf(" | %d failed", failed))
 		}
 		b.WriteString("\n")
-		renderSwarmWorkers(&b, result)
+		renderSwarmWorkerSection(&b, "Active Workers", workerMapsFromResult(result, "active_workers"))
+		renderSwarmWorkerSection(&b, "Recent Outcomes", workerMapsFromResult(result, "recent_workers"))
 		b.WriteString(renderArtifactsSection(
 			displayDataPath("spawn-tree.txt"),
 			displayDataPath("watch-status.txt"),
@@ -830,41 +848,50 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 }
 
 func renderSwarmWorkers(b *strings.Builder, result map[string]interface{}) {
-	raw, ok := result["workers"].([]map[string]interface{})
-	if !ok || raw == nil {
-		if list, ok := result["workers"].([]interface{}); ok {
-			raw = make([]map[string]interface{}, 0, len(list))
-			for _, item := range list {
-				if entry, ok := item.(map[string]interface{}); ok {
-					raw = append(raw, entry)
-				}
-			}
-		}
-	}
+	raw := workerMapsFromResult(result, "workers")
 	if len(raw) == 0 {
-		raw, _ = result["active_workers"].([]map[string]interface{})
-		if raw == nil {
-			if list, ok := result["active_workers"].([]interface{}); ok {
-				raw = make([]map[string]interface{}, 0, len(list))
-				for _, item := range list {
-					if entry, ok := item.(map[string]interface{}); ok {
-						raw = append(raw, entry)
-					}
-				}
-			}
-		}
+		raw = workerMapsFromResult(result, "active_workers")
 	}
 	if len(raw) == 0 {
 		return
 	}
 
-	b.WriteString("\nWorkers\n")
+	renderSwarmWorkerSection(b, "Workers", raw)
+}
+
+func workerMapsFromResult(result map[string]interface{}, key string) []map[string]interface{} {
+	raw, ok := result[key].([]map[string]interface{})
+	if ok && raw != nil {
+		return raw
+	}
+	list, ok := result[key].([]interface{})
+	if !ok {
+		return nil
+	}
+	raw = make([]map[string]interface{}, 0, len(list))
+	for _, item := range list {
+		if entry, ok := item.(map[string]interface{}); ok {
+			raw = append(raw, entry)
+		}
+	}
+	return raw
+}
+
+func renderSwarmWorkerSection(b *strings.Builder, title string, raw []map[string]interface{}) {
+	if len(raw) == 0 {
+		return
+	}
+	b.WriteString("\n")
+	b.WriteString(title)
+	b.WriteString("\n")
 	for _, entry := range raw {
 		caste := strings.TrimSpace(stringValue(entry["caste"]))
-		b.WriteString("  ")
-		b.WriteString(casteEmoji(caste))
-		b.WriteString(" ")
-		b.WriteString(stringValue(entry["name"]))
+		status := strings.TrimSpace(stringValue(entry["status"]))
+		fmt.Fprintf(b, "  %s %s %s",
+			dispatchStatusIcon(status),
+			casteIdentity(caste),
+			stringValue(entry["name"]),
+		)
 		if role := strings.TrimSpace(stringValue(entry["role"])); role != "" {
 			b.WriteString(" (")
 			b.WriteString(role)
@@ -875,13 +902,13 @@ func renderSwarmWorkers(b *strings.Builder, result map[string]interface{}) {
 			b.WriteString(" — ")
 			b.WriteString(task)
 		}
-		if status := strings.TrimSpace(stringValue(entry["status"])); status != "" {
+		if status != "" {
 			b.WriteString(" [")
 			b.WriteString(status)
 			b.WriteString("]")
 		}
 		b.WriteString("\n")
-		if summary := strings.TrimSpace(stringValue(entry["summary"])); summary != "" {
+		if summary := strings.TrimSpace(stringValue(entry["summary"])); summary != "" && summary != task {
 			b.WriteString("    ")
 			b.WriteString(summary)
 			b.WriteString("\n")

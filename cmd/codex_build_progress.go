@@ -10,6 +10,11 @@ import (
 )
 
 func emitCodexBuildWaveProgress(phase colony.Phase, wave int, dispatches []codex.WorkerDispatch, parallelMode colony.ParallelMode) {
+	_ = phase
+	emitCodexDispatchWaveProgress("Wave", wave, dispatches, parallelMode)
+}
+
+func emitCodexDispatchWaveProgress(label string, wave int, dispatches []codex.WorkerDispatch, parallelMode colony.ParallelMode) {
 	if len(dispatches) == 0 {
 		return
 	}
@@ -21,7 +26,10 @@ func emitCodexBuildWaveProgress(phase colony.Phase, wave int, dispatches []codex
 
 	var b strings.Builder
 	b.WriteString(renderStageMarker("Dispatch"))
-	b.WriteString(fmt.Sprintf("Wave %d starting (%s)\n", wave, mode))
+	if strings.TrimSpace(label) == "" {
+		label = "Wave"
+	}
+	b.WriteString(fmt.Sprintf("%s %d starting (%s)\n", label, wave, mode))
 	for _, dispatch := range dispatches {
 		b.WriteString("  ")
 		b.WriteString(casteIdentity(dispatch.Caste))
@@ -36,6 +44,10 @@ func emitCodexBuildWaveProgress(phase colony.Phase, wave int, dispatches []codex
 }
 
 func emitCodexBuildWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
+	emitCodexDispatchWorkerStarted(dispatch, wave)
+}
+
+func emitCodexDispatchWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 	var b strings.Builder
 	b.WriteString("… ")
 	b.WriteString(casteIdentity(dispatch.Caste))
@@ -50,6 +62,10 @@ func emitCodexBuildWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 }
 
 func emitCodexBuildWorkerFinished(dispatch codex.WorkerDispatch, result codex.DispatchResult) {
+	emitCodexDispatchWorkerFinished(dispatch, result)
+}
+
+func emitCodexDispatchWorkerFinished(dispatch codex.WorkerDispatch, result codex.DispatchResult) {
 	status := strings.TrimSpace(result.Status)
 	if status == "" {
 		status = "failed"
@@ -80,7 +96,7 @@ func emitCodexBuildWorkerFinished(dispatch codex.WorkerDispatch, result codex.Di
 		b.WriteString(fmt.Sprintf(" %.1fs", result.WorkerResult.Duration.Seconds()))
 	}
 
-	if summary := strings.TrimSpace(buildDispatchResultSummary(dispatch, result)); summary != "" {
+	if summary := strings.TrimSpace(dispatchResultSummary(dispatch, result)); summary != "" {
 		b.WriteString("  ")
 		b.WriteString(summary)
 	}
@@ -97,6 +113,10 @@ func updateCodexBuildDispatchRuntimeStatus(name, status, summary string) error {
 }
 
 func buildDispatchResultSummary(dispatch codex.WorkerDispatch, result codex.DispatchResult) string {
+	return dispatchResultSummary(dispatch, result)
+}
+
+func dispatchResultSummary(dispatch codex.WorkerDispatch, result codex.DispatchResult) string {
 	if result.WorkerResult != nil {
 		if summary := strings.TrimSpace(result.WorkerResult.Summary); summary != "" {
 			return summary

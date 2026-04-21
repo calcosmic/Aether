@@ -21,6 +21,7 @@ type codexPlanningDispatch struct {
 	Task     string   `json:"task"`
 	Outputs  []string `json:"outputs"`
 	Status   string   `json:"status"`
+	Summary  string   `json:"summary,omitempty"`
 	Duration float64  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
 	Claimed  []string `json:"-"`
 }
@@ -278,6 +279,9 @@ func runCodexPlan(root string, refresh bool) (map[string]interface{}, error) {
 			"outputs": dispatch.Outputs,
 			"status":  dispatch.Status,
 		}
+		if summary := strings.TrimSpace(dispatch.Summary); summary != "" {
+			entry["summary"] = summary
+		}
 		if dispatch.Duration > 0 {
 			entry["duration"] = dispatch.Duration
 		}
@@ -428,11 +432,16 @@ func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex
 		})
 	}
 
-	results, err := codex.DispatchBatchWithObserver(
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	results, err := dispatchBatchByWaveWithVisuals(
 		ctx,
 		invoker,
 		dispatches,
-		spawnTreeDispatchObserver(agent.NewSpawnTree(store, "spawn-tree.txt"), "Planning worker active"),
+		colony.ModeInRepo,
+		"Planning Wave",
+		func(wave int) codex.DispatchObserver {
+			return runtimeVisualDispatchObserver(spawnTree, "Planning worker active", wave)
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -447,8 +456,7 @@ func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex
 }
 
 // convertPlanningDispatchResults maps a slice of DispatchResult to codexPlanningDispatch.
-// "timeout" status is mapped to "failed". If results don't cover all specs,
-// remaining specs get the planned defaults.
+// If results don't cover all specs, remaining specs get the planned defaults.
 func convertPlanningDispatchResults(results []codex.DispatchResult, root string) []codexPlanningDispatch {
 	planned := plannedPlanningWorkers(root)
 	dispatches := make([]codexPlanningDispatch, 0, len(planned))
@@ -467,21 +475,19 @@ func convertPlanningDispatchResults(results []codex.DispatchResult, root string)
 			if r.WorkerName != "" {
 				d.Name = r.WorkerName
 			}
-			switch r.Status {
-			case "completed":
-				d.Status = "completed"
-			case "timeout":
-				d.Status = "failed"
-			case "failed":
-				d.Status = "failed"
-			default:
-				d.Status = "failed"
-			}
+			d.Status = normalizeRuntimeDispatchStatus(r.Status)
 			if r.WorkerResult != nil {
 				d.Duration = r.WorkerResult.Duration.Seconds()
 				d.Claimed = append(d.Claimed, r.WorkerResult.FilesCreated...)
 				d.Claimed = append(d.Claimed, r.WorkerResult.FilesModified...)
 				d.Claimed = uniqueSortedStrings(d.Claimed)
+				d.Summary = strings.TrimSpace(r.WorkerResult.Summary)
+				if d.Summary == "" && len(r.WorkerResult.Blockers) > 0 {
+					d.Summary = strings.Join(r.WorkerResult.Blockers, "; ")
+				}
+			}
+			if strings.TrimSpace(d.Summary) == "" && r.Error != nil {
+				d.Summary = strings.TrimSpace(r.Error.Error())
 			}
 		}
 

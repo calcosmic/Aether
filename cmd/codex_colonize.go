@@ -21,6 +21,7 @@ type codexSurveyorDispatch struct {
 	Task     string   `json:"task"`
 	Outputs  []string `json:"outputs"`
 	Status   string   `json:"status"`
+	Summary  string   `json:"summary,omitempty"`
 	Duration float64  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
 	Claimed  []string `json:"-"`
 }
@@ -165,6 +166,9 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 			"task":    dispatch.Task,
 			"outputs": dispatch.Outputs,
 			"status":  dispatch.Status,
+		}
+		if summary := strings.TrimSpace(dispatch.Summary); summary != "" {
+			entry["summary"] = summary
 		}
 		if dispatch.Duration > 0 {
 			entry["duration"] = dispatch.Duration
@@ -441,11 +445,16 @@ func dispatchRealSurveyors(ctx context.Context, root string, invoker codex.Worke
 		})
 	}
 
-	results, err := codex.DispatchBatchWithObserver(
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	results, err := dispatchBatchByWaveWithVisuals(
 		ctx,
 		invoker,
 		dispatches,
-		spawnTreeDispatchObserver(agent.NewSpawnTree(store, "spawn-tree.txt"), "Survey running"),
+		colony.ModeInRepo,
+		"Survey Wave",
+		func(wave int) codex.DispatchObserver {
+			return runtimeVisualDispatchObserver(spawnTree, "Survey running", wave)
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -460,8 +469,7 @@ func dispatchRealSurveyors(ctx context.Context, root string, invoker codex.Worke
 }
 
 // convertDispatchResults maps a slice of DispatchResult to codexSurveyorDispatch.
-// "timeout" status is mapped to "failed". If results don't cover all specs,
-// remaining specs get the planned-surveyor defaults.
+// If results don't cover all specs, remaining specs get the planned-surveyor defaults.
 func convertDispatchResults(results []codex.DispatchResult, specs []surveyorSpec, root string) []codexSurveyorDispatch {
 	dispatches := make([]codexSurveyorDispatch, 0, len(specs))
 
@@ -483,21 +491,19 @@ func convertDispatchResults(results []codex.DispatchResult, specs []surveyorSpec
 			if d.Name == "" {
 				d.Name = name
 			}
-			switch r.Status {
-			case "completed":
-				d.Status = "completed"
-			case "timeout":
-				d.Status = "failed"
-			case "failed":
-				d.Status = "failed"
-			default:
-				d.Status = "failed"
-			}
+			d.Status = normalizeRuntimeDispatchStatus(r.Status)
 			if r.WorkerResult != nil {
 				d.Duration = r.WorkerResult.Duration.Seconds()
 				d.Claimed = append(d.Claimed, r.WorkerResult.FilesCreated...)
 				d.Claimed = append(d.Claimed, r.WorkerResult.FilesModified...)
 				d.Claimed = uniqueSortedStrings(d.Claimed)
+				d.Summary = strings.TrimSpace(r.WorkerResult.Summary)
+				if d.Summary == "" && len(r.WorkerResult.Blockers) > 0 {
+					d.Summary = strings.Join(r.WorkerResult.Blockers, "; ")
+				}
+			}
+			if strings.TrimSpace(d.Summary) == "" && r.Error != nil {
+				d.Summary = strings.TrimSpace(r.Error.Error())
 			}
 		}
 

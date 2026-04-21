@@ -414,6 +414,7 @@ func parseSurveyorMaps(surveyors []interface{}) []codexSurveyorDispatch {
 			Name:     stringValue(entry["name"]),
 			Task:     stringValue(entry["task"]),
 			Status:   stringValue(entry["status"]),
+			Summary:  stringValue(entry["summary"]),
 			Duration: floatValue(entry["duration"]),
 		}
 		if outputs, ok := entry["outputs"].([]interface{}); ok {
@@ -438,7 +439,7 @@ func hasRealExecutionData(dispatches []codexSurveyorDispatch) bool {
 }
 
 // renderSurveyorResults formats surveyor execution data as a table with
-// emoji, name, caste, status icon, and duration.
+// truthful worker identity, status, and worker summary context.
 func renderSurveyorResults(surveyors []codexSurveyorDispatch) string {
 	if len(surveyors) == 0 {
 		return ""
@@ -447,24 +448,22 @@ func renderSurveyorResults(surveyors []codexSurveyorDispatch) string {
 	completed := 0
 	totalDuration := 0.0
 	for _, s := range surveyors {
-		statusIcon := "\u2717"
-		if s.Status == "completed" {
-			statusIcon = "\u2713"
+		status := normalizeRuntimeDispatchStatus(s.Status)
+		if status == "completed" {
 			completed++
 		}
-		b.WriteString("  ")
-		b.WriteString(casteIdentity(s.Caste))
-		b.WriteString(" ")
-		b.WriteString(s.Name)
-		b.WriteString("  ")
-		b.WriteString(statusIcon)
-		b.WriteString(" ")
-		b.WriteString(s.Status)
+		fmt.Fprintf(&b, "  %s %s %s  %s", dispatchStatusIcon(status), casteIdentity(s.Caste), s.Name, status)
 		if s.Duration > 0 {
-			b.WriteString(fmt.Sprintf("  %ss", fmt.Sprintf("%.1f", s.Duration)))
+			fmt.Fprintf(&b, "  %.1fs", s.Duration)
 			totalDuration += s.Duration
 		}
 		b.WriteString("\n")
+		if task := strings.TrimSpace(s.Task); task != "" {
+			fmt.Fprintf(&b, "      Task: %s\n", task)
+		}
+		if summary := strings.TrimSpace(s.Summary); summary != "" && summary != strings.TrimSpace(s.Task) {
+			fmt.Fprintf(&b, "      %s\n", summary)
+		}
 	}
 	b.WriteString(fmt.Sprintf("\n%d/%d surveyors completed", completed, len(surveyors)))
 	if totalDuration > 0 {
@@ -498,6 +497,7 @@ func parsePlanningDispatchMaps(dispatches []interface{}) []codexPlanningDispatch
 			Name:     stringValue(entry["name"]),
 			Task:     stringValue(entry["task"]),
 			Status:   stringValue(entry["status"]),
+			Summary:  stringValue(entry["summary"]),
 			Duration: floatValue(entry["duration"]),
 		}
 		if outputs, ok := entry["outputs"].([]interface{}); ok {
@@ -511,7 +511,7 @@ func parsePlanningDispatchMaps(dispatches []interface{}) []codexPlanningDispatch
 }
 
 // renderPlanningWorkerResults formats planning worker execution data as a table with
-// emoji, name, caste, status icon, and duration.
+// truthful worker identity, status, and worker summary context.
 func renderPlanningWorkerResults(workers []codexPlanningDispatch) string {
 	if len(workers) == 0 {
 		return ""
@@ -520,24 +520,22 @@ func renderPlanningWorkerResults(workers []codexPlanningDispatch) string {
 	completed := 0
 	totalDuration := 0.0
 	for _, w := range workers {
-		statusIcon := "\u2717"
-		if w.Status == "completed" {
-			statusIcon = "\u2713"
+		status := normalizeRuntimeDispatchStatus(w.Status)
+		if status == "completed" {
 			completed++
 		}
-		b.WriteString("  ")
-		b.WriteString(casteIdentity(w.Caste))
-		b.WriteString(" ")
-		b.WriteString(w.Name)
-		b.WriteString("  ")
-		b.WriteString(statusIcon)
-		b.WriteString(" ")
-		b.WriteString(w.Status)
+		fmt.Fprintf(&b, "  %s %s %s  %s", dispatchStatusIcon(status), casteIdentity(w.Caste), w.Name, status)
 		if w.Duration > 0 {
-			b.WriteString(fmt.Sprintf("  %ss", fmt.Sprintf("%.1f", w.Duration)))
+			fmt.Fprintf(&b, "  %.1fs", w.Duration)
 			totalDuration += w.Duration
 		}
 		b.WriteString("\n")
+		if task := strings.TrimSpace(w.Task); task != "" {
+			fmt.Fprintf(&b, "      Task: %s\n", task)
+		}
+		if summary := strings.TrimSpace(w.Summary); summary != "" && summary != strings.TrimSpace(w.Task) {
+			fmt.Fprintf(&b, "      %s\n", summary)
+		}
 	}
 	b.WriteString(fmt.Sprintf("\n%d/%d workers completed", completed, len(workers)))
 	if totalDuration > 0 {
@@ -545,6 +543,21 @@ func renderPlanningWorkerResults(workers []codexPlanningDispatch) string {
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+func dispatchStatusIcon(status string) string {
+	switch normalizeRuntimeDispatchStatus(status) {
+	case "completed", "manually-reconciled":
+		return "\u2713"
+	case "blocked":
+		return "!"
+	case "failed", "timeout", "superseded":
+		return "\u2717"
+	case "starting", "active", "running", "spawned":
+		return "\u2026"
+	default:
+		return "\u2022"
+	}
 }
 
 func renderPlanVisual(result map[string]interface{}) string {
