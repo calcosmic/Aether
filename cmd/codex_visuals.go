@@ -37,6 +37,7 @@ var casteEmojiMap = map[string]string{
 	"tracker":       "🐛",
 	"weaver":        "🔄",
 	"dreamer":       "💭",
+	"medic":         "🩹",
 }
 
 var casteColorMap = map[string]string{
@@ -63,6 +64,7 @@ var casteColorMap = map[string]string{
 	"tracker":       "31",
 	"weaver":        "95",
 	"dreamer":       "90",
+	"medic":         "96",
 }
 
 var casteLabelMap = map[string]string{
@@ -89,6 +91,7 @@ var casteLabelMap = map[string]string{
 	"tracker":       "Tracker",
 	"weaver":        "Weaver",
 	"dreamer":       "Dreamer",
+	"medic":         "Medic",
 }
 
 var commandEmojiMap = map[string]string{

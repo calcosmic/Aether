@@ -1529,6 +1529,35 @@ func TestInstallJsonModeStillProducesJson(t *testing.T) {
 	}
 }
 
+// --- Medic Caste Tests (Phase 25) ---
+
+func TestCasteIdentityMedic(t *testing.T) {
+	os.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	const medicEmoji = "🩹"
+
+	identity := casteIdentity("medic")
+	if !strings.Contains(identity, medicEmoji) {
+		t.Errorf("casteIdentity(medic): expected 🩹 emoji, got %q", identity)
+	}
+	if !strings.Contains(identity, "Medic") {
+		t.Errorf("casteIdentity(medic): expected 'Medic' label, got %q", identity)
+	}
+	emoji := casteEmoji("medic")
+	if emoji != medicEmoji {
+		t.Errorf("casteEmoji(medic): expected 🩹, got %q", emoji)
+	}
+	label := casteLabel("medic")
+	if label != "Medic" {
+		t.Errorf("casteLabel(medic): expected 'Medic', got %q", label)
+	}
+	color := casteANSIColor("medic")
+	if color == "" {
+		t.Errorf("casteANSIColor(medic): expected a color code, got empty")
+	}
+}
+
 // --- Emoji Consistency Tests (Phase 20) ---
 
 func TestCasteEmojiMapCompleteness(t *testing.T) {
