@@ -217,6 +217,10 @@ func renderNextUp(primary string, alternatives ...string) string {
 	return b.String()
 }
 
+func renderContextClearGuidance() string {
+	return "It's safe to clear your context now. Run `/ant:resume` to restore.\n"
+}
+
 func renderProgressSummary(current, total int) string {
 	if total <= 0 {
 		return "[Phase 0/0] " + generateProgressBar(0, 0, 16) + " 0%"
@@ -757,7 +761,8 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 		b.WriteString(strings.TrimSpace(phase.Description))
 		b.WriteString("\n")
 	}
-	b.WriteString("\nTasks\n")
+	b.WriteString(renderStageMarker("Context"))
+	b.WriteString(renderStageMarker("Tasks"))
 	for _, task := range phase.Tasks {
 		b.WriteString("  [ ] ")
 		b.WriteString(strings.TrimSpace(task.Goal))
@@ -767,16 +772,29 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 		b.WriteString("  [ ] No explicit tasks captured for this phase.\n")
 	}
 	b.WriteString("\n")
+	b.WriteString(renderStageMarker("Dispatch"))
 	b.WriteString(renderSpawnPlanForDispatches(dispatches))
 	b.WriteString(renderArtifactsSection(
 		displayDataPath(fmt.Sprintf("build/phase-%d/manifest.json", phase.ID)),
 		displayDataPath("last-build-claims.json"),
 		displayDataPath("spawn-tree.txt"),
 	))
+	b.WriteString(renderStageMarker("Verification"))
+	b.WriteString("Verification happens during `aether continue`.\n")
+	b.WriteString(renderStageMarker("Housekeeping"))
+	b.WriteString("Signal housekeeping runs during `aether continue`.\n")
+	if len(state.Plan.Phases) == phase.ID {
+		b.WriteString(renderStageMarker("Colony Complete"))
+		b.WriteString("This is the final phase. Seal the colony after continue.\n")
+	} else {
+		b.WriteString(renderStageMarker("Next Phase"))
+		b.WriteString(fmt.Sprintf("Phase %d follows after continue.\n", phase.ID+1))
+	}
 	b.WriteString(renderNextUp(
 		`Run `+"`aether continue`"+` after the work is implemented and independently verified.`,
 		`Run `+"`aether status`"+` if you want to inspect progress before advancing.`,
 	))
+	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
 
@@ -849,6 +867,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 			`Run `+"`aether seal`"+` to finalize the colony.`,
 			`Run `+"`aether status`"+` if you want one last dashboard pass before sealing.`,
 		))
+		b.WriteString(renderContextClearGuidance())
 		return b.String()
 	}
 
@@ -864,6 +883,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 		fmt.Sprintf("Run `aether build %d` to dispatch the next worker wave.", nextBuild),
 		`Run `+"`aether focus \"...\"`"+` or `+"`aether feedback \"...\"`"+` if you want to steer the next phase before it starts.`,
 	))
+	b.WriteString(renderContextClearGuidance())
 	return b.String()
 }
 

@@ -84,7 +84,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "aether continue"} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -129,6 +129,10 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 		".aether/data/build/phase-1/manifest.json",
 		".aether/data/last-build-claims.json",
 		".aether/data/spawn-tree.txt",
+		"── Context ──",
+		"── Tasks ──",
+		"── Dispatch ──",
+		"It's safe to clear your context now.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
@@ -314,6 +318,7 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 		".aether/data/build/phase-1/gates.json",
 		".aether/data/build/phase-1/continue.json",
 		".aether/data/spawn-tree.txt",
+		"It's safe to clear your context now.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
@@ -369,6 +374,7 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 		"── Colony Complete ──",
 		"All planned phases are complete. The colony is ready for Crowned Anthill.",
 		"aether seal",
+		"It's safe to clear your context now.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
