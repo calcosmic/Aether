@@ -285,6 +285,7 @@ Legal transitions (from `pkg/colony/colony.go:490`):
 - For unreleased local source changes on this machine: run `aether install --package-dir "$PWD"` from the Aether repo, then `aether update --force` in target repos
 - If the change modified `aether install` itself: bootstrap with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`
 - For published release runtime updates: run `aether update --force --download-binary`
+- For first-time published installs on a machine with no hub yet: run `npx --yes aether-colony@latest`
 
 ## Version Compatibility
 

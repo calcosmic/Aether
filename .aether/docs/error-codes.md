@@ -147,10 +147,10 @@ This document is the complete reference for all `E_*` error constants used in Ae
 - **When it happens:**
   - Aether hasn't been installed yet.
   - The hub directory was accidentally deleted.
-- **Suggested fix:** Run `npm install -g aether` to install Aether. This creates the hub at `~/.aether/`.
+- **Suggested fix:** Run `npx --yes aether-colony@latest` for the published bootstrap install, or run `aether install` if the binary is already present on this machine. Either path creates the hub at `~/.aether/`.
 - **Example output:**
   ```json
-  {"ok":false,"error":{"code":"E_HUB_NOT_FOUND","message":"Couldn't find the Aether hub. Try: npm install -g aether","details":null,"recovery":"Run: aether install","timestamp":"2026-02-19T13:00:00Z"}}
+  {"ok":false,"error":{"code":"E_HUB_NOT_FOUND","message":"Couldn't find the Aether hub. Try: npx --yes aether-colony@latest","details":null,"recovery":"Run: aether install","timestamp":"2026-02-19T13:00:00Z"}}
   ```
 
 ### E_REPO_NOT_INITIALIZED

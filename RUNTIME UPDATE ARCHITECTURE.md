@@ -1,6 +1,6 @@
 # Aether Architecture - How It Works
 
-> **Historical note:** The distribution system was originally Node.js-based (`bin/cli.js`, `bin/validate-package.sh`), which was later replaced by the current Go binary (`cmd/`, `pkg/`). Even earlier, a `runtime/` staging directory was used as an intermediary — also removed.
+> **Distribution note:** The Go `aether` binary is the only runtime. A thin npm bootstrap package now exists at `npm/` for `npx --yes aether-colony@latest`, but it only downloads and hands off to the published Go release.
 
 ## The Core Concept
 
@@ -30,12 +30,13 @@
 │   .aether/data/        ← LOCAL ONLY (gitignored, never sync'd)  │
 │   .aether/dreams/      ← LOCAL ONLY (gitignored, never sync'd)  │
 │                                                                  │
-│   .claude/commands/ant/ ← 45 slash commands (Claude Code)       │
-│   .claude/agents/ant/   ← 24 agent definitions (Claude Code)    │
+│   .claude/commands/ant/ ← 50 slash commands (Claude Code)       │
+│   .claude/agents/ant/   ← 25 agent definitions (Claude Code)    │
 │   .claude/rules/        ← Rules loaded by Claude Code           │
 │                                                                  │
-│   .opencode/commands/ant/ ← 45 slash commands (OpenCode)        │
+│   .opencode/commands/ant/ ← 50 slash commands (OpenCode)        │
 │   .opencode/agents/       ← Agent definitions (OpenCode)        │
+│   .codex/agents/          ← 25 agent definitions (Codex CLI)    │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -79,9 +80,15 @@
 | Agents (Claude) | `.claude/agents/ant/` | `system/agents-claude/` | `.claude/agents/ant/` |
 | Commands (OpenCode) | `.opencode/commands/ant/` | `system/commands/opencode/` | `.opencode/commands/ant/` |
 | Agents (OpenCode) | `.opencode/agents/` | `system/agents/` | `.opencode/agents/` |
+| Agents (Codex) | `.codex/agents/` | `system/codex/` | `.codex/agents/` |
+| Skills (Codex) | `.aether/skills-codex/` | `system/skills-codex/` | `.codex/skills/aether/` |
 | Skills | `.aether/skills/` | `system/skills/` | `.aether/skills/` |
 | Templates | `.aether/templates/` | `system/templates/` | `.aether/templates/` |
 | Docs | `.aether/docs/` | `system/docs/` | `.aether/docs/` |
+
+Published bootstrap path:
+- `npx --yes aether-colony@latest` downloads the published Go release, installs it locally, and runs `aether install`.
+- The npm package is not a second runtime and should always trail a published Go release, never lead it.
 
 **Never distributed (local only):**
 - `.aether/data/` — colony state, pheromones, midden
@@ -100,8 +107,9 @@ Pushes from the Aether repo to the hub. This is what you run after editing sourc
 1. Syncs slash commands to `~/.claude/commands/ant/` and `~/.opencode/command/`
 2. Syncs agent definitions to `~/.claude/agents/ant/` and `~/.opencode/agent/`
 3. Calls `setupInstallHub()` to create `~/.aether/` with `registry.json` and `version.json`
-4. When run from an Aether source checkout, rebuilds the shared local `aether` binary unless `--skip-build-binary` is used
-5. Optionally downloads the Go binary from GitHub Releases (`--download-binary`)
+4. Syncs Codex agents to `~/.codex/agents/` and Codex skills to `~/.codex/skills/aether/`
+5. When run from an Aether source checkout, rebuilds the shared local `aether` binary unless `--skip-build-binary` is used
+6. Optionally downloads the Go binary from GitHub Releases (`--download-binary`)
 
 **Sync pairs (repo → home directory):**
 
@@ -111,6 +119,8 @@ Pushes from the Aether repo to the hub. This is what you run after editing sourc
 | `.claude/agents/ant/` | `~/.claude/agents/ant/` | Agents (claude) |
 | `.opencode/commands/ant/` | `~/.opencode/command/` | Commands (opencode) |
 | `.opencode/agents/` | `~/.opencode/agent/` | Agents (opencode) |
+| `.codex/agents/` | `~/.codex/agents/` | Agents (codex) |
+| `.aether/skills-codex/` | `~/.codex/skills/aether/` | Skills (codex) |
 
 Note: The hub's `system/` directory (companion files) is populated by copying `.aether/` contents. The `install` command also cleans up stale files in the destination that no longer exist in the source.
 
@@ -179,6 +189,9 @@ These are never modified by update/setup:
 ## Quick Reference
 
 ```bash
+# First-time published install without Go:
+npx --yes aether-colony@latest
+
 # You changed files in the Aether repo:
 aether install                          # Push to hub (~/.aether/system/) and, from source, rebuild the shared binary
 
@@ -202,10 +215,12 @@ aether update --download-binary         # Update + fetch latest binary
 
 | What | Source Location | Distributed To |
 |------|----------------|----------------|
-| 45 slash commands (Claude) | `.claude/commands/ant/` | `.claude/commands/ant/` |
-| 45 slash commands (OpenCode) | `.opencode/commands/ant/` | `.opencode/commands/ant/` |
-| 24 agent definitions | `.claude/agents/ant/` | `.claude/agents/ant/` |
-| 28 skills (10 colony + 18 domain) | `.aether/skills/` | `.aether/skills/` |
+| 50 slash commands (Claude) | `.claude/commands/ant/` | `.claude/commands/ant/` |
+| 50 slash commands (OpenCode) | `.opencode/commands/ant/` | `.opencode/commands/ant/` |
+| 25 Claude agent definitions | `.claude/agents/ant/` | `.claude/agents/ant/` |
+| 25 Codex agent definitions | `.codex/agents/` | `.codex/agents/` |
+| 29 source skills (11 colony + 18 domain) | `.aether/skills/` | `.aether/skills/` |
+| 29 Codex mirror skills | `.aether/skills-codex/` | `.codex/skills/aether/` |
 | 12 templates | `.aether/templates/` | `.aether/templates/` |
 | 1 rules file | `.aether/rules/` | `.claude/rules/` |
 

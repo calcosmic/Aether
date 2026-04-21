@@ -36,6 +36,37 @@ aether update --force --download-binary
 
 That command syncs companion files first, then downloads the published binary.
 
+## npm Bootstrap Release Workflow
+
+Use this when you are publishing the public `npx` entrypoint for non-Go users.
+
+Release order matters:
+
+1. Publish the Go GitHub release first.
+2. Verify the release assets exist for every supported platform.
+3. Update `npm/package.json`:
+   - bump `version` for the npm package itself
+   - set `aetherVersion` to the exact Go release version the wrapper should install
+4. Run npm package verification locally.
+5. Publish the npm package.
+
+Recommended verification:
+
+```bash
+npm --prefix npm test
+cd npm && npm pack --dry-run
+node bin/aether.js --bootstrap-version
+node bin/aether.js version
+```
+
+Why the order is strict:
+- The npm package is only a bootstrap wrapper.
+- It downloads a specific published Go release from GitHub Releases.
+- If npm is published before the matching Go release exists, the wrapper will point users at a missing or stale runtime.
+
+User-facing rule:
+- `npx --yes aether-colony@latest` should always install the same published runtime that the current npm wrapper declares in `npm/package.json`.
+
 ## Bootstrap Workflow When `install` Itself Changed
 
 If the change you made affects `aether install`, the currently installed binary may still be running the old publish logic. Bootstrap the new installer directly from source once:

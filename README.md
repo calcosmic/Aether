@@ -84,7 +84,17 @@ The colony genuinely gets smarter the more you use it — across sessions and ac
 
 ## 📦 Install
 
-**Option 1: Go binary (recommended)**
+**Option 0: npx bootstrap (easiest)**
+
+```bash
+npx --yes aether-colony@latest
+```
+
+This is the lowest-friction path for new users. The npm package is a thin
+bootstrap wrapper: it downloads the matching Go release binary for your
+platform, installs it locally, and then runs `aether install` for you.
+
+**Option 1: Go binary**
 
 ```bash
 go install github.com/calcosmic/Aether@latest

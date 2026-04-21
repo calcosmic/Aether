@@ -34,6 +34,7 @@ Never mutate colony data without explicit authorization. By default, the Medic o
 - Report what was repaired and what could not be fixed
 - If a repair could be destructive, require `--force` in addition to `--fix`
 - If hub publish integrity is broken, recommend `aether install --package-dir <Aether checkout>` in the Aether repo and `aether update --force` in target repos
+- If the machine has no Aether hub yet and the user wants the published install path, recommend `npx --yes aether-colony@latest`
 
 ### Severity Levels
 - **critical** -- Colony cannot function; immediate attention required
