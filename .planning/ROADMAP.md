@@ -65,7 +65,7 @@
 ## Phases
 
 - [x] **Phase 25: Medic Ant Core** — Health diagnosis command, colony data scanner, structured health report (completed 2026-04-21)
-- [ ] **Phase 26: Auto-Repair** — Fix common colony data issues with `--fix` flag, logged repairs
+- [x] **Phase 26: Auto-Repair** — Fix common colony data issues with `--fix` flag, logged repairs (completed 2026-04-21)
 - [ ] **Phase 27: Medic Skill** — Healthy state specification skill file for all colony data
 - [ ] **Phase 28: Ceremony Integrity** — Verify wrapper/runtime parity, stage markers, emoji consistency
 - [ ] **Phase 29: Trace Diagnostics** — Remote debugging via trace export analysis
@@ -148,7 +148,7 @@
 | 12-16 | v1.2 | 12/12 | Complete | 2026-04-21 |
 | 17-24 | v1.3 | 17/17 | Complete | 2026-04-21 |
 | 25 | v1.4 | 1/3 | Complete    | 2026-04-21 |
-| 26 | v1.4 | 0/TBD | Not started | - |
+| 26 | v1.4 | 1/1 | Complete    | 2026-04-21 |
 | 27 | v1.4 | 0/TBD | Not started | - |
 | 28 | v1.4 | 0/TBD | Not started | - |
 | 29 | v1.4 | 0/TBD | Not started | - |
