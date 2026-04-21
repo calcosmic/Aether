@@ -11,7 +11,7 @@
 |------|--------------|
 | Version | v1.0.18 |
 | Slash commands | 49 (Claude) + 49 (OpenCode); Codex uses native CLI + 24 TOML agents |
-| Agent definitions | 24 |
+| Agent definitions | 25 |
 | Skills | 28 (10 colony + 18 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Tests | 2900+ passing |
@@ -329,6 +329,7 @@ Consolidated guidelines in `.claude/rules/`:
 | Niche | Oracle | Deep research, actionable recommendations |
 | Niche | Ambassador | External integrations |
 | Niche | Chronicler | Documentation |
+| Specialist | Medic | Colony health diagnosis and repair |
 
 ---
 
