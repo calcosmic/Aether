@@ -35,8 +35,8 @@ That means:
 - Recovery made reliable: worktree lifecycle fixes, deferred cleanup, orphan branch detection
 - Full trace instrumentation: every run leaves a structured trace with replay, summary, and inspect capabilities
 - All 49 slash commands verified working across Claude Code, OpenCode, and Codex CLI
-- Previous milestones: v1.0 (MVP), v1.1 (Trusted Context), v1.2 (Live Dispatch Truth) all shipped
-- Planning next milestone (v1.4)
+- Previous milestones: v1.0 (MVP), v1.1 (Trusted Context), v1.2 (Live Dispatch Truth), v1.3 (Visual Truth) all shipped
+- Defining v1.4: Self-Healing Colony with Medic ant
 
 ## Architecture / Key Patterns
 
@@ -57,7 +57,7 @@ See [.planning/REQUIREMENTS.md](/Users/callumcowie/repos/Aether/.planning/REQUIR
 - [x] v1.1 Trusted Context — Phases 7-11
 - [x] v1.2 Live Dispatch Truth and Recovery — Phases 12-16
 - [x] v1.3 Visual Truth and Core Hardening — Phases 17-24 (shipped 2026-04-21)
-- [ ] v1.4 — Planning (see ROADMAP.md)
+- [ ] v1.4 Self-Healing Colony — Phases 25+ (defining)
 
 ## Previous Milestone Result
 
@@ -91,9 +91,22 @@ The milestone now delivers:
 - application-aware curation that closes the read/write gap
 - a benchmarkable proof/evaluation harness for the trusted-context claim
 
+## Current Milestone: v1.4 Self-Healing Colony
+
+**Goal:** Give Aether the ability to diagnose and repair its own colony data, ceremony integrity, and runtime state — reducing manual intervention and preventing the documentation gaps we saw in v1.3.
+
+**Target features:**
+
+- **Medic Ant** (`/ant:medic`, `aether medic`) — Diagnose colony health across all data files
+- **Colony Health Scan** — Detect corrupted JSON, stale state, missing artifacts, wrapper/runtime drift
+- **Auto-Repair** — Fix common issues (clear stale spawns, rebuild indexes, reconcile orphaned worktrees)
+- **Medic Skill** — `.aether/skills/colony/medic.md` documenting healthy state for every colony file
+- **Ceremony Integrity Check** — Verify stage markers, emoji consistency, context-clear guidance
+- **Trace Diagnostic** — Use trace logs to debug issues in other repos without access
+
 ## Next Move
 
-`v1.3` is now being defined. The next move is to execute the roadmap phases once requirements and planning are complete.
+Define requirements and roadmap for v1.4, then execute phases.
 
 ## Evolution
 
