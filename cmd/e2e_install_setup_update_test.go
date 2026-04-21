@@ -141,6 +141,23 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 			t.Errorf("hub workers.md content mismatch\ngot:  %s\nwant: %s", string(content), string(workersV1))
 		}
 
+		// Verify wrapper command mirrors were published into the hub locations
+		// that `aether update` reads from.
+		hubClaudeCmd := filepath.Join(hubSystem, "commands", "claude", "init.md")
+		if _, err := os.Stat(hubClaudeCmd); os.IsNotExist(err) {
+			t.Error("hub claude command mirror not created")
+		}
+
+		hubOpenCodeCmd := filepath.Join(hubSystem, "commands", "opencode", "init.md")
+		if _, err := os.Stat(hubOpenCodeCmd); os.IsNotExist(err) {
+			t.Error("hub opencode command mirror not created")
+		}
+
+		hubOpenCodeAgent := filepath.Join(hubSystem, "agents", "builder.md")
+		if _, err := os.Stat(hubOpenCodeAgent); os.IsNotExist(err) {
+			t.Error("hub opencode agent mirror not created")
+		}
+
 		// Verify claude commands were installed
 		claudeCmdDest := filepath.Join(homeDir, ".claude", "commands", "ant", "init.md")
 		if _, err := os.Stat(claudeCmdDest); os.IsNotExist(err) {

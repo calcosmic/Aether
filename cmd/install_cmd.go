@@ -573,6 +573,40 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 		result["errors"] = append(existing, codexSyncResult.errors...)
 	}
 
+	// Sync wrapper commands and OpenCode agents into the hub layout that
+	// `aether update` reads from. The `.aether/commands/*.yaml` specs remain in
+	// system/commands/, while the generated wrapper surfaces live in subdirs.
+	for _, pair := range []struct {
+		srcDir  string
+		destDir string
+	}{
+		{
+			srcDir:  filepath.Join(packageDir, ".claude", "commands", "ant"),
+			destDir: filepath.Join(systemDir, "commands", "claude"),
+		},
+		{
+			srcDir:  filepath.Join(packageDir, ".opencode", "commands", "ant"),
+			destDir: filepath.Join(systemDir, "commands", "opencode"),
+		},
+		{
+			srcDir:  filepath.Join(packageDir, ".opencode", "agents"),
+			destDir: filepath.Join(systemDir, "agents"),
+		},
+	} {
+		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, nil, nil)
+		hubSyncResult.copied += syncRes.copied
+		hubSyncResult.skipped += syncRes.skipped
+		hubSyncResult.removed = append(hubSyncResult.removed, syncRes.removed...)
+		if len(syncRes.errors) > 0 {
+			existing, _ := result["errors"].([]string)
+			result["errors"] = append(existing, syncRes.errors...)
+		}
+	}
+
+	result["copied"] = hubSyncResult.copied
+	result["skipped"] = hubSyncResult.skipped
+	result["removed"] = len(hubSyncResult.removed)
+
 	// Create registry.json if it doesn't exist
 	registryPath := filepath.Join(hubDir, "registry.json")
 	if _, err := os.Stat(registryPath); os.IsNotExist(err) {
