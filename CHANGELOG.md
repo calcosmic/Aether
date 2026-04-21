@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.19] - 2026-04-22
+
+Bootstrap asset-name compatibility for published npm installs.
+
+### Fixed
+- the npm bootstrap now requests the real GitHub release archive names (`Aether_<version>_<os>_<arch>.tar.gz`) instead of the old lowercase `aether_v...` pattern
+- checksum downloads now follow the actual release asset name `checksums.txt`
+- Windows bootstrap extraction now matches the shipped tar.gz release archives instead of assuming zip assets
+
 ## [1.0.18] - 2026-04-22
 
 Unified release versioning, npm bootstrap publishing, and operator documentation.

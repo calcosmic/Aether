@@ -123,12 +123,12 @@ function detectPlatform(nodePlatform = process.platform, nodeArch = process.arch
 }
 
 function archiveFilename(version, platform) {
-  const ext = platform.os === "windows" ? ".zip" : ".tar.gz";
-  return `aether_v${version}_${platform.os}_${platform.arch}${ext}`;
+  return `Aether_${version}_${platform.os}_${platform.arch}.tar.gz`;
 }
 
 function checksumsFilename(version) {
-  return `aether_v${version}_checksums.txt`;
+  void version;
+  return "checksums.txt";
 }
 
 function releaseBaseURL(version) {
@@ -296,21 +296,6 @@ async function sha256File(filePath) {
 
 function extractArchive(archivePath, extractDir, platform) {
   fs.mkdirSync(extractDir, { recursive: true });
-  if (platform.os === "windows") {
-    execFileSync(
-      "powershell.exe",
-      [
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        `Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${extractDir.replace(/'/g, "''")}' -Force`
-      ],
-      { stdio: "ignore" }
-    );
-    return;
-  }
-
   execFileSync("tar", ["-xzf", archivePath, "-C", extractDir], {
     stdio: "ignore"
   });

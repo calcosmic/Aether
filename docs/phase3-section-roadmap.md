@@ -1,6 +1,6 @@
 ## Roadmap
 
-### v1.0.18 -- Released (Current)
+### v1.0.19 -- Released (Current)
 
 - 25 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, and more)
 - 50 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow
@@ -10,6 +10,7 @@
 - Autopilot mode via `/ant:run` on Claude/OpenCode and `aether run` on Codex
 - Claude Code, OpenCode, and best-effort Codex CLI support
 - One public release version now spans the Go runtime, npm bootstrap package, and platform docs
+- Published npm installs now resolve the real GitHub release archive names and checksums correctly
 - Go binary distribution across Linux, macOS, and Windows (amd64 + arm64)
 
 ### Near-Term

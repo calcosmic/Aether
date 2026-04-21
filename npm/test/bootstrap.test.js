@@ -19,14 +19,14 @@ test("detectPlatform rejects unsupported platforms", () => {
 
 test("archive helpers match goreleaser naming", () => {
   const platform = { os: "darwin", arch: "arm64" };
-  assert.equal(bootstrap.archiveFilename("1.0.17", platform), "aether_v1.0.17_darwin_arm64.tar.gz");
+  assert.equal(bootstrap.archiveFilename("1.2.3", platform), "Aether_1.2.3_darwin_arm64.tar.gz");
   assert.equal(
-    bootstrap.archiveURL("1.0.17", platform),
-    "https://github.com/calcosmic/Aether/releases/download/v1.0.17/aether_v1.0.17_darwin_arm64.tar.gz"
+    bootstrap.archiveURL("1.2.3", platform),
+    "https://github.com/calcosmic/Aether/releases/download/v1.2.3/Aether_1.2.3_darwin_arm64.tar.gz"
   );
   assert.equal(
-    bootstrap.checksumsURL("1.0.17"),
-    "https://github.com/calcosmic/Aether/releases/download/v1.0.17/aether_v1.0.17_checksums.txt"
+    bootstrap.checksumsURL("1.2.3"),
+    "https://github.com/calcosmic/Aether/releases/download/v1.2.3/checksums.txt"
   );
 });
 
@@ -44,13 +44,13 @@ test("bootstrap defaults to the published package version", () => {
 
 test("parseChecksum extracts the right checksum line", () => {
   const content = [
-    "aaa111  aether_v1.0.17_linux_amd64.tar.gz",
-    "bbb222  aether_v1.0.17_darwin_arm64.tar.gz"
+    "aaa111  Aether_1.2.3_linux_amd64.tar.gz",
+    "bbb222  Aether_1.2.3_darwin_arm64.tar.gz"
   ].join("\n");
-  assert.equal(bootstrap.parseChecksum(content, "aether_v1.0.17_darwin_arm64.tar.gz"), "bbb222");
+  assert.equal(bootstrap.parseChecksum(content, "Aether_1.2.3_darwin_arm64.tar.gz"), "bbb222");
 });
 
 test("parseVersionOutput handles JSON and plain text", () => {
-  assert.equal(bootstrap.parseVersionOutput("{\"ok\":true,\"result\":\"1.0.17\"}"), "1.0.17");
-  assert.equal(bootstrap.parseVersionOutput("v1.0.17"), "1.0.17");
+  assert.equal(bootstrap.parseVersionOutput("{\"ok\":true,\"result\":\"1.2.3\"}"), "1.2.3");
+  assert.equal(bootstrap.parseVersionOutput("v1.2.3"), "1.2.3");
 });
