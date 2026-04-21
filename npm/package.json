@@ -31,7 +31,7 @@
     "node": ">=18"
   },
   "bin": {
-    "aether": "./bin/aether.js"
+    "aether": "bin/aether.js"
   },
   "files": [
     "bin",
