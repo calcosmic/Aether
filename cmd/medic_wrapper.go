@@ -27,18 +27,19 @@ type wrapperSurface struct {
 }
 
 // scanWrapperParity checks that command and agent file counts match across all surfaces.
+// Uses the repo root since wrapper files live at repo root, not inside .aether/data/.
 func scanWrapperParity(fc *fileChecker) []HealthIssue {
 	var issues []HealthIssue
 
 	surfaces := []wrapperSurface{
-		{"YAML commands", filepath.Join(fc.basePath, ".aether", "commands", "*.yaml"), expectedYAMLCommands},
-		{"Claude commands", filepath.Join(fc.basePath, ".claude", "commands", "ant", "*.md"), expectedClaudeCommands},
-		{"OpenCode commands", filepath.Join(fc.basePath, ".opencode", "commands", "ant", "*.md"), expectedOpenCodeCommands},
-		{"Codex agents", filepath.Join(fc.basePath, ".codex", "agents", "*.toml"), expectedCodexAgents},
-		{"Claude agents", filepath.Join(fc.basePath, ".claude", "agents", "ant", "*.md"), expectedClaudeAgents},
-		{"OpenCode agents", filepath.Join(fc.basePath, ".opencode", "agents", "*.md"), expectedOpenCodeAgents},
-		{"Claude mirror", filepath.Join(fc.basePath, ".aether", "agents-claude", "*.md"), expectedClaudeMirror},
-		{"Codex mirror", filepath.Join(fc.basePath, ".aether", "agents-codex", "*.toml"), expectedCodexMirror},
+		{"YAML commands", filepath.Join(fc.repoRoot, ".aether", "commands", "*.yaml"), expectedYAMLCommands},
+		{"Claude commands", filepath.Join(fc.repoRoot, ".claude", "commands", "ant", "*.md"), expectedClaudeCommands},
+		{"OpenCode commands", filepath.Join(fc.repoRoot, ".opencode", "commands", "ant", "*.md"), expectedOpenCodeCommands},
+		{"Codex agents", filepath.Join(fc.repoRoot, ".codex", "agents", "*.toml"), expectedCodexAgents},
+		{"Claude agents", filepath.Join(fc.repoRoot, ".claude", "agents", "ant", "*.md"), expectedClaudeAgents},
+		{"OpenCode agents", filepath.Join(fc.repoRoot, ".opencode", "agents", "*.md"), expectedOpenCodeAgents},
+		{"Claude mirror", filepath.Join(fc.repoRoot, ".aether", "agents-claude", "*.md"), expectedClaudeMirror},
+		{"Codex mirror", filepath.Join(fc.repoRoot, ".aether", "agents-codex", "*.toml"), expectedCodexMirror},
 	}
 
 	// Count each surface and check against expected
@@ -76,7 +77,7 @@ func scanWrapperParity(fc *fileChecker) []HealthIssue {
 	}
 
 	// Colony skills count
-	colonySkillsPattern := filepath.Join(fc.basePath, ".aether", "skills", "colony", "*", "SKILL.md")
+	colonySkillsPattern := filepath.Join(fc.repoRoot, ".aether", "skills", "colony", "*", "SKILL.md")
 	colonySkillCount := countFilesInDir(colonySkillsPattern)
 	if colonySkillCount != expectedColonySkills {
 		issues = append(issues, issueWarning("wrapper", "colony-skills",
@@ -84,7 +85,7 @@ func scanWrapperParity(fc *fileChecker) []HealthIssue {
 	}
 
 	// Domain skills count
-	domainSkillsPattern := filepath.Join(fc.basePath, ".aether", "skills", "domain", "*", "SKILL.md")
+	domainSkillsPattern := filepath.Join(fc.repoRoot, ".aether", "skills", "domain", "*", "SKILL.md")
 	domainSkillCount := countFilesInDir(domainSkillsPattern)
 	if domainSkillCount != expectedDomainSkills {
 		issues = append(issues, issueWarning("wrapper", "domain-skills",

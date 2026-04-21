@@ -22,15 +22,18 @@ type ScannerResult struct {
 
 // fileChecker wraps file loading with error-to-HealthIssue conversion.
 type fileChecker struct {
-	basePath     string
+	basePath     string // .aether/data/ directory
+	repoRoot     string // repository root (derived from basePath)
 	filesChecked int
 	filesHealthy int
 	issues       []HealthIssue
 }
 
-// newFileChecker creates a fileChecker rooted at basePath.
+// newFileChecker creates a fileChecker rooted at the .aether/data/ path.
+// repoRoot is derived as two levels up from basePath.
 func newFileChecker(basePath string) *fileChecker {
-	return &fileChecker{basePath: basePath}
+	repoRoot := filepath.Dir(filepath.Dir(basePath)) // .aether/data/ -> repo root
+	return &fileChecker{basePath: basePath, repoRoot: repoRoot}
 }
 
 // checkJSONFile attempts to load and parse a JSON file.

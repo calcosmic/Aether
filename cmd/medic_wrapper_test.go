@@ -116,7 +116,7 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 		writeFile(t, aetherDir, fmt.Sprintf("skills/domain/%s/SKILL.md", name), []byte("test"))
 	}
 
-	fc := newFileChecker(dir)
+	fc := newFileChecker(filepath.Join(dir, ".aether", "data"))
 	issues := scanWrapperParity(fc)
 
 	// Healthy setup should produce no warnings or criticals
@@ -144,7 +144,7 @@ func TestScanWrapperParityMismatch(t *testing.T) {
 		writeFile(t, aetherDir, fmt.Sprintf("commands/cmd%d.yaml", i), []byte("test"))
 	}
 
-	fc := newFileChecker(dir)
+	fc := newFileChecker(filepath.Join(dir, ".aether", "data"))
 	issues := scanWrapperParity(fc)
 
 	found := false
@@ -192,7 +192,7 @@ func TestScanWrapperParityCrossSurfaceMismatch(t *testing.T) {
 		writeFile(t, opencodeDir, fmt.Sprintf("commands/ant/cmd%d.md", i), []byte("test"))
 	}
 
-	fc := newFileChecker(dir)
+	fc := newFileChecker(filepath.Join(dir, ".aether", "data"))
 	issues := scanWrapperParity(fc)
 
 	// Should have cross-surface command count mismatch warning
