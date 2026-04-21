@@ -212,3 +212,50 @@ func TestMedicExitCodes(t *testing.T) {
 		})
 	}
 }
+
+func TestMedicReportRepairLogSection(t *testing.T) {
+	issues := []HealthIssue{
+		{Severity: "warning", Category: "pheromone", Message: "Stale signal", Fixable: true},
+		{Severity: "info", Category: "session", Message: "Old session", Fixable: false},
+	}
+
+	opts := MedicOptions{Fix: true, Force: false, JSON: false, Deep: false}
+	output := renderMedicReport(issues, opts, nil)
+
+	if !strings.Contains(output, "Repair Log") {
+		t.Errorf("fix mode report missing Repair Log section\n%s", output)
+	}
+	if !strings.Contains(output, "Repaired 1 issue") {
+		t.Errorf("fix mode report missing repair count\n%s", output)
+	}
+}
+
+func TestMedicReportEmptyIssues(t *testing.T) {
+	opts := MedicOptions{Fix: false, JSON: false, Deep: false}
+	output := renderMedicReport(nil, opts, nil)
+
+	if !strings.Contains(output, "healthy") {
+		t.Errorf("empty report missing healthy message\n%s", output)
+	}
+	if !strings.Contains(output, "No action needed") {
+		t.Errorf("empty report missing next-steps guidance\n%s", output)
+	}
+}
+
+func TestMedicReportNextStepsCritical(t *testing.T) {
+	issues := []HealthIssue{{Severity: "critical", Message: "broken"}}
+	opts := MedicOptions{Fix: false}
+	output := renderMedicReport(issues, opts, nil)
+	if !strings.Contains(output, "aether medic --fix") {
+		t.Errorf("critical report missing fix guidance\n%s", output)
+	}
+}
+
+func TestMedicReportNextStepsWarning(t *testing.T) {
+	issues := []HealthIssue{{Severity: "warning", Message: "stale"}}
+	opts := MedicOptions{Fix: false}
+	output := renderMedicReport(issues, opts, nil)
+	if !strings.Contains(output, "Review warnings") {
+		t.Errorf("warning report missing review guidance\n%s", output)
+	}
+}
