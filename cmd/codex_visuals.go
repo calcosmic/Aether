@@ -152,6 +152,7 @@ var commandEmojiMap = map[string]string{
 	"export-signals":    "📤",
 	"import-signals":    "📥",
 	"swarm-display":     "🔥",
+	"medic":             "🩹",
 }
 
 func commandEmoji(command string) string {
