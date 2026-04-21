@@ -611,6 +611,87 @@ func TestContextCapsuleCompact(t *testing.T) {
 	}
 }
 
+func TestContextCapsuleCompactPreservesRisksOverDecisions(t *testing.T) {
+	saveGlobalsCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var fixture protectedCapsuleFixture
+	loadContextWeightingFixture(t, "protected-capsule.json", &fixture)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	goal := fixture.Goal
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: "in_progress"},
+			},
+		},
+		Memory: colony.Memory{
+			Decisions: []colony.Decision{
+				{ID: "d1", Phase: 1, Claim: fixture.DecisionClaims[0], Rationale: "reason", Timestamp: now},
+				{ID: "d2", Phase: 1, Claim: fixture.DecisionClaims[1], Rationale: "reason", Timestamp: now},
+				{ID: "d3", Phase: 1, Claim: fixture.DecisionClaims[2], Rationale: "reason", Timestamp: now},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	phase := 1
+	flags := colony.FlagsFile{
+		Version: "1.0",
+		Decisions: []colony.FlagEntry{
+			{ID: "f1", Type: "blocker", Description: fixture.RiskText, Phase: &phase, Source: "builder", CreatedAt: now, Resolved: false},
+		},
+	}
+	if err := s.SaveJSON("flags.json", flags); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"context-capsule", "--compact", "--max-words", "35"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("context-capsule returned error: %v", err)
+	}
+
+	envelope := parseEnvelopeCmd(t, buf.String())
+	result := envelope["result"].(map[string]interface{})
+	promptSection := result["prompt_section"].(string)
+
+	if !strings.Contains(promptSection, fixture.RiskText) {
+		t.Fatalf("compact capsule should preserve blocker/risk text under budget pressure:\n%s", promptSection)
+	}
+
+	preserved := result["preserved_sections"].([]interface{})
+	foundRisks := false
+	for _, entry := range preserved {
+		item := entry.(map[string]interface{})
+		if item["name"] == "risks" {
+			foundRisks = true
+			break
+		}
+	}
+	if !foundRisks {
+		t.Fatalf("compact capsule should mark risks as preserved under budget pressure: %+v", preserved)
+	}
+	if strings.Index(promptSection, "Open risks:") > strings.Index(promptSection, "Recent decisions:") {
+		t.Fatalf("compact capsule should surface protected risk context before lower-value decisions:\n%s", promptSection)
+	}
+}
+
 func TestContextCapsuleWithSignals(t *testing.T) {
 	saveGlobalsCmd(t)
 	var buf bytes.Buffer

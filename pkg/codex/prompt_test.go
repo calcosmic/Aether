@@ -320,6 +320,40 @@ developer_instructions = '''
 	}
 }
 
+func TestAssemblePrompt_WeightedContextStillBeatsOptionalSections(t *testing.T) {
+	t.Setenv(promptBudgetEnvVar, "220")
+
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "agent.toml")
+	content := `name = "aether-builder"
+description = "Builder agent"
+
+developer_instructions = '''
+[SECTION:INSTRUCTIONS]
+` + strings.Repeat("I", 70) + `
+'''
+`
+	if err := os.WriteFile(tomlPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test TOML: %v", err)
+	}
+
+	context := "[SECTION:CONTEXT]\n[WEIGHTED:0.91]\n" + strings.Repeat("C", 95)
+	skill := "[SECTION:SKILL]\n" + strings.Repeat("S", 120)
+	brief := "[SECTION:BRIEF]\n" + strings.Repeat("B", 60)
+
+	prompt, err := AssemblePrompt(tomlPath, context, skill, "", brief)
+	if err != nil {
+		t.Fatalf("AssemblePrompt returned error: %v", err)
+	}
+
+	if !strings.Contains(prompt, "[SECTION:CONTEXT]") {
+		t.Fatal("weighted runtime context should survive ahead of optional sections")
+	}
+	if strings.Contains(prompt, "[SECTION:SKILL]") {
+		t.Fatal("optional skill section should still trim before weighted context")
+	}
+}
+
 func TestAssemblePrompt_TruncatesRequiredSectionsAsLastResort(t *testing.T) {
 	t.Setenv(promptBudgetEnvVar, "120")
 

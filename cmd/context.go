@@ -19,17 +19,81 @@ import (
 // ContextCapsuleOutput is the typed output for context-capsule (DIFF-02).
 // The shell version uses jq string interpolation; this uses typed structs with JSON marshaling.
 type ContextCapsuleOutput struct {
-	Exists        bool   `json:"exists"`
-	State         string `json:"state"`
-	NextAction    string `json:"next_action"`
-	WordCount     int    `json:"word_count"`
-	PromptSection string `json:"prompt_section"`
-	Goal          string `json:"goal"`
-	Phase         int    `json:"phase"`
-	TotalPhases   int    `json:"total_phases"`
-	PhaseName     string `json:"phase_name"`
-	Warnings      []string                    `json:"warnings,omitempty"`
-	Integrity     []colony.PromptIntegrityRecord `json:"integrity,omitempty"`
+	Exists            bool                            `json:"exists"`
+	State             string                          `json:"state"`
+	NextAction        string                          `json:"next_action"`
+	WordCount         int                             `json:"word_count"`
+	PromptSection     string                          `json:"prompt_section"`
+	Goal              string                          `json:"goal"`
+	Phase             int                             `json:"phase"`
+	TotalPhases       int                             `json:"total_phases"`
+	PhaseName         string                          `json:"phase_name"`
+	Warnings          []string                        `json:"warnings,omitempty"`
+	Integrity         []colony.PromptIntegrityRecord  `json:"integrity,omitempty"`
+	IncludedSections  []ContextCapsuleSectionDecision `json:"included_sections,omitempty"`
+	TrimmedSections   []ContextCapsuleSectionDecision `json:"trimmed_sections,omitempty"`
+	PreservedSections []ContextCapsuleSectionDecision `json:"preserved_sections,omitempty"`
+}
+
+type ContextCapsuleSectionDecision struct {
+	Name           string                       `json:"name"`
+	Title          string                       `json:"title"`
+	Source         string                       `json:"source"`
+	BaseTrustClass colony.PromptTrustClass      `json:"base_trust_class,omitempty"`
+	TrustClass     colony.PromptTrustClass      `json:"trust_class,omitempty"`
+	Action         colony.PromptIntegrityAction `json:"action,omitempty"`
+	Score          colony.ContextScoreBreakdown `json:"score_breakdown,omitempty"`
+	Preserved      bool                         `json:"preserved,omitempty"`
+	PreserveReason string                       `json:"preserve_reason,omitempty"`
+	TrimReason     string                       `json:"trim_reason,omitempty"`
+	Decision       string                       `json:"decision,omitempty"`
+}
+
+type contextCapsuleSection struct {
+	name              string
+	title             string
+	source            string
+	content           string
+	freshnessScore    float64
+	confirmationScore float64
+	relevanceScore    float64
+	protected         bool
+	preserveReason    string
+}
+
+func (s contextCapsuleSection) rankingCandidate(assessment colony.PromptIntegrityAssessment) colony.ContextCandidate {
+	return colony.ContextCandidate{
+		Name:              s.name,
+		Title:             s.title,
+		Source:            s.source,
+		Content:           s.content,
+		Cost:              wordCount(s.content),
+		BudgetMetric:      "words",
+		BaseTrustClass:    assessment.BaseTrustClass,
+		TrustClass:        assessment.TrustClass,
+		Action:            assessment.Action,
+		FreshnessScore:    s.freshnessScore,
+		ConfirmationScore: s.confirmationScore,
+		RelevanceScore:    s.relevanceScore,
+		Protected:         s.protected,
+		PreserveReason:    s.preserveReason,
+	}
+}
+
+func contextCapsuleDecisionFromRanked(item colony.RankedContextCandidate) ContextCapsuleSectionDecision {
+	return ContextCapsuleSectionDecision{
+		Name:           item.Name,
+		Title:          item.Title,
+		Source:         item.Source,
+		BaseTrustClass: item.BaseTrustClass,
+		TrustClass:     item.TrustClass,
+		Action:         item.Action,
+		Score:          item.Score,
+		Preserved:      item.Preserved,
+		PreserveReason: item.PreserveReason,
+		TrimReason:     item.TrimReason,
+		Decision:       item.Decision,
+	}
 }
 
 // resumeDashboardCmd returns a read-only session recovery dashboard.
@@ -320,11 +384,14 @@ var contextCapsuleCmd = &cobra.Command{
 func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks, maxWords int) ContextCapsuleOutput {
 	if store == nil {
 		return ContextCapsuleOutput{
-			Exists:        false,
-			WordCount:     0,
-			PromptSection: "",
-			Warnings:      []string{},
-			Integrity:     []colony.PromptIntegrityRecord{},
+			Exists:            false,
+			WordCount:         0,
+			PromptSection:     "",
+			Warnings:          []string{},
+			Integrity:         []colony.PromptIntegrityRecord{},
+			IncludedSections:  []ContextCapsuleSectionDecision{},
+			TrimmedSections:   []ContextCapsuleSectionDecision{},
+			PreservedSections: []ContextCapsuleSectionDecision{},
 		}
 	}
 	if maxSignals < 1 {
@@ -347,14 +414,18 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 	statePath := filepath.Join(store.BasePath(), "COLONY_STATE.json")
 	if err := sc.Load(statePath, &state); err != nil {
 		return ContextCapsuleOutput{
-			Exists:        false,
-			WordCount:     0,
-			PromptSection: "",
-			Warnings:      []string{},
-			Integrity:     []colony.PromptIntegrityRecord{},
+			Exists:            false,
+			WordCount:         0,
+			PromptSection:     "",
+			Warnings:          []string{},
+			Integrity:         []colony.PromptIntegrityRecord{},
+			IncludedSections:  []ContextCapsuleSectionDecision{},
+			TrimmedSections:   []ContextCapsuleSectionDecision{},
+			PreservedSections: []ContextCapsuleSectionDecision{},
 		}
 	}
 
+	now := time.Now().UTC()
 	goal := "No goal set"
 	if state.Goal != nil {
 		goal = *state.Goal
@@ -371,18 +442,17 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 	phaseName := lookupPhaseName(state, phase)
 	nextAction := computeNextAction(stateStr, phase, totalPhases)
 
-	decisionTexts := extractDecisionTexts(state.Memory.Decisions, maxDecisions)
+	selectedDecisions := selectRecentDecisions(state.Memory.Decisions, maxDecisions)
+	decisionTexts := make([]string, 0, len(selectedDecisions))
+	for _, decision := range selectedDecisions {
+		decisionTexts = append(decisionTexts, truncateString(decision.Claim, 160))
+	}
 	riskTexts := extractRiskTexts(maxRisks)
 	pf, _ := loadPheromonesOnce(store, sc)
+	activeSignals := filterSignalsForPrompt(pf.Signals, now)
 	signalTexts := extractSignalTextsFrom(&pf, maxSignals)
 	summaryTexts := extractRollingSummary(3)
-
-	type capsuleSection struct {
-		name    string
-		title   string
-		source  string
-		content string
-	}
+	riskEntries := extractRiskEntries(maxRisks)
 
 	flagsSource := filepath.Join(store.BasePath(), "flags.json")
 	if _, err := os.Stat(flagsSource); err != nil {
@@ -392,13 +462,19 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 		}
 	}
 
-	sections := []capsuleSection{
+	stateProtected, statePreserveReason := protectedSectionPolicy("state")
+	sections := []contextCapsuleSection{
 		{
 			name:   "state",
 			title:  "Context Capsule State",
 			source: statePath,
 			content: fmt.Sprintf("Goal: %s\nState: %s\nPhase: %d/%d - %s\nNext: %s\n",
 				goal, stateStr, phase, totalPhases, phaseName, nextAction),
+			freshnessScore:    1.0,
+			confirmationScore: 1.0,
+			relevanceScore:    sectionRelevanceScore("state"),
+			protected:         stateProtected,
+			preserveReason:    statePreserveReason,
 		},
 	}
 	if len(signalTexts) > 0 {
@@ -407,11 +483,21 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 		for _, s := range signalTexts {
 			fmt.Fprintf(&sb, "- %s\n", s)
 		}
-		sections = append(sections, capsuleSection{
-			name:    "signals",
-			title:   "Active Signals",
-			source:  filepath.Join(store.BasePath(), "pheromones.json"),
-			content: sb.String(),
+		signalsProtected, signalsPreserveReason := protectedSectionPolicy("signals")
+		signalTimestamps := make([]string, 0, len(activeSignals))
+		for _, sig := range activeSignals {
+			signalTimestamps = append(signalTimestamps, sig.CreatedAt)
+		}
+		sections = append(sections, contextCapsuleSection{
+			name:              "signals",
+			title:             "Active Signals",
+			source:            filepath.Join(store.BasePath(), "pheromones.json"),
+			content:           sb.String(),
+			freshnessScore:    latestFreshnessScore(now, 0.85, signalTimestamps...),
+			confirmationScore: confidenceScoreFromSignals(activeSignals, now),
+			relevanceScore:    sectionRelevanceScore("signals"),
+			protected:         signalsProtected,
+			preserveReason:    signalsPreserveReason,
 		})
 	}
 	if len(decisionTexts) > 0 {
@@ -420,11 +506,14 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 		for _, d := range decisionTexts {
 			fmt.Fprintf(&sb, "- %s\n", d)
 		}
-		sections = append(sections, capsuleSection{
-			name:    "decisions",
-			title:   "Recent Decisions",
-			source:  statePath,
-			content: sb.String(),
+		sections = append(sections, contextCapsuleSection{
+			name:              "decisions",
+			title:             "Recent Decisions",
+			source:            statePath,
+			content:           sb.String(),
+			freshnessScore:    latestDecisionFreshness(now, selectedDecisions),
+			confirmationScore: confidenceScoreFromDecisions(selectedDecisions, state.CurrentPhase),
+			relevanceScore:    phaseScopedRelevance(sectionRelevanceScore("decisions"), state.CurrentPhase, decisionPhases(selectedDecisions)...),
 		})
 	}
 	if len(riskTexts) > 0 {
@@ -433,11 +522,21 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 		for _, r := range riskTexts {
 			fmt.Fprintf(&sb, "- %s\n", r)
 		}
-		sections = append(sections, capsuleSection{
-			name:    "risks",
-			title:   "Open Risks",
-			source:  flagsSource,
-			content: sb.String(),
+		risksProtected, risksPreserveReason := protectedSectionPolicy("risks")
+		riskTimestamps := make([]string, 0, len(riskEntries))
+		for _, risk := range riskEntries {
+			riskTimestamps = append(riskTimestamps, risk.CreatedAt)
+		}
+		sections = append(sections, contextCapsuleSection{
+			name:              "risks",
+			title:             "Open Risks",
+			source:            flagsSource,
+			content:           sb.String(),
+			freshnessScore:    latestFreshnessScore(now, 0.85, riskTimestamps...),
+			confirmationScore: 1.0,
+			relevanceScore:    sectionRelevanceScore("risks"),
+			protected:         risksProtected,
+			preserveReason:    risksPreserveReason,
 		})
 	}
 	if len(summaryTexts) > 0 {
@@ -446,11 +545,15 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 		for _, s := range summaryTexts {
 			fmt.Fprintf(&sb, "- %s\n", s)
 		}
-		sections = append(sections, capsuleSection{
-			name:    "recent_narrative",
-			title:   "Recent Narrative",
-			source:  filepath.Join(store.BasePath(), "rolling-summary.log"),
-			content: sb.String(),
+		summaryPath := filepath.Join(store.BasePath(), "rolling-summary.log")
+		sections = append(sections, contextCapsuleSection{
+			name:              "recent_narrative",
+			title:             "Recent Narrative",
+			source:            summaryPath,
+			content:           sb.String(),
+			freshnessScore:    latestSummaryFreshness(summaryPath, now, 0.40),
+			confirmationScore: 0.25,
+			relevanceScore:    sectionRelevanceScore("recent_narrative"),
 		})
 	}
 
@@ -458,6 +561,7 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 	b.WriteString("--- CONTEXT CAPSULE ---\n")
 	warnings := make([]string, 0, len(sections))
 	integrity := make([]colony.PromptIntegrityRecord, 0, len(sections))
+	allowedCandidates := make([]colony.ContextCandidate, 0, len(sections))
 	for _, sec := range sections {
 		assessment := colony.AssessPromptSource(sec.source, sec.content)
 		integrity = append(integrity, assessment.Record(sec.name, sec.title, sec.source))
@@ -465,34 +569,47 @@ func buildContextCapsuleOutput(compact bool, maxSignals, maxDecisions, maxRisks,
 			warnings = append(warnings, assessment.Warning(sec.name, sec.source))
 			continue
 		}
-		b.WriteString(sec.content)
+		allowedCandidates = append(allowedCandidates, sec.rankingCandidate(assessment))
 	}
 
+	assemblyBudget := maxWords
+	if !compact {
+		assemblyBudget = maxWords * 4
+	}
+	ranking := colony.RankContextCandidates(allowedCandidates, assemblyBudget)
+	includedSections := make([]ContextCapsuleSectionDecision, 0, len(ranking.Included))
+	trimmedSections := make([]ContextCapsuleSectionDecision, 0, len(ranking.Trimmed))
+	preservedSections := make([]ContextCapsuleSectionDecision, 0, len(ranking.Preserved))
+	for _, item := range ranking.Included {
+		b.WriteString(item.Content)
+		includedSections = append(includedSections, contextCapsuleDecisionFromRanked(item))
+	}
+	for _, item := range ranking.Trimmed {
+		trimmedSections = append(trimmedSections, contextCapsuleDecisionFromRanked(item))
+	}
+	for _, item := range ranking.Preserved {
+		preservedSections = append(preservedSections, contextCapsuleDecisionFromRanked(item))
+	}
 	b.WriteString("--- END CONTEXT CAPSULE ---\n")
 
 	promptSection := b.String()
 	wc := wordCount(promptSection)
-	if compact && wc > maxWords {
-		promptSection = trimSection(promptSection, "Recent narrative:")
-		wc = wordCount(promptSection)
-	}
-	if compact && wc > maxWords {
-		promptSection = trimSection(promptSection, "Open risks:")
-		wc = wordCount(promptSection)
-	}
 
 	return ContextCapsuleOutput{
-		Exists:        true,
-		State:         stateStr,
-		NextAction:    nextAction,
-		WordCount:     wc,
-		PromptSection: promptSection,
-		Goal:          goal,
-		Phase:         phase,
-		TotalPhases:   totalPhases,
-		PhaseName:     phaseName,
-		Warnings:      warnings,
-		Integrity:     integrity,
+		Exists:            true,
+		State:             stateStr,
+		NextAction:        nextAction,
+		WordCount:         wc,
+		PromptSection:     promptSection,
+		Goal:              goal,
+		Phase:             phase,
+		TotalPhases:       totalPhases,
+		PhaseName:         phaseName,
+		Warnings:          warnings,
+		Integrity:         integrity,
+		IncludedSections:  includedSections,
+		TrimmedSections:   trimmedSections,
+		PreservedSections: preservedSections,
 	}
 }
 
@@ -1133,6 +1250,18 @@ func lookupPhaseName(state colony.ColonyState, phaseID int) string {
 
 // extractDecisionTexts returns the last N decision claims (reversed), truncated.
 func extractDecisionTexts(decisions []colony.Decision, n int) []string {
+	selected := selectRecentDecisions(decisions, n)
+	if len(selected) == 0 {
+		return nil
+	}
+	result := make([]string, len(selected))
+	for i, decision := range selected {
+		result[i] = truncateString(decision.Claim, 160)
+	}
+	return result
+}
+
+func selectRecentDecisions(decisions []colony.Decision, n int) []colony.Decision {
 	total := len(decisions)
 	if total == 0 {
 		return nil
@@ -1140,32 +1269,44 @@ func extractDecisionTexts(decisions []colony.Decision, n int) []string {
 	if n > total {
 		n = total
 	}
-	result := make([]string, n)
+	result := make([]colony.Decision, n)
 	for i := 0; i < n; i++ {
-		result[i] = truncateString(decisions[total-1-i].Claim, 160)
+		result[i] = decisions[total-1-i]
 	}
 	return result
 }
 
 // extractRiskTexts loads flags.json and returns descriptions of unresolved blockers/issues.
 func extractRiskTexts(maxRisks int) []string {
+	riskEntries := extractRiskEntries(maxRisks)
+	if len(riskEntries) == 0 {
+		return nil
+	}
+
+	risks := make([]string, 0, len(riskEntries))
+	for _, risk := range riskEntries {
+		risks = append(risks, truncateString(risk.Description, 160))
+	}
+	return risks
+}
+
+func extractRiskEntries(maxRisks int) []colony.FlagEntry {
 	var flags colony.FlagsFile
 	if err := store.LoadJSON("flags.json", &flags); err != nil {
-		// Try alternate name
 		if err2 := store.LoadJSON("pending-decisions.json", &flags); err2 != nil {
 			return nil
 		}
 	}
 
-	var risks []string
-	for _, f := range flags.Decisions {
-		if f.Resolved {
+	risks := make([]colony.FlagEntry, 0, maxRisks)
+	for _, flag := range flags.Decisions {
+		if flag.Resolved {
 			continue
 		}
-		if f.Type != "blocker" && f.Type != "issue" {
+		if flag.Type != "blocker" && flag.Type != "issue" {
 			continue
 		}
-		risks = append(risks, truncateString(f.Description, 160))
+		risks = append(risks, flag)
 		if len(risks) >= maxRisks {
 			break
 		}
@@ -1378,49 +1519,7 @@ func readUserPreferences(filePath string) []string {
 // readHiveWisdom reads hive wisdom entries, falling back to eternal memory.
 // Returns up to limit entries as simple text strings for prompt assembly.
 func readHiveWisdom(hubDir string, limit int, fallbacks *[]string) []string {
-	// Try hive first
-	wisdomPath := filepath.Join(hubDir, "hive", "wisdom.json")
-	if data, err := os.ReadFile(wisdomPath); err == nil {
-		var wf struct {
-			Entries []struct {
-				Text       string  `json:"text"`
-				Confidence float64 `json:"confidence"`
-			} `json:"entries"`
-		}
-		if err := json.Unmarshal(data, &wf); err == nil && len(wf.Entries) > 0 {
-			var results []string
-			count := limit
-			if len(wf.Entries) < count {
-				count = len(wf.Entries)
-			}
-			for i := 0; i < count; i++ {
-				results = append(results, truncateString(wf.Entries[i].Text, 200))
-			}
-			return results
-		}
-	}
-
-	// Fallback to eternal memory
-	eternalPath := filepath.Join(hubDir, "eternal", "memory.json")
-	if data, err := os.ReadFile(eternalPath); err == nil {
-		var entries []struct {
-			Text string `json:"text"`
-		}
-		if json.Unmarshal(data, &entries) == nil && len(entries) > 0 {
-			var results []string
-			count := limit
-			if len(entries) < count {
-				count = len(entries)
-			}
-			for i := 0; i < count; i++ {
-				results = append(results, truncateString(entries[i].Text, 200))
-			}
-			return results
-		}
-	}
-
-	*fallbacks = append(*fallbacks, "hive_wisdom: no hive or eternal data")
-	return nil
+	return buildHiveWisdomLines(readHiveWisdomEntries(hubDir, limit, fallbacks))
 }
 
 // extractBlockerTexts loads flags.json and returns unresolved blocker/issue descriptions.

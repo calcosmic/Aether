@@ -512,9 +512,9 @@ func TestColonyPrimeCompactEmptyState(t *testing.T) {
 
 // --- TDD: Full priority order and edge case budget tests ---
 
-// TestColonyPrimeFullTrimPriorityOrder verifies the complete priority ordering:
-// learnings(2) < decisions(3) < hive_wisdom(4) < state(5) < instincts(6) < user_preferences(7) < pheromones(9).
-// When all sections are large and the budget is tight, lower-priority sections are trimmed first.
+// TestColonyPrimeFullTrimPriorityOrder verifies the weighted ordering contract.
+// When all sections are large and the budget is tight, protected sections survive
+// and trimmed entries are reported in descending weighted-score order.
 func TestColonyPrimeFullTrimPriorityOrder(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
@@ -642,34 +642,16 @@ func TestColonyPrimeFullTrimPriorityOrder(t *testing.T) {
 		trimmedSet[name.(string)] = true
 	}
 
-	// The trimming algorithm packs higher-priority sections first, then trims
-	// later sections when they do not fit into the remaining budget.
-	//
-	// That means the trimmed list follows the evaluation order, which is
-	// non-increasing priority.
-	type sectionInfo struct {
-		name     string
-		priority int
-	}
-	priorityOf := map[string]int{
-		"learnings":        2,
-		"decisions":        3,
-		"hive_wisdom":      4,
-		"state":            5,
-		"instincts":        6,
-		"user_preferences": 7,
-		"pheromones":       9,
-	}
-
-	// Verify trimmed list is in non-increasing priority order.
-	for i := 1; i < len(trimmed); i++ {
-		prevName := trimmed[i-1].(string)
-		currName := trimmed[i].(string)
-		prevPri := priorityOf[prevName]
-		currPri := priorityOf[currName]
-		if prevPri < currPri {
-			t.Errorf("trimmed list not in evaluation order: %s (priority %d) trimmed before %s (priority %d)",
-				prevName, prevPri, currName, currPri)
+	ledger := result["ledger"].(map[string]interface{})
+	trimmedLedger := ledger["trimmed"].([]interface{})
+	for i := 1; i < len(trimmedLedger); i++ {
+		prev := trimmedLedger[i-1].(map[string]interface{})
+		curr := trimmedLedger[i].(map[string]interface{})
+		prevScore := prev["score_breakdown"].(map[string]interface{})["total"].(float64)
+		currScore := curr["score_breakdown"].(map[string]interface{})["total"].(float64)
+		if prevScore < currScore {
+			t.Errorf("trimmed ledger should follow weighted score order: %s (%0.3f) before %s (%0.3f)",
+				prev["name"], prevScore, curr["name"], currScore)
 		}
 	}
 
@@ -766,11 +748,6 @@ func TestColonyPrimePheromonesNeverTrimmedBeforeLearnings(t *testing.T) {
 		trimmedSet[name.(string)] = true
 	}
 
-	// Learnings (priority 2) should definitely be trimmed
-	if !trimmedSet["learnings"] {
-		t.Error("expected 'learnings' (priority 2) to be trimmed when content massively exceeds budget")
-	}
-
 	// Pheromones (priority 9) must NOT be trimmed
 	if trimmedSet["pheromones"] {
 		t.Error("pheromones (priority 9) must never be trimmed when learnings (priority 2) could be trimmed instead")
@@ -782,6 +759,20 @@ func TestColonyPrimePheromonesNeverTrimmedBeforeLearnings(t *testing.T) {
 	}
 	if !strings.Contains(contextStr, "Focus on tests") {
 		t.Error("pheromone signal text 'Focus on tests' should be present in context output")
+	}
+
+	ledger := result["ledger"].(map[string]interface{})
+	preserved := ledger["preserved"].([]interface{})
+	foundPheromones := false
+	for _, entry := range preserved {
+		item := entry.(map[string]interface{})
+		if item["name"] == "pheromones" {
+			foundPheromones = true
+			break
+		}
+	}
+	if !foundPheromones {
+		t.Error("expected pheromones to be preserved under weighted trimming pressure")
 	}
 }
 
@@ -1020,6 +1011,115 @@ func TestColonyPrimeHiveWisdomAndUserPrefsPriority(t *testing.T) {
 	// Verify at least one of hive_wisdom or user_preferences is in the output
 	// (or both if budget allows)
 	_ = contextStr
+}
+
+// TestColonyPrimeFreshDecisionsBeatStaleHiveWisdom verifies that weighted runtime
+// assembly prefers fresher current-colony decisions over very stale hive wisdom
+// when budget pressure forces a choice.
+func TestColonyPrimeFreshDecisionsBeatStaleHiveWisdom(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	hubDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	origHub := os.Getenv("AETHER_HUB_DIR")
+	os.Setenv("AETHER_HUB_DIR", hubDir)
+	defer os.Setenv("AETHER_HUB_DIR", origHub)
+
+	var fixture freshVsStaleFixture
+	loadContextWeightingFixture(t, "fresh-vs-stale.json", &fixture)
+
+	stale := time.Now().Add(-240 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	var hiveEntries []string
+	for i := 0; i < fixture.StaleHiveCount; i++ {
+		hiveEntries = append(hiveEntries, fmt.Sprintf(
+			`{"id":"w_%d","text":"Stale wisdom %d: %s","domain":"go","source_repo":"test","confidence":0.55,"created_at":"%s","accessed_at":"%s","access_count":1}`,
+			i, i, strings.Repeat(fixture.StaleHivePhrase+" ", 18), stale, stale,
+		))
+	}
+	wisdomData := `{"entries":[` + strings.Join(hiveEntries, ",") + `]}`
+	if err := os.WriteFile(filepath.Join(hubDir, "hive", "wisdom.json"), []byte(wisdomData), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	goal := fixture.Goal
+
+	var decisions []colony.Decision
+	for i := 0; i < fixture.FreshDecisionCount; i++ {
+		decisions = append(decisions, colony.Decision{
+			ID:        fmt.Sprintf("d%d", i),
+			Phase:     1,
+			Claim:     fmt.Sprintf("Fresh decision %d: %s", i, strings.Repeat(fixture.FreshDecisionPhrase+" ", 24)),
+			Rationale: fixture.FreshDecisionRationale,
+			Timestamp: now,
+		})
+	}
+
+	var learnings []colony.Learning
+	for i := 0; i < fixture.LearningCount; i++ {
+		learnings = append(learnings, colony.Learning{
+			Claim:  fmt.Sprintf("Background learning %d: %s", i, strings.Repeat(fixture.LearningPhrase+" ", 24)),
+			Status: "confirmed",
+			Tested: true,
+		})
+	}
+
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: "in_progress"},
+			},
+		},
+		Memory: colony.Memory{
+			Decisions:      decisions,
+			PhaseLearnings: []colony.PhaseLearning{{Phase: 1, PhaseName: "Phase One", Timestamp: now, Learnings: learnings}},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"colony-prime", "--compact"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colony-prime --compact returned error: %v", err)
+	}
+
+	envelope := parseEnvelopeCmd(t, buf.String())
+	result := envelope["result"].(map[string]interface{})
+	contextStr := result["context"].(string)
+	trimmed := result["trimmed"].([]interface{})
+
+	if !strings.Contains(contextStr, "Fresh decision 0") {
+		t.Fatalf("fresh current decision should survive weighted budget pressure:\n%s", contextStr)
+	}
+	if strings.Contains(contextStr, "Stale wisdom 0") {
+		t.Fatalf("stale hive wisdom should lose to fresher decision context under weighted budget pressure:\n%s", contextStr)
+	}
+
+	trimmedSet := make(map[string]bool)
+	for _, name := range trimmed {
+		trimmedSet[name.(string)] = true
+	}
+	if !trimmedSet["hive_wisdom"] {
+		t.Fatalf("expected hive_wisdom to be trimmed under weighted freshness test, got %v", trimmed)
+	}
 }
 
 // TestColonyPrimeNormalModeWithin8000Budget verifies that normal mode (8000 budget)

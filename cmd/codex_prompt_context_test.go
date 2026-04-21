@@ -209,3 +209,68 @@ func TestResolveCodexWorkerContextHonorsBlockedIntegritySections(t *testing.T) {
 
 	_ = now
 }
+
+func TestResolveCodexWorkerContextPrefersFreshRuntimeContextOverStaleHiveWisdom(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	hubDir := filepath.Join(tmpDir, "hub")
+	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
+		t.Fatalf("mkdir hive: %v", err)
+	}
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+
+	var fixture freshVsStaleFixture
+	loadContextWeightingFixture(t, "fresh-vs-stale.json", &fixture)
+
+	stale := time.Now().Add(-240 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	hiveContent := `{"entries":[{"id":"go_1","text":"Stale hive guidance that should lose under weighted assembly","domain":"go","source_repo":"test","confidence":0.55,"created_at":"` + stale + `","accessed_at":"` + stale + `","access_count":1}]}`
+	if err := os.WriteFile(filepath.Join(hubDir, "hive", "wisdom.json"), []byte(hiveContent), 0644); err != nil {
+		t.Fatalf("write wisdom.json: %v", err)
+	}
+
+	now := time.Now().UTC()
+	goal := fixture.CodexGoal
+	var decisions []colony.Decision
+	for i := 0; i < fixture.FreshDecisionCount; i++ {
+		decisions = append(decisions, colony.Decision{
+			ID:        "d" + string(rune('a'+i)),
+			Phase:     1,
+			Claim:     fixture.CodexDecisionPrefix + " " + strings.Repeat(fixture.CodexDecisionPhrase+" ", 24),
+			Rationale: "current colony work",
+			Timestamp: now.Format(time.RFC3339),
+		})
+	}
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Weighted", Status: colony.PhaseInProgress}}},
+		Memory: colony.Memory{
+			Decisions: decisions,
+			PhaseLearnings: []colony.PhaseLearning{{
+				ID:        "l1",
+				Phase:     1,
+				PhaseName: "Weighted",
+				Timestamp: now.Format(time.RFC3339),
+				Learnings: []colony.Learning{{Claim: strings.Repeat(fixture.CodexLearningPhrase+" ", 80), Status: "confirmed", Tested: true}},
+			}},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	context := resolveCodexWorkerContext()
+	if !strings.Contains(context, "Fresh current decision should survive weighted runtime assembly") {
+		t.Fatalf("Codex worker context should inherit the runtime-weighted fresh decision:\n%s", context)
+	}
+	if strings.Contains(context, "Stale hive guidance that should lose under weighted assembly") {
+		t.Fatalf("Codex worker context should not retain stale hive wisdom when fresher runtime context wins:\n%s", context)
+	}
+}

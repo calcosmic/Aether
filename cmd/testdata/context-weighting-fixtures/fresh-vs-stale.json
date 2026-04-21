@@ -1,0 +1,14 @@
+{
+  "goal": "weighted freshness test",
+  "stale_hive_count": 5,
+  "stale_hive_phrase": "legacy guidance",
+  "fresh_decision_count": 12,
+  "fresh_decision_phrase": "current release rule",
+  "fresh_decision_rationale": "recent runtime-aligned work",
+  "learning_count": 40,
+  "learning_phrase": "fill budget",
+  "codex_goal": "Weighted Codex context",
+  "codex_decision_phrase": "current work",
+  "codex_decision_prefix": "Fresh current decision should survive weighted runtime assembly",
+  "codex_learning_phrase": "background filler"
+}

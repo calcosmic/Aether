@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -26,34 +25,45 @@ type colonyPrimeOutput struct {
 }
 
 type colonyPrimeLedger struct {
-	Included []colonyPrimeLedgerItem `json:"included"`
-	Trimmed  []colonyPrimeLedgerItem `json:"trimmed"`
-	Blocked  []colonyPrimeLedgerItem `json:"blocked,omitempty"`
+	Included  []colonyPrimeLedgerItem `json:"included"`
+	Trimmed   []colonyPrimeLedgerItem `json:"trimmed"`
+	Preserved []colonyPrimeLedgerItem `json:"preserved,omitempty"`
+	Blocked   []colonyPrimeLedgerItem `json:"blocked,omitempty"`
 }
 
 type colonyPrimeLedgerItem struct {
-	Name           string                         `json:"name"`
-	Title          string                         `json:"title"`
-	Source         string                         `json:"source"`
-	Priority       int                            `json:"priority"`
-	Chars          int                            `json:"chars"`
-	BaseTrustClass colony.PromptTrustClass       `json:"base_trust_class,omitempty"`
-	TrustClass     colony.PromptTrustClass       `json:"trust_class,omitempty"`
-	Action         colony.PromptIntegrityAction  `json:"action,omitempty"`
-	Blocked        bool                           `json:"blocked,omitempty"`
+	Name           string                          `json:"name"`
+	Title          string                          `json:"title"`
+	Source         string                          `json:"source"`
+	Priority       int                             `json:"priority"`
+	Chars          int                             `json:"chars"`
+	BaseTrustClass colony.PromptTrustClass         `json:"base_trust_class,omitempty"`
+	TrustClass     colony.PromptTrustClass         `json:"trust_class,omitempty"`
+	Action         colony.PromptIntegrityAction    `json:"action,omitempty"`
+	Blocked        bool                            `json:"blocked,omitempty"`
 	Findings       []colony.PromptIntegrityFinding `json:"findings,omitempty"`
+	Score          colony.ContextScoreBreakdown    `json:"score_breakdown,omitempty"`
+	Preserved      bool                            `json:"preserved,omitempty"`
+	PreserveReason string                          `json:"preserve_reason,omitempty"`
+	TrimReason     string                          `json:"trim_reason,omitempty"`
+	Decision       string                          `json:"decision,omitempty"`
 }
 
 type colonyPrimeSection struct {
-	name           string
-	title          string
-	source         string
-	content        string
-	priority       int // lower = trimmed first
-	baseTrustClass colony.PromptTrustClass
-	trustClass     colony.PromptTrustClass
-	action         colony.PromptIntegrityAction
-	findings       []colony.PromptIntegrityFinding
+	name              string
+	title             string
+	source            string
+	content           string
+	priority          int // legacy relevance hint retained for proof output
+	baseTrustClass    colony.PromptTrustClass
+	trustClass        colony.PromptTrustClass
+	action            colony.PromptIntegrityAction
+	findings          []colony.PromptIntegrityFinding
+	freshnessScore    float64
+	confirmationScore float64
+	relevanceScore    float64
+	protected         bool
+	preserveReason    string
 }
 
 func (s colonyPrimeSection) ledgerItem() colonyPrimeLedgerItem {
@@ -71,19 +81,58 @@ func (s colonyPrimeSection) ledgerItem() colonyPrimeLedgerItem {
 	}
 }
 
+func (s colonyPrimeSection) rankingCandidate() colony.ContextCandidate {
+	return colony.ContextCandidate{
+		Name:              s.name,
+		Title:             s.title,
+		Source:            s.source,
+		Content:           s.content,
+		BudgetMetric:      "chars",
+		PriorityHint:      s.priority,
+		BaseTrustClass:    s.baseTrustClass,
+		TrustClass:        s.trustClass,
+		Action:            s.action,
+		FreshnessScore:    s.freshnessScore,
+		ConfirmationScore: s.confirmationScore,
+		RelevanceScore:    s.relevanceScore,
+		Protected:         s.protected,
+		PreserveReason:    s.preserveReason,
+	}
+}
+
+func colonyPrimeLedgerItemFromRanked(item colony.RankedContextCandidate) colonyPrimeLedgerItem {
+	return colonyPrimeLedgerItem{
+		Name:           item.Name,
+		Title:          item.Title,
+		Source:         filepath.ToSlash(strings.TrimSpace(item.Source)),
+		Priority:       item.PriorityHint,
+		Chars:          len(item.Content),
+		BaseTrustClass: item.BaseTrustClass,
+		TrustClass:     item.TrustClass,
+		Action:         item.Action,
+		Blocked:        item.Action == colony.PromptIntegrityActionBlock,
+		Score:          item.Score,
+		Preserved:      item.Preserved,
+		PreserveReason: item.PreserveReason,
+		TrimReason:     item.TrimReason,
+		Decision:       item.Decision,
+	}
+}
+
 func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	budget := 8000
 	if compact {
 		budget = 4000
 	}
 	result := colonyPrimeOutput{
-		Budget:  budget,
-		Trimmed: []string{},
+		Budget:   budget,
+		Trimmed:  []string{},
 		Warnings: []string{},
 		Ledger: colonyPrimeLedger{
-			Included: []colonyPrimeLedgerItem{},
-			Trimmed:  []colonyPrimeLedgerItem{},
-			Blocked:  []colonyPrimeLedgerItem{},
+			Included:  []colonyPrimeLedgerItem{},
+			Trimmed:   []colonyPrimeLedgerItem{},
+			Preserved: []colonyPrimeLedgerItem{},
+			Blocked:   []colonyPrimeLedgerItem{},
 		},
 	}
 	if store == nil {
@@ -123,12 +172,18 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		mode = colony.ModeInRepo
 	}
 	stateSection.WriteString(fmt.Sprintf("Parallel Mode: %s\n", mode))
+	stateProtected, statePreserveReason := protectedSectionPolicy("state")
 	sections = append(sections, colonyPrimeSection{
-		name:     "state",
-		title:    "Colony State",
-		source:   statePath,
-		content:  stateSection.String(),
-		priority: 5,
+		name:              "state",
+		title:             "Colony State",
+		source:            statePath,
+		content:           stateSection.String(),
+		priority:          5,
+		freshnessScore:    1.0,
+		confirmationScore: 1.0,
+		relevanceScore:    sectionRelevanceScore("state"),
+		protected:         stateProtected,
+		preserveReason:    statePreserveReason,
 	})
 
 	now := time.Now().UTC()
@@ -149,17 +204,28 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 				phSB.WriteString(fmt.Sprintf("- [%s] %s\n", sig.Type, text))
 			}
 			if strings.TrimSpace(phSB.String()) != "" {
+				signalTimestamps := make([]string, 0, len(activeSignals))
+				for _, sig := range activeSignals {
+					signalTimestamps = append(signalTimestamps, sig.CreatedAt)
+				}
+				signalsProtected, signalsPreserveReason := protectedSectionPolicy("pheromones")
 				sections = append(sections, colonyPrimeSection{
-					name:     "pheromones",
-					title:    "Pheromone Signals",
-					source:   filepath.Join(store.BasePath(), "pheromones.json"),
-					content:  phSB.String(),
-					priority: 9,
+					name:              "pheromones",
+					title:             "Pheromone Signals",
+					source:            filepath.Join(store.BasePath(), "pheromones.json"),
+					content:           phSB.String(),
+					priority:          9,
+					freshnessScore:    latestFreshnessScore(now, 0.85, signalTimestamps...),
+					confirmationScore: confidenceScoreFromSignals(activeSignals, now),
+					relevanceScore:    sectionRelevanceScore("pheromones"),
+					protected:         signalsProtected,
+					preserveReason:    signalsPreserveReason,
 				})
 			}
 		}
 	}
 
+	instinctEntries := make([]colony.InstinctEntry, 0)
 	var instincts []struct {
 		trigger    string
 		action     string
@@ -178,6 +244,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			if inst.Archived {
 				continue
 			}
+			instinctEntries = append(instinctEntries, inst)
 			instincts = append(instincts, struct {
 				trigger    string
 				action     string
@@ -204,11 +271,14 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			source = statePath
 		}
 		sections = append(sections, colonyPrimeSection{
-			name:     "instincts",
-			title:    "Active Instincts",
-			source:   source,
-			content:  instSB.String(),
-			priority: 6,
+			name:              "instincts",
+			title:             "Active Instincts",
+			source:            source,
+			content:           instSB.String(),
+			priority:          6,
+			freshnessScore:    latestInstinctFreshness(now, instinctEntries, instincts),
+			confirmationScore: instinctConfidenceScore(instinctEntries, instincts),
+			relevanceScore:    sectionRelevanceScore("instincts"),
 		})
 	}
 	result.InstinctCount = len(instincts)
@@ -220,11 +290,14 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			decSB.WriteString(fmt.Sprintf("- Phase %d: %s — %s\n", d.Phase, d.Claim, d.Rationale))
 		}
 		sections = append(sections, colonyPrimeSection{
-			name:     "decisions",
-			title:    "Key Decisions",
-			source:   statePath,
-			content:  decSB.String(),
-			priority: 3,
+			name:              "decisions",
+			title:             "Key Decisions",
+			source:            statePath,
+			content:           decSB.String(),
+			priority:          3,
+			freshnessScore:    latestDecisionFreshness(now, state.Memory.Decisions),
+			confirmationScore: confidenceScoreFromDecisions(state.Memory.Decisions, state.CurrentPhase),
+			relevanceScore:    phaseScopedRelevance(sectionRelevanceScore("decisions"), state.CurrentPhase, decisionPhases(state.Memory.Decisions)...),
 		})
 	}
 
@@ -238,29 +311,36 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			}
 		}
 		sections = append(sections, colonyPrimeSection{
-			name:     "learnings",
-			title:    "Phase Learnings",
-			source:   statePath,
-			content:  learnSB.String(),
-			priority: 2,
+			name:              "learnings",
+			title:             "Phase Learnings",
+			source:            statePath,
+			content:           learnSB.String(),
+			priority:          2,
+			freshnessScore:    latestPhaseLearningFreshness(now, state.Memory.PhaseLearnings),
+			confirmationScore: phaseLearningConfidenceScore(state.Memory.PhaseLearnings),
+			relevanceScore:    phaseScopedRelevance(sectionRelevanceScore("learnings"), state.CurrentPhase, phaseLearningPhases(state.Memory.PhaseLearnings)...),
 		})
 	}
 
 	hubDir := resolveHubPath()
 	var fallbacks []string
-	hiveEntries := readHiveWisdom(hubDir, 5, &fallbacks)
-	if len(hiveEntries) > 0 {
+	hiveEntries := readHiveWisdomEntries(hubDir, 5, &fallbacks)
+	hiveLines := buildHiveWisdomLines(hiveEntries)
+	if len(hiveLines) > 0 {
 		var hiveSB strings.Builder
 		hiveSB.WriteString("## HIVE WISDOM (Cross-Colony Patterns)\n\n")
-		for _, entry := range hiveEntries {
+		for _, entry := range hiveLines {
 			hiveSB.WriteString(fmt.Sprintf("- %s\n", entry))
 		}
 		sections = append(sections, colonyPrimeSection{
-			name:     "hive_wisdom",
-			title:    "Hive Wisdom",
-			source:   filepath.Join(hubDir, "hive", "wisdom.json"),
-			content:  hiveSB.String(),
-			priority: 4,
+			name:              "hive_wisdom",
+			title:             "Hive Wisdom",
+			source:            filepath.Join(hubDir, "hive", "wisdom.json"),
+			content:           hiveSB.String(),
+			priority:          4,
+			freshnessScore:    hiveFreshnessScore(now, hiveEntries),
+			confirmationScore: confidenceScoreFromHive(hiveEntries),
+			relevanceScore:    sectionRelevanceScore("hive_wisdom"),
 		})
 	}
 
@@ -272,12 +352,18 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		for _, pref := range userPrefs {
 			prefsSB.WriteString(fmt.Sprintf("- %s\n", pref))
 		}
+		prefsProtected, prefsPreserveReason := protectedSectionPolicy("user_preferences")
 		sections = append(sections, colonyPrimeSection{
-			name:     "user_preferences",
-			title:    "User Preferences",
-			source:   queenPath,
-			content:  prefsSB.String(),
-			priority: 7,
+			name:              "user_preferences",
+			title:             "User Preferences",
+			source:            queenPath,
+			content:           prefsSB.String(),
+			priority:          7,
+			freshnessScore:    0.85,
+			confirmationScore: 0.90,
+			relevanceScore:    sectionRelevanceScore("user_preferences"),
+			protected:         prefsProtected,
+			preserveReason:    prefsPreserveReason,
 		})
 	}
 
@@ -288,12 +374,18 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			clarifySB.WriteString(clarification)
 			clarifySB.WriteString("\n")
 		}
+		intentProtected, intentPreserveReason := protectedSectionPolicy("clarified_intent")
 		sections = append(sections, colonyPrimeSection{
-			name:     "clarified_intent",
-			title:    "Clarified Intent",
-			source:   filepath.Join(store.BasePath(), pendingDecisionsFile),
-			content:  clarifySB.String(),
-			priority: 8,
+			name:              "clarified_intent",
+			title:             "Clarified Intent",
+			source:            filepath.Join(store.BasePath(), pendingDecisionsFile),
+			content:           clarifySB.String(),
+			priority:          8,
+			freshnessScore:    1.0,
+			confirmationScore: 1.0,
+			relevanceScore:    sectionRelevanceScore("clarified_intent"),
+			protected:         intentProtected,
+			preserveReason:    intentPreserveReason,
 		})
 	}
 
@@ -305,6 +397,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 	if len(blockerFile.Decisions) > 0 {
 		var blockerSB strings.Builder
+		blockerTimestamps := make([]string, 0, len(blockerFile.Decisions))
 		for _, blocker := range blockerFile.Decisions {
 			if blocker.Resolved || blocker.Type != "blocker" {
 				continue
@@ -313,27 +406,27 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 				blockerSB.WriteString("## Active Blockers\n\n")
 			}
 			blockerSB.WriteString(fmt.Sprintf("- %s\n", blocker.Description))
+			blockerTimestamps = append(blockerTimestamps, blocker.CreatedAt)
 		}
 		if blockerSB.Len() > 0 {
+			blockerProtected, blockerPreserveReason := protectedSectionPolicy("blockers")
 			sections = append(sections, colonyPrimeSection{
-				name:     "blockers",
-				title:    "Active Blockers",
-				source:   blockerSource,
-				content:  blockerSB.String(),
-				priority: 10,
+				name:              "blockers",
+				title:             "Active Blockers",
+				source:            blockerSource,
+				content:           blockerSB.String(),
+				priority:          10,
+				freshnessScore:    latestFreshnessScore(now, 0.9, blockerTimestamps...),
+				confirmationScore: 1.0,
+				relevanceScore:    sectionRelevanceScore("blockers"),
+				protected:         blockerProtected,
+				preserveReason:    blockerPreserveReason,
 			})
 		}
 	}
 
-	sort.Slice(sections, func(i, j int) bool {
-		if sections[i].priority != sections[j].priority {
-			return sections[i].priority > sections[j].priority
-		}
-		return sections[i].name < sections[j].name
-	})
-
 	result.Sections = len(sections)
-	allowedSections := make([]colonyPrimeSection, 0, len(sections))
+	allowedCandidates := make([]colony.ContextCandidate, 0, len(sections))
 	for _, sec := range sections {
 		assessment := colony.AssessPromptSource(sec.source, sec.content)
 		sec.baseTrustClass = assessment.BaseTrustClass
@@ -345,35 +438,32 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			result.Ledger.Blocked = append(result.Ledger.Blocked, sec.ledgerItem())
 			continue
 		}
-		allowedSections = append(allowedSections, sec)
+		allowedCandidates = append(allowedCandidates, sec.rankingCandidate())
 	}
 
+	ranking := colony.RankContextCandidates(allowedCandidates, budget)
 	var assembled strings.Builder
-	currentLen := 0
-	for _, sec := range allowedSections {
-		if currentLen+len(sec.content) > budget {
-			if sec.name == "blockers" {
-				assembled.WriteString(sec.content)
-				assembled.WriteString("\n")
-				currentLen += len(sec.content)
-				result.Ledger.Included = append(result.Ledger.Included, sec.ledgerItem())
-				continue
-			}
-			result.Trimmed = append(result.Trimmed, sec.name)
-			result.Ledger.Trimmed = append(result.Ledger.Trimmed, sec.ledgerItem())
-			continue
+	for _, item := range ranking.Included {
+		if assembled.Len() > 0 {
+			assembled.WriteString("\n")
 		}
-		assembled.WriteString(sec.content)
-		assembled.WriteString("\n")
-		currentLen += len(sec.content)
-		result.Ledger.Included = append(result.Ledger.Included, sec.ledgerItem())
+		assembled.WriteString(strings.TrimRight(item.Content, "\n"))
+		ledgerItem := colonyPrimeLedgerItemFromRanked(item)
+		result.Ledger.Included = append(result.Ledger.Included, ledgerItem)
+		if item.Preserved {
+			result.Ledger.Preserved = append(result.Ledger.Preserved, ledgerItem)
+		}
+	}
+	for _, item := range ranking.Trimmed {
+		result.Trimmed = append(result.Trimmed, item.Name)
+		result.Ledger.Trimmed = append(result.Ledger.Trimmed, colonyPrimeLedgerItemFromRanked(item))
 	}
 
 	context := strings.TrimSpace(assembled.String())
 	result.Context = context
 	result.PromptSection = context
-	result.Used = currentLen
-	result.LogLine = fmt.Sprintf("colony-prime loaded %d signal(s), %d instinct(s), used %d/%d chars", result.SignalCount, result.InstinctCount, currentLen, budget)
+	result.Used = ranking.Used
+	result.LogLine = fmt.Sprintf("colony-prime loaded %d signal(s), %d instinct(s), used %d/%d chars", result.SignalCount, result.InstinctCount, ranking.Used, budget)
 	return result
 }
 
