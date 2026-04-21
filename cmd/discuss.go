@@ -173,6 +173,16 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 		redirectEmitted = true
 	}
 
+	if tracer != nil {
+		var state colony.ColonyState
+		if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+			_ = tracer.LogIntervention(*state.RunID, "discuss.resolved", "discuss", map[string]interface{}{
+				"decisions":         1,
+				"redirect_emitted": redirectEmitted,
+			})
+		}
+	}
+
 	remaining := countPendingClarifications(file)
 	next := "Run `aether discuss` to review remaining questions before planning."
 	if remaining == 0 {

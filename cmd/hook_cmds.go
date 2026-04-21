@@ -54,9 +54,31 @@ var hookPreToolUseCmd = &cobra.Command{
 
 		if strings.EqualFold(toolName, "Write") || strings.EqualFold(toolName, "Edit") {
 			if reason := protectedHookWriteReason(target, cwd); reason != "" {
+				if tracer != nil {
+					var state colony.ColonyState
+					if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+						_ = tracer.LogIntervention(*state.RunID, "hook.pre-tool-use.block", "hook-cmd", map[string]interface{}{
+							"hook":   "pre-tool-use",
+							"reason": reason,
+							"tool":   toolName,
+							"target": target,
+						})
+					}
+				}
 				return emitHookBlock(reason)
 			}
 			if reason := redirectWriteReason(target, cwd); reason != "" {
+				if tracer != nil {
+					var state colony.ColonyState
+					if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
+						_ = tracer.LogIntervention(*state.RunID, "hook.pre-tool-use.redirect", "hook-cmd", map[string]interface{}{
+							"hook":   "pre-tool-use",
+							"reason": reason,
+							"tool":   toolName,
+							"target": target,
+						})
+					}
+				}
 				return emitHookBlock(reason)
 			}
 		}
@@ -90,6 +112,14 @@ var hookStopCmd = &cobra.Command{
 		phaseLabel := fmt.Sprintf("phase %d", state.CurrentPhase)
 		if state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
 			phaseLabel = fmt.Sprintf("phase %d (%s)", state.CurrentPhase, state.Plan.Phases[state.CurrentPhase-1].Name)
+		}
+
+		if tracer != nil && state.RunID != nil {
+			_ = tracer.LogIntervention(*state.RunID, "hook.stop.block", "hook-cmd", map[string]interface{}{
+				"hook":       "stop",
+				"phase":      state.CurrentPhase,
+				"phaseLabel": phaseLabel,
+			})
 		}
 
 		return emitHookBlock(fmt.Sprintf(

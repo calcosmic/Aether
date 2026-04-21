@@ -163,6 +163,11 @@ var resumeColonyCmd = &cobra.Command{
 					outputError(2, fmt.Sprintf("failed to clear stale spawn state: %v", err), nil)
 					return nil
 				}
+				if tracer != nil && state.RunID != nil {
+					_ = tracer.LogIntervention(*state.RunID, "resume.spawn-clear", "resume-colony", map[string]interface{}{
+						"reason": "stale_session",
+					})
+				}
 			}
 			contextCleared := false
 			if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
