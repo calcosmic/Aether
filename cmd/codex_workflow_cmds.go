@@ -66,7 +66,8 @@ var buildCmd = &cobra.Command{
 			return nil
 		}
 
-		result, err := runCodexBuild(skillWorkspaceRoot(), phaseNum)
+		selectedTasks := normalizeCLIStringList(mustGetStringArray(cmd, "task"))
+		result, err := runCodexBuild(skillWorkspaceRoot(), phaseNum, selectedTasks)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -96,7 +97,9 @@ var continueCmd = &cobra.Command{
 	Short: "Verify the active build packet, close dispatched workers, and advance honestly",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot())
+		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
+			ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -110,6 +113,28 @@ var continueCmd = &cobra.Command{
 		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result))
 		return nil
 	},
+}
+
+func mustGetStringArray(cmd *cobra.Command, name string) []string {
+	if !cmd.Flags().Changed(name) {
+		return nil
+	}
+	values, _ := cmd.Flags().GetStringArray(name)
+	return values
+}
+
+func normalizeCLIStringList(values []string) []string {
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			normalized = append(normalized, part)
+		}
+	}
+	return uniqueSortedStrings(normalized)
 }
 
 var sealCmd = &cobra.Command{
@@ -519,6 +544,8 @@ func init() {
 	colonizeCmd.Flags().Bool("force", false, "Alias for --force-resurvey")
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
+	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
+	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
 	rootCmd.AddCommand(layEggsCmd)

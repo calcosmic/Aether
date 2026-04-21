@@ -51,9 +51,17 @@ type DispatchObserver func(DispatchLifecycleEvent)
 // ClaimsSummary aggregates file claims across all successful workers in a batch.
 // It matches the last-build-claims.json schema used by cmd/codex_build.go.
 type ClaimsSummary struct {
-	FilesCreated  []string `json:"files_created"`
-	FilesModified []string `json:"files_modified"`
-	TestsWritten  []string `json:"tests_written"`
+	FilesCreated  []string            `json:"files_created"`
+	FilesModified []string            `json:"files_modified"`
+	TestsWritten  []string            `json:"tests_written"`
+	TaskClaims    []TaskClaimsSummary `json:"task_claims,omitempty"`
+}
+
+type TaskClaimsSummary struct {
+	TaskID        string   `json:"task_id"`
+	FilesCreated  []string `json:"files_created,omitempty"`
+	FilesModified []string `json:"files_modified,omitempty"`
+	TestsWritten  []string `json:"tests_written,omitempty"`
 }
 
 // GroupByWave groups dispatches by their Wave field and returns a map sorted
@@ -184,6 +192,7 @@ func ExtractClaims(results []DispatchResult) *ClaimsSummary {
 		FilesModified: []string{},
 		TestsWritten:  []string{},
 	}
+	taskClaims := map[string]*TaskClaimsSummary{}
 
 	for _, r := range results {
 		if r.Status != "completed" || r.WorkerResult == nil {
@@ -192,6 +201,36 @@ func ExtractClaims(results []DispatchResult) *ClaimsSummary {
 		summary.FilesCreated = append(summary.FilesCreated, r.WorkerResult.FilesCreated...)
 		summary.FilesModified = append(summary.FilesModified, r.WorkerResult.FilesModified...)
 		summary.TestsWritten = append(summary.TestsWritten, r.WorkerResult.TestsWritten...)
+		taskID := strings.TrimSpace(r.WorkerResult.TaskID)
+		if taskID == "" {
+			continue
+		}
+		entry, ok := taskClaims[taskID]
+		if !ok {
+			entry = &TaskClaimsSummary{TaskID: taskID}
+			taskClaims[taskID] = entry
+		}
+		entry.FilesCreated = append(entry.FilesCreated, r.WorkerResult.FilesCreated...)
+		entry.FilesModified = append(entry.FilesModified, r.WorkerResult.FilesModified...)
+		entry.TestsWritten = append(entry.TestsWritten, r.WorkerResult.TestsWritten...)
+	}
+
+	if len(taskClaims) > 0 {
+		taskIDs := make([]string, 0, len(taskClaims))
+		for taskID := range taskClaims {
+			taskIDs = append(taskIDs, taskID)
+		}
+		sort.Strings(taskIDs)
+		summary.TaskClaims = make([]TaskClaimsSummary, 0, len(taskIDs))
+		for _, taskID := range taskIDs {
+			entry := taskClaims[taskID]
+			summary.TaskClaims = append(summary.TaskClaims, TaskClaimsSummary{
+				TaskID:        entry.TaskID,
+				FilesCreated:  append([]string{}, entry.FilesCreated...),
+				FilesModified: append([]string{}, entry.FilesModified...),
+				TestsWritten:  append([]string{}, entry.TestsWritten...),
+			})
+		}
 	}
 
 	return summary

@@ -139,7 +139,7 @@ func TestBuildWorktreeModeDispatchesIntoIsolatedRoots(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	result, err := runCodexBuild(root, 1)
+	result, err := runCodexBuild(root, 1, nil)
 	if err != nil {
 		t.Fatalf("runCodexBuild returned error: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestBuildWorktreeModeMergesPheromoneChangesBackToRoot(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &worktreePheromoneInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	result, err := runCodexBuild(root, 1)
+	result, err := runCodexBuild(root, 1, nil)
 	if err != nil {
 		t.Fatalf("runCodexBuild returned error: %v", err)
 	}

@@ -94,7 +94,14 @@ func resetRootCmd(t *testing.T) {
 // to their default values. This prevents Cobra flag leakage between tests.
 func resetFlags(cmd *cobra.Command) {
 	cmd.LocalFlags().VisitAll(func(f *pflag.Flag) {
-		f.Value.Set(f.DefValue)
+		if sliceValue, ok := f.Value.(pflag.SliceValue); ok {
+			if f.DefValue == "" || f.DefValue == "[]" {
+				_ = sliceValue.Replace(nil)
+			}
+		} else {
+			_ = f.Value.Set(f.DefValue)
+		}
+		f.Changed = false
 	})
 	for _, sub := range cmd.Commands() {
 		resetFlags(sub)

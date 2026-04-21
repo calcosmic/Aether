@@ -798,9 +798,17 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	b.WriteString(renderBanner("👁️", "Continue"))
 	b.WriteString(visualDivider)
 	b.WriteString(renderStageMarker("Verification"))
-	b.WriteString("Verification pass complete.\n")
+	if partial, _ := result["partial_success"].(bool); partial {
+		b.WriteString("Verification passed with partial operational success.\n")
+	} else {
+		b.WriteString("Verification pass complete.\n")
+	}
 	b.WriteString(fmt.Sprintf("Phase %d verified and completed: %s\n", phase.ID, phase.Name))
 	renderContinueVerificationSummaryMap(&b, mapValue(result["verification"]))
+	if issues := stringSliceValue(result["operational_issues"]); len(issues) > 0 {
+		b.WriteString("Operational evidence\n")
+		b.WriteString(renderIndentedList(issues))
+	}
 	b.WriteString("Workers\n")
 	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
 		b.WriteString(renderIndentedList(closed))
@@ -859,14 +867,24 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	b.WriteString(fmt.Sprintf("Phase %d remains active: %s\n", phase.ID, phase.Name))
 	renderContinueVerificationSummaryMap(&b, mapValue(result["verification"]))
 	renderContinueGateSummaryMap(&b, mapValue(result["gates"]))
+	if issues := stringSliceValue(result["operational_issues"]); len(issues) > 0 {
+		b.WriteString("Operational issues\n")
+		b.WriteString(renderIndentedList(issues))
+	}
 	if blockers := stringSliceValue(result["blocking_issues"]); len(blockers) > 0 {
 		b.WriteString("Blocking issues\n")
 		b.WriteString(renderIndentedList(blockers))
 	}
-	b.WriteString(renderNextUp(
-		`Fix the blocking issues, then run `+"`aether continue`"+` again.`,
-		`Run `+"`aether status`"+` to inspect the active colony before retrying.`,
-	))
+	primary := `Fix the blocking issues, then run ` + "`aether continue`" + ` again.`
+	if next := strings.TrimSpace(stringValue(result["next"])); next != "" {
+		primary = `Run ` + "`" + next + "`" + ` to recover the blocked work.`
+	}
+	recovery := mapValue(result["recovery"])
+	secondary := `Run ` + "`aether status`" + ` to inspect the active colony before retrying.`
+	if reconcile := strings.TrimSpace(stringValue(recovery["reconcile_command"])); reconcile != "" {
+		secondary = `Run ` + "`" + reconcile + "`" + ` if the code landed manually and only needs reconciliation.`
+	}
+	b.WriteString(renderNextUp(primary, secondary))
 	return b.String()
 }
 

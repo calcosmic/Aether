@@ -181,6 +181,93 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 }
 
+func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Redispatch only the missing task"
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	now := time.Now().UTC()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateEXECUTING,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		ColonyDepth:    "full",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Targeted redispatch",
+					Status: colony.PhaseInProgress,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Keep the completed task closed", Status: colony.TaskCompleted},
+						{ID: &taskTwoID, Goal: "Redispatch only the missing task", Status: colony.TaskInProgress, DependsOn: []string{taskOneID}},
+					},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--task", taskTwoID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse build output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	result := envelope["result"].(map[string]interface{})
+	selectedTasks := result["selected_tasks"].([]interface{})
+	if len(selectedTasks) != 1 || selectedTasks[0].(string) != taskTwoID {
+		t.Fatalf("selected_tasks = %v, want [%s]", selectedTasks, taskTwoID)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("failed to load build manifest: %v", err)
+	}
+	if len(manifest.SelectedTasks) != 1 || manifest.SelectedTasks[0] != taskTwoID {
+		t.Fatalf("manifest selected tasks = %v, want [%s]", manifest.SelectedTasks, taskTwoID)
+	}
+	if len(manifest.Dispatches) != 3 {
+		t.Fatalf("expected 3 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
+	}
+	for _, dispatch := range manifest.Dispatches {
+		if dispatch.TaskID != "" && dispatch.TaskID != taskTwoID {
+			t.Fatalf("unexpected task-scoped dispatch %+v", dispatch)
+		}
+		if dispatch.Stage == "strategy" {
+			t.Fatalf("unexpected strategy dispatch during targeted redispatch: %+v", dispatch)
+		}
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload colony state: %v", err)
+	}
+	if state.Plan.Phases[0].Tasks[0].Status != colony.TaskCompleted {
+		t.Fatalf("task 1 status = %s, want completed", state.Plan.Phases[0].Tasks[0].Status)
+	}
+	if state.Plan.Phases[0].Tasks[1].Status != colony.TaskInProgress {
+		t.Fatalf("task 2 status = %s, want in_progress", state.Plan.Phases[0].Tasks[1].Status)
+	}
+}
+
 func TestBuildRejectsDifferentActivePhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -335,7 +422,7 @@ func TestBuildRollsBackStateWhenDispatchFails(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &buildFailInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	_, err = runCodexBuild(root, 1)
+	_, err = runCodexBuild(root, 1, nil)
 	if err == nil {
 		t.Fatal("expected build failure")
 	}
@@ -427,7 +514,7 @@ func TestBuildAllowsRetryWhenBuiltPhaseHasFailedDispatches(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	if _, err := runCodexBuild(root, 1); err != nil {
+	if _, err := runCodexBuild(root, 1, nil); err != nil {
 		t.Fatalf("build retry returned error: %v", err)
 	}
 

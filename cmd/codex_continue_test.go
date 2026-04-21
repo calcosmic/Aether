@@ -197,7 +197,7 @@ func TestContinueCompletesFinalPhase(t *testing.T) {
 	}
 }
 
-func TestContinueBlocksWhenWatcherGateFails(t *testing.T) {
+func TestContinueAdvancesWithoutWatcherDispatchWhenVerificationPasses(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -206,7 +206,7 @@ func TestContinueBlocksWhenWatcherGateFails(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Block invalid advancement"
+	goal := "Advance without watcher dispatch when verification passes"
 	now := time.Now().UTC()
 	taskOneID := "1.1"
 	taskTwoID := "1.2"
@@ -221,7 +221,7 @@ func TestContinueBlocksWhenWatcherGateFails(t *testing.T) {
 			Phases: []colony.Phase{
 				{
 					ID:     1,
-					Name:   "Watcher missing",
+					Name:   "Watcher optional when verification is real",
 					Status: colony.PhaseInProgress,
 					Tasks: []colony.Task{
 						{ID: &taskOneID, Goal: "Do work one", Status: colony.TaskInProgress},
@@ -238,7 +238,219 @@ func TestContinueBlocksWhenWatcherGateFails(t *testing.T) {
 		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-32", Task: "Do work two", Status: "spawned", TaskID: taskTwoID},
 		{Stage: "wave", Wave: 1, Caste: "scout", Name: "Ranger-33", Task: "Do work three", Status: "spawned", TaskID: taskThreeID},
 	}
-	seedContinueBuildPacket(t, dataDir, 1, "Watcher missing", goal, dispatches)
+	seedContinueBuildPacket(t, dataDir, 1, "Watcher optional when verification is real", goal, dispatches)
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true, got %v", result)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.State != colony.StateCOMPLETED {
+		t.Fatalf("state = %s, want COMPLETED", state.State)
+	}
+}
+
+func TestContinueAdvancesOnVerifiedPartialSuccess(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Advance despite partial worker failure"
+	now := time.Now().UTC()
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Partial success phase",
+					Status: colony.PhaseInProgress,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Land the first change", Status: colony.TaskInProgress},
+						{ID: &taskTwoID, Goal: "Land the second change", Status: colony.TaskInProgress},
+					},
+				},
+				{
+					ID:     2,
+					Name:   "Next verified phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Keep going", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-61", Task: "Land the first change", Status: "completed", TaskID: taskOneID},
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-62", Task: "Land the second change", Status: "timeout", TaskID: taskTwoID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-63", Task: "Independent verification before advancement", Status: "blocked"},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Partial success phase", goal, dispatches)
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true, got %v", result)
+	}
+	if partial, _ := result["partial_success"].(bool); !partial {
+		t.Fatalf("expected partial_success:true, got %v", result)
+	}
+	issues := stringSliceValue(result["operational_issues"])
+	if len(issues) == 0 {
+		t.Fatalf("expected operational issues in partial success result, got %v", result)
+	}
+
+	spawnTreeData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
+	if err != nil {
+		t.Fatalf("failed to read spawn tree: %v", err)
+	}
+	for _, want := range []string{
+		"|Forge-61|completed|Completed before continue verification",
+		"|Forge-62|timeout|",
+		"|Keen-63|blocked|",
+	} {
+		if !strings.Contains(string(spawnTreeData), want) {
+			t.Fatalf("spawn tree missing partial-success line %q\n%s", want, string(spawnTreeData))
+		}
+	}
+}
+
+func TestContinueAllowsManualReconciliationForVerifiedManualFix(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Advance after a manual fix"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Manual recovery phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Land the manual fix", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-71", Task: "Land the manual fix", Status: "failed", TaskID: taskID},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Manual recovery phase", goal, dispatches)
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		BuildPhase: 1,
+		Timestamp:  now.Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("failed to overwrite build claims: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true, got %v", result)
+	}
+	reconciled := stringSliceValue(result["reconciled_tasks"])
+	if len(reconciled) != 1 || reconciled[0] != taskID {
+		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
+	}
+
+	spawnTreeData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
+	if err != nil {
+		t.Fatalf("failed to read spawn tree: %v", err)
+	}
+	if !strings.Contains(string(spawnTreeData), "|Forge-71|manually-reconciled|Task was manually reconciled before continue advancement") {
+		t.Fatalf("expected manually-reconciled worker in spawn tree, got:\n%s", string(spawnTreeData))
+	}
+}
+
+func TestContinueBlockedResultSuggestsTargetedRedispatch(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n\nfunc main() { this_will_not_compile }\n"), 0644); err != nil {
+		t.Fatalf("failed to break workspace build: %v", err)
+	}
+
+	goal := "Suggest task-scoped redispatch"
+	now := time.Now().UTC()
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateEXECUTING,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Redispatch recovery phase",
+					Status: colony.PhaseInProgress,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Recover the missing implementation", Status: colony.TaskInProgress},
+						{ID: &taskTwoID, Goal: "Preserve the completed work", Status: colony.TaskInProgress},
+					},
+				},
+			},
+		},
+	})
+
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-81", Task: "Recover the missing implementation", Status: "failed", TaskID: taskOneID},
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-82", Task: "Preserve the completed work", Status: "completed", TaskID: taskTwoID},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Redispatch recovery phase", goal, dispatches)
 
 	rootCmd.SetArgs([]string{"continue"})
 	if err := rootCmd.Execute(); err != nil {
@@ -250,27 +462,9 @@ func TestContinueBlocksWhenWatcherGateFails(t *testing.T) {
 	if blocked, _ := result["blocked"].(bool); !blocked {
 		t.Fatalf("expected blocked:true, got %v", result)
 	}
-	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false, got %v", result)
-	}
-	blockers := stringSliceValue(result["blocking_issues"])
-	found := false
-	for _, blocker := range blockers {
-		if strings.Contains(blocker, "no watcher dispatch recorded") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected watcher gate blocker, got %v", blockers)
-	}
-
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		t.Fatalf("failed to reload state: %v", err)
-	}
-	if state.State != colony.StateEXECUTING {
-		t.Fatalf("state = %s, want EXECUTING", state.State)
+	recovery := result["recovery"].(map[string]interface{})
+	if got := recovery["redispatch_command"].(string); got != "aether build 1 --task 1.1" {
+		t.Fatalf("redispatch command = %q, want %q", got, "aether build 1 --task 1.1")
 	}
 }
 

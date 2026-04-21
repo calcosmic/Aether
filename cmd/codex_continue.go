@@ -38,6 +38,7 @@ type codexContinueVerificationReport struct {
 	GeneratedAt    string                  `json:"generated_at"`
 	Steps          []codexVerificationStep `json:"steps"`
 	Claims         codexClaimVerification  `json:"claims"`
+	ChecksPassed   bool                    `json:"checks_passed"`
 	Passed         bool                    `json:"passed"`
 	BlockingIssues []string                `json:"blocking_issues,omitempty"`
 }
@@ -51,15 +52,19 @@ type codexContinueGateReport struct {
 }
 
 type codexContinueReport struct {
-	Phase              int      `json:"phase"`
-	GeneratedAt        string   `json:"generated_at"`
-	Manifest           string   `json:"manifest,omitempty"`
-	VerificationReport string   `json:"verification_report"`
-	GateReport         string   `json:"gate_report"`
-	ClosedWorkers      []string `json:"closed_workers,omitempty"`
-	Advanced           bool     `json:"advanced"`
-	Completed          bool     `json:"completed"`
-	Next               string   `json:"next"`
+	Phase              int                           `json:"phase"`
+	GeneratedAt        string                        `json:"generated_at"`
+	Manifest           string                        `json:"manifest,omitempty"`
+	VerificationReport string                        `json:"verification_report"`
+	GateReport         string                        `json:"gate_report"`
+	ClosedWorkers      []string                      `json:"closed_workers,omitempty"`
+	PartialSuccess     bool                          `json:"partial_success,omitempty"`
+	OperationalIssues  []string                      `json:"operational_issues,omitempty"`
+	Tasks              []codexContinueTaskAssessment `json:"tasks,omitempty"`
+	Recovery           codexContinueRecoveryPlan     `json:"recovery,omitempty"`
+	Advanced           bool                          `json:"advanced"`
+	Completed          bool                          `json:"completed"`
+	Next               string                        `json:"next"`
 }
 
 type codexContinueManifest struct {
@@ -75,7 +80,52 @@ type codexVerificationCommands struct {
 	Test  string
 }
 
-func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+type codexContinueOptions struct {
+	ReconcileTaskIDs []string
+}
+
+type codexContinueTaskAssessment struct {
+	TaskID           string   `json:"task_id"`
+	Goal             string   `json:"goal"`
+	Outcome          string   `json:"outcome"`
+	Summary          string   `json:"summary"`
+	Verified         bool     `json:"verified,omitempty"`
+	Reconciled       bool     `json:"reconciled,omitempty"`
+	DispatchStatuses []string `json:"dispatch_statuses,omitempty"`
+	RecoveryAction   string   `json:"recovery_action,omitempty"`
+}
+
+type codexContinueRecoveryPlan struct {
+	ReverifyCommand   string   `json:"reverify_command,omitempty"`
+	ReconcileTasks    []string `json:"reconcile_tasks,omitempty"`
+	ReconcileCommand  string   `json:"reconcile_command,omitempty"`
+	RedispatchTasks   []string `json:"redispatch_tasks,omitempty"`
+	RedispatchCommand string   `json:"redispatch_command,omitempty"`
+}
+
+type codexContinueAssessment struct {
+	Phase              int                           `json:"phase"`
+	GeneratedAt        string                        `json:"generated_at"`
+	Tasks              []codexContinueTaskAssessment `json:"tasks"`
+	VerificationPassed bool                          `json:"verification_passed"`
+	PositiveEvidence   bool                          `json:"positive_evidence"`
+	PartialSuccess     bool                          `json:"partial_success,omitempty"`
+	OperationalIssues  []string                      `json:"operational_issues,omitempty"`
+	ReconciledTasks    []string                      `json:"reconciled_tasks,omitempty"`
+	RedispatchTasks    []string                      `json:"redispatch_tasks,omitempty"`
+	BlockingIssues     []string                      `json:"blocking_issues,omitempty"`
+	Passed             bool                          `json:"passed"`
+	Summary            string                        `json:"summary"`
+	Recovery           codexContinueRecoveryPlan     `json:"recovery,omitempty"`
+}
+
+type codexContinueClosedWorker struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Summary string `json:"summary,omitempty"`
+}
+
+func runCodexContinue(root string, options codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
@@ -99,6 +149,9 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 	if phase.Status != colony.PhaseInProgress {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
+	if err := validateContinueReconcileTasks(phase, options.ReconcileTaskIDs); err != nil {
+		return nil, state, colony.Phase{}, nil, nil, false, err
+	}
 	manifest := loadCodexContinueManifest(phase.ID)
 	if state.BuildStartedAt == nil && !manifest.Present {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
@@ -106,7 +159,8 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 	now := time.Now().UTC()
 
 	verification := runCodexContinueVerification(root, phase.ID, manifest)
-	gates := runCodexContinueGates(state, phase, manifest, verification, now)
+	assessment := assessCodexContinue(phase, manifest, verification, options, now)
+	gates := runCodexContinueGates(phase, manifest, verification, assessment, now)
 
 	verificationReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "verification.json"))
 	gateReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "gates.json"))
@@ -117,9 +171,8 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write gate report: %w", err)
 	}
 
-	if !verification.Passed || !gates.Passed {
-		blockers := append([]string{}, verification.BlockingIssues...)
-		blockers = append(blockers, gates.BlockingIssues...)
+	if !gates.Passed {
+		blockers := append([]string{}, gates.BlockingIssues...)
 		summary := "Continue blocked by verification or gate failures"
 		if len(blockers) > 0 {
 			summary = blockers[0]
@@ -131,33 +184,44 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 			Manifest:           displayOptionalDataPath(manifest.Path),
 			VerificationReport: displayDataPath(verificationReportRel),
 			GateReport:         displayDataPath(gateReportRel),
+			PartialSuccess:     assessment.PartialSuccess,
+			OperationalIssues:  append([]string{}, assessment.OperationalIssues...),
+			Tasks:              append([]codexContinueTaskAssessment{}, assessment.Tasks...),
+			Recovery:           assessment.Recovery,
 			Advanced:           false,
 			Completed:          false,
-			Next:               "aether continue",
+			Next:               continueNextCommandForAssessment(assessment),
 		})
 		updateSessionSummary("continue", "aether continue", summary)
 
 		result := map[string]interface{}{
 			"advanced":            false,
 			"blocked":             true,
+			"partial_success":     assessment.PartialSuccess,
 			"current_phase":       state.CurrentPhase,
 			"phase_name":          phase.Name,
 			"state":               state.State,
-			"next":                "aether continue",
+			"next":                continueNextCommandForAssessment(assessment),
 			"verification":        verification,
+			"assessment":          assessment,
+			"task_evidence":       assessment.Tasks,
 			"gates":               gates,
 			"verification_report": displayDataPath(verificationReportRel),
 			"gate_report":         displayDataPath(gateReportRel),
 			"continue_report":     displayDataPath(continueReportRel),
+			"operational_issues":  assessment.OperationalIssues,
+			"recovery":            assessment.Recovery,
+			"reconciled_tasks":    assessment.ReconciledTasks,
 			"blocking_issues":     blockers,
 		}
 		return result, state, phase, nil, nil, false, nil
 	}
 
-	closedWorkers, err := closeCodexContinueWorkers(manifest)
+	closedWorkerDetails, err := closeCodexContinueWorkers(manifest, assessment)
 	if err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	closedWorkers := closedWorkerNames(closedWorkerDetails)
 	updated := state
 	updated.Plan.Phases[currentIdx].Status = colony.PhaseCompleted
 	for i := range updated.Plan.Phases[currentIdx].Tasks {
@@ -195,6 +259,9 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 	if err := store.SaveJSON("COLONY_STATE.json", updated); err != nil {
 		return nil, state, phase, nextPhase, nil, final, fmt.Errorf("failed to save colony state: %w", err)
 	}
+	if err := updateCodexContinueContext(phase, manifest, closedWorkerDetails, now); err != nil {
+		return nil, updated, phase, nextPhase, nil, final, err
+	}
 	housekeeping, housekeepingErr := runSignalHousekeeping(now, false)
 	if housekeepingErr != nil {
 		return nil, updated, phase, nextPhase, nil, final, housekeepingErr
@@ -208,6 +275,10 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 		VerificationReport: displayDataPath(verificationReportRel),
 		GateReport:         displayDataPath(gateReportRel),
 		ClosedWorkers:      closedWorkers,
+		PartialSuccess:     assessment.PartialSuccess,
+		OperationalIssues:  append([]string{}, assessment.OperationalIssues...),
+		Tasks:              append([]codexContinueTaskAssessment{}, assessment.Tasks...),
+		Recovery:           assessment.Recovery,
 		Advanced:           true,
 		Completed:          final,
 		Next:               nextCommand,
@@ -215,19 +286,29 @@ func runCodexContinue(root string) (map[string]interface{}, colony.ColonyState, 
 		return nil, updated, phase, nextPhase, &housekeeping, final, fmt.Errorf("failed to write continue report: %w", err)
 	}
 
-	updateSessionSummary("continue", nextCommand, fmt.Sprintf("Phase %d verified and advanced", phase.ID))
+	summary := fmt.Sprintf("Phase %d verified and advanced", phase.ID)
+	if assessment.PartialSuccess {
+		summary = fmt.Sprintf("Phase %d verified and advanced with partial operational success", phase.ID)
+	}
+	updateSessionSummary("continue", nextCommand, summary)
 	result := map[string]interface{}{
 		"advanced":            true,
 		"completed":           final,
+		"partial_success":     assessment.PartialSuccess,
 		"current_phase":       updated.CurrentPhase,
 		"state":               updated.State,
 		"next":                nextCommand,
 		"verification":        verification,
+		"assessment":          assessment,
+		"task_evidence":       assessment.Tasks,
 		"gates":               gates,
 		"verification_report": displayDataPath(verificationReportRel),
 		"gate_report":         displayDataPath(gateReportRel),
 		"continue_report":     displayDataPath(continueReportRel),
 		"closed_workers":      closedWorkers,
+		"operational_issues":  assessment.OperationalIssues,
+		"recovery":            assessment.Recovery,
+		"reconciled_tasks":    assessment.ReconciledTasks,
 		"signal_housekeeping": housekeeping,
 	}
 	if nextPhase != nil {
@@ -261,17 +342,13 @@ func runCodexContinueVerification(root string, phaseID int, manifest codexContin
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 
-	passed := true
+	checksPassed := true
 	blockers := []string{}
 	for _, step := range steps {
 		if !step.Passed && !step.Skipped {
-			passed = false
+			checksPassed = false
 			blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
 		}
-	}
-	if !claims.Passed && !claims.Skipped {
-		passed = false
-		blockers = append(blockers, claims.Summary)
 	}
 
 	return codexContinueVerificationReport{
@@ -279,9 +356,210 @@ func runCodexContinueVerification(root string, phaseID int, manifest codexContin
 		GeneratedAt:    now.Format(time.RFC3339),
 		Steps:          steps,
 		Claims:         claims,
-		Passed:         passed,
+		ChecksPassed:   checksPassed,
+		Passed:         checksPassed,
 		BlockingIssues: blockers,
 	}
+}
+
+func validateContinueReconcileTasks(phase colony.Phase, reconcileTaskIDs []string) error {
+	if len(reconcileTaskIDs) == 0 {
+		return nil
+	}
+	known := make(map[string]struct{}, len(phase.Tasks))
+	for idx, task := range phase.Tasks {
+		known[buildTaskID(task, idx)] = struct{}{}
+	}
+	unknown := make([]string, 0, len(reconcileTaskIDs))
+	for _, taskID := range reconcileTaskIDs {
+		if _, ok := known[taskID]; !ok {
+			unknown = append(unknown, taskID)
+		}
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown task id(s) for phase %d: %s", phase.ID, strings.Join(unknown, ", "))
+	}
+	return nil
+}
+
+func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, options codexContinueOptions, now time.Time) codexContinueAssessment {
+	reconciled := make(map[string]struct{}, len(options.ReconcileTaskIDs))
+	for _, taskID := range options.ReconcileTaskIDs {
+		reconciled[taskID] = struct{}{}
+	}
+
+	dispatchStatuses := make(map[string][]string, len(phase.Tasks))
+	completedTaskIDs := make(map[string]bool, len(phase.Tasks))
+	operationalIssues := []string{}
+	for _, dispatch := range manifest.Data.Dispatches {
+		status := strings.TrimSpace(dispatch.Status)
+		if dispatch.TaskID != "" {
+			dispatchStatuses[dispatch.TaskID] = append(dispatchStatuses[dispatch.TaskID], status)
+		}
+		if status == "completed" && dispatch.TaskID != "" {
+			completedTaskIDs[dispatch.TaskID] = true
+		}
+		if status != "" && status != "completed" {
+			operationalIssues = append(operationalIssues, fmt.Sprintf("%s (%s)", dispatch.Name, status))
+		}
+	}
+	operationalIssues = uniqueSortedStrings(operationalIssues)
+
+	positiveEvidence := verification.Claims.Passed || verification.Claims.Skipped || len(completedTaskIDs) > 0 || len(reconciled) > 0
+	tasks := make([]codexContinueTaskAssessment, 0, len(phase.Tasks))
+	redispatchTasks := make([]string, 0, len(phase.Tasks))
+
+	for idx, task := range phase.Tasks {
+		taskID := buildTaskID(task, idx)
+		statuses := uniqueSortedStrings(dispatchStatuses[taskID])
+		_, reconciledTask := reconciled[taskID]
+		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, positiveEvidence, reconciledTask)
+		taskAssessment := codexContinueTaskAssessment{
+			TaskID:           taskID,
+			Goal:             strings.TrimSpace(task.Goal),
+			Outcome:          outcome,
+			Summary:          summary,
+			Verified:         verification.ChecksPassed,
+			Reconciled:       reconciledTask,
+			DispatchStatuses: statuses,
+			RecoveryAction:   recovery,
+		}
+		tasks = append(tasks, taskAssessment)
+		if recovery == "redispatch" {
+			redispatchTasks = append(redispatchTasks, taskID)
+		}
+	}
+
+	blockingIssues := []string{}
+	if !verification.ChecksPassed {
+		blockingIssues = append(blockingIssues, verification.BlockingIssues...)
+	}
+	if verification.ChecksPassed && !positiveEvidence {
+		blockingIssues = append(blockingIssues, "verification passed but no implementation evidence was recorded; reconcile completed tasks or redispatch missing work")
+	}
+
+	recovery := codexContinueRecoveryPlan{
+		ReverifyCommand: "aether continue",
+	}
+	if len(options.ReconcileTaskIDs) == 0 {
+		recovery.ReconcileTasks = tasksNeedingRecovery(tasks)
+		if len(recovery.ReconcileTasks) > 0 {
+			recovery.ReconcileCommand = buildContinueReconcileCommand(recovery.ReconcileTasks)
+		}
+	} else {
+		recovery.ReconcileTasks = append([]string{}, options.ReconcileTaskIDs...)
+		recovery.ReconcileCommand = buildContinueReconcileCommand(recovery.ReconcileTasks)
+	}
+	if len(redispatchTasks) > 0 {
+		recovery.RedispatchTasks = uniqueSortedStrings(redispatchTasks)
+		recovery.RedispatchCommand = buildTargetedRedispatchCommand(phase.ID, recovery.RedispatchTasks)
+	}
+
+	passed := verification.ChecksPassed && positiveEvidence
+	summary := "Verification and task evidence support advancement"
+	if passed && len(operationalIssues) > 0 {
+		summary = "Verification passed with partial operational success"
+	} else if !verification.ChecksPassed {
+		summary = "Continue blocked by verification failures"
+	} else if !positiveEvidence {
+		summary = "Continue blocked because task evidence is missing"
+	}
+
+	return codexContinueAssessment{
+		Phase:              phase.ID,
+		GeneratedAt:        now.Format(time.RFC3339),
+		Tasks:              tasks,
+		VerificationPassed: verification.ChecksPassed,
+		PositiveEvidence:   positiveEvidence,
+		PartialSuccess:     passed && len(operationalIssues) > 0,
+		OperationalIssues:  operationalIssues,
+		ReconciledTasks:    append([]string{}, options.ReconcileTaskIDs...),
+		RedispatchTasks:    recovery.RedispatchTasks,
+		BlockingIssues:     uniqueSortedStrings(blockingIssues),
+		Passed:             passed,
+		Summary:            summary,
+		Recovery:           recovery,
+	}
+}
+
+func classifyContinueTaskAssessment(taskID string, statuses []string, verificationPassed, positiveEvidence, reconciled bool) (string, string, string) {
+	if reconciled {
+		if verificationPassed {
+			return "manually_reconciled", "Task was manually reconciled and the phase verification passed.", "reverify"
+		}
+		return "manually_reconciled", "Task was manually reconciled, but phase verification still failed.", "reverify"
+	}
+
+	if verificationPassed {
+		if containsString(statuses, "completed") {
+			return "verified", "Task has completed worker evidence and the phase verification passed.", ""
+		}
+		if len(statuses) == 0 {
+			if positiveEvidence {
+				return "verified_partial", "Phase verification passed and overall code evidence supports this task even without a direct task dispatch record.", ""
+			}
+			return "missing", "No dispatch or reconciliation evidence was recorded for this task.", "redispatch"
+		}
+		return "verified_partial", fmt.Sprintf("Phase verification passed despite operational worker issues: %s.", strings.Join(statuses, ", ")), ""
+	}
+
+	if len(statuses) == 0 {
+		return "missing", "No dispatch evidence was recorded for this task.", "redispatch"
+	}
+	if containsString(statuses, "completed") {
+		return "implemented_unverified", "A worker reported completion for this task, but phase verification failed.", "reverify"
+	}
+	return "needs_redispatch", fmt.Sprintf("Worker evidence is incomplete or failed for this task: %s.", strings.Join(statuses, ", ")), "redispatch"
+}
+
+func tasksNeedingRecovery(tasks []codexContinueTaskAssessment) []string {
+	taskIDs := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		switch task.Outcome {
+		case "missing", "needs_redispatch", "implemented_unverified":
+			taskIDs = append(taskIDs, task.TaskID)
+		}
+	}
+	return uniqueSortedStrings(taskIDs)
+}
+
+func buildContinueReconcileCommand(taskIDs []string) string {
+	if len(taskIDs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("aether continue")
+	for _, taskID := range uniqueSortedStrings(taskIDs) {
+		b.WriteString(" --reconcile-task ")
+		b.WriteString(taskID)
+	}
+	return b.String()
+}
+
+func buildTargetedRedispatchCommand(phaseID int, taskIDs []string) string {
+	if len(taskIDs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "aether build %d", phaseID)
+	for _, taskID := range uniqueSortedStrings(taskIDs) {
+		b.WriteString(" --task ")
+		b.WriteString(taskID)
+	}
+	return b.String()
+}
+
+func continueNextCommandForAssessment(assessment codexContinueAssessment) string {
+	if strings.TrimSpace(assessment.Recovery.RedispatchCommand) != "" {
+		return assessment.Recovery.RedispatchCommand
+	}
+	if strings.TrimSpace(assessment.Recovery.ReconcileCommand) != "" {
+		return assessment.Recovery.ReconcileCommand
+	}
+	if strings.TrimSpace(assessment.Recovery.ReverifyCommand) != "" {
+		return assessment.Recovery.ReverifyCommand
+	}
+	return "aether continue"
 }
 
 func resolveCodexVerificationCommands(root string) codexVerificationCommands {
@@ -405,7 +683,7 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 	}
 }
 
-func runCodexContinueGates(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, now time.Time) codexContinueGateReport {
+func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
 
@@ -416,43 +694,27 @@ func runCodexContinueGates(state colony.ColonyState, phase colony.Phase, manifes
 	}
 	checks = append(checks, manifestCheck)
 
-	spawnCount := 0
-	watcherCount := 0
-	failedDispatches := []string{}
-	if manifest.Present {
-		for _, dispatch := range manifest.Data.Dispatches {
-			spawnCount++
-			if dispatch.Caste == "watcher" {
-				watcherCount++
-			}
-			if dispatch.Status != "" && dispatch.Status != "completed" {
-				failedDispatches = append(failedDispatches, fmt.Sprintf("%s (%s)", dispatch.Name, dispatch.Status))
-			}
-		}
+	checks = append(checks, gateCheck{
+		Name:   "verification_steps_passed",
+		Passed: verification.ChecksPassed,
+		Detail: continueVerificationDetail(verification),
+	})
+	if !verification.ChecksPassed {
+		blockers = append(blockers, verification.BlockingIssues...)
 	}
 
-	spawnCheck := gateCheck{Name: "spawn_gate", Passed: true, Detail: fmt.Sprintf("%d workers dispatched", spawnCount)}
-	if manifest.Present && len(phase.Tasks) >= 3 && spawnCount == 0 {
-		spawnCheck.Passed = false
-		spawnCheck.Detail = fmt.Sprintf("phase had %d tasks but manifest recorded 0 worker dispatches", len(phase.Tasks))
-		blockers = append(blockers, spawnCheck.Detail)
+	evidenceCheck := gateCheck{Name: "implementation_evidence", Passed: assessment.PositiveEvidence, Detail: "task or claim evidence recorded for the verified phase"}
+	if !assessment.PositiveEvidence {
+		evidenceCheck.Detail = "verification passed but no implementation evidence or reconciliation was recorded"
+		blockers = append(blockers, assessment.BlockingIssues...)
 	}
-	checks = append(checks, spawnCheck)
+	checks = append(checks, evidenceCheck)
 
-	watcherCheck := gateCheck{Name: "watcher_gate", Passed: true, Detail: fmt.Sprintf("%d watcher dispatches recorded", watcherCount)}
-	if manifest.Present && watcherCount == 0 {
-		watcherCheck.Passed = false
-		watcherCheck.Detail = "no watcher dispatch recorded for this build"
-		blockers = append(blockers, watcherCheck.Detail)
+	operationalCheck := gateCheck{Name: "operational_evidence", Passed: true, Detail: "no operational worker issues were recorded"}
+	if len(assessment.OperationalIssues) > 0 {
+		operationalCheck.Detail = fmt.Sprintf("%d operational worker issues recorded; continue is using verification-led truth instead", len(assessment.OperationalIssues))
 	}
-	checks = append(checks, watcherCheck)
-
-	dispatchCheck := gateCheck{Name: "dispatch_status", Passed: len(failedDispatches) == 0, Detail: "all dispatched workers completed"}
-	if len(failedDispatches) > 0 {
-		dispatchCheck.Detail = fmt.Sprintf("worker dispatches did not complete: %s", strings.Join(failedDispatches, ", "))
-		blockers = append(blockers, dispatchCheck.Detail)
-	}
-	checks = append(checks, dispatchCheck)
+	checks = append(checks, operationalCheck)
 
 	flagCheck := checkNoCriticalFlags()
 	checks = append(checks, flagCheck)
@@ -460,52 +722,64 @@ func runCodexContinueGates(state colony.ColonyState, phase colony.Phase, manifes
 		blockers = append(blockers, flagCheck.Detail)
 	}
 
-	verifyCheck := gateCheck{Name: "verification_passed", Passed: verification.Passed, Detail: "all verification checks passed"}
-	if !verification.Passed {
-		verifyCheck.Detail = strings.Join(verification.BlockingIssues, "; ")
-		blockers = append(blockers, verification.BlockingIssues...)
-	}
-	checks = append(checks, verifyCheck)
-
 	return codexContinueGateReport{
 		Phase:          phase.ID,
 		GeneratedAt:    now.Format(time.RFC3339),
 		Checks:         checks,
 		Passed:         len(blockers) == 0,
-		BlockingIssues: uniqueSortedStrings(blockers),
+		BlockingIssues: uniqueSortedStrings(append(blockers, assessment.BlockingIssues...)),
 	}
 }
 
-func closeCodexContinueWorkers(manifest codexContinueManifest) ([]string, error) {
+func continueVerificationDetail(verification codexContinueVerificationReport) string {
+	if verification.ChecksPassed {
+		return "verification commands passed"
+	}
+	if len(verification.BlockingIssues) == 0 {
+		return "verification commands failed"
+	}
+	return strings.Join(verification.BlockingIssues, "; ")
+}
+
+func closeCodexContinueWorkers(manifest codexContinueManifest, assessment codexContinueAssessment) ([]codexContinueClosedWorker, error) {
 	if !manifest.Present || len(manifest.Data.Dispatches) == 0 {
 		return nil, nil
 	}
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
-	closed := make([]string, 0, len(manifest.Data.Dispatches))
+	closed := make([]codexContinueClosedWorker, 0, len(manifest.Data.Dispatches))
+	reconciled := make(map[string]struct{}, len(assessment.ReconciledTasks))
+	for _, taskID := range assessment.ReconciledTasks {
+		reconciled[taskID] = struct{}{}
+	}
 	for _, dispatch := range manifest.Data.Dispatches {
-		status := "completed"
+		status := strings.TrimSpace(dispatch.Status)
+		if status == "" {
+			status = "completed"
+		}
 		summary := continueWorkerCloseSummary(dispatch)
-		switch strings.TrimSpace(dispatch.Status) {
-		case "failed", "blocked":
-			status = strings.TrimSpace(dispatch.Status)
-			if status == "" {
-				status = "failed"
-			}
-		case "completed", "":
-			summary = continueWorkerCloseSummary(dispatch)
-		default:
-			status = strings.TrimSpace(dispatch.Status)
-			summary = continueWorkerCloseSummary(dispatch)
+		if _, ok := reconciled[dispatch.TaskID]; ok && status != "completed" {
+			status = "manually-reconciled"
+			summary = "Task was manually reconciled before continue advancement"
+		} else if assessment.PartialSuccess && status != "completed" {
+			summary = fmt.Sprintf("%s Phase verification passed independently during continue.", continueWorkerCloseSummary(dispatch))
 		}
 		if err := spawnTree.UpdateStatus(dispatch.Name, status, summary); err != nil {
 			return closed, fmt.Errorf("failed to close worker %s: %w", dispatch.Name, err)
 		}
-		closed = append(closed, dispatch.Name)
+		closed = append(closed, codexContinueClosedWorker{Name: dispatch.Name, Status: status, Summary: summary})
 	}
 	return closed, nil
 }
 
-func updateCodexContinueContext(phase colony.Phase, manifest codexContinueManifest, closedWorkers []string, now time.Time) error {
+func closedWorkerNames(details []codexContinueClosedWorker) []string {
+	names := make([]string, 0, len(details))
+	for _, detail := range details {
+		names = append(names, detail.Name)
+	}
+	return names
+}
+
+func updateCodexContinueContext(phase colony.Phase, manifest codexContinueManifest, closedWorkers []codexContinueClosedWorker, now time.Time) error {
 	data, err := readContextDocument()
 	if err != nil {
 		return nil
@@ -514,8 +788,8 @@ func updateCodexContinueContext(phase colony.Phase, manifest codexContinueManife
 	content = replaceContextTableRow(content, "Last Updated", now.Format(time.RFC3339))
 	content = replaceContextTableRow(content, "Safe to Clear?", "YES — Build complete, ready to continue")
 	content = replaceBuildInProgressWithComplete(content, "verified", fmt.Sprintf("Phase %d ready to advance", phase.ID))
-	for _, name := range closedWorkers {
-		content = markWorkerComplete(content, name, "completed", now.Format(time.RFC3339))
+	for _, worker := range closedWorkers {
+		content = markWorkerComplete(content, worker.Name, worker.Status, now.Format(time.RFC3339))
 	}
 	return writeContextDocument(content)
 }

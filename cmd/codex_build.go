@@ -54,21 +54,30 @@ type codexBuildManifest struct {
 	Playbooks       []string             `json:"playbooks"`
 	WorkerBriefs    []string             `json:"worker_briefs"`
 	Dispatches      []codexBuildDispatch `json:"dispatches"`
+	SelectedTasks   []string             `json:"selected_tasks,omitempty"`
 	Tasks           []codexBuildTaskPlan `json:"tasks"`
 	SuccessCriteria []string             `json:"success_criteria"`
 }
 
-type codexBuildClaims struct {
-	FilesCreated  []string `json:"files_created"`
-	FilesModified []string `json:"files_modified"`
+type codexBuildTaskClaim struct {
+	TaskID        string   `json:"task_id"`
+	FilesCreated  []string `json:"files_created,omitempty"`
+	FilesModified []string `json:"files_modified,omitempty"`
 	TestsWritten  []string `json:"tests_written,omitempty"`
-	BuildPhase    int      `json:"build_phase"`
-	Timestamp     string   `json:"timestamp"`
+}
+
+type codexBuildClaims struct {
+	FilesCreated  []string              `json:"files_created"`
+	FilesModified []string              `json:"files_modified"`
+	TestsWritten  []string              `json:"tests_written,omitempty"`
+	TaskClaims    []codexBuildTaskClaim `json:"task_claims,omitempty"`
+	BuildPhase    int                   `json:"build_phase"`
+	Timestamp     string                `json:"timestamp"`
 }
 
 var newCodexWorkerInvoker = codex.NewWorkerInvoker
 
-func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
+func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
@@ -83,7 +92,12 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
-	if err := validateCodexBuildState(state, phaseNum); err != nil {
+	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
+	phase := state.Plan.Phases[phaseNum-1]
+	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
+		return nil, err
+	}
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs); err != nil {
 		return nil, err
 	}
 	originalState, err := cloneColonyState(state)
@@ -101,13 +115,12 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	phase := state.Plan.Phases[phaseNum-1]
 	depth := strings.TrimSpace(state.ColonyDepth)
 	if depth == "" {
 		depth = "standard"
 	}
 	playbooks := codexBuildPlaybooks()
-	dispatches := plannedBuildDispatches(phase, depth)
+	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
 	if err != nil {
 		return nil, err
@@ -124,13 +137,13 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 	}
 
 	updatedState := state
-	applyCodexBuildState(&updatedState, phaseNum, startedAt)
+	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs)
 	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
 	}
 
-	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, "")
+	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, "", selectedTaskIDs)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -153,7 +166,7 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 		updatedState.Worktrees = latestState.Worktrees
 	}
 	updatedState.State = colony.StateBUILT
-	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode); err != nil {
+	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs); err != nil {
 		return nil, err
 	}
 
@@ -211,6 +224,7 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 		"parallel_waves": parallelWaves,
 		"parallel_mode":  string(parallelMode),
 		"dispatch_mode":  mode,
+		"selected_tasks": selectedTaskIDs,
 		"checkpoint":     displayDataPath(checkpointRel),
 		"build_dir":      displayDataPath(buildDirRel),
 		"manifest":       displayDataPath(manifestRel),
@@ -221,15 +235,22 @@ func runCodexBuild(root string, phaseNum int) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func validateCodexBuildState(state colony.ColonyState, phaseNum int) error {
+func validateCodexBuildState(state colony.ColonyState, phaseNum int, selectedTaskIDs []string) error {
 	retryBuiltPhase := false
+	recoveryBuild := len(selectedTaskIDs) > 0 && state.CurrentPhase == phaseNum
 	switch state.State {
 	case colony.StateEXECUTING:
+		if recoveryBuild {
+			return nil
+		}
 		if state.CurrentPhase > 0 {
 			return fmt.Errorf("phase %d is already active; run `aether continue` before dispatching another build", state.CurrentPhase)
 		}
 		return fmt.Errorf("a build is already in progress; run `aether continue` before dispatching phase %d", phaseNum)
 	case colony.StateBUILT:
+		if recoveryBuild {
+			return nil
+		}
 		if canRetryBuiltPhase(state, phaseNum) {
 			retryBuiltPhase = true
 			break
@@ -256,6 +277,26 @@ func validateCodexBuildState(state colony.ColonyState, phaseNum int) error {
 	}
 	if err := colony.Transition(state.State, colony.StateEXECUTING); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateSelectedBuildTasks(phase colony.Phase, selectedTaskIDs []string) error {
+	if len(selectedTaskIDs) == 0 {
+		return nil
+	}
+	known := make(map[string]struct{}, len(phase.Tasks))
+	for idx, task := range phase.Tasks {
+		known[buildTaskID(task, idx)] = struct{}{}
+	}
+	unknown := make([]string, 0, len(selectedTaskIDs))
+	for _, taskID := range selectedTaskIDs {
+		if _, ok := known[taskID]; !ok {
+			unknown = append(unknown, taskID)
+		}
+	}
+	if len(unknown) > 0 {
+		return fmt.Errorf("unknown task id(s) for phase %d: %s", phase.ID, strings.Join(unknown, ", "))
 	}
 	return nil
 }
@@ -304,7 +345,7 @@ func countCodexBuildClaimPaths(claims codexBuildClaims) int {
 	return total
 }
 
-func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt time.Time) {
+func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt time.Time, selectedTaskIDs []string) {
 	state.State = colony.StateEXECUTING
 	state.CurrentPhase = phaseNum
 	state.BuildStartedAt = &startedAt
@@ -315,7 +356,7 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 			state.Plan.Phases[i].Status = colony.PhaseCompleted
 		case state.Plan.Phases[i].ID == phaseNum:
 			state.Plan.Phases[i].Status = colony.PhaseInProgress
-			applyBuildTaskStatuses(&state.Plan.Phases[i])
+			applyBuildTaskStatuses(&state.Plan.Phases[i], selectedTaskIDs)
 		case state.Plan.Phases[i].Status == "":
 			state.Plan.Phases[i].Status = colony.PhasePending
 		}
@@ -324,11 +365,31 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 	phase := state.Plan.Phases[phaseNum-1]
 	state.Events = append(trimmedEvents(state.Events),
 		fmt.Sprintf("%s|phase_started|build|Phase %d: %s", startedAt.Format(time.RFC3339), phaseNum, phase.Name),
-		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatches(phase, normalizedBuildDepth(state.ColonyDepth))), phaseNum),
+		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelection(phase, normalizedBuildDepth(state.ColonyDepth), selectedTaskIDs)), phaseNum),
 	)
 }
 
-func applyBuildTaskStatuses(phase *colony.Phase) {
+func applyBuildTaskStatuses(phase *colony.Phase, selectedTaskIDs []string) {
+	selected := make(map[string]struct{}, len(selectedTaskIDs))
+	for _, taskID := range selectedTaskIDs {
+		selected[taskID] = struct{}{}
+	}
+	if len(selected) > 0 {
+		for i := range phase.Tasks {
+			if phase.Tasks[i].Status == colony.TaskCompleted {
+				continue
+			}
+			if _, ok := selected[buildTaskID(phase.Tasks[i], i)]; ok {
+				phase.Tasks[i].Status = colony.TaskInProgress
+				continue
+			}
+			if phase.Tasks[i].Status == "" {
+				phase.Tasks[i].Status = colony.TaskPending
+			}
+		}
+		return
+	}
+
 	waves := taskWaves(phase.Tasks)
 	firstWave := map[int]bool{}
 	if len(waves) > 0 {
@@ -361,7 +422,15 @@ func codexBuildPlaybooks() []string {
 }
 
 func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispatch {
+	return plannedBuildDispatchesForSelection(phase, depth, nil)
+}
+
+func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string) []codexBuildDispatch {
 	depth = normalizedBuildDepth(depth)
+	selected := make(map[string]struct{}, len(selectedTaskIDs))
+	for _, taskID := range selectedTaskIDs {
+		selected[taskID] = struct{}{}
+	}
 	waves := taskWaves(phase.Tasks)
 	dispatches := make([]codexBuildDispatch, 0, len(phase.Tasks)+4)
 
@@ -369,6 +438,11 @@ func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispat
 		for _, taskIdx := range wave {
 			task := phase.Tasks[taskIdx]
 			taskID := buildTaskID(task, taskIdx)
+			if len(selected) > 0 {
+				if _, ok := selected[taskID]; !ok {
+					continue
+				}
+			}
 			dispatches = append(dispatches, codexBuildDispatch{
 				Stage:     "wave",
 				Wave:      waveIdx + 1,
@@ -383,7 +457,7 @@ func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispat
 		}
 	}
 
-	if len(waves) == 0 {
+	if len(waves) == 0 && len(selected) == 0 {
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:  "wave",
 			Wave:   1,
@@ -394,7 +468,7 @@ func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispat
 		})
 	}
 
-	if depth == "deep" || depth == "full" {
+	if len(selected) == 0 && (depth == "deep" || depth == "full") {
 		dispatches = append(dispatches,
 			codexBuildDispatch{
 				Stage:  "strategy",
@@ -520,7 +594,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	return dispatches, claims, mode, nil
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string) ([]string, []codexBuildDispatch, error) {
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
 	briefOutputs := map[string]string{}
 
@@ -579,6 +653,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 		Playbooks:       append([]string{}, playbooks...),
 		WorkerBriefs:    briefPaths,
 		Dispatches:      dispatches,
+		SelectedTasks:   append([]string{}, selectedTaskIDs...),
 		Tasks:           taskPlans,
 		SuccessCriteria: append([]string{}, phase.SuccessCriteria...),
 	}
@@ -789,6 +864,17 @@ func writeCodexBuildClaims(relPath string, phaseNum int, startedAt time.Time, su
 		claims.FilesCreated = append([]string{}, summary.FilesCreated...)
 		claims.FilesModified = append([]string{}, summary.FilesModified...)
 		claims.TestsWritten = append([]string{}, summary.TestsWritten...)
+		if len(summary.TaskClaims) > 0 {
+			claims.TaskClaims = make([]codexBuildTaskClaim, 0, len(summary.TaskClaims))
+			for _, taskClaim := range summary.TaskClaims {
+				claims.TaskClaims = append(claims.TaskClaims, codexBuildTaskClaim{
+					TaskID:        taskClaim.TaskID,
+					FilesCreated:  append([]string{}, taskClaim.FilesCreated...),
+					FilesModified: append([]string{}, taskClaim.FilesModified...),
+					TestsWritten:  append([]string{}, taskClaim.TestsWritten...),
+				})
+			}
+		}
 	}
 	if err := store.SaveJSON(relPath, claims); err != nil {
 		return fmt.Errorf("failed to write build claims: %w", err)
