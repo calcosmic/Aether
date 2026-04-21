@@ -20,14 +20,87 @@ func scanCeremonyIntegrity(fc *fileChecker) []HealthIssue {
 	return issues
 }
 
-// checkStageMarkers is implemented in the stage marker check task.
+// stateChangingCommands lists commands that should have stage marker
+// ceremony in their wrapper markdown.
+var stateChangingCommands = []string{"build", "continue", "init", "seal", "plan"}
+
+// stageMarkerPattern matches stage markers in the form "── ... ──".
+var stageMarkerPattern = regexp.MustCompile(`──.*──`)
+
+// checkStageMarkers verifies that state-changing command wrappers contain
+// stage marker references, and that YAML source files exist for each
+// state-changing command.
 func checkStageMarkers(fc *fileChecker) []HealthIssue {
-	return nil
+	var issues []HealthIssue
+
+	claudeCmdDir := filepath.Join(fc.repoRoot, ".claude", "commands", "ant")
+
+	for _, cmd := range stateChangingCommands {
+		wrapperPath := filepath.Join(claudeCmdDir, cmd+".md")
+		content, err := os.ReadFile(wrapperPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				issues = append(issues, issueWarning("ceremony", cmd,
+					fmt.Sprintf("Wrapper for '%s' not found", cmd)))
+			}
+			continue
+		}
+
+		if !stageMarkerPattern.Match(content) {
+			issues = append(issues, issueWarning("ceremony", cmd,
+				fmt.Sprintf("Wrapper for '%s' has no stage markers (state-changing command should include ceremony)", cmd)))
+		}
+
+		// Verify YAML source exists
+		yamlPath := filepath.Join(fc.repoRoot, ".aether", "commands", cmd+".yaml")
+		if _, err := os.Stat(yamlPath); err != nil {
+			issues = append(issues, issueWarning("ceremony", cmd,
+				fmt.Sprintf("YAML source for '%s' not found at .aether/commands/%s.yaml", cmd, cmd)))
+		}
+	}
+
+	return issues
 }
 
-// checkContextClearGuidance is implemented in the context-clear check task.
+// checkContextClearGuidance verifies that context-clear guidance in
+// continue.md is runtime-owned (not hard-coded).
 func checkContextClearGuidance(fc *fileChecker) []HealthIssue {
-	return nil
+	var issues []HealthIssue
+
+	continuePath := filepath.Join(fc.repoRoot, ".claude", "commands", "ant", "continue.md")
+	content, err := os.ReadFile(continuePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			issues = append(issues, issueWarning("ceremony", "continue.md",
+				"continue.md not found (context-clear guidance missing)"))
+		}
+		return issues
+	}
+
+	text := string(content)
+
+	// Verify context-clear guidance exists (references runtime emission)
+	if !strings.Contains(text, "context-clear") && !strings.Contains(text, "context clear") {
+		issues = append(issues, issueInfo("ceremony", "continue.md",
+			"No context-clear guidance found in continue.md"))
+	}
+
+	// Check for hard-coded context-clear patterns that should be runtime-owned
+	// The runtime owns context-clear via renderContextClearGuidance().
+	// Wrappers should NOT contain their own context-clear instructions.
+	hardcodedPatterns := []string{
+		"It's safe to clear your context now",
+		"You can safely clear",
+		"safe to clear",
+	}
+	for _, pattern := range hardcodedPatterns {
+		if strings.Contains(text, pattern) {
+			issues = append(issues, issueWarning("ceremony", "continue.md",
+				fmt.Sprintf("Context-clear guidance in continue.md contains hardcoded value '%s' (should be runtime-owned)", pattern)))
+		}
+	}
+
+	return issues
 }
 
 // emojiPattern matches Unicode emoji characters commonly used in command
