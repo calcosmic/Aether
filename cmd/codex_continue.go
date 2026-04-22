@@ -370,46 +370,52 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	closedWorkerDetails := plannedCodexContinueClosedWorkers(manifest, assessment)
 	closedWorkers := closedWorkerNames(closedWorkerDetails)
 
-	updated := state
-	updated.Events = append(trimmedEvents(updated.Events),
-		fmt.Sprintf("%s|verification_passed|continue|Build verification passed for phase %d", now.Format(time.RFC3339), phase.ID),
-		fmt.Sprintf("%s|gate_passed|continue|Continue gates passed for phase %d", now.Format(time.RFC3339), phase.ID),
-	)
-	updated.Plan.Phases[currentIdx].Status = colony.PhaseCompleted
-	for i := range updated.Plan.Phases[currentIdx].Tasks {
-		updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
-	}
-	updated.BuildStartedAt = nil
-
-	final := currentIdx == len(updated.Plan.Phases)-1
-	var nextPhase *colony.Phase
-	nextCommand := "aether seal"
-	if final {
-		updated.State = colony.StateCOMPLETED
-		updated.CurrentPhase = phase.ID
-		updated.Events = append(updated.Events,
-			fmt.Sprintf("%s|phase_completed|continue|Completed final phase %d", now.Format(time.RFC3339), updated.CurrentPhase),
-		)
-	} else {
-		nextIdx := currentIdx + 1
-		if updated.Plan.Phases[nextIdx].Status == colony.PhasePending || updated.Plan.Phases[nextIdx].Status == "" {
-			updated.Plan.Phases[nextIdx].Status = colony.PhaseReady
-		}
-		updated.CurrentPhase = nextIdx + 1
-		nextPhase = &updated.Plan.Phases[nextIdx]
-		updated.State = colony.StateREADY
-		nextCommand = fmt.Sprintf("aether build %d", nextIdx+1)
-		updated.Events = append(updated.Events,
-			fmt.Sprintf("%s|phase_advanced|continue|Completed phase %d, ready for phase %d", now.Format(time.RFC3339), phase.ID, nextIdx+1),
-		)
-	}
-
 	// --- ATOMIC STATE COMMIT ---
-	// Save colony state BEFORE running side effects or writing reports that
-	// claim advancement. If this fails, no external party can observe a
-	// partially advanced state.
-	if err := store.SaveJSON("COLONY_STATE.json", updated); err != nil {
-		return nil, state, phase, nextPhase, nil, final, fmt.Errorf("failed to save colony state: %w", err)
+	// Mutate and save colony state in a single atomic read-modify-write cycle.
+	// If the mutation fails, no write occurs. This runs BEFORE side effects
+	// and report saves so no external observer can see a partially advanced state.
+	var (
+		nextPhase   *colony.Phase
+		nextCommand string
+		final       bool
+		updated     colony.ColonyState
+	)
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		updated = state
+		updated.Events = append(trimmedEvents(updated.Events),
+			fmt.Sprintf("%s|verification_passed|continue|Build verification passed for phase %d", now.Format(time.RFC3339), phase.ID),
+			fmt.Sprintf("%s|gate_passed|continue|Continue gates passed for phase %d", now.Format(time.RFC3339), phase.ID),
+		)
+		updated.Plan.Phases[currentIdx].Status = colony.PhaseCompleted
+		for i := range updated.Plan.Phases[currentIdx].Tasks {
+			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
+		}
+		updated.BuildStartedAt = nil
+
+		final = currentIdx == len(updated.Plan.Phases)-1
+		nextCommand = "aether seal"
+		if final {
+			updated.State = colony.StateCOMPLETED
+			updated.CurrentPhase = phase.ID
+			updated.Events = append(updated.Events,
+				fmt.Sprintf("%s|phase_completed|continue|Completed final phase %d", now.Format(time.RFC3339), updated.CurrentPhase),
+			)
+		} else {
+			nextIdx := currentIdx + 1
+			if updated.Plan.Phases[nextIdx].Status == colony.PhasePending || updated.Plan.Phases[nextIdx].Status == "" {
+				updated.Plan.Phases[nextIdx].Status = colony.PhaseReady
+			}
+			updated.CurrentPhase = nextIdx + 1
+			nextPhase = &updated.Plan.Phases[nextIdx]
+			updated.State = colony.StateREADY
+			nextCommand = fmt.Sprintf("aether build %d", nextIdx+1)
+			updated.Events = append(updated.Events,
+				fmt.Sprintf("%s|phase_advanced|continue|Completed phase %d, ready for phase %d", now.Format(time.RFC3339), phase.ID, nextIdx+1),
+			)
+		}
+		return nil
+	}); err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to atomically advance phase: %w", err)
 	}
 
 	// --- SIDE EFFECTS (after state is durable) ---
