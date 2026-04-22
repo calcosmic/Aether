@@ -855,7 +855,7 @@ func TestContinueBlocksWhenWatcherUsesFakeInvoker(t *testing.T) {
 	}
 }
 
-func TestContinueAdvancesOnVerifiedPartialSuccess(t *testing.T) {
+func TestContinueBlocksWhenWorkerTimesOut(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -865,7 +865,7 @@ func TestContinueAdvancesOnVerifiedPartialSuccess(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Advance despite partial worker failure"
+	goal := "Block advancement when a worker timed out"
 	now := time.Now().UTC()
 	taskOneID := "1.1"
 	taskTwoID := "1.2"
@@ -880,7 +880,7 @@ func TestContinueAdvancesOnVerifiedPartialSuccess(t *testing.T) {
 			Phases: []colony.Phase{
 				{
 					ID:     1,
-					Name:   "Partial success phase",
+					Name:   "Timeout worker phase",
 					Status: colony.PhaseInProgress,
 					Tasks: []colony.Task{
 						{ID: &taskOneID, Goal: "Land the first change", Status: colony.TaskInProgress},
@@ -889,9 +889,9 @@ func TestContinueAdvancesOnVerifiedPartialSuccess(t *testing.T) {
 				},
 				{
 					ID:     2,
-					Name:   "Next verified phase",
+					Name:   "Next phase should not unlock",
 					Status: colony.PhasePending,
-					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Keep going", Status: colony.TaskPending}},
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Wait for redispatch", Status: colony.TaskPending}},
 				},
 			},
 		},
@@ -902,7 +902,7 @@ func TestContinueAdvancesOnVerifiedPartialSuccess(t *testing.T) {
 		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-62", Task: "Land the second change", Status: "timeout", TaskID: taskTwoID},
 		{Stage: "verification", Caste: "watcher", Name: "Keen-63", Task: "Independent verification before advancement", Status: "completed"},
 	}
-	seedContinueBuildPacket(t, dataDir, 1, "Partial success phase", goal, dispatches)
+	seedContinueBuildPacket(t, dataDir, 1, "Timeout worker phase", goal, dispatches)
 
 	rootCmd.SetArgs([]string{"continue"})
 	if err := rootCmd.Execute(); err != nil {
@@ -911,29 +911,32 @@ func TestContinueAdvancesOnVerifiedPartialSuccess(t *testing.T) {
 
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if advanced, _ := result["advanced"].(bool); !advanced {
-		t.Fatalf("expected advanced:true, got %v", result)
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true when a worker timed out, got %v", result)
 	}
-	if partial, _ := result["partial_success"].(bool); !partial {
-		t.Fatalf("expected partial_success:true, got %v", result)
-	}
-	issues := stringSliceValue(result["operational_issues"])
-	if len(issues) == 0 {
-		t.Fatalf("expected operational issues in partial success result, got %v", result)
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false when a worker timed out, got %v", result)
 	}
 
-	spawnTreeData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
-	if err != nil {
-		t.Fatalf("failed to read spawn tree: %v", err)
+	recovery := result["recovery"].(map[string]interface{})
+	if got := recovery["redispatch_command"].(string); got != "aether build 1 --task 1.2" {
+		t.Fatalf("redispatch command = %q, want %q", got, "aether build 1 --task 1.2")
 	}
-	for _, want := range []string{
-		"|Forge-61|completed|",
-		"|Forge-62|timeout|",
-		"|Keen-63|completed|",
-	} {
-		if !strings.Contains(string(spawnTreeData), want) {
-			t.Fatalf("spawn tree missing partial-success line %q\n%s", want, string(spawnTreeData))
-		}
+
+	issues := stringSliceValue(result["operational_issues"])
+	if len(issues) == 0 {
+		t.Fatalf("expected operational issues in blocked result, got %v", result)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("state = %s, want BUILT", state.State)
+	}
+	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
+		t.Fatalf("phase 1 status = %s, want in_progress", state.Plan.Phases[0].Status)
 	}
 }
 

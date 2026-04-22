@@ -1073,7 +1073,7 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 
 func continueTasksSupportAdvancement(tasks []codexContinueTaskAssessment, claimsSatisfied bool) bool {
 	if len(tasks) == 0 {
-		return claimsSatisfied
+		return false
 	}
 	for _, task := range tasks {
 		switch task.Outcome {
@@ -1111,7 +1111,7 @@ func classifyContinueTaskAssessment(taskID string, statuses []string, verificati
 		if !artifactEvidenceTrusted {
 			return "implemented_unverified", fmt.Sprintf("Workers reported activity for this task, but artifact verification is missing or failed: %s.", strings.Join(statuses, ", ")), "redispatch"
 		}
-		return "verified_partial", fmt.Sprintf("Phase verification passed despite operational worker issues: %s.", strings.Join(statuses, ", ")), ""
+		return "needs_redispatch", fmt.Sprintf("Phase verification passed but worker evidence is incomplete or failed: %s.", strings.Join(statuses, ", ")), "redispatch"
 	}
 
 	if len(statuses) == 0 {
