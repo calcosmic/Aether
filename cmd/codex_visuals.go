@@ -318,7 +318,28 @@ func renderNextUp(primary string, alternatives ...string) string {
 }
 
 func renderContextClearGuidance() string {
-	return "It's safe to clear your context now. Run `/ant:resume` to restore.\n"
+	return renderContextClearGuidanceForPlatform(detectPlatform())
+}
+
+func detectPlatform() string {
+	if os.Getenv("AETHER_PLATFORM") != "" {
+		return os.Getenv("AETHER_PLATFORM")
+	}
+	if os.Getenv("CODEX_CLI") != "" || os.Getenv("CODEX_API_KEY") != "" {
+		return "codex"
+	}
+	return "claude"
+}
+
+func renderContextClearGuidanceForPlatform(platform string) string {
+	switch platform {
+	case "codex":
+		return "It's safe to clear your context now. Run `aether resume` to restore.\n"
+	case "opencode":
+		return "It's safe to clear your context now. Run `/ant:resume` to restore.\n"
+	default:
+		return "It's safe to clear your context now. Run `/ant:resume` to restore.\n"
+	}
 }
 
 func renderProgressSummary(current, total int) string {
@@ -2098,6 +2119,13 @@ func filterBuildDispatches(dispatches []codexBuildDispatch, stage string) []code
 
 func suggestedBuildCaste(task colony.Task) string {
 	text := strings.ToLower(strings.TrimSpace(task.Goal + " " + strings.Join(task.Hints, " ") + " " + strings.Join(task.SuccessCriteria, " ")))
+	// Check builder keywords first (higher priority)
+	for _, token := range []string{"implement", "build", "create", "fix", "add", "write", "code", "refactor", "test", "deploy"} {
+		if strings.Contains(text, token) {
+			return "builder"
+		}
+	}
+	// Then check scout keywords
 	for _, token := range []string{"research", "investigat", "survey", "analy", "document", "readme", "spec"} {
 		if strings.Contains(text, token) {
 			return "scout"

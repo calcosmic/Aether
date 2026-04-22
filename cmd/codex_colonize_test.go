@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"strings"
 	"testing"
 	"time"
@@ -189,6 +190,19 @@ func TestColonizeIncludesDispatchContract(t *testing.T) {
 		if !containsString(artifacts, want) {
 			t.Fatalf("artifact_paths missing %q: %v", want, artifacts)
 		}
+	}
+}
+
+func TestSurveyDispatchContractWithTimeoutOverride(t *testing.T) {
+	contract := surveyDispatchContractWithTimeout(6 * time.Minute)
+	if got, ok := contract["worker_timeout_seconds"].(int); !ok || got != 360 {
+		t.Fatalf("worker_timeout_seconds = %#v, want 360", contract["worker_timeout_seconds"])
+	}
+}
+
+func TestColonizeCommandExposesWorkerTimeoutFlag(t *testing.T) {
+	if colonizeCmd.Flags().Lookup("worker-timeout") == nil {
+		t.Fatal("expected colonize command to expose --worker-timeout")
 	}
 }
 
@@ -452,6 +466,49 @@ developer_instructions = "You are a test surveyor."
 	}
 }
 
+func TestDispatchRealSurveyors_UsesTimeoutOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	root := tmpDir
+
+	codexDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(codexDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	tomlContent := `name = "test"
+description = "test agent"
+developer_instructions = "You are a test surveyor."
+`
+	for _, name := range []string{
+		"aether-surveyor-nest.toml",
+		"aether-surveyor-disciplines.toml",
+		"aether-surveyor-pathogens.toml",
+		"aether-surveyor-provisions.toml",
+	} {
+		if err := os.WriteFile(filepath.Join(codexDir, name), []byte(tomlContent), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	invoker := &timeoutRecordingSurveyInvoker{}
+	override := 6 * time.Minute
+
+	got, err := dispatchRealSurveyorsWithTimeout(context.Background(), root, invoker, override)
+	if err != nil {
+		t.Fatalf("dispatchRealSurveyorsWithTimeout returned error: %v", err)
+	}
+	if len(got) != len(surveyorSpecs) {
+		t.Fatalf("expected %d dispatches, got %d", len(surveyorSpecs), len(got))
+	}
+	if len(invoker.timeouts) != len(surveyorSpecs) {
+		t.Fatalf("expected %d recorded timeouts, got %d", len(surveyorSpecs), len(invoker.timeouts))
+	}
+	for i, gotTimeout := range invoker.timeouts {
+		if gotTimeout != override {
+			t.Fatalf("timeout[%d] = %s, want %s", i, gotTimeout, override)
+		}
+	}
+}
+
 // TestDispatchRealSurveyors_TimeoutMapsToFailed verifies that "timeout"
 // status from DispatchResult is mapped to "failed" in codexSurveyorDispatch.
 func TestDispatchRealSurveyors_TimeoutMapsToFailed(t *testing.T) {
@@ -512,6 +569,32 @@ func (ti *timeoutTestInvoker) IsAvailable(_ context.Context) bool {
 }
 
 func (ti *timeoutTestInvoker) ValidateAgent(_ string) error {
+	return nil
+}
+
+type timeoutRecordingSurveyInvoker struct {
+	mu       sync.Mutex
+	timeouts []time.Duration
+}
+
+func (ti *timeoutRecordingSurveyInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	ti.mu.Lock()
+	ti.timeouts = append(ti.timeouts, config.Timeout)
+	ti.mu.Unlock()
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "captured survey dispatch",
+	}, nil
+}
+
+func (ti *timeoutRecordingSurveyInvoker) IsAvailable(_ context.Context) bool {
+	return true
+}
+
+func (ti *timeoutRecordingSurveyInvoker) ValidateAgent(_ string) error {
 	return nil
 }
 

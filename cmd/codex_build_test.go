@@ -71,8 +71,8 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 
 	result := envelope["result"].(map[string]interface{})
-	if got := int(result["dispatch_count"].(float64)); got != 6 {
-		t.Fatalf("dispatch_count = %d, want 6", got)
+	if got := int(result["dispatch_count"].(float64)); got != 7 {
+		t.Fatalf("dispatch_count = %d, want 7", got)
 	}
 	if got := int(result["wave_count"].(float64)); got != 2 {
 		t.Fatalf("wave_count = %d, want 2", got)
@@ -107,11 +107,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 6 {
-		t.Fatalf("expected 6 manifest dispatches, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 7 {
+		t.Fatalf("expected 7 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	if len(manifest.WorkerBriefs) != 6 {
-		t.Fatalf("expected 6 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	if len(manifest.WorkerBriefs) != 7 {
+		t.Fatalf("expected 7 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -146,7 +146,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|scout|", "|Queen|builder|", "|Queen|oracle|", "|Queen|architect|", "|Queen|watcher|", "|Queen|chaos|"} {
+	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|architect|", "|Queen|watcher|", "|Queen|chaos|", "|Queen|archaeologist|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
 		}
@@ -291,8 +291,8 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	if len(manifest.SelectedTasks) != 1 || manifest.SelectedTasks[0] != taskTwoID {
 		t.Fatalf("manifest selected tasks = %v, want [%s]", manifest.SelectedTasks, taskTwoID)
 	}
-	if len(manifest.Dispatches) != 3 {
-		t.Fatalf("expected 3 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 4 {
+		t.Fatalf("expected 4 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
 	}
 	for _, dispatch := range manifest.Dispatches {
 		if dispatch.TaskID != "" && dispatch.TaskID != taskTwoID {

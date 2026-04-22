@@ -97,7 +97,20 @@ type phaseTaskTemplate struct {
 	DependsOn       []string
 }
 
+type codexPlanOptions struct {
+	Refresh       bool
+	Synthetic     bool
+	WorkerTimeout time.Duration
+}
+
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
+	return runCodexPlanWithOptions(root, codexPlanOptions{
+		Refresh:   refresh,
+		Synthetic: synthetic,
+	})
+}
+
+func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
@@ -115,7 +128,7 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 		clarificationWarning = "Unresolved clarifications exist. Run `aether discuss` to resolve them before planning, or proceed with implicit assumptions."
 	}
 
-	if len(state.Plan.Phases) > 0 && !refresh {
+	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
 		if nextPhase > 0 {
@@ -129,14 +142,14 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 			"phases":                    state.Plan.Phases,
 			"count":                     len(state.Plan.Phases),
 			"granularity":               string(granularity),
-			"dispatch_contract":         planningDispatchContract(),
+			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
 			"unresolved_clarifications": unresolvedClarifications,
 			"clarification_warning":     clarificationWarning,
 			"next":                      nextCommand,
 		}, nil
 	}
 
-	if refresh && state.CurrentPhase > 0 {
+	if opts.Refresh && state.CurrentPhase > 0 {
 		return nil, fmt.Errorf("cannot refresh the plan while phase %d is already active", state.CurrentPhase)
 	}
 
@@ -181,13 +194,13 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 
 	emitVisualProgress(renderPlanDispatchPreview(*state.Goal, dispatches))
 
-	if !synthetic {
+	if !opts.Synthetic {
 		invoker := newCodexWorkerInvoker()
 		if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
 			dispatchMode = "fallback"
 			planningWarning = fmt.Sprintf("Real planning workers were unavailable, so Aether fell back to local synthesis. Cause: %s", dispatchAvailabilityMessage(invoker))
 		} else {
-			realDispatches, dispatchErr := dispatchRealPlanningWorkers(context.Background(), root, invoker)
+			realDispatches, dispatchErr := dispatchRealPlanningWorkersWithTimeout(context.Background(), root, survey, invoker, opts.WorkerTimeout)
 			if realDispatches != nil {
 				dispatches = realDispatches
 			}
@@ -305,7 +318,7 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 	result := map[string]interface{}{
 		"planned":                   true,
 		"existing_plan":             false,
-		"refreshed":                 refresh,
+		"refreshed":                 opts.Refresh,
 		"goal":                      *state.Goal,
 		"phases":                    phases,
 		"count":                     len(phases),
@@ -320,7 +333,7 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 		"phase_research_files":      phaseResearchFiles,
 		"dispatches":                dispatchMaps,
 		"dispatch_mode":             dispatchMode,
-		"dispatch_contract":         planningDispatchContract(),
+		"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
 		"artifact_source":           artifactSource,
 		"plan_source":               planSource,
 		"gaps":                      unresolvedGaps,
@@ -415,6 +428,10 @@ var planningWorkerSpecs = []planningWorkerSpec{
 // dispatchRealPlanningWorkers attempts real worker invocation for planning.
 // If the invoker is not available, it returns nil, nil (caller falls back to plannedPlanningWorkers).
 func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex.WorkerInvoker) ([]codexPlanningDispatch, error) {
+	return dispatchRealPlanningWorkersWithTimeout(ctx, root, codexSurveyContext{}, invoker, 0)
+}
+
+func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, survey codexSurveyContext, invoker codex.WorkerInvoker, timeoutOverride time.Duration) ([]codexPlanningDispatch, error) {
 	if invoker == nil || !invoker.IsAvailable(ctx) {
 		return nil, nil
 	}
@@ -423,6 +440,7 @@ func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex
 	pheromoneSection := resolvePheromoneSection()
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	results := make([]codex.DispatchResult, 0, len(planningWorkerSpecs))
+	workerTimeout := effectivePlanningDispatchTimeout(timeoutOverride)
 	for i, spec := range planningWorkerSpecs {
 		agentName := strings.TrimSuffix(spec.AgentFile, ".toml")
 		dispatch := codex.WorkerDispatch{
@@ -432,17 +450,13 @@ func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex
 			AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
 			Caste:            spec.Caste,
 			TaskID:           fmt.Sprintf("plan-%d", i),
-			TaskBrief:        renderPlanningWorkerBrief(root, spec),
+			TaskBrief:        renderPlanningWorkerBrief(root, survey, spec),
 			ContextCapsule:   capsule,
 			SkillSection:     resolveSkillSection(spec.Caste, spec.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
 			Wave:             i + 1,
-		}
-		if i == 0 {
-			dispatch.Timeout = planningScoutTimeout
-		} else {
-			dispatch.Timeout = planningRouteSetterTimeout
+			Timeout:          workerTimeout,
 		}
 
 		stageResults, err := dispatchBatchByWaveWithVisuals(
@@ -723,18 +737,41 @@ func clampInt(value, min, max int) int {
 	return value
 }
 
-func renderPlanningWorkerBrief(root string, spec planningWorkerSpec) string {
+func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec planningWorkerSpec) string {
 	planningDir := filepath.ToSlash(filepath.Join(".aether", "data", "planning"))
+	surveyDir := filepath.ToSlash(filepath.Join(".aether", "data", "survey"))
 	phaseResearchDir := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research"))
 	primaryOutputs := make([]string, 0, len(spec.Outputs))
 	for _, output := range spec.Outputs {
 		primaryOutputs = append(primaryOutputs, filepath.ToSlash(filepath.Join(planningDir, output)))
+	}
+	surveyDocs := make([]string, 0, len(survey.SurveyDocs))
+	for _, name := range survey.SurveyDocs {
+		surveyDocs = append(surveyDocs, filepath.ToSlash(filepath.Join(surveyDir, name)))
 	}
 
 	var b strings.Builder
 	b.WriteString("Planning task: ")
 	b.WriteString(spec.Task)
 	b.WriteString("\n\n")
+	b.WriteString("Use the existing survey artifacts first before scanning the wider repository.\n")
+	b.WriteString("- Primary survey source: ")
+	b.WriteString(surveyDir)
+	b.WriteString("\n")
+	if len(surveyDocs) > 0 {
+		b.WriteString("- Survey docs to read first: ")
+		b.WriteString(strings.Join(surveyDocs, ", "))
+		b.WriteString("\n")
+	} else {
+		b.WriteString("- Survey docs to read first: none detected; inspect repo files only when the survey is missing or ambiguous.\n")
+	}
+	if spec.Caste == "route_setter" {
+		b.WriteString("- Read scout output before drafting phases: ")
+		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
+		b.WriteString("\n")
+	}
+	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
+	b.WriteString("- Avoid high-noise paths unless directly relevant: .aether/backups/, .aether/chambers/, .aether/data/build/, .git/, node_modules/, dist/, build/, vendor/.\n")
 	b.WriteString("Write planning outputs directly into the repository.\n")
 	b.WriteString("- Primary outputs: ")
 	b.WriteString(strings.Join(primaryOutputs, ", "))

@@ -201,7 +201,7 @@ func (st *SpawnTree) RecordSpawn(parent, caste, name, task string, depth int) er
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if st.store == nil {
-		return nil
+		return fmt.Errorf("spawn tree: store is nil")
 	}
 
 	if err := st.store.UpdateFile(st.filePath, func(existing []byte) ([]byte, error) {
@@ -248,7 +248,7 @@ func (st *SpawnTree) updateStatus(name string, status string, summary string, pr
 	summary = sanitizeSpawnField(summary)
 	updatedAt := time.Now().UTC().Format(time.RFC3339)
 	if st.store == nil {
-		return nil
+		return fmt.Errorf("spawn tree: store is nil")
 	}
 
 	if err := st.store.UpdateFile(st.filePath, func(existing []byte) ([]byte, error) {

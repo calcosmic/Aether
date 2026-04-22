@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -504,8 +505,12 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 
 func resolveCodexWorkerContext() string {
 	context := strings.TrimSpace(buildColonyPrimeOutput(true).PromptSection)
-	if context != "" {
-		return context
+	if context == "" {
+		context = buildContextCapsuleOutput(true, 8, 3, 2, 220).PromptSection
 	}
-	return buildContextCapsuleOutput(true, 8, 3, 2, 220).PromptSection
+	if len(context) < 128 {
+		fmt.Fprintf(os.Stderr, "⚠ Context capsule below minimum threshold (%d chars, min 128) — dispatch blocked to prevent zero-context worker execution\n", len(context))
+		return ""
+	}
+	return context
 }

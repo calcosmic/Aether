@@ -28,7 +28,15 @@ var colonizeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		forceResurvey, _ := cmd.Flags().GetBool("force-resurvey")
 		forceAlias, _ := cmd.Flags().GetBool("force")
-		result, err := runCodexColonize(skillWorkspaceRoot(), forceResurvey || forceAlias)
+		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		result, err := runCodexColonizeWithOptions(skillWorkspaceRoot(), codexColonizeOptions{
+			ForceResurvey: forceResurvey || forceAlias,
+			WorkerTimeout: workerTimeout,
+		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -46,7 +54,16 @@ var planCmd = &cobra.Command{
 		refresh, _ := cmd.Flags().GetBool("refresh")
 		forceAlias, _ := cmd.Flags().GetBool("force")
 		synthetic, _ := cmd.Flags().GetBool("synthetic")
-		result, err := runCodexPlan(skillWorkspaceRoot(), refresh || forceAlias, synthetic)
+		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		result, err := runCodexPlanWithOptions(skillWorkspaceRoot(), codexPlanOptions{
+			Refresh:       refresh || forceAlias,
+			Synthetic:     synthetic,
+			WorkerTimeout: workerTimeout,
+		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -137,6 +154,20 @@ func normalizeCLIStringList(values []string) []string {
 		}
 	}
 	return uniqueSortedStrings(normalized)
+}
+
+func resolveWorkerTimeoutFlag(cmd *cobra.Command) (time.Duration, error) {
+	if !cmd.Flags().Changed("worker-timeout") {
+		return 0, nil
+	}
+	timeout, err := cmd.Flags().GetDuration("worker-timeout")
+	if err != nil {
+		return 0, fmt.Errorf("invalid --worker-timeout: %w", err)
+	}
+	if timeout <= 0 {
+		return 0, fmt.Errorf("--worker-timeout must be greater than 0")
+	}
+	return timeout, nil
 }
 
 var sealCmd = &cobra.Command{
@@ -544,9 +575,11 @@ func init() {
 	layEggsCmd.Flags().String("home-dir", "", "User home directory (default: $HOME)")
 	colonizeCmd.Flags().Bool("force-resurvey", false, "Refresh survey artifacts even when an existing survey is present")
 	colonizeCmd.Flags().Bool("force", false, "Alias for --force-resurvey")
+	colonizeCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real surveyor dispatches (e.g. 5m)")
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
+	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")

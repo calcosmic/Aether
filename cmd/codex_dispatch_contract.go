@@ -8,11 +8,25 @@ import (
 )
 
 var (
-	planningScoutTimeout       = 90 * time.Second
-	planningRouteSetterTimeout = 90 * time.Second
-	surveyorDispatchTimeout    = 90 * time.Second
+	planningScoutTimeout       = 5 * time.Minute
+	planningRouteSetterTimeout = 5 * time.Minute
+	surveyorDispatchTimeout    = 5 * time.Minute
 	continueReviewTimeout      = 5 * time.Minute
 )
+
+func effectivePlanningDispatchTimeout(override time.Duration) time.Duration {
+	if override > 0 {
+		return override
+	}
+	return maxDuration(planningScoutTimeout, planningRouteSetterTimeout)
+}
+
+func effectiveSurveyorDispatchTimeout(override time.Duration) time.Duration {
+	if override > 0 {
+		return override
+	}
+	return surveyorDispatchTimeout
+}
 
 type codexDispatchContract struct {
 	ExecutionModel       string   `json:"execution_model"`
@@ -29,12 +43,16 @@ type codexDispatchContract struct {
 }
 
 func surveyDispatchContract() map[string]interface{} {
+	return surveyDispatchContractWithTimeout(0)
+}
+
+func surveyDispatchContractWithTimeout(workerTimeout time.Duration) map[string]interface{} {
 	return codexDispatchContract{
 		ExecutionModel:       "1 wave, parallel read-only worker execution",
 		WaveCount:            1,
 		WorkerCount:          len(surveyorSpecs),
 		SharedTimeoutSeconds: 0,
-		WorkerTimeoutSeconds: int(surveyorDispatchTimeout / time.Second),
+		WorkerTimeoutSeconds: int(effectiveSurveyorDispatchTimeout(workerTimeout) / time.Second),
 		DeadlinePolicy:       "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets.",
 		DependencyBehavior:   "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher.",
 		FallbackBehavior:     "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first.",
@@ -58,12 +76,16 @@ func surveyDispatchContract() map[string]interface{} {
 }
 
 func planningDispatchContract() map[string]interface{} {
+	return planningDispatchContractWithTimeout(0)
+}
+
+func planningDispatchContractWithTimeout(workerTimeout time.Duration) map[string]interface{} {
 	return codexDispatchContract{
 		ExecutionModel:       "2 staged workers, scout then route-setter",
 		WaveCount:            2,
 		WorkerCount:          len(planningWorkerSpecs),
 		SharedTimeoutSeconds: 0,
-		WorkerTimeoutSeconds: int(maxDuration(planningScoutTimeout, planningRouteSetterTimeout) / time.Second),
+		WorkerTimeoutSeconds: int(effectivePlanningDispatchTimeout(workerTimeout) / time.Second),
 		DeadlinePolicy:       "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.",
 		DependencyBehavior:   "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.",
 		FallbackBehavior:     "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first.",

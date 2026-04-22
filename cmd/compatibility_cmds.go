@@ -210,8 +210,13 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 
 			buildResult, err := runCodexBuild(root, phase.ID, nil, false)
 			if err != nil {
-				_ = syncRunAutopilotState(state, opts, "paused")
-				return nil, err
+				fmt.Fprintf(os.Stderr, "⚠ Build failed for phase %d, attempting single retry...\n", phase.ID)
+				time.Sleep(2 * time.Second)
+				buildResult, err = runCodexBuild(root, phase.ID, nil, false)
+				if err != nil {
+					_ = syncRunAutopilotState(state, opts, "paused")
+					return nil, err
+				}
 			}
 			steps = append(steps, map[string]interface{}{
 				"command":       fmt.Sprintf("aether build %d", phase.ID),

@@ -47,6 +47,11 @@ type codexWorkspaceFacts struct {
 	Integrations     []string
 }
 
+type codexColonizeOptions struct {
+	ForceResurvey bool
+	WorkerTimeout time.Duration
+}
+
 // logActivity appends an entry to the activity log. It is a no-op if the
 // store is not initialized (e.g., during tests without a full colony setup).
 func logActivity(command, details string) {
@@ -62,6 +67,10 @@ func logActivity(command, details string) {
 }
 
 func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
+	return runCodexColonizeWithOptions(root, codexColonizeOptions{ForceResurvey: force})
+}
+
+func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
@@ -73,7 +82,7 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 
 	surveyDir := filepath.Join(store.BasePath(), "survey")
 	existingSurvey := surveyDocsExist(surveyDir)
-	if existingSurvey && !force {
+	if existingSurvey && !opts.ForceResurvey {
 		return nil, fmt.Errorf("existing territory survey found; rerun with `aether colonize --force-resurvey` to refresh it")
 	}
 
@@ -109,7 +118,7 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 	} else {
 		emitVisualProgress(renderColonizeDispatchPreview(facts.Root, dispatches))
 
-		realDispatches, dispatchErr := dispatchRealSurveyors(context.Background(), root, invoker)
+		realDispatches, dispatchErr := dispatchRealSurveyorsWithTimeout(context.Background(), root, invoker, opts.WorkerTimeout)
 		if realDispatches != nil {
 			dispatches = realDispatches
 		}
@@ -195,10 +204,10 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 		"survey_files":       surveyFiles,
 		"surveyors":          dispatchMaps,
 		"existing_survey":    existingSurvey,
-		"force_resurvey":     force,
+		"force_resurvey":     opts.ForceResurvey,
 		"territory_surveyed": surveyedAt,
 		"dispatch_mode":      dispatchMode,
-		"dispatch_contract":  surveyDispatchContract(),
+		"dispatch_contract":  surveyDispatchContractWithTimeout(opts.WorkerTimeout),
 		"artifact_source":    artifactSource,
 		"survey_warning":     surveyWarning,
 		"stats": map[string]interface{}{
@@ -416,6 +425,10 @@ var surveyorSpecs = []surveyorSpec{
 // If the invoker is not available, it falls back to plannedSurveyors.
 // The invoker parameter allows injection for testing.
 func dispatchRealSurveyors(ctx context.Context, root string, invoker codex.WorkerInvoker) ([]codexSurveyorDispatch, error) {
+	return dispatchRealSurveyorsWithTimeout(ctx, root, invoker, 0)
+}
+
+func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker codex.WorkerInvoker, timeoutOverride time.Duration) ([]codexSurveyorDispatch, error) {
 	if invoker == nil || !invoker.IsAvailable(ctx) {
 		return plannedSurveyors(root), nil
 	}
@@ -423,6 +436,7 @@ func dispatchRealSurveyors(ctx context.Context, root string, invoker codex.Worke
 	dispatches := make([]codex.WorkerDispatch, 0, len(surveyorSpecs))
 	capsule := resolveCodexWorkerContext()
 	pheromoneSection := resolvePheromoneSection()
+	workerTimeout := effectiveSurveyorDispatchTimeout(timeoutOverride)
 	for i, spec := range surveyorSpecs {
 		tomlFile := fmt.Sprintf("aether-surveyor-%s.toml", spec.AgentSuffix)
 
@@ -447,7 +461,7 @@ func dispatchRealSurveyors(ctx context.Context, root string, invoker codex.Worke
 			SkillSection:     resolveSkillSection(spec.Caste, spec.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
-			Timeout:          surveyorDispatchTimeout,
+			Timeout:          workerTimeout,
 			Wave:             1,
 		})
 	}

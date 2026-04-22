@@ -273,6 +273,19 @@ func TestPlanIncludesDispatchContract(t *testing.T) {
 	}
 }
 
+func TestPlanningDispatchContractWithTimeoutOverride(t *testing.T) {
+	contract := planningDispatchContractWithTimeout(7 * time.Minute)
+	if got, ok := contract["worker_timeout_seconds"].(int); !ok || got != 420 {
+		t.Fatalf("worker_timeout_seconds = %#v, want 420", contract["worker_timeout_seconds"])
+	}
+}
+
+func TestPlanCommandExposesWorkerTimeoutFlag(t *testing.T) {
+	if planCmd.Flags().Lookup("worker-timeout") == nil {
+		t.Fatal("expected plan command to expose --worker-timeout")
+	}
+}
+
 func TestPlanRefreshRejectsActivePhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -679,6 +692,61 @@ developer_instructions = "test instructions"`), 0644); err != nil {
 	}
 }
 
+func TestDispatchRealPlanningWorkers_UsesTimeoutOverrideAndSurveyFirstBrief(t *testing.T) {
+	tmpDir := t.TempDir()
+	codexAgentsDir := filepath.Join(tmpDir, ".codex", "agents")
+	if err := os.MkdirAll(codexAgentsDir, 0755); err != nil {
+		t.Fatalf("failed to create .codex/agents: %v", err)
+	}
+	for _, name := range []string{"aether-scout.toml", "aether-route-setter.toml"} {
+		if err := os.WriteFile(filepath.Join(codexAgentsDir, name), []byte(`name = "test"
+description = "test agent"
+developer_instructions = "test instructions"`), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", name, err)
+		}
+	}
+
+	invoker := &planningCaptureInvoker{}
+	override := 7 * time.Minute
+	survey := codexSurveyContext{
+		SurveyDocs: []string{"PROVISIONS.md", "BLUEPRINT.md"},
+	}
+
+	result, err := dispatchRealPlanningWorkersWithTimeout(context.Background(), tmpDir, survey, invoker, override)
+	if err != nil {
+		t.Fatalf("expected nil error for available invoker, got: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 dispatches, got %d", len(result))
+	}
+	if len(invoker.timeouts) != 2 {
+		t.Fatalf("expected 2 recorded timeouts, got %d", len(invoker.timeouts))
+	}
+	for i, got := range invoker.timeouts {
+		if got != override {
+			t.Fatalf("timeout[%d] = %s, want %s", i, got, override)
+		}
+	}
+	if len(invoker.briefs) != 2 {
+		t.Fatalf("expected 2 recorded briefs, got %d", len(invoker.briefs))
+	}
+	for _, want := range []string{
+		".aether/data/survey/",
+		".aether/backups/",
+		".aether/chambers/",
+		".aether/data/build/",
+		".git/",
+		"node_modules/",
+	} {
+		if !strings.Contains(invoker.briefs[0], want) {
+			t.Fatalf("scout brief missing %q:\n%s", want, invoker.briefs[0])
+		}
+	}
+	if !strings.Contains(invoker.briefs[1], ".aether/data/planning/SCOUT.md") {
+		t.Fatalf("route-setter brief missing scout artifact guidance:\n%s", invoker.briefs[1])
+	}
+}
+
 // planTestUnavailableInvoker is a WorkerInvoker that always reports unavailable.
 type planTestUnavailableInvoker struct{}
 
@@ -691,6 +759,31 @@ func (u *planTestUnavailableInvoker) IsAvailable(ctx context.Context) bool {
 }
 
 func (u *planTestUnavailableInvoker) ValidateAgent(path string) error {
+	return nil
+}
+
+type planningCaptureInvoker struct {
+	timeouts []time.Duration
+	briefs   []string
+}
+
+func (p *planningCaptureInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	p.timeouts = append(p.timeouts, config.Timeout)
+	p.briefs = append(p.briefs, config.TaskBrief)
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "captured planning dispatch",
+	}, nil
+}
+
+func (p *planningCaptureInvoker) IsAvailable(_ context.Context) bool {
+	return true
+}
+
+func (p *planningCaptureInvoker) ValidateAgent(_ string) error {
 	return nil
 }
 

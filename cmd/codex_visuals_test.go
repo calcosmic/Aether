@@ -278,7 +278,7 @@ func TestColonizeVisualOutputShowsDispatchContractDetails(t *testing.T) {
 	for _, want := range []string{
 		"Contract",
 		"1 wave, parallel read-only worker execution",
-		"1m30s worker max",
+		effectiveSurveyorDispatchTimeout(0).String() + " worker max",
 		"One surveyor timing out does not reduce sibling surveyor budgets",
 		"authenticated platform dispatcher",
 		"dispatch_mode, survey_warning, artifact_source",
@@ -351,7 +351,7 @@ func TestPlanVisualOutputShowsDispatchContractDetails(t *testing.T) {
 	for _, want := range []string{
 		"Contract",
 		"2 staged workers, scout then route-setter",
-		"1m30s worker max",
+		effectivePlanningDispatchTimeout(0).String() + " worker max",
 		"route-setter only runs after a completed scout stage",
 		"authenticated platform dispatcher",
 		"dispatch_mode, planning_warning, artifact_source, plan_source",

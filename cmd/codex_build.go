@@ -550,6 +550,13 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 			Task:   "Resilience probing after verification",
 			Status: "spawned",
 		})
+		dispatches = append(dispatches, codexBuildDispatch{
+			Stage:  "prep",
+			Caste:  "archaeologist",
+			Name:   deterministicAntName("archaeologist", fmt.Sprintf("phase:%d:archaeologist", phase.ID)),
+			Task:   "Git history analysis before implementation",
+			Status: "spawned",
+		})
 	}
 
 	return dispatches
@@ -923,7 +930,7 @@ func buildPlaybooksForDispatch(dispatch codexBuildDispatch, playbooks []string) 
 	filtered := make([]string, 0, len(playbooks))
 	for _, playbook := range playbooks {
 		switch dispatch.Caste {
-		case "oracle", "architect":
+		case "oracle", "architect", "archaeologist":
 			if strings.Contains(playbook, "build-prep") || strings.Contains(playbook, "build-wave") {
 				filtered = append(filtered, playbook)
 			}
@@ -955,6 +962,8 @@ func expectedDispatchOutcome(dispatch codexBuildDispatch) string {
 		return "Design boundaries, interfaces, and sequencing guidance for the phase."
 	case "chaos":
 		return "Resilience findings and failure cases worth checking before advancement."
+	case "archaeologist":
+		return "Git history insights and risk identification from prior commits."
 	default:
 		return "Concrete code changes plus a truthful summary of files touched and verification run."
 	}
