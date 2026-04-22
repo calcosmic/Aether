@@ -2908,3 +2908,292 @@ func TestContinue_StateNotModifiedOnReportSaveFailure(t *testing.T) {
 		t.Fatalf("phase 2 status = %s, want ready", state.Plan.Phases[1].Status)
 	}
 }
+
+
+func TestContinueDetectsAbandonedBuild(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Detect abandoned builds"
+	staleTime := time.Now().UTC().Add(-2 * time.Hour)
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &staleTime,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Abandoned phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Task that was never completed", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	// Manually write a manifest with all dispatches stuck at "spawned"
+	// (do NOT use seedContinueBuildPacket since it normalizes spawned to completed)
+	buildDir := filepath.Join(dataDir, "build", "phase-1")
+	if err := os.MkdirAll(filepath.Join(buildDir, "worker-briefs"), 0755); err != nil {
+		t.Fatalf("failed to create build dir: %v", err)
+	}
+	manifest := codexBuildManifest{
+		Phase:        1,
+		PhaseName:    "Abandoned phase",
+		Goal:         goal,
+		Root:         root,
+		ColonyDepth:  "standard",
+		DispatchMode: "real",
+		GeneratedAt:  staleTime.Format(time.RFC3339),
+		State:        string(colony.StateBUILT),
+		ClaimsPath:   displayDataPath("last-build-claims.json"),
+		Dispatches: []codexBuildDispatch{
+			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-ab1", Task: "Task that was never completed", Status: "spawned", TaskID: taskID},
+			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-ab2", Task: "Another abandoned task", Status: "spawned", TaskID: "1.2"},
+			{Stage: "verification", Caste: "watcher", Name: "Keen-ab3", Task: "Build-time verification", Status: "spawned"},
+		},
+	}
+	manifestJSON, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(buildDir, "manifest.json"), manifestJSON, 0644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	var outBuf bytes.Buffer
+	stdout = &outBuf
+	t.Cleanup(func() { stdout = os.Stdout })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	result := parseLifecycleEnvelope(t, outBuf.String())
+
+	if abandoned, _ := result["abandoned"].(bool); !abandoned {
+		t.Fatalf("expected abandoned=true, got result: %v", result["abandoned"])
+	}
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatal("expected blocked=true for abandoned build")
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatal("expected advanced=false for abandoned build")
+	}
+	staleDuration, _ := result["stale_duration"].(string)
+	if staleDuration == "" {
+		t.Fatal("expected stale_duration to be set for abandoned build")
+	}
+
+	recovery, ok := result["recovery"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected recovery map, got: %T", result["recovery"])
+	}
+	redispatchCmd, _ := recovery["redispatch_command"].(string)
+	if !strings.Contains(redispatchCmd, "aether build 1") {
+		t.Fatalf("expected redispatch_command to contain 'aether build 1', got: %s", redispatchCmd)
+	}
+}
+
+func TestContinueAbandonedBuildReturnsRecoveryOptions(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Recovery from abandoned builds"
+	staleTime := time.Now().UTC().Add(-2 * time.Hour)
+	taskID1 := "1.1"
+	taskID2 := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &staleTime,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Abandoned recovery",
+					Status: colony.PhaseInProgress,
+					Tasks: []colony.Task{
+						{ID: &taskID1, Goal: "First abandoned task", Status: colony.TaskInProgress},
+						{ID: &taskID2, Goal: "Second abandoned task", Status: colony.TaskInProgress},
+					},
+				},
+			},
+		},
+	})
+
+	buildDir := filepath.Join(dataDir, "build", "phase-1")
+	if err := os.MkdirAll(filepath.Join(buildDir, "worker-briefs"), 0755); err != nil {
+		t.Fatalf("failed to create build dir: %v", err)
+	}
+	manifest := codexBuildManifest{
+		Phase:        1,
+		PhaseName:    "Abandoned recovery",
+		Goal:         goal,
+		Root:         root,
+		ColonyDepth:  "standard",
+		DispatchMode: "real",
+		GeneratedAt:  staleTime.Format(time.RFC3339),
+		State:        string(colony.StateBUILT),
+		ClaimsPath:   displayDataPath("last-build-claims.json"),
+		Dispatches: []codexBuildDispatch{
+			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-rec1", Task: "First abandoned task", Status: "spawned", TaskID: taskID1},
+			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-rec2", Task: "Second abandoned task", Status: "spawned", TaskID: taskID2},
+		},
+	}
+	manifestJSON, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(buildDir, "manifest.json"), manifestJSON, 0644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	var outBuf bytes.Buffer
+	stdout = &outBuf
+	t.Cleanup(func() { stdout = os.Stdout })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	result := parseLifecycleEnvelope(t, outBuf.String())
+
+	recovery, ok := result["recovery"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected recovery map, got: %T", result["recovery"])
+	}
+
+	// Verify redispatch_tasks contains both task IDs
+	redispatchTasks, ok := recovery["redispatch_tasks"].([]interface{})
+	if !ok {
+		t.Fatalf("expected redispatch_tasks array, got: %T", recovery["redispatch_tasks"])
+	}
+	taskIDSet := make(map[string]bool)
+	for _, id := range redispatchTasks {
+		if s, ok := id.(string); ok {
+			taskIDSet[s] = true
+		}
+	}
+	if !taskIDSet[taskID1] || !taskIDSet[taskID2] {
+		t.Fatalf("expected redispatch_tasks to contain %s and %s, got: %v", taskID1, taskID2, redispatchTasks)
+	}
+
+	// Verify reconcile_tasks contains both task IDs
+	reconcileTasks, ok := recovery["reconcile_tasks"].([]interface{})
+	if !ok {
+		t.Fatalf("expected reconcile_tasks array, got: %T", recovery["reconcile_tasks"])
+	}
+	reconcileSet := make(map[string]bool)
+	for _, id := range reconcileTasks {
+		if s, ok := id.(string); ok {
+			reconcileSet[s] = true
+		}
+	}
+	if !reconcileSet[taskID1] || !reconcileSet[taskID2] {
+		t.Fatalf("expected reconcile_tasks to contain %s and %s, got: %v", taskID1, taskID2, reconcileTasks)
+	}
+
+	// Verify reconcile_command is present
+	reconcileCmd, _ := recovery["reconcile_command"].(string)
+	if reconcileCmd == "" {
+		t.Fatal("expected reconcile_command to be set")
+	}
+
+	// Verify blocking_issues contains the abandoned summary mentioning minutes
+	blockingIssues, ok := result["blocking_issues"].([]interface{})
+	if !ok || len(blockingIssues) == 0 {
+		t.Fatalf("expected blocking_issues with abandoned summary, got: %v", result["blocking_issues"])
+	}
+	firstIssue, _ := blockingIssues[0].(string)
+	if !strings.Contains(strings.ToLower(firstIssue), "abandoned") {
+		t.Fatalf("expected blocking_issues[0] to mention 'abandoned', got: %s", firstIssue)
+	}
+	if !strings.Contains(strings.ToLower(firstIssue), "minute") {
+		t.Fatalf("expected blocking_issues[0] to mention 'minutes', got: %s", firstIssue)
+	}
+}
+
+func TestContinueNotAbandonedWhenDispatchesCompleted(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Completed dispatches are not abandoned"
+	staleTime := time.Now().UTC().Add(-2 * time.Hour)
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &staleTime,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Not abandoned",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Completed task", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Future work", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	// Use seedContinueBuildPacket which sets completed dispatches
+	seedContinueBuildPacket(t, dataDir, 1, "Not abandoned", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-na1", Task: "Completed task", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-na2", Task: "Build-time verification", Status: "completed"},
+	})
+
+	var outBuf bytes.Buffer
+	stdout = &outBuf
+	t.Cleanup(func() { stdout = os.Stdout })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	result := parseLifecycleEnvelope(t, outBuf.String())
+
+	if abandoned, _ := result["abandoned"].(bool); abandoned {
+		t.Fatal("expected abandoned to NOT be true when dispatches are completed")
+	}
+	// Should have advanced normally since all dispatches are completed and verification passes
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced=true for completed dispatches, got result: %+v", result)
+	}
+}
