@@ -977,6 +977,40 @@ func TestRenderColonizeVisual_MixedResults(t *testing.T) {
 	}
 }
 
+func TestRenderColonizeVisual_ShowsSurveyFallbackWarning(t *testing.T) {
+	result := map[string]interface{}{
+		"root":           "/tmp/test",
+		"detected_type":  "go",
+		"languages":      []interface{}{"go"},
+		"frameworks":     []interface{}{"cobra"},
+		"domains":        []interface{}{"cli"},
+		"dispatch_mode":  "fallback",
+		"survey_warning": "Real surveyors did not finish cleanly, so Aether fell back to local survey synthesis.",
+		"stats": map[string]interface{}{
+			"files":       42,
+			"directories": 7,
+		},
+		"survey_dir": "/tmp/test/.aether/data/survey",
+		"surveyors": []interface{}{
+			map[string]interface{}{"name": "Nest-42", "caste": "surveyor-nest", "task": "Map architecture", "status": "timeout", "summary": "timed out", "duration": 60.0},
+			map[string]interface{}{"name": "Disc-7", "caste": "surveyor-disciplines", "task": "Map disciplines", "status": "timeout", "summary": "timed out", "duration": 0.0},
+		},
+		"survey_files": []interface{}{"BLUEPRINT.md", "CHAMBERS.md"},
+	}
+
+	output := renderColonizeVisual(result)
+
+	if !strings.Contains(output, "Survey Warning") {
+		t.Errorf("output missing survey warning header\n%s", output)
+	}
+	if !strings.Contains(output, "fell back to local survey synthesis") {
+		t.Errorf("output missing survey fallback explanation\n%s", output)
+	}
+	if !strings.Contains(output, "Dispatch: Fallback") {
+		t.Errorf("output missing fallback dispatch label\n%s", output)
+	}
+}
+
 func TestRenderSurveyorResults_Formatting(t *testing.T) {
 	surveyors := []codexSurveyorDispatch{
 		{Caste: "surveyor-nest", Name: "Nest-42", Task: "Map architecture", Status: "completed", Summary: "Mapped chamber layout", Duration: 12.3},

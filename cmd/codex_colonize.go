@@ -94,6 +94,7 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 	dispatches := plannedSurveyors(root)
 	dispatchMode := "synthetic"
 	artifactSource := "local-synthesis"
+	surveyWarning := ""
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	for _, dispatch := range dispatches {
 		if err := spawnTree.RecordSpawn("Queen", "surveyor", dispatch.Name, dispatch.Task, 1); err != nil {
@@ -108,16 +109,18 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 	emitVisualProgress(renderColonizeDispatchPreview(facts.Root, dispatches))
 
 	realDispatches, dispatchErr := dispatchRealSurveyors(context.Background(), root, invoker)
-	if dispatchErr != nil {
-		if _, ok := invoker.(*codex.FakeInvoker); !ok {
-			for _, dispatch := range dispatches {
-				_ = spawnTree.UpdateStatus(dispatch.Name, "failed", dispatchErr.Error())
-			}
-			return nil, dispatchErr
-		}
-		logActivity("colonize", "Brick-76: Fallback to planned surveyors (dispatch error)")
-	} else if realDispatches != nil {
+	if realDispatches != nil {
 		dispatches = realDispatches
+	}
+	if dispatchErr != nil {
+		if _, ok := invoker.(*codex.FakeInvoker); ok {
+			logActivity("colonize", "Brick-76: Fallback to planned surveyors (dispatch error)")
+			dispatchMode = "simulated"
+		} else {
+			dispatchMode = "fallback"
+			surveyWarning = fmt.Sprintf("Real surveyors did not finish cleanly, so Aether fell back to local survey synthesis. Cause: %s", dispatchErr.Error())
+		}
+	} else if realDispatches != nil {
 		if _, ok := invoker.(*codex.FakeInvoker); ok {
 			dispatchMode = "simulated"
 		} else {
@@ -192,6 +195,7 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 		"territory_surveyed": surveyedAt,
 		"dispatch_mode":      dispatchMode,
 		"artifact_source":    artifactSource,
+		"survey_warning":     surveyWarning,
 		"stats": map[string]interface{}{
 			"files":       facts.FileCount,
 			"directories": facts.DirectoryCount,
@@ -410,6 +414,8 @@ func dispatchRealSurveyors(ctx context.Context, root string, invoker codex.Worke
 	if invoker == nil || !invoker.IsAvailable(ctx) {
 		return plannedSurveyors(root), nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, planningDispatchTimeout)
+	defer cancel()
 
 	codexAgentsDir := filepath.Join(root, ".codex", "agents")
 

@@ -441,6 +441,12 @@ func renderColonizeVisual(result map[string]interface{}) string {
 		b.WriteString(surveyDir)
 		b.WriteString("\n")
 	}
+	if warning := strings.TrimSpace(stringValue(result["survey_warning"])); warning != "" {
+		b.WriteString("Survey Warning\n")
+		b.WriteString("  - ")
+		b.WriteString(warning)
+		b.WriteString("\n")
+	}
 	if surveyors, ok := result["surveyors"].([]interface{}); ok && len(surveyors) > 0 {
 		dispatches := parseSurveyorMaps(surveyors)
 		hasRealData := hasRealExecutionData(dispatches)

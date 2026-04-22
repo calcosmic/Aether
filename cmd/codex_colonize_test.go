@@ -210,6 +210,66 @@ func TestColonizePreservesWorkerWrittenSurveyArtifacts(t *testing.T) {
 	}
 }
 
+func TestColonizeFallsBackWhenRealSurveyorsFail(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Test workspace\n"), 0644); err != nil {
+		t.Fatalf("failed to write README: %v", err)
+	}
+
+	goal := "Survey fallback"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &timeoutTestInvoker{} }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"colonize"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colonize returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["dispatch_mode"]; got != "fallback" {
+		t.Fatalf("dispatch_mode = %v, want fallback", got)
+	}
+	if got := strings.TrimSpace(result["survey_warning"].(string)); got == "" {
+		t.Fatal("expected survey_warning to be populated")
+	}
+	surveyors := result["surveyors"].([]interface{})
+	if len(surveyors) != 4 {
+		t.Fatalf("expected 4 surveyors, got %d", len(surveyors))
+	}
+	first := surveyors[0].(map[string]interface{})
+	if first["status"] != "timeout" {
+		t.Fatalf("first surveyor status = %v, want timeout", first["status"])
+	}
+	if files := result["survey_files"].([]interface{}); len(files) == 0 {
+		t.Fatal("expected fallback colonize to still write survey files")
+	}
+}
+
 // unavailableInvoker always reports not available, forcing fallback.
 type unavailableInvoker struct{}
 
