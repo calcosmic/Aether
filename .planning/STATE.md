@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Runtime Truth Recovery, Colony Unblock, and Release Readiness
 status: executing
-last_updated: "2026-04-22T20:13:00.000Z"
-last_activity: 2026-04-22 -- Plan 04 complete: git-verified claims + integration tests
+last_updated: "2026-04-22T20:48:00.000Z"
+last_activity: 2026-04-22 -- Plan 03 complete: atomic phase advancement
 progress:
   total_phases: 6
   completed_phases: 0
@@ -25,9 +25,9 @@ See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md
 ## Current Position
 
 Phase: 31 of 36 (P0 Runtime Truth Fixes)
-Plan: 04 — Git-Verified Claims and Integration Tests (complete)
+Plan: 03 — Atomic Phase Advancement (complete)
 Status: All 4 plans executed
-Last activity: 2026-04-22 -- Integration tests committed proving all bypass paths closed
+Last activity: 2026-04-22 -- Plan 03 executed: atomic state advancement with UpdateJSONAtomically
 
 Progress: `[███████   ] 75%`
 
@@ -65,6 +65,8 @@ Progress: `[███████   ] 75%`
 - Integration tests prove bypass paths stay closed for verified_partial, watcher timeout, reconcile, and git claims.
 - FakeInvoker blocked from production paths; real invoker requires honest platform dispatch.
 - DispatchBatch error propagation ensures dispatch errors surface to callers.
+- Colony state advancement is atomic via UpdateJSONAtomically; state saved before side effects and reports (R051 resolved).
+- Side-effect failures after state commit do not roll back; state remains valid and consistent.
 
 ### Blockers / Concerns
 
@@ -72,7 +74,7 @@ Progress: `[███████   ] 75%`
 - 459 stale test-audit branches (R057).
 - 13 unresolved blocker flags (R058).
 - 6 unreleased fix commits need v1.0.20.
-- Phase advancement is non-atomic (R051).
+- Phase advancement is non-atomic (R051). -- RESOLVED: atomic via UpdateJSONAtomically
 
 ## Deferred Items
 
@@ -87,13 +89,15 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-22 20:13
-Stopped at: Plan 04 complete — all Phase 31 plans executed
+Last session: 2026-04-22 20:48
+Stopped at: Plan 03 complete — atomic phase advancement
 Resume file: None
 
 ### Completed This Session
 
-- Plan 04 Task 04-03: Committed integration tests for all closed bypass paths
-- Verified Tasks 04-01 and 04-02 were previously committed and correct
-- All Build and Continue tests passing
+- Plan 03 Task 03-01: Reordered continue to save state before side effects
+- Plan 03 Task 03-02: Added UpdateJSONAtomically helper and tests
+- Plan 03 Task 03-03: Refactored continue to use UpdateJSONAtomically
+- Plan 03 Task 03-04: Added atomic ordering tests
+- All Continue and storage tests passing
 - Binary builds clean
