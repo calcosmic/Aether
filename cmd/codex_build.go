@@ -84,6 +84,7 @@ type codexBuildClaims struct {
 }
 
 var newCodexWorkerInvoker = codex.NewWorkerInvoker
+var newCodexWorkerInvokerOrError = codex.NewWorkerInvokerOrError
 
 func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, synthetic bool) (map[string]interface{}, error) {
 	if store == nil {
@@ -627,7 +628,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		invoker = &codex.FakeInvoker{}
 	}
 	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(ctx) {
-		return nil, nil, "", fmt.Errorf("codex CLI is not available in PATH")
+		return nil, nil, "", dispatchUnavailableError(invoker)
 	}
 
 	capsule := resolveCodexWorkerContext()
@@ -635,11 +636,12 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
 	indexByName := make(map[string]int, len(dispatches))
 	for i, dispatch := range dispatches {
+		agentName := codexAgentNameForCaste(dispatch.Caste)
 		workerDispatches = append(workerDispatches, codex.WorkerDispatch{
 			ID:               fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
 			WorkerName:       dispatch.Name,
-			AgentName:        codexAgentNameForCaste(dispatch.Caste),
-			AgentTOMLPath:    filepath.Join(root, ".codex", "agents", codexAgentFileForCaste(dispatch.Caste)),
+			AgentName:        agentName,
+			AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
 			Caste:            dispatch.Caste,
 			TaskID:           normalizedDispatchTaskID(dispatch),
 			TaskBrief:        renderCodexBuildWorkerBrief(root, phase, dispatch, playbooks, startedAt),

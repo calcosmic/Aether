@@ -123,7 +123,7 @@ type WorkerInvoker interface {
 	// Invoke spawns a codex CLI subprocess for the given worker configuration.
 	Invoke(ctx context.Context, config WorkerConfig) (WorkerResult, error)
 
-	// IsAvailable checks whether the codex CLI binary is installed and reachable.
+// IsAvailable checks whether the platform dispatcher is installed and authenticated.
 	IsAvailable(ctx context.Context) bool
 
 	// ValidateAgent checks that a TOML agent file is parseable and contains
@@ -254,10 +254,9 @@ func codexWritableDirs() []string {
 	return out
 }
 
-// IsAvailable checks whether the codex CLI binary is reachable via exec.LookPath.
+// IsAvailable checks whether the codex dispatcher is runnable and authenticated.
 func (r *RealInvoker) IsAvailable(ctx context.Context) bool {
-	_, err := exec.LookPath(r.binaryName)
-	return err == nil
+	return r.Availability(ctx).Available
 }
 
 // ValidateAgent parses and validates a TOML agent file.
@@ -582,23 +581,36 @@ func ParseWorkerOutput(output string) (workerClaims, error) {
 
 // --- Factory ---
 
-// NewWorkerInvoker returns a FakeInvoker (default) or RealInvoker
-// based on the AETHER_CODEX_REAL_DISPATCH environment variable.
-func NewWorkerInvoker() WorkerInvoker {
+// NewWorkerInvokerOrError returns a FakeInvoker or RealInvoker based on the
+// AETHER_CODEX_REAL_DISPATCH environment variable. It returns an error when
+// the real invoker is unavailable and the env var is not explicitly set to fake.
+// Production paths should use this function and fail fast on error.
+func NewWorkerInvokerOrError() (WorkerInvoker, error) {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(envRealDispatch))) {
 	case "0", "false", "fake":
-		return &FakeInvoker{}
+		return &FakeInvoker{}, nil
 	case "1", "true", "real":
-		return NewRealInvoker()
+		return NewRealInvoker(), nil
 	}
 	if runningInGoTest() {
-		return &FakeInvoker{}
+		return &FakeInvoker{}, nil
 	}
 	real := NewRealInvoker()
 	if real.IsAvailable(context.Background()) {
-		return real
+		return real, nil
 	}
-	return &FakeInvoker{}
+	return nil, fmt.Errorf("codex CLI is not available and AETHER_CODEX_REAL_DISPATCH is not set to fake; install the codex CLI or set AETHER_CODEX_REAL_DISPATCH=fake to run in synthetic mode")
+}
+
+// NewWorkerInvoker returns a FakeInvoker (default) or RealInvoker
+// based on the AETHER_CODEX_REAL_DISPATCH environment variable.
+// Deprecated: use NewWorkerInvokerOrError in production paths.
+func NewWorkerInvoker() WorkerInvoker {
+	invoker, err := NewWorkerInvokerOrError()
+	if err != nil {
+		panic(err)
+	}
+	return invoker
 }
 
 func stripCodeFence(text string) string {
