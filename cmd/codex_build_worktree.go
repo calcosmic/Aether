@@ -358,15 +358,13 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			if err != nil {
 				dr.Status = "failed"
 				dr.Error = err
-			} else if result.Status == "completed" {
-				dr.Status = "completed"
-				dr.WorkerResult = &result
 			} else {
 				dr.Status = result.Status
 				dr.WorkerResult = &result
 				if result.Error != nil {
 					dr.Error = result.Error
-				} else if baselineErr == nil {
+				}
+				if baselineErr == nil && dr.Status == "completed" {
 					if touched, touchErr := collectRepoTouchedPaths(dispatch.Root, baseline, result); touchErr == nil {
 						applyObservedClaims(dispatch.Root, baseline, touched, dr.WorkerResult)
 					}
