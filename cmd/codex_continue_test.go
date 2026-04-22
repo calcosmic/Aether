@@ -1384,7 +1384,7 @@ func TestContinueWorkerFlowUsesContinueWatcherInsteadOfBuildManifestWatcher(t *t
 	}
 }
 
-func TestContinueAllowsManualReconciliationForVerifiedManualFix(t *testing.T) {
+func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1394,7 +1394,7 @@ func TestContinueAllowsManualReconciliationForVerifiedManualFix(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Advance after a manual fix"
+	goal := "Block when reconciled task lacks builder claim evidence"
 	now := time.Now().UTC()
 	taskID := "1.1"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -1433,20 +1433,28 @@ func TestContinueAllowsManualReconciliationForVerifiedManualFix(t *testing.T) {
 
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if advanced, _ := result["advanced"].(bool); !advanced {
-		t.Fatalf("expected advanced:true, got %v", result)
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true when reconciled task lacks claim evidence, got %v", result)
 	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false when reconciled task lacks claim evidence, got %v", result)
+	}
+
 	reconciled := stringSliceValue(result["reconciled_tasks"])
 	if len(reconciled) != 1 || reconciled[0] != taskID {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	spawnTreeData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
-	if err != nil {
-		t.Fatalf("failed to read spawn tree: %v", err)
+	blockingIssues := stringSliceValue(result["blocking_issues"])
+	hasWarning := false
+	for _, issue := range blockingIssues {
+		if strings.Contains(issue, "manually reconciled") {
+			hasWarning = true
+			break
+		}
 	}
-	if !strings.Contains(string(spawnTreeData), "|Forge-71|manually-reconciled|Task was manually reconciled before continue advancement") {
-		t.Fatalf("expected manually-reconciled worker in spawn tree, got:\n%s", string(spawnTreeData))
+	if !hasWarning {
+		t.Fatalf("expected blocking issues to contain reconcile warning, got %v", blockingIssues)
 	}
 }
 

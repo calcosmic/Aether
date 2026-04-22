@@ -980,7 +980,7 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 		taskID := buildTaskID(task, idx)
 		statuses := uniqueSortedStrings(dispatchStatuses[taskID])
 		_, reconciledTask := reconciled[taskID]
-		taskArtifactEvidenceTrusted := !requiresBuilderClaims || claimsSatisfied || reconciledTask
+		taskArtifactEvidenceTrusted := !requiresBuilderClaims || claimsSatisfied
 		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, reconciledTask, dispatchEvidenceTrusted, taskArtifactEvidenceTrusted)
 		taskAssessment := codexContinueTaskAssessment{
 			TaskID:           taskID,
@@ -1000,6 +1000,9 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	positiveEvidence := continueTasksSupportAdvancement(tasks, claimsSatisfied)
 
 	blockingIssues := []string{}
+	if len(options.ReconcileTaskIDs) > 0 {
+		blockingIssues = append(blockingIssues, fmt.Sprintf("Warning: %d task(s) were manually reconciled. Verification was re-run, but reconciled tasks do not bypass claim checks.", len(options.ReconcileTaskIDs)))
+	}
 	if !verification.ChecksPassed {
 		blockingIssues = append(blockingIssues, verification.BlockingIssues...)
 	}
@@ -1070,7 +1073,7 @@ func continueTasksSupportAdvancement(tasks []codexContinueTaskAssessment, claims
 	}
 	for _, task := range tasks {
 		switch task.Outcome {
-		case "missing", "needs_redispatch", "implemented_unverified", "simulated":
+		case "missing", "needs_redispatch", "implemented_unverified", "simulated", "manually_reconciled":
 			return false
 		}
 	}
