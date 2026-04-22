@@ -4,13 +4,13 @@ milestone: v1.5
 milestone_name: Runtime Truth Recovery, Colony Unblock, and Release Readiness
 status: phase-complete
 last_updated: "2026-04-22T23:30:00.000Z"
-last_activity: 2026-04-22 -- Phase 32 complete: continue unblock, abandoned detection + stale cleanup
+last_activity: 2026-04-23 -- Phase 33 complete: dispatch fixes (P1 robustness, archaeologist caste, context threshold, retry logic)
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 33
+  completed_phases: 3
+  total_plans: 8
+  completed_plans: 8
+  percent: 50
 ---
 
 # Project State
@@ -20,15 +20,15 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie-repos-Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 31 complete — ready for Phase 32 (Continue Unblock)
+**Current focus:** Phase 33 complete — ready for Phase 34 (Cleanup)
 
 ## Current Position
 
-Phase: 32 of 36 (Continue Unblock) — COMPLETE
-Status: All 2 plans executed, 5 new tests green
-Last activity: 2026-04-22 -- Phase 32 verified and closed
+Phase: 34 of 36 (Cleanup) — PLANNED
+Status: Phase 33 complete, ready to plan Phase 34
+Last activity: 2026-04-23 -- Phase 33 verified and closed
 
-Progress: `[██████░░░░] 33%` (Milestone v1.5: 2/6 phases complete)
+Progress: `[████████░░] 50%` (Milestone v1.5: 3/6 phases complete)
 
 ## Performance Metrics
 
@@ -67,6 +67,10 @@ Progress: `[██████░░░░] 33%` (Milestone v1.5: 2/6 phases com
 - Stale report files (verification.json, gates.json, continue.json, review.json) are cleared before continue verification runs.
 - Full E2E recovery pipeline proven: abandoned detection -> re-dispatch -> verify -> advance.
 
+### Roadmap Evolution
+
+- Phase 34 added: Cleanup — Address stale worktrees, orphaned branches, and stale blocker flags from prior colony work.
+
 ### Blockers / Concerns
 
 - 464 stale worktrees (~43+ GB) distort the system (R056).
@@ -87,6 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-22 23:30
-Stopped at: Phase 31 complete
+Last session: 2026-04-23
+Stopped at: Phase 33 complete, Phase 34 planning initiated
 Resume file: None

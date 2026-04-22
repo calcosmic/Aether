@@ -108,7 +108,8 @@ Plans:
 **Status:** Planned
 
 ### Phase 34: Cleanup
-**Goal:** Address R056 (stale worktrees), R057 (stale branches), R058 (blocker flags).
+**Goal:** Address stale worktrees, orphaned branches, and stale blocker flags from prior colony work.
+**Requirements:** R056 (stale worktrees), R057 (stale branches), R058 (blocker flags)
 **Status:** Planned
 
 ### Phase 35: Platform Parity
@@ -131,3 +132,4 @@ Plans:
 | 31 | v1.5 | 4/4 | Complete | 2026-04-22 |
 | 32 | v1.5 | 2 | Planned | -- |
 | 33-36 | v1.5 | 0 | Planned | -- |
+
