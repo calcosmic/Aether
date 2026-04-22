@@ -2,17 +2,17 @@
 
 ## Milestones
 
-- ✅ **v1.0 MVP** - Phases 1-6 (shipped)
-- ✅ **v1.1 Trusted Context** - Phases 7-11 (shipped)
-- ✅ **v1.2 Live Dispatch Truth and Recovery** - Phases 12-16 (shipped)
-- ✅ **v1.3 Visual Truth and Core Hardening** - Phases 17-24 (shipped 2026-04-21)
-- ✅ **v1.4 Self-Healing Colony** - Phases 25-30 (completed 2026-04-21)
-- 🚧 **v1.5 Runtime Truth Recovery** - Phases 31-36 (in progress)
+- **v1.0 MVP** - Phases 1-6 (shipped)
+- **v1.1 Trusted Context** - Phases 7-11 (shipped)
+- **v1.2 Live Dispatch Truth and Recovery** - Phases 12-16 (shipped)
+- **v1.3 Visual Truth and Core Hardening** - Phases 17-24 (shipped 2026-04-21)
+- **v1.4 Self-Healing Colony** - Phases 25-30 (completed 2026-04-21)
+- **v1.5 Runtime Truth Recovery** - Phases 31-36 (in progress)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 MVP (Phases 1-6) — SHIPPED</summary>
+<summary>v1.0 MVP (Phases 1-6) -- SHIPPED</summary>
 
 - Phase 1: Housekeeping and Foundation
 - Phase 2: Colony Scope System
@@ -24,7 +24,7 @@
 </details>
 
 <details>
-<summary>✅ v1.1 Trusted Context (Phases 7-11) — SHIPPED</summary>
+<summary>v1.1 Trusted Context (Phases 7-11) -- SHIPPED</summary>
 
 - Phase 7: Context Ledger and Skill Routing Foundation
 - Phase 8: Prompt Integrity and Trust Boundaries
@@ -35,7 +35,7 @@
 </details>
 
 <details>
-<summary>✅ v1.2 Live Dispatch Truth and Recovery (Phases 12-16) — SHIPPED</summary>
+<summary>v1.2 Live Dispatch Truth and Recovery (Phases 12-16) -- SHIPPED</summary>
 
 - Phase 12: Dispatch Truth Model and Run Scoping
 - Phase 13: Live Workflow Visibility Across Colonize, Plan, and Build
@@ -46,55 +46,61 @@
 </details>
 
 <details>
-<summary>✅ v1.3 Visual Truth and Core Hardening (Phases 17-24) — SHIPPED 2026-04-21</summary>
+<summary>v1.3 Visual Truth and Core Hardening (Phases 17-24) -- SHIPPED 2026-04-21</summary>
 
 - Phase 17: Slash Command Format Audit
-- Phase 18: Visual UX Restoration — Caste Identity and Spawn Lists
-- Phase 19: Visual UX Restoration — Stage Separators and Ceremony
-- Phase 20: Visual UX Restoration — Emoji Consistency
+- Phase 18: Visual UX Restoration -- Caste Identity and Spawn Lists
+- Phase 19: Visual UX Restoration -- Stage Separators and Ceremony
+- Phase 20: Visual UX Restoration -- Emoji Consistency
 - Phase 21: Codex CLI Visual Parity
 - Phase 22: Core Path Hardening
 - Phase 23: Recovery and Continuity
-- Phase 24: Full Instrumentation — Trace Logging
+- Phase 24: Full Instrumentation -- Trace Logging
 
 </details>
 
 <details>
-<summary>✅ v1.4 Self-Healing Colony (Phases 25-30) — COMPLETED 2026-04-21</summary>
+<summary>v1.4 Self-Healing Colony (Phases 25-30) -- COMPLETED 2026-04-21</summary>
 
-- Phase 25: Medic Ant Core — Health diagnosis command, colony data scanner
-- Phase 26: Auto-Repair — Fix common colony data issues with `--fix` flag
-- Phase 27: Medic Skill — Healthy state specification skill file
-- Phase 28: Ceremony Integrity — Verify wrapper/runtime parity
-- Phase 29: Trace Diagnostics — Remote debugging via trace export analysis
-- Phase 30: Medic Worker Integration — Caste integration, auto-spawn
+- Phase 25: Medic Ant Core -- Health diagnosis command, colony data scanner
+- Phase 26: Auto-Repair -- Fix common colony data issues with `--fix` flag
+- Phase 27: Medic Skill -- Healthy state specification skill file
+- Phase 28: Ceremony Integrity -- Verify wrapper/runtime parity
+- Phase 29: Trace Diagnostics -- Remote debugging via trace export analysis
+- Phase 30: Medic Worker Integration -- Caste integration, auto-spawn
 
 </details>
 
-### 🚧 v1.5 Runtime Truth Recovery (In Progress)
+### v1.5 Runtime Truth Recovery (In Progress)
 
-**Milestone Goal:** Recover runtime truth — close P0 bypass paths, fix atomic state advancement, and restore colony continue orchestration so active colonies can unblock.
+**Milestone Goal:** Recover runtime truth -- close P0 bypass paths, fix atomic state advancement, and restore colony continue orchestration so active colonies can unblock.
 
-**Milestone Goal:** Give Aether the ability to diagnose and repair its own colony data, ceremony integrity, and runtime state — reducing manual intervention and preventing documentation gaps.
+**Milestone Goal:** Give Aether the ability to diagnose and repair its own colony data, ceremony integrity, and runtime state -- reducing manual intervention and preventing documentation gaps.
 
 ## Phases
 
-- [x] **Phase 31: P0 Runtime Truth Fixes** — Invoker honesty, dispatch errors, continue bypass closure, git-verified claims, atomic state (completed 2026-04-22)
-- [ ] **Phase 32: Continue Unblock** — Full continue orchestration recovery
-- [ ] **Phase 33: Dispatch Fixes** — P1 dispatch robustness improvements
-- [ ] **Phase 34: Cleanup** — Stale worktrees, branches, blockers
-- [ ] **Phase 35: Platform Parity** — Claude/OpenCode/Codex alignment
-- [ ] **Phase 36: Release Decision** — v1.0.20 cut and ship decision
+- [x] **Phase 31: P0 Runtime Truth Fixes** -- Invoker honesty, dispatch errors, continue bypass closure, git-verified claims, atomic state (completed 2026-04-22)
+- [ ] **Phase 32: Continue Unblock** -- Full continue orchestration recovery
+- [ ] **Phase 33: Dispatch Fixes** -- P1 dispatch robustness improvements
+- [ ] **Phase 34: Cleanup** -- Stale worktrees, branches, blockers
+- [ ] **Phase 35: Platform Parity** -- Claude/OpenCode/Codex alignment
+- [ ] **Phase 36: Release Decision** -- v1.0.20 cut and ship decision
 
 ## Phase Details
 
 ### Phase 31: P0 Runtime Truth Fixes
-**Goal:** Close all P0 truth bugs from the oracle audit — honest invokers, error propagation, and atomic state.
+**Goal:** Close all P0 truth bugs from the oracle audit -- honest invokers, error propagation, and atomic state.
 **Requirements:** R045 (FakeInvoker), R046 (dispatch errors), R047 (continue bypass), R048 (reconcile), R049 (git claims), R050 (no env dismissal), R051 (atomic state)
-**Status:** Complete (2026-04-22) — 4 plans, 16 commits, 12 validation tests green
+**Status:** Complete (2026-04-22) -- 4 plans, 16 commits, 12 validation tests green
 
 ### Phase 32: Continue Unblock
-**Goal:** Recover full continue orchestration so active colonies can advance past phase 2.
+**Goal:** Recover full continue orchestration so active colonies can advance past phase 2. Detect abandoned builds, produce actionable recovery messages, clear stale reports, ensure end-to-end pipeline works.
+**Plans:** 2 plans
+
+Plans:
+- [ ] 32-01-PLAN.md -- Abandoned build detection and recovery (TDD)
+- [ ] 32-02-PLAN.md -- Stale report cleanup and E2E pipeline recovery (TDD)
+
 **Status:** Planned
 
 ### Phase 33: Dispatch Fixes
@@ -123,4 +129,5 @@
 | 17-24 | v1.3 | 17/17 | Complete | 2026-04-21 |
 | 25-30 | v1.4 | 6/6 | Complete | 2026-04-21 |
 | 31 | v1.5 | 4/4 | Complete | 2026-04-22 |
-| 32-36 | v1.5 | 0 | Planned | — |
+| 32 | v1.5 | 2 | Planned | -- |
+| 33-36 | v1.5 | 0 | Planned | -- |
