@@ -2481,6 +2481,239 @@ func (i *continueUnavailableInvoker) IsAvailable(ctx context.Context) bool { ret
 
 func (i *continueUnavailableInvoker) ValidateAgent(path string) error { return nil }
 
+// TestContinue_BlocksOnVerifiedPartial verifies that a phase with a
+// non-completed worker does NOT advance even when verification steps pass.
+// This proves the partial-success bypass is closed.
+func TestContinue_BlocksOnVerifiedPartial(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Block advancement when any worker failed despite passing checks"
+	now := time.Now().UTC()
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Partial completion phase",
+					Status: colony.PhaseInProgress,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Ship the first part", Status: colony.TaskInProgress},
+						{ID: &taskTwoID, Goal: "Ship the second part", Status: colony.TaskInProgress},
+					},
+				},
+				{
+					ID:     2,
+					Name:   "Next should stay blocked",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Waits for full completion", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Partial completion phase", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-301", Task: "Ship the first part", Status: "completed", TaskID: taskOneID},
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-302", Task: "Ship the second part", Status: "failed", TaskID: taskTwoID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-303", Task: "Independent verification before advancement", Status: "completed"},
+	})
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true when a worker failed, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false when a worker failed, got %v", result)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("state = %s, want BUILT", state.State)
+	}
+	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
+		t.Fatalf("phase 1 status = %s, want in_progress", state.Plan.Phases[0].Status)
+	}
+}
+
+// TestContinue_BlocksOnWatcherTimeout proves that a watcher timeout
+// prevents phase advancement and sets checksPassed to false.
+func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Block advancement when continue watcher verification times out"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Watcher timeout integration test",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Ship after watcher completes", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Remains blocked",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Await watcher success", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Watcher timeout integration test", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-401", Task: "Ship after watcher completes", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-402", Task: "Build-time verification", Status: "completed"},
+	})
+
+	invoker := &continueWatcherTestInvoker{
+		watcherStatus:  "timeout",
+		watcherSummary: "Continue watcher timed out during independent verification",
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true on watcher timeout, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false on watcher timeout, got %v", result)
+	}
+
+	verification := result["verification"].(map[string]interface{})
+	if passed, _ := verification["checks_passed"].(bool); passed {
+		t.Fatalf("expected checks_passed:false on watcher timeout, got %v", verification)
+	}
+	watcher := verification["watcher"].(map[string]interface{})
+	if passed, _ := watcher["passed"].(bool); passed {
+		t.Fatalf("expected watcher.passed:false on timeout, got %v", watcher)
+	}
+}
+
+// TestContinue_ReconcileDoesNotBypassClaims proves that --reconcile-task
+// does not advance the phase when the reconciled task has no git evidence
+// to support the claim.
+func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Reconcile does not bypass claims verification"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Reconcile bypass test",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Needs git evidence", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-501", Task: "Needs git evidence", Status: "failed", TaskID: taskID},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Reconcile bypass test", goal, dispatches)
+
+	// Overwrite claims to be empty so there is no git evidence for the task
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		BuildPhase: 1,
+		Timestamp:  now.Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("failed to write empty claims: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true when reconciled task lacks evidence, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false when reconciled task lacks evidence, got %v", result)
+	}
+
+	reconciled := stringSliceValue(result["reconciled_tasks"])
+	if len(reconciled) != 1 || reconciled[0] != taskID {
+		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
+	}
+
+	blockingIssues := stringSliceValue(result["blocking_issues"])
+	hasReconcileWarning := false
+	for _, issue := range blockingIssues {
+		if strings.Contains(issue, "manually reconciled") {
+			hasReconcileWarning = true
+			break
+		}
+	}
+	if !hasReconcileWarning {
+		t.Fatalf("expected blocking issues to mention reconcile, got %v", blockingIssues)
+	}
+}
+
 func withTestWorkspace(t *testing.T, root string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {

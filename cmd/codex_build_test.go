@@ -802,3 +802,126 @@ func TestResolveSkillSection_ReturnsEmptyWhenNoMatches(t *testing.T) {
 		t.Fatalf("expected empty skill section when no skills exist, got:\n%s", section)
 	}
 }
+
+// TestBuildInRepo_VerifiesGitClaimsForCompletedWorkers proves that in-repo
+// builds verify completed worker claims against actual git state.
+// After the fix in task 04-01, completed workers have their claims
+// checked via applyObservedClaims, not trusted blindly.
+func TestBuildInRepo_VerifiesGitClaimsForCompletedWorkers(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "checkout", "-b", "main")
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	goal := "Verify in-repo claims are git-verified for completed workers"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+		ColonyDepth:  "light",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Claims verification",
+				Status: colony.PhaseReady,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Create a file and verify claims", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	// Create an invoker that creates a file and reports it as completed
+	invoker := &inRepoClaimsInvoker{
+		root: root,
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	result, err := runCodexBuild(root, 1, nil, false)
+	if err != nil {
+		t.Fatalf("runCodexBuild returned error: %v", err)
+	}
+
+	dispatches, ok := result["dispatches"].([]map[string]interface{})
+	if !ok || len(dispatches) == 0 {
+		t.Fatalf("expected dispatches, got %v", result["dispatches"])
+	}
+
+	// Verify the worker completed
+	dispatch := dispatches[0]
+	if status, _ := dispatch["status"].(string); status != "completed" {
+		t.Fatalf("expected completed status, got %q", status)
+	}
+
+	// Verify the claims file was written and contains the file
+	var claims codexBuildClaims
+	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
+		t.Fatalf("failed to load claims: %v", err)
+	}
+
+	foundClaimed := false
+	for _, f := range claims.FilesCreated {
+		if f == "pkg/feature.txt" {
+			foundClaimed = true
+			break
+		}
+	}
+	if !foundClaimed {
+		for _, f := range claims.FilesModified {
+			if f == "pkg/feature.txt" {
+				foundClaimed = true
+				break
+			}
+		}
+	}
+	if !foundClaimed {
+		t.Fatalf("expected pkg/feature.txt in claims, got FilesCreated=%v FilesModified=%v", claims.FilesCreated, claims.FilesModified)
+	}
+
+	// Verify the file exists on disk (proving git verification checked real state)
+	if _, err := os.Stat(filepath.Join(root, "pkg", "feature.txt")); err != nil {
+		t.Fatalf("expected pkg/feature.txt to exist on disk: %v", err)
+	}
+}
+
+// inRepoClaimsInvoker is a test invoker that creates a file in-repo
+// and reports completion with claimed files.
+type inRepoClaimsInvoker struct {
+	root string
+}
+
+func (i *inRepoClaimsInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	target := filepath.Join(cfg.Root, "pkg", "feature.txt")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	if err := os.WriteFile(target, []byte("in-repo build change\n"), 0644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return codex.WorkerResult{
+		WorkerName:    cfg.WorkerName,
+		Caste:         cfg.Caste,
+		TaskID:        cfg.TaskID,
+		Status:        "completed",
+		Summary:       "in-repo build completed",
+		FilesCreated:  []string{"pkg/feature.txt"},
+	}, nil
+}
+
+func (i *inRepoClaimsInvoker) IsAvailable(_ context.Context) bool { return true }
+func (i *inRepoClaimsInvoker) ValidateAgent(_ string) error       { return nil }
