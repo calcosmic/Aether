@@ -2980,7 +2980,8 @@ func TestContinueDetectsAbandonedBuild(t *testing.T) {
 		t.Fatalf("continue returned error: %v", err)
 	}
 
-	result := parseLifecycleEnvelope(t, outBuf.String())
+	env := parseLifecycleEnvelope(t, outBuf.String())
+	result := env["result"].(map[string]interface{})
 
 	if abandoned, _ := result["abandoned"].(bool); !abandoned {
 		t.Fatalf("expected abandoned=true, got result: %v", result["abandoned"])
@@ -3077,7 +3078,8 @@ func TestContinueAbandonedBuildReturnsRecoveryOptions(t *testing.T) {
 		t.Fatalf("continue returned error: %v", err)
 	}
 
-	result := parseLifecycleEnvelope(t, outBuf.String())
+	env := parseLifecycleEnvelope(t, outBuf.String())
+	result := env["result"].(map[string]interface{})
 
 	recovery, ok := result["recovery"].(map[string]interface{})
 	if !ok {
@@ -3187,7 +3189,8 @@ func TestContinueNotAbandonedWhenDispatchesCompleted(t *testing.T) {
 		t.Fatalf("continue returned error: %v", err)
 	}
 
-	result := parseLifecycleEnvelope(t, outBuf.String())
+	env := parseLifecycleEnvelope(t, outBuf.String())
+	result := env["result"].(map[string]interface{})
 
 	if abandoned, _ := result["abandoned"].(bool); abandoned {
 		t.Fatal("expected abandoned to NOT be true when dispatches are completed")

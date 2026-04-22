@@ -97,6 +97,44 @@ type codexContinueOptions struct {
 	ReconcileTaskIDs []string
 }
 
+// detectAbandonedBuild checks whether all manifest dispatches are stuck at
+// "spawned" and the build started long enough ago to be considered abandoned.
+// Returns (true, elapsed, summary) when the build is abandoned.
+func detectAbandonedBuild(manifest codexContinueManifest, state colony.ColonyState) (abandoned bool, staleDuration time.Duration, summary string) {
+	if !manifest.Present || len(manifest.Data.Dispatches) == 0 {
+		return false, 0, ""
+	}
+	if state.BuildStartedAt == nil {
+		return false, 0, ""
+	}
+	for _, dispatch := range manifest.Data.Dispatches {
+		if strings.TrimSpace(dispatch.Status) != "spawned" {
+			return false, 0, ""
+		}
+	}
+	elapsed := time.Since(*state.BuildStartedAt)
+	if elapsed < 10*time.Minute {
+		return false, 0, ""
+	}
+	return true, elapsed, fmt.Sprintf("Build was abandoned %.0f minutes ago: all %d dispatches stuck at 'spawned'", elapsed.Minutes(), len(manifest.Data.Dispatches))
+}
+
+// abandonedBuildTaskIDs extracts unique task IDs from manifest dispatches.
+func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
+	seen := make(map[string]struct{})
+	var ids []string
+	for _, d := range manifest.Data.Dispatches {
+		id := strings.TrimSpace(d.TaskID)
+		if id != "" {
+			if _, ok := seen[id]; !ok {
+				seen[id] = struct{}{}
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
+}
+
 type codexContinueTaskAssessment struct {
 	TaskID           string   `json:"task_id"`
 	Goal             string   `json:"goal"`
@@ -202,6 +240,46 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if state.BuildStartedAt == nil && !manifest.Present {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
 	}
+
+	// Abandoned build detection: if all dispatches are still "spawned" and the
+	// build started more than 10 minutes ago, the build was abandoned mid-execution.
+	// Return a blocked result with recovery commands instead of running verification
+	// against incomplete dispatches.
+	if abandoned, duration, abandonedSummary := detectAbandonedBuild(manifest, state); abandoned {
+		now := time.Now().UTC()
+		runHandle, _ := beginRuntimeSpawnRun("continue", now)
+		taskIDs := abandonedBuildTaskIDs(manifest)
+		recovery := codexContinueRecoveryPlan{
+			RedispatchTasks:   taskIDs,
+			RedispatchCommand: buildTargetedRedispatchCommand(phase.ID, taskIDs),
+			ReconcileTasks:    taskIDs,
+			ReconcileCommand:  buildContinueReconcileCommand(taskIDs),
+		}
+		_ = store.SaveJSON(
+			filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json")),
+			codexContinueReport{
+				Phase:         phase.ID,
+				GeneratedAt:   now.Format(time.RFC3339),
+				Summary:       abandonedSummary,
+				Recovery:      recovery,
+				Advanced:      false,
+				Completed:     false,
+			},
+		)
+		finishRuntimeSpawnRun(runHandle, "blocked-abandoned", now)
+		return map[string]interface{}{
+			"advanced":        false,
+			"blocked":         true,
+			"abandoned":       true,
+			"stale_duration":  duration.String(),
+			"current_phase":   state.CurrentPhase,
+			"phase_name":      phase.Name,
+			"state":           state.State,
+			"recovery":        recovery,
+			"blocking_issues": []string{abandonedSummary},
+		}, state, phase, nil, nil, false, nil
+	}
+
 	now := time.Now().UTC()
 	runHandle, err := beginRuntimeSpawnRun("continue", now)
 	if err != nil {
