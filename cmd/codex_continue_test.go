@@ -1121,6 +1121,95 @@ func TestContinueBlocksWhenContinueWatcherRejectsPhase(t *testing.T) {
 	}
 }
 
+func TestContinueBlocksWhenWatcherTimesOut(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Block advancement when continue watcher times out"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Watcher timeout phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Ship only after watcher completes", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Still blocked",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Wait for non-timed-out watcher", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Watcher timeout phase", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-201", Task: "Ship only after watcher completes", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-202", Task: "Build-time verification", Status: "completed"},
+	})
+
+	invoker := &continueWatcherTestInvoker{
+		watcherStatus:  "timeout",
+		watcherSummary: "Continue watcher timed out during independent verification",
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true when watcher times out, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false when watcher times out, got %v", result)
+	}
+
+	verification := result["verification"].(map[string]interface{})
+	if passed, _ := verification["checks_passed"].(bool); passed {
+		t.Fatalf("expected checks_passed:false when watcher times out, got %v", verification)
+	}
+	watcher := verification["watcher"].(map[string]interface{})
+	if passed, _ := watcher["passed"].(bool); passed {
+		t.Fatalf("expected watcher.passed:false on timeout, got %v", watcher)
+	}
+	if status := watcher["status"].(string); status != "timeout" {
+		t.Fatalf("watcher status = %q, want timeout", status)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("state = %s, want BUILT", state.State)
+	}
+	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
+		t.Fatalf("phase 1 status = %s, want in_progress", state.Plan.Phases[0].Status)
+	}
+}
+
 func TestContinueBlockedFlowIsRecordedInStateAndSpawnSummary(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)

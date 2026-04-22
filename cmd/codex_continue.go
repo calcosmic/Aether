@@ -691,19 +691,12 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 		}
 	}
 	if watcher.Present && !watcher.Passed {
-		// Watcher timeout is an environmental issue (Codex CLI hang), not a code
-		// failure. When all build/test steps already passed, don't let a watcher
-		// timeout block phase advancement. Real verification failures still do.
-		if watcher.Status == "timeout" {
-			// Leave checksPassed true; the actual verification steps passed.
-		} else {
-			checksPassed = false
-			summary := strings.TrimSpace(watcher.Summary)
-			if summary == "" {
-				summary = "watcher verification did not complete cleanly"
-			}
-			blockers = append(blockers, summary)
+		checksPassed = false
+		summary := strings.TrimSpace(watcher.Summary)
+		if summary == "" {
+			summary = "watcher verification did not complete cleanly"
 		}
+		blockers = append(blockers, summary)
 	}
 
 	return codexContinueVerificationReport{
