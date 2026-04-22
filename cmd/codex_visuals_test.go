@@ -1259,6 +1259,43 @@ func TestRenderPlanVisual_RealDispatchWithFailure(t *testing.T) {
 	}
 }
 
+func TestRenderPlanVisual_ShowsPlanningFallbackWarning(t *testing.T) {
+	phases := []colony.Phase{
+		{ID: 1, Name: "Discovery", Description: "Map the codebase", Status: colony.PhaseReady,
+			Tasks: []colony.Task{{Goal: "Read code paths"}}},
+	}
+	phaseMaps := make([]interface{}, len(phases))
+	for i, p := range phases {
+		phaseMaps[i] = phaseToMap(p)
+	}
+
+	result := map[string]interface{}{
+		"existing_plan":    false,
+		"goal":             "Build feature X",
+		"granularity":      "milestone",
+		"confidence":       map[string]interface{}{"overall": 72},
+		"phases":           phaseMaps,
+		"dispatch_mode":    "fallback",
+		"planning_warning": "Real planning workers did not finish cleanly, so Aether fell back to local synthesis.",
+		"dispatches": []interface{}{
+			map[string]interface{}{"name": "Scout-7", "caste": "scout", "task": "Survey the repo", "status": "timeout", "summary": "timed out", "duration": 60.0},
+			map[string]interface{}{"name": "Route-12", "caste": "route_setter", "task": "Convert findings into phases", "status": "timeout", "summary": "timed out", "duration": 0.0},
+		},
+	}
+
+	output := renderPlanVisual(result)
+
+	if !strings.Contains(output, "Planning Warning") {
+		t.Errorf("output missing planning warning header\n%s", output)
+	}
+	if !strings.Contains(output, "fell back to local synthesis") {
+		t.Errorf("output missing fallback explanation\n%s", output)
+	}
+	if !strings.Contains(output, "Dispatch: Fallback") {
+		t.Errorf("output missing fallback dispatch label\n%s", output)
+	}
+}
+
 func TestRenderPlanVisual_NoDispatches(t *testing.T) {
 	// No dispatches at all -- should not crash, should show legacy output.
 	phases := []colony.Phase{

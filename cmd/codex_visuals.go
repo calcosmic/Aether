@@ -697,6 +697,12 @@ func renderPlanVisual(result map[string]interface{}) string {
 		b.WriteString(warning)
 		b.WriteString("\n\n")
 	}
+	if warning := strings.TrimSpace(stringValue(result["planning_warning"])); warning != "" {
+		b.WriteString("Planning Warning\n")
+		b.WriteString("  - ")
+		b.WriteString(warning)
+		b.WriteString("\n\n")
+	}
 	if dispatches, ok := result["dispatches"].([]interface{}); ok && len(dispatches) > 0 {
 		parsed := parsePlanningDispatchMaps(dispatches)
 		hasRealData := hasRealPlanningExecutionData(parsed)

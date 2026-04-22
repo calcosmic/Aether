@@ -451,6 +451,10 @@ waitLoop:
 	rawOutput := combinedWorkerOutput(stdout.String(), stderr.String())
 
 	if ctx.Err() == context.DeadlineExceeded {
+		reportedTimeout := duration.Round(time.Millisecond)
+		if duration >= time.Second {
+			reportedTimeout = duration.Round(time.Second)
+		}
 		return WorkerResult{
 			WorkerName: config.WorkerName,
 			Caste:      config.Caste,
@@ -458,7 +462,7 @@ waitLoop:
 			Status:     "timeout",
 			Duration:   duration,
 			RawOutput:  rawOutput,
-			Error:      fmt.Errorf("worker timeout after %v", timeout),
+			Error:      fmt.Errorf("worker timeout after %v", reportedTimeout),
 		}, nil
 	}
 

@@ -97,6 +97,8 @@ type phaseTaskTemplate struct {
 	DependsOn       []string
 }
 
+var planningDispatchTimeout = 60 * time.Second
+
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
@@ -170,6 +172,7 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 	dispatchMode := "synthetic"
 	artifactSource := "local-synthesis"
 	planSource := "local-synthesis"
+	planningWarning := ""
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	for _, dispatch := range dispatches {
 		if err := spawnTree.RecordSpawn("Queen", dispatch.Caste, dispatch.Name, dispatch.Task, 1); err != nil {
@@ -185,15 +188,17 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 			return nil, fmt.Errorf("codex CLI is not available in PATH")
 		}
 		realDispatches, dispatchErr := dispatchRealPlanningWorkers(context.Background(), root, invoker)
+		if realDispatches != nil {
+			dispatches = realDispatches
+		}
 		if dispatchErr != nil {
-			if _, ok := invoker.(*codex.FakeInvoker); !ok {
-				for _, dispatch := range dispatches {
-					_ = spawnTree.UpdateStatus(dispatch.Name, "failed", dispatchErr.Error())
-				}
-				return nil, dispatchErr
+			if _, ok := invoker.(*codex.FakeInvoker); ok {
+				dispatchMode = "simulated"
+			} else {
+				dispatchMode = "fallback"
+				planningWarning = fmt.Sprintf("Real planning workers did not finish cleanly, so Aether fell back to local synthesis. Cause: %s", dispatchErr.Error())
 			}
 		} else if realDispatches != nil {
-			dispatches = realDispatches
 			if _, ok := invoker.(*codex.FakeInvoker); ok {
 				dispatchMode = "simulated"
 			} else {
@@ -317,6 +322,7 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 		"survey_docs":               survey.SurveyDocs,
 		"unresolved_clarifications": unresolvedClarifications,
 		"clarification_warning":     clarificationWarning,
+		"planning_warning":          planningWarning,
 		"next":                      nextCommand,
 	}
 	statuses := make([]string, 0, len(dispatches))
@@ -407,6 +413,8 @@ func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex
 	if invoker == nil || !invoker.IsAvailable(ctx) {
 		return nil, nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, planningDispatchTimeout)
+	defer cancel()
 
 	codexAgentsDir := filepath.Join(root, ".codex", "agents")
 

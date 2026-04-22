@@ -350,6 +350,63 @@ func TestPlanUsesWorkerWrittenArtifactsWhenProvided(t *testing.T) {
 	}
 }
 
+func TestPlanFallsBackWhenRealPlanningDispatchFails(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+
+	goal := "Fall back when planner workers stall"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &failingPlanningInvoker{} }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["dispatch_mode"]; got != "fallback" {
+		t.Fatalf("dispatch_mode = %v, want fallback", got)
+	}
+	if got := strings.TrimSpace(result["planning_warning"].(string)); got == "" {
+		t.Fatal("expected planning_warning to be populated")
+	}
+	dispatches := result["dispatches"].([]interface{})
+	if len(dispatches) != 2 {
+		t.Fatalf("expected 2 planning dispatches, got %d", len(dispatches))
+	}
+	first := dispatches[0].(map[string]interface{})
+	if first["status"] != "timeout" {
+		t.Fatalf("first dispatch status = %v, want timeout", first["status"])
+	}
+	if count := int(result["count"].(float64)); count == 0 {
+		t.Fatal("expected fallback plan to still contain phases")
+	}
+}
+
 // --- dispatchRealPlanningWorkers tests ---
 
 func TestDispatchRealPlanningWorkers_NilInvoker_ReturnsNil(t *testing.T) {
@@ -523,6 +580,26 @@ func (p *planningArtifactInvoker) IsAvailable(_ context.Context) bool {
 }
 
 func (p *planningArtifactInvoker) ValidateAgent(_ string) error {
+	return nil
+}
+
+type failingPlanningInvoker struct{}
+
+func (f *failingPlanningInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "timeout",
+		Error:      context.DeadlineExceeded,
+	}, nil
+}
+
+func (f *failingPlanningInvoker) IsAvailable(_ context.Context) bool {
+	return true
+}
+
+func (f *failingPlanningInvoker) ValidateAgent(_ string) error {
 	return nil
 }
 
