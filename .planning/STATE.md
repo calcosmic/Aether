@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
+status: executing
 stopped_at: Phase 43 plan 02 complete
-last_updated: "2026-04-23T19:33:54.037Z"
-last_activity: 2026-04-23
+last_updated: "2026-04-23T19:38:56.161Z"
+last_activity: 2026-04-23 -- Phase 44 execution started
 progress:
   total_phases: 49
   completed_phases: 37
@@ -21,14 +21,14 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie-repos-Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 43 — release-integrity-checks
+**Current focus:** Phase 44 — doc-alignment-and-archive-consistency
 
 ## Current Position
 
-Phase: 43
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-04-23
+Phase: 44 (doc-alignment-and-archive-consistency) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 44
+Last activity: 2026-04-23 -- Phase 44 execution started
 
 ## Performance Metrics
 
