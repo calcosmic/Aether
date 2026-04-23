@@ -189,8 +189,14 @@ func TestE2ERegressionStalePublishDetection(t *testing.T) {
 		t.Fatalf("expected valid JSON output: %v, output: %s", err, buf.String())
 	}
 
-	inner, _ := result["result"].(map[string]interface{})
-	stale, _ := inner["stale_publish"].(map[string]interface{})
+	inner, ok := result["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected result.result to be a map, got: %T", result["result"])
+	}
+	stale, ok := inner["stale_publish"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected result.stale_publish to be a map, got: %T", inner["stale_publish"])
+	}
 
 	if stale["classification"] != "critical" {
 		t.Errorf("expected classification=critical, got: %v", stale["classification"])
