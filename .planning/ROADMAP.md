@@ -125,8 +125,8 @@ Plans:
 
 Plans:
 - [x] 35-01-PLAN.md -- Drift detection infrastructure (completed 2026-04-23)
-- [ ] 35-02-PLAN.md -- Fix OpenCode agent drift
-- [ ] 35-03-PLAN.md -- Codex agent completeness updates
+- [x] 35-02-PLAN.md -- Fix OpenCode agent drift
+- [x] 35-03-PLAN.md -- Codex agent completeness updates
 
 ### Phase 36: Release Decision
 **Goal:** Cut v1.0.20, validate release readiness, or defer.
