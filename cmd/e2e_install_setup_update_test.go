@@ -84,7 +84,7 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 	if err := os.MkdirAll(pkgOCAgents, 0755); err != nil {
 		t.Fatalf("failed to create opencode agents dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(pkgOCAgents, "builder.md"), []byte("# OC Builder agent"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pkgOCAgents, "builder.md"), []byte("---\ndescription: \"OpenCode builder agent for the Aether colony framework\"\nmode: subagent\nmodel: anthropic/claude-sonnet-4-20250514\ncolor: \"#ff0000\"\ntools:\n  write: true\n  edit: true\n  bash: true\n  grep: true\n  glob: true\n  task: true\n---\n\n# OC Builder agent\n"), 0644); err != nil {
 		t.Fatalf("failed to write OC builder.md: %v", err)
 	}
 

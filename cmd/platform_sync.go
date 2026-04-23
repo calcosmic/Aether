@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
 )
 
 type installSyncPair struct {
@@ -45,7 +47,7 @@ func installSyncPairs() []installSyncPair {
 		{srcRel: ".claude/commands/ant", destRel: ".claude/commands/ant", label: "Commands (claude)", cleanup: true},
 		{srcRel: ".claude/agents/ant", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
 		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode)", cleanup: true},
-		{srcRel: ".opencode/agents", destRel: ".opencode/agent", label: "Agents (opencode)", cleanup: false},
+		{srcRel: ".opencode/agents", destRel: ".opencode/agent", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 		{srcRel: ".aether/skills-codex", destRel: ".codex/skills/aether", label: "Skills (codex)", cleanup: false, preserveLocalChanges: true},
 	}
@@ -57,7 +59,7 @@ func repoSyncPairs() []repoSyncPair {
 		{hubRel: "commands/claude", destRel: "../.claude/commands/ant", label: "Commands (claude)"},
 		{hubRel: "settings/claude", destRel: "../.claude", label: "Settings (claude)", preserveLocalChanges: true, include: isClaudeSettingsFile},
 		{hubRel: "commands/opencode", destRel: "../.opencode/commands/ant", label: "Commands (opencode)"},
-		{hubRel: "agents", destRel: "../.opencode/agents", label: "Agents (opencode)"},
+		{hubRel: "agents", destRel: "../.opencode/agents", label: "Agents (opencode)", validate: validateOpenCodeAgentFile},
 		{hubRel: "agents-claude", destRel: "../.claude/agents/ant", label: "Agents (claude)"},
 		{hubRel: "codex", destRel: "../.codex/agents", label: "Agents (codex)", preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 		{hubRel: "skills-codex", destRel: "../.codex/skills/aether", label: "Skills (codex)", preserveLocalChanges: true},
@@ -104,6 +106,118 @@ func validateCodexAgentFile(srcPath, relPath string, data []byte) error {
 	// Reject binary-like content masquerading as text by ensuring the source can
 	// be read back as a regular file. This keeps the validator conservative while
 	// still allowing normal multiline TOML strings.
+	if info, err := os.Stat(srcPath); err == nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", relPath)
+	}
+
+	return nil
+}
+
+// openCodeAgentFrontmatter defines the expected YAML fields for an OpenCode
+// agent file. The `name` field must NOT be present — filename is the agent name.
+type openCodeAgentFrontmatter struct {
+	Description string                 `yaml:"description"`
+	Mode        string                 `yaml:"mode"`
+	Tools       map[string]interface{} `yaml:"tools"`
+	Color       string                 `yaml:"color"`
+	Model       string                 `yaml:"model"`
+	Name        string                 `yaml:"name"` // Must NOT be present
+}
+
+var openCodeThemeColors = map[string]bool{
+	"primary": true, "secondary": true, "accent": true,
+	"success": true, "warning": true, "error": true, "info": true,
+}
+
+var openCodeHexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// validateOpenCodeAgentFile validates an OpenCode agent markdown file.
+// It checks that the YAML frontmatter conforms to the OpenCode agent schema:
+// description (20+ chars), tools (object/map), color (hex or theme), no name field,
+// and model (provider/model-id format).
+func validateOpenCodeAgentFile(srcPath, relPath string, data []byte) error {
+	// Rule 1: must have .md extension
+	if filepath.Ext(relPath) != ".md" {
+		return fmt.Errorf("%s must use the .md extension", relPath)
+	}
+
+	// Rule 2: must be valid UTF-8
+	if !utf8.Valid(data) {
+		return fmt.Errorf("%s is not valid UTF-8 text", relPath)
+	}
+
+	// Rule 3: must have YAML frontmatter between --- delimiters
+	content := string(data)
+	start := strings.Index(content, "---")
+	if start == -1 {
+		return fmt.Errorf("%s is missing YAML frontmatter (no opening ---)", relPath)
+	}
+	end := strings.Index(content[start+3:], "---")
+	if end == -1 {
+		return fmt.Errorf("%s is missing YAML frontmatter (no closing ---)", relPath)
+	}
+	yamlContent := content[start+3 : start+3+end]
+
+	var fm openCodeAgentFrontmatter
+	if err := yaml.Unmarshal([]byte(yamlContent), &fm); err != nil {
+		return fmt.Errorf("%s has invalid YAML frontmatter: %w", relPath, err)
+	}
+
+	// Rule 4: description must be present and at least 20 characters
+	desc := strings.TrimSpace(fm.Description)
+	if desc == "" {
+		return fmt.Errorf("%s is missing description in frontmatter", relPath)
+	}
+	if len(desc) < 20 {
+		return fmt.Errorf("%s description too short (%d chars, need at least 20): %q", relPath, len(desc), desc)
+	}
+
+	// Rule 5: tools must be a map/object (not a string, not nil)
+	if fm.Tools == nil {
+		return fmt.Errorf("%s is missing tools field in frontmatter", relPath)
+	}
+	// Also check the raw YAML to detect tools as a string (yaml.Unmarshal
+	// would not error on that but would produce nil map). Re-parse the raw
+	// frontmatter to check the actual type of tools.
+	var rawFM map[string]interface{}
+	if err := yaml.Unmarshal([]byte(yamlContent), &rawFM); err != nil {
+		return fmt.Errorf("%s has invalid YAML: %w", relPath, err)
+	}
+	rawTools := rawFM["tools"]
+	if rawTools == nil {
+		return fmt.Errorf("%s is missing tools field in frontmatter", relPath)
+	}
+	if _, ok := rawTools.(map[string]interface{}); !ok {
+		if _, isStr := rawTools.(string); isStr {
+			return fmt.Errorf("%s tools must be a map/object with true/false values, not a string", relPath)
+		}
+		return fmt.Errorf("%s tools has unexpected type %T (must be a map/object)", relPath, rawTools)
+	}
+
+	// Rule 6: color must be a hex color or a theme color name
+	color := strings.TrimSpace(fm.Color)
+	if color == "" {
+		return fmt.Errorf("%s is missing color in frontmatter", relPath)
+	}
+	if !openCodeHexColorRe.MatchString(color) && !openCodeThemeColors[color] {
+		return fmt.Errorf("%s color %q must be a hex color (#rrggbb) or a theme color (primary, secondary, accent, success, warning, error, info)", relPath, color)
+	}
+
+	// Rule 7: name field must NOT be present
+	if _, hasName := rawFM["name"]; hasName {
+		return fmt.Errorf("%s must not have a name field in frontmatter — filename is the agent name", relPath)
+	}
+
+	// Rule 8: model must contain a / (provider/model-id format)
+	model := strings.TrimSpace(fm.Model)
+	if model == "" {
+		return fmt.Errorf("%s is missing model in frontmatter", relPath)
+	}
+	if !strings.Contains(model, "/") {
+		return fmt.Errorf("%s model %q must use provider/model-id format (e.g. anthropic/claude-sonnet-4-20250514)", relPath, model)
+	}
+
+	// Reject binary-like content masquerading as text
 	if info, err := os.Stat(srcPath); err == nil && !info.Mode().IsRegular() {
 		return fmt.Errorf("%s is not a regular file", relPath)
 	}
