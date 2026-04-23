@@ -101,6 +101,7 @@ Last activity: 2026-04-23 -- Phase 44 execution started
 ### Roadmap Evolution
 
 - Phase 34 added: Cleanup — Address stale worktrees, orphaned branches, and stale blocker flags from prior colony work.
+- Phase 44.1 inserted after Phase 44: Downstream Runtime Bugs — fix false Codex skills count, rigid plan --refresh guard, low scout timeout (URGENT)
 
 ### Phase 35 Decisions (Platform Parity)
 

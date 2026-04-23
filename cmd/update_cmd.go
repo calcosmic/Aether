@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -411,20 +412,26 @@ func checkStalePublish(hubDir, hubVersion, binaryVersion string, channel runtime
 	// Check companion-file completeness in hubDir
 	hubSystem := filepath.Join(hubDir, "system")
 	checks := []struct {
-		name     string
-		path     string
-		expected int
-		filter   func(string) bool
+		name      string
+		path      string
+		expected  int
+		filter    func(string) bool
+		recursive bool
 	}{
-		{"Commands (claude)", filepath.Join(hubSystem, "commands", "claude"), expectedClaudeCommandCount, nil},
-		{"Commands (opencode)", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil},
-		{"Agents (opencode)", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil},
-		{"Agents (codex)", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }},
-		{"Skills (codex)", filepath.Join(hubSystem, "skills-codex"), expectedCodexSkillCount, nil},
+		{"Commands (claude)", filepath.Join(hubSystem, "commands", "claude"), expectedClaudeCommandCount, nil, false},
+		{"Commands (opencode)", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil, false},
+		{"Agents (opencode)", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil, false},
+		{"Agents (codex)", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }, false},
+		{"Skills (codex)", filepath.Join(hubSystem, "skills-codex"), expectedCodexSkillCount, nil, true},
 	}
 
 	for _, check := range checks {
-		actual := countEntriesInDir(check.path, check.filter)
+		var actual int
+		if check.recursive {
+			actual = countEntriesRecursive(check.path, check.filter)
+		} else {
+			actual = countEntriesInDir(check.path, check.filter)
+		}
 		if actual < check.expected {
 			result.Components = append(result.Components, staleComponent{
 				Name:     check.name,
@@ -462,6 +469,21 @@ func countEntriesInDir(dir string, filter func(string) bool) int {
 		}
 		count++
 	}
+	return count
+}
+
+func countEntriesRecursive(dir string, filter func(string) bool) int {
+	count := 0
+	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if filter != nil && !filter(d.Name()) {
+			return nil
+		}
+		count++
+		return nil
+	})
 	return count
 }
 

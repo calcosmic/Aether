@@ -80,7 +80,7 @@
 </details>
 
 <details>
-<summary>v1.6 Release Pipeline Integrity (Phases 39-46) -- IN PROGRESS</summary>
+<summary>v1.6 Release Pipeline Integrity (Phases 39-46) -- IN PROGRESS (Phase 44.1 inserted)</summary>
 
 ### Phase 39: OpenCode Agent Frontmatter Fix
 **Goal:** Fix the urgent blocker where Aether ships invalid OpenCode agent frontmatter that crashes OpenCode startup in downstream repos.
@@ -148,6 +148,16 @@ Plans:
 4. Archived v1.5 docs no longer contain internal contradictions
 5. Any behavior changes from Phases 39-43 are reflected in docs
 **Depends on:** Phase 43 (docs must reflect final behavior)
+
+### Phase 44.1: Downstream Runtime Bugs (INSERTED)
+**Goal:** Fix three runtime bugs found during downstream testing in Sodalitas: false Codex skills count warning, rigid plan --refresh guard, and low default scout timeout.
+**Requirements:** PUB-03 (R061), EVD-02 (R067)
+**Success Criteria:**
+1. `aether update --force` reports correct Codex skills count (no false "1 found, expected 29")
+2. `aether plan --refresh` is allowed when Phase 1 is "ready" with no built artifacts (not blocked)
+3. Default scout/worker timeout raised to 15m (configurable)
+4. Downstream repro confirms all three fixes work in a real repo
+**Depends on:** Phase 44
 
 ### Phase 45: End-to-End Regression Coverage
 **Goal:** Automated E2E tests for stable and dev publish/update flows that catch regressions before they ship.

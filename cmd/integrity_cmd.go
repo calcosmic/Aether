@@ -275,21 +275,27 @@ func checkSourceVersion() integrityCheck {
 func checkHubCompanionFiles(hubDir string) integrityCheck {
 	hubSystem := filepath.Join(hubDir, "system")
 	checks := []struct {
-		name     string
-		path     string
-		expected int
-		filter   func(string) bool
+		name      string
+		path      string
+		expected  int
+		filter    func(string) bool
+		recursive bool
 	}{
-		{"commands/claude/", filepath.Join(hubSystem, "commands", "claude"), expectedClaudeCommandCount, nil},
-		{"commands/opencode/", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil},
-		{"agents/opencode/", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil},
-		{"agents/codex/", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }},
-		{"skills/codex/", filepath.Join(hubSystem, "skills-codex"), expectedCodexSkillCount, nil},
+		{"commands/claude/", filepath.Join(hubSystem, "commands", "claude"), expectedClaudeCommandCount, nil, false},
+		{"commands/opencode/", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil, false},
+		{"agents/opencode/", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil, false},
+		{"agents/codex/", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }, false},
+		{"skills/codex/", filepath.Join(hubSystem, "skills-codex"), expectedCodexSkillCount, nil, true},
 	}
 
 	var discrepancies []string
 	for _, c := range checks {
-		actual := countEntriesInDir(c.path, c.filter)
+		var actual int
+		if c.recursive {
+			actual = countEntriesRecursive(c.path, c.filter)
+		} else {
+			actual = countEntriesInDir(c.path, c.filter)
+		}
 		if actual < c.expected {
 			discrepancies = append(discrepancies, fmt.Sprintf("%s has %d files (expected %d)", c.name, actual, c.expected))
 		}

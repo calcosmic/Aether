@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	planningScoutTimeout       = 5 * time.Minute
-	planningRouteSetterTimeout = 5 * time.Minute
+	planningScoutTimeout       = 15 * time.Minute
+	planningRouteSetterTimeout = 15 * time.Minute
 	surveyorDispatchTimeout    = 5 * time.Minute
 	continueReviewTimeout      = 5 * time.Minute
 )

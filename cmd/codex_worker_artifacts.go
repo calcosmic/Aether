@@ -82,6 +82,13 @@ func shouldPreserveWorkerArtifact(root string, relPath string, before map[string
 		return false
 	}
 
+	// If a fallback marker exists, only preserve artifacts newer than the marker.
+	// This allows real workers to overwrite stale fallback artifacts.
+	fallbackMarkerPath := filepath.Join(root, ".aether", "data", "planning", ".fallback-marker")
+	if markerInfo, mErr := os.Stat(fallbackMarkerPath); mErr == nil {
+		return info.ModTime().After(markerInfo.ModTime())
+	}
+
 	snapshot, existed := before[relPath]
 	if !existed || !snapshot.Existed {
 		return true
