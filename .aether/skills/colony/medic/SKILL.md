@@ -282,14 +282,16 @@ Legal transitions (from `pkg/colony/colony.go:490`):
 
 ### Remedies
 
-- For unreleased local source changes on this machine: run `aether install --package-dir "$PWD"` from the Aether repo, then `aether update --force` in target repos
-- For isolated source-development on the same machine: run `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"` from the Aether repo, then `aether-dev update --force` in target repos
+- For unreleased local source changes on this machine: run `aether publish` from the Aether repo (builds binary, syncs hub, verifies version agreement), then `aether update --force` in target repos. `aether install --package-dir "$PWD"` also works as backward-compatible fallback
+- For isolated source-development on the same machine: run `aether publish --channel dev --binary-dest "$HOME/.local/bin"` from the Aether repo, then `aether-dev update --force` in target repos. `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"` also works as fallback
 - If the change modified `aether install` itself: bootstrap with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`
 - For published release runtime updates: run `aether update --force --download-binary`
 - For first-time published installs on a machine with no hub yet: run `npx --yes aether-colony@latest`
 
 ## Release Version Integrity
 
+- `aether medic --deep` includes release integrity scanning via scanIntegrity() which checks binary/hub version agreement and stale publish classification. Issues surface with severity and recovery commands inline.
+- `aether integrity` is the dedicated command for full release pipeline validation. Auto-detects source vs consumer repo context. Source repos get 5 checks (source version, binary version, hub version, companion files, downstream simulation); consumer repos get 4 checks (binary version, hub version, companion files, downstream simulation). Flags: `--json` (machine-readable output), `--channel stable|dev` (override channel), `--source` (force source-repo checks). Cross-reference the operations guide for full workflow documentation.
 - `.aether/version.json` is the source-checkout release version file
 - `npm/package.json` version must equal `.aether/version.json`
 - If these differ, report release version drift before trusting docs or publish instructions
