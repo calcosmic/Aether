@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -922,6 +923,132 @@ func slicesEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// TestClaudeOpenCodeAgentContentParity verifies that OpenCode agent files have
+// byte-for-byte identical content to their Claude master counterparts.
+// This test fails when drift is introduced, forcing explicit decisions about
+// whether divergence is intentional.
+func TestClaudeOpenCodeAgentContentParity(t *testing.T) {
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	claudeDir := filepath.Join(repoRoot, ".claude", "agents", "ant")
+	opencodeDir := filepath.Join(repoRoot, ".opencode", "agents")
+
+	claudeNames := listAgentBaseNames(t, claudeDir, ".md")
+	opencodeNames := listAgentBaseNames(t, opencodeDir, ".md")
+
+	if !slicesEqual(claudeNames, opencodeNames) {
+		t.Fatalf("Claude and OpenCode agent names do not match.\nClaude:   %v\nOpenCode: %v", claudeNames, opencodeNames)
+	}
+
+	var mismatches []string
+	for _, name := range claudeNames {
+		claudePath := filepath.Join(claudeDir, name+".md")
+		opencodePath := filepath.Join(opencodeDir, name+".md")
+
+		claudeBytes, err := os.ReadFile(claudePath)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", claudePath, err)
+		}
+		opencodeBytes, err := os.ReadFile(opencodePath)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", opencodePath, err)
+		}
+
+		if string(claudeBytes) == string(opencodeBytes) {
+			continue
+		}
+
+		claudeLines := strings.Count(string(claudeBytes), "\n")
+		opencodeLines := strings.Count(string(opencodeBytes), "\n")
+		if len(claudeBytes) > 0 && !strings.HasSuffix(string(claudeBytes), "\n") {
+			claudeLines++
+		}
+		if len(opencodeBytes) > 0 && !strings.HasSuffix(string(opencodeBytes), "\n") {
+			opencodeLines++
+		}
+		diff := claudeLines - opencodeLines
+		if diff < 0 {
+			diff = -diff
+		}
+
+		mismatches = append(mismatches, fmt.Sprintf(
+			"Claude/OpenCode agent content mismatch for %s.md:\n  Claude:   %d lines\n  OpenCode: %d lines\n  Diff:     %d lines",
+			name, claudeLines, opencodeLines, diff,
+		))
+	}
+
+	if len(mismatches) > 0 {
+		t.Errorf("Agent content parity failures (%d of %d agents):\n\n%s", len(mismatches), len(claudeNames), strings.Join(mismatches, "\n\n"))
+	}
+}
+
+// TestCodexAgentCompleteness verifies that each Codex TOML agent contains
+// essential sections expected after Phases 31-33. This test is advisory:
+// it logs warnings rather than hard-failing, since Codex agents have
+// platform-specific adaptations that may legitimately differ.
+func TestCodexAgentCompleteness(t *testing.T) {
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	codexDir := filepath.Join(repoRoot, ".codex", "agents")
+	agentNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
+
+	var warnings []string
+	for _, name := range agentNames {
+		path := filepath.Join(codexDir, name+".toml")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+		content := string(data)
+
+		// 1. developer_instructions block exists and is non-empty
+		if !strings.Contains(content, "developer_instructions") {
+			warnings = append(warnings, fmt.Sprintf("%s: missing developer_instructions block", name))
+		} else {
+			// Rough check for non-empty: look for closing quote after some content
+			idx := strings.Index(content, "developer_instructions")
+			after := content[idx:]
+			if len(after) < 50 {
+				warnings = append(warnings, fmt.Sprintf("%s: developer_instructions appears empty or very short", name))
+			}
+		}
+
+		// 2. Contains TDD or test-driven references (Phase 31 truth emphasis)
+		lower := strings.ToLower(content)
+		if !strings.Contains(lower, "tdd") && !strings.Contains(lower, "test-driven") {
+			warnings = append(warnings, fmt.Sprintf("%s: missing TDD or test-driven references", name))
+		}
+
+		// 3. Contains protected or boundary references (safety rules)
+		if !strings.Contains(lower, "protected") && !strings.Contains(lower, "boundary") {
+			warnings = append(warnings, fmt.Sprintf("%s: missing protected/boundary references", name))
+		}
+
+		// 4. Contains escalation references (failure handling)
+		if !strings.Contains(lower, "escalat") {
+			warnings = append(warnings, fmt.Sprintf("%s: missing escalation references", name))
+		}
+
+		// 5. Deprecated patterns
+		if strings.Contains(content, "flag-add") {
+			warnings = append(warnings, fmt.Sprintf("%s: contains deprecated 'flag-add' (use 'aether flag-add')", name))
+		}
+		if strings.Contains(content, "activity-log") {
+			warnings = append(warnings, fmt.Sprintf("%s: contains deprecated 'activity-log' (OpenCode-specific, no Claude equivalent)", name))
+		}
+	}
+
+	if len(warnings) > 0 {
+		t.Logf("Codex agent completeness warnings (%d):\n%s", len(warnings), strings.Join(warnings, "\n"))
+	}
 }
 
 // findRepoRoot walks up from the current working directory to find the
