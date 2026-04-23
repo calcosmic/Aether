@@ -36,7 +36,7 @@ That means:
 - Full trace instrumentation: every run leaves a structured trace with replay, summary, and inspect capabilities
 - All 49 slash commands verified working across Claude Code, OpenCode, and Codex CLI
 - Previous milestones: v1.0 (MVP), v1.1 (Trusted Context), v1.2 (Live Dispatch Truth), v1.3 (Visual Truth) all shipped
-- Defining v1.4: Self-Healing Colony with Medic ant
+- v1.6 Release Pipeline Integrity in progress: Phase 41 complete — channel isolation guards enforce stable/dev separation at runtime
 
 ## Architecture / Key Patterns
 
@@ -57,7 +57,9 @@ See [.planning/REQUIREMENTS.md](/Users/callumcowie/repos/Aether/.planning/REQUIR
 - [x] v1.1 Trusted Context — Phases 7-11
 - [x] v1.2 Live Dispatch Truth and Recovery — Phases 12-16
 - [x] v1.3 Visual Truth and Core Hardening — Phases 17-24 (shipped 2026-04-21)
-- [ ] v1.4 Self-Healing Colony — Phases 25+ (defining)
+- [x] v1.4 Self-Healing Colony — Phases 25-30 (completed 2026-04-21)
+- [x] v1.5 Runtime Truth Recovery — Phases 31-38 (completed 2026-04-23, product v1.0.20)
+- [~] v1.6 Release Pipeline Integrity — Phases 39-46 (in progress, Phase 41 complete)
 
 ## Previous Milestone Result
 
@@ -91,22 +93,35 @@ The milestone now delivers:
 - application-aware curation that closes the read/write gap
 - a benchmarkable proof/evaluation harness for the trusted-context claim
 
-## Current Milestone: v1.4 Self-Healing Colony
+## Current Milestone: v1.6 Release Pipeline Integrity
 
-**Goal:** Give Aether the ability to diagnose and repair its own colony data, ceremony integrity, and runtime state — reducing manual intervention and preventing the documentation gaps we saw in v1.3.
+**Goal:** Lock down Aether's stable and dev release/update pipeline so it behaves exactly as documented — honest versions, isolated channels, trustworthy evidence.
 
 **Target features:**
 
-- **Medic Ant** (`/ant:medic`, `aether medic`) — Diagnose colony health across all data files
-- **Colony Health Scan** — Detect corrupted JSON, stale state, missing artifacts, wrapper/runtime drift
-- **Auto-Repair** — Fix common issues (clear stale spawns, rebuild indexes, reconcile orphaned worktrees)
-- **Medic Skill** — `.aether/skills/colony/medic.md` documenting healthy state for every colony file
-- **Ceremony Integrity Check** — Verify stage markers, emoji consistency, context-clear guidance
-- **Trace Diagnostic** — Use trace logs to debug issues in other repos without access
+- **Stable/dev publish synchronization** — Stable binary and hub must agree; dev must never contaminate stable
+- **Stale publish detection** — Downstream `aether update` must surface incomplete publishes instead of silently succeeding
+- **Release integrity validation** — Source, binary, hub, companion-file surfaces, and downstream result checked together
+- **Medic/release diagnostics** — Flag incomplete stable/dev publishes with exact recovery commands
+- **Doc-runtime alignment** — Operations guide, runbook, and AGENTS.md match actual behavior exactly
+- **E2E regression coverage** — Automated stable and dev publish/update flow validation
+- **Archive consistency** — Milestone/release evidence internally consistent after ship
+- **OpenCode agent frontmatter fix** — Ship valid OpenCode schema instead of crashing downstream startups
+- **Stuck-plan investigation** — Verify whether `aether plan` issue still reproduces in freshly updated repos
+
+## Milestone Sequence
+
+- [x] v1.0 MVP — Phases 1-6
+- [x] v1.1 Trusted Context — Phases 7-11
+- [x] v1.2 Live Dispatch Truth and Recovery — Phases 12-16
+- [x] v1.3 Visual Truth and Core Hardening — Phases 17-24 (shipped 2026-04-21)
+- [x] v1.4 Self-Healing Colony — Phases 25-30 (completed 2026-04-21)
+- [x] v1.5 Runtime Truth Recovery — Phases 31-38 (completed 2026-04-23, product v1.0.20)
+- [ ] v1.6 Release Pipeline Integrity — Phases 39+
 
 ## Next Move
 
-Define requirements and roadmap for v1.4, then execute phases.
+Execute v1.6 phases starting with Phase 39.
 
 ## Evolution
 
