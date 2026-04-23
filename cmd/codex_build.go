@@ -84,7 +84,6 @@ type codexBuildClaims struct {
 }
 
 var newCodexWorkerInvoker = codex.NewWorkerInvoker
-var newCodexWorkerInvokerOrError = codex.NewWorkerInvokerOrError
 
 func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, synthetic bool) (map[string]interface{}, error) {
 	if store == nil {
