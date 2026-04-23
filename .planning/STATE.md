@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Runtime Truth Recovery
-status: ready_to_plan
+status: planning
 stopped_at: Completed 34-03-PLAN.md
-last_updated: "2026-04-23T01:46:44.652Z"
+last_updated: "2026-04-23T03:44:09.329Z"
 last_activity: 2026-04-23
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 7
-  completed_plans: 11
-  percent: 67
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -26,8 +26,8 @@ See: [.planning/PROJECT.md](/Users/callumcowie-repos-Aether/.planning/PROJECT.md
 ## Current Position
 
 Phase: 35
-Plan: Not started
-Status: Ready to plan
+Plan: 1 of 3
+Status: Executing
 Last activity: 2026-04-23
 
 Progress: [██████████] 100%
@@ -36,8 +36,8 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 7
-- Total commits: 16
+- Total plans completed: 8
+- Total commits: 17
 - All tests green (2900+ passing)
 
 **By Plan:**
@@ -51,6 +51,7 @@ Progress: [██████████] 100%
 | Phase 34 P01 | 5min | 2 tasks | 0 files |
 | Phase 34 P02 | 4min | 2 tasks | 0 files |
 | Phase 34-cleanup P03 | 5min | 2 tasks | 1 files |
+| Phase 35 P01 | 8min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -88,9 +89,17 @@ Progress: [██████████] 100%
 
 - Phase 34 added: Cleanup — Address stale worktrees, orphaned branches, and stale blocker flags from prior colony work.
 
+### Phase 35 Decisions (Platform Parity)
+
+- Drift detection test is hard-failing to force explicit decisions about intentional divergence.
+- Codex completeness test is advisory (logs warnings) because platform-specific adaptations are legitimate.
+- All 25 OpenCode agents drift from Claude masters (16-316 lines each); Plan 02 will fix.
+- 53 Codex warnings logged (21 deprecated patterns, 32 missing content); Plan 03 will address.
+
 ### Blockers / Concerns
 
 - 6 unreleased fix commits need v1.0.20.
+- Content parity test currently fails CI until Plan 02 fixes the drift.
 
 ## Deferred Items
 

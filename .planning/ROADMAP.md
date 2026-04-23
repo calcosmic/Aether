@@ -83,7 +83,7 @@
 - [ ] **Phase 32: Continue Unblock** -- Full continue orchestration recovery
 - [ ] **Phase 33: Dispatch Fixes** -- P1 dispatch robustness improvements
 - [x] **Phase 34: Cleanup** -- Stale worktrees, branches, blockers (completed 2026-04-23)
-- [ ] **Phase 35: Platform Parity** -- Claude/OpenCode/Codex alignment
+- [x] **Phase 35: Platform Parity** -- Claude/OpenCode/Codex alignment (in progress, 1/3 plans)
 - [ ] **Phase 36: Release Decision** -- v1.0.20 cut and ship decision
 
 ## Phase Details
@@ -121,7 +121,12 @@ Plans:
 
 ### Phase 35: Platform Parity
 **Goal:** Align Claude/OpenCode/Codex command and agent UX.
-**Status:** Planned
+**Status:** In Progress (1/3 plans complete)
+
+Plans:
+- [x] 35-01-PLAN.md -- Drift detection infrastructure (completed 2026-04-23)
+- [ ] 35-02-PLAN.md -- Fix OpenCode agent drift
+- [ ] 35-03-PLAN.md -- Codex agent completeness updates
 
 ### Phase 36: Release Decision
 **Goal:** Cut v1.0.20, validate release readiness, or defer.
