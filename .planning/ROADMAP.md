@@ -80,7 +80,7 @@
 </details>
 
 <details>
-<summary>v1.6 Release Pipeline Integrity (Phases 39-46) -- IN PROGRESS (Phase 44.1 inserted)</summary>
+<summary>v1.6 Release Pipeline Integrity (Phases 39-46) -- IN PROGRESS (Phases 44.1, 44.2 inserted)</summary>
 
 ### Phase 39: OpenCode Agent Frontmatter Fix
 **Goal:** Fix the urgent blocker where Aether ships invalid OpenCode agent frontmatter that crashes OpenCode startup in downstream repos.
@@ -158,6 +158,21 @@ Plans:
 3. Default scout/worker timeout raised to 15m (configurable)
 4. Downstream repro confirms all three fixes work in a real repo
 **Depends on:** Phase 44
+
+### Phase 44.2: Command Hygiene and Agent Parity (INSERTED)
+**Goal:** Fix aether-medic.md agent body parity mismatch between Claude and OpenCode, and rename all Aether slash commands from colon format (`ant:command`) to hyphen format (`ant-command`) to comply with current Claude Code skill naming rules.
+**Requirements:** PUB-03 (R061), REL-01 (R059)
+**Plans:** 1 plan
+
+Plans:
+- [ ] 44.2-01-PLAN.md -- Medic parity fix and colon-to-hyphen rename across repo
+
+**Success Criteria:**
+1. `TestClaudeOpenCodeAgentContentParity` passes (aether-medic.md matches between Claude and OpenCode)
+2. All 50 slash commands use hyphen format (e.g., `ant-build` not `ant:build`)
+3. All command references in YAML sources, wrappers, docs, and tests updated
+4. `go test ./...` passes with zero failures
+**Depends on:** Phase 44.1
 
 ### Phase 45: End-to-End Regression Coverage
 **Goal:** Automated E2E tests for stable and dev publish/update flows that catch regressions before they ship.
