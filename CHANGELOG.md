@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.20] - 2026-04-23
+
+Truth recovery and platform parity checkpoint release.
+
+### Fixed
+- FakeInvoker blocked from production paths; real invoker requires honest platform dispatch (R045)
+- DispatchBatch error propagation ensures dispatch errors surface to callers (R046)
+- Four continue bypass paths closed for verified_partial, watcher timeout, reconcile, and git claims (R047, R048)
+- In-repo build claims are now git-verified for ALL completed workers (R049)
+- Environmental dismissal removed from verification -- all failures produce honest summaries (R050)
+- Colony state advancement is atomic via UpdateJSONAtomically; state saved before side effects (R051)
+- Continue detects abandoned builds (all dispatches stuck at "spawned" >10 min) and returns blocked with recovery commands
+- Stale report files cleared before continue verification runs
+- 523 stale worktrees and 259 orphaned branches cleaned up
+- All 18 unresolved blocker flags archived (issues fixed by phases 31-33)
+- All 25 OpenCode agents synced from Claude masters (zero drift)
+- All 25 Codex agents updated with Phase 31-33 runtime concepts
+
+### Known Limitations
+- Medic does not detect "functionally stuck" deadlocks where colony state is structurally valid but all forward paths are blocked. A dedicated fix is planned for a future release.
+
 ## [1.0.19] - 2026-04-22
 
 Bootstrap asset-name compatibility for published npm installs.
