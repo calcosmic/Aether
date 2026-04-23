@@ -1,6 +1,6 @@
 {
   "version": "3.0",
-  "goal": "Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant:quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge",
+  "goal": "Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant-quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge",
   "colony_name": null,
   "colony_version": 2,
   "state": "READY",
@@ -22,13 +22,13 @@
         "id": 2,
         "name": "Colony Vital Signs Dashboard",
         "status": "completed",
-        "description": "Extend /ant:status with vital signs panel using existing data"
+        "description": "Extend /ant-status with vital signs panel using existing data"
       },
       {
         "id": 3,
         "name": "Headless Autopilot + Pending Decisions",
         "status": "completed",
-        "description": "Add --headless flag to /ant:run, suppress interactive prompts, queue deferred decisions"
+        "description": "Add --headless flag to /ant-run, suppress interactive prompts, queue deferred decisions"
       },
       {
         "id": 4,
@@ -38,7 +38,7 @@
       },
       {
         "id": 5,
-        "name": "/ant:quick Scout Missions",
+        "name": "/ant-quick Scout Missions",
         "status": "completed",
         "description": "New lightweight command for focused scout queries without full build ceremony"
       },
@@ -62,7 +62,7 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    "2026-03-29T17:42:38Z|colony_initialized|init|Colony initialized with goal: Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant:quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge",
+    "2026-03-29T17:42:38Z|colony_initialized|init|Colony initialized with goal: Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant-quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge",
     "2026-03-29T18:03:09Z|plan_generated|plan|Generated 6 phases with 94% confidence (3 iterations, exhaustive mode)",
     "2026-03-29T18:06:40Z|phase_started|build|Phase 1: Midden Library Foundation started",
     "2026-03-29T18:15:23Z|phase_completed|continue|Phase 1: Midden Library Foundation completed",
@@ -76,8 +76,8 @@
     "2026-03-29T18:51:18Z|phase_started|build|Phase 4: Trophallaxis Repair + Scarification started",
     "2026-03-29T19:05:11Z|phase_completed|continue|Phase 4: Trophallaxis Repair + Scarification completed",
     "2026-03-29T19:05:11Z|autopilot_advance|run|Phase 4 -> 5 (4/6)",
-    "2026-03-29T19:05:25Z|phase_started|build|Phase 5: /ant:quick Scout Missions started",
-    "2026-03-29T19:07:33Z|phase_completed|continue|Phase 5: /ant:quick Scout Missions completed",
+    "2026-03-29T19:05:25Z|phase_started|build|Phase 5: /ant-quick Scout Missions started",
+    "2026-03-29T19:07:33Z|phase_completed|continue|Phase 5: /ant-quick Scout Missions completed",
     "2026-03-29T19:07:33Z|autopilot_advance|run|Phase 5 -> 6 (5/6)",
     "2026-03-29T19:07:39Z|phase_started|build|Phase 6: Council Expansion started",
     "2026-03-29T19:22:22Z|phase_completed|continue|Phase 6: Council Expansion completed",

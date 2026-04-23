@@ -48,7 +48,7 @@ Iron Laws (TDD, verification-before-approval) are text instructions, not runtime
 ### Model Routing Verification
 Model-per-caste configuration exists (model-profiles.yaml) but execution is unproven. ANTHROPIC_MODEL may not be inherited by spawned workers.
 
-**The opportunity:** Verify that `/ant:verify-castes` Step 3 actually spawns a test worker with the correct model. Prove the routing works, don't just configure it.
+**The opportunity:** Verify that `/ant-verify-castes` Step 3 actually spawns a test worker with the correct model. Prove the routing works, don't just configure it.
 
 *Source: Dream 2026-02-14 #3*
 

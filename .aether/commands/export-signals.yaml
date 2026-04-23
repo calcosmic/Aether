@@ -1,4 +1,4 @@
-name: ant:export-signals
+name: ant-export-signals
 description: "📤 Export colony pheromone signals to portable XML format"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

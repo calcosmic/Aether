@@ -76,7 +76,7 @@
       "type": "blocker",
       "severity": "critical",
       "title": "Registry-add race condition — no file locking",
-      "description": "Two concurrent /ant:init calls can silently overwrite each others registry entries. registry-add needs acquire_lock like COLONY_STATE.json operations.",
+      "description": "Two concurrent /ant-init calls can silently overwrite each others registry entries. registry-add needs acquire_lock like COLONY_STATE.json operations.",
       "source": "chaos-testing",
       "phase": 3,
       "created_at": "2026-03-20T08:26:07Z",

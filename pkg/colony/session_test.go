@@ -10,9 +10,9 @@ import (
 func TestSessionFileRoundTrip(t *testing.T) {
 	file := SessionFile{
 		SessionID: "session_123_abc", StartedAt: "2026-03-31T19:30:07Z",
-		LastCommand: "/ant:continue", LastCommandAt: "2026-04-01T17:32:39Z",
+		LastCommand: "/ant-continue", LastCommandAt: "2026-04-01T17:32:39Z",
 		ColonyGoal: "Build something great", CurrentPhase: 4,
-		CurrentMilestone: "First Mound", SuggestedNext: "/ant:build 5",
+		CurrentMilestone: "First Mound", SuggestedNext: "/ant-build 5",
 		ContextCleared: false, BaselineCommit: "abc123",
 		ResumedAt:   nil,
 		ActiveTodos: []string{"Task A", "Task B"},

@@ -1,4 +1,4 @@
-name: ant:migrate-state
+name: ant-migrate-state
 description: "🚚 One-time state migration from v1 to v2.0 format"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

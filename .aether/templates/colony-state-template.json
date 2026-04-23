@@ -1,4 +1,4 @@
 {
-  "_comment_parallel_mode": "Parallel execution strategy. Valid values: 'in-repo' (default) or 'worktree'. Set during /ant:init.",
+  "_comment_parallel_mode": "Parallel execution strategy. Valid values: 'in-repo' (default) or 'worktree'. Set during /ant-init.",
   "parallel_mode": ""
 }

@@ -273,10 +273,10 @@
 - **Format:** GIF (max 10 MB) or WebM (preferred for quality)
 - **Duration:** 15-30 seconds
 - **Content:** Terminal recording showing the five-command lifecycle:
-  1. `/ant:init "Build a REST API for task management"` -- colony initializes
-  2. `/ant:plan` -- phases generated
-  3. `/ant:build 1` -- workers deployed, output scrolling
-  4. `/ant:continue` -- verification and advancement
+  1. `/ant-init "Build a REST API for task management"` -- colony initializes
+  2. `/ant-plan` -- phases generated
+  3. `/ant-build 1` -- workers deployed, output scrolling
+  4. `/ant-continue` -- verification and advancement
   5. Final state showing passing tests / completed phase
 - **Style:** Dark terminal theme (matching GitHub dark). Font: JetBrains Mono or similar. Clean, no typos, no excessive scrolling.
 - **Usage:** README embed below Quick Start section
@@ -290,14 +290,14 @@
 - **Content:** Full walkthrough from blank directory to working API:
   1. Install (`go install`)
   2. Create project directory
-  3. `/ant:lay-eggs`
-  4. `/ant:init` with goal
-  5. `/ant:colonize` (if existing code)
-  6. `/ant:plan` -- show phase output
-  7. `/ant:focus` and `/ant:redirect` signals
-  8. `/ant:build 1` -- show parallel workers
-  9. `/ant:continue` -- verification
-  10. `/ant:run` (autopilot demo)
+  3. `/ant-lay-eggs`
+  4. `/ant-init` with goal
+  5. `/ant-colonize` (if existing code)
+  6. `/ant-plan` -- show phase output
+  7. `/ant-focus` and `/ant-redirect` signals
+  8. `/ant-build 1` -- show parallel workers
+  9. `/ant-continue` -- verification
+  10. `/ant-run` (autopilot demo)
   11. Final result: working project
 - **Audio:** Optional narration or text overlays. No music (keeps it professional).
 - **Usage:** YouTube embed in README, linked from landing page, shared on social media

@@ -1,4 +1,4 @@
-name: ant:entomb
+name: ant-entomb
 description: "⚰️ Entomb completed colony in chambers"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

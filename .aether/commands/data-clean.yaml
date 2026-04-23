@@ -1,4 +1,4 @@
-name: ant:data-clean
+name: ant-data-clean
 description: "🧹 Scan and remove test artifacts from colony data files"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

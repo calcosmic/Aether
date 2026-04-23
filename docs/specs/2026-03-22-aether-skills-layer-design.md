@@ -384,14 +384,14 @@ This is separate from colony-prime's own trim cascade, which remains unchanged.
 
 ---
 
-## 7. Skill Creation Wizard (`/ant:skill-create`)
+## 7. Skill Creation Wizard (`/ant-skill-create`)
 
 A new slash command that creates domain skills using Oracle research.
 
 ### Flow
 
 ```
-/ant:skill-create "tailwind"
+/ant-skill-create "tailwind"
 
 Step 1: Oracle Research
   ├── Web search for Tailwind best practices, common pitfalls
@@ -467,7 +467,7 @@ To support large libraries (100+ skills) without slow startup:
 
 | Command | Purpose |
 |---------|---------|
-| `/ant:skill-create "<topic>"` | Skill creation wizard with Oracle research |
+| `/ant-skill-create "<topic>"` | Skill creation wizard with Oracle research |
 
 ### Build Pipeline Changes
 
@@ -536,7 +536,7 @@ The skills layer is working when:
 1. Colony-prime automatically detects which domain skills are relevant based on the codebase
 2. Workers receive matched skills in their context and follow them
 3. Pheromone signals influence which skills get loaded
-4. Users can create custom skills via `/ant:skill-create` with Oracle research
+4. Users can create custom skills via `/ant-skill-create` with Oracle research
 5. `aether update` installs/updates shipped skills without touching user-created ones
 6. The 10 colony skills resolve the Oracle's UX findings (more interaction, visible pheromones, consistent visuals, error formatting parity)
 7. The system scales — 200 skills in the library doesn't slow down matching or bloat worker prompts

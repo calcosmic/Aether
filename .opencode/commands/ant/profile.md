@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/profile.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:profile
+name: ant-profile
 description: "🧠 Inspect or refresh the behavioral profile through the Aether CLI runtime"
 ---
 

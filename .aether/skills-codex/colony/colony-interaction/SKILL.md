@@ -65,4 +65,4 @@ What would you like to do?
 
 ## Integration with Autopilot
 
-When running under `/ant:run` or `aether run` (autopilot mode), interaction touchpoints are relaxed -- autopilot handles the build-verify-advance loop. But smart-pause conditions still apply: test failures, security issues, quality gate failures, and replan suggestions all trigger a pause that requires user input.
+When running under `/ant-run` or `aether run` (autopilot mode), interaction touchpoints are relaxed -- autopilot handles the build-verify-advance loop. But smart-pause conditions still apply: test failures, security issues, quality gate failures, and replan suggestions all trigger a pause that requires user input.

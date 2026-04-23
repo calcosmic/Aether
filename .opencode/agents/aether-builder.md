@@ -1,5 +1,5 @@
 ---
-description: "Use this agent when implementing code from a plan, creating files to spec, executing builds, running commands, or applying TDD cycles. Spawned by /ant:build and /ant:continue when the colony needs hands-on implementation. Also use when debugging requires the 3-Fix Rule or when systematic file creation and modification is needed."
+description: "Use this agent when implementing code from a plan, creating files to spec, executing builds, running commands, or applying TDD cycles. Spawned by /ant-build and /ant-continue when the colony needs hands-on implementation. Also use when debugging requires the 3-Fix Rule or when systematic file creation and modification is needed."
 mode: subagent
 model: anthropic/claude-sonnet-4-20250514
 tools:
@@ -211,7 +211,7 @@ If you encounter a task 3x larger than expected or requiring genuinely different
 - `escalation_reason`: why it exceeded scope
 - `specialist_needed`: what type of work is required
 
-The calling orchestrator (/ant:build, /ant:continue) handles re-routing.
+The calling orchestrator (/ant-build, /ant-continue) handles re-routing.
 
 Do NOT attempt to spawn sub-workers — Claude Code subagents cannot spawn other subagents.
 </escalation>

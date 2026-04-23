@@ -1,17 +1,17 @@
 <!-- Generated from .aether/commands/memory-details.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:memory-details
+name: ant-memory-details
 description: "📜 Show detailed colony memory — wisdom, pending promotions, and recent failures"
 ---
 
-# /ant:memory-details — Colony Memory Details
+# /ant-memory-details — Colony Memory Details
 
 Drill-down view of accumulated colony wisdom, pending promotions, and recent failures.
 
 ## Usage
 
 ```bash
-/ant:memory-details
+/ant-memory-details
 ```
 
 ## Implementation
@@ -73,5 +73,5 @@ Show last 5 failures from midden:
 
 Show counts summary and reminder command:
 ```
-Run /ant:status for quick overview
+Run /ant-status for quick overview
 ```

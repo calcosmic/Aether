@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/organize.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:organize
+name: ant-organize
 description: "🧹 Run codebase hygiene report"
 ---
 
@@ -27,7 +27,7 @@ From COLONY_STATE.json, extract:
 - `memory` for decisions/learnings
 - `events` for activity
 
-**Validate:** If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant:init first.` and stop.
+**Validate:** If `COLONY_STATE.json` has `goal: null`, output `No colony initialized. Run /ant-init first.` and stop.
 
 ### Step 2: Compute Active Pheromones
 
@@ -200,9 +200,9 @@ Report saved: .aether/data/hygiene-report.md
 This report is advisory only. No files were modified.
 
 Next:
-  /ant:status           View colony status
-  /ant:build <phase>    Continue building
-  /ant:focus "<area>"   Focus colony on a hygiene area
+  /ant-status           View colony status
+  /ant-build <phase>    Continue building
+  /ant-focus "<area>"   Focus colony on a hygiene area
 ```
 
 ### Step 6: Log Activity
@@ -218,7 +218,7 @@ Display persistence confirmation:
 ---
 All state persisted. Safe to /clear context if needed.
   Report: .aether/data/hygiene-report.md
-  Resume: /ant:resume-colony
+  Resume: /ant-resume-colony
 ```
 
 ### Step 7: Next Up

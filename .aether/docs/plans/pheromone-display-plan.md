@@ -10,7 +10,7 @@
 
 The pheromone system works but is invisible:
 
-1. **Council command exists** - `/ant:council` proposes pheromones via multiple choice
+1. **Council command exists** - `/ant-council` proposes pheromones via multiple choice
 2. **Pheromone signals exist** - Stored in `.aether/data/pheromones.json`
 3. **Colony-prime loads them** - But only shows a count like "Primed: 2 signals"
 4. **User never sees them** - The actual content is hidden
@@ -77,7 +77,7 @@ This displays the formatted pheromone table to the user so they can see what gui
 
 ### 3. **Status Command Enhancement** (status.md)
 
-Add pheromone summary to `/ant:status` output:
+Add pheromone summary to `/ant-status` output:
 
 ```markdown
 ### Pheromones Active
@@ -86,7 +86,7 @@ Add pheromone summary to `/ant:status` output:
 🚫 REDIRECT: 1 signal
 💬 FEEDBACK: 1 signal
 
-Run /ant:pheromones for full details
+Run /ant-pheromones for full details
 ```
 
 ### 4. **New Pheromones Command** (pheromones.md)
@@ -100,12 +100,12 @@ description: "🎯🐜🚫🐜💬 View and manage active pheromone signals"
 ---
 
 Usage:
-  /ant:pheromones          # Display all active signals
-  /ant:pheromones focus    # Show only FOCUS signals
-  /ant:pheromones redirect # Show only REDIRECT signals
-  /ant:pheromones feedback # Show only FEEDBACK signals
-  /ant:pheromones clear    # Clear all expired signals
-  /ant:pheromones expire <id> # Expire a specific signal
+  /ant-pheromones          # Display all active signals
+  /ant-pheromones focus    # Show only FOCUS signals
+  /ant-pheromones redirect # Show only REDIRECT signals
+  /ant-pheromones feedback # Show only FEEDBACK signals
+  /ant-pheromones clear    # Clear all expired signals
+  /ant-pheromones expire <id> # Expire a specific signal
 ```
 
 ---
@@ -128,7 +128,7 @@ pheromone-display)
   pd_now=$(date +%s)
 
   if [[ ! -f "$pd_file" ]]; then
-    echo "No pheromones file found. Run /ant:init to initialize colony."
+    echo "No pheromones file found. Run /ant-init to initialize colony."
     exit 0
   fi
 
@@ -160,17 +160,17 @@ New slash command for dedicated pheromone viewing and management.
 
 | Where | What | When |
 |-------|------|------|
-| `/ant:build` | Full table | Before spawning workers |
-| `/ant:status` | Summary counts | In colony overview |
-| `/ant:council` | After injection | Show what was added |
-| `/ant:pheromones` | Full table + management | On demand |
-| `/ant:continue` | Summary | After phase completion |
+| `/ant-build` | Full table | Before spawning workers |
+| `/ant-status` | Summary counts | In colony overview |
+| `/ant-council` | After injection | Show what was added |
+| `/ant-pheromones` | Full table + management | On demand |
+| `/ant-continue` | Summary | After phase completion |
 
 ---
 
 ## Visual Design
 
-### Full Table (for /ant:build, /ant:pheromones)
+### Full Table (for /ant-build, /ant-pheromones)
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -197,7 +197,7 @@ New slash command for dedicated pheromone viewing and management.
 5 signals active | Decay rates: FOCUS 30d, REDIRECT 60d, FEEDBACK 90d
 ```
 
-### Summary (for /ant:status)
+### Summary (for /ant-status)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -208,11 +208,11 @@ New slash command for dedicated pheromone viewing and management.
 │ Strongest: "use ORM" [90%]                              │
 │ Newest: "security" [85%] - 2d ago                       │
 │                                                          │
-│ Run /ant:pheromones for details                         │
+│ Run /ant-pheromones for details                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Injection Confirmation (for /ant:council, /ant:focus, etc.)
+### Injection Confirmation (for /ant-council, /ant-focus, etc.)
 
 ```
 ✓ Pheromone injected:
@@ -238,20 +238,20 @@ Active signals: 5
 
 ## Testing
 
-1. Run `/ant:focus "test signal"` and verify it appears in display
-2. Run `/ant:redirect "avoid this"` and verify it appears in display
-3. Run `/ant:build 1` and verify pheromone table shows before workers spawn
-4. Run `/ant:status` and verify pheromone summary appears
+1. Run `/ant-focus "test signal"` and verify it appears in display
+2. Run `/ant-redirect "avoid this"` and verify it appears in display
+3. Run `/ant-build 1` and verify pheromone table shows before workers spawn
+4. Run `/ant-status` and verify pheromone summary appears
 5. Test decay: Create signal, wait, verify strength decreases
 
 ---
 
 ## Success Criteria
 
-- [x] `/ant:build` displays full pheromone table before spawning workers
-- [x] `/ant:status` shows pheromone counts and strongest/newest
-- [x] `/ant:pheromones` command exists for dedicated viewing
-- [x] `/ant:council` displays what was injected after session (already existed)
+- [x] `/ant-build` displays full pheromone table before spawning workers
+- [x] `/ant-status` shows pheromone counts and strongest/newest
+- [x] `/ant-pheromones` command exists for dedicated viewing
+- [x] `/ant-council` displays what was injected after session (already existed)
 - [x] All signal types (FOCUS/REDIRECT/FEEDBACK) visible
 - [x] Decay strength shown as percentage
 - [x] Age and expiry shown per signal

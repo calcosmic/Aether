@@ -1,4 +1,4 @@
-name: ant:continue
+name: ant-continue
 description: "👁️ Verify build work, extract learnings, and advance the colony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
@@ -11,10 +11,10 @@ wrapper_additions:
     3. Keep the learning framing compact and consequential; learnings must come from runtime evidence, not wrapper invention.
   post_continue: |
     Close with branch-specific colony synthesis:
-    1. If the phase advanced, summarize what was verified, what the colony learned, and route first to `/ant:build N+1`.
-    2. If continue blocked, translate the blocker into plain language and follow the runtime's recovery command first when it surfaces one; only fall back to `/ant:continue` when the runtime stayed generic.
-    3. If the colony completed, mark the achievement briefly and route first to `/ant:seal`.
-    4. Only after successful advance or final completion, say it is safe to clear context and point to `/ant:resume`.
+    1. If the phase advanced, summarize what was verified, what the colony learned, and route first to `/ant-build N+1`.
+    2. If continue blocked, translate the blocker into plain language and follow the runtime's recovery command first when it surfaces one; only fall back to `/ant-continue` when the runtime stayed generic.
+    3. If the colony completed, mark the achievement briefly and route first to `/ant-seal`.
+    4. Only after successful advance or final completion, say it is safe to clear context and point to `/ant-resume`.
     5. Mention signal housekeeping only if the runtime surfaced it, and keep that note to one short line.
     6. When signal housekeeping appears, explain what expired, what remained active, and what that means for the next phase or final seal without diffing pheromone files directly.
 guardrails:
@@ -25,6 +25,6 @@ guardrails:
   - "Do NOT add extra option menus or manual state surgery unless the runtime explicitly asks."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
-  advance: "Guide the user first to `/ant:build N+1`, with `aether build <next_phase>` remaining the runtime source of truth beneath the wrapper."
-  blocked: "Guide the user through the runtime-surfaced recovery command first; only route back to `/ant:continue` when the runtime has no more specific recovery step."
-  complete: "Guide the user first to `/ant:seal`, with `aether seal` remaining the runtime source of truth beneath the wrapper."
+  advance: "Guide the user first to `/ant-build N+1`, with `aether build <next_phase>` remaining the runtime source of truth beneath the wrapper."
+  blocked: "Guide the user through the runtime-surfaced recovery command first; only route back to `/ant-continue` when the runtime has no more specific recovery step."
+  complete: "Guide the user first to `/ant-seal`, with `aether seal` remaining the runtime source of truth beneath the wrapper."

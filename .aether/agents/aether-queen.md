@@ -225,7 +225,7 @@ Log escalation as a flag:
 ```bash
 bash .aether/aether-utils.sh flag-add "blocker" "{task title}" "{failure summary}" "escalation" {phase_number}
 ```
-This persists escalation state across context resets and appears in /ant:status.
+This persists escalation state across context resets and appears in /ant-status.
 
 ### Escalation Format
 When escalating at Tier 4, always provide:

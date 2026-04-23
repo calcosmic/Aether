@@ -63,7 +63,7 @@
       "expires_at": "phase_end",
       "active": false,
       "strength": 0.9,
-      "reason": "User emitted via /ant:redirect",
+      "reason": "User emitted via /ant-redirect",
       "content": {
         "text": "avoid direct runtime edits"
       }

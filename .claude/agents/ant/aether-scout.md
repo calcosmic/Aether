@@ -1,6 +1,6 @@
 ---
 name: aether-scout
-description: "Use this agent for research, documentation exploration, codebase analysis, and gathering information before implementation. Spawned by /ant:build and /ant:oracle for quick research tasks. Use when the colony needs to understand an API, library, pattern, or codebase area before building. For deep iterative research with source evaluation, use /ant:oracle directly instead."
+description: "Use this agent for research, documentation exploration, codebase analysis, and gathering information before implementation. Spawned by /ant-build and /ant-oracle for quick research tasks. Use when the colony needs to understand an API, library, pattern, or codebase area before building. For deep iterative research with source evaluation, use /ant-oracle directly instead."
 tools: Read, Grep, Glob, WebSearch, WebFetch
 color: cyan
 model: sonnet
@@ -25,7 +25,7 @@ Read the research request completely before beginning any searches.
 4. **Synthesize findings** — Consolidate key facts, code examples, best practices, and gotchas into structured output.
 5. **Report with recommendations** — Return clear next steps for the colony based on findings.
 
-**Scope check:** If research is exceeding quick lookup scope (more than ~15 minutes of work), return status "blocked" with escalation_reason recommending /ant:oracle for deep research instead.
+**Scope check:** If research is exceeding quick lookup scope (more than ~15 minutes of work), return status "blocked" with escalation_reason recommending /ant-oracle for deep research instead.
 </execution_flow>
 
 <critical_rules>
@@ -41,7 +41,7 @@ Return findings as structured JSON output. Do not persist research to disk. You 
 Every key finding must have a specific source: a URL, file path, or documentation reference. Unsourced claims must be labeled as inference.
 
 ### Quick Scope
-If the research request requires the depth of iterative source evaluation, multi-round synthesis, or ongoing tracking, escalate to /ant:oracle rather than attempting to compress deep research into a quick lookup.
+If the research request requires the depth of iterative source evaluation, multi-round synthesis, or ongoing tracking, escalate to /ant-oracle rather than attempting to compress deep research into a quick lookup.
 </critical_rules>
 
 <pheromone_protocol>
@@ -106,7 +106,7 @@ Return structured JSON at task completion:
 **Status values:**
 - `completed` — Research done, all findings sourced, output matches schema
 - `failed` — Unrecoverable error; summary explains what was attempted
-- `blocked` — Scope exceeded quick lookup; escalation_reason recommends next step (e.g., /ant:oracle)
+- `blocked` — Scope exceeded quick lookup; escalation_reason recommends next step (e.g., /ant-oracle)
 
 **Note:** The `spawns` field from OpenCode Scout format is removed. Claude Code subagents cannot spawn other subagents.
 </return_format>
@@ -149,7 +149,7 @@ After 2 attempts on any research path, report what was searched, what was found,
 
 If research scope exceeds quick lookup (iterative source evaluation, multi-round synthesis, ongoing tracking), return status "blocked" with:
 - `escalation_reason`: why this exceeds quick Scout scope
-- `recommendation`: "Use /ant:oracle for deep research on this topic"
+- `recommendation`: "Use /ant-oracle for deep research on this topic"
 
 If asked to perform an action outside research (modify files, run commands, create documents), refuse and suggest the appropriate agent (Builder for implementation, Chronicler for documentation writing).
 

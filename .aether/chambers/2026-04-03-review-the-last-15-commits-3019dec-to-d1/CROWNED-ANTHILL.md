@@ -31,7 +31,7 @@ Upgrade observation storage with trust scores, create standalone instincts.json 
 Implement 8 curation ant scripts in .aether/utils/curation-ants/ — nurse, herald, librarian, archivist, sentinel, jani
 
 ### ⏸️ Phase: Consolidation Pipeline Integration — pending
-Wire the stack into Aether lifecycle — lightweight consolidation at /ant:continue, full consolidation at /ant:seal, pl
+Wire the stack into Aether lifecycle — lightweight consolidation at /ant-continue, full consolidation at /ant-seal, pl
 
 ### ⏸️ Phase: Documentation and Full Test Sweep — pending
 Document the Structural Learning Stack, update CLAUDE.md, and verify complete test suite passes with zero regressions

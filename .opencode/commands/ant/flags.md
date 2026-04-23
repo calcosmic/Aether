@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/flags.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:flags
+name: ant-flags
 description: "🚩 List project flags (blockers, issues, notes)"
 ---
 
@@ -20,11 +20,11 @@ Parse `$ARGUMENTS` for:
 - `--ack` or `-k`: Acknowledge a specific flag ID
 
 Examples:
-- `/ant:flags` → Show active flags
-- `/ant:flags --all` → Include resolved flags
-- `/ant:flags -t blocker` → Show only blockers
-- `/ant:flags --resolve flag_123 "Fixed by commit abc"` → Resolve a flag
-- `/ant:flags --ack flag_456` → Acknowledge an issue
+- `/ant-flags` → Show active flags
+- `/ant-flags --all` → Include resolved flags
+- `/ant-flags -t blocker` → Show only blockers
+- `/ant-flags --resolve flag_123 "Fixed by commit abc"` → Resolve a flag
+- `/ant-flags --ack flag_456` → Acknowledge an issue
 
 ### Step 2: Handle Resolution/Acknowledgment
 
@@ -131,12 +131,12 @@ If flags exist:
 Summary: {blockers} blockers | {issues} issues | {notes} notes
 
 {if blockers > 0:}
-⚠️  Blockers must be resolved before /ant:continue
+⚠️  Blockers must be resolved before /ant-continue
 
 Commands:
-  /ant:flags --resolve {id} "message"   Resolve a flag
-  /ant:flags --ack {id}                 Acknowledge an issue
-  /ant:flag "description"               Create new flag
+  /ant-flags --resolve {id} "message"   Resolve a flag
+  /ant-flags --ack {id}                 Acknowledge an issue
+  /ant-flag "description"               Create new flag
 ```
 
 
@@ -155,15 +155,15 @@ aether print-next-up
 
 **Resolve a flag:**
 ```
-/ant:flags --resolve flag_123456 "Fixed in commit abc123"
+/ant-flags --resolve flag_123456 "Fixed in commit abc123"
 ```
 
 **Acknowledge an issue:**
 ```
-/ant:flags --ack flag_789012
+/ant-flags --ack flag_789012
 ```
 
 **Create a new flag:**
 ```
-/ant:flag --type blocker "Critical issue here"
+/ant-flag --type blocker "Critical issue here"
 ```

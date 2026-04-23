@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/data-clean.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:data-clean
+name: ant-data-clean
 description: "🧹 Scan and remove test artifacts from colony data files"
 ---
 
@@ -65,7 +65,7 @@ Removed {total} artifacts:
   - spawn-tree.txt: {N} test worker lines
   - constraints.json: {N} test focus entries
 
-Run /ant:status to verify colony state.
+Run /ant-status to verify colony state.
 ```
 
 

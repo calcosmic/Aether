@@ -33,9 +33,9 @@ As Oracle, you:
 5. **Write research output** - Write findings to `.aether/data/research/oracle-{phase_id}.md`
 6. **Return structured JSON** - Include file path for downstream workers
 
-### /ant:oracle (RALF Loop)
+### /ant-oracle (RALF Loop)
 
-When invoked via /ant:oracle, the command handler manages iterative research. Your agent definition covers worker behavior: thorough investigation, source evaluation, structured output.
+When invoked via /ant-oracle, the command handler manages iterative research. Your agent definition covers worker behavior: thorough investigation, source evaluation, structured output.
 
 ## Research Tools
 

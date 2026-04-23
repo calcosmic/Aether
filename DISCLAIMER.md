@@ -52,11 +52,11 @@ This includes but is not limited to:
 To use Aether Colony safely:
 
 1. ✅ Use git with frequent commits
-2. ✅ Review the colony's plan before building (`/ant:plan`)
+2. ✅ Review the colony's plan before building (`/ant-plan`)
 3. ✅ Read generated code before committing
-4. ✅ Run tests after each phase (`/ant:continue` does this)
-5. ✅ Use flags to track concerns (`/ant:flag`)
-6. ✅ Use `/ant:swarm` cautiously (it makes automatic changes)
+4. ✅ Run tests after each phase (`/ant-continue` does this)
+5. ✅ Use flags to track concerns (`/ant-flag`)
+6. ✅ Use `/ant-swarm` cautiously (it makes automatic changes)
 7. ✅ Keep backups of important data
 
 ### Acknowledgment

@@ -1,4 +1,4 @@
-# `/ant:bump-version` Slash Command — Design Spec
+# `/ant-bump-version` Slash Command — Design Spec
 
 **Date:** 2026-04-11
 **Status:** Approved
@@ -11,15 +11,15 @@ Version strings live in 7+ locations across the repo. Updating them manually cau
 
 ## Solution
 
-A Claude Code slash command (`/ant:bump-version`) that bumps the version everywhere and triggers the existing GoReleaser pipeline automatically.
+A Claude Code slash command (`/ant-bump-version`) that bumps the version everywhere and triggers the existing GoReleaser pipeline automatically.
 
 ## Command
 
 ```
-/ant:bump-version <semver>
+/ant-bump-version <semver>
 ```
 
-Example: `/ant:bump-version 1.1.0`
+Example: `/ant-bump-version 1.1.0`
 
 ## Files Updated
 
@@ -96,7 +96,7 @@ Example: `/ant:bump-version 1.1.0`
 
 ## Testing
 
-- Manual test: run `/ant:bump-version 1.0.1` and verify all 6 files update
+- Manual test: run `/ant-bump-version 1.0.1` and verify all 6 files update
 - Verify `aether version` returns the new version after rebuild
 - Verify `~/.aether/version.json` matches
 - Verify tag was created and pushed

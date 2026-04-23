@@ -1,5 +1,5 @@
 ---
-description: "Use this agent when validating implementations, running test suites, checking quality gates, or verifying that built work meets specifications. Spawned by /ant:build and /ant:continue after Builder completes. Also use when independent verification of code correctness, security posture, or test coverage is needed."
+description: "Use this agent when validating implementations, running test suites, checking quality gates, or verifying that built work meets specifications. Spawned by /ant-build and /ant-continue after Builder completes. Also use when independent verification of code correctness, security posture, or test coverage is needed."
 mode: subagent
 model: anthropic/claude-sonnet-4-20250514
 tools:
@@ -256,7 +256,7 @@ If verification cannot be completed due to environment issues, missing dependenc
 - Include the specific blocked reason in `issues_found` with severity CRITICAL
 - Set `recommendation: "fix_required"`
 
-The calling orchestrator (/ant:build, /ant:continue) handles re-routing.
+The calling orchestrator (/ant-build, /ant-continue) handles re-routing.
 
 Do NOT attempt to fix issues yourself — that is Builder's job. Report only.
 Do NOT attempt to spawn sub-workers — Claude Code subagents cannot spawn other subagents.

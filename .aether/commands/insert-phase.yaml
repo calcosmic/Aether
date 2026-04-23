@@ -1,4 +1,4 @@
-name: ant:insert-phase
+name: ant-insert-phase
 description: "➕ Insert a corrective phase into the active plan"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

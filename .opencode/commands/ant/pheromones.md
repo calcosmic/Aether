@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/pheromones.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:pheromones
+name: ant-pheromones
 description: "🎯 View and manage active pheromone signals"
 ---
 

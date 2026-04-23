@@ -336,9 +336,9 @@ func renderContextClearGuidanceForPlatform(platform string) string {
 	case "codex":
 		return "It's safe to clear your context now. Run `aether resume` to restore.\n"
 	case "opencode":
-		return "It's safe to clear your context now. Run `/ant:resume` to restore.\n"
+		return "It's safe to clear your context now. Run `/ant-resume` to restore.\n"
 	default:
-		return "It's safe to clear your context now. Run `/ant:resume` to restore.\n"
+		return "It's safe to clear your context now. Run `/ant-resume` to restore.\n"
 	}
 }
 

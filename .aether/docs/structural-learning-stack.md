@@ -204,11 +204,11 @@ Two consolidation modes, each calling into the curation ants.
 
 **Phase-end (lightweight) — `consolidation-phase-end`:**
 
-Runs at the end of every phase (`/ant:continue`). Executes three ants only: `nurse → herald → janitor`. Publishes a `consolidation.phase_end` event on the event bus. All three steps are non-blocking.
+Runs at the end of every phase (`/ant-continue`). Executes three ants only: `nurse → herald → janitor`. Publishes a `consolidation.phase_end` event on the event bus. All three steps are non-blocking.
 
 **Seal (full) — `consolidation-seal`:**
 
-Runs once during `/ant:seal`. Executes five steps:
+Runs once during `/ant-seal`. Executes five steps:
 
 1. `curation-run` — full 8-ant orchestration
 2. `instinct-decay-all` — final trust decay pass across all active instincts
@@ -224,9 +224,9 @@ All steps are non-blocking. The seal report path is returned in the output.
 
 | Trigger | Stack call | Effect |
 |---------|-----------|--------|
-| `/ant:continue` | `consolidation-phase-end` | nurse + herald + janitor; phase_end event |
-| `/ant:seal` | `consolidation-seal` | full 8-ant curation + decay + archive + seal event + report |
-| `/ant:build` (pattern capture) | `learning-observe` | Records observation with trust score |
+| `/ant-continue` | `consolidation-phase-end` | nurse + herald + janitor; phase_end event |
+| `/ant-seal` | `consolidation-seal` | full 8-ant curation + decay + archive + seal event + report |
+| `/ant-build` (pattern capture) | `learning-observe` | Records observation with trust score |
 | `colony-prime` | `instinct-read-trusted` | Injects trusted instincts into worker prompts |
 
 ---

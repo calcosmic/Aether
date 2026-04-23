@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/phase.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:phase
+name: ant-phase
 description: "🧱 View phase details through the Aether CLI runtime"
 ---
 

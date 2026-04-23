@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/export-signals.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:export-signals
+name: ant-export-signals
 description: "📤 Export colony pheromone signals to portable XML format"
 ---
 
@@ -13,7 +13,7 @@ The optional output path is: `$ARGUMENTS`
 ### Step 1: Validate
 
 Read `.aether/data/COLONY_STATE.json`.
-If file missing or `goal: null` -> "No colony initialized. Run /ant:init first.", stop.
+If file missing or `goal: null` -> "No colony initialized. Run /ant-init first.", stop.
 
 Parse `$ARGUMENTS`:
 - If a path is provided, use it as the output path.
@@ -38,7 +38,7 @@ Output (3-5 lines, no banners):
 Pheromone signals exported to XML
   Path: <output_path>
 
-Share this file with another colony using /ant:import-signals.
+Share this file with another colony using /ant-import-signals.
 ```
 
 

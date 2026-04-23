@@ -116,21 +116,21 @@ any-repo/.codex/ (WORKING COPY)
 
 ### No Slash Commands
 
-Codex CLI does **not** support slash commands like Claude Code (`/ant:build`) or OpenCode.
+Codex CLI does **not** support slash commands like Claude Code (`/ant-build`) or OpenCode.
 Instead, all colony operations use the **`aether` CLI directly** or are described as natural
 language prompts in `AGENTS.md`.
 
 ```bash
-# Instead of /ant:init "Build feature X"
+# Instead of /ant-init "Build feature X"
 aether init "Build feature X"
 
-# Instead of /ant:build 1
+# Instead of /ant-build 1
 aether build 1
 
-# Instead of /ant:status
+# Instead of /ant-status
 aether status
 
-# Instead of /ant:pheromones
+# Instead of /ant-pheromones
 aether pheromone-display
 ```
 
@@ -437,14 +437,14 @@ Runtime note:
 
 | Goal | Claude Code | OpenCode | Codex |
 |------|-------------|----------|-------|
-| Start colony | `/ant:init "goal"` | `/ant:init "goal"` | `aether init "goal"` |
-| Build phase | `/ant:build 1` | `/ant:build 1` | `aether build 1` |
-| Check status | `/ant:status` | `/ant:status` | `aether status` |
-| Focus signal | `/ant:focus "area"` | `/ant:focus "area"` | `aether focus "area"` |
-| Update Aether | `/ant:update` | `/ant:update` | `aether update` |
-| Seal colony | `/ant:seal` | `/ant:seal` | `aether seal` |
-| Deep research | `/ant:oracle` | `/ant:oracle` | Use the `aether-oracle` agent plus `aether skill-*` and research commands |
-| View pheromones | `/ant:pheromones` | `/ant:pheromones` | `aether pheromone-display` |
+| Start colony | `/ant-init "goal"` | `/ant-init "goal"` | `aether init "goal"` |
+| Build phase | `/ant-build 1` | `/ant-build 1` | `aether build 1` |
+| Check status | `/ant-status` | `/ant-status` | `aether status` |
+| Focus signal | `/ant-focus "area"` | `/ant-focus "area"` | `aether focus "area"` |
+| Update Aether | `/ant-update` | `/ant-update` | `aether update` |
+| Seal colony | `/ant-seal` | `/ant-seal` | `aether seal` |
+| Deep research | `/ant-oracle` | `/ant-oracle` | Use the `aether-oracle` agent plus `aether skill-*` and research commands |
+| View pheromones | `/ant-pheromones` | `/ant-pheromones` | `aether pheromone-display` |
 
 ---
 

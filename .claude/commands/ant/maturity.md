@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/maturity.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:maturity
+name: ant-maturity
 description: "👑 View colony maturity journey with ASCII art anthill"
 ---
 
@@ -97,7 +97,7 @@ Colony Statistics:
 - If milestone name is unrecognized: Show "Unknown milestone" with the raw name
 
 
-- If COLONY_STATE.json missing: "No colony initialized. Run /ant:init first."
+- If COLONY_STATE.json missing: "No colony initialized. Run /ant-init first."
 - If phases_completed is 0: All milestones show as upcoming except First Mound
 
 

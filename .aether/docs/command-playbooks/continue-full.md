@@ -18,16 +18,16 @@ Read `.aether/data/COLONY_STATE.json`.
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
 1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
-2. Write upgraded v3.0 state (same structure as /ant:init but preserving data)
+2. Write upgraded v3.0 state (same structure as /ant-init but preserving data)
 3. Output: `State auto-upgraded to v3.0`
 4. Continue with command.
 
 Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `events`, `build_started_at`.
 
 **Validation:**
-- If `goal: null` -> output "No colony initialized. Run /ant:init first." and stop.
-- If `milestone` == `"Crowned Anthill"` -> output "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop.
-- If `plan.phases` is empty -> output "No project plan. Run /ant:plan first." and stop.
+- If `goal: null` -> output "No colony initialized. Run /ant-init first." and stop.
+- If `milestone` == `"Crowned Anthill"` -> output "This colony has been sealed. Start a new colony with `/ant-init \"new goal\"`." and stop.
+- If `plan.phases` is empty -> output "No project plan. Run /ant-plan first." and stop.
 
 ### Step 1.5: Load State and Show Resumption Context
 
@@ -49,9 +49,9 @@ If .aether/HANDOFF.md exists (detected in load-state output):
 Run using the Bash tool with description "Releasing colony lock...": `aether unload-state` to release lock.
 
 **Error handling:**
-- If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+- If E_FILE_NOT_FOUND: "No colony initialized. Run /ant-init first." and stop
 - If validation error: Display error details with recovery suggestion and stop
-- For other errors: Display generic error and suggest /ant:status for diagnostics
+- For other errors: Display generic error and suggest /ant-status for diagnostics
 
 **Completion Detection:**
 
@@ -292,7 +292,7 @@ Phase {id} cannot advance until issues are resolved.
 
 🔧 Required Actions:
   1. Fix the issues listed above
-  2. Run /ant:continue again to re-verify
+  2. Run /ant-continue again to re-verify
 
 The phase will NOT advance until verification passes.
 ```
@@ -341,9 +341,9 @@ The Prime Worker violated the spawn protocol.
   - "Justifications" for not spawning are not accepted
 
 🔧 Required Actions:
-  1. Run /ant:build {phase} again
+  1. Run /ant-build {phase} again
   2. Prime Worker MUST spawn at least 1 specialist
-  3. Re-run /ant:continue after spawns complete
+  3. Re-run /ant-continue after spawns complete
 
 The phase will NOT advance until spawning occurs.
 ```
@@ -371,7 +371,7 @@ Testing MUST be performed by a separate agent, not the builder.
   - "Build passing" ≠ "App working"
 
 🔧 Required Actions:
-  1. Run /ant:build {phase} again
+  1. Run /ant-build {phase} again
   2. Prime Worker MUST spawn at least 1 Watcher
   3. Watcher must independently verify the work
 
@@ -432,7 +432,7 @@ If CRITICAL issues found, display:
 Critical anti-patterns detected:
 {list issues with file paths}
 
-Run /ant:build {phase} again after fixing.
+Run /ant-build {phase} again after fixing.
 ```
 
 Do NOT proceed to Step 2.
@@ -680,7 +680,7 @@ Critical security vulnerabilities detected: {critical_count}
 🔧 Required Actions:
   1. Run `npm audit` to see full details
   2. Fix or update vulnerable dependencies
-  3. Run /ant:continue again after resolving
+  3. Run /ant-continue again after resolving
 
 The phase will NOT advance with critical CVEs.
 ```
@@ -704,7 +704,7 @@ Continue to Step 1.9.
 
 ### Step 1.9: Auditor Quality Gate (MANDATORY)
 
-**Code quality audit — runs on every `/ant:continue` for consistent coverage.**
+**Code quality audit — runs on every `/ant-continue` for consistent coverage.**
 
 1. Generate Auditor name and log spawn:
 Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(aether generate-ant-name "auditor" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "auditor" --name "$auditor_name" --task "Code quality audit" --depth 0 && echo "{\"name\":\"$auditor_name\"}"`
@@ -781,7 +781,7 @@ Critical code quality issues detected: {critical_count}
 🔧 Required Actions:
   1. Review the critical issues listed below
   2. Fix each critical finding
-  3. Run /ant:continue again after resolving
+  3. Run /ant-continue again after resolving
 
 Critical Findings:
 {list each critical finding with file:line and description}
@@ -805,7 +805,7 @@ Code quality score below threshold: {overall_score}/100 (threshold: 60)
   1. Address the top issues preventing score improvement:
 {list top 3-5 issues with severity and location}
   2. Focus on HIGH severity items first
-  3. Run /ant:continue again after improving quality
+  3. Run /ant-continue again after improving quality
 
 The phase will NOT advance with quality score below 60.
 ```
@@ -856,7 +856,7 @@ But no test files were found in the codebase.
 🚨 CRITICAL violation — fabricated TDD metrics.
 
 🔧 Required Actions:
-  1. Run /ant:build {phase} again
+  1. Run /ant-build {phase} again
   2. Actually write test files (not just claim them)
   3. Tests must exist and be runnable
 
@@ -918,7 +918,7 @@ Do NOT proceed to Step 2.
 
 **If "No, haven't tested yet":**
 ```
-⏸️🐜 RUNTIME PENDING — Test the app, then run /ant:continue again.
+⏸️🐜 RUNTIME PENDING — Test the app, then run /ant-continue again.
 
   - [ ] App launches without crashing
   - [ ] Core features work as expected
@@ -967,8 +967,8 @@ Parse result for `blockers`, `issues`, and `notes` counts.
 
 🔧 Required Actions:
   1. Fix the issues described in each blocker
-  2. Resolve flags: /ant:flags --resolve {flag_id} "resolution message"
-  3. Run /ant:continue again after resolving all blockers
+  2. Resolve flags: /ant-flags --resolve {flag_id} "resolution message"
+  3. Run /ant-continue again after resolving all blockers
 ```
 
 **CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
@@ -980,7 +980,7 @@ Parse result for `blockers`, `issues`, and `notes` counts.
 
 {list each issue flag}
 
-Use /ant:flags to review.
+Use /ant-flags to review.
 ```
 
 Continue to Step 2.
@@ -1411,7 +1411,7 @@ cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
 # Colony Session — Phase Advanced
 
 ## Quick Resume
-Run `/ant:build {next_phase_id}` to start working on the current phase.
+Run `/ant-build {next_phase_id}` to start working on the current phase.
 
 ## State at Advancement
 - Goal: "$(jq -r '.goal' .aether/data/COLONY_STATE.json)"
@@ -1430,9 +1430,9 @@ Run `/ant:build {next_phase_id}` to start working on the current phase.
 $(jq -r '.plan.phases[] | select(.id == next_phase_id) | .tasks[] | "- [ ] \(.id): \(.description)"' .aether/data/COLONY_STATE.json)
 
 ## Next Steps
-- Build current phase: `/ant:build {next_phase_id}`
-- Review phase details: `/ant:phase {next_phase_id}`
-- Pause colony: `/ant:pause-colony`
+- Build current phase: `/ant-build {next_phase_id}`
+- Review phase details: `/ant-phase {next_phase_id}`
+- Pause colony: `/ant-pause-colony`
 
 ## Session Note
 Phase advanced successfully. Colony is READY to build Phase {next_phase_id}.
@@ -1593,7 +1593,7 @@ Phase {next_id} is ready to build.
 ```
 Clear context now?
 
-1. Yes, clear context then run /ant:build {next_id}
+1. Yes, clear context then run /ant-build {next_id}
 2. No, continue in current context
 ```
 
@@ -1603,7 +1603,7 @@ Clear context now?
    ```
    Please type: /clear
    
-   Then run: /ant:build {next_id}
+   Then run: /ant-build {next_id}
    ```
    
    Record the suggestion: Set `context_clear_suggested` to `true` in COLONY_STATE.json.
@@ -1699,25 +1699,25 @@ Output:
 ──────────────────────────────────────────────────
 🐜 Next Up
 ──────────────────────────────────────────────────
-   /ant:build {next_id}     🔨 Build next phase
-   /ant:status              📊 Check progress
+   /ant-build {next_id}     🔨 Build next phase
+   /ant-status              📊 Check progress
 
 💾 State persisted — context clear suggested above
 
 📋 Context document updated at `.aether/CONTEXT.md`
 ```
 
-**IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant:build 4` not `/ant:build {next_id}`.
+**IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant-build 4` not `/ant-build {next_id}`.
 
 ### Step 4: Update Session
 
-Update the session tracking file to enable `/ant:resume` after context clear:
+Update the session tracking file to enable `/ant-resume` after context clear:
 
 ```bash
-aether session-update --command "/ant:continue" --suggested-next "/ant:build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"
+aether session-update --command "/ant-continue" --suggested-next "/ant-build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"
 ```
 
-Run using the Bash tool with description "Saving session state...": `aether session-update --command "/ant:continue" --suggested-next "/ant:build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"`
+Run using the Bash tool with description "Saving session state...": `aether session-update --command "/ant-continue" --suggested-next "/ant-build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"`
 
 ### Step 4.5: Housekeeping (Non-Blocking)
 

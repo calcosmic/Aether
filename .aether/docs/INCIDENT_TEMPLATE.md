@@ -1,7 +1,7 @@
 # Incident Report: {INCIDENT_ID}
 
 ## Trigger
-- Command run: `/ant:{command}`
+- Command run: `/ant-{command}`
 - Expected outcome:
 - Actual outcome:
 

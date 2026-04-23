@@ -204,8 +204,8 @@ The QUEEN.md file includes a METADATA block at the end:
 
 ## See Also
 
-- `/ant:init` - Initializes QUEEN.md for new colonies
-- `/ant:build` - Reads QUEEN.md wisdom for worker priming
-- `/ant:continue` - Promotes validated learnings
-- `/ant:seal` - Promotes final colony wisdom
-- `/ant:entomb` - Promotes wisdom before archiving
+- `/ant-init` - Initializes QUEEN.md for new colonies
+- `/ant-build` - Reads QUEEN.md wisdom for worker priming
+- `/ant-continue` - Promotes validated learnings
+- `/ant-seal` - Promotes final colony wisdom
+- `/ant-entomb` - Promotes wisdom before archiving

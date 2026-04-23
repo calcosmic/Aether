@@ -91,14 +91,14 @@ Run using the Bash tool with description "Loading colony state...": `aether load
 
 If the command fails (non-zero exit or JSON has ok: false):
 1. Parse error JSON
-2. If error code is E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+2. If error code is E_FILE_NOT_FOUND: "No colony initialized. Run /ant-init first." and stop
 3. If validation error: Display error details with recovery suggestion and stop
-4. For other errors: Display generic error and suggest /ant:status for diagnostics
+4. For other errors: Display generic error and suggest /ant-status for diagnostics
 
 If successful:
 1. Parse the state JSON from result field
-2. Check if goal is null - if so: "No colony initialized. Run /ant:init first." and stop
-3. Check if `milestone` == `"Crowned Anthill"` - if so: "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop
+2. Check if goal is null - if so: "No colony initialized. Run /ant-init first." and stop
+3. Check if `milestone` == `"Crowned Anthill"` - if so: "This colony has been sealed. Start a new colony with `/ant-init \"new goal\"`." and stop
 4. Extract current_phase and phase name from plan.phases[current_phase - 1].name
 4. Display brief resumption context:
    ```
@@ -122,7 +122,7 @@ After displaying context, run using the Bash tool with description "Releasing co
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--no-suggest] [--depth <level>]
+Usage: /ant-build <phase_number> [--verbose|-v] [--no-visual] [--no-suggest] [--depth <level>]
 
 Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
@@ -131,11 +131,11 @@ Options:
   --depth <level>     Set colony depth for this build (light|standard|deep|full)
 
 Examples:
-  /ant:build 1              Build Phase 1 (with visual display)
-  /ant:build 1 --verbose    Build Phase 1 (full details + visual)
-  /ant:build 1 --no-visual  Build Phase 1 without visual display
-  /ant:build 1 --no-suggest Build Phase 1 without pheromone suggestions
-  /ant:build 1 --depth deep Build Phase 1 with thorough investigation
+  /ant-build 1              Build Phase 1 (with visual display)
+  /ant-build 1 --verbose    Build Phase 1 (full details + visual)
+  /ant-build 1 --no-visual  Build Phase 1 without visual display
+  /ant-build 1 --no-suggest Build Phase 1 without pheromone suggestions
+  /ant-build 1 --depth deep Build Phase 1 with thorough investigation
 ```
 
 Stop here.
@@ -180,7 +180,7 @@ If `colony_depth` is "standard" and `depth_source` is "default" (user never expl
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
 1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
-2. Write upgraded v3.0 state (same structure as /ant:init but preserving data)
+2. Write upgraded v3.0 state (same structure as /ant-init but preserving data)
 3. Output: `State auto-upgraded to v3.0`
 4. Continue with command.
 
@@ -191,7 +191,7 @@ Extract:
 - `memory` for decisions/learnings
 
 **Validate:**
-- If `plan.phases` is empty -> output `No project plan. Run /ant:plan first.` and stop.
+- If `plan.phases` is empty -> output `No project plan. Run /ant-plan first.` and stop.
 - Find the phase matching the requested ID. If not found -> output `Phase {id} not found.` and stop.
 - If the phase status is `"completed"` -> output `Phase {id} already completed.` and stop.
 
@@ -219,7 +219,7 @@ Parse the JSON result (`.result.blockers`):
      - [{flag.id}] {flag.title}
   {end for}
 
-  Consider reviewing with /ant:flags or auto-fixing with /ant:swarm before building.
+  Consider reviewing with /ant-flags or auto-fixing with /ant-swarm before building.
   Proceeding anyway...
   ```
   **This is advisory only — do NOT stop.** Continue to Step 2 regardless.
@@ -347,7 +347,7 @@ aether survey-load "{phase_name}" 2>/dev/null
 {/for}
 
 {if no survey}
-  (No territory survey — run /ant:colonize for deeper context)
+  (No territory survey — run /ant-colonize for deeper context)
 {/if}
 ```
 
@@ -903,8 +903,8 @@ Failed workers:
   {end for}
 
 Next steps:
-  /ant:flags      Review blockers
-  /ant:swarm      Auto-repair mode
+  /ant-flags      Review blockers
+  /ant-swarm      Auto-repair mode
 ```
 
 Then STOP — do not proceed to subsequent waves, Watcher, or Chaos. Skip directly to Step 5.9 synthesis with `status: "failed"`.
@@ -1437,7 +1437,7 @@ Only fires when workers fail. Zero impact on successful builds.
 
 --- SPAWN TRACKING ---
 
-The spawn tree will be visible in `/ant:watch` because each spawn is logged.
+The spawn tree will be visible in `/ant-watch` because each spawn is logged.
 
 --- OUTPUT FORMAT ---
 
@@ -1545,7 +1545,7 @@ jq -n \
   --arg summary "{synthesis.summary}" \
   --argjson tasks_completed '{synthesis.tasks_completed | length}' \
   --argjson tasks_failed '{synthesis.tasks_failed | length}' \
-  --arg next_action "{if synthesis.status == "completed" then "/ant:continue" else "/ant:flags" end}" \
+  --arg next_action "{if synthesis.status == "completed" then "/ant-continue" else "/ant-flags" end}" \
   '{
     "last_updated": $timestamp,
     "goal": $goal,
@@ -1557,7 +1557,7 @@ jq -n \
     "tasks_failed": $tasks_failed,
     "next_recommended_action": $next_action,
     "can_resume": true,
-    "note": "Phase build completed. Run /ant:continue to advance if verification passed."
+    "note": "Phase build completed. Run /ant-continue to advance if verification passed."
   }' > .aether/data/last-build-result.json
 ```
 
@@ -1593,7 +1593,7 @@ Run using the Bash tool with description "Updating build context...": `aether co
 
 Also update safe-to-clear status:
 - If build completed successfully: `context-update safe-to-clear "YES" "Build complete, ready to continue"`
-- If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant:swarm or /ant:flags"`
+- If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant-swarm or /ant-flags"`
 
 ### Step 5.10: Check for Promotion Proposals
 
@@ -1650,7 +1650,7 @@ Failed:
   {caste_emoji} {Ant-Name}: {task_description} ✗ ({failure_reason} after {tool_count} tools)
   {end for}
 
-Retry: /ant:swarm to auto-repair failed tasks, or /ant:flags to review blockers
+Retry: /ant-swarm to auto-repair failed tasks, or /ant-flags to review blockers
 {end if}
 ```
 
@@ -1667,15 +1667,15 @@ total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/d
 aether print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
-**Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant:flags` before continuing.
+**Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant-flags` before continuing.
 
-**IMPORTANT:** Build does NOT update task statuses or advance state. Run `/ant:continue` to:
+**IMPORTANT:** Build does NOT update task statuses or advance state. Run `/ant-continue` to:
 - Mark tasks as completed
 - Extract learnings
 - Advance to next phase
 
 ### Step 8: Update Session
 
-Update the session tracking file to enable `/ant:resume` after context clear:
+Update the session tracking file to enable `/ant-resume` after context clear:
 
-Run using the Bash tool with description "Saving build session...": `aether session-update --command "/ant:build {phase_id}" --suggested-next "/ant:continue" --summary "Phase {phase_id} build completed: {synthesis.status}"`
+Run using the Bash tool with description "Saving build session...": `aether session-update --command "/ant-build {phase_id}" --suggested-next "/ant-continue" --summary "Phase {phase_id} build completed: {synthesis.status}"`

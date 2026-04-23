@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/bump-version.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:bump-version
+name: ant-bump-version
 description: "🚀 Bump version across all files, rebuild, push, and tag for release"
 ---
 
@@ -11,8 +11,8 @@ You are the **Queen Ant Colony**. Bump the Aether version everywhere and trigger
 Parse `$ARGUMENTS` to extract the target version string (e.g. "1.1.0").
 If no argument provided, display:
 ```
-Usage: /ant:bump-version <semver>
-Example: /ant:bump-version 1.1.0
+Usage: /ant-bump-version <semver>
+Example: /ant-bump-version 1.1.0
 ```
 Stop here.
 

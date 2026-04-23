@@ -1,4 +1,4 @@
-name: ant:watch
+name: ant-watch
 description: "👁️ View the current colony watch surface through the Aether CLI runtime"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

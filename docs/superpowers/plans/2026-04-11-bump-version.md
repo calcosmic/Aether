@@ -1,4 +1,4 @@
-# `/ant:bump-version` Implementation Plan
+# `/ant-bump-version` Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -32,8 +32,8 @@ You are the **Queen Ant Colony**. Bump the Aether version everywhere and trigger
 Parse `$ARGUMENTS` to extract the target version string (e.g. "1.1.0").
 If no argument provided, display:
 ```
-Usage: /ant:bump-version <semver>
-Example: /ant:bump-version 1.1.0
+Usage: /ant-bump-version <semver>
+Example: /ant-bump-version 1.1.0
 ```
 Stop here.
 
@@ -194,7 +194,7 @@ Expected: file exists, readable.
 
 ```bash
 git add .claude/commands/ant/bump-version.md
-git commit -m "feat: add /ant:bump-version slash command"
+git commit -m "feat: add /ant-bump-version slash command"
 ```
 
 ---

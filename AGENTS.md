@@ -33,7 +33,7 @@ OpenCode, and Codex CLI.
 
 Codex CLI does not support slash commands. All colony operations use the `aether`
 CLI binary directly or natural language prompts. There is no equivalent of
-typing `/ant:build 1` -- instead you run:
+typing `/ant-build 1` -- instead you run:
 
 ```bash
 aether build 1

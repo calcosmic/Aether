@@ -412,7 +412,7 @@ This ensures verification failures are persisted as blockers that survive contex
 
 ### Step 5.9: Midden Collection for Merged Branches (NON-BLOCKING)
 
-**Per D-04: Wire midden-collect into /ant:run flow (build-verify phase).**
+**Per D-04: Wire midden-collect into /ant-run flow (build-verify phase).**
 
 If this build is running on main after a merge (detected via COLONY_STATE or git log), attempt midden collection:
 

@@ -23,7 +23,7 @@ colony context.
 | 1 | `COLONY_STATE.json` | Master colony state: goal, phases, memory (learnings, decisions, instincts, events), milestone | `aether state-*` commands |
 | 2 | `pheromones.json` | Active pheromone signals (FOCUS, REDIRECT, FEEDBACK) with strength, decay, dedup | `aether pheromone-*` commands |
 | 3 | `midden/midden.json` | Failure records with category, severity, acknowledgment status | `aether midden-*` commands |
-| 4 | `flags.json` | Active flags (blocking, informational) created by `/ant:flag` | `aether flag-*` commands |
+| 4 | `flags.json` | Active flags (blocking, informational) created by `/ant-flag` | `aether flag-*` commands |
 | 5 | `session.json` | Current session metadata: session_id, last command, colony_goal, baseline_commit | `aether session-*` commands |
 | 6 | `learning-observations.json` | Raw learning observations captured via `memory-capture` | `aether memory-*` commands |
 | 7 | `rolling-summary.log` | Rolling log of condensed learnings per phase | `aether memory-*` commands |
@@ -129,7 +129,7 @@ never via `DATA_DIR` or `COLONY_DATA_DIR`.
 
 ## 3. Read Rules During a Build on a PR Branch
 
-When an agent runs `/ant:build` or `/ant:continue` on a feature branch:
+When an agent runs `/ant-build` or `/ant-continue` on a feature branch:
 
 ### Rule 1: Branch-local state is authoritative for colony context
 
@@ -170,7 +170,7 @@ When an agent runs `/ant:build` or `/ant:continue` on a feature branch:
 ### Rule 5: Instincts are branch-local until promoted
 
 - Instincts live inside `COLONY_STATE.json` (branch-local)
-- They are promoted to hub `QUEEN.md` via `queen-promote` during `/ant:seal`
+- They are promoted to hub `QUEEN.md` via `queen-promote` during `/ant-seal`
 - After promotion, they become visible to all branches via hub QUEEN.md
 
 ---
@@ -192,7 +192,7 @@ merged**. This creates a coordination challenge:
 
 | Scenario | What happens | Mitigation |
 |----------|-------------|------------|
-| Phase completed on branch | COLONY_STATE.json updated on branch, not on main | `/ant:continue` must update main after merge |
+| Phase completed on branch | COLONY_STATE.json updated on branch, not on main | `/ant-continue` must update main after merge |
 | Pheromone created on branch | Signal exists only on branch | Hub QUEEN.md promotion at seal |
 | Midden entry on branch | Failure tracked only on branch | Must be promoted to hub or re-observed |
 | Learning on branch | Observation in branch-local file | Must flow to hub via wisdom pipeline |
@@ -247,7 +247,7 @@ Hub state is automatically shared because it lives outside git:
 ### Phase: Build on Branch
 
 ```
-1. /ant:init or /ant:build writes to branch-local state
+1. /ant-init or /ant-build writes to branch-local state
 2. Colony reads hub QUEEN.md + hive for cross-branch wisdom
 3. Pheromones created are branch-scoped
 4. Learnings captured are branch-scoped

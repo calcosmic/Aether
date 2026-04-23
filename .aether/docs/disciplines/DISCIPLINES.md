@@ -54,7 +54,7 @@ Instincts track success/failure counts and can be automatically disproven.
 
 ## Verification Enforcement
 
-`/ant:continue` enforces verification:
+`/ant-continue` enforces verification:
 - Build must pass
 - Tests must pass
 - Success criteria must have evidence
@@ -66,10 +66,10 @@ No workarounds. Fix issues and re-run.
 
 | Command | Key Behaviors |
 |---------|---------------|
-| `/ant:build` | Real parallelism via Task tool, honest logging |
-| `/ant:continue` | Mandatory verification gate, learning extraction |
-| `/ant:plan` | Bite-sized task planning |
-| `/ant:status` | Colony state with instincts |
+| `/ant-build` | Real parallelism via Task tool, honest logging |
+| `/ant-continue` | Mandatory verification gate, learning extraction |
+| `/ant-plan` | Bite-sized task planning |
+| `/ant-status` | Colony state with instincts |
 
 ## File Structure
 

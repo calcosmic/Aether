@@ -131,7 +131,7 @@ cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
 # Colony Session — Phase Advanced
 
 ## Quick Resume
-Run `/ant:build {next_phase_id}` to start working on the current phase.
+Run `/ant-build {next_phase_id}` to start working on the current phase.
 
 ## State at Advancement
 - Goal: "$(jq -r '.goal' .aether/data/COLONY_STATE.json)"
@@ -150,9 +150,9 @@ Run `/ant:build {next_phase_id}` to start working on the current phase.
 $(jq -r '.plan.phases[] | select(.id == next_phase_id) | .tasks[] | "- [ ] \(.id): \(.description)"' .aether/data/COLONY_STATE.json)
 
 ## Next Steps
-- Build current phase: `/ant:build {next_phase_id}`
-- Review phase details: `/ant:phase {next_phase_id}`
-- Pause colony: `/ant:pause-colony`
+- Build current phase: `/ant-build {next_phase_id}`
+- Review phase details: `/ant-phase {next_phase_id}`
+- Pause colony: `/ant-pause-colony`
 
 ## Session Note
 Phase advanced successfully. Colony is READY to build Phase {next_phase_id}.
@@ -313,7 +313,7 @@ Phase {next_id} is ready to build.
 ```
 Clear context now?
 
-1. Yes, clear context then run /ant:build {next_id}
+1. Yes, clear context then run /ant-build {next_id}
 2. No, continue in current context
 ```
 
@@ -323,7 +323,7 @@ Clear context now?
    ```
    Please type: /clear
    
-   Then run: /ant:build {next_id}
+   Then run: /ant-build {next_id}
    ```
    
    Record the suggestion: Set `context_clear_suggested` to `true` in COLONY_STATE.json.
@@ -423,25 +423,25 @@ Output:
 ──────────────────────────────────────────────────
 🐜 Next Up
 ──────────────────────────────────────────────────
-   /ant:build {next_id}     🔨 Build next phase
-   /ant:status              📊 Check progress
+   /ant-build {next_id}     🔨 Build next phase
+   /ant-status              📊 Check progress
 
 💾 State persisted — context clear suggested above
 
 📋 Context document updated at `.aether/CONTEXT.md`
 ```
 
-**IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant:build 4` not `/ant:build {next_id}`.
+**IMPORTANT:** In the "Next Steps" section above, substitute the actual phase number for `{next_id}` (calculated in Step 2 as `current_phase + 1`). For example, if advancing to phase 4, output `/ant-build 4` not `/ant-build {next_id}`.
 
 ### Step 4: Update Session
 
-Update the session tracking file to enable `/ant:resume` after context clear:
+Update the session tracking file to enable `/ant-resume` after context clear:
 
 ```bash
-aether session-update --command "/ant:continue" --suggested-next "/ant:build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"
+aether session-update --command "/ant-continue" --suggested-next "/ant-build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"
 ```
 
-Run using the Bash tool with description "Saving session state...": `aether session-update --command "/ant:continue" --suggested-next "/ant:build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"`
+Run using the Bash tool with description "Saving session state...": `aether session-update --command "/ant-continue" --suggested-next "/ant-build {next_id}" --summary "Phase {prev_id} completed, advanced to Phase {next_id}"`
 
 ### Step 4.5: Housekeeping (Non-Blocking)
 

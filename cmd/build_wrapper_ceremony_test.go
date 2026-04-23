@@ -34,7 +34,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"Dispatching workers now...",
 		"AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS",
 		"## After the Build",
-		"/ant:continue",
+		"/ant-continue",
 	}
 
 	inOrder := []string{

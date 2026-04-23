@@ -1,7 +1,7 @@
 # Colony Session — Phase Advanced
 
 ## Quick Resume
-Run `/ant:build 5` to start working on the current phase.
+Run `/ant-build 5` to start working on the current phase.
 
 ## State at Advancement
 - Goal: Fix all ~120 broken CLI calls in markdown — add missing flags and subcommands to Go CLI so pheromones, learning, midden, spawn tracking, activity log, flags, and registry actually work
@@ -20,9 +20,9 @@ Run `/ant:build 5` to start working on the current phase.
 - [ ] 5.2: Fix all markdown pheromone-write calls: positional type -> --type, positional content -> --content
 
 ## Next Steps
-- Build current phase: `/ant:build 5`
-- Review phase details: `/ant:phase 5`
-- Pause colony: `/ant:pause-colony`
+- Build current phase: `/ant-build 5`
+- Review phase details: `/ant-phase 5`
+- Pause colony: `/ant-pause-colony`
 
 ## Session Note
 Phase advanced successfully. Colony is READY to build Phase 5.

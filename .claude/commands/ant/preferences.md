@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/preferences.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:preferences
+name: ant-preferences
 description: "🧠 Add or list user preferences in hub QUEEN.md"
 ---
 
@@ -12,7 +12,7 @@ The input is: `$ARGUMENTS`
 
 ### Step 1: Validate
 
-If `$ARGUMENTS` empty -> show usage: `/ant:preferences "preference text"` or `/ant:preferences --list`, stop.
+If `$ARGUMENTS` empty -> show usage: `/ant-preferences "preference text"` or `/ant-preferences --list`, stop.
 
 ### Step 2: Route
 
@@ -21,14 +21,14 @@ If `$ARGUMENTS` empty -> show usage: `/ant:preferences "preference text"` or `/a
 
 ### List Mode
 
-Read `~/.aether/QUEEN.md`. If missing -> "No hub QUEEN.md found. Run /ant:init to create one.", stop.
+Read `~/.aether/QUEEN.md`. If missing -> "No hub QUEEN.md found. Run /ant-init to create one.", stop.
 
 Find the `## User Preferences` section (with or without emoji). Extract bullet lines (`- ...`) between that heading and the next `---`.
 
 If user-added bullets exist, output each. Otherwise:
 ```
 No user preferences set yet.
-Add one with: /ant:preferences "your preference"
+Add one with: /ant-preferences "your preference"
 ```
 Stop.
 
@@ -37,7 +37,7 @@ Stop.
 Set `PREF` to `$ARGUMENTS` (strip surrounding quotes).
 If length > 500 chars -> "Preference too long (max 500 chars)", stop.
 
-Read `~/.aether/QUEEN.md`. If missing -> "No hub QUEEN.md found. Run /ant:init to create one.", stop.
+Read `~/.aether/QUEEN.md`. If missing -> "No hub QUEEN.md found. Run /ant-init to create one.", stop.
 
 **If `## User Preferences` section exists** (with or without emoji):
 1. Remove `*No user preferences recorded yet.*` placeholder if present

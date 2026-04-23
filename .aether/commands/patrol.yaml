@@ -1,4 +1,4 @@
-name: ant:patrol
+name: ant-patrol
 description: "📊 Patrol the colony through the Aether CLI runtime"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

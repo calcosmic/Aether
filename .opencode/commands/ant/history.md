@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/history.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:history
+name: ant-history
 description: "📜 Show colony event history"
 ---
 
@@ -14,7 +14,7 @@ Read `.aether/data/COLONY_STATE.json`.
 
 If file missing or `goal: null`:
 ```
-No colony initialized. Run /ant:init first.
+No colony initialized. Run /ant-init first.
 ```
 Stop here.
 

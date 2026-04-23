@@ -190,7 +190,7 @@ Update COLONY_STATE.json:
 3c. **Promote high-confidence instincts to QUEEN.md (QUEEN-02):**
 
    After instinct creation (Steps 3/3a/3b), sweep all instincts for confidence >= 0.8
-   and promote to the QUEEN.md Instincts section. This runs every /ant:continue to catch
+   and promote to the QUEEN.md Instincts section. This runs every /ant-continue to catch
    newly boosted instincts.
 
    Run using the Bash tool with description "Promoting high-confidence instincts to QUEEN.md...":
@@ -282,7 +282,7 @@ Update COLONY_STATE.json:
    echo "hive_error=$hive_error"
    ```
 
-   This step promotes high-confidence instincts to the cross-colony hive. It runs every /ant:continue and is idempotent -- hive-store deduplicates via SHA-256, so re-promoting existing instincts is safe.
+   This step promotes high-confidence instincts to the cross-colony hive. It runs every /ant-continue and is idempotent -- hive-store deduplicates via SHA-256, so re-promoting existing instincts is safe.
 
    NON-BLOCKING: hive promotion failures never stop the continue flow.
 
@@ -428,7 +428,7 @@ fi
 
 After pheromone merge-back, collect failure records from any recently merged branch worktrees. This step is silent and non-blocking -- continue proceeds even if collection fails.
 
-**Per D-04: Wire midden-collect into /ant:continue flow.**
+**Per D-04: Wire midden-collect into /ant-continue flow.**
 
 If the colony uses a PR-based workflow and a merge just happened, attempt to collect the branch's midden entries:
 
@@ -460,7 +460,7 @@ This step is NON-BLOCKING -- continue proceeds regardless of collection outcome.
 
 After midden collection (Step 2.0.6), run cross-PR analysis to detect systemic failure patterns across multiple merged branches. Auto-emits REDIRECT pheromones to hub if systemic patterns found.
 
-**Per D-05: Wire midden-cross-pr-analysis into /ant:continue flow.**
+**Per D-05: Wire midden-cross-pr-analysis into /ant-continue flow.**
 
 Run using the Bash tool with description "Running cross-PR midden analysis...":
 ```bash

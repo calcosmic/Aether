@@ -730,8 +730,8 @@ Failed workers:
   {end for}
 
 Next steps:
-  /ant:flags      Review blockers
-  /ant:swarm      Auto-repair mode
+  /ant-flags      Review blockers
+  /ant-swarm      Auto-repair mode
 ```
 
 Then STOP — do not proceed to subsequent waves, Watcher, or Chaos. Skip directly to Step 5.9 synthesis with `status: "failed"`.
@@ -870,7 +870,7 @@ If some merges succeed and some fail in the same wave:
 Merge-back: {success_count} merged, {fail_count} blocked
 ```
 - Proceed to the next wave regardless -- subsequent waves will work on main which has the successfully-merged changes.
-- Failed worktrees remain available for manual merge or retry via `/ant:swarm`.
+- Failed worktrees remain available for manual merge or retry via `/ant-swarm`.
 
 5. **Log merge-back activity:**
 

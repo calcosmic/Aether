@@ -6,7 +6,7 @@
   "colony_goal": "Remove all shell scripts and ensure the Go version of aether works perfectly, we are finalising the system, also ensure to remove all parts of the GSD system from this repo, this has to be done with extreme care and safety",
   "current_phase": 0,
   "current_milestone": "First Mound",
-  "suggested_next": "/ant:plan",
+  "suggested_next": "/ant-plan",
   "context_cleared": false,
   "baseline_commit": "95f18baf48fd6b459cd0add2d20215a4b535bb53",
   "resumed_at": null,

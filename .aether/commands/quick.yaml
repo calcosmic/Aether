@@ -1,4 +1,4 @@
-name: ant:quick
+name: ant-quick
 description: "⚡ Quick scout query — fast answers without build ceremony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

@@ -1,4 +1,4 @@
-name: ant:build
+name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
@@ -16,7 +16,7 @@ wrapper_additions:
     Close with a short colony-language synthesis:
     1. Summarize what moved forward and which workers or castes the runtime actually dispatched.
     2. Note only the most relevant signal or risk.
-    3. Route first to `/ant:continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
+    3. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
 guardrails:
   - "Do NOT load playbooks or reimplement build orchestration."
   - "Do NOT read or write colony state files by hand."
@@ -25,5 +25,5 @@ guardrails:
   - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
-  verify: "Guide the user first to `/ant:continue`, with `aether continue` as the runtime source of truth."
+  verify: "Guide the user first to `/ant-continue`, with `aether continue` as the runtime source of truth."
   inspect: "Run `aether status` if you want to inspect progress before advancing."

@@ -21,7 +21,7 @@ You do not need to write a spec, break down tasks, or plan anything yourself. Th
 
 <!-- VISUAL NOTE: A text input or chat bubble icon. Something that suggests "speaking" or "typing a goal."
 Color suggestion: the project purple (#7B3FE4). Could also show a terminal snippet:
-  /ant:init "Build a REST API for task management" -->
+  /ant-init "Build a REST API for task management" -->
 
 ### Step 2: Plan -- The colony maps the path
 
@@ -46,7 +46,7 @@ You can steer with simple signals (like "focus on security" or "avoid raw SQL") 
 <!-- VISUAL NOTE: Multiple small ant/worker icons moving in parallel, converging on a target.
 Color suggestion: green tones for "action" (#16a34a).
 Could show a terminal snippet:
-  /ant:run
+  /ant-run
   [Phase 3] Building... 4 workers deployed
   [Phase 3] Verified. Advancing. -->
 
@@ -82,7 +82,7 @@ Pheromone signals are a simple way to guide the colony without micromanaging. Th
 
 ### What does autopilot mode do?
 
-Autopilot mode (`/ant:run`) chains the entire build cycle together automatically. Instead of running each command by hand, you turn on autopilot and the colony plans, builds, verifies, and advances through every phase on its own. It pauses -- not crashes -- when something needs your attention, like a test failure or a decision it cannot make on its own. Fix the issue, tell it to continue, and it picks up where it left off. You can also set limits, like "run at most 2 phases then stop," to stay in control.
+Autopilot mode (`/ant-run`) chains the entire build cycle together automatically. Instead of running each command by hand, you turn on autopilot and the colony plans, builds, verifies, and advances through every phase on its own. It pauses -- not crashes -- when something needs your attention, like a test failure or a decision it cannot make on its own. Fix the issue, tell it to continue, and it picks up where it left off. You can also set limits, like "run at most 2 phases then stop," to stay in control.
 
 ### Is it ready for production use?
 
@@ -107,7 +107,7 @@ The colony has built-in safeguards. A Watcher worker monitors every build for qu
 ---
 
 <!-- LAYOUT NOTE: Below the FAQ, consider a CTA row:
-  Left: "Ready to start?" with a /ant:lay-eggs code snippet
+  Left: "Ready to start?" with a /ant-lay-eggs code snippet
   Right: Primary button "Get Started" linking to GitHub
   Below: Secondary links "Read the Docs" | "Join the Discussion" -->
 

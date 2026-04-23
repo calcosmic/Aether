@@ -1,4 +1,4 @@
-name: ant:colonize
+name: ant-colonize
 description: "🗺️ Survey territory with 4 parallel scouts for comprehensive colony intelligence"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

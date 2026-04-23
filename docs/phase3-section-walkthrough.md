@@ -22,7 +22,7 @@ One-time setup. The colony hub lives at `~/.aether/` and persists across every p
 
 ```bash
 cd ~/projects/task-api
-/ant:lay-eggs
+/ant-lay-eggs
 ```
 
 ```
@@ -41,7 +41,7 @@ This creates the nest -- the directory structure the colony needs to operate. Yo
 ### Step 2 -- State the Goal
 
 ```bash
-/ant:init "Build a REST API for task management with user auth, project CRUD, and task tracking"
+/ant-init "Build a REST API for task management with user auth, project CRUD, and task tracking"
 ```
 
 ```
@@ -58,7 +58,7 @@ The colony now has a purpose. Every worker that spawns from this point knows the
 ### Step 3 -- Colonize (Optional, but Smart)
 
 ```bash
-/ant:colonize
+/ant-colonize
 ```
 
 ```
@@ -80,7 +80,7 @@ Since this is a new project, there is not much to map. But if you were adding Ae
 ### Step 4 -- Plan
 
 ```bash
-/ant:plan
+/ant-plan
 ```
 
 ```
@@ -123,9 +123,9 @@ You can adjust the plan. Add phases, remove them, merge them. The colony follows
 Before the first build, you set the guardrails:
 
 ```bash
-/ant:focus "database migrations -- use versioned migrations, no schema drift"
-/ant:redirect "No raw SQL in application code -- use parameterized queries only"
-/ant:feedback "Prefer standard library where possible -- minimize dependencies"
+/ant-focus "database migrations -- use versioned migrations, no schema drift"
+/ant-redirect "No raw SQL in application code -- use parameterized queries only"
+/ant-feedback "Prefer standard library where possible -- minimize dependencies"
 ```
 
 ```
@@ -148,7 +148,7 @@ Signals expire at the end of the current phase. You can also set a wall-clock ex
 ### Step 6 -- Build Phase 1
 
 ```bash
-/ant:build 1
+/ant-build 1
 ```
 
 ```
@@ -182,7 +182,7 @@ Behind the scenes, multiple builder ants worked in parallel. A Probe ant wrote t
 ### Step 7 -- Continue (Verify, Learn, Advance)
 
 ```bash
-/ant:continue
+/ant-continue
 ```
 
 ```
@@ -210,9 +210,9 @@ The FOCUS signal about migrations expired because the phase ended. If you want i
 You emit new signals for the auth phase:
 
 ```bash
-/ant:focus "JWT token security -- use short expiry, secure refresh flow"
-/ant:redirect "Never store passwords in plain text -- always bcrypt"
-/ant:build 2
+/ant-focus "JWT token security -- use short expiry, secure refresh flow"
+/ant-redirect "Never store passwords in plain text -- always bcrypt"
+/ant-build 2
 ```
 
 ```
@@ -242,12 +242,12 @@ The REDIRECT signal about bcrypt was active. The Watcher explicitly verified no 
 
 ### Steps 9-12 -- Phases 3, 4, and 5
 
-The pattern repeats. `/ant:build N`, then `/ant:continue`. Each phase builds on the verified output of the last. Instincts accumulate. The colony gets smarter about your project's patterns.
+The pattern repeats. `/ant-build N`, then `/ant-continue`. Each phase builds on the verified output of the last. Instincts accumulate. The colony gets smarter about your project's patterns.
 
 For phases 3 and 4, you decide to let autopilot handle it:
 
 ```bash
-/ant:run --max-phases 2
+/ant-run --max-phases 2
 ```
 
 ```
@@ -270,7 +270,7 @@ Current phase: 3 (Projects)
   Verifying... PASS
 
 Autopilot paused. Max phases reached (2/2).
-Run /ant:run to continue, or /ant:continue to advance manually.
+Run /ant-run to continue, or /ant-continue to advance manually.
 ```
 
 Autopilot ran two phases without you touching the keyboard. It paused gracefully at the limit instead of running off into the distance. You review what landed, emit any new signals if needed, and decide whether to continue.
@@ -282,7 +282,7 @@ Autopilot ran two phases without you touching the keyboard. It paused gracefully
 Now suppose you close your laptop. The next morning, you open Claude Code in the same directory. You have lost your conversation context. No problem.
 
 ```bash
-/ant:resume
+/ant-resume
 ```
 
 ```
@@ -296,7 +296,7 @@ Restoring context...
   Open flags: 0
 
 Resume from Phase 5: Integration and Polish
-  /ant:build 5 to continue
+  /ant-build 5 to continue
 ```
 
 The colony reconstructed its full context from the colony state file, active signals, and accumulated instincts. You did not need to re-explain the project or paste your plan. The colony remembered.
@@ -306,8 +306,8 @@ The colony reconstructed its full context from the colony state file, active sig
 ### Step 13 -- Build Phase 5 (Final)
 
 ```bash
-/ant:focus "API documentation -- generate OpenAPI spec from handlers"
-/ant:build 5
+/ant-focus "API documentation -- generate OpenAPI spec from handlers"
+/ant-build 5
 ```
 
 ```
@@ -334,7 +334,7 @@ Phase 5 status: VERIFIED
 ### Step 14 -- Seal the Colony
 
 ```bash
-/ant:seal
+/ant-seal
 ```
 
 ```
@@ -361,7 +361,7 @@ The colony ran a final curation pass. High-confidence instincts were promoted to
 ### Step 15 -- Entomb
 
 ```bash
-/ant:entomb
+/ant-entomb
 ```
 
 ```
@@ -380,14 +380,14 @@ The colony's work is archived. The directory is clean. But the knowledge persist
 If you trust the plan and want hands-off execution, you can skip the manual loop entirely:
 
 ```bash
-/ant:lay-eggs
-/ant:init "Build a REST API for task management"
-/ant:plan
-/ant:focus "database migrations -- use versioned migrations"
-/ant:redirect "No raw SQL in application code"
-/ant:run
+/ant-lay-eggs
+/ant-init "Build a REST API for task management"
+/ant-plan
+/ant-focus "database migrations -- use versioned migrations"
+/ant-redirect "No raw SQL in application code"
+/ant-run
 ```
 
-Autopilot runs every remaining phase, pausing only when something needs your attention -- a test failure, a security concern, a blocker it cannot resolve. Fix the issue, run `/ant:run` again, and it resumes.
+Autopilot runs every remaining phase, pausing only when something needs your attention -- a test failure, a security concern, a blocker it cannot resolve. Fix the issue, run `/ant-run` again, and it resumes.
 
 That is five commands from zero to shipped. The colony handles the rest.

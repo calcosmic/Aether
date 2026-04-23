@@ -291,7 +291,7 @@ func TestCheckContextClearGuidance(t *testing.T) {
 
 		// continue.md with hard-coded context-clear
 		writeFile(t, continueDir, "continue.md", []byte(
-			"It's safe to clear your context now. Run /ant:resume.\n"))
+			"It's safe to clear your context now. Run /ant-resume.\n"))
 
 		fc := newFileChecker(dataDir)
 		issues := checkContextClearGuidance(fc)

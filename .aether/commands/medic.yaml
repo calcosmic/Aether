@@ -1,4 +1,4 @@
-name: ant:medic
+name: ant-medic
 description: "🩹 Diagnose colony health — scan all colony data for corruption, staleness, and configuration issues"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

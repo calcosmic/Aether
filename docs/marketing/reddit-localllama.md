@@ -25,7 +25,7 @@ In practice, that looks like:
 - **24 specialized workers** -- Builder writes code, Watcher verifies, Scout researches, Tracker hunts bugs, Archaeologist digs through git history. Each has a specific role and caste.
 - **Pheromone signals instead of prompt engineering** -- You emit FOCUS (pay attention here), REDIRECT (don't do this), and FEEDBACK (adjust your approach) signals. Every worker in the next wave sees them automatically.
 - **Memory that compounds** -- Learnings from one build become instincts. High-confidence instincts promote to a wisdom file (QUEEN.md). The best insights cross into a "Hive Brain" that shares across all your projects.
-- **Autopilot mode** -- Set a goal, generate a plan, emit your constraints, and let `/ant:run` handle the build-verify-advance loop across phases. It pauses when something needs your attention.
+- **Autopilot mode** -- Set a goal, generate a plan, emit your constraints, and let `/ant-run` handle the build-verify-advance loop across phases. It pauses when something needs your attention.
 
 ## Why you might care (for this sub specifically)
 
@@ -48,12 +48,12 @@ In practice, that looks like:
 ```
 aether install
 cd my-project
-/ant:lay-eggs
-/ant:init "Build a REST API for task management"
-/ant:plan
-/ant:focus "database migrations -- use versioned migrations"
-/ant:redirect "No raw SQL in application code"
-/ant:run
+/ant-lay-eggs
+/ant-init "Build a REST API for task management"
+/ant-plan
+/ant-focus "database migrations -- use versioned migrations"
+/ant-redirect "No raw SQL in application code"
+/ant-run
 ```
 
 Five commands from blank directory to shipped code. The colony generates a phased plan, spawns parallel workers for each phase, verifies the output, and advances. If something breaks, autopilot pauses and waits for you.

@@ -1,6 +1,6 @@
 ---
 name: aether-queen
-description: "Use this agent when coordinating multi-phase projects, managing multiple workers across a build session, or executing colony workflows like SPBV, Investigate-Fix, Refactor, Compliance, or Documentation Sprint. Spawned by /ant:build and /ant:colonize when a goal requires planning, delegation, and synthesis across multiple steps. Do NOT use for single-task implementation (use aether-builder) or quick research (use aether-scout)."
+description: "Use this agent when coordinating multi-phase projects, managing multiple workers across a build session, or executing colony workflows like SPBV, Investigate-Fix, Refactor, Compliance, or Documentation Sprint. Spawned by /ant-build and /ant-colonize when a goal requires planning, delegation, and synthesis across multiple steps. Do NOT use for single-task implementation (use aether-builder) or quick research (use aether-scout)."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 color: red
 model: opus
@@ -281,7 +281,7 @@ Options:
 Awaiting your choice.
 ```
 
-If the calling command supports flag persistence, note the blocker for /ant:status.
+If the calling command supports flag persistence, note the blocker for /ant-status.
 
 ### Escalation Format
 When escalating at Tier 4, always provide:

@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/chaos.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:chaos
+name: ant-chaos
 description: "🎲 Resilience tester — probes edge cases, boundary conditions, and unexpected inputs"
 ---
 
@@ -41,12 +41,12 @@ The user specifies what to investigate via `$ARGUMENTS`:
 ```
 🎲🐜🔍🐜🎲 CHAOS ANT — Resilience Tester
 
-Usage: /ant:chaos <target>
+Usage: /ant-chaos <target>
 
   <target> can be:
-    - A file path:           /ant:chaos src/auth/login.ts
-    - A module name:         /ant:chaos authentication
-    - A feature description: /ant:chaos "user signup flow"
+    - A file path:           /ant-chaos src/auth/login.ts
+    - A module name:         /ant-chaos authentication
+    - A feature description: /ant-chaos "user signup flow"
 
 The Chaos Ant will investigate 5 edge case scenarios and produce
 a structured resilience report with reproduction steps.
@@ -245,9 +245,9 @@ Scenarios probed: 5
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Next steps:
-  /ant:build   🔨 Fix the findings
-  /ant:watch   👁️ Verify existing coverage
-  /ant:chaos   🎲 Test another target
+  /ant-build   🔨 Fix the findings
+  /ant-watch   👁️ Verify existing coverage
+  /ant-chaos   🎲 Test another target
 ```
 
 ### Step 6: Output JSON Report

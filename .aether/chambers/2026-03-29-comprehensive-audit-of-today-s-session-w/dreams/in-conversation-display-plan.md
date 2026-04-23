@@ -14,12 +14,12 @@ Make Aether colony activity visible inside Claude's conversation output, not in 
    - Limits to 5 ants
 
 ### Agent-Spawning Commands Identified
-1. `/ant:build` - Builders, Watcher, Chaos, Archaeologist
-2. `/ant:swarm` - 4 scouts (Archaeologist, PatternHunter, ErrorAnalyst, WebResearcher)
-3. `/ant:colonize` - 4 surveyors (provisions, nest, disciplines, pathogens)
-4. `/ant:oracle` - Research loop in tmux (not inline)
-5. `/ant:organize` - Archivist ant
-6. `/ant:plan` - Scouts and route-setter
+1. `/ant-build` - Builders, Watcher, Chaos, Archaeologist
+2. `/ant-swarm` - 4 scouts (Archaeologist, PatternHunter, ErrorAnalyst, WebResearcher)
+3. `/ant-colonize` - 4 surveyors (provisions, nest, disciplines, pathogens)
+4. `/ant-oracle` - Research loop in tmux (not inline)
+5. `/ant-organize` - Archivist ant
+6. `/ant-plan` - Scouts and route-setter
 
 **Total: 6 commands spawn agents**
 
@@ -90,11 +90,11 @@ surveyor:     🗺️🐜 (missing - needs adding)
 
 | Command | Where to Display | When |
 |---------|------------------|------|
-| `/ant:build` | Step 5.2 (after each wave) | During |
-| `/ant:swarm` | Step 6 (as scouts complete) | During |
-| `/ant:colonize` | Step 4 (as surveyors complete) | During |
-| `/ant:plan` | After each iteration | During |
-| `/ant:organize` | At completion | End |
+| `/ant-build` | Step 5.2 (after each wave) | During |
+| `/ant-swarm` | Step 6 (as scouts complete) | During |
+| `/ant-colonize` | Step 4 (as surveyors complete) | During |
+| `/ant-plan` | After each iteration | During |
+| `/ant-organize` | At completion | End |
 
 ### Phase 3: Update Existing Functions
 - Add `surveyor` emoji to caste mapping
@@ -266,13 +266,13 @@ Display: `🐜 No swarm data available`
 
 | Command | File | Line | Change |
 |---------|------|------|--------|
-| `/ant:build` | build.md | 531 | Replace `swarm-display-inline` with `swarm-display-text` |
-| `/ant:build` | build.md | 936 | Replace `swarm-display-inline` with `swarm-display-text` |
-| `/ant:swarm` | swarm.md | ~230 | Add `swarm-display-text` after scouts complete |
-| `/ant:colonize` | colonize.md | ~160 | Add `swarm-display-text` after surveyors complete |
-| `/ant:init` | init.md | 273 | Replace `swarm-display-inline` with `swarm-display-text` |
-| `/ant:plan` | plan.md | 457 | Replace `swarm-display-inline` with `swarm-display-text` |
-| `/ant:continue` | continue.md | 997 | Replace `swarm-display-inline` with `swarm-display-text` |
+| `/ant-build` | build.md | 531 | Replace `swarm-display-inline` with `swarm-display-text` |
+| `/ant-build` | build.md | 936 | Replace `swarm-display-inline` with `swarm-display-text` |
+| `/ant-swarm` | swarm.md | ~230 | Add `swarm-display-text` after scouts complete |
+| `/ant-colonize` | colonize.md | ~160 | Add `swarm-display-text` after surveyors complete |
+| `/ant-init` | init.md | 273 | Replace `swarm-display-inline` with `swarm-display-text` |
+| `/ant-plan` | plan.md | 457 | Replace `swarm-display-inline` with `swarm-display-text` |
+| `/ant-continue` | continue.md | 997 | Replace `swarm-display-inline` with `swarm-display-text` |
 
 ### Pattern: Keep Both Available
 
@@ -343,8 +343,8 @@ continue.md line 997
 
 | Command | Add After | Code to Add |
 |---------|-----------|-------------|
-| `/ant:swarm` | Step 6 (line ~220) | `bash .aether/aether-utils.sh swarm-display-text "$swarm_id"` |
-| `/ant:colonize` | Step 4 (line ~160) | `bash .aether/aether-utils.sh swarm-display-text "$colonize_id"` |
+| `/ant-swarm` | Step 6 (line ~220) | `bash .aether/aether-utils.sh swarm-display-text "$swarm_id"` |
+| `/ant-colonize` | Step 4 (line ~160) | `bash .aether/aether-utils.sh swarm-display-text "$colonize_id"` |
 
 **Step 4: Test**
 ```bash

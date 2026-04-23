@@ -1,7 +1,7 @@
 {
   "session_id": "session_1774650429_217110",
   "started_at": "2026-03-27T22:27:20Z",
-  "last_command": "/ant:continue",
+  "last_command": "/ant-continue",
   "last_command_at": "2026-03-29T02:47:24Z",
   "colony_goal": "Comprehensive audit of today's session work — verify QUEEN.md, pheromone system, wisdom pipeline, charter-write, and all colony lifecycle changes are functioning correctly",
   "current_phase": 7,

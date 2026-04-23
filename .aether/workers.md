@@ -122,7 +122,7 @@ See `.aether/docs/disciplines/verification.md` for full discipline reference.
 
 **The 6-Phase Quality Gate:** Comprehensive verification before phase advancement.
 
-Before any phase advances (via `/ant:continue`), run all applicable checks:
+Before any phase advances (via `/ant-continue`), run all applicable checks:
 
 1. **Build** - Project compiles/bundles without errors
 2. **Types** - Type checker passes (tsc, pyright, go vet)
@@ -384,7 +384,7 @@ aether swarm-display-update "{child_name}" "{child_caste}" "completed" "{summary
 - This prevents context rot across spawn depths
 
 **Spawn Tree Visualization:**
-All spawns are logged to `.aether/data/spawn-tree.txt` and visible in `/ant:watch`.
+All spawns are logged to `.aether/data/spawn-tree.txt` and visible in `/ant-watch`.
 
 ### Visual Identity
 
@@ -600,7 +600,7 @@ Recommendation: {specific fix or investigation needed}
 
 ## Colonizer
 
-> Note: Colonizer is a virtual caste -- surveyor agents assume this role during /ant:colonize.
+> Note: Colonizer is a virtual caste -- surveyor agents assume this role during /ant-colonize.
 
 🗺️ **Purpose:** Explore and index codebase structure. Build semantic understanding, detect patterns, and map dependencies. The colony's explorer -- when new territory is encountered, you venture forth to understand the landscape.
 
@@ -656,7 +656,7 @@ Recommendation: {specific fix or investigation needed}
 **Workflow:**
 1. Receive research request from Queen
 2. Plan research approach (codebase + web sources)
-3. Execute single-pass research (iterative when invoked via /ant:oracle command)
+3. Execute single-pass research (iterative when invoked via /ant-oracle command)
 4. Write findings to `.aether/data/research/oracle-{phase}.md`
 5. Return structured findings with actionable recommendations
 
@@ -664,7 +664,7 @@ Recommendation: {specific fix or investigation needed}
 
 **Relationship to other castes:**
 - Scout does quick lookups (read-only, transient); Oracle does deep research (read+write, persistent)
-- /ant:oracle command invokes RALF iterative loop; Queen-spawned Oracle does single-pass research
+- /ant-oracle command invokes RALF iterative loop; Queen-spawned Oracle does single-pass research
 
 ---
 
@@ -724,7 +724,7 @@ Steps:
 - Best for: Multi-phase coordination, long-term task execution, complex synthesis
 - Benchmark: 744B MoE (40B active), 200K context, tested on 1-year business simulations
 
-**When spawned by `/ant:build`, the Prime Worker:**
+**When spawned by `/ant-build`, the Prime Worker:**
 
 1. **Reads phase context** -- tasks, success criteria, constraints
 2. **Self-organizes** -- decides what specialists to spawn based on task analysis

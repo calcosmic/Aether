@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/flag.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:flag
+name: ant-flag
 description: "🚩 Create a project-specific flag (blocker, issue, or note)"
 ---
 
@@ -23,13 +23,13 @@ Derive severity from type:
 - note → `low`
 
 Examples:
-- `/ant:flag "Build fails on auth module"` → issue type
-- `/ant:flag --type blocker "API rate limit hit"` → blocker type
-- `/ant:flag -t note -p 3 "Consider refactoring later"` → note for phase 3
+- `/ant-flag "Build fails on auth module"` → issue type
+- `/ant-flag --type blocker "API rate limit hit"` → blocker type
+- `/ant-flag -t note -p 3 "Consider refactoring later"` → note for phase 3
 
 If `$ARGUMENTS` is empty:
 ```
-Usage: /ant:flag "<description>" [--type blocker|issue|note] [--phase N]
+Usage: /ant-flag "<description>" [--type blocker|issue|note] [--phase N]
 
 Types:
   blocker  Critical issue that blocks phase advancement
@@ -37,9 +37,9 @@ Types:
   note     Informational for future reference
 
 Examples:
-  /ant:flag "Build fails on auth"
-  /ant:flag --type blocker "Tests hanging"
-  /ant:flag -t note "Consider refactoring"
+  /ant-flag "Build fails on auth"
+  /ant-flag --type blocker "Tests hanging"
+  /ant-flag -t note "Consider refactoring"
 ```
 Stop here.
 
@@ -48,7 +48,7 @@ Stop here.
 Read `.aether/data/COLONY_STATE.json`.
 If file missing or `goal: null`:
 ```
-No colony initialized. Run /ant:init first.
+No colony initialized. Run /ant-init first.
 ```
 Stop here.
 
@@ -107,7 +107,7 @@ Then output based on flag type:
    Phase: {phase or "all"}
 
 ⚠️  This will BLOCK phase advancement until resolved.
-   Use /ant:flags to view all flags.
+   Use /ant-flags to view all flags.
 ```
 
 **For issue:**
@@ -119,7 +119,7 @@ Then output based on flag type:
    ID: {flag_id}
    Phase: {phase or "all"}
 
-   Use /ant:flags to view all flags.
+   Use /ant-flags to view all flags.
 ```
 
 **For note:**
@@ -131,7 +131,7 @@ Then output based on flag type:
    ID: {flag_id}
    Phase: {phase or "all"}
 
-   Use /ant:flags to view all flags.
+   Use /ant-flags to view all flags.
 ```
 
 

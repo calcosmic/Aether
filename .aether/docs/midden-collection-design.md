@@ -477,7 +477,7 @@ FAILURE PATTERN DETECTION (TWO TIERS)
 
   TIER 2: Cross-PR (new)
   ======================
-  midden-cross-pr-analysis runs periodically (on merge, on /ant:status)
+  midden-cross-pr-analysis runs periodically (on merge, on /ant-status)
   IF cross_pr_score >= 0.5 AND unique_prs >= 2:
     --> Emit REDIRECT to HUB pheromones (or QUEEN.md wisdom)
     --> Strength: proportional to score (0.5-1.0)
@@ -486,8 +486,8 @@ FAILURE PATTERN DETECTION (TWO TIERS)
 
   TRIGGER POINTS:
   - After every midden-collect (post-merge)
-  - On /ant:status (periodic check)
-  - On /ant:continue (review phase)
+  - On /ant-status (periodic check)
+  - On /ant-continue (review phase)
 ```
 
 ### 6.5 Analysis Output Schema
@@ -645,15 +645,15 @@ All three are additions to `aether midden-*` commands and dispatched from
 | Trigger | Command | Notes |
 |---------|---------|-------|
 | Post-merge hook | `midden-collect` | Requires worktree path; must run before worktree cleanup |
-| `/ant:continue` (on main) | `midden-collect` | Fallback if no post-merge hook; reads from last merged branch ref |
-| `/ant:status` | `midden-cross-pr-analysis` | Periodic health check |
+| `/ant-continue` (on main) | `midden-collect` | Fallback if no post-merge hook; reads from last merged branch ref |
+| `/ant-status` | `midden-cross-pr-analysis` | Periodic health check |
 
 ### 9.2 When Revert Handling Runs
 
 | Trigger | Command | Notes |
 |---------|---------|-------|
 | Post-merge hook detects revert commit message | `midden-handle-revert` | `git log --grep="Revert"` |
-| `/ant:status` | Checks for unhandled reverts | Scans `collected-merges.json` for merges without revert status that have corresponding revert commits |
+| `/ant-status` | Checks for unhandled reverts | Scans `collected-merges.json` for merges without revert status that have corresponding revert commits |
 
 ### 9.3 Data Flow Integration with State Contract (Task 1.1)
 
@@ -699,7 +699,7 @@ MIDDEN DATA FLOW (aligned with state-contract-design.md Section 4.3)
 
 | Data | Retention | Pruning Trigger |
 |------|-----------|-----------------|
-| Collected midden entries | Indefinite (or per colony lifecycle) | `/ant:seal` archives all midden |
+| Collected midden entries | Indefinite (or per colony lifecycle) | `/ant-seal` archives all midden |
 | `collected-merges.json` entries | 90 days after merge | `midden-prune --stale-merges` |
 | Reverted entry tags | 30 days after revert | `midden-prune --reverted --age 30` |
 | Cross-PR analysis cache | Not persisted | Computed on demand |

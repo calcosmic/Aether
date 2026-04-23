@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/dream.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:dream
+name: ant-dream
 description: "💭 The Dreamer — observes, imagines, and writes wisdom about the codebase"
 ---
 
@@ -138,7 +138,7 @@ No jargon. Simple analogy. What does this actually mean for the project?}
 {Simple explanation of what's wrong and why it matters}
 
 💊 **suggested pheromone:**
-`/ant:redirect "{the exact pheromone content}"`
+`/ant-redirect "{the exact pheromone content}"`
 
 🧒 **what this pheromone does:**
 {Explain in simple terms what running this command would tell the colony workers to do}
@@ -154,7 +154,7 @@ No jargon. Simple analogy. What does this actually mean for the project?}
 {Simple explanation}
 
 💊 **suggested pheromone:**
-`/ant:focus "{the exact pheromone content}"`
+`/ant-focus "{the exact pheromone content}"`
 
 🧒 **what this pheromone does:**
 {Simple explanation of what this would guide the colony toward}
@@ -218,7 +218,7 @@ Output to the terminal:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 View dreams:  cat .aether/dreams/{filename}.md
-Colony status: /ant:status
+Colony status: /ant-status
 ```
 
 ### Step 6: Log Activity

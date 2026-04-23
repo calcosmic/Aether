@@ -4,7 +4,7 @@ Pheromones are how you communicate with the colony. Instead of micromanaging ind
 
 ## How Pheromones Work
 
-- **You emit** signals using `/ant:focus`, `/ant:redirect`, `/ant:feedback`
+- **You emit** signals using `/ant-focus`, `/ant-redirect`, `/ant-feedback`
 - **The colony also emits** signals automatically after builds (FEEDBACK after every phase, REDIRECT when error patterns recur)
 - **Signals expire** based on their `expires_at` field -- default is `"phase_end"` (lasts until phase completes)
 - **Optional TTL** -- use `--ttl` flag for wall-clock expiration (e.g., `--ttl 2h` for 2 hours)
@@ -12,7 +12,7 @@ Pheromones are how you communicate with the colony. Instead of micromanaging ind
 - **Expired signals** are filtered on read -- no cleanup process needed
 - **Compact priming path** (`pheromone-prime --compact`) injects only top signals by priority/strength for low token usage
 
-Run `/ant:status` at any time to see all active pheromones.
+Run `/ant-status` at any time to see all active pheromones.
 
 ---
 
@@ -31,7 +31,7 @@ This injection model means pheromones influence worker behavior through prompt c
 
 ## FOCUS -- Guide Attention
 
-**Command:** `/ant:focus "<area>"`
+**Command:** `/ant-focus "<area>"`
 **Priority:** normal | **Default expiration:** end of phase
 
 **What it does:** Tells the colony "pay extra attention here." FOCUS signals are injected into worker prompts via colony-prime, weighting the indicated area higher in task execution.
@@ -39,26 +39,26 @@ This injection model means pheromones influence worker behavior through prompt c
 ### When to use FOCUS
 
 **Scenario 1: Steering the next build phase**
-You're about to run `/ant:build 3` and Phase 3 has tasks touching both the API layer and the database layer. You know the database schema is fragile:
+You're about to run `/ant-build 3` and Phase 3 has tasks touching both the API layer and the database layer. You know the database schema is fragile:
 
 ```
-/ant:focus "database schema -- handle migrations carefully"
-/ant:build 3
+/ant-focus "database schema -- handle migrations carefully"
+/ant-build 3
 ```
 
 **Scenario 2: Time-limited focus**
 You want attention on auth for the next 2 hours, then let it fade:
 
 ```
-/ant:focus "auth middleware correctness" --ttl 2h
+/ant-focus "auth middleware correctness" --ttl 2h
 ```
 
 **Scenario 3: Directing colonization**
 You're colonizing a new project and want the colonizer to pay special attention to testing:
 
 ```
-/ant:focus "test framework and coverage gaps"
-/ant:colonize
+/ant-focus "test framework and coverage gaps"
+/ant-colonize
 ```
 
 ### When NOT to use FOCUS
@@ -71,7 +71,7 @@ You're colonizing a new project and want the colonizer to pay special attention 
 
 ## REDIRECT -- Warn Away
 
-**Command:** `/ant:redirect "<pattern to avoid>"`
+**Command:** `/ant-redirect "<pattern to avoid>"`
 **Priority:** high | **Default expiration:** end of phase
 
 **What it does:** Acts as a hard constraint. Workers with high priority signal awareness will actively avoid the specified pattern. This is the strongest signal type.
@@ -82,22 +82,22 @@ You're colonizing a new project and want the colonizer to pay special attention 
 Your project uses Next.js Edge Runtime, and you know `jsonwebtoken` doesn't work there:
 
 ```
-/ant:redirect "Don't use jsonwebtoken -- use jose library instead (Edge Runtime compatible)"
-/ant:build 2
+/ant-redirect "Don't use jsonwebtoken -- use jose library instead (Edge Runtime compatible)"
+/ant-build 2
 ```
 
 **Scenario 2: Long-lived constraint**
 You want to enforce a constraint across multiple phases (24 hours):
 
 ```
-/ant:redirect "No global mutable state -- use request-scoped context" --ttl 1d
+/ant-redirect "No global mutable state -- use request-scoped context" --ttl 1d
 ```
 
 **Scenario 3: Steering away from a previous failure**
 Phase 1 tried to use synchronous file reads and caused performance issues:
 
 ```
-/ant:redirect "No synchronous file I/O -- use async fs/promises"
+/ant-redirect "No synchronous file I/O -- use async fs/promises"
 ```
 
 ### When NOT to use REDIRECT
@@ -110,7 +110,7 @@ Phase 1 tried to use synchronous file reads and caused performance issues:
 
 ## FEEDBACK -- Adjust Course
 
-**Command:** `/ant:feedback "<observation>"`
+**Command:** `/ant-feedback "<observation>"`
 **Priority:** low | **Default expiration:** end of phase
 
 **What it does:** Provides gentle course correction. Unlike FOCUS (attention) or REDIRECT (avoidance), FEEDBACK adjusts the colony's approach based on your observations.
@@ -121,21 +121,21 @@ Phase 1 tried to use synchronous file reads and caused performance issues:
 After building Phase 2, you notice the code is over-engineered:
 
 ```
-/ant:feedback "Code is too abstract -- prefer simple, direct implementations over clever abstractions"
+/ant-feedback "Code is too abstract -- prefer simple, direct implementations over clever abstractions"
 ```
 
 **Scenario 2: Positive reinforcement**
 Phase 3 produced clean, well-tested code. You want more of the same:
 
 ```
-/ant:feedback "Great test coverage in Phase 3 -- maintain this level of testing"
+/ant-feedback "Great test coverage in Phase 3 -- maintain this level of testing"
 ```
 
 **Scenario 3: Quality emphasis shift**
 You're noticing the code lacks error handling:
 
 ```
-/ant:feedback "Need more error handling -- happy path works but edge cases are unhandled"
+/ant-feedback "Need more error handling -- happy path works but edge cases are unhandled"
 ```
 
 ### When NOT to use FEEDBACK
@@ -178,10 +178,10 @@ Pheromones combine. colony-prime injects all active signals into worker prompts,
 By default, signals expire at phase end (`expires_at: "phase_end"`). Use `--ttl` flag for wall-clock expiration:
 
 ```
-/ant:focus "database schema"              # expires at phase end
-/ant:focus "API layer" --ttl 2h           # expires in 2 hours
-/ant:redirect "No JWT" --ttl 1d           # expires in 1 day
-/ant:feedback "keep tests simple" --ttl 30m  # expires in 30 minutes
+/ant-focus "database schema"              # expires at phase end
+/ant-focus "API layer" --ttl 2h           # expires in 2 hours
+/ant-redirect "No JWT" --ttl 1d           # expires in 1 day
+/ant-feedback "keep tests simple" --ttl 30m  # expires in 30 minutes
 ```
 
 **Duration format:** `<number><unit>` where unit is:
@@ -204,7 +204,7 @@ This ensures signals don't expire while you're away from the project.
 
 ## Viewing Active Pheromones
 
-**Command:** `/ant:pheromones [filter]`
+**Command:** `/ant-pheromones [filter]`
 
 Displays all active signals in a formatted table with:
 - Signal type (FOCUS/REDIRECT/FEEDBACK)
@@ -213,11 +213,11 @@ Displays all active signals in a formatted table with:
 - Remaining time before expiration
 
 **Filters:**
-- `/ant:pheromones` — Show all active signals
-- `/ant:pheromones focus` — Show only FOCUS signals
-- `/ant:pheromones redirect` — Show only REDIRECT signals
-- `/ant:pheromones feedback` — Show only FEEDBACK signals
-- `/ant:pheromones clear` — Clear expired/inactive signals
+- `/ant-pheromones` — Show all active signals
+- `/ant-pheromones focus` — Show only FOCUS signals
+- `/ant-pheromones redirect` — Show only REDIRECT signals
+- `/ant-pheromones feedback` — Show only FEEDBACK signals
+- `/ant-pheromones clear` — Clear expired/inactive signals
 
 ---
 
@@ -270,9 +270,9 @@ Signals below 10% strength are considered inactive but remain in history.
 
 | Signal | Command | Priority | Default Expiration | Use for |
 |--------|---------|----------|-------------------|---------|
-| FOCUS | `/ant:focus "<area>"` | normal | phase end | "Pay attention to this" |
-| REDIRECT | `/ant:redirect "<avoid>"` | high | phase end | "Don't do this" |
-| FEEDBACK | `/ant:feedback "<note>"` | low | phase end | "Adjust based on this" |
+| FOCUS | `/ant-focus "<area>"` | normal | phase end | "Pay attention to this" |
+| REDIRECT | `/ant-redirect "<avoid>"` | high | phase end | "Don't do this" |
+| FEEDBACK | `/ant-feedback "<note>"` | low | phase end | "Adjust based on this" |
 
 **Rule of thumb:**
 - Before a build: FOCUS + REDIRECT to steer
@@ -281,5 +281,5 @@ Signals below 10% strength are considered inactive but remain in history.
 - For gentle nudges: FEEDBACK (low priority)
 - For attention: FOCUS (normal priority)
 - For short-lived signals: use `--ttl` flag
-- To see current signals: `/ant:pheromones`
-- To clear expired: `/ant:pheromones clear`
+- To see current signals: `/ant-pheromones`
+- To clear expired: `/ant-pheromones clear`

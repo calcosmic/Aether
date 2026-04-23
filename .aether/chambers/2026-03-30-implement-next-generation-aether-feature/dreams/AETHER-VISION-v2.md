@@ -46,7 +46,7 @@ Aether is an ant colony — and ant colonies are the most successful civilizatio
 
 **The wisdom flow:**
 1. You work in a repo. The colony learns things — instincts, patterns, mistakes.
-2. When you seal the colony (`/ant:seal`), the Queen reviews what was learned.
+2. When you seal the colony (`/ant-seal`), the Queen reviews what was learned.
 3. High-confidence instincts get **abstracted** — repo-specific details stripped away — and promoted to the hive.
 4. Next time you start a colony in ANY repo, the Queen brings relevant hive wisdom into the new workers' context.
 
@@ -70,7 +70,7 @@ It's not a database. It's an ecosystem.
 
 ### The Problem Today
 
-Every colony starts from zero. You've sealed 24 colonies across 13 repos, but each new `/ant:init` is a blank slate. The Queen has amnesia.
+Every colony starts from zero. You've sealed 24 colonies across 13 repos, but each new `/ant-init` is a blank slate. The Queen has amnesia.
 
 ### The Solution: Stigmergic Intelligence
 
@@ -86,7 +86,7 @@ Aether works the same way:
 - The environment itself becomes intelligent
 
 **Domain Scoping:**
-- Repos get domain tags (auto-inferred during `/ant:colonize`, or user-specified)
+- Repos get domain tags (auto-inferred during `/ant-colonize`, or user-specified)
 - Hive wisdom filters by domain relevance: WordPress wisdom doesn't leak into your Electron app
 - Universal wisdom (cross-cutting patterns) has no domain tag — applies everywhere
 - Domains form a trail hierarchy: `web.wordpress.ecommerce`, `desktop.electron`, `api.node`
@@ -294,10 +294,10 @@ A fifth signal type for user-level preferences:
 The Queen doesn't ask you to fill this out. She builds it over time through the same instinct pipeline that powers everything else:
 
 **Observation Sources:**
-1. **Decision tracking** — Every `/ant:council` choice, every option selected during builds. "User chose Express over Fastify" (3 times across 3 API projects → preference captured)
+1. **Decision tracking** — Every `/ant-council` choice, every option selected during builds. "User chose Express over Fastify" (3 times across 3 API projects → preference captured)
 2. **Correction detection** — When you say "don't show me diffs" or "stop summarizing", the correction is logged as a PREFERENCE observation with `domain: communication`
 3. **Domain inference** — Registry tracks which project types you touch. 5 WordPress repos and 2 Electron repos → expertise map auto-builds from colony history
-4. **Workflow pattern extraction** — Colony chronicle data reveals patterns: average phase count, build-to-seal time, how often you use `/ant:swarm` vs `/ant:build`, whether you plan first or dive in
+4. **Workflow pattern extraction** — Colony chronicle data reveals patterns: average phase count, build-to-seal time, how often you use `/ant-swarm` vs `/ant-build`, whether you plan first or dive in
 
 **Promotion Pipeline:**
 - Observations accumulate in `~/.aether/hive/user-observations.json` (same content-hash dedup as learning-observations)
@@ -335,7 +335,7 @@ Aether should feel like peering into a living ant colony. Not a dashboard — a 
 - Phase progress bar at bottom of build output
 - Consistent format across all commands
 
-**Enhanced /ant:status:**
+**Enhanced /ant-status:**
 ```
 ╔══════════════════════════════════════════════════════╗
 ║  🐜 AETHER COLONY — my-project                       ║
@@ -405,7 +405,7 @@ The chronicle is the hive's historical record — every sealed colony, every out
 }
 ```
 
-The `learnings_summary` is written by the Queen during `/ant:seal` — she synthesizes the colony's instincts, decisions, and midden entries into a one-line takeaway. This is the same synthesis she does today when reviewing learnings, just persisted to the chronicle.
+The `learnings_summary` is written by the Queen during `/ant-seal` — she synthesizes the colony's instincts, decisions, and midden entries into a one-line takeaway. This is the same synthesis she does today when reviewing learnings, just persisted to the chronicle.
 
 ### What The Queen Does With It
 
@@ -441,8 +441,8 @@ A periodic health check that runs between builds. Not a build — a pulse.
 
 **When it runs:**
 - Automatically at colony init (health check before starting work)
-- Optionally via `/ant:heartbeat` for manual check
-- During `/ant:continue` (lightweight check between phases)
+- Optionally via `/ant-heartbeat` for manual check
+- During `/ant-continue` (lightweight check between phases)
 - NOT during builds (don't interrupt workers)
 
 **Output:**
@@ -476,7 +476,7 @@ Tomorrow: the command layer is thin — it translates tool-specific invocation i
 
 The pattern:
 ```
-User types /ant:build 1
+User types /ant-build 1
 → Tool-specific command file parses args
 → Calls aether-utils.sh subcommands
 → aether-utils.sh does the work (tool-agnostic)
@@ -533,7 +533,7 @@ Security must be in place BEFORE cross-repo features go live. A poisoned signal 
 - Budget adapts: tighter context window = higher quality bar for admission
 
 **Layer 5: Memory Governance**
-- `/ant:memory-audit` — Review what's in the hive, what's been injected, provenance
+- `/ant-memory-audit` — Review what's in the hive, what's been injected, provenance
 - Force-forget: user can explicitly remove any hive entry
 - Auto-decay: unused wisdom fades over time (exponential decay with access boost)
 - Entry caps per section (max 100 hive entries, max 20 QUEEN.md entries per category)
@@ -572,7 +572,7 @@ The environment IS the memory. Pheromone trails are chemical traces left by work
 Other systems use metaphors as marketing ("your AI copilot", "your AI teammate"). In Aether, the ant colony metaphor IS the architecture: pheromones ARE how signals flow, the Queen IS the orchestrator, the midden IS where failures go, castes ARE how labor specialization works. You can explain the system to a child using the metaphor, and you'll have described the actual code.
 
 **5. Human-in-the-loop by design.**
-Build and advance are deliberately separate (`/ant:build` then `/ant:continue`). The user sees results and decides. This isn't a limitation — it's designed for a non-technical founder who wants control over direction without needing to understand code. Other systems either run autonomously (risky) or require technical oversight (excluding non-developers).
+Build and advance are deliberately separate (`/ant-build` then `/ant-continue`). The user sees results and decides. This isn't a limitation — it's designed for a non-technical founder who wants control over direction without needing to understand code. Other systems either run autonomously (risky) or require technical oversight (excluding non-developers).
 
 ### The Ant Colony Advantage
 
@@ -641,7 +641,7 @@ $ aether init "Build the API"
    ├── Your projects average 3.2 phases
    └── Suggested plan structure based on past API colonies
 
-   Shall I generate a plan? (/ant:plan)
+   Shall I generate a plan? (/ant-plan)
 ```
 
 ### Day 365 (Twentieth Sealed Colony)
@@ -689,7 +689,7 @@ The hive self-manages. Entries that nobody accesses decay below threshold and ge
 - JIT signal injection (REDIRECTs upfront, FOCUS/FEEDBACK by domain match)
 - Temporal supersession (invalidate, don't delete)
 - Heartbeat system for colony health
-- **Done when:** Signals have trail namespaces. Decay is exponential. Duplicate signals merge instead of accumulating. `/ant:heartbeat` runs and reports health.
+- **Done when:** Signals have trail namespaces. Decay is exponential. Duplicate signals merge instead of accumulating. `/ant-heartbeat` runs and reports health.
 
 ### Phase 3: The Hive Awakens
 - Hive wisdom data model and promotion flow
@@ -708,11 +708,11 @@ The hive self-manages. Entries that nobody accesses decay below threshold and ge
 
 ### Phase 5: The Visual World
 - In-conversation display implementation (already fully spec'd)
-- Enhanced /ant:status with hive overview panel
+- Enhanced /ant-status with hive overview panel
 - Worker activity animations
 - Token/cost tracking per build
 - Color theme support
-- **Done when:** Builds show real-time worker status. `/ant:status` shows hive statistics. Users can see what they're spending per colony.
+- **Done when:** Builds show real-time worker status. `/ant-status` shows hive statistics. Users can see what they're spending per colony.
 
 ### Future: Tool-Agnostic Layer
 - MCP server exposing hive intelligence to Cursor, Cline, OpenCode
@@ -765,7 +765,7 @@ When a colony repeatedly does something that works, it should be able to create 
 5. Approved commands become part of their personal toolkit
 
 **Example:**
-The instinct "When deploying WordPress, always flush permalinks after plugin activation" could become `/ant:wp-deploy-check` — a custom command that runs the specific verification steps the user always needs.
+The instinct "When deploying WordPress, always flush permalinks after plugin activation" could become `/ant-wp-deploy-check` — a custom command that runs the specific verification steps the user always needs.
 
 **Guardrails:**
 - Generated commands are drafts — never auto-activated

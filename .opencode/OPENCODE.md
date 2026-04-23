@@ -41,7 +41,7 @@ aether publish
 
 ## Critical Architecture
 
-**`.aether/` + `.opencode/` are the source of truth.** Source-checkout publishes go through `aether publish` in this repo, which builds the binary, refreshes `~/.aether/system/`, and verifies version agreement. `aether install --package-dir "$PWD"` still works for backward compatibility. Downstream repos then pull those companion files with `aether update` or `/ant:update`. For isolated source-development on the same machine, use the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
+**`.aether/` + `.opencode/` are the source of truth.** Source-checkout publishes go through `aether publish` in this repo, which builds the binary, refreshes `~/.aether/system/`, and verifies version agreement. `aether install --package-dir "$PWD"` still works for backward compatibility. Downstream repos then pull those companion files with `aether update` or `/ant-update`. For isolated source-development on the same machine, use the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
 
 ```
 Aether Repo (this repo)
@@ -62,7 +62,7 @@ Aether Repo (this repo)
 ├── commands/opencode/           ← OpenCode slash commands
 └── agents/                      ← OpenCode agents
    │
-   └── aether update or /ant:update
+   └── aether update or /ant-update
       ▼
       any-repo/
       ├── .aether/
@@ -123,7 +123,7 @@ Results return inline.
 
 ## Argument Parsing (Fixed 2026-02-15)
 
-**Issue:** OpenCode doesn't pass `$ARGUMENTS` the same way as Claude Code. When users ran `/ant:init Build a REST API`, only "Build" was captured.
+**Issue:** OpenCode doesn't pass `$ARGUMENTS` the same way as Claude Code. When users ran `/ant-init Build a REST API`, only "Build" was captured.
 
 **Fix:** All commands now use `normalize-args` helper that checks:
 1. `$ARGUMENTS` (Claude Code style)
@@ -140,8 +140,8 @@ Run: `normalized_args=$(aether normalize-args "$@")`
 **For Users:**
 If argument parsing issues persist, wrap multi-word arguments in quotes:
 ```
-/ant:init "Build a REST API"   # Always works
-/ant:init Build a REST API      # Now works with normalize-args
+/ant-init "Build a REST API"   # Always works
+/ant-init Build a REST API      # Now works with normalize-args
 ```
 
 ---
@@ -152,11 +152,11 @@ Slash commands live in `.opencode/commands/ant/`:
 
 | Command | Purpose |
 |---------|---------|
-| `/ant:build` | Start a build phase |
-| `/ant:plan` | Create a phase plan |
-| `/ant:watch` | View colony status |
-| `/ant:phase` | Phase management |
-| `/ant:update` | Update Aether system |
+| `/ant-build` | Start a build phase |
+| `/ant-plan` | Create a phase plan |
+| `/ant-watch` | View colony status |
+| `/ant-phase` | Phase management |
+| `/ant-update` | Update Aether system |
 
 ---
 
@@ -167,7 +167,7 @@ Slash commands live in `.opencode/commands/ant/`:
 aether publish
 
 # In any repo, pull the refreshed companion files
-/ant:update
+/ant-update
 aether update --force
 
 # Verify the hub publish actually contains OpenCode surfaces

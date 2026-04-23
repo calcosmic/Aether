@@ -33,23 +33,23 @@ They work in waves. A builder writes code, a watcher verifies it, a probe writes
 Aether is a Go binary that installs alongside Claude Code. It adds 45 slash commands to your Claude session. The workflow looks like:
 
 ```
-/ant:init "Build a REST API with auth and task tracking"
-/ant:plan
-/ant:focus "payment flow security"
-/ant:redirect "No raw SQL -- parameterized queries only"
-/ant:build 1
-/ant:continue
-/ant:build 2
+/ant-init "Build a REST API with auth and task tracking"
+/ant-plan
+/ant-focus "payment flow security"
+/ant-redirect "No raw SQL -- parameterized queries only"
+/ant-build 1
+/ant-continue
+/ant-build 2
 ...
-/ant:seal
+/ant-seal
 ```
 
-Each `/ant:build` spawns a wave of parallel workers. Each `/ant:continue` verifies the output, extracts learnings, and advances to the next phase.
+Each `/ant-build` spawns a wave of parallel workers. Each `/ant-continue` verifies the output, extracts learnings, and advances to the next phase.
 
 Or just use autopilot:
 
 ```
-/ant:run
+/ant-run
 ```
 
 It chains the build-verify-advance loop automatically and pauses when something needs your attention.
@@ -79,13 +79,13 @@ Aether solves this with a multi-stage memory pipeline:
 3. **QUEEN.md wisdom** (instincts scoring 0.80+ get promoted)
 4. **Hive Brain** (the best insights cross to other projects)
 
-When you run `/ant:resume` after a session break, the colony reconstructs its full context from state files, active signals, and accumulated instincts. You don't re-explain anything.
+When you run `/ant-resume` after a session break, the colony reconstructs its full context from state files, active signals, and accumulated instincts. You don't re-explain anything.
 
 ## Context for Claude Code users specifically
 
 - **Not a replacement for Claude Code** -- it builds on top of it. Claude Code is the runtime; Aether is the orchestration layer.
 - **All colony state is local** -- nothing leaves your machine. State lives in `.aether/` in your repo and `~/.aether/` for cross-project wisdom.
-- **Works with your existing projects** -- run `/ant:colonize` on an existing codebase and it maps the structure before building.
+- **Works with your existing projects** -- run `/ant-colonize` on an existing codebase and it maps the structure before building.
 - **OpenCode support too** -- if you use OpenCode, Aether works there as well.
 
 ## Honest take

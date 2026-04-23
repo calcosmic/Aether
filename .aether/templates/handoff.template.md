@@ -36,5 +36,5 @@ The learnings have been carried forward to QUEEN.md — the next colony won't st
 
 When you are ready to begin again:
 
-To start anew: /ant:lay-eggs "<new goal>"
-To revisit what came before: /ant:tunnels
+To start anew: /ant-lay-eggs "<new goal>"
+To revisit what came before: /ant-tunnels

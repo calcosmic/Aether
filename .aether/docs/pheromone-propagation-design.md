@@ -58,7 +58,7 @@ Each signal in `pheromones.json` has the following structure (from
   "expires_at": "2026-03-30T18:00:00Z | phase_end",
   "active": true,
   "strength": 0.8,
-  "reason": "User emitted via /ant:focus",
+  "reason": "User emitted via /ant-focus",
   "content": { "text": "security" },
   "content_hash": "sha256:abc123...",
   "reinforcement_count": 0
@@ -456,7 +456,7 @@ FOCUS signal on main, log a warning in pheromone-merge-log.json:
   "main_signal": {"id": "...", "content": "use PostgreSQL"},
   "branch_signal": {"id": "...", "content": "use SQLite"},
   "resolution": "both_signals_retained",
-  "recommendation": "User should review and resolve via /ant:redirect or /ant:focus"
+  "recommendation": "User should review and resolve via /ant-redirect or /ant-focus"
 }
 ```
 
@@ -626,10 +626,10 @@ File: `.aether/data/pheromone-merge-log.json` (gitignored, appended on main)
 
 | Command | Integration Point | Behavior |
 |---------|-------------------|----------|
-| `/ant:build` | Before spawning workers | If on a non-main branch without snapshot, run `pheromone-snapshot-inject` automatically |
-| `/ant:continue` | Step 4 (post-verify) | Promote eligible branch signals to hub QUEEN.md (existing behavior) |
-| `/ant:seal` | Step 3.7 | Export branch pheromones for merge-back if PR workflow is active |
-| `/ant:run` | After each phase merge | Run `pheromone-merge-back` on main after merge |
+| `/ant-build` | Before spawning workers | If on a non-main branch without snapshot, run `pheromone-snapshot-inject` automatically |
+| `/ant-continue` | Step 4 (post-verify) | Promote eligible branch signals to hub QUEEN.md (existing behavior) |
+| `/ant-seal` | Step 3.7 | Export branch pheromones for merge-back if PR workflow is active |
+| `/ant-run` | After each phase merge | Run `pheromone-merge-back` on main after merge |
 
 ### 8.3 File Locking
 

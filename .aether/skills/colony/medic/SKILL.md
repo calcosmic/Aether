@@ -156,7 +156,7 @@ Legal transitions (from `pkg/colony/colony.go:490`):
 ### Remedies
 
 - **Phase/goal mismatch**: Sync from COLONY_STATE.json
-- **Stale session**: User should run `/ant:resume` to refresh
+- **Stale session**: User should run `/ant-resume` to refresh
 
 ## Data Files Healthy State
 

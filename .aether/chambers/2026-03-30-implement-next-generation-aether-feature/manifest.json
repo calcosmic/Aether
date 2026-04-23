@@ -1,6 +1,6 @@
 {
   "entombed_at": "2026-03-30T04:37:25Z",
-  "goal": "Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant:quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge",
+  "goal": "Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant-quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge",
   "phases_completed": 6,
   "total_phases": 6,
   "milestone": "Crowned Anthill",

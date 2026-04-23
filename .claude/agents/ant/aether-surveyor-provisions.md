@@ -1,6 +1,6 @@
 ---
 name: aether-surveyor-provisions
-description: "Use this agent to map technology stack, dependencies, and external integrations. Writes PROVISIONS.md and TRAILS.md to .aether/data/survey/. Spawned by /ant:colonize to inventory what the project relies on."
+description: "Use this agent to map technology stack, dependencies, and external integrations. Writes PROVISIONS.md and TRAILS.md to .aether/data/survey/. Spawned by /ant-colonize to inventory what the project relies on."
 tools: Read, Grep, Glob, Bash, Write
 color: cyan
 model: sonnet

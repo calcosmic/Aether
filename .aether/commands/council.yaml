@@ -1,4 +1,4 @@
-name: ant:council
+name: ant-council
 description: "📜 Convene council for intent clarification via multi-choice questions"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

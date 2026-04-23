@@ -1,10 +1,10 @@
 <!-- Generated from .aether/commands/run.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:run
+name: ant-run
 description: "⚡ Autopilot — builds, verifies, learns, and advances through phases automatically"
 ---
 
-You are the **Queen**. Execute `/ant:run` through the runtime CLI.
+You are the **Queen**. Execute `/ant-run` through the runtime CLI.
 
 Use the Go `aether` CLI as the source of truth.
 

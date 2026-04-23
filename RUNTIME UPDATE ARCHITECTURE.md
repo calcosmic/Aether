@@ -212,7 +212,7 @@ aether update --dry-run                 # Preview what would change
 aether setup                            # Copy from hub, create directories
 
 # Or use the slash command:
-/ant:update                             # Same as aether update
+/ant-update                             # Same as aether update
 
 # Binary management:
 aether install --download-binary        # Install + fetch latest binary

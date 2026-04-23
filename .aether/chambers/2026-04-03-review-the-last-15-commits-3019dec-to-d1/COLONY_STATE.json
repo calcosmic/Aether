@@ -148,7 +148,7 @@
       {
         "id": 5,
         "name": "Consolidation Pipeline Integration",
-        "description": "Wire the stack into Aether lifecycle — lightweight consolidation at /ant:continue, full consolidation at /ant:seal, plus end-to-end integration test",
+        "description": "Wire the stack into Aether lifecycle — lightweight consolidation at /ant-continue, full consolidation at /ant-seal, plus end-to-end integration test",
         "tasks": [
           {
             "id": "5.1",

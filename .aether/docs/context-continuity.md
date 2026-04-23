@@ -46,7 +46,7 @@ Keep colony context stable across sessions and long conversations without high t
    - `build-context.md` now calls `colony-prime --compact`.
    - Worker prompt context now includes capsule + top signals via `prompt_section`.
 2. Planning flow:
-   - `/ant:plan` (Claude/OpenCode) now loads `context-capsule --compact --json`.
+   - `/ant-plan` (Claude/OpenCode) now loads `context-capsule --compact --json`.
    - Scout + Route-Setter prompts include `context_capsule_prompt`.
 3. Continue flow:
    - `continue-advance.md` now records recurring pattern resolution candidates through `memory-capture "resolution"`.
@@ -60,10 +60,10 @@ Keep colony context stable across sessions and long conversations without high t
 ### Phase 4: Session-Wide Coverage (planned, not yet implemented)
 
 1. Inject `context-capsule` into remaining long-running orchestration commands:
-   - `/ant:continue`,
-   - `/ant:resume`,
-   - `/ant:swarm`,
-   - `/ant:oracle`.
+   - `/ant-continue`,
+   - `/ant-resume`,
+   - `/ant-swarm`,
+   - `/ant-oracle`.
 2. Add per-command context budget checks and fallback degradation order.
 
 ## Current Runtime Surfaces

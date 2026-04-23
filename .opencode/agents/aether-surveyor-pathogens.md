@@ -1,5 +1,5 @@
 ---
-description: "Use this agent to identify technical debt, bugs, security concerns, and fragile areas in the codebase. Writes PATHOGENS.md to .aether/data/survey/. Spawned by /ant:colonize to detect what needs fixing before colony work begins."
+description: "Use this agent to identify technical debt, bugs, security concerns, and fragile areas in the codebase. Writes PATHOGENS.md to .aether/data/survey/. Spawned by /ant-colonize to detect what needs fixing before colony work begins."
 mode: subagent
 model: anthropic/claude-sonnet-4-20250514
 tools:
@@ -164,12 +164,12 @@ These documents are consumed by other Aether commands:
 |------------|------------------|
 | refactor, cleanup | **PATHOGENS.md**, BLUEPRINT.md |
 
-**`/ant:plan`** reads PATHOGENS.md first to:
+**`/ant-plan`** reads PATHOGENS.md first to:
 - Understand known concerns before planning
 - Avoid creating more technical debt
 - Potentially create phases to address issues
 
-**`/ant:build`** references PATHOGENS.md to:
+**`/ant-build`** references PATHOGENS.md to:
 - Avoid fragile areas when modifying code
 - Understand known workarounds
 - Not break existing hacks/shortcuts

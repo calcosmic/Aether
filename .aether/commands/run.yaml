@@ -1,4 +1,4 @@
-name: ant:run
+name: ant-run
 description: "⚡ Autopilot — builds, verifies, learns, and advances through phases automatically"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

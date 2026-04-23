@@ -1,6 +1,6 @@
 ---
 name: aether-surveyor-disciplines
-description: "Use this agent to map coding conventions, testing patterns, and development practices. Writes DISCIPLINES.md and SENTINEL-PROTOCOLS.md to .aether/data/survey/. Spawned by /ant:colonize to document how the team builds software."
+description: "Use this agent to map coding conventions, testing patterns, and development practices. Writes DISCIPLINES.md and SENTINEL-PROTOCOLS.md to .aether/data/survey/. Spawned by /ant-colonize to document how the team builds software."
 tools: Read, Grep, Glob, Bash, Write
 color: cyan
 model: sonnet

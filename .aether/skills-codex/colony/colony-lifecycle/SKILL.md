@@ -19,7 +19,7 @@ Every command must leave the user with a clear next action. No dead ends. The co
 When the user message is already a literal `aether ...` command, treat it as an instruction to run that command directly.
 
 - Do not inspect repo files first to infer what the command "might mean".
-- Do not translate the command into `/ant:` language in Codex.
+- Do not translate the command into `/ant-` language in Codex.
 - Use `aether --help` or `aether <subcommand> --help` only to confirm availability or flags.
 - Treat the installed `aether` binary as the source of truth if docs and runtime disagree.
 - If the binary does not expose a documented command, say so plainly and follow the binary's actual command surface.
@@ -43,12 +43,12 @@ literal persisted state values.
 
 | State | Meaning | Entered By | Next Action |
 |-------|---------|------------|-------------|
-| IDLE | No active colony | Default / after entomb | `/ant:init` or `aether init` |
-| READY | Colony initialized, no plan | `/ant:init` or `aether init` | `/ant:plan` or `aether plan` |
-| PLANNING | Plan being generated | `/ant:plan` or `aether plan` | `/ant:build 1` or `aether build 1` |
-| EXECUTING | Phases being built | `/ant:build` or `aether build` | `/ant:continue` or `aether continue` |
-| SEALED | Colony marked complete | `/ant:seal` or `aether seal` | `/ant:entomb` or `aether entomb` |
-| ENTOMBED | Colony archived | `/ant:entomb` or `aether entomb` | `/ant:init` or `aether init` (new goal) |
+| IDLE | No active colony | Default / after entomb | `/ant-init` or `aether init` |
+| READY | Colony initialized, no plan | `/ant-init` or `aether init` | `/ant-plan` or `aether plan` |
+| PLANNING | Plan being generated | `/ant-plan` or `aether plan` | `/ant-build 1` or `aether build 1` |
+| EXECUTING | Phases being built | `/ant-build` or `aether build` | `/ant-continue` or `aether continue` |
+| SEALED | Colony marked complete | `/ant-seal` or `aether seal` | `/ant-entomb` or `aether entomb` |
+| ENTOMBED | Colony archived | `/ant-entomb` or `aether entomb` | `/ant-init` or `aether init` (new goal) |
 
 ## Next Up Block
 

@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/seal.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:seal
+name: ant-seal
 description: "🏺 Seal the colony with Crowned Anthill milestone"
 ---
 

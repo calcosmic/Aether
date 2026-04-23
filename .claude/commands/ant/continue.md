@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/continue.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:continue
+name: ant-continue
 description: "👁️ Verify build work, extract learnings, and advance the colony"
 ---
 
@@ -50,7 +50,7 @@ Branch strictly on the runtime result:
 ### If the phase advanced
 
 1. Summarize what was verified and what the colony learned
-2. Route the user first to `/ant:build N+1`
+2. Route the user first to `/ant-build N+1`
 3. If the runtime surfaced signal housekeeping, explain what expired, what remained active, and what that means for the next phase in one short steering sentence
 4. The runtime emits context-clear guidance automatically — do not duplicate it
 
@@ -59,13 +59,13 @@ Branch strictly on the runtime result:
 1. Translate the blocker into plain language
 2. Keep the focus on what must be fixed before the colony can advance
 3. If the runtime surfaced a specific recovery command, route the user to that first
-4. Only fall back to `/ant:continue` when the runtime did not surface a more specific recovery step
+4. Only fall back to `/ant-continue` when the runtime did not surface a more specific recovery step
 5. Do not suggest clearing context here
 
 ### If the colony completed
 
 1. Mark the colony's achievement in short Queen language
-2. Route the user first to `/ant:seal`
+2. Route the user first to `/ant-seal`
 3. If the runtime surfaced signal housekeeping, explain what expired, what remained active, and what that means for the final seal in one short steering sentence
 4. The runtime emits context-clear guidance automatically — do not duplicate it
 

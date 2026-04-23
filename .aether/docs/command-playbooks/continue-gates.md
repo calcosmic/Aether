@@ -22,9 +22,9 @@ The Prime Worker violated the spawn protocol.
   - "Justifications" for not spawning are not accepted
 
 🔧 Required Actions:
-  1. Run /ant:build {phase} again
+  1. Run /ant-build {phase} again
   2. Prime Worker MUST spawn at least 1 specialist
-  3. Re-run /ant:continue after spawns complete
+  3. Re-run /ant-continue after spawns complete
 
 The phase will NOT advance until spawning occurs.
 ```
@@ -52,7 +52,7 @@ Testing MUST be performed by a separate agent, not the builder.
   - "Build passing" ≠ "App working"
 
 🔧 Required Actions:
-  1. Run /ant:build {phase} again
+  1. Run /ant-build {phase} again
   2. Prime Worker MUST spawn at least 1 Watcher
   3. Watcher must independently verify the work
 
@@ -113,7 +113,7 @@ If CRITICAL issues found, display:
 Critical anti-patterns detected:
 {list issues with file paths}
 
-Run /ant:build {phase} again after fixing.
+Run /ant-build {phase} again after fixing.
 ```
 
 Do NOT proceed to Step 2.
@@ -367,7 +367,7 @@ Critical security vulnerabilities detected: {critical_count}
 🔧 Required Actions:
   1. Run `npm audit` to see full details
   2. Fix or update vulnerable dependencies
-  3. Run /ant:continue again after resolving
+  3. Run /ant-continue again after resolving
 
 The phase will NOT advance with critical CVEs.
 ```
@@ -391,7 +391,7 @@ Continue to Step 1.9.
 
 ### Step 1.9: Auditor Quality Gate (MANDATORY)
 
-**Code quality audit — runs on every `/ant:continue` for consistent coverage.**
+**Code quality audit — runs on every `/ant-continue` for consistent coverage.**
 
 1. Generate Auditor name and log spawn:
 Run using the Bash tool with description "Generating Auditor name...": `auditor_name=$(aether generate-ant-name "auditor" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "auditor" --name "$auditor_name" --task "Code quality audit" --depth 0 && echo "{\"name\":\"$auditor_name\"}"`
@@ -472,7 +472,7 @@ Critical code quality issues detected: {critical_count}
 🔧 Required Actions:
   1. Review the critical issues listed below
   2. Fix each critical finding
-  3. Run /ant:continue again after resolving
+  3. Run /ant-continue again after resolving
 
 Critical Findings:
 {list each critical finding with file:line and description}
@@ -496,7 +496,7 @@ Code quality score below threshold: {overall_score}/100 (threshold: 60)
   1. Address the top issues preventing score improvement:
 {list top 3-5 issues with severity and location}
   2. Focus on HIGH severity items first
-  3. Run /ant:continue again after improving quality
+  3. Run /ant-continue again after improving quality
 
 The phase will NOT advance with quality score below 60.
 ```
@@ -547,7 +547,7 @@ But no test files were found in the codebase.
 🚨 CRITICAL violation — fabricated TDD metrics.
 
 🔧 Required Actions:
-  1. Run /ant:build {phase} again
+  1. Run /ant-build {phase} again
   2. Actually write test files (not just claim them)
   3. Tests must exist and be runnable
 
@@ -609,7 +609,7 @@ Do NOT proceed to Step 2.
 
 **If "No, haven't tested yet":**
 ```
-⏸️🐜 RUNTIME PENDING — Test the app, then run /ant:continue again.
+⏸️🐜 RUNTIME PENDING — Test the app, then run /ant-continue again.
 
   - [ ] App launches without crashing
   - [ ] Core features work as expected
@@ -658,8 +658,8 @@ Parse result for `blockers`, `issues`, and `notes` counts.
 
 🔧 Required Actions:
   1. Fix the issues described in each blocker
-  2. Resolve flags: /ant:flags --resolve {flag_id} "resolution message"
-  3. Run /ant:continue again after resolving all blockers
+  2. Resolve flags: /ant-flags --resolve {flag_id} "resolution message"
+  3. Run /ant-continue again after resolving all blockers
 ```
 
 **CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
@@ -671,7 +671,7 @@ Parse result for `blockers`, `issues`, and `notes` counts.
 
 {list each issue flag}
 
-Use /ant:flags to review.
+Use /ant-flags to review.
 ```
 
 Continue to Step 2.
@@ -743,7 +743,7 @@ This gate enforces the Watcher's quality authority by stashing uncommitted work 
    Required Actions:
      1. Review and fix all CRITICAL and HIGH issues identified by Watcher
      2. Restore changes: git stash pop
-     3. Re-run /ant:build {current_phase} after fixes
+     3. Re-run /ant-build {current_phase} after fixes
      4. Watcher must re-verify with quality_score >= 7 and no CRITICAL issues
 
    Phase advancement is BLOCKED until Watcher approves.
@@ -839,7 +839,7 @@ Issues:
 Recommended Actions:
   1. Review the critical issues above
   2. Run `aether medic --fix` to attempt repairs
-  3. Re-run /ant:continue after repairs
+  3. Re-run /ant-continue after repairs
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 

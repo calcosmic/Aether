@@ -11,9 +11,9 @@ On the first message of a new conversation, check if `.aether/data/session.json`
 2. If a goal exists, display:
    ```
    Previous colony session detected: "{goal}"
-   Run /ant:resume to restore context, or continue with a new topic.
+   Run /ant-resume to restore context, or continue with a new topic.
    ```
-3. Do NOT auto-restore — wait for the user to explicitly run /ant:resume
+3. Do NOT auto-restore — wait for the user to explicitly run /ant-resume
 
 This only applies to genuinely new conversations, not after /clear.
 
@@ -22,97 +22,97 @@ This only applies to genuinely new conversations, not after /clear.
 ### Setup & Getting Started
 | Command | Purpose |
 |---------|---------|
-| `/ant:lay-eggs` | Set up Aether in this repo (one-time, creates .aether/) |
-| `/ant:init "<goal>"` | Start a colony with a goal |
-| `/ant:colonize` | Analyze existing codebase |
-| `/ant:plan` | Generate project phases |
-| `/ant:build <phase>` | Execute a phase with parallel workers |
-| `/ant:continue` | Verify work, extract learnings, advance |
+| `/ant-lay-eggs` | Set up Aether in this repo (one-time, creates .aether/) |
+| `/ant-init "<goal>"` | Start a colony with a goal |
+| `/ant-colonize` | Analyze existing codebase |
+| `/ant-plan` | Generate project phases |
+| `/ant-build <phase>` | Execute a phase with parallel workers |
+| `/ant-continue` | Verify work, extract learnings, advance |
 
 ### Pheromone Signals
 | Command | Priority | Purpose |
 |---------|----------|---------|
-| `/ant:focus "<area>"` | normal | Guide colony attention |
-| `/ant:redirect "<pattern>"` | high | Hard constraint — avoid this |
-| `/ant:feedback "<note>"` | low | Gentle adjustment |
-| `/ant:pheromones` | — | View all active signals |
-| `/ant:export-signals` | — | Export signals to XML |
-| `/ant:import-signals` | — | Import signals from XML |
+| `/ant-focus "<area>"` | normal | Guide colony attention |
+| `/ant-redirect "<pattern>"` | high | Hard constraint — avoid this |
+| `/ant-feedback "<note>"` | low | Gentle adjustment |
+| `/ant-pheromones` | — | View all active signals |
+| `/ant-export-signals` | — | Export signals to XML |
+| `/ant-import-signals` | — | Import signals from XML |
 
 ### Status & Monitoring
 | Command | Purpose |
 |---------|---------|
-| `/ant:status` | Colony dashboard |
-| `/ant:phase [N]` | View phase details |
-| `/ant:flags` | List active flags |
-| `/ant:flag "<title>"` | Create a flag |
-| `/ant:history` | Browse colony events |
-| `/ant:watch` | Colony watch dashboard / compatibility view |
-| `/ant:memory-details` | Drill-down memory view |
-| `/ant:patrol` | System health check |
-| `/ant:help` | List available commands |
+| `/ant-status` | Colony dashboard |
+| `/ant-phase [N]` | View phase details |
+| `/ant-flags` | List active flags |
+| `/ant-flag "<title>"` | Create a flag |
+| `/ant-history` | Browse colony events |
+| `/ant-watch` | Colony watch dashboard / compatibility view |
+| `/ant-memory-details` | Drill-down memory view |
+| `/ant-patrol` | System health check |
+| `/ant-help` | List available commands |
 
 ### Session Management
 | Command | Purpose |
 |---------|---------|
-| `/ant:pause-colony` | Save state and create handoff |
-| `/ant:resume-colony` | Restore from pause with the full recovery view |
-| `/ant:resume` | Quick session restore |
+| `/ant-pause-colony` | Save state and create handoff |
+| `/ant-resume-colony` | Restore from pause with the full recovery view |
+| `/ant-resume` | Quick session restore |
 
 ### Lifecycle
 | Command | Purpose |
 |---------|---------|
-| `/ant:seal` | Seal colony (Crowned Anthill) |
-| `/ant:entomb` | Archive completed colony |
-| `/ant:maturity` | View colony maturity journey |
-| `/ant:update` | Update system files from hub |
-| `/ant:migrate-state` | Migrate colony state between versions |
+| `/ant-seal` | Seal colony (Crowned Anthill) |
+| `/ant-entomb` | Archive completed colony |
+| `/ant-maturity` | View colony maturity journey |
+| `/ant-update` | Update system files from hub |
+| `/ant-migrate-state` | Migrate colony state between versions |
 
 ### Advanced
 | Command | Purpose |
 |---------|---------|
-| `/ant:run` | Autopilot — build, verify, advance automatically |
-| `/ant:quick` | Quick one-shot task |
-| `/ant:swarm "<bug>"` | Parallel bug investigation |
-| `/ant:oracle` | Deep research (RALF loop) |
-| `/ant:dream` | Philosophical observation |
-| `/ant:interpret` | Review dreams, discuss actions |
-| `/ant:chaos` | Resilience testing |
-| `/ant:archaeology` | Git history analysis |
-| `/ant:organize` | Codebase hygiene report |
-| `/ant:council` | Intent clarification |
-| `/ant:preferences` | Set user preferences |
-| `/ant:skill-create` | Create a custom skill |
-| `/ant:insert-phase` | Insert phase into plan |
-| `/ant:tunnels` | View colony communication tunnels |
-| `/ant:data-clean` | Clean test artifacts from data files |
-| `/ant:verify-castes` | Verify worker caste assignments |
+| `/ant-run` | Autopilot — build, verify, advance automatically |
+| `/ant-quick` | Quick one-shot task |
+| `/ant-swarm "<bug>"` | Parallel bug investigation |
+| `/ant-oracle` | Deep research (RALF loop) |
+| `/ant-dream` | Philosophical observation |
+| `/ant-interpret` | Review dreams, discuss actions |
+| `/ant-chaos` | Resilience testing |
+| `/ant-archaeology` | Git history analysis |
+| `/ant-organize` | Codebase hygiene report |
+| `/ant-council` | Intent clarification |
+| `/ant-preferences` | Set user preferences |
+| `/ant-skill-create` | Create a custom skill |
+| `/ant-insert-phase` | Insert phase into plan |
+| `/ant-tunnels` | View colony communication tunnels |
+| `/ant-data-clean` | Clean test artifacts from data files |
+| `/ant-verify-castes` | Verify worker caste assignments |
 
 ## Typical Workflow
 
 ```
 First time in a repo:
-0. /ant:lay-eggs                           (set up Aether in this repo)
+0. /ant-lay-eggs                           (set up Aether in this repo)
 
 Starting a colony:
-1. /ant:init "Build feature X"             (start colony with a goal)
-2. /ant:colonize                           (if existing code)
-3. /ant:plan                               (generates phases)
-4. /ant:focus "security"                   (optional guidance)
-5. /ant:build 1                            (workers execute phase 1)
-6. /ant:continue                           (verify, learn, advance)
-7. /ant:build 2                            (repeat until complete)
-   /ant:run                                (or use autopilot for all phases)
+1. /ant-init "Build feature X"             (start colony with a goal)
+2. /ant-colonize                           (if existing code)
+3. /ant-plan                               (generates phases)
+4. /ant-focus "security"                   (optional guidance)
+5. /ant-build 1                            (workers execute phase 1)
+6. /ant-continue                           (verify, learn, advance)
+7. /ant-build 2                            (repeat until complete)
+   /ant-run                                (or use autopilot for all phases)
 
 After /clear or session break:
-8. /ant:resume                             (quick restore)
-9. /ant:resume-colony                      (full recovery view if needed)
-10. /ant:status                            (see where you left off)
+8. /ant-resume                             (quick restore)
+9. /ant-resume-colony                      (full recovery view if needed)
+10. /ant-status                            (see where you left off)
 
 After completing a colony:
-11. /ant:seal                              (mark as complete)
-12. /ant:entomb                            (archive to chambers)
-13. /ant:init "next project goal"          (start fresh colony)
+11. /ant-seal                              (mark as complete)
+12. /ant-entomb                            (archive to chambers)
+13. /ant-init "next project goal"          (start fresh colony)
 ```
 
 ## Worker Castes

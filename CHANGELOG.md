@@ -271,9 +271,9 @@ Aether v2.7 — PR Workflow + Stability. Six phases (39-44) adding multi-branch 
 - **Clash detection** — PreToolUse hook (`clash-pre-tool-use.js`) blocks edits to files modified in other active worktrees; `.aether/data/` files allowlisted (branch-local state)
 - **Worktree utilities** — `_worktree_create` auto-copies colony context (COLONY_STATE.json, pheromones.json) and runs pheromone-snapshot-inject
 - **Merge driver** — `.gitattributes` merge driver resolves package-lock.json conflicts by keeping "ours" via `merge-driver-lockfile.sh`
-- **Midden wiring** — `midden-collect` and `midden-cross-pr-analysis` wired into `/ant:continue` playbooks (non-blocking, follows pheromone merge-back pattern)
+- **Midden wiring** — `midden-collect` and `midden-cross-pr-analysis` wired into `/ant-continue` playbooks (non-blocking, follows pheromone merge-back pattern)
 - **Interactive installer** — `npx aether-colony` now shows a 3-option menu (Full setup / Global only / Repo only) with environment detection and context-sensitive defaults; supports `--global`, `--repo`, `--yes` flags for scripting
-- **`aether setup` command** — CLI equivalent of `/ant:lay-eggs` for setting up Aether in a repo without Claude Code open
+- **`aether setup` command** — CLI equivalent of `/ant-lay-eggs` for setting up Aether in a repo without Claude Code open
 
 ### Changed
 - **Package validation** — `validate-package.sh` expanded from 15 to 38+ required file entries (100% coverage of packaged utils)
@@ -285,7 +285,7 @@ Aether v2.7 — PR Workflow + Stability. Six phases (39-44) adding multi-branch 
 
 ### Fixed
 - **Clash detection dispatcher** — `clash-detect.sh` and `worktree.sh` wired into `aether-utils.sh` dispatcher (source lines, dispatch cases, help JSON)
-- **Init command** — Clash detection hook verification and read-only worktree list integrated into `/ant:init` Step 7.6
+- **Init command** — Clash detection hook verification and read-only worktree list integrated into `/ant-init` Step 7.6
 
 ## [2.1.0] - 2026-03-24
 
@@ -296,7 +296,7 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 - **Builder output verification** (`verify-claims`) -- cross-references builder file claims against filesystem to catch fabrication
 - **Error handling infrastructure** (`_aether_log_error`) -- structured error logging across all modules with `[error]` prefix
 - **SUPPRESS:OK convention** -- intentional error suppressions annotated for auditability (cleanup, read-default, existence-test, cross-platform, idempotent, validation)
-- **Per-phase research** -- scouts investigate domain knowledge before task decomposition (`/ant:plan` Step 3.6)
+- **Per-phase research** -- scouts investigate domain knowledge before task decomposition (`/ant-plan` Step 3.6)
 - **Research context injection** -- builder and watcher prompts receive domain research during builds (16K character budget)
 - **Deprecation warning system** (`_deprecation_warning`) -- 18 dead subcommands emit stderr warnings with `[deprecated]` prefix
 - **Rolling state checkpoints** -- COLONY_STATE.json backed up before every build-wave (3 max retained)
@@ -323,7 +323,7 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 
 ### Added
 - **Hive Brain** — cross-colony wisdom sharing with domain-scoped retrieval, 200-entry LRU, multi-repo confidence boosting
-- **Autopilot (`/ant:run`)** — automated build-verify-advance loop with smart pausing
+- **Autopilot (`/ant-run`)** — automated build-verify-advance loop with smart pausing
 - **User Preferences** — colony adapts to user communication style via QUEEN.md
 - **Quality gate agents** — Probe (coverage), Auditor (quality), Gatekeeper (security), Measurer (performance)
 - **`instinct-apply` subcommand** — tracks instinct usage with confidence adjustment
@@ -332,7 +332,7 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 - **Pheromone content deduplication** — SHA-256 hashing prevents duplicate signals
 - **Pheromone prompt injection sanitization** — blocks LLM instruction override attempts
 - **Colony-prime token budget** — 8000/4000 char budget with priority-based truncation
-- **`/ant:patrol`** — comprehensive pre-seal audit of work against plan
+- **`/ant-patrol`** — comprehensive pre-seal audit of work against plan
 - **Colony pheromone exchange** — XML export/import for cross-colony signal sharing
 
 ### Changed
@@ -482,7 +482,7 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 ## [3.1.2] - 2026-02-15
 
 ### Fixed
-- **Swarm Display Integration in Build Command** — The visualization system was fully implemented but never integrated into `/ant:build`. Added `swarm-display-init` at build start, `swarm-display-update` calls when spawning builders/watchers/chaos ants, progress updates when workers complete (updating to 100% completion), and final `swarm-display-render` at build completion. The build now shows real-time ant-themed visualization with caste emojis, colors, tool usage stats, and chamber activity maps. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`)
+- **Swarm Display Integration in Build Command** — The visualization system was fully implemented but never integrated into `/ant-build`. Added `swarm-display-init` at build start, `swarm-display-update` calls when spawning builders/watchers/chaos ants, progress updates when workers complete (updating to 100% completion), and final `swarm-display-render` at build completion. The build now shows real-time ant-themed visualization with caste emojis, colors, tool usage stats, and chamber activity maps. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`)
 - **Missing swarm-display-render Command** — Added new `swarm-display-render` command to `aether-utils.sh` that executes the visualization script to render the current swarm state to terminal. (`.aether/aether-utils.sh`)
 
 ### Changed
@@ -491,7 +491,7 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 ## [3.1.1] - 2026-02-15
 
 ### Fixed
-- **Missing Visualization Assets** — Added `.aether/visualizations/` directory to npm package files array. The ASCII art anthill files required by `/ant:maturity` command were not being published, causing the command to fail in repos that installed/updated via npm. (`package.json`)
+- **Missing Visualization Assets** — Added `.aether/visualizations/` directory to npm package files array. The ASCII art anthill files required by `/ant-maturity` command were not being published, causing the command to fail in repos that installed/updated via npm. (`package.json`)
 - **Visualization Sync in Install** — Updated `setupHub()` function in CLI to sync visualization files from package to hub (`~/.aether/visualizations/`). (`bin/cli.js`)
 - **Visualization Sync in Update** — Updated `UpdateTransaction` to sync visualization files from hub to repos during `aether update`. Added `HUB_VISUALIZATIONS` constant and visualization sync result tracking. (`bin/lib/update-transaction.js`)
 
@@ -502,13 +502,13 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 
 ### Added
 - **Session Freshness Detection System** — Global system to prevent stale session files from silently breaking Aether workflows. Implements `session-verify-fresh` and `session-clear` commands with support for 7 commands (survey, oracle, watch, swarm, init, seal, entomb). Features cross-platform timestamp detection (macOS/Linux), environment variable overrides for testing, and protected operations (init/seal/entomb never auto-clear). Backward compatibility maintained with `survey-verify-fresh` and `survey-clear` wrappers. Added comprehensive test suite (`tests/bash/test-session-freshness.sh`) and API documentation (`docs/session-freshness-api.md`). (`.aether/aether-utils.sh`, `tests/bash/test-session-freshness.sh`, `docs/session-freshness-api.md`)
-  - `/ant:colonize` — Added `--force-resurvey` flag, stale survey detection, and verification
-  - `/ant:oracle` — Added `--force` flag, stale session detection with user options
-  - `/ant:watch` — Added session timestamp capture and stale file handling
-  - `/ant:swarm` — Added auto-clear for stale findings with verification
-  - `/ant:init` — Added freshness check with protected state (no auto-clear)
-  - `/ant:seal` — Added incomplete archive detection and integrity verification
-  - `/ant:entomb` — Added incomplete chamber detection and integrity verification
+  - `/ant-colonize` — Added `--force-resurvey` flag, stale survey detection, and verification
+  - `/ant-oracle` — Added `--force` flag, stale session detection with user options
+  - `/ant-watch` — Added session timestamp capture and stale file handling
+  - `/ant-swarm` — Added auto-clear for stale findings with verification
+  - `/ant-init` — Added freshness check with protected state (no auto-clear)
+  - `/ant-seal` — Added incomplete archive detection and integrity verification
+  - `/ant-entomb` — Added incomplete chamber detection and integrity verification
 
 ### Fixed
 - **Architecture Cleanup: Source of Truth Flipped** — Complete review and cleanup of the flipped source-of-truth architecture. `.aether/` is now the source of truth for system files, with `runtime/` auto-populated by `bin/sync-to-runtime.sh` during npm install. Fixed 6 stale documentation files, updated 5 planning files, expanded allowlist from 20 to 36 files, handled 4 orphan files, and verified zero drift between directories. (`.aether/recover.sh`, `.aether/RECOVERY-PLAN.md`, `.planning/codebase/STRUCTURE.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/CONVENTIONS.md`, `TO-DOS.md`, `bin/sync-to-runtime.sh`, `bin/lib/update-transaction.js`)
@@ -518,12 +518,12 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 
 ### Fixed
 - **Phase 2: Fix Blocker Severity and Auto-Resolve Logic** — Made auto_resolve_on conditional by flag source: chaos-sourced blockers require manual resolution (auto_resolve_on: null), verification blockers auto-resolve on build pass. Reordered continue.md Flags Gate to run auto-resolve before blocker count check. Added advisory blocker warning (Step 1.5) to build.md so builders see active blockers before execution. (`.aether/aether-utils.sh`, `runtime/aether-utils.sh`, `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md`, `.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`)
-- **Phase 1: Fix Chaos Ant Duplicate Flagging** — Eliminated duplicate flag creation during build-rebuild cycles by removing redundant chaos flagging from build.md Step 5.5 (Step 5.4.2 already handles it), injected existing flag titles into Chaos Ant spawn prompt to prevent re-investigating known issues, and added flag persistence to standalone /ant:chaos for critical/high findings using source 'chaos-standalone'. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`, `.claude/commands/ant/chaos.md`, `.opencode/commands/ant/chaos.md`)
+- **Phase 1: Fix Chaos Ant Duplicate Flagging** — Eliminated duplicate flag creation during build-rebuild cycles by removing redundant chaos flagging from build.md Step 5.5 (Step 5.4.2 already handles it), injected existing flag titles into Chaos Ant spawn prompt to prevent re-investigating known issues, and added flag persistence to standalone /ant-chaos for critical/high findings using source 'chaos-standalone'. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/build.md`, `.claude/commands/ant/chaos.md`, `.opencode/commands/ant/chaos.md`)
 
 ### Added
-- **Phase 6: Final Verification and Integration Testing** — Added milestone display to /ant:status command (now shows "Milestone: <name>" in output), expanded milestone progression in /ant:archive to handle all 6 stages (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill), added unrecognized milestone error handling. Full lint suite passes (shell, JSON, sync - 28 commands verified). (`.claude/commands/ant/status.md`, `.claude/commands/ant/archive.md`, `.opencode/commands/ant/status.md`, `.opencode/commands/ant/archive.md`)
+- **Phase 6: Final Verification and Integration Testing** — Added milestone display to /ant-status command (now shows "Milestone: <name>" in output), expanded milestone progression in /ant-archive to handle all 6 stages (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill), added unrecognized milestone error handling. Full lint suite passes (shell, JSON, sync - 28 commands verified). (`.claude/commands/ant/status.md`, `.claude/commands/ant/archive.md`, `.opencode/commands/ant/status.md`, `.opencode/commands/ant/archive.md`)
 
-- **Phase 1: Create Oracle infrastructure and command** — Added Oracle Ant deep research agent with RALF-pattern bash loop, agent prompt, /ant:oracle command definition (mirrored), and oracle caste registration in aether-utils.sh. (`.aether/oracle/oracle.sh`, `.aether/oracle/oracle.md`, `.claude/commands/ant/oracle.md`, `.opencode/commands/ant/oracle.md`, `.aether/aether-utils.sh`, `runtime/aether-utils.sh`)
+- **Phase 1: Create Oracle infrastructure and command** — Added Oracle Ant deep research agent with RALF-pattern bash loop, agent prompt, /ant-oracle command definition (mirrored), and oracle caste registration in aether-utils.sh. (`.aether/oracle/oracle.sh`, `.aether/oracle/oracle.md`, `.claude/commands/ant/oracle.md`, `.opencode/commands/ant/oracle.md`, `.aether/aether-utils.sh`, `runtime/aether-utils.sh`)
 
 ### Verified
 - **Phase 2: Verification and smoke test** — All Oracle Ant files verified: generate-commands.sh check passes (26/26 in sync, SHA-1 checksums verified), oracle.sh error handling works (exits code 1 with descriptive error when no research.json), oracle caste generates themed names (Vision-NN, Delph-NN), file structure matches spec (oracle.sh executable, oracle.md exists, command mirrors byte-identical, no stray files). Full lint suite passes (shell, JSON, sync).
@@ -558,16 +558,16 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 - **Phase 3: Sync Global OpenCode Commands** — Replaced stale global OpenCode commands at `~/.config/opencode/commands/ant/` with all 24 current repo commands. Removed orphan `ant.md`, cleared old files, installed fresh copies. All 24 files verified identical to repo source. (`~/.config/opencode/commands/ant/*.md`)
 - **Phase 2: Sync Content Between Repo and Runtime** — Synced runtime/QUEEN_ANT_ARCHITECTURE.md with .aether/ source (+56 lines: Council, Swarm sections, heading rename), added 3 missing docs to runtime/docs/ (constraints.md, pathogen-schema.md, pathogen-schema-example.json), synced aether-watcher.md to global install with Command Resolution section. (`runtime/QUEEN_ANT_ARCHITECTURE.md`, `runtime/docs/*`, `~/.config/opencode/agents/aether-watcher.md`)
 - **Phase 1: Fix OpenCode Command Naming Convention** — Renamed all 24 `.opencode/commands/ant/` files from `ant:*.md` to bare `*.md` names to match `.claude/commands/ant/` convention. OpenCode uses frontmatter `name:` field for command resolution, so filenames are cosmetic. `npm run lint:sync` now passes. (`.opencode/commands/ant/*.md`)
-- **Phase 4: Documentation and Validation (Chaos + Archaeologist)** — Updated help.md with /ant:chaos and /ant:archaeology in ADVANCED and WORKER CASTES sections, updated README.md command count from 22 to 24 in all 6 locations, added CHANGELOG entries for all phases, marked both TO-DOS.md entries as DONE with implementation references. Validated 24 files in each command directory, name generation, and emoji resolution. (`.claude/commands/ant/help.md`, `.opencode/commands/ant/ant:help.md`, `README.md`, `CHANGELOG.md`, `TO-DOS.md`)
+- **Phase 4: Documentation and Validation (Chaos + Archaeologist)** — Updated help.md with /ant-chaos and /ant-archaeology in ADVANCED and WORKER CASTES sections, updated README.md command count from 22 to 24 in all 6 locations, added CHANGELOG entries for all phases, marked both TO-DOS.md entries as DONE with implementation references. Validated 24 files in each command directory, name generation, and emoji resolution. (`.claude/commands/ant/help.md`, `.opencode/commands/ant/ant-help.md`, `README.md`, `CHANGELOG.md`, `TO-DOS.md`)
 - 2026-02-12: TO-DOS.md — Marked Chaos Ant and Archaeologist Ant entries as DONE with implementation references
 - **Phase 1: Threshold and Quoting Fixes** — Lowered instinct confidence threshold from 0.7 to 0.5 in both init.md mirrors, standardized YAML description quoting across all 26 command files. (`init.md`, `build.md`, `colonize.md`, `continue.md`, `council.md`, `dream.md`, `feedback.md`, `flag.md`, `flags.md`, `focus.md`, `help.md`, `interpret.md`, `organize.md`, `pause-colony.md`, `phase.md`, `plan.md`, `redirect.md`, `resume-colony.md`, `status.md`, `swarm.md`, `watch.md` + .opencode mirrors)
 - **Phase 3: Watcher, Builder, and Swarm command resolution** — Watcher prompt in build.md, swarm.md Step 8, and aether-watcher.md now resolve build/test/lint commands via the 3-tier priority chain (CLAUDE.md > CODEBASE.md > heuristic fallback) instead of leaving commands unspecified or hardcoded. (`build.md`, `swarm.md`, `aether-watcher.md` + .opencode mirrors)
 - **Phase 2: Verification loop priority chain** — Command detection in continue.md and verification-loop.md now uses 3-tier priority chain (CLAUDE.md > CODEBASE.md > heuristic table) instead of heuristic table alone. Heuristic table preserved as fallback. (`continue.md`, `runtime/verification-loop.md` + .opencode/.aether mirrors)
-- **Phase 3: Build Pipeline Integration (Chaos + Archaeologist)** — Integrated both new ant types into the build.md pipeline. Archaeologist Ant spawns as conditional pre-build step (Step 4.5) when phase modifies existing files, injecting history context into builder prompts. Chaos Ant spawns as post-build resilience tester (Step 5.4.2) alongside Watcher, limited to 5 edge case scenarios. Added `chaos_count` and `archaeologist_count` to spawn_metrics and `archaeology` field to synthesis JSON. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/ant:build.md`)
+- **Phase 3: Build Pipeline Integration (Chaos + Archaeologist)** — Integrated both new ant types into the build.md pipeline. Archaeologist Ant spawns as conditional pre-build step (Step 4.5) when phase modifies existing files, injecting history context into builder prompts. Chaos Ant spawns as post-build resilience tester (Step 5.4.2) alongside Watcher, limited to 5 edge case scenarios. Added `chaos_count` and `archaeologist_count` to spawn_metrics and `archaeology` field to synthesis JSON. (`.claude/commands/ant/build.md`, `.opencode/commands/ant/ant-build.md`)
 
 ### Added
-- **Phase 2: `/ant:chaos` command** — Standalone Chaos Ant (Resilience Tester) command that probes code for edge cases, boundary conditions, error handling gaps, state corruption, and unexpected inputs. Produces structured findings reports with reproduction steps and severity ratings. Read-only by design (Tester's Law). (`.claude/commands/ant/chaos.md`, `.opencode/commands/ant/ant:chaos.md`)
-- **Phase 2: `/ant:archaeology` command** — Standalone Archaeologist Ant command that excavates git history for any file or directory. Uses git log, blame, show, and follow to analyze commit patterns, surface tribal knowledge, identify tech debt markers, map churn hotspots, and produce structured archaeology reports. Read-only by design (Archaeologist's Law). (`.claude/commands/ant/archaeology.md`, `.opencode/commands/ant/ant:archaeology.md`)
+- **Phase 2: `/ant-chaos` command** — Standalone Chaos Ant (Resilience Tester) command that probes code for edge cases, boundary conditions, error handling gaps, state corruption, and unexpected inputs. Produces structured findings reports with reproduction steps and severity ratings. Read-only by design (Tester's Law). (`.claude/commands/ant/chaos.md`, `.opencode/commands/ant/ant-chaos.md`)
+- **Phase 2: `/ant-archaeology` command** — Standalone Archaeologist Ant command that excavates git history for any file or directory. Uses git log, blame, show, and follow to analyze commit patterns, surface tribal knowledge, identify tech debt markers, map churn hotspots, and produce structured archaeology reports. Read-only by design (Archaeologist's Law). (`.claude/commands/ant/archaeology.md`, `.opencode/commands/ant/ant-archaeology.md`)
 - **Phase 1: Utility Foundation (Chaos + Archaeologist)** — Added chaos and archaeologist castes to `generate-ant-name` (8 prefixes each) and `get_caste_emoji` (🎲 and 🏺) in both `.aether/aether-utils.sh` and `runtime/aether-utils.sh`. (`.aether/aether-utils.sh`, `runtime/aether-utils.sh`)
 - **Phase 1: Immune Memory Schema** — Defined JSON schema for pathogen signatures extending existing error-patterns.json format. Schema adds signature_type, pattern_string, confidence_threshold, escalation_level fields while preserving backward compatibility. Created .aether/docs/pathogen-schema.md documentation, .aether/docs/pathogen-schema-example.json with sample entries, and .aether/data/pathogens.json empty storage file. Watcher verified 6/6 jq validation tests pass. (`.aether/docs/pathogen-schema.md`, `.aether/docs/pathogen-schema-example.json`, `.aether/data/pathogens.json`)
 - **Phase 2: Add Lint Scripts** — Added `lint:shell`, `lint:json`, `lint:sync`, and top-level `lint` scripts to package.json for shell validation, JSON validation, and mirror sync checking. (`package.json`)
@@ -579,18 +579,18 @@ Six phases of production hardening (Phases 9-14) targeting reliability, maintain
 - **Auto-recovery headers** — All ant commands now show `🔄 Resuming: Phase X - Name` after `/clear`. `status.md` has Step 1.5 with extended format including last activity timestamp. `build.md`, `plan.md`, `continue.md` show brief one-line context. `resume-colony.md` documents the tiered pattern. (`status.md`, `build.md`, `plan.md`, `continue.md`, `resume-colony.md`)
 - **Ant Graveyards** — `grave-add` and `grave-check` commands in `aether-utils.sh`. When builders fail, grave markers record the file, ant name, and failure summary. Future builders check for nearby graves before modifying files and adjust caution level accordingly. Capped at 30 entries. (`aether-utils.sh`, `init.md`, `build.md`)
 - **Colony knowledge in builder prompts** — Spawned workers now receive top instincts (confidence >= 0.5), recent validated learnings, and flagged error patterns via `--- COLONY KNOWLEDGE ---` section in builder prompt template. (`build.md`)
-- **Automatic changelog updates** — `/ant:continue` now appends a changelog entry for each completed phase under `## [Unreleased]`. (`continue.md`)
-- **Colony memory inheritance** — `/ant:init` now reads the most recent `completion-report.md` (if it exists) and seeds the new colony's `memory.instincts` with high-confidence instincts (>= 0.7) and validated learnings from prior sessions. Colonies no longer start completely blind. (`init.md` + .opencode mirror)
+- **Automatic changelog updates** — `/ant-continue` now appends a changelog entry for each completed phase under `## [Unreleased]`. (`continue.md`)
+- **Colony memory inheritance** — `/ant-init` now reads the most recent `completion-report.md` (if it exists) and seeds the new colony's `memory.instincts` with high-confidence instincts (>= 0.7) and validated learnings from prior sessions. Colonies no longer start completely blind. (`init.md` + .opencode mirror)
 - **Unbuilt design status markers** — Added `STATUS: NOT IMPLEMENTED` headers to `.planning/git-staging-tier3.md` and `.planning/git-staging-tier4.md` to prevent confusion with implemented features. (`git-staging-tier3.md`, `git-staging-tier4.md`)
-- **`/ant:interpret` command** — Dream reviewer that loads dream sessions, investigates each observation against the actual codebase with evidence and verdicts (confirmed/partially confirmed/unconfirmed/refuted), assesses concern severity, estimates implementation scope, and facilitates discussion before injecting pheromones or adding TO-DOs. (`interpret.md`)
-- **`/ant:dream` command** — Philosophical wanderer agent that reads codebase, git history, colony state, and TO-DOs, performs random exploration cycles and writes observations to `.aether/dreams/`. (`dream.md`)
-- **`/ant:help` command** — Renamed from `/ant:ant` with updated content covering all 20 commands, session resume workflow, colony memory system, and full state file inventory. (`help.md`)
+- **`/ant-interpret` command** — Dream reviewer that loads dream sessions, investigates each observation against the actual codebase with evidence and verdicts (confirmed/partially confirmed/unconfirmed/refuted), assesses concern severity, estimates implementation scope, and facilitates discussion before injecting pheromones or adding TO-DOs. (`interpret.md`)
+- **`/ant-dream` command** — Philosophical wanderer agent that reads codebase, git history, colony state, and TO-DOs, performs random exploration cycles and writes observations to `.aether/dreams/`. (`dream.md`)
+- **`/ant-help` command** — Renamed from `/ant-ant` with updated content covering all 20 commands, session resume workflow, colony memory system, and full state file inventory. (`help.md`)
 - **OpenCode command sync** — All `.claude/commands/ant/` prompts synced to `.opencode/commands/ant/` for cross-tool parity
 
 ### Changed
-- **Checkpoint messaging** — Now suggests actual next command (e.g., `/ant:continue` or `/ant:build 3`) instead of generic `/ant:status`. Format: "safe to /clear, then run /ant:continue"
+- **Checkpoint messaging** — Now suggests actual next command (e.g., `/ant-continue` or `/ant-build 3`) instead of generic `/ant-status`. Format: "safe to /clear, then run /ant-continue"
 - **Caste emoji in spawn output** — Spawn-log and spawn-complete in `aether-utils.sh` show caste emoji adjacent to ant name (e.g., `🔨Chip-36`). Build.md SPAWN PLAN and Colony Work Tree use emoji-first format. (`aether-utils.sh`, `build.md`)
-- **Phase context in command suggestions** — Next Steps sections now include phase names alongside numbers (e.g., `/ant:build 3   Phase 3: Add Authentication`). (`status.md`, `plan.md`, `phase.md`)
+- **Phase context in command suggestions** — Next Steps sections now include phase names alongside numbers (e.g., `/ant-build 3   Phase 3: Add Authentication`). (`status.md`, `plan.md`, `phase.md`)
 - **OpenCode plan.md** — Now dynamically calculates first incomplete phase instead of hardcoding Phase 1. (`plan.md`)
 
 ### Fixed
@@ -655,7 +655,7 @@ Development releases (versions 2.0.0-2.4.2) building toward stable release. Key 
 - **Multi-dimensional watcher scoring** — Richer verification rubrics
 
 ### 2026-02-04
-- **Auto-continue mode** — `--all` flag for `/ant:continue`
+- **Auto-continue mode** — `--all` flag for `/ant-continue`
 - **Safe-to-clear messaging** — State persistence indicators on all commands
 - **Conflict prevention** — File overlap validation between parallel workers
 - **Phase-aware error tracking** — Error-add wired to phase numbers
@@ -673,7 +673,7 @@ Development releases (versions 2.0.0-2.4.2) building toward stable release. Key 
 
 - 2026-02-11: README.md — Major update reflecting all new features: 22 commands (was 20), dream/interpret commands, colony memory inheritance, graveyards, auto-recovery headers, git safety, lint suite, CLAUDE.md-aware command detection, Colony Memory section, restructured Features section
 - 2026-02-11: .aether/data/review-2026-02-11.md — Comprehensive daily review report covering 3 colony sessions, 10 achievements, 3 regressions, 5 concerns, 3 debunked concerns, and prioritized recommendations
-- 2026-02-12: README.md, CHANGELOG.md — Added /ant:chaos (resilience testing) and /ant:archaeology (git history analysis) commands with build pipeline integration
+- 2026-02-12: README.md, CHANGELOG.md — Added /ant-chaos (resilience testing) and /ant-archaeology (git history analysis) commands with build pipeline integration
 - 2026-02-12: CHANGELOG.md — added repo-local path migration entry
 - 2026-02-12: README.md — Updated to describe repo-local .aether/ architecture; removed global ~/.aether/ runtime references, restructured File Structure section with repo-local paths primary
 - 2026-02-13: bin/cli.js, update.md — Added orphan cleanup (syncDirWithCleanup), git dirty-file detection with --force stash, --dry-run preview, hub manifest generation

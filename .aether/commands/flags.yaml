@@ -1,4 +1,4 @@
-name: ant:flags
+name: ant-flags
 description: "🚩 List project flags (blockers, issues, notes)"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

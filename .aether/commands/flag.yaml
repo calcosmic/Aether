@@ -1,4 +1,4 @@
-name: ant:flag
+name: ant-flag
 description: "🚩 Create a project-specific flag (blocker, issue, or note)"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

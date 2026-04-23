@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/medic.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:medic
+name: ant-medic
 description: "🩹 Diagnose colony health — scan all colony data for corruption, staleness, and configuration issues"
 ---
 

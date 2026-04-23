@@ -1,4 +1,4 @@
-name: ant:memory-details
+name: ant-memory-details
 description: "📜 Show detailed colony memory — wisdom, pending promotions, and recent failures"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

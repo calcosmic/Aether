@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/update.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:update
+name: ant-update
 description: "🔄 Update Aether safely from the global hub (transactional)"
 ---
 

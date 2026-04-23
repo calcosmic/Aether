@@ -1,4 +1,4 @@
-name: ant:chaos
+name: ant-chaos
 description: "🎲 Resilience tester — probes edge cases, boundary conditions, and unexpected inputs"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

@@ -1,5 +1,5 @@
 ---
-description: "Use this agent to map coding conventions, testing patterns, and development practices. Writes DISCIPLINES.md and SENTINEL-PROTOCOLS.md to .aether/data/survey/. Spawned by /ant:colonize to document how the team builds software."
+description: "Use this agent to map coding conventions, testing patterns, and development practices. Writes DISCIPLINES.md and SENTINEL-PROTOCOLS.md to .aether/data/survey/. Spawned by /ant-colonize to document how the team builds software."
 mode: subagent
 model: anthropic/claude-sonnet-4-20250514
 tools:

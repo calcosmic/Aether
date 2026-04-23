@@ -149,14 +149,14 @@ clarified intent, parallel mode, and context capsule — all within a token budg
 
 ### Autopilot
 
-`/ant:run` — Autopilot that builds, verifies, learns, and advances through phases automatically.
+`/ant-run` — Autopilot that builds, verifies, learns, and advances through phases automatically.
 
 ```bash
-/ant:run                       # Run all remaining phases
-/ant:run --max-phases 2        # Run at most 2 phases then stop
-/ant:run --replan-interval 3   # Suggest replan every 3 phases
-/ant:run --continue            # Resume after replan pause
-/ant:run --dry-run             # Preview the autopilot plan
+/ant-run                       # Run all remaining phases
+/ant-run --max-phases 2        # Run at most 2 phases then stop
+/ant-run --replan-interval 3   # Suggest replan every 3 phases
+/ant-run --continue            # Resume after replan pause
+/ant-run --dry-run             # Preview the autopilot plan
 ```
 
 Smart pause conditions: test failures, critical Chaos findings, security gate failures, quality gate failures, runtime verification needed, replan suggestions.
@@ -168,20 +168,20 @@ Go runtime:
 
 | Command | When to use it | What it does |
 |---------|----------------|--------------|
-| `/ant:discuss` | After `/ant:init`, before `/ant:plan` | Captures clarifications, stores them as pending decisions, and emits `REDIRECT` pheromones for hard constraints once resolved |
-| `/ant:assumptions` | After `/ant:plan`, before `/ant:build` | Surfaces current plan assumptions, writes `assumptions.json`, and emits `FOCUS` / `FEEDBACK` pheromones from the analysis |
-| `/ant:profile` | When reviewing or refreshing learned user behavior | Reads or refreshes the behavioral profile and promotes top `[profiled]` directives into `QUEEN.md` |
+| `/ant-discuss` | After `/ant-init`, before `/ant-plan` | Captures clarifications, stores them as pending decisions, and emits `REDIRECT` pheromones for hard constraints once resolved |
+| `/ant-assumptions` | After `/ant-plan`, before `/ant-build` | Surfaces current plan assumptions, writes `assumptions.json`, and emits `FOCUS` / `FEEDBACK` pheromones from the analysis |
+| `/ant-profile` | When reviewing or refreshing learned user behavior | Reads or refreshes the behavioral profile and promotes top `[profiled]` directives into `QUEEN.md` |
 
 Typical guided flow:
 
 ```bash
-/ant:init "Build feature X"
-/ant:discuss
-/ant:plan
-/ant:assumptions
-/ant:build 1
-/ant:continue
-/ant:profile
+/ant-init "Build feature X"
+/ant-discuss
+/ant-plan
+/ant-assumptions
+/ant-build 1
+/ant-continue
+/ant-profile
 ```
 
 ### Publishing Changes
@@ -200,7 +200,7 @@ git commit -m "your message"
 aether publish
 
 # 4. In other repos, pull updates
-aether update --force      # or /ant:update
+aether update --force      # or /ant-update
 ```
 
 Runtime note:
@@ -226,7 +226,7 @@ Runtime note:
 .aether/
 ├── workers.md           # Worker definitions, spawn protocol
 ├── utils/               # Runtime utilities
-│   ├── oracle/oracle.md # Oracle loop instructions (loaded by /ant:oracle)
+│   ├── oracle/oracle.md # Oracle loop instructions (loaded by /ant-oracle)
 │   └── queen-to-md.xsl  # XSL transform for queen wisdom export
 ├── skills/              # colony/ (11) + domain/ (18) skill definitions
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
@@ -354,9 +354,9 @@ User-colony communication via signals:
 
 | Signal | Command | Priority | Use For |
 |--------|---------|----------|---------|
-| FOCUS | `/ant:focus "<area>"` | normal | "Pay attention here" |
-| REDIRECT | `/ant:redirect "<avoid>"` | high | "Don't do this" (hard constraint) |
-| FEEDBACK | `/ant:feedback "<note>"` | low | "Adjust based on this observation" |
+| FOCUS | `/ant-focus "<area>"` | normal | "Pay attention here" |
+| REDIRECT | `/ant-redirect "<avoid>"` | high | "Don't do this" (hard constraint) |
+| FEEDBACK | `/ant-feedback "<note>"` | low | "Adjust based on this observation" |
 
 **Before builds:** FOCUS + REDIRECT to steer
 **After builds:** FEEDBACK to adjust
@@ -364,7 +364,7 @@ User-colony communication via signals:
 **Gentle nudges:** FEEDBACK (preferences)
 
 **Viewing Signals:**
-- `/ant:pheromones` — Full table of all active signals
+- `/ant-pheromones` — Full table of all active signals
 - `pheromone-display` subcommand — Formatted output with strength % and decay
 
 **Signal Injection:**
@@ -383,8 +383,8 @@ User-colony communication via signals:
 - Content capped at 500 characters
 
 **Exchange:**
-- `/ant:export-signals` — Export pheromone signals to XML for cross-colony sharing
-- `/ant:import-signals` — Import pheromone signals from XML
+- `/ant-export-signals` — Export pheromone signals to XML for cross-colony sharing
+- `/ant-import-signals` — Import pheromone signals from XML
 
 **Automatic Suggestions:**
 - `suggest-analyze` — Analyzes codebase for patterns worth capturing as pheromones
@@ -448,7 +448,7 @@ Skill content is injected separately from colony-prime context:
 
 ### Custom Skills
 
-- `/ant:skill-create` — Oracle-powered skill generation from a description
+- `/ant-skill-create` — Oracle-powered skill generation from a description
 - Manual creation: add a `SKILL.md` file to `~/.aether/skills/domain/`
 - Each skill uses frontmatter (name, category, detect patterns, roles)
 
@@ -520,7 +520,7 @@ Colony-prime retrieves hive wisdom scoped to the current project's domain:
 
 ### Seal Promotion Hook
 
-During `/ant:seal` (Step 3.7), high-confidence instincts are promoted to the hive:
+During `/ant-seal` (Step 3.7), high-confidence instincts are promoted to the hive:
 
 1. Extracts instincts with confidence >= 0.8 from `COLONY_STATE.json`
 2. Promotes each via `hive-promote` with `--text` and `--source-repo`
@@ -555,12 +555,12 @@ User preferences are stored in the hub `~/.aether/QUEEN.md` under the `## User P
 
 | Command | Purpose |
 |---------|---------|
-| `/ant:preferences "text"` | Add a user preference to hub QUEEN.md |
-| `/ant:preferences --list` | List all user preferences |
+| `/ant-preferences "text"` | Add a user preference to hub QUEEN.md |
+| `/ant-preferences --list` | List all user preferences |
 
 - Preferences capture communication style, expertise level, and decision patterns
 - Colony-prime injects user preferences into worker context
-- `/ant:profile` promotes learned directives into the same section with a `[profiled]` prefix
+- `/ant-profile` promotes learned directives into the same section with a `[profiled]` prefix
 - Max 500 characters per preference entry
 
 ---
@@ -617,7 +617,7 @@ Failures are logged during:
 - Approach changes (tracked for wisdom)
 
 **Data Maintenance:**
-- `/ant:data-clean` — Remove test artifacts from colony data files (pheromones, constraints, midden)
+- `/ant-data-clean` — Remove test artifacts from colony data files (pheromones, constraints, midden)
 
 ---
 
@@ -625,9 +625,9 @@ Failures are logged during:
 
 Colony memory is tracked and displayed:
 
-- `/ant:status` — Shows memory health table
-- `/ant:memory-details` — Drill-down view
-- `/ant:resume` — Shows memory health section
+- `/ant-status` — Shows memory health table
+- `/ant-memory-details` — Drill-down view
+- `/ant-resume` — Shows memory health section
 
 Metrics tracked:
 - Events count
@@ -717,9 +717,9 @@ On the first message of a new conversation, check if `.aether/data/session.json`
 2. If a goal exists, display:
    ```
    Previous colony session detected: "{goal}"
-   Run /ant:resume to restore context, or continue with a new topic.
+   Run /ant-resume to restore context, or continue with a new topic.
    ```
-3. Do NOT auto-restore — wait for the user to explicitly run `/ant:resume`
+3. Do NOT auto-restore — wait for the user to explicitly run `/ant-resume`
 
 ---
 
@@ -747,7 +747,7 @@ observations that flow through the system and become reusable wisdom.
 ### Key Thresholds
 
 - **Auto-promotion:** Pattern observations need 2 captures to trigger; confidence starts at 0.75
-- **Hive promotion:** Instincts with confidence >= 0.8 are promoted to Hive Brain at `/ant:seal`
+- **Hive promotion:** Instincts with confidence >= 0.8 are promoted to Hive Brain at `/ant-seal`
 - **Cross-colony boost:** Multi-repo confirmation raises confidence (2 repos = 0.70, 4+ = 0.95)
 
 See [Hive Brain](#hive-brain-cross-colony-wisdom) for cross-colony wisdom details.
@@ -767,7 +767,7 @@ Key additions:
 - Standalone instinct storage with full provenance
 - jq-based graph layer for instinct relationships
 - 8 curation ants with orchestrated execution
-- Lifecycle integration: phase-end at /ant:continue, full at /ant:seal
+- Lifecycle integration: phase-end at /ant-continue, full at /ant-seal
 
 ### Curation Ants
 
@@ -796,7 +796,7 @@ Aether supports two parallel execution strategies, selected at colony init:
 
 ### How It Works
 
-1. **`/ant:init`** prompts for strategy selection (Step 6.5) during colony setup
+1. **`/ant-init`** prompts for strategy selection (Step 6.5) during colony setup
 2. The choice is saved as `parallel_mode` in `COLONY_STATE.json` (omitempty, defaults to `"in-repo"`)
 3. **Colony-prime** injects the current parallel mode into worker context
 4. **Build-wave playbook** conditionally allocates worktrees when mode is `"worktree"`
@@ -828,7 +828,7 @@ The system's pieces are now **connected**:
 - Instincts promote to hive at seal (confidence >= 0.8 -> hive-promote)
 - Multi-repo confirmation boosts confidence (2 repos = 0.7, 4+ = 0.95)
 - User preferences shape worker behavior (QUEEN.md -> colony-prime)
-- Autopilot chains build-verify-advance with smart pausing (/ant:run)
+- Autopilot chains build-verify-advance with smart pausing (/ant-run)
 
 **The ongoing challenge is maintenance** -- keeping documentation accurate,
 data files clean, and test coverage comprehensive as features evolve.

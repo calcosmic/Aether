@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/tunnels.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:tunnels
+name: ant-tunnels
 description: "🕳️ Explore tunnels (browse archived colonies, compare chambers)"
 ---
 
@@ -13,7 +13,7 @@ You are the **Queen**. Browse the colony history.
 - No arguments: Show timeline view (Step 4)
 - One argument: Show single chamber detail with seal document (Step 3)
 - Two arguments: Compare two chambers side-by-side (Step 5)
-- More than two: "Too many arguments. Use: /ant:tunnels [chamber1] [chamber2]"
+- More than two: "Too many arguments. Use: /ant-tunnels [chamber1] [chamber2]"
 
 ### Step 1: Check for Chambers Directory
 
@@ -25,7 +25,7 @@ TUNNELS — Colony Timeline
 
 No chambers found.
 
-Archive colonies with /ant:entomb to build the tunnel network.
+Archive colonies with /ant-entomb to build the tunnel network.
 ```
 Stop here.
 
@@ -42,7 +42,7 @@ TUNNELS — Colony Timeline
 0 colonies archived
 
 The tunnel network is empty.
-Archive colonies with /ant:entomb to preserve history.
+Archive colonies with /ant-entomb to preserve history.
 ```
 Stop here.
 
@@ -55,7 +55,7 @@ If `$ARGUMENTS` is not empty and contains exactly one argument:
   ```
   Chamber not found: {arguments}
 
-  Run /ant:tunnels to see available chambers.
+  Run /ant-tunnels to see available chambers.
   ```
   Stop here.
 
@@ -96,16 +96,16 @@ Select an action (1/2/3)
 Use AskUserQuestion with three options.
 
 If option 1 selected: proceed to Step 6 (Import Signals from Chamber).
-If option 2 selected: return to timeline (run /ant:tunnels).
-If option 3 selected: prompt for second chamber name then run /ant:tunnels {chamber_a} {chamber_b}.
+If option 2 selected: return to timeline (run /ant-tunnels).
+If option 3 selected: prompt for second chamber name then run /ant-tunnels {chamber_a} {chamber_b}.
 
 **If `colony-archive.xml` does NOT exist in the chamber**, show the existing footer unchanged:
 ```
 Chamber integrity: {hash_status from chamber-verify}
 Chamber location: .aether/chambers/{chamber_name}/
 
-Run /ant:tunnels to return to timeline
-Run /ant:tunnels {chamber_a} {chamber_b} to compare chambers
+Run /ant-tunnels to return to timeline
+Run /ant-tunnels {chamber_a} {chamber_b} to compare chambers
 ```
 
 **If CROWNED-ANTHILL.md does NOT exist (older chamber):**
@@ -124,8 +124,8 @@ Fall back to manifest data display:
 
 Footer with navigation guidance:
 ```
-Run /ant:tunnels to return to timeline
-Run /ant:tunnels {chamber_a} {chamber_b} to compare chambers
+Run /ant-tunnels to return to timeline
+Run /ant-tunnels {chamber_a} {chamber_b} to compare chambers
 ```
 
 To get the hash status, run using the Bash tool with description "Verifying chamber integrity...":
@@ -159,8 +159,8 @@ Where `milestone_emoji` is:
 
 After the timeline entries, show:
 ```
-Run /ant:tunnels <chamber_name> to view seal document
-Run /ant:tunnels <chamber_a> <chamber_b> to compare two colonies
+Run /ant-tunnels <chamber_name> to view seal document
+Run /ant-tunnels <chamber_a> <chamber_b> to compare two colonies
 ```
 
 Use the entombed_at field from the chamber-list JSON to extract the date (first 10 chars of ISO timestamp).
@@ -170,7 +170,7 @@ Stop here.
 ### Step 5: Chamber Comparison Mode (Two Arguments)
 
 If two arguments provided (chamber names separated by space):
-- Treat as: `/ant:tunnels <chamber_a> <chamber_b>`
+- Treat as: `/ant-tunnels <chamber_a> <chamber_b>`
 
 Check both chambers exist. If either missing:
 ```
@@ -249,13 +249,13 @@ New Learnings in {chamber_b}:
 
 If both chambers have `CROWNED-ANTHILL.md`, note:
 ```
-Both colonies have seal documents. Run /ant:tunnels <name> to view individually.
+Both colonies have seal documents. Run /ant-tunnels <name> to view individually.
 ```
 
 Footer:
 ```
-Run /ant:tunnels to see all chambers
-Run /ant:tunnels <chamber> to view single chamber details
+Run /ant-tunnels to see all chambers
+Run /ant-tunnels <chamber> to view single chamber details
 ```
 
 Stop here.
@@ -369,7 +369,7 @@ Imported: {imported_count} pheromone signals
 Tagged with: "{source_colony}:" prefix
 
 Your colony now carries wisdom from {source_colony}.
-Run /ant:status to see current colony state.
+Run /ant-status to see current colony state.
 ```
 
 If import failed:

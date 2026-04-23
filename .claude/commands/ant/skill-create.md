@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/skill-create.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:skill-create
+name: ant-skill-create
 description: "🧪 Create a custom domain skill using Oracle mini-research and a guided wizard"
 ---
 
@@ -19,12 +19,12 @@ If `$ARGUMENTS` is empty, output:
 ```
 Skill Creator — Usage
 
-  /ant:skill-create "topic"
+  /ant-skill-create "topic"
 
   Examples:
-    /ant:skill-create "kubernetes"
-    /ant:skill-create "fastapi"
-    /ant:skill-create "terraform"
+    /ant-skill-create "kubernetes"
+    /ant-skill-create "fastapi"
+    /ant-skill-create "terraform"
 
   This will research the topic, ask a few questions, and generate
   a custom SKILL.md in ~/.aether/skills/domain/
@@ -280,7 +280,7 @@ If the user selects option 1, output:
 Skill "{SKILL_NAME}" is ready. It will automatically activate in projects
 that match its detection patterns (files: {detect_files}, packages: {detect_packages}).
 
-You can also view all installed skills with: /ant:skill-list
+You can also view all installed skills with: /ant-skill-list
 ```
 
 Stop here.

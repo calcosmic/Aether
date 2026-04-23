@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/oracle.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:oracle
+name: ant-oracle
 description: "🔮 Run the autonomous Oracle loop through the Aether CLI runtime"
 ---
 

@@ -44,7 +44,7 @@ What this colony learned, the next colony inherits.
 ## Chronicler Documentation Audit
 
 - Coverage: 78%
-- Gaps: 13 identified (2 high: version changelog gap, 3 medium: stale counts, missing /ant:quick in rules table)
+- Gaps: 13 identified (2 high: version changelog gap, 3 medium: stale counts, missing /ant-quick in rules table)
 - Pages documented: extensive (CLAUDE.md, CHANGELOG.md, 36 .aether/docs/ files, 12 bin/lib/ modules)
 
 ## The Work

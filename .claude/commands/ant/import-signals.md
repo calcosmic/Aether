@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/import-signals.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:import-signals
+name: ant-import-signals
 description: "📥 Import pheromone signals from another colony's XML export"
 ---
 
@@ -13,19 +13,19 @@ The arguments are: `$ARGUMENTS`
 ### Step 1: Validate
 
 Read `.aether/data/COLONY_STATE.json`.
-If file missing or `goal: null` -> "No colony initialized. Run /ant:init first.", stop.
+If file missing or `goal: null` -> "No colony initialized. Run /ant-init first.", stop.
 
 Parse `$ARGUMENTS`:
 - First argument: path to XML file (required).
 
 If no arguments provided, show usage and stop:
 ```
-Usage: /ant:import-signals <path-to-signals.xml>
+Usage: /ant-import-signals <path-to-signals.xml>
 
   <path-to-signals.xml>  Path to an exported pheromone XML file
 
 Example:
-  /ant:import-signals .aether/exchange/pheromones.xml
+  /ant-import-signals .aether/exchange/pheromones.xml
 ```
 
 Verify the XML file exists. If not -> "File not found: <path>", stop.

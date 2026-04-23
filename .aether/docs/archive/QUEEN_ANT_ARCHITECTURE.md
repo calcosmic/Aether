@@ -28,7 +28,7 @@
         │                │                │
         ▼                ▼                ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   /ant:init  │  │ /ant:focus   │  │/ant:redirect │
+│   /ant-init  │  │ /ant-focus   │  │/ant-redirect │
 │   Set goal   │  │  Add focus   │  │  Add avoid   │
 └──────────────┘  └──────────────┘  └──────────────┘
         │                │                │
@@ -43,14 +43,14 @@
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    /ant:plan                                 │
+│                    /ant-plan                                 │
 │  Iterative Research/Planning Loop (up to 50 iterations)    │
 │  Scout + Route-Setter until 95% confidence                 │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    /ant:build                                │
+│                    /ant-build                                │
 │  Spawns ONE Prime Worker                                    │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -121,7 +121,7 @@ Result: True emergence where structure comes from the work
 ### Iterative Research Loop
 
 ```
-/ant:plan triggers:
+/ant-plan triggers:
 
 for iteration in 1..50:
 
@@ -181,13 +181,13 @@ Simple, declarative guidance replacing the complex pheromone system.
 
 | Command | Effect |
 |---------|--------|
-| `/ant:focus "area"` | Add to focus list (max 5) |
-| `/ant:redirect "pattern"` | Add AVOID constraint (max 10) |
-| `/ant:council` | Interactive multi-choice to inject multiple signals |
+| `/ant-focus "area"` | Add to focus list (max 5) |
+| `/ant-redirect "pattern"` | Add AVOID constraint (max 10) |
+| `/ant-council` | Interactive multi-choice to inject multiple signals |
 
 ### Council: Interactive Clarification
 
-When you need to inject multiple pheromones or clarify complex intent, use `/ant:council`:
+When you need to inject multiple pheromones or clarify complex intent, use `/ant-council`:
 
 ```
 📜🐜🏛️🐜📜 ANT COUNCIL
@@ -209,7 +209,7 @@ Queen convenes the council to clarify intent via multi-choice questions.
 
 ### Swarm: Stubborn Bug Destroyer
 
-When repeated fix attempts fail, deploy the swarm with `/ant:swarm "<problem>"`:
+When repeated fix attempts fail, deploy the swarm with `/ant-swarm "<problem>"`:
 
 ```
 🔥🐜🗡️🐜🔥 SWARM DEPLOYED
@@ -253,7 +253,7 @@ Deploys 4 parallel scouts to investigate from multiple angles:
 ### tmux Watch Session
 
 ```
-/ant:watch creates:
+/ant-watch creates:
 
 ┌─────────────────────────┬───────────────────────────────┐
 │ Status                  │ Activity Log                   │
@@ -367,16 +367,16 @@ Simplified from v2.0:
 
 | Command | Purpose |
 |---------|---------|
-| `/ant:init "goal"` | Initialize colony with intention |
-| `/ant:plan` | Iterative planning until 95% confidence |
-| `/ant:build N` | Build phase N with Prime Worker |
-| `/ant:continue` | Advance to next phase |
-| `/ant:focus "area"` | Add focus constraint |
-| `/ant:redirect "pattern"` | Add avoid constraint |
-| `/ant:council` | 📜🐜🏛️🐜📜 Multi-choice intent clarification |
-| `/ant:swarm "problem"` | 🔥🐜🗡️🐜🔥 Stubborn bug destroyer |
-| `/ant:status` | Quick colony status |
-| `/ant:watch` | Set up tmux for live viewing |
+| `/ant-init "goal"` | Initialize colony with intention |
+| `/ant-plan` | Iterative planning until 95% confidence |
+| `/ant-build N` | Build phase N with Prime Worker |
+| `/ant-continue` | Advance to next phase |
+| `/ant-focus "area"` | Add focus constraint |
+| `/ant-redirect "pattern"` | Add avoid constraint |
+| `/ant-council` | 📜🐜🏛️🐜📜 Multi-choice intent clarification |
+| `/ant-swarm "problem"` | 🔥🐜🗡️🐜🔥 Stubborn bug destroyer |
+| `/ant-status` | Quick colony status |
+| `/ant-watch` | Set up tmux for live viewing |
 
 ---
 

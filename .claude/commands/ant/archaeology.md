@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/archaeology.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:archaeology
+name: ant-archaeology
 description: "🏺 The Archaeologist — excavates git history and surfaces tribal knowledge"
 ---
 
@@ -42,14 +42,14 @@ The target path is: `$ARGUMENTS`
 ```
 🏺🐜🔍🐜🏺 ARCHAEOLOGIST
 
-Usage: /ant:archaeology <path>
+Usage: /ant-archaeology <path>
 
   <path>  A file or directory to excavate
 
 Examples:
-  /ant:archaeology src/auth/
-  /ant:archaeology lib/legacy/cache.ts
-  /ant:archaeology package.json
+  /ant-archaeology src/auth/
+  /ant-archaeology lib/legacy/cache.ts
+  /ant-archaeology package.json
 
 The Archaeologist analyzes git history to explain WHY code exists,
 surfaces tribal knowledge buried in commits, and identifies
@@ -298,9 +298,9 @@ Excavation date: {YYYY-MM-DD}
   What are the sacred cows? What's safe to change?}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-/ant:status   📊 Colony status
-/ant:dream    💭 Dream about this code
-/ant:build    🔨 Start building
+/ant-status   📊 Colony status
+/ant-dream    💭 Dream about this code
+/ant-build    🔨 Start building
 ```
 
 **Adapt the report to what was found.** If there are no dead code candidates, omit that section. If there is no tech debt, omit that section. Never fabricate findings — if the history is clean and simple, say so. A short, honest report is better than a padded one.

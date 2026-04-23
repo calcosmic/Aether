@@ -1,4 +1,4 @@
-name: ant:pheromones
+name: ant-pheromones
 description: "🎯 View and manage active pheromone signals"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

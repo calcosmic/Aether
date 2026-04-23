@@ -4,7 +4,7 @@
 
 Active and supported.
 
-These utilities back XML export/import/validation flows used by runtime subcommands and by user-facing commands such as `/ant:seal`, `/ant:entomb`, and `/ant:tunnels`.
+These utilities back XML export/import/validation flows used by runtime subcommands and by user-facing commands such as `/ant-seal`, `/ant-entomb`, and `/ant-tunnels`.
 
 ## Utility Files
 

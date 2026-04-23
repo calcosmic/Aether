@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/council.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:council
+name: ant-council
 description: "📜 Convene council for intent clarification via multi-choice questions"
 ---
 

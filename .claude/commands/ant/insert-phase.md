@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/insert-phase.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:insert-phase
+name: ant-insert-phase
 description: "➕ Insert a corrective phase into the active plan"
 ---
 
@@ -13,15 +13,15 @@ You are the **Queen**. Insert a new corrective phase without forcing the user to
 Read `.aether/data/COLONY_STATE.json`.
 
 If `goal` is null:
-`No colony initialized. Run /ant:init first.`
+`No colony initialized. Run /ant-init first.`
 Stop.
 
 If `milestone` == `"Crowned Anthill"`:
-`This colony has been sealed. Start a new colony with /ant:init "new goal".`
+`This colony has been sealed. Start a new colony with /ant-init "new goal".`
 Stop.
 
 If `plan.phases` is empty:
-`No project plan. Run /ant:plan first.`
+`No project plan. Run /ant-plan first.`
 Stop.
 
 Determine:
@@ -94,7 +94,7 @@ Show:
 
 ```text
 Next steps:
-  /ant:phase <inserted_phase_id>   Review inserted phase details
-  /ant:build <inserted_phase_id>   Execute corrective phase
-  /ant:status                      Verify updated plan state
+  /ant-phase <inserted_phase_id>   Review inserted phase details
+  /ant-build <inserted_phase_id>   Execute corrective phase
+  /ant-status                      Verify updated plan state
 ```

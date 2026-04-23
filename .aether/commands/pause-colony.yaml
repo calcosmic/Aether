@@ -1,4 +1,4 @@
-name: ant:pause-colony
+name: ant-pause-colony
 description: "💾 Pause colony work through the Aether CLI runtime"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

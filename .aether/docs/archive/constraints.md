@@ -4,36 +4,36 @@ Constraints are how you guide the colony. Instead of micromanaging individual an
 
 ## How Constraints Work
 
-- **You set** constraints using `/ant:focus` and `/ant:redirect`
+- **You set** constraints using `/ant-focus` and `/ant-redirect`
 - **Constraints persist** until you remove them or reset the colony
 - **Focus areas** tell the colony "pay extra attention here"
 - **Avoid patterns** tell the colony "don't do this"
-- **Run `/ant:status`** to see active constraints
+- **Run `/ant-status`** to see active constraints
 
 ---
 
 ## FOCUS -- Guide Attention
 
-**Command:** `/ant:focus "<area>"`
+**Command:** `/ant-focus "<area>"`
 
 **What it does:** Adds an area to the focus list. Workers prioritize focused areas in their task execution.
 
 ### When to use FOCUS
 
 **Scenario 1: Steering the next build phase**
-You're about to run `/ant:build 3` and Phase 3 has tasks touching both the API layer and the database layer. You know the database schema is fragile:
+You're about to run `/ant-build 3` and Phase 3 has tasks touching both the API layer and the database layer. You know the database schema is fragile:
 
 ```
-/ant:focus "database schema -- handle migrations carefully"
-/ant:build 3
+/ant-focus "database schema -- handle migrations carefully"
+/ant-build 3
 ```
 
 **Scenario 2: Directing colonization**
 You're colonizing a new project and want the colonizer to pay special attention to testing:
 
 ```
-/ant:focus "test framework and coverage gaps"
-/ant:colonize
+/ant-focus "test framework and coverage gaps"
+/ant-colonize
 ```
 
 ### When NOT to use FOCUS
@@ -45,7 +45,7 @@ You're colonizing a new project and want the colonizer to pay special attention 
 
 ## REDIRECT -- Warn Away
 
-**Command:** `/ant:redirect "<pattern to avoid>"`
+**Command:** `/ant-redirect "<pattern to avoid>"`
 
 **What it does:** Adds an AVOID constraint. Workers actively avoid the specified pattern. This is the strongest guidance type.
 
@@ -55,15 +55,15 @@ You're colonizing a new project and want the colonizer to pay special attention 
 Your project uses Next.js Edge Runtime, and you know `jsonwebtoken` doesn't work there:
 
 ```
-/ant:redirect "Don't use jsonwebtoken -- use jose library instead (Edge Runtime compatible)"
-/ant:build 2
+/ant-redirect "Don't use jsonwebtoken -- use jose library instead (Edge Runtime compatible)"
+/ant-build 2
 ```
 
 **Scenario 2: Steering away from a previous failure**
 Phase 1 tried to use synchronous file reads and caused performance issues:
 
 ```
-/ant:redirect "No synchronous file I/O -- use async fs/promises"
+/ant-redirect "No synchronous file I/O -- use async fs/promises"
 ```
 
 ### When NOT to use REDIRECT
@@ -106,9 +106,9 @@ Constraints are stored in `.aether/data/constraints.json`:
 
 | Command | Effect | Limit |
 |---------|--------|-------|
-| `/ant:focus "<area>"` | Add to focus list | 5 max |
-| `/ant:redirect "<avoid>"` | Add AVOID constraint | 10 max |
-| `/ant:status` | View active constraints | - |
+| `/ant-focus "<area>"` | Add to focus list | 5 max |
+| `/ant-redirect "<avoid>"` | Add AVOID constraint | 10 max |
+| `/ant-status` | View active constraints | - |
 
 **Rule of thumb:**
 - Before a build: FOCUS + REDIRECT to steer

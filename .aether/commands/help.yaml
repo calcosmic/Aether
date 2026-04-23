@@ -1,4 +1,4 @@
-name: ant:help
+name: ant-help
 description: "🐜 Show the current Aether command surface"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:

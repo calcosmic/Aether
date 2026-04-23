@@ -63,8 +63,8 @@ What was learned from debugging:
 
 ### 3. User Corrections
 What the user redirected:
-- Feedback via `/ant:feedback`
-- Redirects via `/ant:redirect`
+- Feedback via `/ant-feedback`
+- Redirects via `/ant-redirect`
 - Explicit corrections
 
 ### 4. Tool Preferences
@@ -227,22 +227,22 @@ Over time, instincts with high confidence become colony-wide behaviors:
 
 ## Integration Points
 
-### /ant:build
+### /ant-build
 - Workers receive relevant instincts in prompt
 - Workers report patterns observed
 - Workers log instinct applications
 
-### /ant:continue
+### /ant-continue
 - Extract patterns from build results
 - Create/update instincts
 - Adjust confidence based on outcomes
 
-### /ant:status
+### /ant-status
 - Show learned instincts with confidence
 - Show application statistics
 - Show recent pattern discoveries
 
-### /ant:feedback
+### /ant-feedback
 - Creates user_feedback instinct
 - High initial confidence (0.7)
 - Immediate application to current work

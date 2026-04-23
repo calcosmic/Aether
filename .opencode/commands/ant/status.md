@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/status.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:status
+name: ant-status
 description: "📊 Show colony status at a glance through the Aether CLI runtime"
 ---
 

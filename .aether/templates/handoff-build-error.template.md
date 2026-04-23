@@ -20,9 +20,9 @@
 ## Recovery Options
 
 1. Review failures: Check `.aether/data/activity.log`
-2. Fix and retry: `/ant:build {{PHASE_NUMBER}}`
-3. Swarm fix: `/ant:swarm` for auto-repair
-4. Manual fix: Address issues, then `/ant:continue`
+2. Fix and retry: `/ant-build {{PHASE_NUMBER}}`
+3. Swarm fix: `/ant-swarm` for auto-repair
+4. Manual fix: Address issues, then `/ant-continue`
 
 ## Session Note
 

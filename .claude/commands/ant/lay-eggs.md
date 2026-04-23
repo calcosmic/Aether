@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/lay-eggs.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:lay-eggs
+name: ant-lay-eggs
 description: "🥚 Set up Aether in this repo — creates .aether/ with all system files"
 ---
 
@@ -8,7 +8,7 @@ You are the **Queen**. Prepare this repository for Aether colony development.
 
 ## Instructions
 
-This command sets up the `.aether/` directory structure and copies all system files from the global hub. It does NOT start a colony — that's what `/ant:init "goal"` is for.
+This command sets up the `.aether/` directory structure and copies all system files from the global hub. It does NOT start a colony — that's what `/ant-init "goal"` is for.
 
 <failure_modes>
 ### Hub Not Found
@@ -20,7 +20,7 @@ If `~/.aether/version.json` does not exist:
 ### Partial Copy Failure
 If some files fail to copy from hub:
 - Report which files succeeded and which failed
-- The user can re-run `/ant:lay-eggs` safely (idempotent)
+- The user can re-run `/ant-lay-eggs` safely (idempotent)
 </failure_modes>
 
 <success_criteria>
@@ -58,7 +58,7 @@ The global hub must be installed before setting up a repo.
 This installs the Aether Go binary and populates the hub at ~/.aether/system/
 with all the system files your repo needs.
 
-After installing, run /ant:lay-eggs again.
+After installing, run /ant-lay-eggs again.
 ```
 Stop here.
 
@@ -188,8 +188,8 @@ Parse the JSON output for the display step.
    {templates} templates ({utils} utils modules)
 
 To start a colony:
-  /ant:init "your goal here"
+  /ant-init "your goal here"
 
 To verify setup:
-  /ant:status
+  /ant-status
 ```

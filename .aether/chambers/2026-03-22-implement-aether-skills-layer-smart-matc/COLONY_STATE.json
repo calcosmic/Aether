@@ -247,13 +247,13 @@
           "Skill detection runs once per build",
           "Builders receive matched skills",
           "Watchers receive matched skills",
-          "Autopilot (/ant:run) gets skills automatically via same playbooks"
+          "Autopilot (/ant-run) gets skills automatically via same playbooks"
         ]
       },
       {
         "id": 4,
         "name": "Hub Distribution and Skill Creation Command",
-        "description": "Add manifest-aware skills sync to setupHub, create /ant:skill-create command with OpenCode parity stub.",
+        "description": "Add manifest-aware skills sync to setupHub, create /ant-skill-create command with OpenCode parity stub.",
         "status": "completed",
         "tasks": [
           {
@@ -279,7 +279,7 @@
           },
           {
             "id": "4.2",
-            "goal": "Create /ant:skill-create slash command for Claude Code with Oracle research wizard",
+            "goal": "Create /ant-skill-create slash command for Claude Code with Oracle research wizard",
             "status": "completed",
             "constraints": [
               "Must be at .claude/commands/ant/skill-create.md",
@@ -358,7 +358,7 @@
           },
           {
             "id": "5.2",
-            "goal": "Add /ant:skill-create to aether-colony.md Available Commands table",
+            "goal": "Add /ant-skill-create to aether-colony.md Available Commands table",
             "status": "completed",
             "constraints": [],
             "hints": [],

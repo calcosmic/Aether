@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/pause-colony.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:pause-colony
+name: ant-pause-colony
 description: "💾 Pause colony work through the Aether CLI runtime"
 ---
 

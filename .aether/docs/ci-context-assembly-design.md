@@ -433,7 +433,7 @@ Reuse colony-prime's existing algorithm (colony-prime lines 1388-1492) with
                     ===============                      ================
 
   +------------------+                                  +------------------+
-  | /ant:build       |                                  | CI Pipeline      |
+  | /ant-build       |                                  | CI Pipeline      |
   | (interactive)    |                                  | (automated)      |
   +--------+---------+                                  +--------+---------+
            |                                                     |
@@ -509,8 +509,8 @@ pr-context) _pr_context "$@" ;;
 | Caller | When | Mode |
 |--------|------|------|
 | CI pipeline (GitHub Actions) | On PR push/open, before agent review | `--compact` |
-| `/ant:continue` Step 4 | After verification, for review context | default |
-| `/ant:run` autopilot | Before each phase's review cycle | `--compact` |
+| `/ant-continue` Step 4 | After verification, for review context | default |
+| `/ant-run` autopilot | Before each phase's review cycle | `--compact` |
 | Watcher agent | When running as CI check | `--compact` |
 
 ---
@@ -702,7 +702,7 @@ pr-context) _pr_context "$@" ;;
 ### 10.1 No Colony Initialized on Branch
 
 A PR branch may not have `.aether/data/COLONY_STATE.json` (e.g., a developer
-creates a branch without running `/ant:init`). In this case:
+creates a branch without running `/ant-init`). In this case:
 
 - pr-context returns `colony_state.exists = false` with defaults
 - context-capsule returns `{"exists":false,...}` (verified at aether CLI 4210-4213)
@@ -772,8 +772,8 @@ output with a `warnings` entry noting the budget overflow.
 
 | Command | Integration Point | Behavior |
 |---------|-------------------|----------|
-| `/ant:continue` | Step 4 (post-verify) | Call pr-context to generate review context |
-| `/ant:run` | Before review cycle | Call pr-context --compact for each CI agent |
+| `/ant-continue` | Step 4 (post-verify) | Call pr-context to generate review context |
+| `/ant-run` | Before review cycle | Call pr-context --compact for each CI agent |
 | CI workflow | PR push/open | Call pr-context --compact for Watcher, Gatekeeper, etc. |
 
 ### 11.4 File Locking
@@ -804,7 +804,7 @@ output with a `warnings` entry noting the budget overflow.
 | Cache storage | `.aether/data/pr-context-cache.json` (gitignored) |
 | Cache invalidation | mtime-based per source |
 | Code reuse | Reuse _extract_wisdom, _filter_wisdom_entries; extract _budget_enforce |
-| Integration | CI pipeline tiers 2-3, /ant:continue, /ant:run |
+| Integration | CI pipeline tiers 2-3, /ant-continue, /ant-run |
 
 ---
 

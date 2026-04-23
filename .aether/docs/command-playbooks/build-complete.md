@@ -23,9 +23,9 @@ To verify, read the cross-stage state (typically `.aether/data/build-stage-state
     {list each stage name with its recorded status, or "not recorded" if absent}
 
   Recovery options:
-    1. Re-run the missing stage(s) manually, then retry /ant:build
-    2. Run /ant:flags to review blockers
-    3. Run /ant:swarm to auto-repair failed tasks
+    1. Re-run the missing stage(s) manually, then retry /ant-build
+    2. Run /ant-flags to review blockers
+    3. Run /ant-swarm to auto-repair failed tasks
   ```
 - Return `{"status": "failed", "summary": "Stage audit failed — stages {names} did not complete successfully"}` and stop.
 
@@ -136,7 +136,7 @@ The cap of 2 prevents observation count inflation when builds produce many patte
 
 ### Step 5.9.1: Persist Builder Claims (MANDATORY)
 
-Write builder file claims to `.aether/data/last-build-claims.json` for verification during /ant:continue.
+Write builder file claims to `.aether/data/last-build-claims.json` for verification during /ant-continue.
 
 Collect from each builder worker's output:
 - files_created: [...all files_created from all builders...]
@@ -149,7 +149,7 @@ echo '{"files_created":[...], "files_modified":[...], "build_phase": N, "timesta
 
 Replace the `[...]` placeholders with the actual arrays collected from builder outputs, `N` with the current phase number, and `ISO8601` with the current timestamp.
 
-This file is consumed by verify-claims during /ant:continue.
+This file is consumed by verify-claims during /ant-continue.
 
 **Error Handoff Update:**
 If workers failed, update handoff with error context for recovery:
@@ -174,7 +174,7 @@ Only fires when workers fail. Zero impact on successful builds.
 
 --- SPAWN TRACKING ---
 
-The spawn tree will be visible in `/ant:watch` because each spawn is logged.
+The spawn tree will be visible in `/ant-watch` because each spawn is logged.
 
 --- OUTPUT FORMAT ---
 
@@ -282,7 +282,7 @@ jq -n \
   --arg summary "{synthesis.summary}" \
   --argjson tasks_completed '{synthesis.tasks_completed | length}' \
   --argjson tasks_failed '{synthesis.tasks_failed | length}' \
-  --arg next_action "{if synthesis.status == "completed" then "/ant:continue" else "/ant:flags" end}" \
+  --arg next_action "{if synthesis.status == "completed" then "/ant-continue" else "/ant-flags" end}" \
   '{
     "last_updated": $timestamp,
     "goal": $goal,
@@ -294,7 +294,7 @@ jq -n \
     "tasks_failed": $tasks_failed,
     "next_recommended_action": $next_action,
     "can_resume": true,
-    "note": "Phase build completed. Run /ant:continue to advance if verification passed."
+    "note": "Phase build completed. Run /ant-continue to advance if verification passed."
   }' > .aether/data/last-build-result.json
 ```
 
@@ -330,7 +330,7 @@ Run using the Bash tool with description "Updating build context...": `aether co
 
 Also update safe-to-clear status:
 - If build completed successfully: `context-update safe-to-clear "YES" "Build complete, ready to continue"`
-- If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant:swarm or /ant:flags"`
+- If build failed: `context-update safe-to-clear "NO" "Build failed — run /ant-swarm or /ant-flags"`
 
 ### Step 6.7: Check for Promotion Proposals
 
@@ -387,7 +387,7 @@ Failed:
   {caste_emoji} {Ant-Name}: {task_description} ✗ ({failure_reason} after {tool_count} tools)
   {end for}
 
-Retry: /ant:swarm to auto-repair failed tasks, or /ant:flags to review blockers
+Retry: /ant-swarm to auto-repair failed tasks, or /ant-flags to review blockers
 {end if}
 ```
 
@@ -404,15 +404,15 @@ total_phases=$(jq -r '.plan.phases | length' .aether/data/COLONY_STATE.json 2>/d
 aether print-next-up "$state" "$current_phase" "$total_phases"
 ```
 
-**Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant:flags` before continuing.
+**Routing Note:** The state-based Next Up block above routes based on colony state. If verification failed or blockers exist, review `/ant-flags` before continuing.
 
-**IMPORTANT:** Build does NOT update task statuses or advance state. Run `/ant:continue` to:
+**IMPORTANT:** Build does NOT update task statuses or advance state. Run `/ant-continue` to:
 - Mark tasks as completed
 - Extract learnings
 - Advance to next phase
 
 ### Step 8: Update Session
 
-Update the session tracking file to enable `/ant:resume` after context clear:
+Update the session tracking file to enable `/ant-resume` after context clear:
 
-Run using the Bash tool with description "Saving build session...": `aether session-update --command "/ant:build {phase_id}" --suggested-next "/ant:continue" --summary "Phase {phase_id} build completed: {synthesis.status}"`
+Run using the Bash tool with description "Saving build session...": `aether session-update --command "/ant-build {phase_id}" --suggested-next "/ant-continue" --summary "Phase {phase_id} build completed: {synthesis.status}"`

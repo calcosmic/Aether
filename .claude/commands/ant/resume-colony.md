@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/resume-colony.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:resume-colony
+name: ant-resume-colony
 description: "💾 Resume colony work through the Aether CLI runtime"
 ---
 

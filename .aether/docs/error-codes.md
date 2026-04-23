@@ -157,12 +157,12 @@ This document is the complete reference for all `E_*` error constants used in Ae
 
 - **Meaning:** The current repository hasn't been initialized with Aether.
 - **When it happens:**
-  - Running an Aether command in a repo before running `/ant:init`.
+  - Running an Aether command in a repo before running `/ant-init`.
   - The `.aether/` directory or `COLONY_STATE.json` is missing from the current repo.
-- **Suggested fix:** Run `/ant:init` in Claude Code to initialize Aether in this repository.
+- **Suggested fix:** Run `/ant-init` in Claude Code to initialize Aether in this repository.
 - **Example output:**
   ```json
-  {"ok":false,"error":{"code":"E_REPO_NOT_INITIALIZED","message":"Couldn't find Aether initialization in this repo. Try: run /ant:init first.","details":null,"recovery":"Run /ant:init in this repo first","timestamp":"2026-02-19T13:00:00Z"}}
+  {"ok":false,"error":{"code":"E_REPO_NOT_INITIALIZED","message":"Couldn't find Aether initialization in this repo. Try: run /ant-init first.","details":null,"recovery":"Run /ant-init in this repo first","timestamp":"2026-02-19T13:00:00Z"}}
   ```
 
 ### E_GIT_ERROR

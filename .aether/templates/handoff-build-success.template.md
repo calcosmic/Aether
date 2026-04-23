@@ -5,7 +5,7 @@
 
 ## Quick Resume
 
-Run `/ant:continue` to advance phase, or `/ant:resume-colony` to restore full context.
+Run `/ant-continue` to advance phase, or `/ant-resume-colony` to restore full context.
 
 ## State at Build Completion
 
@@ -30,9 +30,9 @@ Run `/ant:continue` to advance phase, or `/ant:resume-colony` to restore full co
 
 ## Next Steps
 
-- If verification passed: `/ant:continue` to advance to next phase
-- If issues found: `/ant:flags` to review blockers
-- To pause: `/ant:pause-colony`
+- If verification passed: `/ant-continue` to advance to next phase
+- If issues found: `/ant-flags` to review blockers
+- To pause: `/ant-pause-colony`
 
 ## Session Note
 

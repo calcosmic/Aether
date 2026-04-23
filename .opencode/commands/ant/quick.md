@@ -1,10 +1,10 @@
 <!-- Generated from .aether/commands/quick.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:quick
+name: ant-quick
 description: "⚡ Quick scout query — fast answers without build ceremony"
 ---
 
-You are the **Queen**. Execute `/ant:quick` — a lightweight scout mission.
+You are the **Queen**. Execute `/ant-quick` — a lightweight scout mission.
 
 The query is: `$ARGUMENTS`
 
@@ -19,13 +19,13 @@ details. No build ceremony, no state changes, no verification waves.
 
 If `$ARGUMENTS` is empty:
 ```
-Usage: /ant:quick "<question>"
+Usage: /ant-quick "<question>"
 
 Examples:
-  /ant:quick "how does the pheromone system work?"
-  /ant:quick "find all uses of acquire_lock"
-  /ant:quick "what tests cover midden-write?"
-  /ant:quick "show me the colony-prime token budget logic"
+  /ant-quick "how does the pheromone system work?"
+  /ant-quick "find all uses of acquire_lock"
+  /ant-quick "what tests cover midden-write?"
+  /ant-quick "show me the colony-prime token budget logic"
 ```
 Stop here.
 
@@ -89,7 +89,7 @@ aether spawn-complete --name "{scout_name}" --status "completed" --summary "Quic
 
 Run using the Bash tool with description "Updating session...":
 ```bash
-aether session-update --command "/ant:quick" --summary "Quick query: {query truncated to 60 chars}" 2>/dev/null || true
+aether session-update --command "/ant-quick" --summary "Quick query: {query truncated to 60 chars}" 2>/dev/null || true
 ```
 
 **NOTE:** This command does NOT:

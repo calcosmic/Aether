@@ -18,16 +18,16 @@ Read `.aether/data/COLONY_STATE.json`.
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
 1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
-2. Write upgraded v3.0 state (same structure as /ant:init but preserving data)
+2. Write upgraded v3.0 state (same structure as /ant-init but preserving data)
 3. Output: `State auto-upgraded to v3.0`
 4. Continue with command.
 
 Extract: `goal`, `state`, `current_phase`, `plan.phases`, `errors`, `memory`, `events`, `build_started_at`.
 
 **Validation:**
-- If `goal: null` -> output "No colony initialized. Run /ant:init first." and stop.
-- If `milestone` == `"Crowned Anthill"` -> output "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop.
-- If `plan.phases` is empty -> output "No project plan. Run /ant:plan first." and stop.
+- If `goal: null` -> output "No colony initialized. Run /ant-init first." and stop.
+- If `milestone` == `"Crowned Anthill"` -> output "This colony has been sealed. Start a new colony with `/ant-init \"new goal\"`." and stop.
+- If `plan.phases` is empty -> output "No project plan. Run /ant-plan first." and stop.
 
 ### Step 1.5: Load State and Show Resumption Context
 
@@ -49,9 +49,9 @@ If .aether/HANDOFF.md exists (detected in load-state output):
 Run using the Bash tool with description "Releasing colony lock...": `aether unload-state` to release lock.
 
 **Error handling:**
-- If E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+- If E_FILE_NOT_FOUND: "No colony initialized. Run /ant-init first." and stop
 - If validation error: Display error details with recovery suggestion and stop
-- For other errors: Display generic error and suggest /ant:status for diagnostics
+- For other errors: Display generic error and suggest /ant-status for diagnostics
 
 **Completion Detection:**
 
@@ -87,9 +87,9 @@ echo "{\"docs\":$survey_docs,\"age_days\":$survey_age_days,\"verify\":$survey_ch
 
 Interpretation:
 - If survey docs are missing (`docs == 0`), continue without blocking and display:
-  `🗺️ Survey: not found (run /ant:colonize for stronger context)`
+  `🗺️ Survey: not found (run /ant-colonize for stronger context)`
 - If survey exists but is stale (`age_days > 14`), continue without blocking and display:
-  `🗺️ Survey: {docs} docs loaded ({age_days}d old, consider /ant:colonize --force-resurvey)`
+  `🗺️ Survey: {docs} docs loaded ({age_days}d old, consider /ant-colonize --force-resurvey)`
 - Otherwise display:
   `🗺️ Survey: {docs} docs loaded ({age_days}d old)`
 
@@ -324,7 +324,7 @@ Phase {id} cannot advance until issues are resolved.
 
 🔧 Required Actions:
   1. Fix the issues listed above
-  2. Run /ant:continue again to re-verify
+  2. Run /ant-continue again to re-verify
 
 The phase will NOT advance until verification passes.
 ```
@@ -390,7 +390,7 @@ Cross-reference worker claims against reality. This step catches fabricated succ
    ```
 
    **Auto-retry once** (locked decision):
-   - Re-run `/ant:build <current_phase>` for the current phase
+   - Re-run `/ant-build <current_phase>` for the current phase
    - After retry build completes, re-run the verification loop from Phase 1
    - If verify-claims passes on retry: Display "Retrying... passed on retry" and continue to Step 1.6
    - If verify-claims still blocked on retry: proceed to hard stop below
@@ -399,7 +399,7 @@ Cross-reference worker claims against reality. This step catches fabricated succ
    ```
    Verification failed after retry.
    <plain summary of each mismatch>
-   Phase will NOT advance. Fix the issues and run /ant:continue again.
+   Phase will NOT advance. Fix the issues and run /ant-continue again.
    ```
 
    **CRITICAL:** Do NOT proceed to Step 1.6. Do NOT advance the phase. The verification failure is a hard block just like a test failure.
@@ -410,7 +410,7 @@ Continue to Step 1.6.
 
 After verification passes, collect failure records from any recently merged branch worktrees. This step is silent and non-blocking -- continue proceeds even if collection fails.
 
-**Per D-04: Wire midden-collect into /ant:continue flow.**
+**Per D-04: Wire midden-collect into /ant-continue flow.**
 
 If the colony uses a PR-based workflow and a merge just happened, attempt to collect the branch's midden entries:
 

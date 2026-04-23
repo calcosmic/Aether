@@ -70,7 +70,7 @@ aether survey-load "{phase_name}" 2>/dev/null
 {/for}
 
 {if no survey}
-  (No territory survey — run /ant:colonize for deeper context)
+  (No territory survey — run /ant-colonize for deeper context)
 {/if}
 ```
 
@@ -81,7 +81,7 @@ aether survey-load "{phase_name}" 2>/dev/null
 
 ### Step 4.0.5: Load Phase Research
 
-Load domain research generated during `/ant:plan` for injection into worker prompts:
+Load domain research generated during `/ant-plan` for injection into worker prompts:
 
 Run using the Bash tool with description "Loading phase research...":
 ```bash

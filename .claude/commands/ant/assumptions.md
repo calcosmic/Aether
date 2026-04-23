@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/assumptions.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:assumptions
+name: ant-assumptions
 description: "📐 Surface plan assumptions through the Aether CLI runtime"
 ---
 

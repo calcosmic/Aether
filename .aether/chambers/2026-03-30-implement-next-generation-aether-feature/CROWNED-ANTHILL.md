@@ -22,7 +22,7 @@ Every phase below is a chapter in the story of this anthill's rise:
   - Colony Vital Signs Dashboard: completed
   - Headless Autopilot + Pending Decisions: completed
   - Trophallaxis Repair + Scarification: completed
-  - /ant:quick Scout Missions: completed
+  - /ant-quick Scout Missions: completed
   - Council Expansion: completed
 
 ## Pheromone Legacy
@@ -33,6 +33,6 @@ What this colony learned, the next colony inherits.
 
 ## The Work
 
-Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant:quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge
+Implement next-generation Aether features: immune response system (trophallaxis repair + scarification), headless autopilot (--headless flag + pending decisions), colony vital signs dashboard, /ant-quick scout missions, council expansion (advocate/challenger/sage), and midden library for persistent debug knowledge
 
 The anthill stands crowned. The work endures.

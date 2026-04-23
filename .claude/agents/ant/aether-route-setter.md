@@ -1,6 +1,6 @@
 ---
 name: aether-route-setter
-description: "Use this agent when decomposing a goal into phases, analyzing task dependencies, creating structured build plans, or verifying a plan's feasibility. Spawned by /ant:plan and Queen when a project needs phase decomposition and task ordering before implementation begins."
+description: "Use this agent when decomposing a goal into phases, analyzing task dependencies, creating structured build plans, or verifying a plan's feasibility. Spawned by /ant-plan and Queen when a project needs phase decomposition and task ordering before implementation begins."
 tools: Read, Grep, Glob, Bash, Write, Task
 color: purple
 model: opus

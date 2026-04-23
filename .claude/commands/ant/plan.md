@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/plan.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:plan
+name: ant-plan
 description: "📋 Generate or review a project plan through the Aether CLI runtime"
 ---
 

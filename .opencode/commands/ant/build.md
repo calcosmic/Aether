@@ -1,6 +1,6 @@
 <!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->
 ---
-name: ant:build
+name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 ---
 
@@ -62,7 +62,7 @@ Once the runtime completes its dispatch:
 
 1. **Summarize what moved forward** in short colony language
 2. **Note only the most relevant signal or risk** that should stay in view
-3. **Guide the user first to `/ant:continue`** as the next command
+3. **Guide the user first to `/ant-continue`** as the next command
 4. Keep the closeout tight — one clear next move is better than an option menu
 
 ## Guardrails
@@ -73,4 +73,4 @@ Once the runtime completes its dispatch:
 - Do NOT parse visual output as authoritative state
 - Do NOT add extra option menus or recovery advice unless the runtime explicitly asks
 - If docs and runtime disagree, runtime wins
-- If `$ARGUMENTS` is empty, show: `Usage: /ant:build <phase_number>`
+- If `$ARGUMENTS` is empty, show: `Usage: /ant-build <phase_number>`

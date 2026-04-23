@@ -91,14 +91,14 @@ Run using the Bash tool with description "Loading colony state...": `aether load
 
 If the command fails (non-zero exit or JSON has ok: false):
 1. Parse error JSON
-2. If error code is E_FILE_NOT_FOUND: "No colony initialized. Run /ant:init first." and stop
+2. If error code is E_FILE_NOT_FOUND: "No colony initialized. Run /ant-init first." and stop
 3. If validation error: Display error details with recovery suggestion and stop
-4. For other errors: Display generic error and suggest /ant:status for diagnostics
+4. For other errors: Display generic error and suggest /ant-status for diagnostics
 
 If successful:
 1. Parse the state JSON from result field
-2. Check if goal is null - if so: "No colony initialized. Run /ant:init first." and stop
-3. Check if `milestone` == `"Crowned Anthill"` - if so: "This colony has been sealed. Start a new colony with `/ant:init \"new goal\"`." and stop
+2. Check if goal is null - if so: "No colony initialized. Run /ant-init first." and stop
+3. Check if `milestone` == `"Crowned Anthill"` - if so: "This colony has been sealed. Start a new colony with `/ant-init \"new goal\"`." and stop
 4. Extract current_phase and phase name from plan.phases[current_phase - 1].name
 4. Display brief resumption context:
    ```
@@ -122,7 +122,7 @@ After displaying context, run using the Bash tool with description "Releasing co
 If the phase number is empty or not a number:
 
 ```
-Usage: /ant:build <phase_number> [--verbose|-v] [--no-visual] [--no-suggest] [--depth <level>]
+Usage: /ant-build <phase_number> [--verbose|-v] [--no-visual] [--no-suggest] [--depth <level>]
 
 Options:
   --verbose, -v       Show full completion details (spawn tree, TDD, patterns)
@@ -131,11 +131,11 @@ Options:
   --depth <level>     Set colony depth for this build (light|standard|deep|full)
 
 Examples:
-  /ant:build 1              Build Phase 1 (with visual display)
-  /ant:build 1 --verbose    Build Phase 1 (full details + visual)
-  /ant:build 1 --no-visual  Build Phase 1 without visual display
-  /ant:build 1 --no-suggest Build Phase 1 without pheromone suggestions
-  /ant:build 1 --depth deep Build Phase 1 with thorough investigation
+  /ant-build 1              Build Phase 1 (with visual display)
+  /ant-build 1 --verbose    Build Phase 1 (full details + visual)
+  /ant-build 1 --no-visual  Build Phase 1 without visual display
+  /ant-build 1 --no-suggest Build Phase 1 without pheromone suggestions
+  /ant-build 1 --depth deep Build Phase 1 with thorough investigation
 ```
 
 Stop here.
@@ -202,7 +202,7 @@ Where label maps:
 **Auto-upgrade old state:**
 If `version` field is missing, "1.0", or "2.0":
 1. Preserve: `goal`, `state`, `current_phase`, `plan.phases`
-2. Write upgraded v3.0 state (same structure as /ant:init but preserving data)
+2. Write upgraded v3.0 state (same structure as /ant-init but preserving data)
 3. Output: `State auto-upgraded to v3.0`
 4. Continue with command.
 
@@ -213,7 +213,7 @@ Extract:
 - `memory` for decisions/learnings
 
 **Validate:**
-- If `plan.phases` is empty -> output `No project plan. Run /ant:plan first.` and stop.
+- If `plan.phases` is empty -> output `No project plan. Run /ant-plan first.` and stop.
 - Find the phase matching the requested ID. If not found -> output `Phase {id} not found.` and stop.
 - If the phase status is `"completed"` -> output `Phase {id} already completed.` and stop.
 
@@ -241,7 +241,7 @@ Parse the JSON result (`.result.blockers`):
      - [{flag.id}] {flag.title}
   {end for}
 
-  Consider reviewing with /ant:flags or auto-fixing with /ant:swarm before building.
+  Consider reviewing with /ant-flags or auto-fixing with /ant-swarm before building.
   Proceeding anyway...
   ```
   **This is advisory only — do NOT stop.** Continue to Step 2 regardless.

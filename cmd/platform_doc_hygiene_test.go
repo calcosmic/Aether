@@ -198,7 +198,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 			forbidden: []string{
 				"It's safe to clear your context now.",
-				"/ant:resume",
+				"/ant-resume",
 				"continue-verify.md",
 				"continue-gates.md",
 				"continue-finalize.md",
@@ -460,7 +460,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 			forbidden: []string{
 				"It's safe to clear your context now.",
-				"/ant:resume",
+				"/ant-resume",
 				"continue-verify.md",
 				"continue-gates.md",
 				"continue-finalize.md",

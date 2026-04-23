@@ -82,7 +82,7 @@ When you catch yourself:
 
 ## Phase Advancement Gate
 
-Before `/ant:continue` advances to next phase:
+Before `/ant-continue` advances to next phase:
 
 1. **Build Check**: Run project build command (if exists)
 2. **Test Check**: Run test suite, capture pass/fail counts

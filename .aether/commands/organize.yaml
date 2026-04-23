@@ -1,4 +1,4 @@
-name: ant:organize
+name: ant-organize
 description: "🧹 Run codebase hygiene report"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
