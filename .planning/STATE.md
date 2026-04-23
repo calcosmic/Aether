@@ -1,16 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.5
-milestone_name: Runtime Truth Recovery, Colony Unblock, and Release Readiness
-status: phase-complete
-last_updated: "2026-04-22T23:30:00.000Z"
-last_activity: 2026-04-23 -- Phase 33 complete: dispatch fixes (P1 robustness, archaeologist caste, context threshold, retry logic)
+milestone_name: Runtime Truth Recovery
+status: executing
+stopped_at: Completed 34-01 backup and commit evaluation
+last_updated: "2026-04-23T01:06:40Z"
+last_activity: 2026-04-23 -- Plan 34-01 completed
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
-  percent: 50
+  completed_phases: 2
+  total_plans: 7
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -20,19 +21,21 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie-repos-Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 34 context gathered — ready for planning
+**Current focus:** Phase --phase — 34
 
 ## Current Position
 
-Phase: 34 of 36 (Cleanup) — CONTEXT GATHERED
-Status: Discuss-phase complete, ready to plan Phase 34
-Last activity: 2026-04-23 -- Phase 34 context gathered and committed
+Phase: 34 (34-cleanup) — EXECUTING
+Plan: 1 of 3 (34-cleanup)
+Status: Plan 34-01 complete, ready for 34-02
+Last activity: 2026-04-23 -- Plan 34-01 completed
 
 Progress: `[████████░░] 50%` (Milestone v1.5: 3/6 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 4
 - Total commits: 16
 - All tests green (2900+ passing)
@@ -68,10 +71,10 @@ Progress: `[████████░░] 50%` (Milestone v1.5: 3/6 phases com
 - Full E2E recovery pipeline proven: abandoned detection -> re-dispatch -> verify -> advance.
 
 ### Phase 34 Decisions (Cleanup)
-- Review 2 candidate commits (claude-dispatch-ux, intent-workflows) for value/merge-readiness/safety before any cleanup.
-- If a commit passes all three checks, integrate into main via selective porting/cherry-pick. If not, create `preserve/` branch and proceed.
-- Interactive confirmation required before deleting worktrees/branches — show full list, pause for explicit user approval.
-- Manual review for all 13 unresolved blocker flags — user decides keep/archive/resolve per flag.
+
+- Both candidate commits (98cda871 claude-dispatch-ux, 4bbb9273 intent-workflows) evaluated and dismissed -- useful code already exists on main in different forms. No preserve branches created per user decision.
+- Interactive confirmation required before deleting worktrees/branches -- show full list, pause for explicit user approval.
+- Manual review for all 13 unresolved blocker flags -- user decides keep/archive/resolve per flag.
 - Auto-archive by age is NOT used.
 
 ### Roadmap Evolution
