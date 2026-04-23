@@ -177,6 +177,11 @@ Plans:
 ### Phase 45: End-to-End Regression Coverage
 **Goal:** Automated E2E tests for stable and dev publish/update flows that catch regressions before they ship.
 **Requirements:** REL-04 (R065)
+**Plans:** 1 plan
+
+Plans:
+- [ ] 45-01-PLAN.md -- Four E2E regression tests for stable/dev publish-update pipeline
+
 **Success Criteria:**
 1. E2E test for stable publish -> downstream update -> version agreement
 2. E2E test for dev publish -> dev downstream update -> version agreement
