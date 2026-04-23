@@ -75,12 +75,12 @@
 <details>
 <summary>v1.5 Runtime Truth Recovery (Phases 31-38) -- COMPLETED 2026-04-23</summary>
 
-8 phases, 17 plans, 176 commits. P0 runtime truth fixes, continue unblock, dispatch robustness, cleanup, platform parity, v1.0.20 release, codebase hygiene, Nyquist validation. Product version: v1.0.20. [Full archive → milestones/v1.5-ROADMAP.md]
+8 phases, 17 plans, 176 commits. P0 runtime truth fixes, continue unblock, dispatch robustness, cleanup, platform parity, v1.0.20 release, codebase hygiene, Nyquist validation. Product version: v1.0.20. [Full archive -> milestones/v1.5-ROADMAP.md]
 
 </details>
 
 <details>
-<summary>v1.6 Release Pipeline Integrity (Phases 39-46) — IN PROGRESS</summary>
+<summary>v1.6 Release Pipeline Integrity (Phases 39-46) -- IN PROGRESS</summary>
 
 ### Phase 39: OpenCode Agent Frontmatter Fix
 **Goal:** Fix the urgent blocker where Aether ships invalid OpenCode agent frontmatter that crashes OpenCode startup in downstream repos.
@@ -92,8 +92,8 @@
 4. E2E test proves OpenCode startup does not fail on agent config
 **Depends on:** none (urgent blocker)
 
-### Phase 40: Stable Publish Hardening ✓ COMPLETE 2026-04-23
-**Goal:** Ensure stable publish atomically syncs binary and hub to the same version — no more 1.0.20 binary with 1.0.19 hub.
+### Phase 40: Stable Publish Hardening -- COMPLETE 2026-04-23
+**Goal:** Ensure stable publish atomically syncs binary and hub to the same version -- no more 1.0.20 binary with 1.0.19 hub.
 **Requirements:** PUB-01 (R059)
 **Success Criteria:**
 1. `aether install --package-dir "$PWD"` sets hub version.json to match source version
@@ -102,8 +102,8 @@
 4. Reproduce the current 1.0.19/1.0.20 mismatch, then prove it's fixed
 **Depends on:** Phase 39 (ship frontmatter fix before touching publish)
 
-### Phase 41: Dev-Channel Isolation ✓ COMPLETE 2026-04-23
-**Goal:** Dev publish touches only `aether-dev` and `~/.aether-dev` — zero contamination of stable channel.
+### Phase 41: Dev-Channel Isolation -- COMPLETE 2026-04-23
+**Goal:** Dev publish touches only `aether-dev` and `~/.aether-dev` -- zero contamination of stable channel.
 **Requirements:** PUB-02 (R060)
 **Success Criteria:**
 1. Dev publish does not modify any file under `~/.aether/` or the `aether` binary
@@ -123,7 +123,7 @@
 **Depends on:** Phase 40, Phase 41
 
 ### Phase 43: Release Integrity Checks and Diagnostics
-**Goal:** Single integrity check validates the full chain (source → binary → hub → downstream) and medic flags incomplete publishes with recovery commands.
+**Goal:** Single integrity check validates the full chain (source -> binary -> hub -> downstream) and medic flags incomplete publishes with recovery commands.
 **Requirements:** REL-01 (R062), REL-02 (R063)
 **Success Criteria:**
 1. `aether` command validates source version, binary version, hub version, and companion surfaces together
@@ -135,6 +135,12 @@
 ### Phase 44: Doc Alignment and Archive Consistency
 **Goal:** Operations guide, runbook, and AGENTS.md match actual runtime behavior exactly. Archived milestone evidence is internally consistent.
 **Requirements:** REL-03 (R064), EVD-01 (R066)
+**Plans:** 2 plans
+
+Plans:
+- [ ] 44-01-PLAN.md -- Core docs alignment (operations guide, runbook, CLAUDE.md, CODEX.md, OPENCODE.md)
+- [ ] 44-02-PLAN.md -- Agent/skill docs and v1.5 archive consistency
+
 **Success Criteria:**
 1. AETHER-OPERATIONS-GUIDE.md verification checklist passes as written
 2. publish-update-runbook.md steps match actual command behavior
@@ -147,8 +153,8 @@
 **Goal:** Automated E2E tests for stable and dev publish/update flows that catch regressions before they ship.
 **Requirements:** REL-04 (R065)
 **Success Criteria:**
-1. E2E test for stable publish → downstream update → version agreement
-2. E2E test for dev publish → dev downstream update → version agreement
+1. E2E test for stable publish -> downstream update -> version agreement
+2. E2E test for dev publish -> dev downstream update -> version agreement
 3. E2E test for stale publish detection (intentionally stale hub)
 4. E2E test for channel isolation (dev publish does not touch stable)
 5. Tests runnable in CI (`go test`)
@@ -177,4 +183,4 @@
 | v1.3 | 17-24 | Complete | 2026-04-21 |
 | v1.4 | 25-30 | Complete | 2026-04-21 |
 | v1.5 | 31-38 | Complete | 2026-04-23 |
-| v1.6 | 39-46 | In Progress | — |
+| v1.6 | 39-46 | In Progress | -- |
