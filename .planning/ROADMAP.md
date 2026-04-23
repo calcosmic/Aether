@@ -193,6 +193,11 @@ Plans:
 ### Phase 46: Stuck-Plan Investigation and Release Decision
 **Goal:** Verify the stuck `aether plan` issue; make the v1.6 release decision.
 **Requirements:** EVD-02 (R067)
+**Plans:** 1 plan
+
+Plans:
+- [ ] 46-01-PLAN.md -- Stuck-plan E2E reproduction test and v1.6 milestone audit
+
 **Success Criteria:**
 1. Stuck `aether plan` issue is reproduced or proven stale in freshly updated repos
 2. If reproducible: fix shipped with regression test
