@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/calcosmic/Aether/pkg/downloader"
 	"github.com/spf13/cobra"
@@ -292,4 +294,181 @@ func readHubVersion(path string) string {
 		return "unknown"
 	}
 	return v.Version
+}
+
+// --- stale-publish detection ---
+
+type stalePublishClassification string
+
+const (
+	staleOK       stalePublishClassification = "ok"
+	staleCritical stalePublishClassification = "critical"
+	staleWarning  stalePublishClassification = "warning"
+	staleInfo     stalePublishClassification = "info"
+)
+
+const (
+	expectedClaudeCommandCount   = 50
+	expectedOpenCodeCommandCount = 50
+	expectedOpenCodeAgentCount   = 25
+	expectedCodexAgentCount      = 25
+	expectedCodexSkillCount      = 29
+)
+
+type staleComponent struct {
+	Name     string `json:"name"`
+	Expected int    `json:"expected"`
+	Actual   int    `json:"actual"`
+}
+
+type stalePublishResult struct {
+	Classification  stalePublishClassification `json:"classification"`
+	BinaryVersion   string                     `json:"binary_version"`
+	HubVersion      string                     `json:"hub_version"`
+	Channel         string                     `json:"channel"`
+	Message         string                     `json:"message"`
+	Components      []staleComponent           `json:"components,omitempty"`
+	RecoveryCommand string                     `json:"recovery_command"`
+}
+
+// compareVersions compares two semver strings segment by segment.
+// Returns -1 if a < b, 0 if equal, 1 if a > b.
+func compareVersions(a, b string) int {
+	a = normalizeVersion(a)
+	b = normalizeVersion(b)
+	if a == b {
+		return 0
+	}
+	aParts := strings.Split(a, ".")
+	bParts := strings.Split(b, ".")
+	maxLen := len(aParts)
+	if len(bParts) > maxLen {
+		maxLen = len(bParts)
+	}
+	for i := 0; i < maxLen; i++ {
+		var aInt, bInt int
+		if i < len(aParts) {
+			aInt, _ = strconv.Atoi(aParts[i])
+		}
+		if i < len(bParts) {
+			bInt, _ = strconv.Atoi(bParts[i])
+		}
+		if aInt < bInt {
+			return -1
+		}
+		if aInt > bInt {
+			return 1
+		}
+	}
+	return 0
+}
+
+func checkStalePublish(hubDir, hubVersion, binaryVersion string, channel runtimeChannel, syncDetails []map[string]interface{}) stalePublishResult {
+	result := stalePublishResult{
+		BinaryVersion: binaryVersion,
+		HubVersion:    hubVersion,
+		Channel:       string(channel),
+	}
+
+	if hubVersion == "" || hubVersion == "unknown" {
+		result.Classification = staleInfo
+		result.Message = "Hub version is unknown — cannot verify publish freshness."
+		result.RecoveryCommand = recoveryCommandForChannel(channel)
+		return result
+	}
+
+	cmp := compareVersions(hubVersion, binaryVersion)
+	switch {
+	case cmp < 0:
+		result.Classification = staleCritical
+		result.Message = fmt.Sprintf("Critical: hub version %s is behind binary version %s", hubVersion, binaryVersion)
+	case cmp > 0:
+		result.Classification = staleWarning
+		result.Message = fmt.Sprintf("Warning: hub version %s is ahead of binary version %s", hubVersion, binaryVersion)
+	default:
+		result.Classification = staleOK
+	}
+
+	// Check companion-file completeness in hubDir
+	hubSystem := filepath.Join(hubDir, "system")
+	checks := []struct {
+		name     string
+		path     string
+		expected int
+		filter   func(string) bool
+	}{
+		{"Commands (claude)", filepath.Join(hubSystem, "commands", "claude"), expectedClaudeCommandCount, nil},
+		{"Commands (opencode)", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil},
+		{"Agents (opencode)", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil},
+		{"Agents (codex)", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }},
+		{"Skills (codex)", filepath.Join(hubSystem, "skills-codex"), expectedCodexSkillCount, nil},
+	}
+
+	for _, check := range checks {
+		actual := countEntriesInDir(check.path, check.filter)
+		if actual < check.expected {
+			result.Components = append(result.Components, staleComponent{
+				Name:     check.name,
+				Expected: check.expected,
+				Actual:   actual,
+			})
+		}
+	}
+
+	if len(result.Components) > 0 && result.Classification == staleOK {
+		result.Classification = staleInfo
+		result.Message = "Info: companion files are incomplete."
+	}
+
+	if result.Classification == staleOK {
+		result.Message = "Publish is fresh: binary and hub versions agree, companion files look complete."
+	}
+
+	result.RecoveryCommand = recoveryCommandForChannel(channel)
+	return result
+}
+
+func countEntriesInDir(dir string, filter func(string) bool) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if filter != nil && !filter(entry.Name()) {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func recoveryCommandForChannel(channel runtimeChannel) string {
+	if channel == channelDev {
+		return "In the Aether repo, run: aether publish --channel dev"
+	}
+	return "In the Aether repo, run: aether publish"
+}
+
+func staleResultToMap(r stalePublishResult) map[string]interface{} {
+	components := make([]map[string]interface{}, len(r.Components))
+	for i, c := range r.Components {
+		components[i] = map[string]interface{}{
+			"name":     c.Name,
+			"expected": c.Expected,
+			"actual":   c.Actual,
+		}
+	}
+	return map[string]interface{}{
+		"classification":   string(r.Classification),
+		"binary_version":   r.BinaryVersion,
+		"hub_version":      r.HubVersion,
+		"channel":          r.Channel,
+		"message":          r.Message,
+		"components":       components,
+		"recovery_command": r.RecoveryCommand,
+	}
 }

@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1118,6 +1119,153 @@ func TestRunUpdateSyncForceSyncsClaudeSettings(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "\"AETHER_ACTIVE_PLATFORM\": \"claude\"") {
 		t.Fatalf("expected synced Claude settings to include platform env, got:\n%s", string(data))
+	}
+}
+
+// --- Stale-publish detection unit tests ---
+
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want int
+	}{
+		{"1.0.19", "1.0.20", -1},
+		{"1.0.20", "1.0.19", 1},
+		{"1.0.20", "1.0.20", 0},
+		{"1.0.3", "1.0.20", -1},
+		{"1.1.0", "1.0.20", 1},
+		{"v1.0.20", "1.0.20", 0},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s_vs_%s", tt.a, tt.b), func(t *testing.T) {
+			got := compareVersions(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("compareVersions(%q, %q) = %d, want %d", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckStalePublishCritical(t *testing.T) {
+	hubDir := t.TempDir()
+	createHubWithExpectedCounts(t, hubDir)
+
+	result := checkStalePublish(hubDir, "1.0.19", "1.0.20", channelStable, nil)
+	if result.Classification != staleCritical {
+		t.Errorf("expected critical, got %s", result.Classification)
+	}
+	if !strings.Contains(result.Message, "hub version 1.0.19 is behind binary version 1.0.20") {
+		t.Errorf("unexpected message: %s", result.Message)
+	}
+	if !strings.Contains(result.RecoveryCommand, "aether publish") {
+		t.Errorf("expected recovery command to contain 'aether publish', got: %s", result.RecoveryCommand)
+	}
+}
+
+func TestCheckStalePublishWarning(t *testing.T) {
+	hubDir := t.TempDir()
+	createHubWithExpectedCounts(t, hubDir)
+
+	result := checkStalePublish(hubDir, "1.0.21", "1.0.20", channelStable, nil)
+	if result.Classification != staleWarning {
+		t.Errorf("expected warning, got %s", result.Classification)
+	}
+}
+
+func TestCheckStalePublishInfoMissingCommands(t *testing.T) {
+	hubDir := t.TempDir()
+	createHubWithExpectedCounts(t, hubDir)
+	// Remove claude commands
+	os.RemoveAll(filepath.Join(hubDir, "system", "commands", "claude"))
+	os.MkdirAll(filepath.Join(hubDir, "system", "commands", "claude"), 0755)
+
+	result := checkStalePublish(hubDir, "1.0.20", "1.0.20", channelStable, nil)
+	if result.Classification != staleInfo {
+		t.Errorf("expected info, got %s", result.Classification)
+	}
+	if len(result.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(result.Components))
+	}
+	if result.Components[0].Name != "Commands (claude)" {
+		t.Errorf("expected component name 'Commands (claude)', got %s", result.Components[0].Name)
+	}
+	if result.Components[0].Expected != 50 {
+		t.Errorf("expected expected=50, got %d", result.Components[0].Expected)
+	}
+	if result.Components[0].Actual != 0 {
+		t.Errorf("expected actual=0, got %d", result.Components[0].Actual)
+	}
+}
+
+func TestCheckStalePublishOK(t *testing.T) {
+	hubDir := t.TempDir()
+	createHubWithExpectedCounts(t, hubDir)
+
+	result := checkStalePublish(hubDir, "1.0.20", "1.0.20", channelStable, nil)
+	if result.Classification != staleOK {
+		t.Errorf("expected ok, got %s", result.Classification)
+	}
+	if len(result.Components) != 0 {
+		t.Errorf("expected 0 components, got %d", len(result.Components))
+	}
+}
+
+func TestCheckStalePublishDevChannelRecoveryCommand(t *testing.T) {
+	hubDir := t.TempDir()
+	createHubWithExpectedCounts(t, hubDir)
+
+	result := checkStalePublish(hubDir, "1.0.19", "1.0.20", channelDev, nil)
+	if !strings.Contains(result.RecoveryCommand, "--channel dev") {
+		t.Errorf("expected recovery command to contain '--channel dev', got: %s", result.RecoveryCommand)
+	}
+}
+
+func TestCheckStalePublishUnknownHubVersion(t *testing.T) {
+	hubDir := t.TempDir()
+	createHubWithExpectedCounts(t, hubDir)
+
+	result := checkStalePublish(hubDir, "unknown", "1.0.20", channelStable, nil)
+	if result.Classification != staleInfo {
+		t.Errorf("expected info, got %s", result.Classification)
+	}
+	if !strings.Contains(result.Message, "unknown") {
+		t.Errorf("expected message to contain 'unknown', got: %s", result.Message)
+	}
+}
+
+func createHubWithExpectedCounts(t *testing.T, hubDir string) {
+	t.Helper()
+	system := filepath.Join(hubDir, "system")
+
+	dirs := map[string]int{
+		"commands/claude":   expectedClaudeCommandCount,
+		"commands/opencode": expectedOpenCodeCommandCount,
+		"agents":            expectedOpenCodeAgentCount,
+		"skills-codex":      expectedCodexSkillCount,
+	}
+	for rel, count := range dirs {
+		dir := filepath.Join(system, filepath.FromSlash(rel))
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("failed to create %s: %v", rel, err)
+		}
+		for i := 0; i < count; i++ {
+			name := fmt.Sprintf("file_%02d.md", i)
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("# test"), 0644); err != nil {
+				t.Fatalf("failed to write %s: %v", name, err)
+			}
+		}
+	}
+
+	// Codex agents use .toml extension
+	codexDir := filepath.Join(system, "codex")
+	if err := os.MkdirAll(codexDir, 0755); err != nil {
+		t.Fatalf("failed to create codex dir: %v", err)
+	}
+	for i := 0; i < expectedCodexAgentCount; i++ {
+		name := fmt.Sprintf("agent_%02d.toml", i)
+		if err := os.WriteFile(filepath.Join(codexDir, name), []byte("name = \"test\""), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", name, err)
+		}
 	}
 }
 
