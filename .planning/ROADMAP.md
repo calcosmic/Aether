@@ -165,7 +165,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 44.2-01-PLAN.md -- Medic parity fix and colon-to-hyphen rename across repo
+- [x] 44.2-01-PLAN.md -- Medic parity fix and colon-to-hyphen rename across repo
 
 **Success Criteria:**
 1. `TestClaudeOpenCodeAgentContentParity` passes (aether-medic.md matches between Claude and OpenCode)

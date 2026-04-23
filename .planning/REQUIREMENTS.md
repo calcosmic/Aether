@@ -9,12 +9,12 @@
 
 - [ ] **PUB-01** (R059): Stable publish updates stable binary and stable hub to the same version atomically
 - [ ] **PUB-02** (R060): Dev publish updates only `aether-dev` binary and `~/.aether-dev` hub with zero stable contamination
-- [ ] **PUB-03** (R061): Downstream `aether update --force` detects and reports stale or incomplete publishes instead of silently succeeding
+- [x] **PUB-03** (R061): Downstream `aether update --force` detects and reports stale or incomplete publishes instead of silently succeeding
 - [ ] **PUB-04** (R061): Downstream `aether-dev update --force` detects and reports stale or incomplete publishes instead of silently succeeding
 
 ### Release Validation
 
-- [ ] **REL-01** (R062): Release integrity check validates source version, binary version, hub version, companion-file surfaces, and downstream update result together
+- [x] **REL-01** (R062): Release integrity check validates source version, binary version, hub version, companion-file surfaces, and downstream update result together
 - [x] **REL-02** (R063): Medic/dedicated diagnostics flag incomplete stable and dev publishes with exact recovery commands
 - [ ] **REL-03** (R064): Operations guide, publish-update-runbook, and AGENTS.md match actual runtime behavior exactly
 - [ ] **REL-04** (R065): End-to-end regression coverage for both stable and dev publish/update flows
@@ -60,9 +60,9 @@
 | OPN-01 (R068) | Phase 39: OpenCode Agent Frontmatter Fix | Pending |
 | PUB-01 (R059) | Phase 40: Stable Publish Hardening | Pending |
 | PUB-02 (R060) | Phase 41: Dev-Channel Isolation | Pending |
-| PUB-03 (R061) | Phase 42: Downstream Stale-Publish Detection | Pending |
+| PUB-03 (R061) | Phase 44.2: Command Hygiene and Agent Parity | Complete (44.2-01) |
 | PUB-04 (R061) | Phase 42: Downstream Stale-Publish Detection | Pending |
-| REL-01 (R062) | Phase 43: Release Integrity Checks and Diagnostics | Pending |
+| REL-01 (R062) | Phase 44.2: Command Hygiene and Agent Parity | Complete (44.2-01) |
 | REL-02 (R063) | Phase 43: Release Integrity Checks and Diagnostics | Complete (43-02) |
 | REL-03 (R064) | Phase 44: Doc Alignment and Archive Consistency | Pending |
 | EVD-01 (R066) | Phase 44: Doc Alignment and Archive Consistency | Pending |

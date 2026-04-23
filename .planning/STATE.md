@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 43 plan 02 complete
-last_updated: "2026-04-23T22:49:14.148Z"
-last_activity: 2026-04-23 -- Phase 44 execution started
+stopped_at: Completed 44.2-01-PLAN.md (finalized)
+last_updated: "2026-04-24T00:15:00.000Z"
+last_activity: 2026-04-24 -- Phase 44.2 execution finalized
 progress:
   total_phases: 51
-  completed_phases: 38
+  completed_phases: 39
   total_plans: 113
-  completed_plans: 108
-  percent: 96
+  completed_plans: 110
+  percent: 97
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie-repos-Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 44 — doc-alignment-and-archive-consistency
+**Current focus:** Phase --phase — 44.2
 
 ## Current Position
 
-Phase: 44 (doc-alignment-and-archive-consistency) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 44
-Last activity: 2026-04-23 -- Phase 44 execution started
+Phase: --phase (44.2) — EXECUTING
+Plan: 1 of --name
+Status: Executing Phase --phase
+Last activity: 2026-04-23 -- Phase --phase execution started
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Last activity: 2026-04-23 -- Phase 44 execution started
 | Phase 40-02 | 2 | 2 | PUB-01 (R059) | E2E tests, operations guide update |
 | Phase 41 | 3 | 5 | PUB-02 (R060) | Channel isolation guards, tests, docs |
 | Phase 43-02 | 1 | 1 | REL-02 (R063) | scanIntegrity wired into medic --deep, 14 tests, os.Exit fix |
+| Phase 44.2 P01 | 7min | 2 tasks | 396 files | PUB-03, REL-01 | Medic parity fix + colon-to-hyphen rename across 394 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,11 @@ Last activity: 2026-04-23 -- Phase 44 execution started
 - aether version --check returns non-zero when binary and hub versions disagree
 - aether install --package-dir continues to work for backward compatibility
 - Operations guide updated to document aether publish as primary path
+- Medic agent body parity restored -- Claude canonical is source of truth for OpenCode body sync
+- All slash commands renamed from colon (/ant:) to hyphen (/ant-) format across 394 files
+- CHANGELOG.md and .aether/chambers/ included in rename for naming consistency
+- Colon-to-hyphen rename is single-pass mechanical change; filenames unchanged, only text content
+- .planning/ directory excluded from rename to preserve historical audit trail
 
 ### Phase 34 Decisions (Cleanup)
 
@@ -149,8 +155,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: Phase 43-02 execution complete
-Stopped at: Phase 43 plan 02 complete
-Resume file: --resume-file
+Last session: 2026-04-24T00:15:00.000Z
+Stopped at: Completed 44.2-01-PLAN.md (finalized)
+Resume file: None
 
-**Planned Phase:** 44.2 (command-hygiene) — 1 plans — 2026-04-23T22:49:14.096Z
+**Planned Phase:** 44.2 (command-hygiene) — 1 plan — COMPLETE
