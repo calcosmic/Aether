@@ -384,18 +384,22 @@ Authoritative runbook: `.aether/docs/publish-update-runbook.md`
 git add .
 git commit -m "update codex agent definitions"
 
-# 3. Refresh the hub from this source checkout
-aether install --package-dir "$PWD"
+# 3. Publish to the hub (recommended)
+aether publish
 
 # 4. In other repos, pull updates
 aether update --force
 ```
 
 Runtime note:
-- `aether install --package-dir "$PWD"` publishes unreleased companion-file and runtime changes on this machine from the current Aether checkout.
+- `aether publish` is the primary publish command. It builds the binary, syncs companion files to the hub, and verifies version agreement automatically.
+- `aether install --package-dir "$PWD"` still works for backward compatibility but does not include version verification.
+- `aether publish --channel dev` publishes to the dev channel (`~/.aether-dev/`) for isolated source development.
+- `aether integrity` validates the full release pipeline chain (source, binary, hub, companion files, downstream simulation).
+- `aether update` automatically runs stale publish detection -- critical stale publishes block the update with a recovery command.
 - `aether update` in other repos only syncs from the shared hub. It does not publish local source changes, and without `--force` it can leave stale Aether-managed files behind.
 - `aether update --force --download-binary` is the published-release path when you also need the release runtime binary.
-- For isolated source-development on this machine, install the dev channel instead: `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
+- For isolated source-development on this machine, publish the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
 - `.aether/version.json` is the source-checkout release version file. `npm/package.json` must match it exactly for published releases.
 - If `aether update --force` shows `Commands (claude)` or `Commands (opencode)` as `0 copied, 0 unchanged`, the hub publish is incomplete. Republish from the Aether repo first, then rerun `aether update --force` in the target repo.
 - If the change modifies `aether install` itself, bootstrap once with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`.

@@ -17,21 +17,61 @@ This runbook is the authoritative workflow for publishing Aether changes and ver
 - npm bootstrap publishes only the stable/public runtime
 - Dev installs intentionally skip global Claude/OpenCode/Codex home sync by default so source-development does not overwrite the public command surface on the same machine
 
+## Publish Command
+
+`aether publish` is the primary recommended command for publishing Aether from source. It builds the binary, syncs companion files to the hub, and verifies that binary and hub versions agree atomically.
+
+```bash
+# In the Aether repo (stable channel, inferred from binary name)
+aether publish
+
+# Explicit channel selection
+aether publish --channel stable
+aether publish --channel dev
+
+# Custom binary destination
+aether publish --channel dev --binary-dest "$HOME/.local/bin"
+
+# Skip binary rebuild (use existing binary)
+aether publish --skip-build-binary
+```
+
+Flags:
+
+| Flag | Description |
+|------|-------------|
+| `--package-dir` | Source directory (default: current directory) |
+| `--home-dir` | User home directory (default: `$HOME`) |
+| `--channel` | Runtime channel (`stable` or `dev`; default: infer from binary/env) |
+| `--binary-dest` | Destination directory for the built binary |
+| `--skip-build-binary` | Skip `go build`; use existing binary |
+
+Behavior:
+- Builds the binary (unless `--skip-build-binary`)
+- Validates channel isolation (rejects cross-channel publish, e.g. dev binary targeting stable hub)
+- Syncs companion files to the hub
+- Verifies binary and hub versions agree after sync
+- Prints a warning if hub version changed
+- Prints an advisory note if stable and dev binaries co-locate in the same directory
+
+> **Backward compatibility:** `aether install --package-dir "$PWD"` still works but does not include automatic version agreement verification. `aether publish` is the recommended path.
+
 ## Standard Local Source Workflow
 
 Use this when you changed files in the Aether repo and want other repos on the same machine to pick them up.
 
 ```bash
 # In the Aether repo
-aether install --package-dir "$PWD"
+aether publish
 
 # In each target repo
 aether update --force
 ```
 
+> **Backward compatibility:** `aether install --package-dir "$PWD"` still works as an alternative.
+
 Why this works:
-- `install` refreshes `~/.aether/system/` from the current checkout.
-- In a source checkout, `install` also rebuilds the shared local `aether` binary unless `--skip-build-binary` is used.
+- `aether publish` builds the binary, refreshes `~/.aether/system/` from the current checkout, and verifies version agreement.
 - `update --force` refreshes tracked companion files from the hub and removes stale managed files.
 
 ## Isolated Dev Workflow
@@ -40,11 +80,13 @@ Use this when you are actively developing Aether itself and do not want unreleas
 
 ```bash
 # In the Aether repo
-go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"
+aether publish --channel dev --binary-dest "$HOME/.local/bin"
 
 # In each target repo you want to test against the dev channel
 aether-dev update --force
 ```
+
+> **Backward compatibility:** `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"` still works.
 
 Why this works:
 - the dev channel uses `~/.aether-dev/system/` instead of `~/.aether/system/`
@@ -156,6 +198,72 @@ Then verify:
 npm view aether-colony dist-tags --json
 ```
 
+## Integrity Check
+
+`aether integrity` validates the full release pipeline chain. It auto-detects whether you are in the Aether source repo or a consumer repo and runs the appropriate checks.
+
+```bash
+# In the Aether source repo (5 checks)
+aether integrity
+
+# In a consumer repo (4 checks)
+aether integrity
+
+# Force source-repo context
+aether integrity --source
+
+# JSON output
+aether integrity --json
+
+# Check dev channel
+aether integrity --channel dev
+```
+
+Flags:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output structured JSON instead of visual report |
+| `--channel stable\|dev` | Override channel detection |
+| `--source` | Force source-repo checks (5 checks instead of 4) |
+
+Source repo checks: source version, binary version, hub version, hub companion files, downstream simulation.
+Consumer repo checks: binary version, hub version, hub companion files, downstream simulation.
+
+Exit codes: `0` = all checks pass, non-zero = failures found.
+
+> **Note:** `aether medic --deep` includes integrity scanning automatically via `scanIntegrity()`. Use `aether integrity` directly when you want a focused release-pipeline validation.
+
+## Stale Publish Detection
+
+Every `aether update` automatically runs stale publish detection. This checks whether the hub publish is complete and fresh by comparing binary and hub versions and verifying companion-file completeness.
+
+Classifications:
+
+| Classification | Meaning | Behavior |
+|---|---|---|
+| `ok` | Binary and hub versions agree, companion files complete | Update proceeds normally |
+| `info` | Companion files are incomplete (counts below expected) | Update proceeds, warning displayed |
+| `warning` | Hub version is ahead of binary version | Update proceeds, warning displayed |
+| `critical` | Hub version is behind binary version (stale publish) | **Update blocked**, non-zero exit code |
+
+Recovery commands printed on failure:
+
+```bash
+# For stable channel
+aether publish
+
+# For dev channel
+aether publish --channel dev
+```
+
+Companion file completeness checks verify expected counts:
+- 50 Claude commands
+- 50 OpenCode commands
+- 25 OpenCode agents
+- 25 Codex agents
+- 29 Codex skills
+
 ## Go Binary Change Checklist
 
 Use this checklist any time the change touches `cmd/`, `pkg/`, `.goreleaser.yml`, version resolution, install/update flows, binary download logic, or anything else that can affect the shipped Go runtime.
@@ -255,6 +363,7 @@ Expected counts:
 Release metadata should also agree:
 - `.aether/version.json` version equals `npm/package.json` version
 - `aether version` equals the intended release version after rebuilding from source
+- `aether version --check` returns exit 0 (binary and hub versions agree)
 - `npm view aether-colony dist-tags --json` reports `latest` at the same stable release version
 
 In a downstream repo, a healthy refresh should no longer show `0/0` for Claude/OpenCode commands.
@@ -265,6 +374,9 @@ Run `aether medic --deep` when you want runtime validation of:
 - repo wrapper parity
 - hub publish completeness
 - ceremony integrity
+- **release integrity** (binary vs hub version agreement, stale publish detection — via `scanIntegrity()`)
 
 Medic should flag incomplete hub publishes before you trust downstream `aether update` output.
 Medic should also treat a missing GitHub release after a pushed tag as a release-integrity failure and recommend `gh workflow run Release -f tag=vX.Y.Z` before falling back to local GoReleaser or manual npm publish.
+
+For a focused release-pipeline validation without the broader medic health checks, use `aether integrity` directly (see [Integrity Check](#integrity-check) above).

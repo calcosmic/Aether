@@ -15,8 +15,9 @@
 │  .aether/data/      → LOCAL ONLY (never distributed)           │
 │  .aether/dreams/    → LOCAL ONLY (never distributed)           │
 │                                                                │
-│  aether install --package-dir "$PWD" refreshes hub files       │
-│  and rebuilds the shared local binary from this checkout.      │
+│  aether publish refreshes hub files and rebuilds the binary.  │
+│  aether install --package-dir "$PWD" still works but lacks    │
+│  automatic version verification.                               │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -31,14 +32,16 @@
 ```bash
 git add .
 git commit -m "your message"
-aether install --package-dir "$PWD"
+aether publish
 ```
+
+> `aether install --package-dir "$PWD"` still works for backward compatibility.
 
 ---
 
 ## Critical Architecture
 
-**`.aether/` + `.opencode/` are the source of truth.** Source-checkout publishes go through `aether install --package-dir "$PWD"` in this repo, which refreshes `~/.aether/system/` and the shared local `aether` binary. Downstream repos then pull those companion files with `aether update` or `/ant:update`. For isolated source-development on the same machine, use the dev channel instead: `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
+**`.aether/` + `.opencode/` are the source of truth.** Source-checkout publishes go through `aether publish` in this repo, which builds the binary, refreshes `~/.aether/system/`, and verifies version agreement. `aether install --package-dir "$PWD"` still works for backward compatibility. Downstream repos then pull those companion files with `aether update` or `/ant:update`. For isolated source-development on the same machine, use the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
 
 ```
 Aether Repo (this repo)
@@ -51,7 +54,7 @@ Aether Repo (this repo)
 │   ├── agents/
 │   └── commands/ant/
 │
-├── aether install --package-dir "$PWD"
+├── aether publish
 │
 ▼
 ~/.aether/system/
@@ -161,7 +164,7 @@ Slash commands live in `.opencode/commands/ant/`:
 
 ```bash
 # Publish unreleased source-checkout changes from this repo
-aether install --package-dir "$PWD"
+aether publish
 
 # In any repo, pull the refreshed companion files
 /ant:update
@@ -170,6 +173,12 @@ aether update --force
 # Verify the hub publish actually contains OpenCode surfaces
 find ~/.aether/system/commands/opencode -maxdepth 1 -type f | wc -l
 find ~/.aether/system/agents -maxdepth 1 -type f | wc -l
+
+# Verify version agreement
+aether version --check
+
+# Run a focused release-pipeline integrity check
+aether integrity
 
 # If you also need the published release runtime binary
 aether update --force --download-binary
