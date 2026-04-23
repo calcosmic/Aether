@@ -180,7 +180,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 45-01-PLAN.md -- Four E2E regression tests for stable/dev publish-update pipeline
+- [x] 45-01-PLAN.md -- Four E2E regression tests for stable/dev publish-update pipeline
 
 **Success Criteria:**
 1. E2E test for stable publish -> downstream update -> version agreement
