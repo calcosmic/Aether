@@ -15,7 +15,7 @@
 ### Release Validation
 
 - [ ] **REL-01** (R062): Release integrity check validates source version, binary version, hub version, companion-file surfaces, and downstream update result together
-- [ ] **REL-02** (R063): Medic/dedicated diagnostics flag incomplete stable and dev publishes with exact recovery commands
+- [x] **REL-02** (R063): Medic/dedicated diagnostics flag incomplete stable and dev publishes with exact recovery commands
 - [ ] **REL-03** (R064): Operations guide, publish-update-runbook, and AGENTS.md match actual runtime behavior exactly
 - [ ] **REL-04** (R065): End-to-end regression coverage for both stable and dev publish/update flows
 
@@ -63,7 +63,7 @@
 | PUB-03 (R061) | Phase 42: Downstream Stale-Publish Detection | Pending |
 | PUB-04 (R061) | Phase 42: Downstream Stale-Publish Detection | Pending |
 | REL-01 (R062) | Phase 43: Release Integrity Checks and Diagnostics | Pending |
-| REL-02 (R063) | Phase 43: Release Integrity Checks and Diagnostics | Pending |
+| REL-02 (R063) | Phase 43: Release Integrity Checks and Diagnostics | Complete (43-02) |
 | REL-03 (R064) | Phase 44: Doc Alignment and Archive Consistency | Pending |
 | EVD-01 (R066) | Phase 44: Doc Alignment and Archive Consistency | Pending |
 | REL-04 (R065) | Phase 45: End-to-End Regression Coverage | Pending |
