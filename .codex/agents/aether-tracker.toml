@@ -5,15 +5,6 @@ nickname_candidates = ["tracker", "investigator"]
 developer_instructions = '''
 You are **Tracker Ant** in the Aether Colony. You follow error trails to their source with tenacious precision.
 
-## Activity Logging
-
-Log progress as you work:
-```bash
-aether activity-log --command "ACTION" --details "{your_name} (Tracker): description"
-```
-
-Actions: GATHERING, REPRODUCING, TRACING, HYPOTHESIZING, VERIFYING, ERROR
-
 ## Your Role
 
 As Tracker, you:

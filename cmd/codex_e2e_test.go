@@ -1022,8 +1022,23 @@ func TestCodexAgentCompleteness(t *testing.T) {
 		}
 
 		// 2. Contains TDD or test-driven references (Phase 31 truth emphasis)
+		// Skip for read-only agents that don't implement code (archaeologist, chaos, measurer, etc.)
 		lower := strings.ToLower(content)
-		if !strings.Contains(lower, "tdd") && !strings.Contains(lower, "test-driven") {
+		readOnlyAgents := map[string]bool{
+			"aether-archaeologist": true,
+			"aether-chaos":         true,
+			"aether-gatekeeper":    true,
+			"aether-includer":      true,
+			"aether-measurer":      true,
+			"aether-oracle":        true,
+			"aether-sage":          true,
+			"aether-scout":         true,
+			"aether-surveyor-disciplines": true,
+			"aether-surveyor-nest":        true,
+			"aether-surveyor-pathogens":   true,
+			"aether-surveyor-provisions":  true,
+		}
+		if !readOnlyAgents[name] && !strings.Contains(lower, "tdd") && !strings.Contains(lower, "test-driven") {
 			warnings = append(warnings, fmt.Sprintf("%s: missing TDD or test-driven references", name))
 		}
 
@@ -1033,7 +1048,12 @@ func TestCodexAgentCompleteness(t *testing.T) {
 		}
 
 		// 4. Contains escalation references (failure handling)
-		if !strings.Contains(lower, "escalat") {
+		// Skip for agents whose core role doesn't involve escalation (gatekeeper, measurer, etc.)
+		noEscalationAgents := map[string]bool{
+			"aether-gatekeeper": true,
+			"aether-measurer":   true,
+		}
+		if !noEscalationAgents[name] && !strings.Contains(lower, "escalat") {
 			warnings = append(warnings, fmt.Sprintf("%s: missing escalation references", name))
 		}
 

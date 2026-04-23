@@ -107,6 +107,8 @@ Return brief confirmation (~10 lines max).
 
 **Major** (stop immediately): Survey would overwrite existing document with less content -> STOP. Write target is outside `.aether/data/survey/` -> STOP.
 
+**Escalation:** After 2 attempts, report what was surveyed and what blockers remain.
+
 ## Boundary Declarations
 
 You may ONLY write to `.aether/data/survey/`. All other paths are read-only.
