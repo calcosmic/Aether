@@ -162,11 +162,12 @@ func performHealthScan(opts MedicOptions) (*ScannerResult, error) {
 	allIssues = append(allIssues, scanDataFiles(fc)...)
 	allIssues = append(allIssues, scanJSONL(fc)...)
 
-	// Deep scan: wrapper parity, hub publish integrity, and ceremony checks.
+	// Deep scan: wrapper parity, hub publish integrity, ceremony, and release integrity checks.
 	if opts.Deep {
 		allIssues = append(allIssues, scanWrapperParity(fc)...)
 		allIssues = append(allIssues, scanHubPublishIntegrity()...)
 		allIssues = append(allIssues, scanCeremonyIntegrity(fc)...)
+		allIssues = append(allIssues, scanIntegrity()...)
 	}
 
 	// Merge fileChecker issues (file-level issues from checkJSONFile/checkJSONLFile)
@@ -634,6 +635,74 @@ func scanJSONL(fc *fileChecker) []HealthIssue {
 				fc.filesHealthy++
 			}
 		}
+	}
+
+	return issues
+}
+
+// ---------------------------------------------------------------------------
+// Release integrity scanner
+// ---------------------------------------------------------------------------
+
+// scanIntegrity checks the version chain (binary vs hub agreement) and stale
+// publish detection. Returns HealthIssue entries for medic deep scan.
+// Does NOT duplicate companion-file counting — that is scanHubPublishIntegrity's job.
+func scanIntegrity() []HealthIssue {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return []HealthIssue{{
+			Severity: "critical",
+			Category: "integrity",
+			Message:  "Cannot determine home directory for integrity scan",
+			Fixable:  false,
+		}}
+	}
+
+	channel := resolveRuntimeChannel()
+	hubDir := resolveHubPathForHome(homeDir, channel)
+	hubVersion := readHubVersionAtPath(hubDir)
+
+	if hubVersion == "" {
+		return []HealthIssue{{
+			Severity: "critical",
+			Category: "integrity",
+			Message:  fmt.Sprintf("Hub not installed at %s. Run aether install to populate the hub.", hubDir),
+			Fixable:  true,
+		}}
+	}
+
+	binaryVersion := resolveVersion()
+	var issues []HealthIssue
+
+	// Run stale publish detection
+	result := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, nil)
+	switch result.Classification {
+	case staleOK:
+		// No issue — everything is consistent
+	case staleInfo:
+		issues = append(issues, HealthIssue{
+			Severity: "warning",
+			Category: "integrity",
+			Message:  result.Message + " Recovery: " + result.RecoveryCommand,
+			Fixable:  true,
+		})
+	case staleWarning, staleCritical:
+		issues = append(issues, HealthIssue{
+			Severity: "critical",
+			Category: "integrity",
+			Message:  result.Message + " Recovery: " + result.RecoveryCommand,
+			Fixable:  true,
+		})
+	}
+
+	// Check version agreement
+	if binaryVersion != "unknown" && hubVersion != binaryVersion {
+		issues = append(issues, HealthIssue{
+			Severity: "critical",
+			Category: "integrity",
+			Message:  fmt.Sprintf("Binary version (%s) does not match hub version (%s). Run aether publish to synchronize.", binaryVersion, hubVersion),
+			Fixable:  true,
+		})
 	}
 
 	return issues

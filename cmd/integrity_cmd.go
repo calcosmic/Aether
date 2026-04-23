@@ -64,21 +64,21 @@ func runIntegrity(cmd *cobra.Command, args []string) error {
 	hubDir := resolveHubPathForHome(homeDir, channel)
 	hubVersionFile := filepath.Join(hubDir, "version.json")
 	if _, err := os.Stat(hubVersionFile); os.IsNotExist(err) {
+		result := integrityResult{
+			Context: ctx,
+			Channel: string(channel),
+			Checks: []integrityCheck{
+				{Name: "Hub installed", Status: "fail", Message: fmt.Sprintf("hub not installed at %s", hubDir)},
+			},
+			Overall: "critical",
+		}
 		if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
-			result := integrityResult{
-				Context: ctx,
-				Channel: string(channel),
-				Checks: []integrityCheck{
-					{Name: "Hub installed", Status: "fail", Message: fmt.Sprintf("hub not installed at %s", hubDir)},
-				},
-				Overall: "critical",
-			}
 			data, _ := json.MarshalIndent(result, "", "  ")
 			fmt.Fprintln(stdout, string(data))
-			os.Exit(2)
+		} else {
+			outputError(2, fmt.Sprintf("hub not installed at %s", hubDir), nil)
 		}
-		outputError(2, fmt.Sprintf("hub not installed at %s", hubDir), nil)
-		os.Exit(2)
+		return fmt.Errorf("hub not installed at %s", hubDir)
 	}
 
 	// 4. Collect versions

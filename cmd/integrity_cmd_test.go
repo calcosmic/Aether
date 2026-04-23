@@ -479,9 +479,10 @@ func TestIntegritySourceFlag(t *testing.T) {
 	rootCmd.SetArgs([]string{"integrity", "--json", "--source"})
 	defer rootCmd.SetArgs([]string{})
 
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("integrity --json --source returned error: %v", err)
-	}
+	// --source forces source context which adds checkSourceVersion.
+	// From a consumer temp dir, checkSourceVersion will fail (no .aether/version.json),
+	// so the command returns an error. That is expected behavior.
+	err = rootCmd.Execute()
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
@@ -493,6 +494,10 @@ func TestIntegritySourceFlag(t *testing.T) {
 	checks, _ := result["checks"].([]interface{})
 	if len(checks) != 5 {
 		t.Errorf("expected 5 checks for source context, got %d", len(checks))
+	}
+	// The command should fail because source version check can't resolve from temp dir
+	if err == nil {
+		t.Error("expected error when --source is used outside Aether repo (source version check fails)")
 	}
 }
 
@@ -536,8 +541,8 @@ func TestIntegrityVisualOutput(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Release Integrity") {
-		t.Errorf("visual output missing 'Release Integrity', got:\n%s", output)
+	if !strings.Contains(output, "R E L E A S E   I N T E G R I T Y") {
+		t.Errorf("visual output missing 'R E L E A S E   I N T E G R I T Y', got:\n%s", output)
 	}
 	// Should contain check markers (pass or fail)
 	hasCheckMarker := strings.Contains(output, "\u2713") || strings.Contains(output, "\u2717")
