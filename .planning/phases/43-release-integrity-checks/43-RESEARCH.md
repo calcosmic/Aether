@@ -348,22 +348,16 @@ func renderIntegrityVisual(result integrityResult) string {
 | A2 | `isAetherSourceCheckout` pattern (go.mod + cmd/aether/main.go) is sufficient to distinguish source repo from consumer repo | Architecture Patterns | A consumer repo that happens to have a go.mod with the Aether module path and a `cmd/aether/main.go` file would be misdetected. This is extremely unlikely in practice. |
 | A3 | The expected companion-file counts (50/50/25/25/29) will not change during this phase | Standard Stack | If counts change, the integrity check will falsely report failures. Counts are stable as of v1.0.20. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should the integrity check verify the installed binary path?**
-   - What we know: `resolveVersion` reads the binary version. The binary path is not currently tracked.
-   - What's unclear: Whether knowing the binary path (e.g., `/usr/local/bin/aether`) adds diagnostic value.
-   - Recommendation: Skip for initial implementation. Add if user feedback requests it.
+1. **RESOLVED: Should the integrity check verify the installed binary path?**
+   - Decision: Skip for initial implementation. Binary path tracking is out of scope for Phase 43.
 
-2. **How should medic display integrity failures?**
-   - What we know: Medic uses `HealthIssue` structs with severity/category/message/file/fixable fields.
-   - What's unclear: Whether to map each integrity check to a separate `HealthIssue`, or aggregate them into one.
-   - Recommendation: Map each failed check to a `HealthIssue` with category="integrity" so they appear alongside other deep-scan findings.
+2. **RESOLVED: How should medic display integrity failures?**
+   - Decision: Map integrity findings to `HealthIssue` with category="integrity". Each distinct failure (version mismatch, stale publish, missing hub) becomes its own `HealthIssue` so they appear alongside other deep-scan findings.
 
-3. **Should `--source` flag be exposed in medic too?**
-   - What we know: `aether integrity` has `--source` to force source-repo checks.
-   - What's unclear: Whether `aether medic --deep --source` should also force source context.
-   - Recommendation: No — medic runs in the current repo context. If the user wants source-repo integrity in medic, they can run `aether integrity --source` directly.
+3. **RESOLVED: Should `--source` flag be exposed in medic too?**
+   - Decision: No. Medic runs in the current repo context. Users who want source-repo integrity checks can run `aether integrity --source` directly.
 
 ## Environment Availability
 

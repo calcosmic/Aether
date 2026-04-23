@@ -2,21 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
+status: executing
 stopped_at: Phase 41 complete
-last_updated: "2026-04-23T16:15:00.000Z"
-progress:
-  total_phases: 45
-  completed_phases: 36
-  total_plans: 110
-  completed_plans: 101
-  percent: 95
+last_updated: "2026-04-23T17:56:57.913Z"
 last_activity: 2026-04-23
 progress:
-  total_phases: 45
+  total_phases: 48
   completed_phases: 36
   total_plans: 109
-  completed_plans: 101
+  completed_plans: 104
   percent: 95
 ---
 
@@ -150,4 +144,4 @@ Last session: Phase 41 execution complete
 Stopped at: Phase 41 complete
 Resume file: --resume-file
 
-**Planned Phase:** 42 (downstream-stale-publish-detection) — next up
+**Planned Phase:** 43 (release-integrity-checks) — 2 plans — 2026-04-23T17:56:57.900Z
