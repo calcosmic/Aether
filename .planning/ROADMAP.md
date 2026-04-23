@@ -114,10 +114,10 @@ Plans:
 
 Plans:
 - [x] 34-01-PLAN.md -- Backup colony data and evaluate candidate commits for preservation (completed 2026-04-23)
-- [ ] 34-02-PLAN.md -- Bulk worktree and branch cleanup with interactive confirmation
+- [x] 34-02-PLAN.md -- Bulk worktree and branch cleanup with interactive confirmation (completed 2026-04-23)
 - [ ] 34-03-PLAN.md -- Interactive blocker flag review and resolution
 
-**Status:** In progress (1/3 plans complete)
+**Status:** In progress (2/3 plans complete)
 
 ### Phase 35: Platform Parity
 **Goal:** Align Claude/OpenCode/Codex command and agent UX.
