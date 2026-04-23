@@ -7,7 +7,8 @@
 - **v1.2 Live Dispatch Truth and Recovery** - Phases 12-16 (shipped)
 - **v1.3 Visual Truth and Core Hardening** - Phases 17-24 (shipped 2026-04-21)
 - **v1.4 Self-Healing Colony** - Phases 25-30 (completed 2026-04-21)
-- **v1.5 Runtime Truth Recovery** - Phases 31-38 (in progress)
+- **v1.5 Runtime Truth Recovery** - Phases 31-38 (completed 2026-04-23, product v1.0.20)
+- [→ Next milestone to be defined]
 
 ## Phases
 
@@ -71,90 +72,20 @@
 
 </details>
 
-### v1.5 Runtime Truth Recovery (In Progress)
+<details>
+<summary>v1.5 Runtime Truth Recovery (Phases 31-38) -- COMPLETED 2026-04-23</summary>
 
-**Milestone Goal:** Recover runtime truth -- close P0 bypass paths, fix atomic state advancement, and restore colony continue orchestration so active colonies can unblock.
+8 phases, 17 plans, 176 commits. P0 runtime truth fixes, continue unblock, dispatch robustness, cleanup, platform parity, v1.0.20 release, codebase hygiene, Nyquist validation. Product version: v1.0.20. [Full archive → milestones/v1.5-ROADMAP.md]
 
-**Milestone Goal:** Give Aether the ability to diagnose and repair its own colony data, ceremony integrity, and runtime state -- reducing manual intervention and preventing documentation gaps.
-
-## Phases
-
-- [x] **Phase 31: P0 Runtime Truth Fixes** -- Invoker honesty, dispatch errors, continue bypass closure, git-verified claims, atomic state (completed 2026-04-22)
-- [ ] **Phase 32: Continue Unblock** -- Full continue orchestration recovery
-- [ ] **Phase 33: Dispatch Fixes** -- P1 dispatch robustness improvements
-- [x] **Phase 34: Cleanup** -- Stale worktrees, branches, blockers (completed 2026-04-23)
-- [x] **Phase 35: Platform Parity** -- Claude/OpenCode/Codex alignment (in progress, 1/3 plans)
-- [x] **Phase 36: Release Decision** -- v1.0.20 cut and ship decision (completed 2026-04-23)
-
-## Phase Details
-
-### Phase 31: P0 Runtime Truth Fixes
-**Goal:** Close all P0 truth bugs from the oracle audit -- honest invokers, error propagation, and atomic state.
-**Requirements:** R045 (FakeInvoker), R046 (dispatch errors), R047 (continue bypass), R048 (reconcile), R049 (git claims), R050 (no env dismissal), R051 (atomic state)
-**Status:** Complete (2026-04-22) -- 4 plans, 16 commits, 12 validation tests green
-
-### Phase 32: Continue Unblock
-**Goal:** Recover full continue orchestration so active colonies can advance past phase 2. Detect abandoned builds, produce actionable recovery messages, clear stale reports, ensure end-to-end pipeline works.
-**Plans:** 2 plans
-
-Plans:
-- [x] 32-01-PLAN.md -- Abandoned build detection and recovery (TDD) (completed 2026-04-22)
-- [x] 32-02-PLAN.md -- Stale report cleanup and E2E pipeline recovery (TDD) (completed 2026-04-22)
-
-**Status:** Complete (2026-04-22) -- 2 plans, 5 commits, 5 new tests green
-
-### Phase 33: Dispatch Fixes
-**Goal:** Address P1 dispatch robustness issues from the oracle audit.
-**Status:** Planned
-
-### Phase 34: Cleanup
-**Goal:** Address stale worktrees, orphaned branches, and stale blocker flags from prior colony work.
-**Requirements:** R056 (stale worktrees), R057 (stale branches), R058 (blocker flags)
-**Plans:** 3/3 plans complete
-
-Plans:
-- [x] 34-01-PLAN.md -- Backup colony data and evaluate candidate commits for preservation (completed 2026-04-23)
-- [x] 34-02-PLAN.md -- Bulk worktree and branch cleanup with interactive confirmation (completed 2026-04-23)
-- [x] 34-03-PLAN.md -- Interactive blocker flag review and resolution (completed 2026-04-23)
-
-**Status:** Complete (2026-04-23) -- 3 plans, 5 commits, 523 worktrees removed, 259 branches deleted, 18 flags archived
-
-### Phase 35: Platform Parity
-**Goal:** Align Claude/OpenCode/Codex command and agent UX.
-**Status:** In Progress (1/3 plans complete)
-
-Plans:
-- [x] 35-01-PLAN.md -- Drift detection infrastructure (completed 2026-04-23)
-- [x] 35-02-PLAN.md -- Fix OpenCode agent drift
-- [x] 35-03-PLAN.md -- Codex agent completeness updates
-
-### Phase 36: Release Decision
-**Goal:** Cut v1.0.20, validate release readiness, or defer.
-**Plans:** 1/1 plans complete
-
-Plans:
-- [x] 36-01-PLAN.md -- Validate readiness, update version files, write changelog, commit and tag
-
-**Status:** Planned
-
-### Phase 37: Codebase Hygiene
-**Goal:** Clean up orphaned code and fix SUMMARY metadata from v1.5 phases.
-**Gap Closure:** Closes tech debt from v1.5 milestone audit
-
-### Phase 38: Nyquist Validation Backfill
-**Goal:** Backfill VALIDATION.md for phases 32, 33, 35, 36.
-**Gap Closure:** Closes Nyquist coverage gaps from v1.5 milestone audit
+</details>
 
 ## Progress
 
-| Phase | Milestone | Plans | Status | Completed |
-|-------|-----------|-------|--------|-----------|
-| 1-6 | v1.0 | 13/13 | Complete | 2026-04-21 |
-| 7-11 | v1.1 | 10/10 | Complete | 2026-04-21 |
-| 12-16 | v1.2 | 12/12 | Complete | 2026-04-21 |
-| 17-24 | v1.3 | 17/17 | Complete | 2026-04-21 |
-| 25-30 | v1.4 | 6/6 | Complete | 2026-04-21 |
-| 31 | v1.5 | 4/4 | Complete | 2026-04-22 |
-| 32 | v1.5 | 2/2 | Complete | 2026-04-22 |
-| 33-36 | v1.5 | 1 | Planned | -- |
-| 37-38 | v1.5 | 0/2 | Planned | -- |
+| Milestone | Phases | Status | Completed |
+|-----------|--------|--------|-----------|
+| v1.0 | 1-6 | Complete | 2026-04-21 |
+| v1.1 | 7-11 | Complete | 2026-04-21 |
+| v1.2 | 12-16 | Complete | 2026-04-21 |
+| v1.3 | 17-24 | Complete | 2026-04-21 |
+| v1.4 | 25-30 | Complete | 2026-04-21 |
+| v1.5 | 31-38 | Complete | 2026-04-23 |
