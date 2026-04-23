@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -87,6 +88,10 @@ func runPublish(cmd *cobra.Command, args []string) error {
 
 	hubDir := resolveHubPathForHome(homeDir, channel)
 
+	if err := validateChannelIsolation(channel, hubDir); err != nil {
+		return err
+	}
+
 	// Read old hub version before sync for the warning message
 	oldHubVersion := readHubVersionAtPath(hubDir)
 
@@ -115,7 +120,43 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		"hub":    hubDir,
 	}, renderBinaryActionVisual("Publish Complete", fmt.Sprintf("Aether v%s published", version), version, hubDir))
 
+	warnBinaryCoLocation(channel, homeDir)
+
 	return nil
+}
+
+// validateChannelIsolation rejects cross-channel publish operations to prevent
+// dev publishes from contaminating stable hubs and vice versa.
+func validateChannelIsolation(channel runtimeChannel, hubDir string) error {
+	absHub, err := filepath.Abs(hubDir)
+	if err != nil {
+		absHub = hubDir
+	}
+	switch channel {
+	case channelDev:
+		if strings.Contains(absHub, "/.aether/") || strings.HasSuffix(absHub, "/.aether") {
+			return fmt.Errorf("dev publish cannot target stable hub at %s: use --channel stable or unset AETHER_HUB_DIR", hubDir)
+		}
+	case channelStable:
+		if strings.Contains(absHub, "/.aether-dev/") || strings.HasSuffix(absHub, "/.aether-dev") {
+			return fmt.Errorf("stable publish cannot target dev hub at %s: use --channel dev or unset AETHER_HUB_DIR", hubDir)
+		}
+	}
+	return nil
+}
+
+// warnBinaryCoLocation prints a note when both stable and dev binaries exist
+// in the same destination directory. Purely informational — does not block publish.
+func warnBinaryCoLocation(channel runtimeChannel, homeDir string) {
+	other := defaultBinaryName(channelStable)
+	if channel == channelStable {
+		other = defaultBinaryName(channelDev)
+	}
+	destDir := defaultLocalBinaryDest(homeDir, channel)
+	otherPath := filepath.Join(destDir, other)
+	if _, err := os.Stat(otherPath); err == nil {
+		fmt.Fprintf(os.Stderr, "Note: %s binary also present in %s\n", other, destDir)
+	}
 }
 
 // readHubVersionAtPath reads the version from a hub directory's version.json.
