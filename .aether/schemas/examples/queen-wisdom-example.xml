@@ -210,7 +210,7 @@
       </context>
       <examples>
         <example>
-          <scenario>Session file is 24 hours old, user runs /ant:init</scenario>
+          <scenario>Session file is 24 hours old, user runs /ant-init</scenario>
           <application>Detect stale file but DO NOT auto-clear. Prompt user.</application>
           <outcome>User's colony state preserved</outcome>
         </example>
