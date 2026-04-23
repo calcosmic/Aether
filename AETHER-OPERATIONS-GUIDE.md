@@ -264,9 +264,39 @@ aether update --force --download-binary
 - close the current session
 - open a fresh session in that repo
 
+### **Channel selection**
+
+`aether update` infers the channel from the binary name (`aether` = stable, `aether-dev` = dev) or from the `AETHER_CHANNEL` environment variable. You can also override explicitly:
+
+```bash
+aether update --channel stable --force
+aether update --channel dev --force
+```
+
+### **Stale publish detection**
+
+Every `aether update` automatically checks whether the hub publish is fresh by comparing binary and hub versions and verifying companion-file completeness. Classifications:
+
+| Classification | Meaning | Behavior |
+|---|---|---|
+| `ok` | Binary and hub versions agree, companion files complete | Update proceeds normally |
+| `info` | Companion files are incomplete (counts below expected) | Update proceeds, warning displayed |
+| `warning` | Hub version is ahead of binary version | Update proceeds, warning displayed |
+| `critical` | Hub version is behind binary version (stale publish) | **Update blocked**, non-zero exit code |
+
+When `critical` is detected, the command prints a recovery command:
+
+```bash
+# For stable
+aether publish
+
+# For dev
+aether publish --channel dev
+```
+
 ### **Rule**
 
-Use a **stable repo copy/worktree** for this.  
+Use a **stable repo copy/worktree** for this.
 Do **not** use your dev test repo for public/stable verification.
 
 ---
@@ -424,7 +454,66 @@ Expected counts:
 
 ---
 
-## **11. Safe Testing Matrix**
+## **11. Release Integrity Checks**
+
+Use `aether integrity` to validate the full release pipeline chain — source version, binary version, hub version, companion files, and a downstream update simulation.
+
+### **Auto-detection**
+
+The command auto-detects whether you are in a source repo (the Aether repo itself) or a consumer repo (any repo using Aether):
+
+- **Source repo** — runs 5 checks: source version, binary version, hub version, hub companion files, downstream simulation
+- **Consumer repo** — runs 4 checks: binary version, hub version, hub companion files, downstream simulation
+
+### **Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output structured JSON instead of visual report |
+| `--channel stable\|dev` | Override channel detection |
+| `--source` | Force source-repo context (5 checks) |
+
+### **Examples**
+
+```bash
+# In the Aether source repo
+aether integrity
+
+# In a consumer repo
+aether integrity
+
+# Force source-repo checks with JSON output
+aether integrity --source --json
+
+# Check dev channel
+aether integrity --channel dev
+```
+
+### **The five checks**
+
+1. **Source version** — reads `.aether/version.json` from the repo root
+2. **Binary version** — reads the version from the running `aether` binary
+3. **Hub version** — reads `~/.aether/system/version.json` (or `~/.aether-dev/` for dev)
+4. **Hub companion files** — verifies expected file counts:
+   - 50 Claude commands
+   - 50 OpenCode commands
+   - 25 OpenCode agents
+   - 25 Codex agents
+   - 29 Codex skills
+5. **Downstream simulation** — runs stale publish detection (see Section 7)
+
+### **Exit codes**
+
+- `0` — all checks pass
+- non-zero — one or more checks failed (see output for recovery commands)
+
+### **Relationship to medic**
+
+`aether medic --deep` includes integrity scanning automatically. Run `aether integrity` directly when you want a focused release-pipeline validation without the broader medic health checks.
+
+---
+
+## **12. Safe Testing Matrix**
 
 | **What you are testing** | **Binary** | **Hub** | **Repo** |
 |---|---|---|---|
@@ -434,7 +523,7 @@ Expected counts:
 
 ---
 
-## **12. Do / Don’t**
+## **13. Do / Don’t**
 
 ### **Do**
 
@@ -453,7 +542,7 @@ Expected counts:
 
 ---
 
-## **13. Short Version**
+## **14. Short Version**
 
 ```text
 aether      = public / stable
@@ -471,8 +560,10 @@ repo/.aether/data = local colony state for that repo only
 
 ```bash
 cd /Users/callumcowie/repos/Aether
-go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "/Users/callumcowie/repos/Aether-dev/bin"
+aether publish --channel dev --binary-dest "/Users/callumcowie/repos/Aether-dev/bin"
 ```
+
+> **Backward compatibility:** `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "..."` still works but `aether publish` is preferred because it includes automatic version agreement verification.
 
 ### **When testing those changes in a target repo**
 
