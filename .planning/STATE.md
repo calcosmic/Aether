@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
+status: completed
 stopped_at: Completed 44.2-01-PLAN.md (finalized)
-last_updated: "2026-04-24T00:15:00.000Z"
-last_activity: 2026-04-24 -- Phase 44.2 execution finalized
+last_updated: "2026-04-23T23:19:07.575Z"
+last_activity: 2026-04-23
 progress:
-  total_phases: 51
-  completed_phases: 40
-  total_plans: 113
-  completed_plans: 110
-  percent: 78
+  total_phases: 52
+  completed_phases: 39
+  total_plans: 114
+  completed_plans: 109
+  percent: 96
 ---
 
 # Project State
@@ -159,4 +159,4 @@ Last session: 2026-04-24T00:15:00.000Z
 Stopped at: Completed 44.2-01-PLAN.md (finalized)
 Resume file: None
 
-**Planned Phase:** 44.2 (command-hygiene) — 1 plan — COMPLETE
+**Planned Phase:** 45 (e2e-regression-coverage) — 1 plans — 2026-04-23T23:19:07.562Z
