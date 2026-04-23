@@ -67,6 +67,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Read hub version for comparison
 	hubVersion := readHubVersion(hubVersionFile)
+	binaryVersion := resolveVersion()
 	downloadBinary, _ := cmd.Flags().GetBool("download-binary")
 	binaryMode := updateBinaryRefreshMode(downloadBinary, dryRun)
 
@@ -102,7 +103,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 				fmt.Sprintf("Do not change the installed %s binary unless --download-binary is also used", defaultBinaryName(channel)),
 			},
 		}
-		outputWorkflow(result, renderUpdateVisual(repoDir, hubVersion, resolveVersion(), force, true, []map[string]interface{}{
+		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, []map[string]interface{}{})
+		result["stale_publish"] = staleResultToMap(staleResult)
+		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, force, true, []map[string]interface{}{
 			{"label": "System files", "copied": 0, "skipped": 0},
 			{"label": "Commands (claude)", "copied": 0, "skipped": 0},
 			{"label": "Settings (claude)", "copied": 0, "skipped": 0},
@@ -111,7 +114,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			{"label": "Skills (codex)", "copied": 0, "skipped": 0},
 			{"label": "Commands (opencode)", "copied": 0, "skipped": 0},
 			{"label": "Agents (opencode)", "copied": 0, "skipped": 0},
-		}, 0, 0, nil, binaryMode))
+		}, 0, 0, nil, binaryMode)
+		if staleResult.Classification != staleOK {
+			visual += renderStalePublishBanner(staleResult)
+		}
+		outputWorkflow(result, visual)
+		if staleResult.Classification == staleCritical {
+			return fmt.Errorf("stale publish detected: %s", staleResult.Message)
+		}
 	} else {
 		syncResult := runUpdateSync(hubDir, repoDir, force)
 		if len(syncResult.errors) > 0 {
@@ -150,10 +160,11 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
 			message += ". " + restartNote
 		}
+		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, syncResult.details)
 		result := map[string]interface{}{
 			"message":                 message,
 			"hub_version":             hubVersion,
-			"local_version":           resolveVersion(),
+			"local_version":           binaryVersion,
 			"force":                   force,
 			"details":                 syncResult.details,
 			"binary_refresh_mode":     binaryMode,
@@ -161,8 +172,16 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"legacy_session_restored": mirrorRestored,
 			"codex_restart_required":  len(restartTargets) > 0,
 			"codex_restart_targets":   restartTargets,
+			"stale_publish":           staleResultToMap(staleResult),
 		}
-		outputWorkflow(result, renderUpdateVisual(repoDir, hubVersion, resolveVersion(), force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode))
+		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode)
+		if staleResult.Classification != staleOK {
+			visual += renderStalePublishBanner(staleResult)
+		}
+		outputWorkflow(result, visual)
+		if staleResult.Classification == staleCritical {
+			return fmt.Errorf("stale publish detected: %s", staleResult.Message)
+		}
 	}
 
 	// Download binary if requested

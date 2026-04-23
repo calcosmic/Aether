@@ -2471,6 +2471,44 @@ func renderSyncSummary(details []map[string]interface{}) string {
 	return b.String()
 }
 
+func renderStalePublishBanner(stale stalePublishResult) string {
+	var b strings.Builder
+	b.WriteString("\n")
+
+	emoji := "🐜"
+	title := "PUBLISH STATUS"
+	switch stale.Classification {
+	case staleCritical:
+		emoji = ""
+		title = "STALE PUBLISH DETECTED"
+	case staleWarning:
+		emoji = "⚠️"
+		title = "STALE PUBLISH DETECTED"
+	case staleInfo:
+		emoji = "ℹ️"
+		title = "PUBLISH STATUS"
+	}
+
+	b.WriteString(renderBanner(emoji, title))
+	b.WriteString(visualDivider)
+	b.WriteString(fmt.Sprintf("Classification: %s\n", stale.Classification))
+	b.WriteString(fmt.Sprintf("Binary version: %s\n", stale.BinaryVersion))
+	b.WriteString(fmt.Sprintf("Hub version: %s\n", stale.HubVersion))
+	b.WriteString(fmt.Sprintf("Channel: %s\n", stale.Channel))
+
+	if len(stale.Components) > 0 {
+		b.WriteString("\nComponents\n")
+		for _, c := range stale.Components {
+			b.WriteString(fmt.Sprintf("  - %s: %d found, expected %d\n", c.Name, c.Actual, c.Expected))
+		}
+	}
+
+	b.WriteString(fmt.Sprintf("\n%s\n", stale.Message))
+	b.WriteString("\nRecovery\n")
+	b.WriteString(fmt.Sprintf("  %s\n", stale.RecoveryCommand))
+	return b.String()
+}
+
 func truncateLines(text string, maxLines int) []string {
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	if maxLines <= 0 || len(lines) <= maxLines {
