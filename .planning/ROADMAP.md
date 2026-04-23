@@ -7,7 +7,7 @@
 - **v1.2 Live Dispatch Truth and Recovery** - Phases 12-16 (shipped)
 - **v1.3 Visual Truth and Core Hardening** - Phases 17-24 (shipped 2026-04-21)
 - **v1.4 Self-Healing Colony** - Phases 25-30 (completed 2026-04-21)
-- **v1.5 Runtime Truth Recovery** - Phases 31-36 (in progress)
+- **v1.5 Runtime Truth Recovery** - Phases 31-38 (in progress)
 
 ## Phases
 
@@ -137,6 +137,14 @@ Plans:
 
 **Status:** Planned
 
+### Phase 37: Codebase Hygiene
+**Goal:** Clean up orphaned code and fix SUMMARY metadata from v1.5 phases.
+**Gap Closure:** Closes tech debt from v1.5 milestone audit
+
+### Phase 38: Nyquist Validation Backfill
+**Goal:** Backfill VALIDATION.md for phases 32, 33, 35, 36.
+**Gap Closure:** Closes Nyquist coverage gaps from v1.5 milestone audit
+
 ## Progress
 
 | Phase | Milestone | Plans | Status | Completed |
@@ -149,3 +157,4 @@ Plans:
 | 31 | v1.5 | 4/4 | Complete | 2026-04-22 |
 | 32 | v1.5 | 2/2 | Complete | 2026-04-22 |
 | 33-36 | v1.5 | 1 | Planned | -- |
+| 37-38 | v1.5 | 0/2 | Planned | -- |
