@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -1011,6 +1012,120 @@ func extractBodyAfterFrontmatter(data []byte) string {
 	}
 
 	return rest[end+3:]
+}
+
+// TestE2EOpenCodeAgentLoad simulates the full downstream flow: copies all 25
+// OpenCode agent files to a temp directory (as if aether update placed them
+// there), parses each file's YAML frontmatter, and validates it against the
+// OpenCode schema. This catches the exact errors that crash OpenCode startup:
+// "Invalid input: expected record, received string tools" and "Invalid hex
+// color format".
+func TestE2EOpenCodeAgentLoad(t *testing.T) {
+	repoRoot, err := findOpenCodeRepoRoot()
+	if err != nil {
+		t.Skipf("repo root not found: %v", err)
+	}
+
+	srcDir := filepath.Join(repoRoot, ".opencode", "agents")
+
+	// 1. Setup: create temp directory simulating a downstream repo
+	tmpDir := t.TempDir()
+	destDir := filepath.Join(tmpDir, ".opencode", "agents")
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		t.Fatalf("failed to create dest dir: %v", err)
+	}
+
+	// 2. Copy: copy all aether-*.md files to temp dir
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		t.Fatalf("failed to read source agents dir: %v", err)
+	}
+
+	var agentFiles []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), "aether-") || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		src := filepath.Join(srcDir, e.Name())
+		dst := filepath.Join(destDir, e.Name())
+		data, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", src, err)
+		}
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", dst, err)
+		}
+		agentFiles = append(agentFiles, e.Name())
+	}
+
+	if len(agentFiles) == 0 {
+		t.Fatal("no aether-*.md files found to copy")
+	}
+	if len(agentFiles) != 25 {
+		t.Errorf("expected 25 agent files, found %d", len(agentFiles))
+	}
+
+	// 3-4. Parse and validate each file
+	hexColorRe := regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+	themeColors := map[string]bool{
+		"primary": true, "secondary": true, "accent": true,
+		"success": true, "warning": true, "error": true, "info": true,
+	}
+
+	for _, name := range agentFiles {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(destDir, name)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("failed to read %s: %v", path, err)
+			}
+
+			// Parse YAML frontmatter
+			fm, err := extractYAMLFrontmatter(data)
+			if err != nil {
+				t.Fatalf("YAML parse error (would crash OpenCode): %v", err)
+			}
+
+			// Validate: description present and 20+ chars
+			desc, ok := fm["description"].(string)
+			if !ok || len(strings.TrimSpace(desc)) < 20 {
+				t.Errorf("description missing or too short: %q", desc)
+			}
+
+			// Validate: mode is valid
+			mode, ok := fm["mode"].(string)
+			if !ok || (mode != "primary" && mode != "subagent" && mode != "all") {
+				t.Errorf("invalid or missing mode: %q", mode)
+			}
+
+			// Validate: tools is an object (not a string — the exact bug that crashed OpenCode)
+			tools := fm["tools"]
+			if tools == nil {
+				t.Error("missing tools field")
+			} else if _, ok := tools.(map[string]interface{}); !ok {
+				t.Errorf("tools is not an object (type %T) — would cause 'expected record, received string' error in OpenCode", tools)
+			}
+
+			// Validate: color is hex or theme
+			color, ok := fm["color"].(string)
+			if !ok || strings.TrimSpace(color) == "" {
+				t.Error("missing or empty color field")
+			} else if !hexColorRe.MatchString(color) && !themeColors[color] {
+				t.Errorf("invalid color %q (must be hex #rrggbb or theme color) — would cause 'Invalid hex color format' error in OpenCode", color)
+			}
+
+			// Validate: no name field
+			if _, hasName := fm["name"]; hasName {
+				t.Error("name field must not exist (filename IS the name)")
+			}
+
+			// Validate: model has provider/ format
+			model, ok := fm["model"].(string)
+			if !ok || !strings.Contains(model, "/") {
+				t.Errorf("model %q missing provider/ format", model)
+			}
+		})
+	}
 }
 
 // TestCodexAgentCompleteness verifies that each Codex TOML agent contains
