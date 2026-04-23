@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,7 +42,144 @@ func init() {
 }
 
 func runIntegrity(cmd *cobra.Command, args []string) error {
-	return fmt.Errorf("not yet implemented")
+	// 1. Determine channel
+	channel := runtimeChannelFromFlag(cmd.Flags())
+	if explicitChannel, _ := cmd.Flags().GetString("channel"); explicitChannel != "" {
+		if normalizeRuntimeChannel(explicitChannel) != channelDev && normalizeRuntimeChannel(explicitChannel) != channelStable {
+			return fmt.Errorf("invalid channel %q: must be stable or dev", explicitChannel)
+		}
+	}
+
+	// 2. Determine context
+	ctx := detectIntegrityContext()
+	if forceSource, _ := cmd.Flags().GetBool("source"); forceSource {
+		ctx = "source"
+	}
+
+	// 3. Resolve hub directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	hubDir := resolveHubPathForHome(homeDir, channel)
+	hubVersionFile := filepath.Join(hubDir, "version.json")
+	if _, err := os.Stat(hubVersionFile); os.IsNotExist(err) {
+		if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
+			result := integrityResult{
+				Context: ctx,
+				Channel: string(channel),
+				Checks: []integrityCheck{
+					{Name: "Hub installed", Status: "fail", Message: fmt.Sprintf("hub not installed at %s", hubDir)},
+				},
+				Overall: "critical",
+			}
+			data, _ := json.MarshalIndent(result, "", "  ")
+			fmt.Fprintln(stdout, string(data))
+			os.Exit(2)
+		}
+		outputError(2, fmt.Sprintf("hub not installed at %s", hubDir), nil)
+		os.Exit(2)
+	}
+
+	// 4. Collect versions
+	binaryVersion := resolveVersion()
+	hubVersion := readHubVersionAtPath(hubDir)
+
+	// 5. Run checks based on context
+	var checks []integrityCheck
+	if ctx == "source" {
+		checks = []integrityCheck{
+			checkSourceVersion(),
+			checkBinaryVersion(),
+			checkHubVersion(hubDir),
+			checkHubCompanionFiles(hubDir),
+			checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, channel),
+		}
+	} else {
+		checks = []integrityCheck{
+			checkBinaryVersion(),
+			checkHubVersion(hubDir),
+			checkHubCompanionFiles(hubDir),
+			checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, channel),
+		}
+	}
+
+	// 6. Aggregate results
+	overall := "ok"
+	var recoveryCommands []string
+	for _, c := range checks {
+		if c.Status == "fail" {
+			overall = "critical"
+			if c.RecoveryCommand != "" {
+				recoveryCommands = append(recoveryCommands, c.RecoveryCommand)
+			}
+		}
+	}
+
+	result := integrityResult{
+		Context:          ctx,
+		Channel:          string(channel),
+		Checks:           checks,
+		Overall:          overall,
+		RecoveryCommands: recoveryCommands,
+	}
+
+	// 7. Render output
+	if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
+		data, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
+		fmt.Fprintln(stdout, string(data))
+	} else {
+		visual := buildIntegrityVisual(result)
+		fmt.Fprint(stdout, visual)
+	}
+
+	// 8. Return
+	if overall == "ok" {
+		return nil
+	}
+	return fmt.Errorf("integrity checks failed")
+}
+
+func buildIntegrityVisual(result integrityResult) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("integrity"), "Release Integrity"))
+	b.WriteString(fmt.Sprintf("Context: %s repo\n", result.Context))
+	b.WriteString(fmt.Sprintf("Channel: %s\n\n", result.Channel))
+
+	passCount := 0
+	for _, c := range result.Checks {
+		if c.Status == "pass" {
+			passCount++
+			b.WriteString(fmt.Sprintf("✓ %s: %s\n", c.Name, c.Status))
+			if msg := strings.TrimSpace(c.Message); msg != "" {
+				b.WriteString(fmt.Sprintf("  Version: %s\n", msg))
+			}
+		} else {
+			b.WriteString(fmt.Sprintf("✗ %s: %s\n", c.Name, c.Status))
+			if msg := strings.TrimSpace(c.Message); msg != "" {
+				b.WriteString(fmt.Sprintf("  Message: %s\n", msg))
+			}
+			if c.RecoveryCommand != "" {
+				b.WriteString(fmt.Sprintf("  Recovery: %s\n", c.RecoveryCommand))
+			}
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("Summary"))
+	b.WriteString(fmt.Sprintf("%d/%d checks passed\n", passCount, len(result.Checks)))
+
+	if len(result.RecoveryCommands) > 0 {
+		b.WriteString("\nRecovery Commands\n")
+		for _, rc := range result.RecoveryCommands {
+			b.WriteString(fmt.Sprintf("  %s\n", rc))
+		}
+	}
+
+	return b.String()
 }
 
 func detectIntegrityContext() string {
