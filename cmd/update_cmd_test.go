@@ -1597,7 +1597,21 @@ func createHubWithExpectedCounts(t *testing.T, hubDir string) {
 	}
 	for i := 0; i < expectedOpenCodeAgentCount; i++ {
 		name := fmt.Sprintf("agent_%02d.md", i)
-		content := fmt.Sprintf("---\nname: Agent %02d\ndescription: This is a test agent description %02d\nrole: test\n---\n\n# Test agent\n", i, i)
+		content := fmt.Sprintf(`---
+description: "This is a valid test agent description for agent %02d"
+mode: subagent
+model: anthropic/claude-sonnet-4-20250514
+tools:
+  write: true
+  edit: true
+  bash: true
+color: "#f1c40f"
+---
+
+# Test Agent %02d
+
+Test agent content.
+`, i, i)
 		if err := os.WriteFile(filepath.Join(agentsDir, name), []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write %s: %v", name, err)
 		}
