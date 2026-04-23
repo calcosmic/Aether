@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -30,6 +32,11 @@ func TestMain(m *testing.M) {
 	origNewCodexWorkerInvoker := newCodexWorkerInvoker
 
 	code := m.Run()
+
+	// Clean up git worktrees and branches created by tests.
+	// Tests like TestWorktreeAllocateAuditLog create real git worktrees
+	// that persist after the test suite finishes.
+	cleanupTestWorktrees()
 
 	store = origStore
 	stdout = origStdout
@@ -121,5 +128,46 @@ func resetFlags(cmd *cobra.Command) {
 	})
 	for _, sub := range cmd.Commands() {
 		resetFlags(sub)
+	}
+}
+
+// cleanupTestWorktrees removes git worktrees and branches created by the test
+// suite. Tests like TestWorktreeAllocateAuditLog create real worktrees in
+// cmd/.aether/worktrees/ that persist after tests finish. This runs once after
+// all tests complete.
+func cleanupTestWorktrees() {
+	// Remove all non-main worktrees
+	out, _ := exec.Command("git", "worktree", "list", "--porcelain").Output()
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "worktree ") {
+			continue
+		}
+		path := strings.TrimPrefix(line, "worktree ")
+		// Skip the main working tree (matches the repo root)
+		if !strings.Contains(path, "/.aether/worktrees/") && !strings.Contains(path, "-worktrees/") {
+			continue
+		}
+		exec.Command("git", "worktree", "remove", path, "--force").Run()
+	}
+
+	// Prune any remaining detached entries
+	exec.Command("git", "worktree", "prune").Run()
+
+	// Delete branches that match test-created patterns
+	branchOut, _ := exec.Command("git", "branch", "--list").Output()
+	branches := strings.Split(string(branchOut), "\n")
+	for _, br := range branches {
+		br = strings.TrimSpace(br)
+		br = strings.TrimPrefix(br, "* ")
+		if br == "" || br == "main" || br == "master" {
+			continue
+		}
+		// Only delete branches that match test patterns
+		if strings.HasPrefix(br, "feature/test-audit-") ||
+			strings.HasPrefix(br, "phase-") ||
+			(strings.HasPrefix(br, "feature/") && len(strings.Split(br, "/")) == 2) {
+			exec.Command("git", "branch", "-D", br).Run()
+		}
 	}
 }
