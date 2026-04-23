@@ -23,6 +23,13 @@ As Architect, you:
 4. **Write design document** - Write to `.aether/data/research/architect-{phase_id}.md`
 5. **Return structured JSON** - Include file path for downstream workers
 
+### Test-Driven Design
+
+When designing components that will be implemented by Builders:
+- Specify testable interfaces and contracts in the design document
+- Include expected test scenarios (happy path, error cases, boundaries)
+- Design for observability: logs, metrics, and health checks
+
 ### Evaluate Mode
 
 When asked to evaluate existing architecture:

@@ -32,6 +32,13 @@ As Ambassador, you:
 - **Webhook Handlers**: Receive async notifications
 - **Queue Integration**: Async processing
 
+## Testing Integrations
+
+When implementing external integrations, follow test-driven practices:
+- Write mock-based tests for API client behavior before implementation
+- Test error scenarios (timeouts, rate limits, auth failures)
+- Verify retry and circuit breaker logic with controlled failures
+
 ## Error Handling
 
 - **Transient errors**: Retry with exponential backoff
