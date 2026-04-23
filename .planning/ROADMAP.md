@@ -110,6 +110,13 @@ Plans:
 ### Phase 34: Cleanup
 **Goal:** Address stale worktrees, orphaned branches, and stale blocker flags from prior colony work.
 **Requirements:** R056 (stale worktrees), R057 (stale branches), R058 (blocker flags)
+**Plans:** 3 plans
+
+Plans:
+- [ ] 34-01-PLAN.md -- Backup colony data and evaluate candidate commits for preservation
+- [ ] 34-02-PLAN.md -- Bulk worktree and branch cleanup with interactive confirmation
+- [ ] 34-03-PLAN.md -- Interactive blocker flag review and resolution
+
 **Status:** Planned
 
 ### Phase 35: Platform Parity
@@ -132,4 +139,3 @@ Plans:
 | 31 | v1.5 | 4/4 | Complete | 2026-04-22 |
 | 32 | v1.5 | 2 | Planned | -- |
 | 33-36 | v1.5 | 0 | Planned | -- |
-
