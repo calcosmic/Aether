@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 43 plan 02 complete
-last_updated: "2026-04-23T19:38:56.161Z"
+last_updated: "2026-04-23T22:49:14.148Z"
 last_activity: 2026-04-23 -- Phase 44 execution started
 progress:
-  total_phases: 49
-  completed_phases: 37
-  total_plans: 112
-  completed_plans: 106
-  percent: 95
+  total_phases: 51
+  completed_phases: 38
+  total_plans: 113
+  completed_plans: 108
+  percent: 96
 ---
 
 # Project State
@@ -102,6 +102,7 @@ Last activity: 2026-04-23 -- Phase 44 execution started
 
 - Phase 34 added: Cleanup — Address stale worktrees, orphaned branches, and stale blocker flags from prior colony work.
 - Phase 44.1 inserted after Phase 44: Downstream Runtime Bugs — fix false Codex skills count, rigid plan --refresh guard, low scout timeout (URGENT)
+- Phase 44.2 inserted after Phase 44.1: Command Hygiene and Agent Parity — fix medic parity test, rename colon commands to hyphens
 
 ### Phase 35 Decisions (Platform Parity)
 
@@ -152,4 +153,4 @@ Last session: Phase 43-02 execution complete
 Stopped at: Phase 43 plan 02 complete
 Resume file: --resume-file
 
-**Planned Phase:** 44 (Doc Alignment and Archive Consistency) — 2 plans — 2026-04-23T19:33:54.027Z
+**Planned Phase:** 44.2 (command-hygiene) — 1 plans — 2026-04-23T22:49:14.096Z
