@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Runtime Truth Recovery
 status: executing
-stopped_at: Completed 35-02-PLAN.md
-last_updated: "2026-04-23T03:52:53.080Z"
+stopped_at: Completed 35-03-PLAN.md
+last_updated: "2026-04-23T04:16:39.008Z"
 last_activity: 2026-04-23
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 13
+  completed_plans: 14
   percent: 100
 ---
 
@@ -26,7 +26,7 @@ See: [.planning/PROJECT.md](/Users/callumcowie-repos-Aether/.planning/PROJECT.md
 ## Current Position
 
 Phase: 35
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-23
 
@@ -53,6 +53,7 @@ Progress: [██████████] 100%
 | Phase 34-cleanup P03 | 5min | 2 tasks | 1 files |
 | Phase 35 P01 | 8min | 2 tasks | 1 files |
 | Phase 35-platform-parity P02 | 5 min | 2 tasks | 25 files |
+| Phase 35-platform-parity P03 | 40min | 2 tasks | 26 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,9 @@ Progress: [██████████] 100%
 - All 18 unresolved blocker flags archived -- issues fixed by Phases 31-33 (R058 complete)
 - Task 2 used an empty commit because packaging mirrors were already byte-identical to canonical sources
 - No Codex mirror changes needed — TOML agents are platform-specific and were already correct
+- Test refinement over agent bloat: completeness test made role-aware instead of forcing TDD/escalation into all agents
+- activity-log sections removed from 16 Codex agents (OpenCode-specific, no Codex equivalent)
+- flag-add deprecation check refined to only warn on bare flag-add without aether prefix
 
 ### Phase 34 Decisions (Cleanup)
 
@@ -117,6 +121,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-04-23T03:52:52.719Z
-Stopped at: Completed 35-02-PLAN.md
+Last session: 2026-04-23T04:16:38.934Z
+Stopped at: Completed 35-03-PLAN.md
 Resume file: None
