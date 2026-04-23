@@ -84,7 +84,7 @@
 - [ ] **Phase 33: Dispatch Fixes** -- P1 dispatch robustness improvements
 - [x] **Phase 34: Cleanup** -- Stale worktrees, branches, blockers (completed 2026-04-23)
 - [x] **Phase 35: Platform Parity** -- Claude/OpenCode/Codex alignment (in progress, 1/3 plans)
-- [ ] **Phase 36: Release Decision** -- v1.0.20 cut and ship decision
+- [x] **Phase 36: Release Decision** -- v1.0.20 cut and ship decision (completed 2026-04-23)
 
 ## Phase Details
 
@@ -130,10 +130,10 @@ Plans:
 
 ### Phase 36: Release Decision
 **Goal:** Cut v1.0.20, validate release readiness, or defer.
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 36-01-PLAN.md -- Validate readiness, update version files, write changelog, commit and tag
+- [x] 36-01-PLAN.md -- Validate readiness, update version files, write changelog, commit and tag
 
 **Status:** Planned
 
