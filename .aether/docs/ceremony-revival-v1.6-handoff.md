@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T03:40:41Z
+Last updated: 2026-04-24T04:06:48Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -32,6 +32,7 @@ These commits are pushed:
 - `1fa1f95f fix: ship dependency-free ceremony narrator runtime`
 - `19bd3d66 feat: let narrator consume visual metadata`
 - `aa8d6d4b test: pipe event stream through narrator runtime`
+- `e2882ff2 docs: add ceremony revival handoff`
 
 Implemented foundation:
 
@@ -46,6 +47,11 @@ Implemented foundation:
   metadata.
 - The narrator accepts Go visual metadata via `--visuals`.
 - A Go smoke test pipes event-bus stream output through `dist/narrator.js`.
+- Go can now auto-launch the narrator sidecar for build ceremony events.
+- Build dispatch lifecycle events are persisted to `event-bus.jsonl` even in
+  JSON mode.
+- `AETHER_NARRATOR` launch gating is implemented with JSON mode protected from
+  narrator text.
 
 Verification already passed for the pushed foundation:
 
@@ -103,19 +109,17 @@ Existing non-narrator dependency advisories were noted by Gatekeeper but not
 changed in this slice. They should be handled as a separate release-hardening
 task, not mixed into the launcher.
 
-## Immediate Next Slice: Go Narrator Launcher
-
-Implement this before moving to the rolling frame renderer.
+## Completed Slice: Go Narrator Launcher
 
 ### Files To Add Or Edit
 
-- Add `cmd/narrator_launcher.go`
-- Add `cmd/ceremony_emitter.go`
-- Add `cmd/narrator_launcher_test.go`
-- Add `cmd/ceremony_emitter_test.go`
-- Edit `cmd/codex_build.go`
-- Edit `cmd/codex_build_worktree.go`
-- Optionally edit `cmd/codex_build_progress.go` only for tiny helper wrappers.
+- Added `cmd/narrator_launcher.go`
+- Added `cmd/ceremony_emitter.go`
+- Added `cmd/narrator_launcher_test.go`
+- Added `cmd/ceremony_emitter_test.go`
+- Edited `cmd/codex_build.go`
+- Edited `cmd/codex_build_worktree.go`
+- Edited `cmd/testing_main_test.go`
 
 ### Runtime Policy
 
@@ -151,7 +155,7 @@ type narratorLauncher struct {
 }
 ```
 
-Expected behavior:
+Implemented behavior:
 
 - Resolve `node` with an injectable `lookPath`.
 - Resolve the runtime as an absolute path:
@@ -163,10 +167,9 @@ Expected behavior:
 - Start `node dist/narrator.js --visuals <path>` with `exec.CommandContext`.
 - Pipe event JSON lines to child stdin.
 - Read child stdout in Go and call `writeVisualOutput(stdout, line+"\n")`.
-- Send child stderr to a bounded internal buffer or debug-only stderr; do not
-  spam normal command output.
-- `Close()` must close stdin, cancel context, wait with a short timeout, and
-  remove the temp visuals file. It must be idempotent.
+- Drain child stderr without spamming command output.
+- `Close()` closes stdin, waits, cancels if needed, waits for stdout drain,
+  removes the temp visuals file, and is idempotent.
 
 Do not call `event-bus-subscribe` from the parent build path. The Go process has
 the events in hand; feed the sidecar directly through stdin. Keep
@@ -185,19 +188,20 @@ type buildCeremonyEmitter struct {
 }
 ```
 
-Expected behavior:
+Implemented behavior:
 
 - Publish `events.CeremonyPayload` to `pkg/events.Bus` when `store` is
   available.
 - Forward the exact persisted `events.Event` JSON to the narrator sidecar.
 - If persistence fails, synthesize an event for the narrator only and continue.
-- Protect the active emitter with a small mutex or explicit scoped ownership.
-- Avoid global state where possible; if a package-level active emitter is used,
-  set it only for the duration of `runCodexBuild` and clear it with `defer`.
+- Protect the active emitter with a small mutex.
+- Use a package-level active emitter only for the duration of `runCodexBuild`;
+  it is restored with `defer`.
+- Trim user-controlled event text and lists before persistence/forwarding.
 
 ### Build Event Insertion Points
 
-Add phase-level events in `runCodexBuild`:
+Implemented phase-level events in `runCodexBuild`:
 
 - After dispatches are planned and named: `ceremony.build.prewave`
   - include `phase`, `phase_name`, `total`, and success criteria count.
@@ -205,7 +209,7 @@ Add phase-level events in `runCodexBuild`:
 - After dispatch execution completes, close the launcher before final JSON/visual
   workflow output is written.
 
-Add worker-level events in `cmd/codex_build_worktree.go`:
+Implemented worker-level events in `cmd/codex_build_worktree.go`:
 
 - Before each wave starts: `ceremony.build.wave.start`
   - include `phase`, `phase_name`, `wave`, `total`, message with execution
@@ -232,9 +236,7 @@ Scout's recommended narrow insertion points:
 - running progress inside `invokeCodexWorkerWithRuntimeProgress`.
 - worker finish around the existing calls to `emitCodexBuildWorkerFinished`.
 
-### Required Tests For The Launcher Slice
-
-Add tests before or with implementation:
+### Launcher Tests Added
 
 - `TestNarratorLauncherOffSuppressesLaunch`
 - `TestNarratorLauncherAutoSkipsJSONMode`
@@ -246,8 +248,11 @@ Add tests before or with implementation:
 - `TestNarratorLauncherCloseCancelsStreamAndWaitsForRuntime`
 - `TestNarratorLauncherHandlesEarlyRuntimeExit`
 - `TestBuildSyntheticNarratorDoesNotPolluteJSONOutput`
-- A test proving runtime launch never invokes `npm`, `npx`, or `tsx`.
-- A test proving the launcher uses `dist/narrator.js`, not `narrator.ts`.
+- `TestNarratorLauncherUsesDistRuntimeDirectly` proves runtime launch uses
+  `dist/narrator.js` and does not invoke `npm`, `npx`, `tsx`, or `narrator.ts`.
+- `TestBuildCeremonyEmitterPersistsAndForwardsEvents`
+- `TestBuildCeremonyEmitterTrimsUserControlledPayload`
+- `TestActiveBuildCeremonyScopeRestoresPreviousEmitter`
 
 Command-level JSON smoke should use a synthetic build fixture and assert:
 
@@ -276,6 +281,23 @@ git status --short
 ```
 
 Commit and push after the launcher is green.
+
+Completed verification on 2026-04-24:
+
+- `go test ./cmd -run 'TestNarratorLauncher|TestBuildCeremonyEmitter|TestActiveBuildCeremonyScope|TestBuildSyntheticNarratorDoesNotPolluteJSONOutput' -count=1`
+- `go test ./cmd ./pkg/events -run 'TestNarratorLauncher|TestBuildCeremonyEmitter|TestActiveBuildCeremonyScope|TestBuildSyntheticNarratorDoesNotPolluteJSONOutput|TestCeremony|TestEventBusSubscribe|TestEventBusStreamPipesToNarratorRuntime|TestVisualsDumpExportsCasteIdentityContract' -count=1`
+- `go test ./cmd -count=1`
+- `go test ./... -count=1 -timeout 300s`
+- `go vet ./...`
+- `npm --prefix .aether/ts ci`
+- `npm --prefix .aether/ts audit --package-lock-only --audit-level=low`
+- `npm --prefix .aether/ts run build`
+- `git diff --exit-code -- .aether/ts/dist/narrator.js`
+- `npm --prefix .aether/ts run typecheck`
+- `npm --prefix .aether/ts test`
+- `go test ./... -race -count=1 -timeout 600s`
+- `git diff --check`
+- `rm -rf .aether/ts/node_modules`
 
 ## Phase After Launcher: Rolling Activity Display
 
@@ -362,10 +384,12 @@ Before release:
 
 ## Current Next Step
 
-Start with the launcher slice above. Do not begin wrapper rewrites until:
+Start with the rolling activity display slice above. Do not begin wrapper
+rewrites until:
 
-1. launcher gating is tested;
-2. build ceremony events are persisted;
-3. sidecar output is proven not to corrupt JSON;
-4. the narrator can be disabled with `AETHER_NARRATOR=off`;
-5. full Go and TS gates pass.
+1. the narrator renders a stable multi-worker frame from the persisted build
+   events now emitted by Go;
+2. non-TTY output remains readable and low-noise;
+3. long event text is visibly truncated;
+4. TS snapshot tests cover active, completed, failed, and blocked workers;
+5. full Go and TS gates pass again.

@@ -30,6 +30,7 @@ func invokeCodexWorkerWithRuntimeProgress(
 			switch status {
 			case "running", "active":
 				_ = updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, "running", buildDispatchActiveSummary(dispatch, wave))
+				emitBuildCeremonyWorkerRunning(dispatch, wave, event.Message)
 				emitCodexDispatchWorkerRunning(dispatch, wave, event.Message)
 			}
 		})
@@ -165,6 +166,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 	var rootOpsMu sync.Mutex
 	for _, wave := range waveNumbers {
 		waveDispatches := waves[wave]
+		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
 		waveResults := make([]codex.DispatchResult, len(waveDispatches))
 		var wg sync.WaitGroup
@@ -179,6 +181,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 						Status:     "timeout",
 						Error:      ctx.Err(),
 					}
+					emitBuildCeremonyWorkerTimeout(dispatch, wave, ctx.Err())
 					return
 				}
 
@@ -210,9 +213,11 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 						Status:     "failed",
 						Error:      allocErr,
 					}
+					emitBuildCeremonyWorkerFailed(dispatch, wave, allocErr)
 					return
 				}
 
+				emitBuildCeremonyWorkerStarting(dispatch, wave)
 				emitCodexBuildWorkerStarted(dispatch, wave)
 
 				cfg := codex.WorkerConfig{
@@ -301,11 +306,13 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 					dr.Error = fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, statusErr)
 				}
 
+				emitBuildCeremonyWorkerFinished(dispatch, dr)
 				emitCodexBuildWorkerFinished(dispatch, dr)
 				waveResults[i] = dr
 			}(idx, dispatch)
 		}
 		wg.Wait()
+		emitBuildCeremonyWaveEnd(phase, wave, waveResults)
 		results = append(results, waveResults...)
 	}
 	return results, nil
@@ -322,14 +329,19 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 	var results []codex.DispatchResult
 	for _, wave := range waveNumbers {
 		waveDispatches := waves[wave]
+		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
+		waveResults := make([]codex.DispatchResult, 0, len(waveDispatches))
 		for _, dispatch := range waveDispatches {
 			if ctx.Err() != nil {
-				results = append(results, codex.DispatchResult{
+				dr := codex.DispatchResult{
 					WorkerName: dispatch.WorkerName,
 					Status:     "timeout",
 					Error:      ctx.Err(),
-				})
+				}
+				emitBuildCeremonyWorkerTimeout(dispatch, wave, ctx.Err())
+				waveResults = append(waveResults, dr)
+				results = append(results, dr)
 				continue
 			}
 
@@ -337,6 +349,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			if err := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, "starting", workerDispatchSummary(dispatch)); err != nil {
 				return nil, fmt.Errorf("mark worker starting for %s: %w", dispatch.WorkerName, err)
 			}
+			emitBuildCeremonyWorkerStarting(dispatch, wave)
 			emitCodexBuildWorkerStarted(dispatch, wave)
 
 			cfg := codex.WorkerConfig{
@@ -376,9 +389,12 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			if err := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); err != nil {
 				return nil, fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, err)
 			}
+			emitBuildCeremonyWorkerFinished(dispatch, dr)
 			emitCodexBuildWorkerFinished(dispatch, dr)
+			waveResults = append(waveResults, dr)
 			results = append(results, dr)
 		}
+		emitBuildCeremonyWaveEnd(phase, wave, waveResults)
 	}
 	return results, nil
 }

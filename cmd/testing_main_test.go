@@ -30,6 +30,10 @@ func TestMain(m *testing.M) {
 	origContinueContextUpdater := continueContextUpdater
 	origContinueSignalHousekeeper := continueSignalHousekeeper
 	origNewCodexWorkerInvoker := newCodexWorkerInvoker
+	origActiveBuildCeremony := activeBuildCeremony
+	origNarratorLookPath := narratorLookPath
+	origNarratorCommandContext := narratorCommandContext
+	origNarratorRuntimePath := narratorRuntimePath
 
 	code := m.Run()
 
@@ -53,6 +57,10 @@ func TestMain(m *testing.M) {
 	continueContextUpdater = origContinueContextUpdater
 	continueSignalHousekeeper = origContinueSignalHousekeeper
 	newCodexWorkerInvoker = origNewCodexWorkerInvoker
+	activeBuildCeremony = origActiveBuildCeremony
+	narratorLookPath = origNarratorLookPath
+	narratorCommandContext = origNarratorCommandContext
+	narratorRuntimePath = origNarratorRuntimePath
 
 	os.Exit(code)
 }
@@ -78,6 +86,10 @@ func saveGlobals(t *testing.T) {
 	origContinueContextUpdater := continueContextUpdater
 	origContinueSignalHousekeeper := continueSignalHousekeeper
 	origNewCodexWorkerInvoker := newCodexWorkerInvoker
+	origActiveBuildCeremony := activeBuildCeremony
+	origNarratorLookPath := narratorLookPath
+	origNarratorCommandContext := narratorCommandContext
+	origNarratorRuntimePath := narratorRuntimePath
 	t.Cleanup(func() {
 		store = origStore
 		stdout = origStdout
@@ -94,6 +106,10 @@ func saveGlobals(t *testing.T) {
 		continueContextUpdater = origContinueContextUpdater
 		continueSignalHousekeeper = origContinueSignalHousekeeper
 		newCodexWorkerInvoker = origNewCodexWorkerInvoker
+		activeBuildCeremony = origActiveBuildCeremony
+		narratorLookPath = origNarratorLookPath
+		narratorCommandContext = origNarratorCommandContext
+		narratorRuntimePath = origNarratorRuntimePath
 	})
 }
 

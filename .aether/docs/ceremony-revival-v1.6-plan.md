@@ -68,13 +68,19 @@ Completed:
   narrator runtime.
 - CI/release/dependabot cover the TS package and dist drift.
 
-Remaining before Phase 2 is complete:
+Completed after this checkpoint:
 
 - Add Go auto-launch behind `AETHER_NARRATOR`.
 - Emit build ceremony events from the build dispatch lifecycle.
 - Prove JSON output is never polluted by narrator text.
 - Prove missing Node/runtime is non-fatal.
 - Prove sidecar stdout is routed through Go's visual output mutex.
+
+Remaining before Phase 2 is complete:
+
+- Manual installed-hub smoke: `aether install --package-dir "$PWD"` and a
+  fixture `aether update --force` should prove the launcher finds the hub
+  runtime outside the source checkout.
 
 The detailed implementation contract is tracked in
 `.aether/docs/ceremony-revival-v1.6-handoff.md`.

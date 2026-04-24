@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T03:40:41Z |
+| **Last Updated** | 2026-04-24T04:06:48Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -38,7 +38,9 @@ Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts
 
 Detailed tracked handoff: `.aether/docs/ceremony-revival-v1.6-handoff.md`.
 
-Specialist reviews for the launcher slice are complete. Scout recommends build-specific lifecycle insertion points in `cmd/codex_build_worktree.go` and `cmd/codex_build.go`. Watcher listed launcher tests for env gating, missing Node/runtime, early exits, cleanup, event persistence, and JSON non-pollution. Gatekeeper requires absolute `node` + `dist/narrator.js`, no shell/npm/npx/tsx at runtime, non-fatal missing dependencies, and child stdout routed back through Go's visual output mutex.
+Specialist reviews for the launcher slice are complete. Scout recommended build-specific lifecycle insertion points in `cmd/codex_build_worktree.go` and `cmd/codex_build.go`. Watcher listed launcher tests for env gating, missing Node/runtime, early exits, cleanup, event persistence, and JSON non-pollution. Gatekeeper required absolute `node` + `dist/narrator.js`, no shell/npm/npx/tsx at runtime, non-fatal missing dependencies, and child stdout routed back through Go's visual output mutex. Those launcher requirements are implemented and verified.
+
+Launcher implementation completed: `cmd/narrator_launcher.go` auto-launches the dependency-free Node sidecar for visual build output, never in JSON mode; `cmd/ceremony_emitter.go` persists build ceremony events and forwards the exact persisted event to the sidecar; `cmd/codex_build.go` and `cmd/codex_build_worktree.go` emit prewave, wave start, spawn, tool-use, and wave-end events. User-controlled event text/lists are trimmed before persistence.
 
 ---
 
@@ -84,15 +86,16 @@ Specialist reviews for the launcher slice are complete. Scout recommends build-s
 - 2026-04-24T03:19:03Z|phase2_visual_contract|build|Narrator consumes visuals-dump caste metadata through --visuals; Go-owned identity contract verified
 - 2026-04-24T03:24:26Z|phase2_stream_smoke|test|Event-bus stream to dependency-free narrator runtime smoke added; full Go/TS/race verification passed
 - 2026-04-24T03:40:41Z|handoff|docs|Tracked v1.6 launcher and remaining-phase implementation handoff created for context recovery
+- 2026-04-24T04:06:48Z|phase2_launcher|build|Go narrator launcher and build ceremony emitter implemented; full Go/TS/race/vet verification passed
 
 ---
 
 ## Next Steps
 
-1. Read `.aether/docs/ceremony-revival-v1.6-handoff.md`
-2. Implement the launcher slice: `cmd/narrator_launcher.go`, `cmd/ceremony_emitter.go`, tests, and build lifecycle event insertion
-3. Run the Go/TS verification block listed in the handoff
-4. Commit and push after the launcher slice is green
+1. Commit and push the launcher implementation
+2. Run an installed-hub smoke if time allows: `aether install --package-dir "$PWD"` and `aether update --force` in a fixture repo
+3. Start the rolling activity display slice in `.aether/ts/narrator.ts`
+4. Add TS snapshots for active, completed, failed, and blocked workers
 
 ---
 
@@ -103,7 +106,7 @@ Specialist reviews for the launcher slice are complete. Scout recommends build-s
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Implement Go narrator launcher gating and sidecar cleanup
-- Emit build ceremony events from the dispatch lifecycle
-- Add launcher/emitter tests for JSON safety, missing Node/runtime, early exits, and event persistence
-- Run the full Go/TS verification block from `.aether/docs/ceremony-revival-v1.6-handoff.md`
+- Commit and push the Go narrator launcher slice
+- Optionally smoke the installed hub runtime lookup path
+- Build the rolling activity display frame in `.aether/ts/narrator.ts`
+- Add TS snapshot coverage for active/completed/failed/blocked worker frames

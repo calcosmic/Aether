@@ -141,6 +141,13 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
 	waveCount := len(waveExecution)
 	parallelWaves := countParallelWaveExecutionPlans(waveExecution)
+
+	ceremony := newBuildCeremonyEmitter(context.Background(), root, phase)
+	restoreCeremony := setActiveBuildCeremony(ceremony)
+	defer restoreCeremony()
+	defer ceremony.Close()
+	emitBuildCeremonyPrewave(phase, dispatches, waveCount)
+
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
