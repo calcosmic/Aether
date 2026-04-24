@@ -16,7 +16,7 @@ wrapper_additions:
     1. Run `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only`.
     2. Parse `result.dispatch_manifest`; do not parse visual output.
     3. Load `.aether/docs/command-playbooks/build-wave.md` as the spawning procedure.
-    4. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, then call `aether spawn-complete`.
+    4. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
     5. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
     6. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.
   post_build: |

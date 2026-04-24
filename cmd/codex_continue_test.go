@@ -146,6 +146,7 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
 
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
@@ -210,6 +211,7 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 		if strings.TrimSpace(dispatch["brief"].(string)) == "" {
 			t.Fatalf("dispatch %d missing brief: %+v", i, dispatch)
 		}
+		assertDispatchHasRuntimeSkillAssignment(t, dispatch)
 	}
 
 	plan := result["continue_manifest"].(map[string]interface{})
