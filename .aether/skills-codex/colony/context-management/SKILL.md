@@ -69,6 +69,17 @@ or `aether pause-colony` to save state, then start fresh with /ant-resume-colony
 or `aether resume-colony`.
 ```
 
+## Capturing Settings, Init Context, and Todos
+
+When starting or reconfiguring a colony, capture durable preferences in the configured preference store rather than burying them in transient chat. Treat communication style, automation level, verbosity, and context-budget preferences as long-lived context.
+
+When a task or idea appears during unrelated work:
+
+- Capture it without derailing the current task.
+- Deduplicate it against existing roadmap items or open todos.
+- Record enough context that a future worker can understand why it matters.
+- Promote it into a phase only when it has clear scope and timing.
+
 This helps prevent context window degradation in long sessions.
 
 ## CONTEXT.md Content

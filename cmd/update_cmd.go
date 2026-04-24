@@ -347,7 +347,7 @@ const (
 	expectedOpenCodeCommandCount = 50
 	expectedOpenCodeAgentCount   = 25
 	expectedCodexAgentCount      = 25
-	expectedCodexSkillCount      = 29
+	expectedCodexSkillCount      = 83
 )
 
 type staleComponent struct {

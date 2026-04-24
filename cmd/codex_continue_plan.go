@@ -169,7 +169,7 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 
 func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
-	watcherSkillAssignment := resolveWorkerSkillAssignment("watcher", "Independent verification before advancement")
+	watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
 	dispatches := []codexContinueExternalDispatch{
 		{
 			Stage:         "verification",
@@ -190,7 +190,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 		},
 	}
 	for _, spec := range codexContinueReviewSpecs {
-		assignment := resolveWorkerSkillAssignment(spec.Caste, spec.Task)
+		assignment := resolveWorkerSkillAssignmentForWorkflow("continue", spec.Caste, spec.Task)
 		dispatches = append(dispatches, codexContinueExternalDispatch{
 			Stage:         "review",
 			Wave:          2,

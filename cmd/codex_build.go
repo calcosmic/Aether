@@ -849,7 +849,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			TaskID:           normalizedDispatchTaskID(dispatch),
 			TaskBrief:        renderCodexBuildWorkerBrief(root, phase, dispatch, playbooks, startedAt),
 			ContextCapsule:   capsule,
-			SkillSection:     resolveSkillSection(dispatch.Caste, dispatch.Task),
+			SkillSection:     resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
 			Wave:             normalizedDispatchWave(dispatch),
@@ -1574,7 +1574,11 @@ func normalizedDispatchTaskID(dispatch codexBuildDispatch) string {
 }
 
 func resolveSkillSectionResult(caste, task string) skillInjectResult {
-	return renderSkillInjectResult(matchSkills(resolveHubPath(), caste, task))
+	return resolveSkillSectionResultForWorkflow("", caste, task)
+}
+
+func resolveSkillSectionResultForWorkflow(workflow, caste, task string) skillInjectResult {
+	return renderSkillInjectResult(matchSkillsForWorkflow(resolveHubPath(), workflow, caste, task))
 }
 
 type codexWorkerSkillAssignment struct {
@@ -1586,7 +1590,11 @@ type codexWorkerSkillAssignment struct {
 }
 
 func resolveWorkerSkillAssignment(caste, task string) codexWorkerSkillAssignment {
-	result := resolveSkillSectionResult(caste, task)
+	return resolveWorkerSkillAssignmentForWorkflow("", caste, task)
+}
+
+func resolveWorkerSkillAssignmentForWorkflow(workflow, caste, task string) codexWorkerSkillAssignment {
+	result := resolveSkillSectionResultForWorkflow(workflow, caste, task)
 	names := append(extractResolvedSkillNames(result.ColonySkills), extractResolvedSkillNames(result.DomainSkills)...)
 	return codexWorkerSkillAssignment{
 		Section:      result.SkillSection,
@@ -1599,7 +1607,7 @@ func resolveWorkerSkillAssignment(caste, task string) codexWorkerSkillAssignment
 
 func attachBuildDispatchSkillAssignments(dispatches []codexBuildDispatch) {
 	for i := range dispatches {
-		assignment := resolveWorkerSkillAssignment(dispatches[i].Caste, dispatches[i].Task)
+		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section
 		dispatches[i].SkillCount = assignment.SkillCount
 		dispatches[i].ColonySkills = assignment.ColonyCount
@@ -1611,7 +1619,11 @@ func attachBuildDispatchSkillAssignments(dispatches []codexBuildDispatch) {
 // resolveSkillSection matches skills for the given role and task through the
 // shared runtime resolver and returns the rendered markdown section.
 func resolveSkillSection(caste, task string) string {
-	result := resolveSkillSectionResult(caste, task)
+	return resolveSkillSectionForWorkflow("", caste, task)
+}
+
+func resolveSkillSectionForWorkflow(workflow, caste, task string) string {
+	result := resolveSkillSectionResultForWorkflow(workflow, caste, task)
 	emitSkillActivationCeremonies(result)
 	return result.SkillSection
 }

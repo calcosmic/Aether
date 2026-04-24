@@ -30,7 +30,7 @@ Run using the Bash tool with description "Dispatching watcher...": `aether spawn
 **Load skills for the Watcher role (NON-BLOCKING):**
 
 ```bash
-skill_inject_result=$(aether skill-inject --role "watcher" --task "{verification_context}" 2>/dev/null)
+skill_inject_result=$(aether skill-inject --workflow "build" --role "watcher" --task "{verification_context}" 2>/dev/null)
 skill_section=$(printf '%s\n' "$skill_inject_result" | jq -r '.result.skill_section // ""')
 ```
 

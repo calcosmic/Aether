@@ -70,6 +70,16 @@ Active signals: 5 | Created: 1 | Reinforced: 1 | Expired: 1
 
 If no signal changes occurred, still display the section with "No signal changes this cycle."
 
+## Evolution and Verbosity
+
+When producing pheromone output, choose the smallest useful level:
+
+- Compact: active high-priority signals and direct conflicts only.
+- Standard: active signals with strength, source, and expiry.
+- Detailed: signal history, reinforcement, decay, and conflict resolution evidence.
+
+Prefer machine-readable fields for command integrations, but keep visual output readable for humans.
+
 ## Integration Points
 
 - **During build** (build-wave): Show each auto-emitted signal as it happens, inline with worker output.

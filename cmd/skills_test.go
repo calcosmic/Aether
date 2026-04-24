@@ -48,6 +48,40 @@ Some content here.
 	}
 }
 
+func TestParseSkillFrontmatterWorkflowMetadata(t *testing.T) {
+	input := `---
+name: Workflow Skill
+description: Use during build workflows
+type: colony
+agent_roles: [builder, watcher]
+workflow_triggers:
+  - build
+task_keywords:
+  - test
+  - coverage
+---
+
+# Body content
+Some content here.
+`
+	fm := parseSkillFrontmatter(input)
+	if fm == nil {
+		t.Fatal("expected non-nil frontmatter")
+	}
+	if len(fm.WorkflowTriggers) != 1 || fm.WorkflowTriggers[0] != "build" {
+		t.Errorf("WorkflowTriggers = %v, want [build]", fm.WorkflowTriggers)
+	}
+	if len(fm.TaskKeywords) != 2 || fm.TaskKeywords[0] != "test" || fm.TaskKeywords[1] != "coverage" {
+		t.Errorf("TaskKeywords = %v, want [test coverage]", fm.TaskKeywords)
+	}
+	if len(fm.AgentRoles) != 2 || fm.AgentRoles[0] != "builder" || fm.AgentRoles[1] != "watcher" {
+		t.Errorf("AgentRoles = %v, want [builder watcher]", fm.AgentRoles)
+	}
+	if len(fm.Roles) != 2 || fm.Roles[0] != "builder" || fm.Roles[1] != "watcher" {
+		t.Errorf("Roles = %v, want [builder watcher]", fm.Roles)
+	}
+}
+
 func TestParseSkillFrontmatterNilOnEmpty(t *testing.T) {
 	if parseSkillFrontmatter("no frontmatter here") != nil {
 		t.Error("expected nil for content without frontmatter")
@@ -159,7 +193,7 @@ func TestIndexSkillDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	os.MkdirAll(tmpDir, 0755)
 	os.WriteFile(filepath.Join(tmpDir, "SKILL.md"), []byte(
-		"---\nname: Test Skill\ncategory: colony\ndetect: *.go\nroles: builder\n---\nContent\n",
+		"---\nname: Test Skill\ncategory: colony\ndetect: [\"*.go\"]\nroles: [builder]\nworkflow_triggers: [build]\ntask_keywords: [implement]\n---\nContent\n",
 	), 0644)
 
 	entry := indexSkillDir(tmpDir, false)
@@ -180,6 +214,12 @@ func TestIndexSkillDir(t *testing.T) {
 	}
 	if len(entry.Roles) != 1 || entry.Roles[0] != "builder" {
 		t.Errorf("Roles = %v, want [builder]", entry.Roles)
+	}
+	if len(entry.WorkflowTriggers) != 1 || entry.WorkflowTriggers[0] != "build" {
+		t.Errorf("WorkflowTriggers = %v, want [build]", entry.WorkflowTriggers)
+	}
+	if len(entry.TaskKeywords) != 1 || entry.TaskKeywords[0] != "implement" {
+		t.Errorf("TaskKeywords = %v, want [implement]", entry.TaskKeywords)
 	}
 }
 
@@ -370,6 +410,15 @@ func copyDirForTest(t *testing.T, src, dst string) {
 	}); err != nil {
 		t.Fatalf("copy dir %s -> %s: %v", src, dst, err)
 	}
+}
+
+func skillMatchContainsName(entries []skillResolvedEntry, name string) bool {
+	for _, entry := range entries {
+		if entry.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func setupProofSkillHub(t *testing.T) string {
@@ -752,6 +801,175 @@ func TestSkillMatchTop3(t *testing.T) {
 	count := int(result["count"].(float64))
 	if count > 3 {
 		t.Errorf("count = %d, want <= 3 (top-3 cap)", count)
+	}
+}
+
+func TestWorkflowGatedColonySkillRequiresWorkflowAndTaskEvidence(t *testing.T) {
+	tmpHub := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
+	workDir := filepath.Join(tmpHub, "repo")
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("mkdir work dir: %v", err)
+	}
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("chdir work dir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	skillDir := filepath.Join(tmpHub, "skills", "colony", "continue-review")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(`---
+name: continue-review
+description: Review completed phase work
+type: colony
+agent_roles: [watcher]
+workflow_triggers: [continue]
+task_keywords: [review]
+---
+Review content
+`), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	missingWorkflow := resolveSkillMatchesForRootWithWorkflow(tmpHub, workDir, "", "watcher", "review completed changes")
+	if skillMatchContainsName(missingWorkflow.ColonySkills, "continue-review") {
+		t.Fatal("workflow-gated skill matched without workflow evidence")
+	}
+
+	missingKeyword := resolveSkillMatchesForRootWithWorkflow(tmpHub, workDir, "continue", "watcher", "implement completed changes")
+	if skillMatchContainsName(missingKeyword.ColonySkills, "continue-review") {
+		t.Fatal("workflow-gated skill matched without task keyword evidence")
+	}
+
+	wrongRole := resolveSkillMatchesForRootWithWorkflow(tmpHub, workDir, "continue", "builder", "review completed changes")
+	if skillMatchContainsName(wrongRole.ColonySkills, "continue-review") {
+		t.Fatal("role-gated skill matched a different worker role")
+	}
+
+	matched := resolveSkillMatchesForRootWithWorkflow(tmpHub, workDir, "continue", "watcher", "review completed changes")
+	if !skillMatchContainsName(matched.ColonySkills, "continue-review") {
+		t.Fatalf("expected continue-review to match with workflow and task evidence: %#v", matched.ColonySkills)
+	}
+	if matched.Workflow != "continue" {
+		t.Fatalf("workflow = %q, want continue", matched.Workflow)
+	}
+}
+
+func TestWorkflowOnlyColonySkillMatchesWorkflowEvidence(t *testing.T) {
+	tmpHub := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
+	workDir := filepath.Join(tmpHub, "repo")
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("mkdir work dir: %v", err)
+	}
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("chdir work dir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	skillDir := filepath.Join(tmpHub, "skills", "colony", "brownfield-analysis")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(`---
+name: brownfield-analysis
+description: Analyze an existing codebase during colonize
+type: colony
+agent_roles: [surveyor-nest]
+workflow_triggers: [colonize]
+---
+Analysis content
+`), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	matched := resolveSkillMatchesForRootWithWorkflow(tmpHub, workDir, "colonize", "surveyor-nest", "map project structure")
+	if !skillMatchContainsName(matched.ColonySkills, "brownfield-analysis") {
+		t.Fatalf("expected workflow-only skill to match colonize workflow: %#v", matched.ColonySkills)
+	}
+}
+
+func TestLegacyRoleOnlyColonySkillStillMatchesByRole(t *testing.T) {
+	tmpHub := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
+	workDir := filepath.Join(tmpHub, "repo")
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("mkdir work dir: %v", err)
+	}
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("chdir work dir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	skillDir := filepath.Join(tmpHub, "skills", "colony", "legacy-build")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(`---
+name: legacy-build
+description: Legacy role-only build skill
+type: colony
+roles: [builder]
+---
+Build content
+`), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	matched := resolveSkillMatchesForRootWithWorkflow(tmpHub, workDir, "", "builder", "ordinary implementation")
+	if !skillMatchContainsName(matched.ColonySkills, "legacy-build") {
+		t.Fatalf("expected legacy role-only skill to keep matching by role: %#v", matched.ColonySkills)
+	}
+}
+
+func TestSkillMatchBuildsLiveCatalogWhenDiskIndexIsStale(t *testing.T) {
+	tmpHub := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", tmpHub)
+	workDir := filepath.Join(tmpHub, "repo")
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("mkdir work dir: %v", err)
+	}
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("chdir work dir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+
+	indexPath := filepath.Join(tmpHub, "skills", "index.json")
+	if err := os.MkdirAll(filepath.Dir(indexPath), 0755); err != nil {
+		t.Fatalf("mkdir index dir: %v", err)
+	}
+	staleIndex := `{"entries":[{"name":"stale-only","type":"colony","category":"colony","roles":["builder"],"path":"/missing/SKILL.md"}],"updated_at":"2026-01-01T00:00:00Z"}`
+	if err := os.WriteFile(indexPath, []byte(staleIndex), 0644); err != nil {
+		t.Fatalf("write stale index: %v", err)
+	}
+
+	skillDir := filepath.Join(tmpHub, "skills", "colony", "live-build")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(`---
+name: live-build
+description: Live catalog skill
+type: colony
+roles: [builder]
+---
+Live content
+`), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	matched := resolveSkillMatchesForRootWithWorkflow(tmpHub, workDir, "build", "builder", "ordinary implementation")
+	if !skillMatchContainsName(matched.ColonySkills, "live-build") {
+		t.Fatalf("expected live skill catalog to override stale disk index: %#v", matched.ColonySkills)
+	}
+	if skillMatchContainsName(matched.ColonySkills, "stale-only") {
+		t.Fatalf("stale disk index entry leaked into match result: %#v", matched.ColonySkills)
 	}
 }
 

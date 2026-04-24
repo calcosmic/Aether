@@ -271,7 +271,7 @@ Companion file completeness checks verify expected counts:
 - 50 OpenCode commands
 - 25 OpenCode agents
 - 25 Codex agents
-- 29 Codex skills
+- 83 Codex skills
 
 ## Go Binary Change Checklist
 
@@ -367,7 +367,7 @@ Expected counts:
 - OpenCode commands: `50`
 - OpenCode agents: `25`
 - Codex agents: `25`
-- Codex skills: `29`
+- Codex skills: `83`
 
 Release metadata should also agree:
 - `.aether/version.json` version equals `npm/package.json` version
