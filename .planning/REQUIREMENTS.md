@@ -7,26 +7,26 @@
 
 ### Publish Integrity
 
-- [ ] **PUB-01** (R059): Stable publish updates stable binary and stable hub to the same version atomically
-- [ ] **PUB-02** (R060): Dev publish updates only `aether-dev` binary and `~/.aether-dev` hub with zero stable contamination
+- [x] **PUB-01** (R059): Stable publish updates stable binary and stable hub to the same version atomically
+- [x] **PUB-02** (R060): Dev publish updates only `aether-dev` binary and `~/.aether-dev` hub with zero stable contamination
 - [x] **PUB-03** (R061): Downstream `aether update --force` detects and reports stale or incomplete publishes instead of silently succeeding
-- [ ] **PUB-04** (R061): Downstream `aether-dev update --force` detects and reports stale or incomplete publishes instead of silently succeeding
+- [x] **PUB-04** (R061): Downstream `aether-dev update --force` detects and reports stale or incomplete publishes instead of silently succeeding
 
 ### Release Validation
 
 - [x] **REL-01** (R062): Release integrity check validates source version, binary version, hub version, companion-file surfaces, and downstream update result together
 - [x] **REL-02** (R063): Medic/dedicated diagnostics flag incomplete stable and dev publishes with exact recovery commands
-- [ ] **REL-03** (R064): Operations guide, publish-update-runbook, and AGENTS.md match actual runtime behavior exactly
-- [ ] **REL-04** (R065): End-to-end regression coverage for both stable and dev publish/update flows
+- [x] **REL-03** (R064): Operations guide, publish-update-runbook, and AGENTS.md match actual runtime behavior exactly
+- [x] **REL-04** (R065): End-to-end regression coverage for both stable and dev publish/update flows
 
 ### Evidence & Consistency
 
-- [ ] **EVD-01** (R066): Archived release and milestone evidence is internally consistent — no contradictions after ship
-- [ ] **EVD-02** (R067): Verify whether stuck `aether plan` issue still reproduces in freshly updated stable and dev repos; if yes, fix with regression test
+- [x] **EVD-01** (R066): Archived release and milestone evidence is internally consistent — no contradictions after ship
+- [x] **EVD-02** (R067): Verify whether stuck `aether plan` issue still reproduces in freshly updated stable and dev repos; if yes, fix with regression test
 
 ### OpenCode Blocker
 
-- [ ] **OPN-01** (R068): Aether ships valid OpenCode agent frontmatter — OpenCode startup in downstream repos no longer crashes
+- [x] **OPN-01** (R068): Aether ships valid OpenCode agent frontmatter — OpenCode startup in downstream repos no longer crashes
 
 ## Completed (Prior Milestones)
 
@@ -57,23 +57,24 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPN-01 (R068) | Phase 39: OpenCode Agent Frontmatter Fix | Pending |
-| PUB-01 (R059) | Phase 40: Stable Publish Hardening | Pending |
-| PUB-02 (R060) | Phase 41: Dev-Channel Isolation | Pending |
+| OPN-01 (R068) | Phase 39: OpenCode Agent Frontmatter Fix | Complete |
+| PUB-01 (R059) | Phase 40: Stable Publish Hardening | Complete |
+| PUB-02 (R060) | Phase 41: Dev-Channel Isolation | Complete |
 | PUB-03 (R061) | Phase 44.2: Command Hygiene and Agent Parity | Complete (44.2-01) |
-| PUB-04 (R061) | Phase 42: Downstream Stale-Publish Detection | Pending |
+| PUB-04 (R061) | Phase 42: Downstream Stale-Publish Detection | Complete |
 | REL-01 (R062) | Phase 44.2: Command Hygiene and Agent Parity | Complete (44.2-01) |
 | REL-02 (R063) | Phase 43: Release Integrity Checks and Diagnostics | Complete (43-02) |
-| REL-03 (R064) | Phase 44: Doc Alignment and Archive Consistency | Pending |
-| EVD-01 (R066) | Phase 44: Doc Alignment and Archive Consistency | Pending |
-| REL-04 (R065) | Phase 45: End-to-End Regression Coverage | Pending |
-| EVD-02 (R067) | Phase 46: Stuck-Plan Investigation and Release Decision | Pending |
+| REL-03 (R064) | Phase 44: Doc Alignment and Archive Consistency | Complete |
+| EVD-01 (R066) | Phase 44: Doc Alignment and Archive Consistency | Complete |
+| REL-04 (R065) | Phase 45: End-to-End Regression Coverage | Complete |
+| EVD-02 (R067) | Phase 46: Stuck-Plan Investigation and Release Decision | Complete |
 
 **Coverage:**
 - v1.6 requirements: 11 total
 - Mapped to phases: 11
+- Satisfied: 11
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-23*
-*Last updated: 2026-04-23 after milestone v1.6 definition*
+*Last updated: 2026-04-24 after Phase 46 milestone audit -- all 11 requirements marked complete*

@@ -190,7 +190,7 @@ Plans:
 5. Tests runnable in CI (`go test`)
 **Depends on:** Phase 43
 
-### Phase 46: Stuck-Plan Investigation and Release Decision
+### Phase 46: Stuck-Plan Investigation and Release Decision -- COMPLETE 2026-04-24
 **Goal:** Verify the stuck `aether plan` issue; make the v1.6 release decision.
 **Requirements:** EVD-02 (R067)
 **Plans:** 1 plan
