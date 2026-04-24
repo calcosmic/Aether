@@ -74,12 +74,27 @@ export interface CeremonyWave {
   message?: string;
 }
 
+export interface CeremonyNotice {
+  key: string;
+  topic: string;
+  lifecycle?: string;
+  phase?: number;
+  phase_name?: string;
+  status?: string;
+  message?: string;
+  skill?: string;
+  pheromone_type?: string;
+  strength?: number;
+}
+
 export interface CeremonyFrame {
+  lifecycle?: string;
   phase?: number;
   phase_name?: string;
   current_wave?: number;
   workers: Record<string, CeremonyWorker>;
   waves: Record<string, CeremonyWave>;
+  notices: CeremonyNotice[];
   last_event?: CeremonyEvent;
 }
 
@@ -282,13 +297,18 @@ export function renderEvent(event: CeremonyEvent, visuals?: VisualContract): str
 export function createCeremonyFrame(): CeremonyFrame {
   return {
     workers: {},
-    waves: {}
+    waves: {},
+    notices: []
   };
 }
 
 export function applyEventToFrame(frame: CeremonyFrame, event: CeremonyEvent): CeremonyFrame {
   const payload = asPayload(event.payload);
   frame.last_event = event;
+  const lifecycle = lifecycleFromTopic(event.topic);
+  if (lifecycle !== undefined) {
+    frame.lifecycle = lifecycle;
+  }
 
   if (payload.phase !== undefined) {
     frame.phase = payload.phase;
@@ -300,7 +320,7 @@ export function applyEventToFrame(frame: CeremonyFrame, event: CeremonyEvent): C
     frame.current_wave = payload.wave;
   }
 
-  if (event.topic === "ceremony.build.wave.start" || event.topic === "ceremony.build.wave.end") {
+  if (isWaveEvent(event.topic)) {
     const wave = payload.wave ?? frame.current_wave ?? 0;
     if (wave > 0) {
       const key = String(wave);
@@ -314,7 +334,8 @@ export function applyEventToFrame(frame: CeremonyFrame, event: CeremonyEvent): C
     }
   }
 
-  if (payload.caste !== undefined || payload.name !== undefined || payload.spawn_id !== undefined) {
+  const workerEvent = payload.caste !== undefined || payload.name !== undefined || payload.spawn_id !== undefined;
+  if (workerEvent) {
     const key = workerKey(payload, frame);
     const existing = frame.workers[key] ?? { key };
     const next: CeremonyWorker = { ...existing };
@@ -337,7 +358,52 @@ export function applyEventToFrame(frame: CeremonyFrame, event: CeremonyEvent): C
     frame.workers[key] = next;
   }
 
+  if (!workerEvent && shouldTrackNotice(event.topic)) {
+    appendNotice(frame, event.topic, payload, lifecycle);
+  }
+
   return frame;
+}
+
+function lifecycleFromTopic(topic: string): string | undefined {
+  const parts = topic.split(".");
+  if (parts[0] !== "ceremony" || parts[1] === undefined || parts[1].trim() === "") {
+    return undefined;
+  }
+  return sanitizeTerminalText(parts[1]);
+}
+
+function isWaveEvent(topic: string): boolean {
+  const parts = topic.split(".");
+  return parts[0] === "ceremony"
+    && parts[2] === "wave"
+    && (parts[3] === "start" || parts[3] === "end");
+}
+
+function shouldTrackNotice(topic: string): boolean {
+  return topic.startsWith("ceremony.") && !isWaveEvent(topic);
+}
+
+function appendNotice(
+  frame: CeremonyFrame,
+  topic: string,
+  payload: CeremonyPayload,
+  lifecycle: string | undefined
+): void {
+  const key = `${topic}:${frame.notices.length}`;
+  const notice: CeremonyNotice = {
+    key,
+    topic: sanitizeTerminalText(topic)
+  };
+  assignDefined(notice, "lifecycle", lifecycle);
+  assignDefined(notice, "phase", payload.phase ?? frame.phase);
+  assignDefined(notice, "phase_name", payload.phase_name ?? frame.phase_name);
+  assignDefined(notice, "status", payload.status);
+  assignDefined(notice, "message", payload.message ?? payload.task);
+  assignDefined(notice, "skill", payload.skill);
+  assignDefined(notice, "pheromone_type", payload.pheromone_type);
+  assignDefined(notice, "strength", payload.strength);
+  frame.notices = [...frame.notices, notice].slice(-5);
 }
 
 function assignDefined<T extends object, K extends keyof T>(target: T, key: K, value: T[K] | undefined): void {
@@ -366,6 +432,9 @@ export function renderActivityFrame(frame: CeremonyFrame, visuals?: VisualContra
   }
 
   const titleParts = ["[CEREMONY]", "COLONY ACTIVITY"];
+  if (frame.lifecycle !== undefined && frame.lifecycle !== "build") {
+    titleParts.push(`stage=${truncateDisplayText(frame.lifecycle, 24)}`);
+  }
   if (frame.phase !== undefined) {
     titleParts.push(`phase=${sanitizeTerminalText(frame.phase)}`);
   }
@@ -378,6 +447,8 @@ export function renderActivityFrame(frame: CeremonyFrame, visuals?: VisualContra
   if (currentWave !== undefined) {
     lines.push(`Wave ${currentWave.wave}: ${formatWaveProgress(currentWave)}`);
   }
+
+  appendNoticeSection(lines, frame.notices);
 
   const workers = Object.values(frame.workers).sort(compareWorkers);
   if (workers.length === 0) {
@@ -428,6 +499,36 @@ function appendWorkerSection(lines: string[], label: string, workers: CeremonyWo
   for (const worker of workers) {
     lines.push(`  ${formatWorkerLine(worker, visuals)}`);
   }
+}
+
+function appendNoticeSection(lines: string[], notices: CeremonyNotice[]): void {
+  if (notices.length === 0) {
+    return;
+  }
+  lines.push("Context:");
+  for (const notice of notices) {
+    lines.push(`  ${formatNoticeLine(notice)}`);
+  }
+}
+
+function formatNoticeLine(notice: CeremonyNotice): string {
+  const details = [truncateDisplayText(notice.topic, 48)];
+  if (notice.status !== undefined) {
+    details.push(sanitizeTerminalText(notice.status));
+  }
+  if (notice.skill !== undefined) {
+    details.push(`skill=${truncateDisplayText(notice.skill, 32)}`);
+  }
+  if (notice.pheromone_type !== undefined) {
+    details.push(`pheromone=${truncateDisplayText(notice.pheromone_type, 24)}`);
+  }
+  if (notice.strength !== undefined) {
+    details.push(`strength=${sanitizeTerminalText(notice.strength)}`);
+  }
+  if (notice.message !== undefined && notice.message.trim() !== "") {
+    details.push(truncateDisplayText(notice.message));
+  }
+  return details.join(" ");
 }
 
 function formatWorkerLine(worker: CeremonyWorker, visuals?: VisualContract): string {

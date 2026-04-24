@@ -316,3 +316,95 @@ test("keeps multi-wave activity history while current wave advances", () => {
   assert.match(rendered, /Active:\n  builder:Mason-14 running task=4\.2 tools=6 Restore wrapper bridge/);
   assert.match(rendered, /Blocked:\n  watcher:Vigil-22 blocked task=4\.3 blockers=1 Verify wrapper bridge/);
 });
+
+test("tracks non-build lifecycle wave events generically", () => {
+  const frame = createCeremonyFrame();
+  for (const raw of [
+    {
+      topic: "ceremony.continue.wave.start",
+      payload: {
+        phase: 5,
+        phase_name: "Continue and plan orchestration",
+        wave: 1,
+        total: 1,
+        status: "starting"
+      }
+    },
+    {
+      topic: "ceremony.continue.spawn",
+      payload: {
+        phase: 5,
+        wave: 1,
+        spawn_id: "watcher-continue",
+        caste: "watcher",
+        name: "Vigil-41",
+        task_id: "5.2",
+        task: "Verify wrapper results",
+        status: "running"
+      }
+    },
+    {
+      topic: "ceremony.continue.wave.end",
+      payload: {
+        phase: 5,
+        phase_name: "Continue and plan orchestration",
+        wave: 1,
+        completed: 1,
+        total: 1,
+        status: "completed"
+      }
+    }
+  ]) {
+    const event = parseEvent(JSON.stringify(raw));
+    assert.ok(event);
+    applyEventToFrame(frame, event);
+  }
+
+  const rendered = renderActivityFrame(frame);
+  assert.match(rendered, /\[CEREMONY\] COLONY ACTIVITY stage=continue phase=5 Continue and plan orchestration/);
+  assert.match(rendered, /Wave 1: 1\/1 completed/);
+  assert.match(rendered, /Active:\n  watcher:Vigil-41 running task=5\.2 Verify wrapper results/);
+});
+
+test("keeps lifecycle context notices for skills pheromones and chambers", () => {
+  const frame = createCeremonyFrame();
+  for (const raw of [
+    {
+      topic: "ceremony.skill.activate",
+      payload: {
+        phase: 6,
+        skill: "typescript",
+        status: "active",
+        message: "Narrator rendering rules injected"
+      }
+    },
+    {
+      topic: "ceremony.pheromone.emit",
+      payload: {
+        phase: 6,
+        pheromone_type: "FOCUS",
+        strength: 0.85,
+        message: "Surface skill activations"
+      }
+    },
+    {
+      topic: "ceremony.chamber.seal",
+      payload: {
+        phase: 6,
+        status: "sealed",
+        message: "Lifecycle ceremony checkpoint"
+      }
+    }
+  ]) {
+    const event = parseEvent(JSON.stringify(raw));
+    assert.ok(event);
+    applyEventToFrame(frame, event);
+  }
+
+  const rendered = renderActivityFrame(frame);
+  assert.match(rendered, /Context:/);
+  assert.match(rendered, /ceremony\.skill\.activate active skill=typescript Narrator rendering rules injected/);
+  assert.match(rendered, /ceremony\.pheromone\.emit pheromone=FOCUS strength=0\.85 Surface skill activations/);
+  assert.match(rendered, /ceremony\.chamber\.seal sealed Lifecycle ceremony checkpoint/);
+  assert.match(rendered, /Workers: none active yet/);
+});

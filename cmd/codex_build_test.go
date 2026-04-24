@@ -71,8 +71,8 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 
 	result := envelope["result"].(map[string]interface{})
-	if got := int(result["dispatch_count"].(float64)); got != 7 {
-		t.Fatalf("dispatch_count = %d, want 7", got)
+	if got := int(result["dispatch_count"].(float64)); got != 9 {
+		t.Fatalf("dispatch_count = %d, want 9", got)
 	}
 	if got := int(result["wave_count"].(float64)); got != 2 {
 		t.Fatalf("wave_count = %d, want 2", got)
@@ -107,11 +107,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 7 {
-		t.Fatalf("expected 7 manifest dispatches, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 9 {
+		t.Fatalf("expected 9 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	if len(manifest.WorkerBriefs) != 7 {
-		t.Fatalf("expected 7 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	if len(manifest.WorkerBriefs) != 9 {
+		t.Fatalf("expected 9 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -146,7 +146,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|architect|", "|Queen|watcher|", "|Queen|chaos|", "|Queen|archaeologist|"} {
+	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|architect|", "|Queen|watcher|", "|Queen|chaos|", "|Queen|archaeologist|", "|Queen|probe|", "|Queen|measurer|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
 		}
@@ -255,12 +255,12 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if got := result["dispatch_mode"].(string); got != "plan-only" {
 		t.Fatalf("dispatch_mode = %q, want plan-only", got)
 	}
-	if got := int(result["dispatch_count"].(float64)); got != 7 {
-		t.Fatalf("dispatch_count = %d, want 7", got)
+	if got := int(result["dispatch_count"].(float64)); got != 9 {
+		t.Fatalf("dispatch_count = %d, want 9", got)
 	}
 	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 7 {
-		t.Fatalf("dispatches = %d, want 7", len(dispatches))
+	if len(dispatches) != 9 {
+		t.Fatalf("dispatches = %d, want 9", len(dispatches))
 	}
 	for _, raw := range dispatches {
 		dispatch := raw.(map[string]interface{})
@@ -269,6 +269,9 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 		}
 		if strings.TrimSpace(dispatch["agent_name"].(string)) == "" {
 			t.Fatalf("dispatch missing agent_name: %+v", dispatch)
+		}
+		if int(dispatch["execution_wave"].(float64)) <= 0 {
+			t.Fatalf("dispatch missing execution_wave: %+v", dispatch)
 		}
 	}
 
@@ -284,6 +287,24 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 	if workerBriefs := manifest["worker_briefs"].([]interface{}); len(workerBriefs) != 0 {
 		t.Fatalf("plan-only manifest should not write worker briefs, got %v", workerBriefs)
+	}
+	executionPlan := manifest["execution_plan"].([]interface{})
+	if len(executionPlan) != 9 {
+		t.Fatalf("execution_plan = %d, want 9 steps: %#v", len(executionPlan), executionPlan)
+	}
+	wantStages := []string{"prep", "research", "design", "wave", "wave", "probe", "verification", "measurement", "resilience"}
+	var gotStages []string
+	for _, raw := range executionPlan {
+		step := raw.(map[string]interface{})
+		stage := step["stage"].(string)
+		if stage == "wave" {
+			gotStages = append(gotStages, stage)
+			continue
+		}
+		gotStages = append(gotStages, stage)
+	}
+	if strings.Join(gotStages, ",") != strings.Join(wantStages, ",") {
+		t.Fatalf("execution stages = %v, want %v", gotStages, wantStages)
 	}
 
 	for _, rel := range []string{
@@ -311,6 +332,59 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 	if state.Plan.Phases[0].Status != colony.PhaseReady {
 		t.Fatalf("phase status = %s, want ready", state.Plan.Phases[0].Status)
+	}
+}
+
+func TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Wire external service safely"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "OpenAI webhook integration",
+				Description: "Connect an external API without leaking secrets",
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:          &taskID,
+					Goal:        "Implement SDK client wrapper for the third-party webhook",
+					Status:      colony.TaskPending,
+					Constraints: []string{"OAuth credentials must come from environment variables"},
+				}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	var ambassador *codexBuildDispatch
+	for i := range manifest.Dispatches {
+		if manifest.Dispatches[i].Caste == "ambassador" {
+			ambassador = &manifest.Dispatches[i]
+			break
+		}
+	}
+	if ambassador == nil {
+		t.Fatalf("expected ambassador dispatch for integration phase, got %#v", manifest.Dispatches)
+	}
+	if ambassador.Stage != "integration" || ambassador.ExecutionWave != 4 {
+		t.Fatalf("ambassador dispatch = %+v, want integration execution wave 4", *ambassador)
+	}
+	if got := codexAgentNameForCaste(ambassador.Caste); got != "aether-ambassador" {
+		t.Fatalf("ambassador agent = %q, want aether-ambassador", got)
 	}
 }
 
@@ -360,14 +434,15 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 	dispatchResults := make([]codexExternalBuildWorkerResult, 0, len(manifest.Dispatches))
 	for _, dispatch := range manifest.Dispatches {
 		worker := codexExternalBuildWorkerResult{
-			Stage:    dispatch.Stage,
-			Wave:     dispatch.Wave,
-			Caste:    dispatch.Caste,
-			Name:     dispatch.Name,
-			TaskID:   dispatch.TaskID,
-			Status:   "completed",
-			Summary:  dispatch.Name + " completed externally",
-			Duration: 1.25,
+			Stage:         dispatch.Stage,
+			Wave:          dispatch.Wave,
+			ExecutionWave: normalizedDispatchWave(dispatch),
+			Caste:         dispatch.Caste,
+			Name:          dispatch.Name,
+			TaskID:        dispatch.TaskID,
+			Status:        "completed",
+			Summary:       dispatch.Name + " completed externally",
+			Duration:      1.25,
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesCreated = []string{"wrapper-evidence.txt"}
@@ -569,15 +644,16 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	if len(manifest.SelectedTasks) != 1 || manifest.SelectedTasks[0] != taskTwoID {
 		t.Fatalf("manifest selected tasks = %v, want [%s]", manifest.SelectedTasks, taskTwoID)
 	}
-	if len(manifest.Dispatches) != 4 {
-		t.Fatalf("expected 4 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 3 {
+		t.Fatalf("expected 3 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
 	}
 	for _, dispatch := range manifest.Dispatches {
 		if dispatch.TaskID != "" && dispatch.TaskID != taskTwoID {
 			t.Fatalf("unexpected task-scoped dispatch %+v", dispatch)
 		}
-		if dispatch.Stage == "strategy" {
-			t.Fatalf("unexpected strategy dispatch during targeted redispatch: %+v", dispatch)
+		switch dispatch.Stage {
+		case "prep", "research", "design", "integration", "probe", "measurement":
+			t.Fatalf("unexpected full-phase specialist during targeted redispatch: %+v", dispatch)
 		}
 	}
 

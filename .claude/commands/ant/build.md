@@ -46,7 +46,7 @@ Use the Go `aether` CLI as the source of truth. Ask the Go runtime for the autho
 AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only
 ```
 
-Parse `result.dispatch_manifest`. This manifest is the only source for worker names, castes, waves, task IDs, playbooks, selected tasks, and success criteria. Do not parse visual output.
+Parse `result.dispatch_manifest`. This manifest is the only source for worker names, castes, execution waves, task waves, task IDs, playbooks, selected tasks, and success criteria. Do not parse visual output.
 
 ## Playbook Procedure
 
@@ -54,18 +54,18 @@ Load `.aether/docs/command-playbooks/build-wave.md` and use it as the spawning p
 
 ## Wave Execution
 
-For each dispatch in `dispatch_manifest.dispatches`, execute the planned workers by wave:
+For each step in `dispatch_manifest.execution_plan`, execute the matching `dispatch_manifest.dispatches` entries whose `execution_wave` matches that step:
 
 1. Before spawning, run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
 3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the phase objective, task metadata, dependencies, success criteria, active signals, relevant playbook instructions, and any specialist findings already collected.
-5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `tool_count`, `blockers`, and `duration`.
+5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `tool_count`, `blockers`, and `duration`.
 6. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
 
-Multiple agent calls issued in one assistant message may run in parallel when the platform supports it. Respect `dispatch_manifest.wave_execution`: serial waves stay serial; parallel waves may spawn together.
+Multiple agent calls issued in one assistant message may run in parallel when the platform supports it. Respect `dispatch_manifest.execution_plan`: serial steps stay serial; parallel steps may spawn together. Pre-wave specialists such as Archaeologist, Oracle, Architect, or Ambassador must complete before builder/scout task waves. Post-wave specialists such as Probe, Watcher, Measurer, or Chaos must run after builder/scout task waves.
 
 ## Completion Packet
 
@@ -82,6 +82,7 @@ After all workers have terminal results, write a temporary completion JSON file 
       "caste": "builder",
       "stage": "wave",
       "wave": 1,
+      "execution_wave": 11,
       "task_id": "1.1",
       "status": "completed",
       "summary": "Implemented the assigned work.",

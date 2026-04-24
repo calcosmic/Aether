@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T05:41:20Z |
+| **Last Updated** | 2026-04-24T11:27:54Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -26,15 +26,15 @@ Restore the agent spawning bridge — bring back full ceremony, real agent dispa
 
 ## What's In Progress
 
-Blended v1.6 ceremony revival plan persisted: Go owns state/events, TypeScript narrator owns visuals, wrappers own real Task-tool spawning. Current phase: Assumptions and gap audit.
+Blended v1.6 ceremony revival plan persisted: Go owns state/events, TypeScript narrator owns visuals, wrappers own real Task-tool spawning. Current persisted colony phase: Assumptions and gap audit.
 
 Detailed handoff note: `.aether/dreams/2026-04-24-ceremony-revival-v1.6-handoff.md`.
 
-Important continuity distinction: structured colony state has not advanced past Phase 1. The working tree contains reviewed Phase 2 foundation work; advance only through the normal lifecycle.
+Important continuity distinction: structured colony state has not advanced past Phase 1. Git commits and `.aether/docs/ceremony-revival-v1.6-handoff.md` are the branch implementation progress source of truth. Do not manually edit `COLONY_STATE.json` to match code progress; advance it only through normal Aether lifecycle commands if needed.
 
 Integrated review findings: Keeper continuity fixes; Auditor stream timeout/pagination fixes; Gatekeeper explicit `.aether/ts` embed, nested `node_modules` exclusion, CI/release/dependabot coverage, package license, and runtime-not-wired warning; Watcher phase-plan mirror and real TypeScript narrator tests.
 
-Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts/dist/narrator.js`; `npm ci` is only for developer/CI checks, not installed runtime use. The narrator can consume Go-owned `visuals-dump --json` caste metadata through `--visuals`. Event-bus stream output is now smoke-tested through the dependency-free narrator runtime. Go auto-launch and `AETHER_NARRATOR` remain deferred until the launcher slice.
+Implemented Phase 2/3 foundation: narrator runtime ships as dependency-free `.aether/ts/dist/narrator.js`; `npm ci` is only for developer/CI checks, not installed runtime use. The narrator consumes Go-owned `visuals-dump --json` caste metadata through `--visuals`, event-bus stream output is smoke-tested through the runtime, Go auto-launch is implemented behind `AETHER_NARRATOR`, and JSON mode stays free of narrator output.
 
 Detailed tracked handoff: `.aether/docs/ceremony-revival-v1.6-handoff.md`.
 
@@ -63,6 +63,14 @@ Plan plan-only bridge slice completed: `aether plan --plan-only --depth <fast|ba
 Plan finalize bridge slice completed: `aether plan-finalize --completion-file <path|->` now consumes the wrapper planning manifest plus terminal Scout/Route-Setter results, validates manifest/state/dispatch identity, writes canonical SCOUT/ROUTE-SETTER/phase-plan/phase-research artifacts, records spawn-tree statuses, updates colony state to READY with the selected plan granularity, and routes to the first build phase.
 
 Plan wrapper restoration completed: `.aether/commands/plan.yaml`, `.claude/commands/ant/plan.md`, and `.opencode/commands/ant/plan.md` now use the runtime bridge: depth ceremony -> status -> JSON `plan --plan-only --depth <choice>` -> parse `plan_manifest`/`planning_manifest` -> spawn Scout wave 1 then Route-Setter wave 2 -> `spawn-log`/`spawn-complete` -> completion JSON -> `plan-finalize` -> route to `/ant-build 1`. Wrapper tests now forbid the old direct visual plan pass-through.
+
+Phase 4 specialist execution-plan slice is in the working tree: `dispatch_manifest` now includes `execution_plan`, each dispatch includes `execution_wave`, full builds sequence Archaeologist/Oracle/Architect/conditional Ambassador before builder/scout waves and Probe/Watcher/Measurer/Chaos after them, and Claude/OpenCode wrappers execute the runtime-owned execution plan. Task-scoped redispatch remains narrow.
+
+TypeScript lifecycle-context rendering slice is in the working tree: `.aether/ts/narrator.ts` now treats `ceremony.<stage>.wave.start/end` generically, tracks non-build stages in the activity title, and keeps skill, pheromone, and chamber events visible in a short `Context` section. `.aether/ts/test/narrator.test.ts` covers continue-style wave events plus skill/pheromone/chamber notices, and `.aether/ts/dist/narrator.js` has been regenerated. Tracked details are in `.aether/docs/ceremony-revival-v1.6-handoff.md`.
+
+Broad checkpoint verification passed on 2026-04-24T11:27:54Z: TS install/typecheck/test/build, `gofmt`, `git diff --check`, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, and `go vet ./...`.
+
+GitHub PR status: previous PR #5 for this branch is already merged/closed and only covered the early branch state through `c1880184`. After committing the current reconciliation and TypeScript checkpoint, open a new draft PR rather than reusing PR #5.
 
 ---
 
@@ -120,14 +128,18 @@ Plan wrapper restoration completed: `.aether/commands/plan.yaml`, `.claude/comma
 - 2026-04-24T05:20:37Z|phase5_plan_manifest|build|plan --plan-only read-only manifest added for wrapper-spawned Scout and Route-Setter agents
 - 2026-04-24T05:33:11Z|phase5_plan_finalize|build|plan-finalize added for wrapper-spawned Scout and Route-Setter results
 - 2026-04-24T05:41:20Z|phase5_plan_wrappers|build|Claude/OpenCode plan wrappers restored as depth-prompted manifest-driven Scout/Route-Setter orchestrators
+- 2026-04-24T10:44:47Z|phase6_ts_lifecycle_context|build|TS narrator now tracks generic lifecycle wave topics and context notices for skills, pheromones, and chamber sealing
+- 2026-04-24T11:03:37Z|reconciliation|docs|Progress matrix added; PR #5 confirmed merged/closed; COLONY_STATE documented as lifecycle state, not branch implementation progress
+- 2026-04-24T11:19:09Z|phase4_specialist_execution_plan|build|Build manifests now include execution_plan/execution_wave and sequence pre-wave/post-wave specialists explicitly
+- 2026-04-24T11:27:54Z|checkpoint_verified|test|Phase 4 specialist execution-plan and TS lifecycle-context checkpoint passed TS, Go, vet, and whitespace verification
 
 ---
 
 ## Next Steps
 
-1. Run full verification for the plan-wrapper checkpoint
-2. Commit and push the plan-wrapper checkpoint
-3. Start lifecycle ceremony expansion: colonize, plan/continue narrator events, pheromones, chamber sealing, graveyard/entomb
+1. Commit and push the verified Phase 4 specialist execution-plan plus TypeScript lifecycle-context checkpoint
+2. Open a new draft PR for the remaining branch work; PR #5 is already merged/closed
+3. Continue in order with live build wrapper smoke, then lifecycle event emission
 4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
@@ -139,5 +151,5 @@ Plan wrapper restoration completed: `.aether/commands/plan.yaml`, `.claude/comma
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the plan-wrapper checkpoint
-- Expand narrator ceremonies beyond build
+- Commit and push the Phase 4 specialist execution-plan + TypeScript lifecycle-context checkpoint
+- Live smoke the build wrapper path with real platform agents

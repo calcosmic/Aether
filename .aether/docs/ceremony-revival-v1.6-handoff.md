@@ -1,10 +1,12 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T05:41:20Z
+Last updated: 2026-04-24T11:27:54Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
-Open PR URL: `https://github.com/calcosmic/Aether/pull/new/codex/ceremony-narrator-foundation-v16`
+Previous PR: `https://github.com/calcosmic/Aether/pull/5` (merged/closed; covered only the early branch state through `c1880184`)
+Next PR: open a new draft PR after committing the current Phase 4
+specialist execution-plan and TypeScript lifecycle-context checkpoint.
 
 ## Purpose
 
@@ -22,6 +24,38 @@ The target architecture is:
 
 Do not revert the Go runtime rewrite. Restore ceremony and real agent spawning
 on top of the current runtime.
+
+## Progress Source Of Truth
+
+There are two separate progress tracks in this checkout:
+
+1. **Lifecycle state**: `.aether/data/COLONY_STATE.json` still reports
+   `current_phase: 1` with all seven phases pending. Treat that as colony
+   lifecycle state only. Do not manually edit it to match code progress.
+2. **Branch implementation progress**: git commits plus this tracked handoff are
+   the source of truth for what has actually been implemented on
+   `codex/ceremony-narrator-foundation-v16`.
+
+This mismatch is expected for this branch because implementation slices were
+committed directly while the persisted colony lifecycle was not advanced through
+`aether build` / `aether continue`.
+
+## Progress Matrix
+
+| Area | Status | Evidence | Remaining Work |
+|------|--------|----------|----------------|
+| Phase 1: assumptions and gap audit | Done in practice, stale in colony state | `.aether/docs/ceremony-revival-v1.6-plan.md`, this handoff, review synthesis | Only update lifecycle state through normal Aether commands if needed |
+| Phase 2: event protocol and narrator foundations | Implemented | `.aether/ts`, `pkg/events/ceremony.go`, `event-bus-subscribe --stream`, `visuals-dump`, install/update tests | None known beyond release verification |
+| Phase 3: rolling activity display | Implemented foundation | `.aether/ts/narrator.ts`, multi-wave activity tests, `dist/narrator.js` | TTY live redraw/debounce deferred until real terminal contract is clear |
+| Phase 4: build subagent bridge | Implemented for wrappers | `build --plan-only`, `build-finalize`, manifest `execution_plan`, Claude/OpenCode build wrappers, wrapper contract tests | Live platform smoke and any future specialist prompt polish |
+| Phase 5: continue and plan orchestration | Implemented for wrappers | `continue --plan-only`, `continue-finalize`, `plan --plan-only`, `plan-finalize`, wrapper contract tests | Live platform smoke; stall/confidence ceremony polish |
+| Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; uncommitted TS slice renders generic lifecycle stages and context notices | Emit Go-backed events for plan, continue, colonize, pheromones, chamber sealing, graves/entomb; surface skill/QUEEN/Hive/midden context from real state |
+| Phase 7: parity verification and release | Not done | Release/rollback notes exist | Cross-platform smoke, install/update release checks, PR review, release hardening |
+
+Safe continuation point: commit and push the verified Phase 4 specialist
+execution-plan and TypeScript lifecycle-context checkpoint, open a new draft PR,
+then live-smoke the build wrapper path before moving on to later lifecycle event
+emission.
 
 ## Already Shipped On This Branch
 
@@ -44,6 +78,7 @@ These commits are pushed:
 - `7c1d25f4 feat: restore continue wrapper orchestration`
 - `feabf3f1 feat: add plan-only orchestration manifest`
 - `f67635c3 feat: finalize external plan workers`
+- `ca5fb42c feat: restore plan wrapper orchestration`
 
 Implemented foundation:
 
@@ -95,6 +130,12 @@ Implemented foundation:
 - Claude/OpenCode plan wrappers now prompt for depth, spawn real
   manifest-driven Scout/Route-Setter agents, and finalize through
   `plan-finalize`.
+- Build manifests now include a runtime-owned `execution_plan` plus
+  per-dispatch `execution_wave`. Full builds sequence pre-wave specialists
+  before builder/scout waves and post-wave specialists after them:
+  Archaeologist, Oracle, Architect, conditional Ambassador, task waves, Probe,
+  Watcher, Measurer, and Chaos. Task-scoped redispatch remains narrow and skips
+  full-phase specialists.
 
 Verification already passed for the pushed foundation:
 
@@ -804,17 +845,132 @@ Remaining display work:
   a Go pipe, so true terminal redraw needs an explicit parent-controlled
   terminal contract such as a `--live` flag or Go-side redraw coordinator.
 
+## Working Tree Slice: Phase 4 Specialist Execution Plan
+
+Date: 2026-04-24
+
+This uncommitted build-bridge slice completes the missing Phase 4 specialist
+sequencing contract.
+
+Changed files:
+
+- `cmd/codex_build.go`
+- `cmd/codex_build_finalize.go`
+- `cmd/codex_build_test.go`
+- `cmd/codex_visuals.go`
+- `cmd/build_wrapper_ceremony_test.go`
+- `.aether/commands/build.yaml`
+- `.claude/commands/ant/build.md`
+- `.opencode/commands/ant/build.md`
+
+Implemented behavior:
+
+- `dispatch_manifest` now includes `execution_plan`.
+- Each build dispatch now includes `execution_wave`, while preserving task
+  `wave` for builder/scout dependency waves.
+- Full builds now sequence specialists explicitly:
+  1. Archaeologist (`prep`, full depth)
+  2. Oracle (`research`, deep/full)
+  3. Architect (`design`, deep/full)
+  4. Ambassador (`integration`, conditional on external/API/OAuth/etc. phase
+     content)
+  5. builder/scout task waves
+  6. Probe (`probe`)
+  7. Watcher (`verification`)
+  8. Measurer (`measurement`, deep/full)
+  9. Chaos (`resilience`, full depth)
+- Task-scoped redispatch remains narrow: it skips full-phase specialists and
+  dispatches only the selected task plus verification/resilience that already
+  applied to redispatch.
+- `build-finalize` can validate worker results that include `execution_wave`.
+- Claude/OpenCode wrappers now execute `dispatch_manifest.execution_plan`
+  instead of loosely grouping only by task wave.
+
+Tests added or updated:
+
+- `TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState`
+- `TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases`
+- `TestBuildFinalizeRecordsExternalTaskResultsForContinue`
+- `TestBuildSupportsTaskScopedRedispatch`
+- `TestBuildWrapperCeremonyContract`
+
+Focused verification run:
+
+- `go test ./cmd -run 'TestBuildWritesDispatchArtifactsAndUpdatesState|TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState|TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases|TestBuildFinalizeRecordsExternalTaskResultsForContinue|TestBuildWrapperCeremonyContract|TestPlatformDocHygiene|TestClaudeOpenCodeCommandParity|TestCommandWrappersDeclareGeneratedSource|TestBuildWaveExecutionPlansRespectParallelMode|TestBuildSupportsTaskScopedRedispatch' -count=1`
+
+## Working Tree Slice: Lifecycle Context Rendering Foundation
+
+Date: 2026-04-24
+
+This uncommitted TypeScript slice continues the lifecycle ceremony work without
+changing Go event emission yet.
+
+Changed files:
+
+- `.aether/ts/narrator.ts`
+- `.aether/ts/test/narrator.test.ts`
+- `.aether/ts/dist/narrator.js`
+
+Implemented behavior:
+
+- The narrator now derives the active lifecycle stage from any
+  `ceremony.<stage>.*` topic.
+- Wave state is no longer build-specific: any
+  `ceremony.<stage>.wave.start` or `ceremony.<stage>.wave.end` event updates the
+  rolling frame.
+- Worker updates remain payload-driven, so future `ceremony.plan.spawn`,
+  `ceremony.continue.spawn`, or similar topics render through the same worker
+  sections without TypeScript changes.
+- Non-worker lifecycle events are retained as a short `Context` section. This
+  keeps `ceremony.skill.activate`, `ceremony.pheromone.emit`, and
+  `ceremony.chamber.seal` visible after their compatibility event line scrolls
+  by.
+- The committed dependency-free runtime was regenerated from TypeScript source.
+
+Tests added:
+
+- `tracks non-build lifecycle wave events generically`
+- `keeps lifecycle context notices for skills pheromones and chambers`
+
+Verification run:
+
+- `npm --prefix .aether/ts ci`
+- `npm --prefix .aether/ts run typecheck`
+- `npm --prefix .aether/ts test`
+- `npm --prefix .aether/ts run build`
+- `go test ./cmd -run 'TestEventBusStreamPipesToNarratorRuntime|TestNarratorLauncher|TestBuildSyntheticNarratorDoesNotPolluteJSONOutput|TestRunUpdateSyncCopiesNarratorPackageButSkipsNodeModules' -count=1`
+
+Broad verification completed on 2026-04-24T11:27:54Z:
+
+- `npm --prefix .aether/ts ci`
+- `npm --prefix .aether/ts run typecheck`
+- `npm --prefix .aether/ts test`
+- `npm --prefix .aether/ts run build`
+- `gofmt -w cmd/codex_build.go cmd/codex_build_finalize.go cmd/codex_visuals.go cmd/codex_build_test.go cmd/build_wrapper_ceremony_test.go`
+- `git diff --check`
+- `go test ./cmd -count=1`
+- `go test ./... -count=1 -timeout 300s`
+- `go vet ./...`
+
+Next implementation slice:
+
+- Commit and push the verified Phase 4 specialist execution-plan plus
+  TypeScript lifecycle-context checkpoint, then continue in order to live
+  platform smoke before Phase 5/6 polish.
+- Keep JSON mode protected from narrator output.
+
 ## Later Phases: Real Agent Spawning Bridge
 
-Build and continue wrapper bridges are implemented for Claude/OpenCode. Remaining
-work is to broaden the same bridge pattern across planning and later lifecycle
-ceremonies.
+Build, continue, and plan wrapper bridges are implemented for Claude/OpenCode.
+Remaining work is to broaden lifecycle ceremony emission and visible context
+across planning, colonize, pheromones, chamber sealing, and graves.
 
 Plan wrapper work:
 
-- Restore depth prompt: Fast, Balanced, Deep, Exhaustive.
-- Spawn Scout and Route-Setter planning loops.
-- Persist confidence, assumptions, stall detection, and plan revisions.
+- Live platform smoke for the manifest-driven Scout and Route-Setter wrapper
+  path.
+- Expand confidence, assumptions, stall detection, and plan revision ceremony
+  where runtime data exists.
 
 Skill work:
 
@@ -842,11 +998,13 @@ Before release:
 
 ## Current Next Step
 
-Next, commit/push the continue-wrapper checkpoint, then start plan wrapper
-orchestration. The preconditions are now satisfied:
+Next, commit and push the verified Phase 4 specialist execution-plan and
+TypeScript lifecycle-context checkpoint, then open a new draft PR. After that,
+continue in order with live build-wrapper smoke before starting later lifecycle
+event emission. The preconditions now satisfied are:
 
 1. hub fallback smoke passed in a temporary HOME;
 2. TTY live redraw is consciously deferred;
 3. multi-wave TS fixture passes;
-4. build and continue wrappers now have plan-only/finalizer bridges;
-5. focused Go and TS gates pass.
+4. build, continue, and plan wrappers now have plan-only/finalizer bridges;
+5. focused Go, full Go, TS, vet, and whitespace gates pass.

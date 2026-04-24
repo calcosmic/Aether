@@ -28,6 +28,7 @@ type codexExternalBuildCompletion struct {
 type codexExternalBuildWorkerResult struct {
 	Stage         string   `json:"stage,omitempty"`
 	Wave          int      `json:"wave,omitempty"`
+	ExecutionWave int      `json:"execution_wave,omitempty"`
 	Caste         string   `json:"caste,omitempty"`
 	Name          string   `json:"name"`
 	Task          string   `json:"task,omitempty"`
@@ -281,6 +282,9 @@ func validateExternalResultIdentity(dispatch codexBuildDispatch, result codexExt
 	}
 	if result.Wave > 0 && dispatch.Wave > 0 && result.Wave != dispatch.Wave {
 		return fmt.Errorf("external worker result %s wave = %d, want %d", dispatch.Name, result.Wave, dispatch.Wave)
+	}
+	if result.ExecutionWave > 0 && result.ExecutionWave != normalizedDispatchWave(dispatch) {
+		return fmt.Errorf("external worker result %s execution_wave = %d, want %d", dispatch.Name, result.ExecutionWave, normalizedDispatchWave(dispatch))
 	}
 	return nil
 }

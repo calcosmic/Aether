@@ -108,8 +108,11 @@ The detailed implementation contract is tracked in
   (Build wrappers now instruct this from `dispatch_manifest`; live platform
   smoke remains next.)
 - Restore pre-wave Archaeologist, Oracle, Architect, and Ambassador hooks.
+  (Implemented in the build manifest execution plan: Archaeologist, Oracle,
+  Architect, and conditional Ambassador run before builder/scout task waves.)
 - Restore Builder waves, Probe verification, Watcher verification, Measurer, and
-  Chaos.
+  Chaos. (Implemented in the build manifest execution plan: Probe, Watcher,
+  Measurer, and Chaos run after builder/scout task waves according to depth.)
 - Call `aether spawn-log` before each Task call and `aether spawn-complete` after
   each returned result so the narrator and spawn tree reflect real work.
 - Add a runtime record/finalize surface for wrapper-spawned work before the
@@ -136,7 +139,10 @@ The detailed implementation contract is tracked in
 ## Phase 6: Full Lifecycle Ceremony and Skills
 
 - Add narrator ceremonies for colonize, plan, build, continue, pheromones,
-  graveyard/entomb, and chamber sealing.
+  graveyard/entomb, and chamber sealing. (TypeScript rendering foundation now
+  handles generic `ceremony.<stage>.wave.*` topics and keeps skill, pheromone,
+  and chamber events visible as frame context. Go lifecycle event emission
+  remains next.)
 - Emit skill activation events from worker prompts or spawn wrappers.
 - Keep QUEEN.md, Hive, midden, graveyard, and pheromone context visible where
   they affect worker behavior.

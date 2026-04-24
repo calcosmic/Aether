@@ -2088,77 +2088,29 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 	b.WriteString(renderBanner(commandEmoji("spawn-plan"), "Spawn Plan"))
 	b.WriteString(visualDivider)
 
-	wavePlans := buildWaveExecutionPlans(dispatches, parallelMode)
-	wavePlanByWave := make(map[int]codexWaveExecutionPlan, len(wavePlans))
-	for _, plan := range wavePlans {
-		wavePlanByWave[plan.Wave] = plan
-	}
-	lastWave := 0
+	executionPlans := buildExecutionPlans(dispatches, parallelMode)
+	dispatchesByExecutionWave := map[int][]codexBuildDispatch{}
 	for _, dispatch := range dispatches {
-		if dispatch.Stage != "wave" {
-			continue
-		}
-		if dispatch.Wave != lastWave {
-			if lastWave > 0 {
-				b.WriteString("\n")
-			}
-			b.WriteString(fmt.Sprintf("Wave %d\n", dispatch.Wave))
-			if plan, ok := wavePlanByWave[dispatch.Wave]; ok {
-				b.WriteString("  Execution: ")
-				b.WriteString(plan.Strategy)
-				b.WriteString(" — ")
-				b.WriteString(plan.Reason)
-				if plan.Strategy == "serial" && plan.WorkerCount > 1 && parallelMode == colony.ModeInRepo {
-					b.WriteString(" (set `aether parallel-mode set worktree` for isolated parallel builders)")
-				}
-				b.WriteString("\n")
-			}
-			lastWave = dispatch.Wave
-		}
-		b.WriteString("  ")
-		b.WriteString(casteIdentity(dispatch.Caste))
-		b.WriteString(" ")
-		b.WriteString(dispatch.Name)
-		b.WriteString("  ")
-		b.WriteString(strings.TrimSpace(dispatch.Task))
-		writeDispatchExecutionStatus(&b, dispatch)
-		b.WriteString("\n")
+		wave := normalizedDispatchWave(dispatch)
+		dispatchesByExecutionWave[wave] = append(dispatchesByExecutionWave[wave], dispatch)
 	}
-	if lastWave > 0 {
-		b.WriteString("\n")
-	}
-
-	strategy := filterBuildDispatches(dispatches, "strategy")
-	if len(strategy) > 0 {
-		b.WriteString("Strategy\n")
-		for _, dispatch := range strategy {
-			b.WriteString("  ")
-			b.WriteString(casteIdentity(dispatch.Caste))
-			b.WriteString(" ")
-			b.WriteString(dispatch.Name)
-			b.WriteString("  ")
-			b.WriteString(strings.TrimSpace(dispatch.Task))
-			writeDispatchExecutionStatus(&b, dispatch)
+	for idx, plan := range executionPlans {
+		if idx > 0 {
 			b.WriteString("\n")
 		}
+		b.WriteString(buildExecutionPlanLabel(plan))
 		b.WriteString("\n")
-	}
-
-	verification := filterBuildDispatches(dispatches, "verification")
-	resilience := filterBuildDispatches(dispatches, "resilience")
-	if len(verification) > 0 || len(resilience) > 0 {
-		b.WriteString("Verification\n")
-		for _, dispatch := range verification {
-			b.WriteString("  ")
-			b.WriteString(casteIdentity(dispatch.Caste))
-			b.WriteString(" ")
-			b.WriteString(dispatch.Name)
-			b.WriteString("  ")
-			b.WriteString(strings.TrimSpace(dispatch.Task))
-			writeDispatchExecutionStatus(&b, dispatch)
-			b.WriteString("\n")
+		b.WriteString("  Execution: ")
+		b.WriteString(plan.Strategy)
+		if strings.TrimSpace(plan.Reason) != "" {
+			b.WriteString(" — ")
+			b.WriteString(plan.Reason)
 		}
-		for _, dispatch := range resilience {
+		if plan.Stage == "wave" && plan.Strategy == "serial" && plan.WorkerCount > 1 && parallelMode == colony.ModeInRepo {
+			b.WriteString(" (set `aether parallel-mode set worktree` for isolated parallel builders)")
+		}
+		b.WriteString("\n")
+		for _, dispatch := range dispatchesByExecutionWave[plan.ExecutionWave] {
 			b.WriteString("  ")
 			b.WriteString(casteIdentity(dispatch.Caste))
 			b.WriteString(" ")
@@ -2173,6 +2125,38 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Total planned dispatches: %d\n", len(dispatches)))
 	return b.String()
+}
+
+func buildExecutionPlanLabel(plan codexBuildExecutionPlan) string {
+	switch plan.Stage {
+	case "prep":
+		return "Pre-Wave: Archaeology"
+	case "research":
+		return "Pre-Wave: Oracle Research"
+	case "design":
+		return "Pre-Wave: Architect Design"
+	case "integration":
+		return "Pre-Wave: Ambassador Integration"
+	case "wave":
+		if plan.Wave > 0 {
+			return fmt.Sprintf("Wave %d", plan.Wave)
+		}
+		return "Worker Wave"
+	case "probe":
+		return "Post-Wave: Probe"
+	case "verification":
+		return "Post-Wave: Watcher"
+	case "measurement":
+		return "Post-Wave: Measurer"
+	case "resilience":
+		return "Post-Wave: Chaos"
+	default:
+		stage := strings.TrimSpace(plan.Stage)
+		if stage == "" {
+			return fmt.Sprintf("Execution Step %d", plan.ExecutionWave)
+		}
+		return fmt.Sprintf("Execution Step %d: %s", plan.ExecutionWave, stage)
+	}
 }
 
 func writeDispatchExecutionStatus(b *strings.Builder, dispatch codexBuildDispatch) {
