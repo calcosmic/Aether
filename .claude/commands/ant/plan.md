@@ -43,6 +43,15 @@ Parse `result.plan_manifest` or `result.planning_manifest`. This manifest is the
 
 If the runtime returns `existing_plan: true`, do not spawn workers. Summarize the existing plan and route to the runtime-surfaced next command.
 
+## Clarification Gate
+
+Before spawning planning workers, inspect the runtime result for `unresolved_clarifications` or `clarification_warning`.
+
+- If unresolved clarifications exist, pause the planning ceremony and surface the warning plainly.
+- Route first to `/ant-discuss` so the user can resolve the questions through the runtime.
+- Proceed with implicit assumptions only if the user explicitly chooses to continue despite the warning.
+- If the user proceeds, carry that choice into the Scout and Route-Setter prompts as a known planning constraint.
+
 ## Wave Execution
 
 For each dispatch in the manifest, execute the planned workers by wave:

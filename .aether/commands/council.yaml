@@ -2,7 +2,8 @@ name: ant-council
 description: "📜 Convene council for intent clarification via multi-choice questions"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=visual aether council $ARGUMENTS"
+  command: "AETHER_OUTPUT_MODE=visual aether council-deliberate --topic \"$ARGUMENTS\""
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "There is no single `aether council` command; route through `council-budget-check`, `council-deliberate`, `council-advocate`, `council-challenger`, `council-sage`, and `council-history`."
   - "If docs and runtime disagree, runtime wins."

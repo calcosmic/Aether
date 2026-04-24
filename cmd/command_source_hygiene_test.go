@@ -96,6 +96,35 @@ func TestSourceOfTruthMapDocumentsWrapperYamlOwnership(t *testing.T) {
 	}
 }
 
+func TestCouncilYamlSourceUsesRealRuntimeSubcommands(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(repoRoot, ".aether", "commands", "council.yaml"))
+	if err != nil {
+		t.Fatalf("read council yaml: %v", err)
+	}
+
+	text := string(content)
+	for _, want := range []string{
+		"council-deliberate",
+		"council-budget-check",
+		"council-advocate",
+		"council-challenger",
+		"council-sage",
+		"council-history",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("council yaml missing real runtime subcommand %q", want)
+		}
+	}
+	if strings.Contains(text, "aether council $ARGUMENTS") {
+		t.Fatal("council yaml still references nonexistent `aether council` command")
+	}
+}
+
 func repoRootForCommandSourceTest() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {

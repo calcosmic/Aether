@@ -16,10 +16,11 @@ wrapper_additions:
     1. Run `AETHER_OUTPUT_MODE=visual aether status`.
     2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>`.
     3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
-    4. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, and `agent_name`.
-    5. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
-    6. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
-    7. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
+    4. If the result reports `unresolved_clarifications` or `clarification_warning`, pause before spawning workers and route first to `/ant-discuss`; proceed with implicit assumptions only if the user explicitly chooses to continue.
+    5. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, and `agent_name`.
+    6. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
+    7. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
+    8. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
   post_plan: |
     Close from the `plan-finalize` result only:
     1. Summarize selected depth, phase count, confidence, and which planning agents ran.

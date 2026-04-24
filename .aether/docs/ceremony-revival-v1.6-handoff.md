@@ -53,6 +53,42 @@ command surface:
 | E: Tests not verified | Fixed | Focused Go tests, full Go tests, race tests, Go vet, Go build, TypeScript tests/typecheck/build, npm tests, npm pack dry run, `goreleaser check`, version agreement, and whitespace checks passed before v1.0.23 release prep. |
 | Publish/update confidence | Fixed in code and temp-smoked | Stable `publish` now refreshes user-level platform assets as well as the stable hub; Claude commands install/update as flat `ant-*.md` files and remove generated legacy `ant/*.md` files while preserving custom files. A temp HOME smoke verified flat `ant-build.md` creation and generated legacy cleanup. |
 
+## Repo-Only Review Result: 2026-04-24
+
+This review checked the merged ceremony revival against the blended seven-phase
+plan without running live Claude Code or OpenCode Task-tool sessions.
+
+| Phase | Repo-only status | Evidence | Notes |
+|-------|------------------|----------|-------|
+| 1. Assumptions and gap audit | Done | This handoff, `ceremony-revival-v1.6-plan.md`, wrapper/source hygiene tests | Persisted colony lifecycle state is not the implementation progress source of truth. |
+| 2. Event protocol and narrator foundations | Done | `pkg/events/ceremony.go`, `event-bus-subscribe`, `visuals-dump`, `.aether/ts/dist/narrator.js`, narrator launcher tests | Node remains optional; JSON output is protected from narrator text. |
+| 3. Rolling activity display | Done for repo contracts, partial for terminal feel | TypeScript narrator tests cover `COLONY ACTIVITY`, colors, lifecycle context, active/completed/blocked workers | Go-launched sidecar live redraw remains intentionally conservative; full TTY feel still needs live-platform observation. |
+| 4. Build subagent bridge | Done for wrappers, live-unverified | `build --plan-only`, `build-finalize`, build wrapper contract tests, specialist execution-plan tests | Repo proves the manifest/finalizer contract, not that Claude/OpenCode actually comply in a live session. |
+| 5. Continue and plan orchestration | Done for wrappers | `plan --plan-only`, `plan-finalize`, `continue --plan-only`, `continue-finalize`, wrapper tests | `/ant-plan` now explicitly pauses on unresolved `discuss` clarifications before spawning planning workers. |
+| 6. Full lifecycle ceremony and skills | Done for repo contracts | lifecycle ceremony emitter tests, skill activation event tests, skill-match/inject tests | Skills are selected by role/task/workspace and surfaced through ceremony events. |
+| 7. Parity, verification, and release hygiene | Done for repo contracts, live-unverified | command parity/source hygiene tests, publish/update tests, integrity docs | Final confidence still requires manual Claude/OpenCode smoke before claiming live wrapper parity. |
+
+Small fixes made by this review:
+
+- Added a `/ant-plan` clarification gate: if `unresolved_clarifications` or
+  `clarification_warning` is present, route to `/ant-discuss` before spawning
+  Scout and Route-Setter unless the user explicitly accepts implicit
+  assumptions.
+- Clarified `/ant-discuss` follow-up routing back to `/ant-plan` for wrappers
+  while keeping `aether plan` as the direct CLI path.
+- Corrected the `ant-council` YAML source to name real council subcommands
+  instead of the nonexistent `aether council` aggregate command.
+
+Confidence statement:
+
+- From repo-only evidence, Aether has the ceremony contracts back: caste
+  identity, narrator frames, plan/build/continue wrapper orchestration,
+  specialist sequencing, discuss gating, skill activation, and lifecycle events
+  are all represented and regression-tested.
+- The remaining honest uncertainty is live-platform behavior: Claude Code and
+  OpenCode must still be smoked manually to prove they follow the wrapper
+  instructions and render the ceremony with real Task-tool workers.
+
 ## Progress Matrix
 
 | Area | Status | Evidence | Remaining Work |

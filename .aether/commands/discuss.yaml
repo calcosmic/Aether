@@ -9,4 +9,5 @@ guardrails:
   - "If docs and runtime disagree, runtime wins."
 follow_up:
   persist_answer: "AETHER_OUTPUT_MODE=visual aether discuss --resolve <id> --answer \"<choice>\""
-  settled: "If the runtime reports discussion_status: settled, route the user back to `aether plan`."
+  settled: "If the runtime reports discussion_status: settled, route wrapper users back to `/ant-plan`; direct CLI users can run `aether plan`."
+  council: "Use `/ant-council` only when the user wants multi-position deliberation; `/ant-discuss` is the lightweight pre-plan clarification gate."
