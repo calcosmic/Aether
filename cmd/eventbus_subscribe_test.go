@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -168,5 +172,70 @@ func TestStreamEventBusNDJSONDoesNotStarveSameSecondBurstWithLowLimit(t *testing
 		if !strings.Contains(buf.String(), want) {
 			t.Fatalf("stream output missing %s\n%s", want, buf.String())
 		}
+	}
+}
+
+func TestEventBusStreamPipesToNarratorRuntime(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not found; skipping narrator pipe smoke")
+	}
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("find repo root: %v", err)
+	}
+	narratorPath := filepath.Join(repoRoot, ".aether", "ts", "dist", "narrator.js")
+	if _, err := os.Stat(narratorPath); err != nil {
+		t.Fatalf("narrator runtime missing: %v", err)
+	}
+
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	bus := events.NewBus(s, events.DefaultConfig())
+
+	reader, writer := io.Pipe()
+	stdout = writer
+	cmd := exec.Command(nodePath, narratorPath)
+	cmd.Stdin = reader
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start narrator runtime: %v", err)
+	}
+
+	streamErr := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		defer writer.Close()
+		since := time.Now().UTC().Add(-time.Second)
+		streamErr <- streamEventBusNDJSON(ctx, bus, "ceremony.*", since, 100, 10*time.Millisecond, 1)
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	payload, err := (events.CeremonyPayload{
+		Phase:  2,
+		Wave:   1,
+		Caste:  "builder",
+		Name:   "Mason-67",
+		Status: "streamed",
+	}).RawMessage()
+	if err != nil {
+		t.Fatalf("payload marshal failed: %v", err)
+	}
+	if _, err := bus.Publish(context.Background(), events.CeremonyTopicBuildSpawn, payload, "unit-test"); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+
+	if err := <-streamErr; err != nil {
+		t.Fatalf("streamEventBusNDJSON returned error: %v", err)
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("narrator runtime failed: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if !strings.Contains(out.String(), "[CEREMONY] ceremony.build.spawn phase=2 wave=1 builder:Mason-67 status=streamed") {
+		t.Fatalf("narrator output mismatch:\nstdout:\n%s\nstderr:\n%s", out.String(), stderr.String())
 	}
 }

@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T03:19:03Z |
+| **Last Updated** | 2026-04-24T03:24:26Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -34,7 +34,7 @@ Important continuity distinction: structured colony state has not advanced past 
 
 Integrated review findings: Keeper continuity fixes; Auditor stream timeout/pagination fixes; Gatekeeper explicit `.aether/ts` embed, nested `node_modules` exclusion, CI/release/dependabot coverage, package license, and runtime-not-wired warning; Watcher phase-plan mirror and real TypeScript narrator tests.
 
-Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts/dist/narrator.js`; `npm ci` is only for developer/CI checks, not installed runtime use. The narrator can consume Go-owned `visuals-dump --json` caste metadata through `--visuals`. Go auto-launch and `AETHER_NARRATOR` remain deferred until the launcher slice.
+Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts/dist/narrator.js`; `npm ci` is only for developer/CI checks, not installed runtime use. The narrator can consume Go-owned `visuals-dump --json` caste metadata through `--visuals`. Event-bus stream output is now smoke-tested through the dependency-free narrator runtime. Go auto-launch and `AETHER_NARRATOR` remain deferred until the launcher slice.
 
 ---
 
@@ -74,17 +74,17 @@ Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-04-24T02:05:12Z|plan_blended|plan|Persisted 7-phase v1.6 ceremony revival roadmap
 - 2026-04-24T02:26:51Z|review_reconciliation|review|Specialist continuity and gatekeeper findings integrated; structured state remains Phase 1 ready
 - 2026-04-24T02:40:41Z|review_verified|review|Specialist review reconciliation complete; TS narrator tests, phase-plan mirror, full Go/TS verification passed
 - 2026-04-24T03:12:26Z|phase2_runtime_packaging|build|Narrator runtime made dependency-free via dist/narrator.js; install/update embeds runtime artifact; full Go/TS verification passed
 - 2026-04-24T03:19:03Z|phase2_visual_contract|build|Narrator consumes visuals-dump caste metadata through --visuals; Go-owned identity contract verified
+- 2026-04-24T03:24:26Z|phase2_stream_smoke|test|Event-bus stream to dependency-free narrator runtime smoke added; full Go/TS/race verification passed
 
 ---
 
 ## Next Steps
 
-1. Continue Phase 2 with event-stream-to-narrator smoke coverage and final contract tightening
+1. Review whether Phase 2 foundation should be marked complete or whether to add one more manual installed-update smoke
 2. Run `aether phase --number 2` to inspect the saved Phase 2 scope
 3. Run `aether build 1` when you want the normal lifecycle to execute and reconcile Phase 1 formally
 4. Run `aether resume-colony` after a context clear if you want the full recovery view
