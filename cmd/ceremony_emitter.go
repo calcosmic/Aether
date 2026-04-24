@@ -326,6 +326,30 @@ func emitContinueCeremonyFlowSequence(source string, phase colony.Phase, workerF
 	}, source, "continue", phase.ID, phase.Name, steps)
 }
 
+func emitSkillActivationCeremonies(result skillInjectResult) {
+	if result.SkillCount == 0 {
+		return
+	}
+	entries := append([]skillResolvedEntry{}, result.ColonySkills...)
+	entries = append(entries, result.DomainSkills...)
+	emitted := 0
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.Name) == "" {
+			continue
+		}
+		emitLifecycleCeremony(events.CeremonyTopicSkillActivate, events.CeremonyPayload{
+			Skill:   entry.Name,
+			Status:  "activated",
+			Task:    result.Task,
+			Message: fmt.Sprintf("matched for %s worker context", strings.TrimSpace(result.Role)),
+		}, "aether-skill")
+		emitted++
+		if emitted >= result.SkillCount {
+			return
+		}
+	}
+}
+
 func continueCeremonyWaveForStage(stage string) int {
 	switch strings.ToLower(strings.TrimSpace(stage)) {
 	case "verification":

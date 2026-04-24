@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T12:14:23Z
+Last updated: 2026-04-24T12:22:11Z
 
 Branch: `codex/ceremony-lifecycle-events-v16`
 Base: `origin/main` after merged PR #7
@@ -49,7 +49,7 @@ committed directly while the persisted colony lifecycle was not advanced through
 | Phase 3: rolling activity display | Implemented foundation | `.aether/ts/narrator.ts`, multi-wave activity tests, `dist/narrator.js` | TTY live redraw/debounce deferred until real terminal contract is clear |
 | Phase 4: build subagent bridge | Implemented for wrappers | `build --plan-only`, `build-finalize`, manifest `execution_plan`, Claude/OpenCode build wrappers, wrapper contract tests | Live platform smoke and any future specialist prompt polish |
 | Phase 5: continue and plan orchestration | Implemented for wrappers | `continue --plan-only`, `continue-finalize`, `plan --plan-only`, `plan-finalize`, wrapper contract tests | Live platform smoke; stall/confidence ceremony polish |
-| Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; TS renders generic lifecycle stages and context notices; Go emits pheromone/chamber plus plan/colonize/continue wave events | Emit skill activation and remaining QUEEN/Hive/midden/graveyard context from real state |
+| Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; TS renders generic lifecycle stages and context notices; Go emits pheromone/chamber plus plan/colonize/continue wave events and skill activation notices | Emit remaining QUEEN/Hive/midden/graveyard context from real state |
 | Phase 7: parity verification and release | Not done | Release/rollback notes exist | Cross-platform smoke, install/update release checks, PR review, release hardening |
 
 Safe continuation point: PR #6 and PR #7 are merged. PR #8 is still open as a
@@ -59,7 +59,8 @@ GitHub because PR #7 was merged without deleting its source branch. Go-side
 wrapper smoke passed for `build 1 --plan-only`; true Claude/OpenCode Task-tool
 smoke remains pending because Codex cannot execute those platform Task-tool
 wrappers directly. The current working-tree slice continues Phase 6 Go-backed
-lifecycle ceremony emission for plan, colonize, and continue wave events.
+lifecycle ceremony emission for plan, colonize, continue wave events, and
+skill activation notices.
 
 ## Already Shipped On This Branch
 
@@ -1057,6 +1058,35 @@ Verification run:
 - `go test ./... -count=1 -timeout 300s`
 - `go vet ./...`
 
+## Working Tree Slice: Phase 6 Skill Activation Events
+
+Date: 2026-04-24
+
+This slice makes matched injected skills visible as ceremony context.
+
+Changed files:
+
+- `cmd/ceremony_emitter.go`
+- `cmd/codex_build.go`
+- `cmd/ceremony_emitter_test.go`
+
+Implemented behavior:
+
+- `resolveSkillSection` now emits `ceremony.skill.activate` for every matched
+  skill it injects into worker context.
+- Skill event emission uses the existing Go-owned skill resolver as the source
+  of truth; no separate skill matching path was added.
+- The event payload includes the skill name, `activated` status, worker role
+  context, and task text.
+
+Verification run:
+
+- `go test ./cmd -run 'TestResolveSkillSectionEmitsSkillActivationCeremony|Test.*Ceremony|TestCeremony' -count=1`
+- `git diff --check`
+- `go test ./cmd -count=1`
+- `go test ./... -count=1 -timeout 300s`
+- `go vet ./...`
+
 ## Release And Rollback
 
 Rollback controls:
@@ -1077,10 +1107,11 @@ Before release:
 
 ## Current Next Step
 
-Next, commit and push the Phase 6 plan/colonize/continue wave event slice to
-PR #8, then continue with visible worker/skill context events. Platform
-Task-tool smoke is still required when Claude or OpenCode is available. The
-preconditions now satisfied are:
+Next, commit and push the Phase 6 skill activation event slice to PR #8, then
+continue with remaining graveyard/entomb and QUEEN/Hive/midden context events
+where Go-owned state transitions exist. Platform Task-tool smoke is still
+required when Claude or OpenCode is available. The preconditions now satisfied
+are:
 
 1. hub fallback smoke passed in a temporary HOME;
 2. TTY live redraw is consciously deferred;
@@ -1098,4 +1129,6 @@ preconditions now satisfied are:
 10. Phase 6 pheromone/chamber event hooks are implemented and verified;
 11. Phase 6 plan/colonize/continue wave event hooks are implemented in the
     working tree with focused, full cmd, full repo, vet, and whitespace checks
-    passing.
+    passing;
+12. Phase 6 skill activation event hooks are implemented in the working tree
+    with focused, full cmd, full repo, vet, and whitespace checks passing.

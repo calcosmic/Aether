@@ -3,6 +3,8 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -339,6 +341,43 @@ func TestContinueEmitsLifecycleCeremonyEvents(t *testing.T) {
 		events.CeremonyTopicContinueSpawn,
 		events.CeremonyTopicContinueWaveEnd,
 	)
+}
+
+func TestResolveSkillSectionEmitsSkillActivationCeremony(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	tmpDir := t.TempDir()
+	hubDir := tmpDir + "/hub"
+	skillsDir := hubDir + "/skills/colony/test-skill"
+	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+		t.Fatalf("failed to create skill dir: %v", err)
+	}
+	skillContent := "---\nname: test-skill\ntype: colony\ncategory: testing\nagent_roles:\n  - builder\n---\nThis is the test skill content."
+	if err := os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte(skillContent), 0644); err != nil {
+		t.Fatalf("failed to write skill: %v", err)
+	}
+	os.Setenv("AETHER_HUB_DIR", hubDir)
+	t.Cleanup(func() { os.Unsetenv("AETHER_HUB_DIR") })
+
+	section := resolveSkillSection("builder", "testing task")
+	if section == "" {
+		t.Fatal("expected matched skill section")
+	}
+
+	persisted := readPersistedCeremonyEvents(t)
+	assertCeremonyTopics(t, persisted, events.CeremonyTopicSkillActivate)
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(persisted[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload.Skill != "test-skill" || payload.Status != "activated" {
+		t.Fatalf("payload = %+v", payload)
+	}
+	if !strings.Contains(payload.Message, "builder") {
+		t.Fatalf("message = %q, want builder context", payload.Message)
+	}
 }
 
 func TestActiveBuildCeremonyScopeRestoresPreviousEmitter(t *testing.T) {

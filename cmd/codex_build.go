@@ -1390,7 +1390,9 @@ func resolveSkillSectionResult(caste, task string) skillInjectResult {
 // resolveSkillSection matches skills for the given role and task through the
 // shared runtime resolver and returns the rendered markdown section.
 func resolveSkillSection(caste, task string) string {
-	return resolveSkillSectionResult(caste, task).SkillSection
+	result := resolveSkillSectionResult(caste, task)
+	emitSkillActivationCeremonies(result)
+	return result.SkillSection
 }
 
 // resolvePheromoneSection extracts active pheromone signals, groups them by
