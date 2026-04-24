@@ -53,6 +53,32 @@ and real worker bridge on top of the current runtime instead of replacing it.
   per event. (Initial scaffold exists; `dist/narrator.js` is dependency-free at
   runtime; Go auto-launch is not wired yet.)
 
+### Phase 2 Checkpoint: 2026-04-24
+
+Foundation commits through `aa8d6d4b` are pushed to
+`codex/ceremony-narrator-foundation-v16`.
+
+Completed:
+
+- Dependency-free `dist/narrator.js` runtime is committed and install/update
+  packaged.
+- `visuals-dump --json` exposes Go-owned caste identity, and the narrator
+  accepts it via `--visuals`.
+- `event-bus-subscribe --stream --filter ceremony.*` can feed NDJSON into the
+  narrator runtime.
+- CI/release/dependabot cover the TS package and dist drift.
+
+Remaining before Phase 2 is complete:
+
+- Add Go auto-launch behind `AETHER_NARRATOR`.
+- Emit build ceremony events from the build dispatch lifecycle.
+- Prove JSON output is never polluted by narrator text.
+- Prove missing Node/runtime is non-fatal.
+- Prove sidecar stdout is routed through Go's visual output mutex.
+
+The detailed implementation contract is tracked in
+`.aether/docs/ceremony-revival-v1.6-handoff.md`.
+
 ## Phase 3: Rolling Activity Display
 
 - Maintain an in-memory ceremony frame keyed by spawn ID.

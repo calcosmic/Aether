@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T03:24:26Z |
+| **Last Updated** | 2026-04-24T03:40:41Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -35,6 +35,10 @@ Important continuity distinction: structured colony state has not advanced past 
 Integrated review findings: Keeper continuity fixes; Auditor stream timeout/pagination fixes; Gatekeeper explicit `.aether/ts` embed, nested `node_modules` exclusion, CI/release/dependabot coverage, package license, and runtime-not-wired warning; Watcher phase-plan mirror and real TypeScript narrator tests.
 
 Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts/dist/narrator.js`; `npm ci` is only for developer/CI checks, not installed runtime use. The narrator can consume Go-owned `visuals-dump --json` caste metadata through `--visuals`. Event-bus stream output is now smoke-tested through the dependency-free narrator runtime. Go auto-launch and `AETHER_NARRATOR` remain deferred until the launcher slice.
+
+Detailed tracked handoff: `.aether/docs/ceremony-revival-v1.6-handoff.md`.
+
+Specialist reviews for the launcher slice are complete. Scout recommends build-specific lifecycle insertion points in `cmd/codex_build_worktree.go` and `cmd/codex_build.go`. Watcher listed launcher tests for env gating, missing Node/runtime, early exits, cleanup, event persistence, and JSON non-pollution. Gatekeeper requires absolute `node` + `dist/narrator.js`, no shell/npm/npx/tsx at runtime, non-fatal missing dependencies, and child stdout routed back through Go's visual output mutex.
 
 ---
 
@@ -72,22 +76,23 @@ Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts
 
 ---
 
-## Recent Activity (Last 5 Events)
+## Recent Activity
 
 - 2026-04-24T02:26:51Z|review_reconciliation|review|Specialist continuity and gatekeeper findings integrated; structured state remains Phase 1 ready
 - 2026-04-24T02:40:41Z|review_verified|review|Specialist review reconciliation complete; TS narrator tests, phase-plan mirror, full Go/TS verification passed
 - 2026-04-24T03:12:26Z|phase2_runtime_packaging|build|Narrator runtime made dependency-free via dist/narrator.js; install/update embeds runtime artifact; full Go/TS verification passed
 - 2026-04-24T03:19:03Z|phase2_visual_contract|build|Narrator consumes visuals-dump caste metadata through --visuals; Go-owned identity contract verified
 - 2026-04-24T03:24:26Z|phase2_stream_smoke|test|Event-bus stream to dependency-free narrator runtime smoke added; full Go/TS/race verification passed
+- 2026-04-24T03:40:41Z|handoff|docs|Tracked v1.6 launcher and remaining-phase implementation handoff created for context recovery
 
 ---
 
 ## Next Steps
 
-1. Review whether Phase 2 foundation should be marked complete or whether to add one more manual installed-update smoke
-2. Run `aether phase --number 2` to inspect the saved Phase 2 scope
-3. Run `aether build 1` when you want the normal lifecycle to execute and reconcile Phase 1 formally
-4. Run `aether resume-colony` after a context clear if you want the full recovery view
+1. Read `.aether/docs/ceremony-revival-v1.6-handoff.md`
+2. Implement the launcher slice: `cmd/narrator_launcher.go`, `cmd/ceremony_emitter.go`, tests, and build lifecycle event insertion
+3. Run the Go/TS verification block listed in the handoff
+4. Commit and push after the launcher slice is green
 
 ---
 
@@ -98,6 +103,7 @@ Latest Phase 2 slices: narrator runtime now ships as dependency-free `.aether/ts
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Verify Node, embed, event bus, ANSI, and v5.4 playbook assumptions
-- Map current build, continue, and plan wrappers against the v5.4 direct-spawn playbooks
-- Persist the blended v1.6 ceremony plan for resume and review
+- Implement Go narrator launcher gating and sidecar cleanup
+- Emit build ceremony events from the dispatch lifecycle
+- Add launcher/emitter tests for JSON safety, missing Node/runtime, early exits, and event persistence
+- Run the full Go/TS verification block from `.aether/docs/ceremony-revival-v1.6-handoff.md`
