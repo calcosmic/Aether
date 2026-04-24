@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -125,6 +126,12 @@ var queenPromoteCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
 			return nil
 		}
+
+		emitLifecycleCeremony(events.CeremonyTopicQueenPromote, events.CeremonyPayload{
+			Task:    section,
+			Status:  "promoted",
+			Message: sanitizeQueenInline(content),
+		}, "aether-queen")
 
 		outputOK(map[string]interface{}{"promoted": true, "section": section})
 		return nil
@@ -265,6 +272,13 @@ var queenPromoteInstinctCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
 			return nil
 		}
+
+		emitLifecycleCeremony(events.CeremonyTopicQueenPromote, events.CeremonyPayload{
+			TaskID:  instinctID,
+			Task:    "Wisdom",
+			Status:  "promoted",
+			Message: sanitizeQueenInline(action),
+		}, "aether-queen")
 
 		outputOK(map[string]interface{}{"promoted": true, "instinct_id": instinctID})
 		return nil

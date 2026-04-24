@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
 
@@ -105,6 +106,12 @@ var hiveStoreCmd = &cobra.Command{
 					outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 					return nil
 				}
+				emitLifecycleCeremony(events.CeremonyTopicHiveStore, events.CeremonyPayload{
+					TaskID:  e.ID,
+					Task:    domain,
+					Status:  "reinforced",
+					Message: text,
+				}, "aether-hive")
 				outputOK(map[string]interface{}{"stored": true, "reinforced": true, "id": e.ID})
 				return nil
 			}
@@ -139,6 +146,13 @@ var hiveStoreCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
 		}
+
+		emitLifecycleCeremony(events.CeremonyTopicHiveStore, events.CeremonyPayload{
+			TaskID:  entry.ID,
+			Task:    domain,
+			Status:  "stored",
+			Message: text,
+		}, "aether-hive")
 
 		outputOK(map[string]interface{}{"stored": true, "reinforced": false, "id": entry.ID, "total": len(wf.Entries)})
 		return nil
@@ -284,6 +298,12 @@ var hivePromoteCmd = &cobra.Command{
 					outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 					return nil
 				}
+				emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
+					TaskID:  e.ID,
+					Task:    domain,
+					Status:  "boosted",
+					Message: abstracted,
+				}, "aether-hive")
 				outputOK(map[string]interface{}{"promoted": true, "boosted": true, "id": e.ID, "confidence": wf.Entries[i].Confidence})
 				return nil
 			}
@@ -315,6 +335,13 @@ var hivePromoteCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
 		}
+
+		emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
+			TaskID:  entry.ID,
+			Task:    domain,
+			Status:  "promoted",
+			Message: abstracted,
+		}, "aether-hive")
 
 		outputOK(map[string]interface{}{"promoted": true, "boosted": false, "id": entry.ID, "confidence": confidence})
 		return nil

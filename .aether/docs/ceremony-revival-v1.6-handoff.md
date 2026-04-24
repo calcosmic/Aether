@@ -1,12 +1,11 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T12:22:11Z
+Last updated: 2026-04-24T12:38:25Z
 
-Branch: `codex/ceremony-lifecycle-events-v16`
-Base: `origin/main` after merged PR #7
-Previous PR: `https://github.com/calcosmic/Aether/pull/5` (merged/closed; covered only the early branch state through `c1880184`)
-Merged PRs: `https://github.com/calcosmic/Aether/pull/6`, `https://github.com/calcosmic/Aether/pull/7`
-Open PR: `https://github.com/calcosmic/Aether/pull/8` (draft; not merged)
+Branch: `codex/ceremony-context-events-v16`
+Base: `origin/main` after merged PR #9
+Previous PRs: `https://github.com/calcosmic/Aether/pull/5` through `https://github.com/calcosmic/Aether/pull/9` are merged
+Open PR: `https://github.com/calcosmic/Aether/pull/10` (clean/mergeable)
 
 ## Purpose
 
@@ -34,7 +33,7 @@ There are two separate progress tracks in this checkout:
    lifecycle state only. Do not manually edit it to match code progress.
 2. **Branch implementation progress**: git commits plus this tracked handoff are
    the source of truth for what has actually been implemented on
-   `codex/ceremony-lifecycle-events-v16`.
+   `codex/ceremony-context-events-v16`.
 
 This mismatch is expected for this branch because implementation slices were
 committed directly while the persisted colony lifecycle was not advanced through
@@ -49,20 +48,18 @@ committed directly while the persisted colony lifecycle was not advanced through
 | Phase 3: rolling activity display | Implemented foundation | `.aether/ts/narrator.ts`, multi-wave activity tests, `dist/narrator.js` | TTY live redraw/debounce deferred until real terminal contract is clear |
 | Phase 4: build subagent bridge | Implemented for wrappers | `build --plan-only`, `build-finalize`, manifest `execution_plan`, Claude/OpenCode build wrappers, wrapper contract tests | Live platform smoke and any future specialist prompt polish |
 | Phase 5: continue and plan orchestration | Implemented for wrappers | `continue --plan-only`, `continue-finalize`, `plan --plan-only`, `plan-finalize`, wrapper contract tests | Live platform smoke; stall/confidence ceremony polish |
-| Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; TS renders generic lifecycle stages and context notices; Go emits pheromone/chamber plus plan/colonize/continue wave events and skill activation notices | Emit remaining QUEEN/Hive/midden/graveyard context from real state |
+| Phase 6: full lifecycle ceremony and skills | Implemented for Go-owned transitions | Build ceremony emits from Go; TS renders generic lifecycle stages and context notices; Go emits pheromone/chamber, plan/colonize/continue wave events, skill activation, entomb, midden, QUEEN, and Hive notices | None known beyond live platform smoke and release polish |
 | Phase 7: parity verification and release | Not done | Release/rollback notes exist | Cross-platform smoke, install/update release checks, PR review, release hardening |
 
-Safe continuation point: PR #6 and PR #7 are merged. PR #8 is still open as a
-draft for `codex/ceremony-lifecycle-events-v16`; it is not on `main` yet.
-The old `codex/ceremony-narrator-foundation-v16` branch still appears on
-GitHub because PR #7 was merged without deleting its source branch. Go-side
-wrapper smoke passed for `build 1 --plan-only`; true Claude/OpenCode Task-tool
-smoke remains pending because Codex cannot execute those platform Task-tool
-wrappers directly. The current working-tree slice continues Phase 6 Go-backed
-lifecycle ceremony emission for plan, colonize, continue wave events, and
-skill activation notices.
+Safe continuation point: PR #5 through PR #9 are merged. PR #10 is open,
+clean, and mergeable for `codex/ceremony-context-events-v16`. The old
+`codex/ceremony-narrator-foundation-v16` branch still appears on GitHub
+because PR #7 was merged without deleting its source branch. Go-side wrapper
+smoke passed for `build 1 --plan-only`; true Claude/OpenCode Task-tool smoke
+remains pending because Codex cannot execute those platform Task-tool wrappers
+directly.
 
-## Already Shipped On This Branch
+## Already Shipped Across Merged Ceremony Branches
 
 These commits are pushed:
 
@@ -1087,6 +1084,53 @@ Verification run:
 - `go test ./... -count=1 -timeout 300s`
 - `go vet ./...`
 
+## Working Tree Slice: Phase 6 Lifecycle Context Events
+
+Date: 2026-04-24
+
+This slice covers the remaining Go-owned lifecycle context transitions that are
+not build waves: graveyard/chamber archival, midden records, QUEEN promotion,
+and Hive wisdom writes.
+
+Changed files:
+
+- `pkg/events/ceremony.go`
+- `cmd/entomb_cmd.go`
+- `cmd/midden_cmds.go`
+- `cmd/queen.go`
+- `cmd/hive.go`
+- `cmd/ceremony_emitter_test.go`
+- `.aether/ts/test/narrator.test.ts`
+
+Implemented behavior:
+
+- New context event topics:
+  `ceremony.chamber.entomb`, `ceremony.midden.record`,
+  `ceremony.queen.promote`, `ceremony.hive.store`, and
+  `ceremony.hive.promote`.
+- `aether entomb` emits `ceremony.chamber.entomb` after chamber archival,
+  active-state reset, runtime cleanup, and recovery doc write succeed.
+- `midden-write` emits `ceremony.midden.record` after the failure record is
+  persisted.
+- `queen-promote` and `queen-promote-instinct` emit
+  `ceremony.queen.promote` after QUEEN.md is updated.
+- `hive-store` emits `ceremony.hive.store`; `hive-promote` emits
+  `ceremony.hive.promote`, including both new entries and reinforced/boosted
+  existing entries.
+- The TypeScript narrator already handles these as generic Context notices; the
+  TS narrator test fixture now covers archive and wisdom context events.
+
+Verification run:
+
+- `go test ./cmd -run 'Test(EntombEmitsChamberEntombCeremonyEvent|MiddenWriteEmitsCeremonyEvent|QueenPromoteEmitsCeremonyEvent|HiveStoreAndPromoteEmitCeremonyEvents|.*Ceremony|Ceremony)' -count=1`
+- `npm run typecheck --prefix .aether/ts`
+- `npm ci --prefix .aether/ts`
+- `npm test --prefix .aether/ts`
+- `go test ./cmd -count=1`
+- `go test ./... -count=1 -timeout 300s`
+- `go vet ./...`
+- `git diff --check`
+
 ## Release And Rollback
 
 Rollback controls:
@@ -1107,28 +1151,25 @@ Before release:
 
 ## Current Next Step
 
-Next, commit and push the Phase 6 skill activation event slice to PR #8, then
-continue with remaining graveyard/entomb and QUEEN/Hive/midden context events
-where Go-owned state transitions exist. Platform Task-tool smoke is still
-required when Claude or OpenCode is available. The preconditions now satisfied
-are:
+Next, review/merge PR #10, then run platform Task-tool smoke when Claude or
+OpenCode is available. The preconditions now satisfied are:
 
-1. hub fallback smoke passed in a temporary HOME;
-2. TTY live redraw is consciously deferred;
-3. multi-wave TS fixture passes;
-4. build, continue, and plan wrappers now have plan-only/finalizer bridges;
-5. focused Go, full Go, TS, vet, and whitespace gates pass;
-6. PR #8 is open as a draft and not merged;
-7. the branch has merged the PR #5 squash commit from `main` with an
-   ancestry-only merge because its tree already matched branch commit
-   `c1880184`;
-8. PR #6 and PR #7 are merged;
-9. Go-side wrapper smoke passed for
+1. PR #5 through PR #9 are merged;
+2. PR #10 is open, clean, and mergeable;
+3. hub fallback smoke passed in a temporary HOME;
+4. TTY live redraw is consciously deferred;
+5. multi-wave TS fixture passes;
+6. build, continue, and plan wrappers now have plan-only/finalizer bridges;
+7. focused Go, full Go, TS, vet, and whitespace gates pass;
+8. Go-side wrapper smoke passed for
    `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`, producing
    standard-depth builder wave 11, Probe wave 12, and Watcher wave 13;
-10. Phase 6 pheromone/chamber event hooks are implemented and verified;
-11. Phase 6 plan/colonize/continue wave event hooks are implemented in the
+9. Phase 6 pheromone/chamber event hooks are implemented and verified;
+10. Phase 6 plan/colonize/continue wave event hooks are implemented in the
     working tree with focused, full cmd, full repo, vet, and whitespace checks
     passing;
-12. Phase 6 skill activation event hooks are implemented in the working tree
-    with focused, full cmd, full repo, vet, and whitespace checks passing.
+11. Phase 6 skill activation event hooks are merged with focused, full cmd,
+    full repo, vet, and whitespace checks passing;
+12. Phase 6 lifecycle context events for entomb, midden, QUEEN, and Hive are
+    implemented in the working tree with focused Go, TS narrator, full cmd,
+    full repo, vet, and whitespace gates passing.

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
 
@@ -463,6 +464,13 @@ var middenWriteCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to save midden: %v", err), nil)
 			return nil
 		}
+
+		emitLifecycleCeremony(events.CeremonyTopicMiddenRecord, events.CeremonyPayload{
+			TaskID:  entryID,
+			Task:    category,
+			Status:  "recorded",
+			Message: message,
+		}, "aether-midden")
 
 		outputOK(map[string]interface{}{
 			"success":      true,

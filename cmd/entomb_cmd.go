@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
 
@@ -98,6 +99,16 @@ var entombCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to write entomb recovery docs: %v", err), nil)
 			return nil
 		}
+
+		emitLifecycleCeremony(events.CeremonyTopicChamberEntomb, events.CeremonyPayload{
+			PhaseName: "Chamber Entombed",
+			TaskID:    chamberName,
+			Task:      chamberDir,
+			Status:    "entombed",
+			Message:   goal,
+			Completed: completedPhaseCount(state),
+			Total:     len(state.Plan.Phases),
+		}, "aether-entomb")
 
 		result := map[string]interface{}{
 			"entombed":         true,
