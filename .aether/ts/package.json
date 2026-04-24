@@ -6,12 +6,11 @@
   "type": "module",
   "description": "Bundled TypeScript narrator for Aether ceremony events",
   "scripts": {
-    "narrate": "tsx narrator.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx narrator.ts",
+    "narrate": "node dist/narrator.js",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "picocolors": "1.1.1"
   },
   "devDependencies": {
     "@types/node": "18.19.130",

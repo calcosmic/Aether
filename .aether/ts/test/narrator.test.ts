@@ -49,6 +49,53 @@ test("strips terminal control sequences from event fields", () => {
   assert.match(rendered, /hello/);
 });
 
+test("renders the shared Go ceremony payload shape", () => {
+  const rendered = renderEvent({
+    topic: "ceremony.build.wave.end",
+    payload: {
+      phase: 2,
+      phase_name: "Event protocol",
+      wave: 3,
+      spawn_id: "spawn_123",
+      caste: "watcher",
+      name: "Vigil-17",
+      task_id: "2.2",
+      task: "Verify stream protocol",
+      status: "complete",
+      skill: "testing",
+      pheromone_type: "FOCUS",
+      strength: 0.8,
+      completed: 2,
+      total: 3,
+      tool_count: 4,
+      token_count: 1200,
+      files_created: ["a"],
+      files_modified: ["b", "c"],
+      tests_written: ["d"],
+      blockers: ["none"],
+      success_criteria: ["green"]
+    }
+  });
+
+  assert.match(rendered, /phase_name=Event protocol/);
+  assert.match(rendered, /spawn=spawn_123/);
+  assert.match(rendered, /watcher:Vigil-17/);
+  assert.match(rendered, /task_id=2\.2/);
+  assert.match(rendered, /skill=testing/);
+  assert.match(rendered, /pheromone=FOCUS/);
+  assert.match(rendered, /strength=0\.8/);
+  assert.match(rendered, /progress=2\/3/);
+  assert.match(rendered, /tools=4/);
+  assert.match(rendered, /tokens=1200/);
+  assert.match(rendered, /created=1/);
+  assert.match(rendered, /modified=2/);
+  assert.match(rendered, /tests=1/);
+  assert.match(rendered, /blockers=1/);
+  assert.match(rendered, /criteria=1/);
+  assert.match(rendered, /status=complete/);
+  assert.match(rendered, /Verify stream protocol/);
+});
+
 test("ignores empty event lines", () => {
   assert.equal(parseEvent("   "), null);
 });

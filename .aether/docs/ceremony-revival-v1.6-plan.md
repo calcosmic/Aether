@@ -18,6 +18,9 @@ and real worker bridge on top of the current runtime instead of replacing it.
 - `.aether/ts` is embedded as an explicit file list in `embedded_assets.go` so
   install/update syncs the narrator package without accidentally shipping
   `node_modules`.
+- The installed narrator runtime is `dist/narrator.js`, a dependency-free Node
+  artifact generated from the TypeScript source. `npm ci` is a developer/CI step,
+  not an installed-runtime requirement.
 - `pkg/events.Bus.Subscribe` is in-process only. Cross-process narration needs
   either parent-process piping or a file-backed stream over `event-bus.jsonl`.
 - Current playbooks still contain the intended direct-spawn flow. In particular,
@@ -47,7 +50,8 @@ and real worker bridge on top of the current runtime instead of replacing it.
 - Add `visuals-dump --json` so TS consumes Go's caste emoji/color/label maps.
   (Initial scaffold exists.)
 - Build a narrator stub that reads NDJSON from stdin and prints one ceremony line
-  per event. (Initial scaffold exists; runtime launch is not wired yet.)
+  per event. (Initial scaffold exists; `dist/narrator.js` is dependency-free at
+  runtime; Go auto-launch is not wired yet.)
 
 ## Phase 3: Rolling Activity Display
 

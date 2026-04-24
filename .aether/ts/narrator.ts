@@ -1,6 +1,7 @@
 import readline from "node:readline";
-import { pathToFileURL } from "node:url";
-import pc from "picocolors";
+import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface CeremonyEvent {
   id?: string;
@@ -17,9 +18,22 @@ export interface CeremonyPayload {
   spawn_id?: string;
   caste?: string;
   name?: string;
+  task_id?: string;
   task?: string;
   status?: string;
   message?: string;
+  skill?: string;
+  pheromone_type?: string;
+  strength?: number;
+  completed?: number;
+  total?: number;
+  tool_count?: number;
+  token_count?: number;
+  files_created?: string[];
+  files_modified?: string[];
+  tests_written?: string[];
+  blockers?: string[];
+  success_criteria?: string[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -66,13 +80,19 @@ export function parseEvent(line: string): CeremonyEvent | null {
 
 export function renderEvent(event: CeremonyEvent): string {
   const payload = asPayload(event.payload);
-  const parts: string[] = [pc.bold("[CEREMONY]"), sanitizeTerminalText(event.topic)];
+  const parts: string[] = ["[CEREMONY]", sanitizeTerminalText(event.topic)];
 
   if (payload.phase !== undefined) {
     parts.push(`phase=${sanitizeTerminalText(payload.phase)}`);
   }
+  if (payload.phase_name !== undefined) {
+    parts.push(`phase_name=${sanitizeTerminalText(payload.phase_name)}`);
+  }
   if (payload.wave !== undefined) {
     parts.push(`wave=${sanitizeTerminalText(payload.wave)}`);
+  }
+  if (payload.spawn_id !== undefined) {
+    parts.push(`spawn=${sanitizeTerminalText(payload.spawn_id)}`);
   }
   if (payload.caste !== undefined || payload.name !== undefined) {
     const identityParts: string[] = [];
@@ -86,6 +106,42 @@ export function renderEvent(event: CeremonyEvent): string {
   }
   if (payload.status !== undefined) {
     parts.push(`status=${sanitizeTerminalText(payload.status)}`);
+  }
+  if (payload.task_id !== undefined) {
+    parts.push(`task_id=${sanitizeTerminalText(payload.task_id)}`);
+  }
+  if (payload.skill !== undefined) {
+    parts.push(`skill=${sanitizeTerminalText(payload.skill)}`);
+  }
+  if (payload.pheromone_type !== undefined) {
+    parts.push(`pheromone=${sanitizeTerminalText(payload.pheromone_type)}`);
+  }
+  if (payload.strength !== undefined) {
+    parts.push(`strength=${sanitizeTerminalText(payload.strength)}`);
+  }
+  if (payload.completed !== undefined && payload.total !== undefined) {
+    parts.push(`progress=${sanitizeTerminalText(payload.completed)}/${sanitizeTerminalText(payload.total)}`);
+  }
+  if (payload.tool_count !== undefined) {
+    parts.push(`tools=${sanitizeTerminalText(payload.tool_count)}`);
+  }
+  if (payload.token_count !== undefined) {
+    parts.push(`tokens=${sanitizeTerminalText(payload.token_count)}`);
+  }
+  if (payload.files_created !== undefined) {
+    parts.push(`created=${sanitizeTerminalText(payload.files_created.length)}`);
+  }
+  if (payload.files_modified !== undefined) {
+    parts.push(`modified=${sanitizeTerminalText(payload.files_modified.length)}`);
+  }
+  if (payload.tests_written !== undefined) {
+    parts.push(`tests=${sanitizeTerminalText(payload.tests_written.length)}`);
+  }
+  if (payload.blockers !== undefined) {
+    parts.push(`blockers=${sanitizeTerminalText(payload.blockers.length)}`);
+  }
+  if (payload.success_criteria !== undefined) {
+    parts.push(`criteria=${sanitizeTerminalText(payload.success_criteria.length)}`);
   }
   if (payload.message !== undefined) {
     parts.push(sanitizeTerminalText(payload.message));
@@ -121,6 +177,21 @@ export function runNarrator(
   return rl;
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+function realpathOrResolve(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+function isEntrypoint(importURL: string, argvPath: string | undefined): boolean {
+  if (argvPath === undefined) {
+    return false;
+  }
+  return realpathOrResolve(fileURLToPath(importURL)) === realpathOrResolve(argvPath);
+}
+
+if (isEntrypoint(import.meta.url, process.argv[1])) {
   runNarrator();
 }

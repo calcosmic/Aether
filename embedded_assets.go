@@ -9,7 +9,7 @@ import (
 
 // installAssets contains the shipped companion files needed by `aether install`.
 //
-//go:embed all:.claude/commands/ant all:.claude/agents/ant all:.opencode/commands/ant all:.opencode/agents .opencode/opencode.json all:.codex all:.aether/agents-claude all:.aether/agents-codex all:.aether/commands all:.aether/docs all:.aether/exchange all:.aether/rules all:.aether/schemas all:.aether/skills all:.aether/skills-codex all:.aether/templates .aether/ts/narrator.ts .aether/ts/package-lock.json .aether/ts/package.json .aether/ts/tsconfig.json all:.aether/utils .aether/workers.md
+//go:embed all:.claude/commands/ant all:.claude/agents/ant all:.opencode/commands/ant all:.opencode/agents .opencode/opencode.json all:.codex all:.aether/agents-claude all:.aether/agents-codex all:.aether/commands all:.aether/docs all:.aether/exchange all:.aether/rules all:.aether/schemas all:.aether/skills all:.aether/skills-codex all:.aether/templates .aether/ts/dist/narrator.js .aether/ts/narrator.ts .aether/ts/package-lock.json .aether/ts/package.json .aether/ts/tsconfig.build.json .aether/ts/tsconfig.json all:.aether/utils .aether/workers.md
 var installAssets embed.FS
 
 // MaterializeInstallPackage writes the embedded install assets into dest.

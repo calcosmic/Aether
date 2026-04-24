@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -122,7 +123,7 @@ func TestInstallUsesEmbeddedAssetsWithoutPackageDir(t *testing.T) {
 	if _, err := os.Stat(hubNarrator); os.IsNotExist(err) {
 		t.Fatalf("expected embedded narrator file %s to exist after install", hubNarrator)
 	}
-	for _, rel := range []string{"package.json", "package-lock.json", "tsconfig.json"} {
+	for _, rel := range []string{"dist/narrator.js", "package.json", "package-lock.json", "tsconfig.build.json", "tsconfig.json"} {
 		path := filepath.Join(homeDir, ".aether", "system", "ts", rel)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Fatalf("expected embedded narrator package file %s to exist after install", path)
@@ -130,6 +131,20 @@ func TestInstallUsesEmbeddedAssetsWithoutPackageDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(homeDir, ".aether", "system", "ts", "node_modules")); err == nil {
 		t.Fatal("embedded install assets must not include .aether/ts/node_modules")
+	}
+	if nodePath, err := exec.LookPath("node"); err == nil {
+		hubNarratorRuntime := filepath.Join(homeDir, ".aether", "system", "ts", "dist", "narrator.js")
+		cmd := exec.Command(nodePath, hubNarratorRuntime)
+		cmd.Stdin = strings.NewReader(`{"topic":"ceremony.build.spawn","payload":{"phase":2,"caste":"builder","name":"Mason-67","status":"starting"}}` + "\n")
+		out, runErr := cmd.CombinedOutput()
+		if runErr != nil {
+			t.Fatalf("installed narrator runtime failed without node_modules: %v\n%s", runErr, out)
+		}
+		if !strings.Contains(string(out), "[CEREMONY] ceremony.build.spawn phase=2 builder:Mason-67 status=starting") {
+			t.Fatalf("installed narrator output mismatch:\n%s", out)
+		}
+	} else {
+		t.Log("node not found; skipping installed narrator runtime smoke")
 	}
 }
 

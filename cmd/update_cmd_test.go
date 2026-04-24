@@ -54,12 +54,17 @@ func TestRunUpdateSyncCopiesNarratorPackageButSkipsNodeModules(t *testing.T) {
 		t.Fatalf("failed to create hub ts fixture: %v", err)
 	}
 	fixtures := map[string]string{
-		"narrator.ts":       "export {};\n",
-		"package.json":      `{"name":"@aether/ceremony-narrator"}`,
-		"package-lock.json": `{"lockfileVersion":3}`,
-		"tsconfig.json":     `{"compilerOptions":{"strict":true}}`,
+		"dist/narrator.js":    "export {};\n",
+		"narrator.ts":         "export {};\n",
+		"package.json":        `{"name":"@aether/ceremony-narrator"}`,
+		"package-lock.json":   `{"lockfileVersion":3}`,
+		"tsconfig.build.json": `{"extends":"./tsconfig.json"}`,
+		"tsconfig.json":       `{"compilerOptions":{"strict":true}}`,
 	}
 	for name, content := range fixtures {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(hubTS, name)), 0755); err != nil {
+			t.Fatalf("failed to create fixture dir for %s: %v", name, err)
+		}
 		if err := os.WriteFile(filepath.Join(hubTS, name), []byte(content), 0644); err != nil {
 			t.Fatalf("failed to write %s: %v", name, err)
 		}
