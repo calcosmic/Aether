@@ -1,335 +1,406 @@
 {
   "version": "3.0",
-  "goal": "Restore guided colony intake and ceremony so init performs a bounded visible foundation pass, proposes a stronger colony goal, persists intake choices into runtime state, restores clear next-command and context-clear guidance, makes the end-to-end lifecycle feel grounded and trustworthy across Claude, OpenCode, and Codex, and ensures ceremony only reports real worker progress instead of synthetic box-ticking.",
+  "goal": "Restore the agent spawning bridge — bring back full ceremony, real agent dispatch via Agent tool, all worker castes (Archaeologist, Oracle, Architect, Ambassador, Builder waves, Watcher, Measurer, Chaos, Scout), depth prompts, named workers with caste colors, graveyard/midden system, QUEEN.md wisdom pipeline, hive brain, skill injection, cross-agent context flow, tiered escalation, and visually rich output with emojis and caste identity. The Go runtime manages state and produces structured dispatch plans; the markdown wrappers must read those plans and spawn real workers. Everything that made v5.4 feel alive, rebuilt on top of the current Go runtime.",
   "scope": "project",
   "colony_name": null,
   "colony_version": 0,
-  "state": "EXECUTING",
-  "current_phase": 2,
-  "session_id": "restore_1776849642",
-  "initialized_at": "2026-04-22T11:20:42.259723+02:00",
-  "build_started_at": "2026-04-22T15:13:42.427621Z",
+  "state": "READY",
+  "current_phase": 1,
+  "session_id": "restore_1776993747",
+  "initialized_at": "2026-04-24T03:22:27.626177+02:00",
+  "build_started_at": null,
   "plan": {
-    "generated_at": "2026-04-22T09:23:27.732307Z",
-    "confidence": 0.84,
+    "generated_at": "2026-04-24T02:04:32Z",
+    "confidence": 0.88,
     "phases": [
       {
         "id": 1,
-        "name": "Contract and gap mapping",
-        "description": "Lock the expected ant-process behavior against the current Go command surface.",
-        "status": "completed",
+        "name": "Assumptions and gap audit",
+        "description": "Verify the ceremony revival assumptions and lock the wrapper-vs-runtime contract before deeper implementation.",
+        "status": "ready",
         "tasks": [
           {
             "id": "1.1",
-            "goal": "Compare the documented ant workflow with the current Codex command behavior",
-            "status": "completed",
+            "goal": "Verify Node, embed, event bus, ANSI, and v5.4 playbook assumptions",
+            "status": "pending",
             "constraints": [
-              "Keep the Go binary as the execution source of truth",
-              "Use Claude/OpenCode command specs as the external contract"
+              "Node must remain a soft dependency",
+              "Do not claim cross-process event streaming from the in-process bus"
             ],
             "hints": [
-              ".claude/commands/ant/colonize.md",
-              ".claude/commands/ant/plan.md",
-              ".opencode/commands/ant/colonize.md",
-              ".opencode/commands/ant/plan.md",
-              "cmd/codex_plan.go",
-              "cmd/codex_colonize.go",
-              "cmd/codex_workflow_cmds.go"
+              "README.md",
+              "npm/package.json",
+              "embedded_assets.go",
+              "pkg/events",
+              ".aether/docs/command-playbooks/build-wave.md"
             ],
             "success_criteria": [
-              "The next implementation slices are dependency-ordered",
-              "The parity gaps are explicit"
+              "Assumptions are documented with code references",
+              "Incorrect assumptions are corrected before implementation"
             ]
           },
           {
             "id": "1.2",
-            "goal": "Decide the observable ant-process outputs Codex must emit during each core command",
-            "status": "completed",
+            "goal": "Map current build, continue, and plan wrappers against the v5.4 direct-spawn playbooks",
+            "status": "pending",
             "constraints": [
-              "Do not claim capabilities the Go binary does not actually perform",
-              "Make timeout, dependency, and fallback behavior explicit and honest across Codex, Claude, and OpenCode"
+              "Go remains state source of truth",
+              "Wrappers own platform Task-tool spawning where available"
             ],
             "hints": [
-              ".claude/commands/ant/colonize.md",
-              ".claude/commands/ant/plan.md",
-              ".opencode/commands/ant/colonize.md",
-              ".opencode/commands/ant/plan.md",
-              "cmd/codex_plan.go",
-              "cmd/codex_colonize.go",
-              "pkg/codex/dispatch.go",
-              "pkg/codex/worker.go"
+              ".claude/commands/ant/build.md",
+              ".opencode/commands/ant/build.md",
+              ".aether/docs/command-playbooks/build-full.md"
             ],
             "success_criteria": [
-              "Each command has a concrete dispatch contract",
-              "Spawn tree and artifacts are part of the contract",
-              "Shared-timeout, per-worker-timeout, and fallback semantics are explicit"
+              "Every hollow ceremony gap has an owner",
+              "The bridge contract is explicit for Claude, OpenCode, and Codex"
+            ]
+          },
+          {
+            "id": "1.3",
+            "goal": "Persist the blended v1.6 ceremony plan for resume and review",
+            "status": "pending",
+            "constraints": [
+              "Keep rollback boundaries clear"
+            ],
+            "hints": [
+              ".aether/docs/ceremony-revival-v1.6-plan.md",
+              ".aether/data/COLONY_STATE.json"
+            ],
+            "success_criteria": [
+              "The active colony plan reflects TS narrator plus real subagent spawning",
+              "Resume context points at the correct next slice"
             ]
           }
         ],
         "success_criteria": [
-          "The parity contract is explicit",
-          "The colony has an honest execution target",
-          "Cross-surface timeout and fallback behavior is defined before implementation"
+          "The colony has the correct blended roadmap",
+          "No implementation starts from a false architecture premise"
         ]
       },
       {
         "id": 2,
-        "name": "Continue orchestration",
-        "description": "Make continue perform the real verification and advancement work instead of only flipping statuses.",
-        "status": "in_progress",
+        "name": "Event protocol and narrator foundations",
+        "description": "Bundle the TypeScript narrator and expose the Go event and visual contracts it consumes.",
+        "status": "pending",
         "tasks": [
           {
             "id": "2.1",
-            "goal": "Implement watcher-led verification and housekeeping before phase advancement",
-            "status": "in_progress",
+            "goal": "Add the bundled .aether/ts narrator package and embed it in install/update assets",
+            "status": "pending",
             "constraints": [
-              "Completed phases must only advance after verification",
-              "Signal housekeeping should stay wired into continue finalize"
+              "Go-only installs must keep working without Node",
+              "Dependencies must be pinned and auditable"
             ],
             "hints": [
-              ".claude/commands/ant/continue.md",
-              "cmd/signal_housekeeping.go"
+              ".aether/ts/package.json",
+              ".aether/ts/narrator.ts",
+              "embedded_assets.go"
             ],
             "success_criteria": [
-              "Advance only happens after verification succeeds",
-              "Continue verifies actual artifacts"
+              "aether install syncs the narrator package",
+              "The narrator typechecks under Node 18-compatible tooling"
             ]
           },
           {
             "id": "2.2",
-            "goal": "Record the continue worker flow in state, spawn logs, and user-facing output",
-            "status": "in_progress",
+            "goal": "Define ceremony event topics and a streamable NDJSON event surface",
+            "status": "pending",
             "constraints": [
-              "The Next Up block must stay valid for the resulting state"
+              "Cross-process streaming must use persisted events or parent piping",
+              "Existing query/publish commands must keep their envelope contract"
             ],
             "hints": [
-              "print-next-up",
-              "renderContinueVisual"
+              "pkg/events/ceremony.go",
+              "cmd/eventbus.go"
             ],
             "success_criteria": [
-              "Continue output matches actual work",
-              "The next phase becomes ready when appropriate"
+              "ceremony.* events can be streamed as raw NDJSON",
+              "Existing event bus tests remain green"
+            ]
+          },
+          {
+            "id": "2.3",
+            "goal": "Export caste visual identity from Go for narrator consumption",
+            "status": "pending",
+            "constraints": [
+              "Do not duplicate emoji/color maps in TypeScript"
+            ],
+            "hints": [
+              "cmd/codex_visuals.go",
+              "cmd/visuals_dump.go"
+            ],
+            "success_criteria": [
+              "visuals-dump exposes caste emoji, color, and label metadata",
+              "Narrator can consume Go-owned identity data"
             ]
           }
         ],
         "success_criteria": [
-          "Continue is no longer a pure state flip",
-          "Phase advancement is defensible"
+          "The narrator package is shipped",
+          "Go exposes stable ceremony and visual contracts"
         ]
       },
       {
         "id": 3,
-        "name": "Colonize orchestration",
-        "description": "Deliver surveyor-driven territory mapping that writes usable survey artifacts and spawn records.",
+        "name": "Rolling activity display",
+        "description": "Recreate the v5.4 colony activity frame on top of ceremony events.",
         "status": "pending",
         "tasks": [
           {
             "id": "3.1",
-            "goal": "Implement the surveyor workflow for Codex colonize",
+            "goal": "Maintain a narrator frame keyed by wave and spawn ID",
             "status": "pending",
             "constraints": [
-              "10 TODO/FIXME/HACK markers need review.",
-              "Follow the repository's existing structure and conventions",
-              "Keep changes scoped to the current goal"
+              "Avoid flickery output",
+              "Strip ANSI when transcripts need clean text"
             ],
             "hints": [
-              ".aether/data/survey/",
-              "cmd/codex_colonize.go",
-              "pkg/codex/dispatch.go",
-              "spawn-tree.txt"
+              ".aether/ts/narrator.ts",
+              "cmd/codex_build_progress.go"
             ],
             "success_criteria": [
-              "Survey artifacts are written",
-              "Surveyor spawns are recorded and completed",
-              "One surveyor timeout does not cancel sibling surveyors by accident"
+              "Active, completed, blocked, and failed workers render distinctly",
+              "Progress bars derive from event counts"
             ]
           },
           {
             "id": "3.2",
-            "goal": "Keep survey artifacts stable enough for planning to consume",
+            "goal": "Render tool counts, blockers, files, tokens when available, and pheromone/skill activations",
             "status": "pending",
             "constraints": [
-              "Avoid polluting reports with cache or generated artifacts",
-              "Timeout and fallback metadata must stay reviewable by later planning stages"
+              "Do not invent token counts when workers do not report them"
             ],
             "hints": [
-              "PATHOGENS.md should only mention real repo concerns"
+              "pkg/codex/worker.go",
+              "pkg/events/ceremony.go"
             ],
             "success_criteria": [
-              "Noise from generated/cache files is excluded",
-              "Survey artifacts are reusable inputs for plan",
-              "Fallback-generated survey context is clearly marked"
+              "Narrator output is rich but evidence-backed",
+              "Missing fields degrade cleanly"
             ]
           }
         ],
         "success_criteria": [
-          "Territory survey is reliable",
-          "Planning can trust the survey output"
+          "Build activity is visibly alive without lying about worker work"
         ]
       },
       {
         "id": 4,
-        "name": "Planning orchestration",
-        "description": "Add a scout plus route-setter planning pass that produces artifacts and a grounded phase plan.",
+        "name": "Subagent spawn restoration",
+        "description": "Restore real Claude/OpenCode agent spawning from the Go runtime manifest and v5.4 playbooks.",
         "status": "pending",
         "tasks": [
           {
             "id": "4.1",
-            "goal": "Implement a scout planning pass that summarizes survey findings into buildable guidance",
+            "goal": "Restore build wrappers as Task-tool orchestrators over Go-owned manifests",
             "status": "pending",
             "constraints": [
-              "Planning must still work when survey docs are missing",
-              "Scout output must be persisted as a planning artifact",
-              "Scout timeout behavior must be isolated from downstream workers"
+              "Wrappers must parse structured runtime output",
+              "Go must remain source of state truth"
             ],
             "hints": [
-              "SCOUT.md",
-              "cmd/codex_plan.go",
-              "pkg/codex/dispatch.go",
-              "pkg/codex/worker.go",
-              "phase-research/"
+              ".claude/commands/ant/build.md",
+              ".opencode/commands/ant/build.md",
+              ".aether/docs/command-playbooks/build-wave.md"
             ],
             "success_criteria": [
-              "Planning produces a scout artifact",
-              "The route-setter consumes scout output and survey context",
-              "Scout has its own bounded timeout and honest fallback path"
+              "Builder waves spawn real platform agents",
+              "spawn-log and spawn-complete surround every Task call"
             ]
           },
           {
             "id": "4.2",
-            "goal": "Generate a route-setter plan with task constraints, hints, and success criteria",
+            "goal": "Restore pre-wave and post-wave specialists",
             "status": "pending",
             "constraints": [
-              "The first phase must become ready",
-              "The saved plan must match the displayed plan",
-              "Route-Setter must not time out only because Scout consumed a shared batch deadline"
+              "Specialists must be conditional and evidence-backed"
             ],
             "hints": [
-              "COLONY_STATE.json",
-              "ROUTE-SETTER.md",
-              "renderPlanVisual"
+              "aether-archaeologist",
+              "aether-oracle",
+              "aether-architect",
+              "aether-ambassador",
+              "aether-probe",
+              "aether-watcher",
+              "aether-measurer",
+              "aether-chaos"
             ],
             "success_criteria": [
-              "Plan generation is grounded in repo context",
-              "Spawn records show scout and route-setter activity",
-              "Route-Setter has an independent budget and dependency contract"
+              "Archaeology, Oracle, Architect, Ambassador, Probe, Watcher, Measurer, and Chaos all fire in the right places",
+              "Cross-agent findings flow into downstream prompts"
             ]
           }
         ],
         "success_criteria": [
-          "Plan generation is ant-driven",
-          "The colony has a grounded next phase",
-          "Planning worker timeouts no longer cascade across the wave"
+          "/ant-build performs construction, not theater",
+          "Worker artifacts and spawn tree reflect real work"
         ]
       },
       {
         "id": 5,
-        "name": "Build orchestration",
-        "description": "Replace visual-only build dispatch with real worker execution slices and artifact handling.",
+        "name": "Continue and plan orchestration",
+        "description": "Bring back depth prompts, Scout plus Route-Setter planning, and verification-led advancement.",
         "status": "pending",
         "tasks": [
           {
             "id": "5.1",
-            "goal": "Define and implement the builder, watcher, and specialist work sequence for build",
+            "goal": "Restore plan depth ceremony and iterative Scout/Route-Setter planning",
             "status": "pending",
             "constraints": [
-              "Keep command behavior inside Go",
-              "Recorded spawns must reflect real work performed"
+              "Planning must remain bounded by selected depth",
+              "Stall detection must stop loops"
             ],
             "hints": [
-              ".claude/commands/ant/build.md",
-              "cmd/codex_visuals.go",
-              "cmd/codex_workflow_cmds.go"
+              ".claude/commands/ant/plan.md",
+              ".opencode/commands/ant/plan.md",
+              "cmd/codex_plan.go"
             ],
             "success_criteria": [
-              "Build does more than set state",
-              "The spawn plan matches actual command behavior"
+              "Users can choose Fast, Balanced, Deep, or Exhaustive planning",
+              "Plans are grounded by real Scout and Route-Setter outputs"
             ]
           },
           {
             "id": "5.2",
-            "goal": "Persist build artifacts and phase context needed by continue",
+            "goal": "Restore continue verification gates before phase advancement",
             "status": "pending",
             "constraints": [
-              "Continue must not rely on implied work that never happened"
+              "No advancement on unverified or fake worker claims"
             ],
             "hints": [
-              "Top-level dirs: .github, .planning, Aether_Content, assets, cmd",
-              "cmd/aether/main.go",
-              "cmd/agent_mirror_test.go",
-              "cmd/alias_cmds_test.go",
-              "cmd/assumptions_test.go"
+              ".claude/commands/ant/continue.md",
+              ".opencode/commands/ant/continue.md",
+              "cmd/codex_continue.go"
             ],
             "success_criteria": [
-              "Continue can verify concrete outputs",
-              "Phase state stays consistent across reruns"
+              "Watcher, Auditor, Gatekeeper, and Probe gates run honestly",
+              "Midden and blockers update from real failures"
             ]
           }
         ],
         "success_criteria": [
-          "Build behavior matches its visuals",
-          "Continue has real evidence to consume"
+          "Planning and continue are real orchestration surfaces again"
         ]
       },
       {
         "id": 6,
-        "name": "End-to-end verification",
-        "description": "Run the colony from init through seal and prove the Codex ant process is now honest.",
+        "name": "Full lifecycle ceremony and skills",
+        "description": "Extend ceremony through colonize, pheromones, graves, chamber sealing, skills, QUEEN.md, and Hive context.",
         "status": "pending",
         "tasks": [
           {
             "id": "6.1",
-            "goal": "Add tests that prove colonize, plan, build, and continue record real worker activity",
+            "goal": "Add narrator ceremonies for colonize, plan, build, continue, pheromones, graves, and sealing",
             "status": "pending",
             "constraints": [
-              "Test the user path, not just helper functions"
+              "Ceremony must follow actual state transitions"
             ],
             "hints": [
-              "cmd/agent_mirror_test.go",
-              "cmd/alias_cmds_test.go",
-              "cmd/assumptions_test.go",
-              "cmd/build_flow_cmds_test.go",
-              "cmd/build_wrapper_ceremony_test.go",
-              "cmd/cache_cmds_test.go",
-              "cmd/chamber_suggest_maintenance_test.go",
-              "cmd/codex_build_test.go",
-              "cmd/codex_colonize_test.go"
+              "cmd/codex_colonize.go",
+              "cmd/codex_plan.go",
+              "cmd/codex_continue.go",
+              "cmd/entomb_cmd.go",
+              "cmd/chamber.go"
             ],
             "success_criteria": [
-              "Core parity regressions are caught by tests",
-              "Spawn tree entries are asserted in tests",
-              "Timeout and fallback semantics are asserted for Claude/OpenCode wrapper flows and Codex CLI"
+              "Core lifecycle commands emit ceremony events",
+              "Graveyard and chamber rituals are visible and state-backed"
             ]
           },
           {
             "id": "6.2",
-            "goal": "Run a live colony loop and compare its outputs with the documented ant process",
+            "goal": "Surface skills, QUEEN.md, Hive, midden, and pheromones in worker context and narration",
             "status": "pending",
             "constraints": [
-              "Call out any remaining parity gap explicitly"
+              "Visible context must be the same context workers receive"
             ],
             "hints": [
-              ".aether/data/survey/",
-              "COLONY_STATE.json",
-              "spawn-tree.txt"
+              "cmd/colony_prime_context.go",
+              "cmd/skills.go",
+              "cmd/hive.go",
+              "cmd/midden_cmds.go"
             ],
             "success_criteria": [
-              "Remaining gaps are small and explicit",
-              "The live loop proves the implemented parity",
-              "Timeout warnings and next-step guidance match across Claude, OpenCode, and Codex"
+              "Skill activation and steering context are visible",
+              "Narration does not drift from prompt injection"
             ]
           }
         ],
         "success_criteria": [
-          "The live colony loop is credible",
-          "The remaining parity gap is narrow and testable"
+          "The whole colony lifecycle feels alive because real context is moving"
+        ]
+      },
+      {
+        "id": 7,
+        "name": "Parity verification and release",
+        "description": "Verify the revived ceremony across Claude Code, OpenCode, and Codex, then prepare v1.6 release rollback paths.",
+        "status": "pending",
+        "tasks": [
+          {
+            "id": "7.1",
+            "goal": "Run cross-platform lifecycle smoke tests and compare ceremony output",
+            "status": "pending",
+            "constraints": [
+              "Platform differences must be explicit and documented"
+            ],
+            "hints": [
+              ".claude/commands/ant",
+              ".opencode/commands/ant",
+              ".codex/agents",
+              "cmd/codex_e2e_test.go"
+            ],
+            "success_criteria": [
+              "All three supported surfaces show aligned ceremony",
+              "No platform reports fake worker progress"
+            ]
+          },
+          {
+            "id": "7.2",
+            "goal": "Verify graceful degradation, update sync, docs, and rollback controls",
+            "status": "pending",
+            "constraints": [
+              "AETHER_NARRATOR=off must instantly return to terse output"
+            ],
+            "hints": [
+              "cmd/install_cmd.go",
+              "cmd/update_cmd.go",
+              "README.md",
+              ".aether/docs/publish-update-runbook.md"
+            ],
+            "success_criteria": [
+              "Missing Node does not crash commands",
+              "aether update --force syncs .aether/ts",
+              "Rollback is documented and tested"
+            ]
+          }
+        ],
+        "success_criteria": [
+          "v1.6 can ship with known rollback levers",
+          "The revived ceremony is verified, not aspirational"
         ]
       }
     ]
   },
   "memory": {
     "phase_learnings": [],
-    "decisions": [],
+    "decisions": [
+      {
+        "id": "decision_ceremony_v16_layers",
+        "phase": 1,
+        "claim": "Go owns state/events/contracts, TypeScript owns narration, wrappers own platform Task-tool spawning.",
+        "rationale": "Keeps the Go runtime authoritative while restoring v5.4 ceremony and real agent spawning without claiming Go performed platform-only spawns.",
+        "timestamp": "2026-04-24T02:26:51Z"
+      },
+      {
+        "id": "decision_ts_runtime_unwired_until_dependency_path",
+        "phase": 1,
+        "claim": "Do not wire runtime launch to the TypeScript narrator until installed dependencies are explicit or dependency-free.",
+        "rationale": "The scaffold currently depends on dev tooling; Go-only installs must degrade cleanly and must not require undocumented npm install steps.",
+        "timestamp": "2026-04-24T02:26:51Z"
+      }
+    ],
     "instincts": []
   },
   "errors": {
@@ -339,46 +410,16 @@
   "signals": [],
   "graveyards": [],
   "events": [
-    "2026-04-22T09:23:27Z|planning_scout|plan|Scout summarized surveyed repo context",
-    "2026-04-22T09:23:27Z|plan_generated|plan|Generated 6 phases with 84% confidence",
-    "2026-04-22T09:47:45Z|phase_started|build|Phase 1: Contract and gap mapping",
-    "2026-04-22T09:47:45Z|build_dispatched|build|Dispatched 3 workers for phase 1",
-    "2026-04-22T09:47:45Z|build_completed|build|Phase 1 build packet prepared (real dispatch)",
-    "2026-04-22T10:13:50Z|verification_passed|continue|Build verification passed for phase 1",
-    "2026-04-22T10:13:50Z|gate_passed|continue|Continue gates passed for phase 1",
-    "2026-04-22T10:13:50Z|phase_advanced|continue|Completed phase 1, ready for phase 2",
-    "2026-04-22T10:20:30Z|phase_started|build|Phase 2: Continue orchestration",
-    "2026-04-22T10:20:30Z|build_dispatched|build|Dispatched 3 workers for phase 2",
-    "2026-04-22T10:20:30Z|build_completed|build|Phase 2 build packet prepared (real dispatch)",
-    "2026-04-22T11:40:54Z|build_dispatch_failed|build|Phase 2 dispatch failed: dispatch build workers: complete worker Chip-20-r2: spawn_tree: agent \"Chip-20-r2\" not found",
-    "2026-04-22T11:56:22Z|phase_started|build|Phase 2: Continue orchestration",
-    "2026-04-22T11:56:22Z|build_dispatched|build|Dispatched 3 workers for phase 2",
-    "2026-04-22T11:56:22Z|build_completed|build|Phase 2 build packet prepared (real dispatch)",
-    "2026-04-22T12:36:18Z|phase_started|build|Phase 2: Continue orchestration",
-    "2026-04-22T12:36:18Z|build_dispatched|build|Dispatched 3 workers for phase 2",
-    "2026-04-22T12:36:18Z|build_completed|build|Phase 2 build packet prepared (real dispatch)",
-    "2026-04-22T13:37:50Z|phase_started|build|Phase 2: Continue orchestration",
-    "2026-04-22T13:37:50Z|build_dispatched|build|Dispatched 3 workers for phase 2",
-    "2026-04-22T13:37:50Z|build_completed|build|Phase 2 build packet prepared (real dispatch)",
-    "2026-04-22T14:09:06Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 1m30s",
-    "2026-04-22T14:11:40Z|phase_started|build|Phase 2: Continue orchestration",
-    "2026-04-22T14:11:40Z|build_dispatched|build|Dispatched 2 workers for phase 2",
-    "2026-04-22T14:23:42Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 1m30s",
-    "2026-04-22T14:28:32Z|phase_started|build|Phase 2: Continue orchestration",
-    "2026-04-22T14:28:32Z|build_dispatched|build|Dispatched 3 workers for phase 2",
-    "2026-04-22T14:40:44Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 1m30s",
-    "2026-04-22T14:43:07Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 1m30s",
-    "2026-04-22T14:45:25Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 1m30s",
-    "2026-04-22T14:49:13Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 1m30s",
-    "2026-04-22T14:52:12Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 5m0s",
-    "2026-04-22T15:06:06Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status blocked: `cmd/codex_continue.go` still allows synthetic verification to satisfy advancement: `go test ./cmd -run TestContinueAdvancesWithoutWatcherDispatchWhenVerificationPasses -count=1 -v` passed, and both `runCodexContinueWatcherVerification` and `runCodexContinueReview` accept `FakeInvoker`-backed dispatch instead of treating it as a blocker.; Recorded artifacts are stale and misleading. Current `.aether/data/last-build-claims.json` is empty, but `.aether/data/build/phase-2/verification.json` still says `builder claims verified` with `checked: 3`; current `.aether/data/build/phase-2/manifest.json` shows builder timeouts and a blocked watcher, while `.aether/data/build/phase-2/continue.json` reflects an older timeout-only continue attempt.; `cmd/codex_continue.go` still performs housekeeping/context/spawn-tree side effects before persisting `.aether/data/COLONY_STATE.json`, so failures after those mutations can leave continue artifacts claiming progress without an atomic phase-state commit.; Runtime state is still inconsistent: `.aether/data/spawn-tree.txt` ends with `Sentinel-93|running` at `2026-04-22T15:06:47Z`, and fresh `/tmp/aether-verify status` reports an active watcher even though the last persisted continue report is blocked.",
-    "2026-04-22T15:13:42Z|phase_started|build|Phase 2: Continue orchestration",
-    "2026-04-22T15:13:42Z|build_dispatched|build|Dispatched 3 workers for phase 2",
-    "2026-04-22T16:34:12Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status blocked: Recorded phase-2 evidence is stale: .aether/data/build/phase-2/manifest.json was generated at 2026-04-22T15:13:42Z, but verification.json, gates.json, and continue.json are from 2026-04-22T15:06:06Z, and .aether/data/last-build-claims.json is empty with timestamp 2026-04-22T14:28:32Z.; The current build packet does not justify advancement: manifest dispatches are still only \"spawned\", the persisted watcher result is blocked, and continue.json says both phase tasks 2.1 and 2.2 need redispatch via `aether build 2 --task 2.1 --task 2.2`.; Fresh execution verification is red: `go test ./...` fails in cmd/codex_continue_test.go, including TestContinueConsumesBuildPacketAndAdvancesPhase, TestContinueRecordsWorkerFlowInStateReportAndSpawnSummary, TestContinueRollsBackStateWhenContextUpdateFails, TestContinueDoesNotCloseBuildWorkersWhenContextUpdateFails, TestContinueDoesNotAdvanceStateWhenHousekeepingFails, and TestContinueExpiresWorkerContinueSignalsUsingAdvancedPhaseState (panic).; Targeted continue regression remains: `go test ./cmd -run TestContinueBlocksWhenWatcherUsesFakeInvoker -count=1 -v` fails because state stays EXECUTING instead of COMPLETED. Runtime launch also still reports Phase 2 as EXECUTING (paused) with 20 blockers and 0/2 tasks complete."
+    "2026-04-24T01:27:59Z|territory_surveyed|colonize|Territory surveyed: 7 documents",
+    "2026-04-24T01:41:27Z|plan_generated|plan|Generated 6 phases with 84% confidence",
+    "2026-04-24T01:41:27Z|planning_scout|plan|Scout summarized surveyed repo context",
+    "2026-04-24T02:05:12Z|plan_blended|plan|Persisted 7-phase v1.6 ceremony revival roadmap",
+    "2026-04-24T02:26:51Z|review_reconciliation|review|Specialist continuity and gatekeeper findings integrated; structured state remains Phase 1 ready",
+    "2026-04-24T02:40:41Z|review_verified|review|Specialist review reconciliation complete; TS narrator tests, phase-plan mirror, full Go/TS verification passed"
   ],
   "plan_granularity": "milestone",
   "parallel_mode": "in-repo",
-  "milestone": "",
-  "paused": true,
-  "run_id": "restore_1776849642_04f4e7ae"
+  "territory_surveyed": "2026-04-24T01:27:59Z",
+  "milestone": "First Mound",
+  "run_id": "restore_1776993747_41816d38"
 }

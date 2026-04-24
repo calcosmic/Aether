@@ -8,25 +8,31 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-22T16:38:04Z |
-| **Current Phase** | 2 |
-| **Phase Name** | Continue orchestration |
-| **Phase Status** | in_progress |
+| **Last Updated** | 2026-04-24T02:40:41Z |
+| **Current Phase** | 1 |
+| **Phase Name** | Assumptions and gap audit |
+| **Phase Status** | ready |
 | **Milestone** | First Mound |
-| **Colony Status** | EXECUTING |
-| **Safe to Clear?** | NO — Build in progress |
+| **Colony Status** | READY |
+| **Safe to Clear?** | YES — Plan persisted, ready for the next command |
 
 ---
 
 ## Current Goal
 
-Restore guided colony intake and ceremony so init performs a bounded visible foundation pass, proposes a stronger colony goal, persists intake choices into runtime state, restores clear next-command and context-clear guidance, makes the end-to-end lifecycle feel grounded and trustworthy across Claude, OpenCode, and Codex, and ensures ceremony only reports real worker progress instead of synthetic box-ticking.
+Restore the agent spawning bridge — bring back full ceremony, real agent dispatch via Agent tool, all worker castes (Archaeologist, Oracle, Architect, Ambassador, Builder waves, Watcher, Measurer, Chaos, Scout), depth prompts, named workers with caste colors, graveyard/midden system, QUEEN.md wisdom pipeline, hive brain, skill injection, cross-agent context flow, tiered escalation, and visually rich output with emojis and caste identity. The Go runtime manages state and produces structured dispatch plans; the markdown wrappers must read those plans and spawn real workers. Everything that made v5.4 feel alive, rebuilt on top of the current Go runtime.
 
 ---
 
 ## What's In Progress
 
-Recorded phase-2 evidence is stale: .aether/data/build/phase-2/manifest.json was generated at 2026-04-22T15:13:42Z, but verification.json, gates.json, and continue.json are from 2026-04-22T15:06:06Z, and .aether/data/last-build-claims.json is empty with timestamp 2026-04-22T14:28:32Z.; The current build packet does not justify advancement: manifest dispatches are still only "spawned", the persisted watcher result is blocked, and continue.json says both phase tasks 2.1 and 2.2 need redispatch via `aether build 2 --task 2.1 --task 2.2`.; Fresh execution verification is red: `go test ./...` fails in cmd/codex_continue_test.go, including TestContinueConsumesBuildPacketAndAdvancesPhase, TestContinueRecordsWorkerFlowInStateReportAndSpawnSummary, TestContinueRollsBackStateWhenContextUpdateFails, TestContinueDoesNotCloseBuildWorkersWhenContextUpdateFails, TestContinueDoesNotAdvanceStateWhenHousekeepingFails, and TestContinueExpiresWorkerContinueSignalsUsingAdvancedPhaseState (panic).; Targeted continue regression remains: `go test ./cmd -run TestContinueBlocksWhenWatcherUsesFakeInvoker -count=1 -v` fails because state stays EXECUTING instead of COMPLETED. Runtime launch also still reports Phase 2 as EXECUTING (paused) with 20 blockers and 0/2 tasks complete.
+Blended v1.6 ceremony revival plan persisted: Go owns state/events, TypeScript narrator owns visuals, wrappers own real Task-tool spawning. Current phase: Assumptions and gap audit.
+
+Detailed handoff note: `.aether/dreams/2026-04-24-ceremony-revival-v1.6-handoff.md`.
+
+Important continuity distinction: structured colony state has not advanced past Phase 1. The working tree already contains a reviewed foundation slice for the Phase 2 event/narrator surface; advance only through the normal lifecycle.
+
+Integrated review findings: Keeper continuity fixes; Auditor stream timeout/pagination fixes; Gatekeeper explicit `.aether/ts` embed, nested `node_modules` exclusion, CI/release/dependabot coverage, package license, and runtime-not-wired warning; Watcher phase-plan mirror and real TypeScript narrator tests.
 
 ---
 
@@ -44,37 +50,15 @@ Recorded phase-2 evidence is stale: .aether/data/build/phase-2/manifest.json was
 
 ## Open Blockers
 
-- cmd/codex_command_contract_test.go requires .aether/docs/codex-command-surface-contract.md, but the file is absent in the repo. Even after the compile break ...
-- Fresh 'AETHER_OUTPUT_MODE=json go test ./... -count=1' is not fully runnable in this environment. Port-binding tests panic with 'listen tcp6 [::1]:0: bind: o...
-- Verification needed an explicit retry because ambient AETHER_OUTPUT_MODE=visual makes JSON-parsing tests fail. Example: 'AETHER_OUTPUT_MODE=visual go test ./...
-- cmd/codex_continue.go:380-384 treats the whole tests step as passed whenever the output contains any environmental marker. A mixed failure run (real regressi...
-- cmd/codex_continue.go:402-405 skips any failure line that matches isEnvironmentalConstraintText(), and the matcher at 777-800 treats the generic substring 'o...
-- cmd/codex_worker_activity_test.go shows aether continue replaces a completed builder's honest summary with generic closure text, so the live worker record is...
-- A live smoke repo in /tmp reached ━━ 🏃 R U N ━━
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Autopilot loop executed.
-State: EXECUTING
-Current Phase: 6
-
-━━ 🐜...
-- Fresh runs of go test ./... -count=1 and go test ./... -race -count=1 passed the dispatch-contract targets but failed full-suite verification because the san...
-- cmd/codex_continue.go marks the phase completed, flips colony state to READY, and saves COLONY_STATE.json before runSignalHousekeeping() and continue report ...
-- In cmd/codex_continue.go, artifactEvidenceTrusted becomes true whenever len(reconciled) > 0. That lets a single --reconcile-task override failed builder-clai...
-- Watcher verification found cmd tests that parse JSON from CLI output but fail under the repo shell's AETHER_OUTPUT_MODE=visual setting, including continue re...
-- Verification failed on 2026-04-22:  now errors because  and  still call  without the new  argument added in , and  has an unused  import.
-- Verification failed on 2026-04-22: go build ./cmd/aether errors because cmd/codex_colonize.go:456 and cmd/codex_plan.go:451 still call dispatchBatchByWaveWit...
-- Fresh verification failed in go test ./cmd. Continue-specific failures include TestContinueRecordsWorkerFlowInStateReportAndSpawnSummary (watcher event now r...
-- go test ./... and go test ./... -race both fail across assumptions, build, colonize, update, flag, and write command tests because commands that tests parse ...
-- go test ./... -race reports concurrent writes to emitVisualProgress via cmd/codex_visuals.go:229 from dispatchRuntime observer goroutines during colonize dis...
-- go test ./cmd -race detects concurrent writes to the shared output buffer from pkg/codex/dispatch.go:131 via cmd/dispatch_runtime.go:37 and cmd/codex_visuals...
-- cmd/codex_continue.go allows FakeInvoker watcher and review runs to count as real verification, and pkg/codex/worker.go falls back to FakeInvoker when real d...
+*None active*
 
 ---
 
-## Tasks For Phase 2 — Continue orchestration
+## Tasks For Phase 1 — Assumptions and gap audit
 
-- [>] Implement watcher-led verification and housekeeping before phase advancement
-- [>] Record the continue worker flow in state, spawn logs, and user-facing output
+- [ ] Verify Node, embed, event bus, ANSI, and v5.4 playbook assumptions
+- [ ] Map current build, continue, and plan wrappers against the v5.4 direct-spawn playbooks
+- [ ] Persist the blended v1.6 ceremony plan for resume and review
 
 ---
 
@@ -88,18 +72,18 @@ Current Phase: 6
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-04-22T14:52:12Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status timeout: worker timeout after 5m0s
-- 2026-04-22T15:06:06Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status blocked: `cmd/codex_continue.go` still allows synthetic verification to satisfy advancement: `go test ./cmd -run TestContinueAdvancesWithoutWatcherDispatchWhenVerificationPasses -count=1 -v` passed, and both `runCodexContinueWatcherVerification` and `runCodexContinueReview` accept `FakeInvoker`-backed dispatch instead of treating it as a blocker.; Recorded artifacts are stale and misleading. Current `.aether/data/last-build-claims.json` is empty, but `.aether/data/build/phase-2/verification.json` still says `builder claims verified` with `checked: 3`; current `.aether/data/build/phase-2/manifest.json` shows builder timeouts and a blocked watcher, while `.aether/data/build/phase-2/continue.json` reflects an older timeout-only continue attempt.; `cmd/codex_continue.go` still performs housekeeping/context/spawn-tree side effects before persisting `.aether/data/COLONY_STATE.json`, so failures after those mutations can leave continue artifacts claiming progress without an atomic phase-state commit.; Runtime state is still inconsistent: `.aether/data/spawn-tree.txt` ends with `Sentinel-93|running` at `2026-04-22T15:06:47Z`, and fresh `/tmp/aether-verify status` reports an active watcher even though the last persisted continue report is blocked.
-- 2026-04-22T15:13:42Z|phase_started|build|Phase 2: Continue orchestration
-- 2026-04-22T15:13:42Z|build_dispatched|build|Dispatched 3 workers for phase 2
-- 2026-04-22T16:34:12Z|watcher_verification|continue|Watcher Sentinel-93 closed independent verification with status blocked: Recorded phase-2 evidence is stale: .aether/data/build/phase-2/manifest.json was generated at 2026-04-22T15:13:42Z, but verification.json, gates.json, and continue.json are from 2026-04-22T15:06:06Z, and .aether/data/last-build-claims.json is empty with timestamp 2026-04-22T14:28:32Z.; The current build packet does not justify advancement: manifest dispatches are still only "spawned", the persisted watcher result is blocked, and continue.json says both phase tasks 2.1 and 2.2 need redispatch via `aether build 2 --task 2.1 --task 2.2`.; Fresh execution verification is red: `go test ./...` fails in cmd/codex_continue_test.go, including TestContinueConsumesBuildPacketAndAdvancesPhase, TestContinueRecordsWorkerFlowInStateReportAndSpawnSummary, TestContinueRollsBackStateWhenContextUpdateFails, TestContinueDoesNotCloseBuildWorkersWhenContextUpdateFails, TestContinueDoesNotAdvanceStateWhenHousekeepingFails, and TestContinueExpiresWorkerContinueSignalsUsingAdvancedPhaseState (panic).; Targeted continue regression remains: `go test ./cmd -run TestContinueBlocksWhenWatcherUsesFakeInvoker -count=1 -v` fails because state stays EXECUTING instead of COMPLETED. Runtime launch also still reports Phase 2 as EXECUTING (paused) with 20 blockers and 0/2 tasks complete.
+- 2026-04-24T01:41:27Z|planning_scout|plan|Scout summarized surveyed repo context
+- 2026-04-24T01:41:27Z|plan_generated|plan|Generated 6 phases with 84% confidence
+- 2026-04-24T02:05:12Z|plan_blended|plan|Persisted 7-phase v1.6 ceremony revival roadmap
+- 2026-04-24T02:26:51Z|review_reconciliation|review|Specialist continuity and gatekeeper findings integrated; structured state remains Phase 1 ready
+- 2026-04-24T02:40:41Z|review_verified|review|Specialist review reconciliation complete; TS narrator tests, phase-plan mirror, full Go/TS verification passed
 
 ---
 
 ## Next Steps
 
-1. Run `aether continue`
-2. Run `aether phase --number 2` to inspect the tracked phase details
+1. Run `aether phase --number 2` to inspect the saved Phase 2 scope before continuing narrator work
+2. Run `aether build 1` when you want the normal lifecycle to execute and reconcile Phase 1 formally
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---
@@ -111,5 +95,6 @@ Current Phase: 6
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Implement watcher-led verification and housekeeping before phase advancement
-- Record the continue worker flow in state, spawn logs, and user-facing output
+- Verify Node, embed, event bus, ANSI, and v5.4 playbook assumptions
+- Map current build, continue, and plan wrappers against the v5.4 direct-spawn playbooks
+- Persist the blended v1.6 ceremony plan for resume and review

@@ -54,6 +54,13 @@ jobs:
         run: |
           test "$(node -p "require('./npm/package.json').version")" = "$(node -p "require('./.aether/version.json').version")"
 
+      - name: Verify bundled narrator package
+        run: |
+          npm --prefix .aether/ts ci
+          npm --prefix .aether/ts audit --package-lock-only --audit-level=low
+          npm --prefix .aether/ts run typecheck
+          printf '%s\n' '{"topic":"ceremony.build.spawn","payload":{"phase":1,"caste":"builder","name":"Mason-67","status":"starting"}}' | npm --prefix .aether/ts run narrate --silent
+
       - name: Run npm bootstrap tests
         run: npm --prefix npm test
 

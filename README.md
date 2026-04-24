@@ -1121,6 +1121,8 @@ Aether is shaped by its community. Whether you are fixing a bug, adding a comman
 
 - **Go 1.22+** -- [Install Go](https://go.dev/dl/) if you don't have it
 - **Git** -- For cloning and branching
+- **Node.js 18+** -- Optional for rich ceremony narration and the npm bootstrap;
+  Go-only installs keep working without Node
 
 ### 🛠️ Development Setup
 

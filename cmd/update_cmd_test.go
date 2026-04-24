@@ -46,6 +46,42 @@ func TestUpdateCommandFlags(t *testing.T) {
 	}
 }
 
+func TestRunUpdateSyncCopiesNarratorPackageButSkipsNodeModules(t *testing.T) {
+	hubDir := t.TempDir()
+	repoDir := t.TempDir()
+	hubTS := filepath.Join(hubDir, "system", "ts")
+	if err := os.MkdirAll(filepath.Join(hubTS, "node_modules", "tsx"), 0755); err != nil {
+		t.Fatalf("failed to create hub ts fixture: %v", err)
+	}
+	fixtures := map[string]string{
+		"narrator.ts":       "export {};\n",
+		"package.json":      `{"name":"@aether/ceremony-narrator"}`,
+		"package-lock.json": `{"lockfileVersion":3}`,
+		"tsconfig.json":     `{"compilerOptions":{"strict":true}}`,
+	}
+	for name, content := range fixtures {
+		if err := os.WriteFile(filepath.Join(hubTS, name), []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", name, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(hubTS, "node_modules", "tsx", "index.js"), []byte("module.exports = {};\n"), 0644); err != nil {
+		t.Fatalf("failed to write node_modules fixture: %v", err)
+	}
+
+	result := runUpdateSync(hubDir, repoDir, true)
+	if len(result.errors) > 0 {
+		t.Fatalf("runUpdateSync returned errors: %v", result.errors)
+	}
+	for name := range fixtures {
+		if _, err := os.Stat(filepath.Join(repoDir, ".aether", "ts", name)); err != nil {
+			t.Fatalf("expected .aether/ts/%s to sync: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "ts", "node_modules")); err == nil {
+		t.Fatal("update sync should not copy .aether/ts/node_modules")
+	}
+}
+
 func TestUpdateUsesDevHubWhenChannelIsDev(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

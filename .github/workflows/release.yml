@@ -105,6 +105,13 @@ jobs:
       - name: Run Go tests with race detection
         run: go test ./... -race -count=1 -timeout 600s
 
+      - name: Verify bundled narrator package
+        run: |
+          npm --prefix .aether/ts ci
+          npm --prefix .aether/ts audit --package-lock-only --audit-level=low
+          npm --prefix .aether/ts run typecheck
+          printf '%s\n' '{"topic":"ceremony.build.spawn","payload":{"phase":1,"caste":"builder","name":"Mason-67","status":"starting"}}' | npm --prefix .aether/ts run narrate --silent
+
       - name: Build GoReleaser snapshot
         run: goreleaser build --snapshot --clean
 

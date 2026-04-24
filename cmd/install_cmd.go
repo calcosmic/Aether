@@ -330,6 +330,10 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 		srcFiles = filterSyncFiles(srcFiles, opts.include)
 	}
 	for _, relPath := range srcFiles {
+		if syncPathHasComponent(relPath, "node_modules") {
+			result.skipped++
+			continue
+		}
 		if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
 			result.skipped++
 			continue
@@ -394,6 +398,9 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 		}
 
 		for _, relPath := range destFiles {
+			if syncPathHasComponent(relPath, "node_modules") {
+				continue
+			}
 			if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
 				continue
 			}
@@ -538,17 +545,18 @@ func cleanEmptyDirs(baseDir string) {
 // These are private/local paths that belong to individual colonies and should
 // never be published into the shared hub.
 var hubExcludeDirs = map[string]bool{
-	"data":        true,
-	"dreams":      true,
-	"oracle":      true,
-	"checkpoints": true,
-	"locks":       true,
-	"temp":        true,
-	"archive":     true,
-	"chambers":    true,
-	"agents":      true, // agents/ is opencode-only, agents-claude/ is the packaging mirror
-	"examples":    true,
-	"__pycache__": true,
+	"data":         true,
+	"dreams":       true,
+	"oracle":       true,
+	"checkpoints":  true,
+	"locks":        true,
+	"temp":         true,
+	"archive":      true,
+	"chambers":     true,
+	"agents":       true, // agents/ is opencode-only, agents-claude/ is the packaging mirror
+	"examples":     true,
+	"node_modules": true,
+	"__pycache__":  true,
 }
 
 // setupInstallHub creates the hub directory at ~/.aether/ and syncs companion files
@@ -694,6 +702,10 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 		srcFiles = filterSyncFiles(srcFiles, include)
 	}
 	for _, relPath := range srcFiles {
+		if syncPathHasComponent(relPath, "node_modules") {
+			result.skipped++
+			continue
+		}
 		srcPath := filepath.Join(src, relPath)
 		destPath := filepath.Join(dest, relPath)
 
@@ -739,8 +751,7 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 	}
 	for _, relPath := range destFiles {
 		// Don't remove files in excluded dirs (they may have been added manually)
-		parts := strings.SplitN(relPath, string(filepath.Separator), 2)
-		if len(parts) > 0 && exclude[parts[0]] {
+		if pathHasExcludedComponent(relPath, exclude) || syncPathHasComponent(relPath, "node_modules") {
 			continue
 		}
 		if include != nil && !include(relPath) {
@@ -774,7 +785,7 @@ func listFilesRecursiveWithExclusion(baseDir string, exclude map[string]bool) []
 		if d.IsDir() {
 			// Skip excluded directories
 			rel, relErr := filepath.Rel(baseDir, path)
-			if relErr == nil && exclude[rel] {
+			if relErr == nil && pathHasExcludedComponent(rel, exclude) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -787,6 +798,39 @@ func listFilesRecursiveWithExclusion(baseDir string, exclude map[string]bool) []
 		return nil
 	})
 	return files
+}
+
+func pathHasExcludedComponent(relPath string, exclude map[string]bool) bool {
+	if len(exclude) == 0 {
+		return false
+	}
+	relPath = filepath.Clean(relPath)
+	if relPath == "." || relPath == "" {
+		return false
+	}
+	for _, part := range strings.Split(relPath, string(filepath.Separator)) {
+		if exclude[part] {
+			return true
+		}
+	}
+	return false
+}
+
+func syncPathHasComponent(relPath, component string) bool {
+	component = strings.TrimSpace(component)
+	if component == "" {
+		return false
+	}
+	relPath = filepath.Clean(relPath)
+	if relPath == "." || relPath == "" {
+		return false
+	}
+	for _, part := range strings.Split(relPath, string(filepath.Separator)) {
+		if part == component {
+			return true
+		}
+	}
+	return false
 }
 
 // runBinaryDownloadFromInstall handles the --download-binary flag on the install command.

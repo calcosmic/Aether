@@ -117,6 +117,20 @@ func TestInstallUsesEmbeddedAssetsWithoutPackageDir(t *testing.T) {
 	if _, err := os.Stat(hubWorkers); os.IsNotExist(err) {
 		t.Fatalf("expected embedded hub file %s to exist after install", hubWorkers)
 	}
+
+	hubNarrator := filepath.Join(homeDir, ".aether", "system", "ts", "narrator.ts")
+	if _, err := os.Stat(hubNarrator); os.IsNotExist(err) {
+		t.Fatalf("expected embedded narrator file %s to exist after install", hubNarrator)
+	}
+	for _, rel := range []string{"package.json", "package-lock.json", "tsconfig.json"} {
+		path := filepath.Join(homeDir, ".aether", "system", "ts", rel)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Fatalf("expected embedded narrator package file %s to exist after install", path)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".aether", "system", "ts", "node_modules")); err == nil {
+		t.Fatal("embedded install assets must not include .aether/ts/node_modules")
+	}
 }
 
 func TestInstallDevChannelUsesSeparateHubAndSkipsPlatformHomes(t *testing.T) {
@@ -156,6 +170,31 @@ func TestInstallDevChannelUsesSeparateHubAndSkipsPlatformHomes(t *testing.T) {
 	claudeCommands := filepath.Join(homeDir, ".claude", "commands", "ant")
 	if _, err := os.Stat(claudeCommands); err == nil {
 		t.Fatalf("dev install should not sync global Claude commands: %s", claudeCommands)
+	}
+}
+
+func TestSyncDirSkipsNestedNodeModules(t *testing.T) {
+	src := t.TempDir()
+	dest := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "ts", "node_modules", "left-pad"), 0755); err != nil {
+		t.Fatalf("failed to create node_modules fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts", "narrator.ts"), []byte("export {};\n"), 0644); err != nil {
+		t.Fatalf("failed to write narrator fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts", "node_modules", "left-pad", "index.js"), []byte("module.exports = 1;\n"), 0644); err != nil {
+		t.Fatalf("failed to write node_modules fixture: %v", err)
+	}
+
+	result := syncDir(src, dest, syncOptions{})
+	if len(result.errors) > 0 {
+		t.Fatalf("syncDir returned errors: %v", result.errors)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "ts", "narrator.ts")); err != nil {
+		t.Fatalf("expected narrator fixture to sync: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "ts", "node_modules")); err == nil {
+		t.Fatal("syncDir should skip nested node_modules directories")
 	}
 }
 
