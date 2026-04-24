@@ -1,12 +1,11 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T11:27:54Z
+Last updated: 2026-04-24T11:33:58Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
 Previous PR: `https://github.com/calcosmic/Aether/pull/5` (merged/closed; covered only the early branch state through `c1880184`)
-Next PR: open a new draft PR after committing the current Phase 4
-specialist execution-plan and TypeScript lifecycle-context checkpoint.
+Current PR: `https://github.com/calcosmic/Aether/pull/6` (draft)
 
 ## Purpose
 
@@ -52,10 +51,11 @@ committed directly while the persisted colony lifecycle was not advanced through
 | Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; uncommitted TS slice renders generic lifecycle stages and context notices | Emit Go-backed events for plan, continue, colonize, pheromones, chamber sealing, graves/entomb; surface skill/QUEEN/Hive/midden context from real state |
 | Phase 7: parity verification and release | Not done | Release/rollback notes exist | Cross-platform smoke, install/update release checks, PR review, release hardening |
 
-Safe continuation point: commit and push the verified Phase 4 specialist
-execution-plan and TypeScript lifecycle-context checkpoint, open a new draft PR,
-then live-smoke the build wrapper path before moving on to later lifecycle event
-emission.
+Safe continuation point: PR #6 is open as a draft. The verified Phase 4
+specialist execution-plan and TypeScript lifecycle-context checkpoint is pushed,
+and the branch has merged the PR #5 squash commit from `main` with an
+ancestry-only merge. Next, live-smoke the build wrapper path before moving on to
+later lifecycle event emission.
 
 ## Already Shipped On This Branch
 
@@ -79,6 +79,8 @@ These commits are pushed:
 - `feabf3f1 feat: add plan-only orchestration manifest`
 - `f67635c3 feat: finalize external plan workers`
 - `ca5fb42c feat: restore plan wrapper orchestration`
+- `51b4b13c feat: sequence build specialist execution plan`
+- merge commit `chore: merge main after ceremony foundation squash`
 
 Implemented foundation:
 
@@ -998,13 +1000,15 @@ Before release:
 
 ## Current Next Step
 
-Next, commit and push the verified Phase 4 specialist execution-plan and
-TypeScript lifecycle-context checkpoint, then open a new draft PR. After that,
-continue in order with live build-wrapper smoke before starting later lifecycle
-event emission. The preconditions now satisfied are:
+Next, continue in order with live build-wrapper smoke before starting later
+lifecycle event emission. The preconditions now satisfied are:
 
 1. hub fallback smoke passed in a temporary HOME;
 2. TTY live redraw is consciously deferred;
 3. multi-wave TS fixture passes;
 4. build, continue, and plan wrappers now have plan-only/finalizer bridges;
-5. focused Go, full Go, TS, vet, and whitespace gates pass.
+5. focused Go, full Go, TS, vet, and whitespace gates pass;
+6. draft PR #6 is open;
+7. the branch has merged the PR #5 squash commit from `main` with an
+   ancestry-only merge because its tree already matched branch commit
+   `c1880184`.

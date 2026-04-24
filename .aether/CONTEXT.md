@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T11:27:54Z |
+| **Last Updated** | 2026-04-24T11:33:58Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -70,7 +70,7 @@ TypeScript lifecycle-context rendering slice is in the working tree: `.aether/ts
 
 Broad checkpoint verification passed on 2026-04-24T11:27:54Z: TS install/typecheck/test/build, `gofmt`, `git diff --check`, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, and `go vet ./...`.
 
-GitHub PR status: previous PR #5 for this branch is already merged/closed and only covered the early branch state through `c1880184`. After committing the current reconciliation and TypeScript checkpoint, open a new draft PR rather than reusing PR #5.
+GitHub PR status: previous PR #5 for this branch is already merged/closed and only covered the early branch state through `c1880184`. Current draft PR is #6: `https://github.com/calcosmic/Aether/pull/6`. The branch has merged the PR #5 squash commit from `main` with an ancestry-only merge because `origin/main` already matched the branch's `c1880184` tree.
 
 ---
 
@@ -132,13 +132,14 @@ GitHub PR status: previous PR #5 for this branch is already merged/closed and on
 - 2026-04-24T11:03:37Z|reconciliation|docs|Progress matrix added; PR #5 confirmed merged/closed; COLONY_STATE documented as lifecycle state, not branch implementation progress
 - 2026-04-24T11:19:09Z|phase4_specialist_execution_plan|build|Build manifests now include execution_plan/execution_wave and sequence pre-wave/post-wave specialists explicitly
 - 2026-04-24T11:27:54Z|checkpoint_verified|test|Phase 4 specialist execution-plan and TS lifecycle-context checkpoint passed TS, Go, vet, and whitespace verification
+- 2026-04-24T11:33:58Z|draft_pr_opened|github|Draft PR #6 opened and branch ancestry synced with main's PR #5 squash commit
 
 ---
 
 ## Next Steps
 
-1. Commit and push the verified Phase 4 specialist execution-plan plus TypeScript lifecycle-context checkpoint
-2. Open a new draft PR for the remaining branch work; PR #5 is already merged/closed
+1. Push the PR/status handoff update
+2. Confirm PR #6 is no longer conflicting after the ancestry-only merge
 3. Continue in order with live build wrapper smoke, then lifecycle event emission
 4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
@@ -151,5 +152,4 @@ GitHub PR status: previous PR #5 for this branch is already merged/closed and on
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the Phase 4 specialist execution-plan + TypeScript lifecycle-context checkpoint
 - Live smoke the build wrapper path with real platform agents
