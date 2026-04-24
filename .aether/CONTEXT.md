@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T04:42:16Z |
+| **Last Updated** | 2026-04-24T04:51:45Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -51,6 +51,8 @@ Build plan-only bridge slice completed: `aether build <phase> --plan-only` now e
 Build finalize bridge slice completed: `aether build-finalize <phase> --completion-file <path|->` now records externally spawned wrapper Task results as `dispatch_mode: external-task`, writes the build manifest and `last-build-claims.json`, updates/creates spawn-tree statuses, sets colony state to BUILT, and points the next action at `aether continue`. This is the missing runtime-owned input packet after Claude/OpenCode wrappers spawn real agents.
 
 Build wrapper restoration completed: `.aether/commands/build.yaml`, `.claude/commands/ant/build.md`, and `.opencode/commands/ant/build.md` now use the runtime bridge: status -> JSON `build --plan-only` -> parse `dispatch_manifest` -> load `build-wave.md` -> spawn real platform agents with manifest names/castes/waves -> `spawn-log`/`spawn-complete` -> completion JSON -> `build-finalize` -> `/ant-continue`. Wrapper tests now forbid the old visual pass-through build command.
+
+Continue plan-only bridge slice completed: `aether continue --plan-only` now runs runtime-owned verification/claim checks and emits a read-only JSON `continue_manifest` for wrapper-spawned Watcher, Gatekeeper, Auditor, and Probe agents. It does not mutate state, write continue reports, or spawn Go-side review workers. `continue-finalize` remains the next runtime surface.
 
 ---
 
@@ -102,14 +104,15 @@ Build wrapper restoration completed: `.aether/commands/build.yaml`, `.claude/com
 - 2026-04-24T04:25:35Z|phase4_plan_manifest|build|Read-only build --plan-only dispatch_manifest added for Claude/OpenCode wrapper spawning bridge
 - 2026-04-24T04:34:19Z|phase4_finalize|build|build-finalize external-task manifest and claims recording added for wrapper-spawned agents
 - 2026-04-24T04:42:16Z|phase4_build_wrappers|build|Claude/OpenCode build wrappers restored as real manifest-driven orchestrators
+- 2026-04-24T04:51:45Z|phase5_continue_plan|build|continue --plan-only read-only manifest added for wrapper-spawned verification/review agents
 
 ---
 
 ## Next Steps
 
-1. Commit and push the build-wrapper restoration checkpoint
-2. Run a live wrapper smoke in Claude/OpenCode when available, using a small fixture phase
-3. Restore continue/plan wrappers with the same bridge discipline
+1. Commit and push the continue plan-only checkpoint
+2. Add `aether continue-finalize --completion-file <path|->`
+3. Restore Claude/OpenCode continue wrappers to call plan-only, spawn real review agents, then call continue-finalize
 4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
@@ -121,6 +124,6 @@ Build wrapper restoration completed: `.aether/commands/build.yaml`, `.claude/com
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the build-wrapper restoration checkpoint
-- Live-smoke the build wrapper bridge in Claude/OpenCode
+- Commit and push the continue plan-only checkpoint
+- Implement `continue-finalize`
 - Restore continue and plan wrappers as real orchestrators

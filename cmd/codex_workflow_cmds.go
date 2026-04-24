@@ -127,6 +127,19 @@ var continueCmd = &cobra.Command{
 	Short: "Verify the active build packet, close dispatched workers, and advance honestly",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		planOnly, _ := cmd.Flags().GetBool("plan-only")
+		if planOnly {
+			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
+				ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+			})
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return nil
+			}
+			outputWorkflow(result, renderContinuePlanOnlyVisual(state, phase, dispatches))
+			return nil
+		}
+
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
 			ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
 		})
@@ -596,6 +609,7 @@ func init() {
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
+	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
 	rootCmd.AddCommand(layEggsCmd)

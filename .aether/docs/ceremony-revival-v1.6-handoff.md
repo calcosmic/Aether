@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T04:42:16Z
+Last updated: 2026-04-24T04:51:45Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -245,6 +245,42 @@ Important guardrails now enforced:
 Focused verification:
 
 - `go test ./cmd -run 'TestBuildWrapperCeremonyContract|TestPlatformDocHygiene|TestClaudeOpenCodeCommandParity|TestCommandWrappersDeclareGeneratedSource' -count=1`
+
+## Completed Slice: Continue Plan-Only Manifest
+
+Architect review confirmed the continue bridge should mirror build:
+
+- Keep normal `aether continue` as the direct Codex/runtime compatibility path.
+- Add `AETHER_OUTPUT_MODE=json aether continue --plan-only` for wrappers.
+- Add `continue-finalize` next; do not trust `spawn-log` / `spawn-complete` as
+  advancement evidence.
+- Finalization must re-run deterministic verification and claim checks before
+  advancing. It must not trust stale plan-only output.
+
+Implemented in this slice:
+
+- `aether continue --plan-only` runs runtime-owned verification commands and
+  claim checks, but does not mutate state, does not write reports, and does not
+  spawn Go-side workers.
+- It emits `result.continue_manifest` with:
+  - phase/root metadata
+  - verification snapshot
+  - assessment snapshot
+  - planned wrapper workers: Watcher, Gatekeeper, Auditor, Probe
+  - worker names, castes, `agent_name`, waves, task IDs, status `planned`, and
+    rendered worker briefs
+  - `finalize_surface: "pending"` until `continue-finalize` lands
+
+Focused verification:
+
+- `go test ./cmd -run 'TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState' -count=1`
+
+Next exact slice:
+
+- Add `aether continue-finalize --completion-file <path|->`.
+- It should re-load current state, re-run verification/claims, merge wrapper
+  watcher/review results, run the existing gate/assessment path, then use the
+  existing atomic advancement/report/session update logic.
 
 ## Completed Slice: Go Narrator Launcher
 

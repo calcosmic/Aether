@@ -1074,6 +1074,44 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	return b.String()
 }
 
+func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("continue"), "Continue Plan"))
+	b.WriteString(visualDivider)
+	b.WriteString("Verification snapshot and review manifest only. No state was changed and no review workers were spawned.\n")
+	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
+	b.WriteString("\n")
+	b.WriteString("Phase: ")
+	b.WriteString(phase.Name)
+	b.WriteString("\n\n")
+	if len(dispatches) > 0 {
+		b.WriteString("Planned Continue Workers\n")
+		lastWave := 0
+		for _, dispatch := range dispatches {
+			if dispatch.Wave != lastWave {
+				if lastWave > 0 {
+					b.WriteString("\n")
+				}
+				b.WriteString(fmt.Sprintf("Wave %d\n", dispatch.Wave))
+				lastWave = dispatch.Wave
+			}
+			b.WriteString("  ")
+			b.WriteString(casteIdentity(dispatch.Caste))
+			b.WriteString(" ")
+			b.WriteString(dispatch.Name)
+			b.WriteString("  ")
+			b.WriteString(strings.TrimSpace(dispatch.Task))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString(renderNextUp(
+		`Use the JSON `+"`continue_manifest`"+` to spawn wrapper verification/review agents.`,
+		`Run the eventual continue finalizer after wrapper agents return terminal results.`,
+	))
+	return b.String()
+}
+
 func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue-blocked"), "Continue Blocked"))
