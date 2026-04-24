@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T11:33:58Z |
+| **Last Updated** | 2026-04-24T11:36:13Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -72,6 +72,8 @@ Broad checkpoint verification passed on 2026-04-24T11:27:54Z: TS install/typeche
 
 GitHub PR status: previous PR #5 for this branch is already merged/closed and only covered the early branch state through `c1880184`. Current draft PR is #6: `https://github.com/calcosmic/Aether/pull/6`. The branch has merged the PR #5 squash commit from `main` with an ancestry-only merge because `origin/main` already matched the branch's `c1880184` tree.
 
+PR #6 status after sync: draft, clean, mergeable, 48 changed files. Go-side wrapper smoke passed with `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`: the standard-depth manifest emitted builder execution wave 11, Probe wave 12, and Watcher wave 13. True Claude/OpenCode Task-tool smoke remains pending because Codex cannot execute those platform wrapper tools directly.
+
 ---
 
 ## Active Constraints (REDIRECT Signals)
@@ -133,15 +135,15 @@ GitHub PR status: previous PR #5 for this branch is already merged/closed and on
 - 2026-04-24T11:19:09Z|phase4_specialist_execution_plan|build|Build manifests now include execution_plan/execution_wave and sequence pre-wave/post-wave specialists explicitly
 - 2026-04-24T11:27:54Z|checkpoint_verified|test|Phase 4 specialist execution-plan and TS lifecycle-context checkpoint passed TS, Go, vet, and whitespace verification
 - 2026-04-24T11:33:58Z|draft_pr_opened|github|Draft PR #6 opened and branch ancestry synced with main's PR #5 squash commit
+- 2026-04-24T11:36:13Z|go_side_wrapper_smoke|test|PR #6 clean/mergeable; build --plan-only emitted execution_plan for builder/probe/watcher waves
 
 ---
 
 ## Next Steps
 
-1. Push the PR/status handoff update
-2. Confirm PR #6 is no longer conflicting after the ancestry-only merge
-3. Continue in order with live build wrapper smoke, then lifecycle event emission
-4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
+1. Run true Claude/OpenCode build wrapper smoke with platform Task-tool agents
+2. Continue in order with lifecycle event emission after wrapper smoke
+3. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
 

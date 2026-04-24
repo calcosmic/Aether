@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T11:33:58Z
+Last updated: 2026-04-24T11:36:13Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -54,8 +54,9 @@ committed directly while the persisted colony lifecycle was not advanced through
 Safe continuation point: PR #6 is open as a draft. The verified Phase 4
 specialist execution-plan and TypeScript lifecycle-context checkpoint is pushed,
 and the branch has merged the PR #5 squash commit from `main` with an
-ancestry-only merge. Next, live-smoke the build wrapper path before moving on to
-later lifecycle event emission.
+ancestry-only merge. PR #6 is clean and mergeable. Go-side wrapper smoke passed
+for `build 1 --plan-only`; true Claude/OpenCode Task-tool smoke remains next
+before moving on to later lifecycle event emission.
 
 ## Already Shipped On This Branch
 
@@ -1011,4 +1012,8 @@ lifecycle event emission. The preconditions now satisfied are:
 6. draft PR #6 is open;
 7. the branch has merged the PR #5 squash commit from `main` with an
    ancestry-only merge because its tree already matched branch commit
-   `c1880184`.
+   `c1880184`;
+8. PR #6 is clean/mergeable;
+9. Go-side wrapper smoke passed for
+   `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`, producing
+   standard-depth builder wave 11, Probe wave 12, and Watcher wave 13.
