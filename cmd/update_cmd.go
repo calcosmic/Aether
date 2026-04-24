@@ -115,7 +115,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			{"label": "Skills (codex)", "copied": 0, "skipped": 0},
 			{"label": "Commands (opencode)", "copied": 0, "skipped": 0},
 			{"label": "Agents (opencode)", "copied": 0, "skipped": 0},
-		}, 0, 0, nil, binaryMode)
+		}, 0, 0, nil, binaryMode, hubVersion == binaryVersion)
 		if staleResult.Classification != staleOK {
 			visual += renderStalePublishBanner(staleResult)
 		}
@@ -175,7 +175,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"codex_restart_targets":   restartTargets,
 			"stale_publish":           staleResultToMap(staleResult),
 		}
-		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode)
+		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode, hubVersion == binaryVersion)
 		if staleResult.Classification != staleOK {
 			visual += renderStalePublishBanner(staleResult)
 		}
@@ -242,7 +242,7 @@ func updateBinaryRefreshNote(mode string, channel runtimeChannel) string {
 	case "release-download":
 		return fmt.Sprintf("Companion files were synced first; a published %s release binary will be downloaded next.", binaryLabel)
 	default:
-		return fmt.Sprintf("The installed %s binary is unchanged by a plain `%s update`; this command only syncs repo companion files.", binaryLabel, binaryLabel)
+		return fmt.Sprintf("The installed %s binary is unchanged — `aether update` only syncs repo companion files, not the shared binary. Run `aether publish` in the Aether repo to update the binary.", binaryLabel)
 	}
 }
 

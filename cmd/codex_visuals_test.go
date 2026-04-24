@@ -796,13 +796,14 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 		12,
 		nil,
 		"unchanged",
+		true,
 	)
 
 	if !strings.Contains(output, "No follow-up is required.") {
 		t.Fatalf("expected no-follow-up guidance, got:\n%s", output)
 	}
-	if !strings.Contains(output, "Binary: unchanged by `aether update`.") {
-		t.Fatalf("expected runtime warning in update visual, got:\n%s", output)
+	if !strings.Contains(output, "Binary: already at the current hub version") {
+		t.Fatalf("expected binary-already-current message in update visual, got:\n%s", output)
 	}
 	if strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
 		t.Fatalf("expected generic next-step guidance to be suppressed, got:\n%s", output)

@@ -323,7 +323,7 @@ func TestUpdateRefreshesManagedCodexProjectDocs(t *testing.T) {
 		t.Fatalf("expected binary_refresh_mode=unchanged, got: %#v", inner["binary_refresh_mode"])
 	}
 	note, _ := inner["binary_refresh_note"].(string)
-	if !strings.Contains(note, "unchanged by a plain `aether update`") {
+	if !strings.Contains(note, "only syncs repo companion files, not the shared binary") {
 		t.Fatalf("expected runtime note in update result, got: %q", note)
 	}
 	message, _ := inner["message"].(string)

@@ -1291,7 +1291,7 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 	return b.String()
 }
 
-func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string) string {
+func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("update"), "Update"))
 	b.WriteString(visualDivider)
@@ -1327,7 +1327,7 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 	b.WriteString("\n")
 	b.WriteString(renderSyncSummary(details))
 	b.WriteString("\nRuntime\n")
-	for _, line := range updateRuntimeLines(binaryMode) {
+	for _, line := range updateRuntimeLines(binaryMode, versionsMatch) {
 		b.WriteString("  ")
 		b.WriteString(line)
 		b.WriteString("\n")
@@ -1417,7 +1417,7 @@ func renderInstallPaths(binaryMode string) string {
 	return b.String()
 }
 
-func updateRuntimeLines(binaryMode string) []string {
+func updateRuntimeLines(binaryMode string, versionsMatch bool) []string {
 	switch strings.TrimSpace(binaryMode) {
 	case "release-download-preview":
 		return []string{
@@ -1431,11 +1431,16 @@ func updateRuntimeLines(binaryMode string) []string {
 			"`aether update --download-binary` only installs released runtime builds, not unreleased local source changes.",
 		}
 	default:
+		if versionsMatch {
+			return []string{
+				"Binary: already at the current hub version. No action needed.",
+				"`aether update` syncs companion files only. The shared binary is updated via `aether publish` in the Aether repo.",
+			}
+		}
 		return []string{
-			"Binary: unchanged by `aether update`.",
-			"This command syncs repo companion files from the hub; it does not publish or rebuild the shared runtime.",
+			"Binary: version differs from hub. The shared binary is not updated by `aether update`.",
 			"For a published runtime update, run `aether update --download-binary`.",
-			"For an unreleased local runtime fix on this machine, run `aether install --package-dir <Aether checkout>` in the Aether repo first.",
+			"For an unreleased local runtime fix on this machine, run `aether publish` in the Aether repo first.",
 		}
 	}
 }

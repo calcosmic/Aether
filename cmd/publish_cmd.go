@@ -66,7 +66,13 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	}
 
 	sourceRoot := findAetherModuleRoot(packageDir)
-	version := resolveVersion(sourceRoot)
+	// During publish, the source version.json is authoritative — not the running
+	// binary's ldflags version. If we used resolveVersion here, an old binary with
+	// baked-in ldflags would override a freshly bumped version.json.
+	version := readRepoVersion(sourceRoot)
+	if version == "" {
+		version = resolveVersion(sourceRoot)
+	}
 
 	skipBuildBinary, _ := cmd.Flags().GetBool("skip-build-binary")
 	if !skipBuildBinary {
