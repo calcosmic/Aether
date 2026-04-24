@@ -380,6 +380,139 @@ func TestResolveSkillSectionEmitsSkillActivationCeremony(t *testing.T) {
 	}
 }
 
+func TestEntombEmitsChamberEntombCeremonyEvent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Entomb ceremony events"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateCOMPLETED,
+		CurrentPhase: 1,
+		Milestone:    "Crowned Anthill",
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Archive",
+			Status: colony.PhaseCompleted,
+		}}},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	persisted := readPersistedCeremonyEvents(t)
+	assertCeremonyTopics(t, persisted, events.CeremonyTopicChamberEntomb)
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(persisted[len(persisted)-1].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload.Status != "entombed" || payload.Message != goal || payload.Completed != 1 || payload.Total != 1 {
+		t.Fatalf("payload = %+v", payload)
+	}
+	if payload.TaskID == "" || payload.Task == "" {
+		t.Fatalf("payload missing chamber context: %+v", payload)
+	}
+}
+
+func TestMiddenWriteEmitsCeremonyEvent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, _ := newTestStore(t)
+	store = s
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"midden-write", "--category", "testing", "--message", "test failure", "--source", "unit"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("midden-write returned error: %v", err)
+	}
+
+	persisted := readPersistedCeremonyEvents(t)
+	assertCeremonyTopics(t, persisted, events.CeremonyTopicMiddenRecord)
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(persisted[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload.Status != "recorded" || payload.Task != "testing" || payload.Message != "test failure" || payload.TaskID == "" {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestQueenPromoteEmitsCeremonyEvent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+	var buf bytes.Buffer
+	stdout = &buf
+
+	hubDir := filepath.Join(tmpDir, "hub")
+	origHub := os.Getenv("AETHER_HUB_DIR")
+	os.Setenv("AETHER_HUB_DIR", hubDir)
+	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", origHub) })
+
+	rootCmd.SetArgs([]string{"queen-promote", "pattern", "Prefer focused ceremony events"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("queen-promote returned error: %v", err)
+	}
+
+	persisted := readPersistedCeremonyEvents(t)
+	assertCeremonyTopics(t, persisted, events.CeremonyTopicQueenPromote)
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(persisted[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload.Status != "promoted" || payload.Task != "Patterns" || payload.Message != "Prefer focused ceremony events" {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestHiveStoreAndPromoteEmitCeremonyEvents(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+	var buf bytes.Buffer
+	stdout = &buf
+
+	hubDir := filepath.Join(tmpDir, "hub")
+	origHub := os.Getenv("AETHER_HUB_DIR")
+	os.Setenv("AETHER_HUB_DIR", hubDir)
+	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", origHub) })
+
+	rootCmd.SetArgs([]string{"hive-store", "Keep docs aligned", "docs", "aether"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hive-store returned error: %v", err)
+	}
+	rootCmd.SetArgs([]string{"hive-promote", "--text", "Prefer focused fixes", "--source-repo", "aether", "--confidence", "0.9"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hive-promote returned error: %v", err)
+	}
+
+	persisted := readPersistedCeremonyEvents(t)
+	assertCeremonyTopics(t, persisted, events.CeremonyTopicHiveStore, events.CeremonyTopicHivePromote)
+}
+
 func TestActiveBuildCeremonyScopeRestoresPreviousEmitter(t *testing.T) {
 	saveGlobals(t)
 	outer := &buildCeremonyEmitter{phaseID: 1, phaseName: "outer"}

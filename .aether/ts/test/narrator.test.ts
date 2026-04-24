@@ -408,3 +408,60 @@ test("keeps lifecycle context notices for skills pheromones and chambers", () =>
   assert.match(rendered, /ceremony\.chamber\.seal sealed Lifecycle ceremony checkpoint/);
   assert.match(rendered, /Workers: none active yet/);
 });
+
+test("keeps lifecycle context notices for archive and wisdom events", () => {
+  const frame = createCeremonyFrame();
+  for (const raw of [
+    {
+      topic: "ceremony.chamber.entomb",
+      payload: {
+        status: "entombed",
+        task_id: "20260424-meta-finish-v16",
+        message: "Finish v1.6 ceremony events"
+      }
+    },
+    {
+      topic: "ceremony.midden.record",
+      payload: {
+        status: "recorded",
+        task: "testing",
+        message: "Smoke failure recorded"
+      }
+    },
+    {
+      topic: "ceremony.queen.promote",
+      payload: {
+        status: "promoted",
+        task: "Patterns",
+        message: "Prefer narrow event hooks"
+      }
+    },
+    {
+      topic: "ceremony.hive.store",
+      payload: {
+        status: "stored",
+        task: "docs",
+        message: "Keep handoff current"
+      }
+    },
+    {
+      topic: "ceremony.hive.promote",
+      payload: {
+        status: "promoted",
+        task: "general",
+        message: "Prefer focused fixes"
+      }
+    }
+  ]) {
+    const event = parseEvent(JSON.stringify(raw));
+    assert.ok(event);
+    applyEventToFrame(frame, event);
+  }
+
+  const rendered = renderActivityFrame(frame);
+  assert.match(rendered, /ceremony\.chamber\.entomb entombed Finish v1\.6 ceremony events/);
+  assert.match(rendered, /ceremony\.midden\.record recorded Smoke failure recorded/);
+  assert.match(rendered, /ceremony\.queen\.promote promoted Prefer narrow event hooks/);
+  assert.match(rendered, /ceremony\.hive\.store stored Keep handoff current/);
+  assert.match(rendered, /ceremony\.hive\.promote promoted Prefer focused fixes/);
+});

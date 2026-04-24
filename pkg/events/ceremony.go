@@ -20,6 +20,11 @@ const (
 	CeremonyTopicPheromoneEmit     = "ceremony.pheromone.emit"
 	CeremonyTopicSkillActivate     = "ceremony.skill.activate"
 	CeremonyTopicChamberSeal       = "ceremony.chamber.seal"
+	CeremonyTopicChamberEntomb     = "ceremony.chamber.entomb"
+	CeremonyTopicMiddenRecord      = "ceremony.midden.record"
+	CeremonyTopicQueenPromote      = "ceremony.queen.promote"
+	CeremonyTopicHiveStore         = "ceremony.hive.store"
+	CeremonyTopicHivePromote       = "ceremony.hive.promote"
 )
 
 // CeremonyPayload is the shared event shape consumed by the bundled narrator.
@@ -76,5 +81,10 @@ func CeremonyTopics() []string {
 		CeremonyTopicPheromoneEmit,
 		CeremonyTopicSkillActivate,
 		CeremonyTopicChamberSeal,
+		CeremonyTopicChamberEntomb,
+		CeremonyTopicMiddenRecord,
+		CeremonyTopicQueenPromote,
+		CeremonyTopicHiveStore,
+		CeremonyTopicHivePromote,
 	}
 }
