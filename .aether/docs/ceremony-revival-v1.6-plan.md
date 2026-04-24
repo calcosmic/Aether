@@ -126,8 +126,8 @@ The detailed implementation contract is tracked in
   (Continue plan-only manifest, continue-finalize, and Claude/OpenCode wrapper
   orchestration are implemented.)
 - Restore plan depth ceremony: Fast, Balanced, Deep, Exhaustive.
-  (`aether plan --plan-only --depth <choice>` manifest implemented; finalizer
-  and wrapper rewrite remain next.)
+  (`aether plan --plan-only --depth <choice>` manifest and `plan-finalize`
+  implemented; wrapper rewrite remains next.)
 - Run Scout plus Route-Setter planning loops with stall detection and confidence.
 - Persist validated learnings, midden failures, and blocker status honestly.
 

@@ -16,19 +16,24 @@ import (
 )
 
 type codexPlanningDispatch struct {
-	Stage     string   `json:"stage,omitempty"`
-	Wave      int      `json:"wave,omitempty"`
-	Caste     string   `json:"caste"`
-	AgentName string   `json:"agent_name,omitempty"`
-	Name      string   `json:"name"`
-	Task      string   `json:"task"`
-	TaskID    string   `json:"task_id,omitempty"`
-	Outputs   []string `json:"outputs"`
-	Status    string   `json:"status"`
-	Summary   string   `json:"summary,omitempty"`
-	Duration  float64  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
-	Brief     string   `json:"brief,omitempty"`
-	Claimed   []string `json:"-"`
+	Stage         string                   `json:"stage,omitempty"`
+	Wave          int                      `json:"wave,omitempty"`
+	Caste         string                   `json:"caste"`
+	AgentName     string                   `json:"agent_name,omitempty"`
+	Name          string                   `json:"name"`
+	Task          string                   `json:"task"`
+	TaskID        string                   `json:"task_id,omitempty"`
+	Outputs       []string                 `json:"outputs"`
+	Status        string                   `json:"status"`
+	Summary       string                   `json:"summary,omitempty"`
+	Blockers      []string                 `json:"blockers,omitempty"`
+	Duration      float64                  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
+	Brief         string                   `json:"brief,omitempty"`
+	FilesCreated  []string                 `json:"files_created,omitempty"`
+	FilesModified []string                 `json:"files_modified,omitempty"`
+	ScoutReport   *codexScoutReport        `json:"scout_report,omitempty"`
+	PhasePlan     *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
+	Claimed       []string                 `json:"-"`
 }
 
 type codexSurveyContext struct {

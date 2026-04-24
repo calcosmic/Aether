@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T05:20:37Z
+Last updated: 2026-04-24T05:33:11Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -42,6 +42,7 @@ These commits are pushed:
 - `315d4ee8 feat: add continue plan-only manifest`
 - `dfd7f6da feat: finalize external continue workers`
 - `7c1d25f4 feat: restore continue wrapper orchestration`
+- `feabf3f1 feat: add plan-only orchestration manifest`
 
 Implemented foundation:
 
@@ -87,6 +88,9 @@ Implemented foundation:
 - `aether plan --plan-only --depth <fast|balanced|deep|exhaustive>` now emits a
   read-only `plan_manifest` / `planning_manifest` for wrapper-spawned Scout and
   Route-Setter agents.
+- `aether plan-finalize --completion-file <path|->` records externally spawned
+  Scout/Route-Setter results as the canonical colony plan and planning
+  artifacts.
 
 Verification already passed for the pushed foundation:
 
@@ -455,6 +459,53 @@ Plan-finalize contract for the next worker:
 Focused verification:
 
 - `go test ./cmd -run 'TestPlanOnlyPrintsManifestWithoutMutatingState|TestPlanDepthMapsToGranularityBounds|TestPlanIncludesDispatchContract|TestPlanUsesSurveyAndRecordsPlanningDispatches|TestDispatchRealPlanningWorkers' -count=1`
+
+## Completed Slice: Plan Finalize For Wrapper Agents
+
+Implemented in this slice:
+
+- New command: `aether plan-finalize --completion-file <path|->`.
+- Completion JSON must include the original `plan_manifest` or
+  `planning_manifest` from `aether plan --plan-only` plus terminal wrapper
+  worker results.
+- The finalizer re-loads current state and rejects stale goal mismatches,
+  invalid granularity, non-refresh replacement of an existing plan, and refresh
+  attempts after completed phases.
+- It validates dispatch identity by name/caste/stage/wave/task_id.
+- It requires completed Scout and Route-Setter results.
+- Route-Setter must provide `phase_plan` matching the existing
+  `codexWorkerPlanArtifact` JSON shape, either embedded in the completion packet
+  or as a validated claimed `.aether/data/planning/phase-plan.json` fallback.
+- It writes canonical runtime-owned artifacts:
+  - `.aether/data/planning/SCOUT.md`
+  - `.aether/data/planning/ROUTE-SETTER.md`
+  - `.aether/data/planning/phase-plan.json`
+  - `.aether/data/phase-research/phase-N-research.md`
+- It records/updates spawn-tree entries for wrapper planning workers without
+  duplicating entries when wrappers already called `spawn-log`.
+- It updates `COLONY_STATE.json` to `READY`, first buildable phase, selected
+  plan granularity, generated plan/confidence, `build_started_at: nil`, and
+  planning events.
+- It updates session/CONTEXT/HANDOFF through existing runtime helpers.
+
+Expected plan wrapper flow now:
+
+1. Ground with `AETHER_OUTPUT_MODE=visual aether status`.
+2. Ask the user for planning depth: Fast, Balanced, Deep, or Exhaustive.
+3. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>`.
+4. Parse `result.plan_manifest` or `result.planning_manifest`.
+5. Spawn Scout from wave 1.
+6. Spawn Route-Setter from wave 2 with Scout findings and the exact
+   `phase-plan.json` schema.
+7. Call `aether spawn-log` before each worker and `aether spawn-complete` after.
+8. Write a completion JSON file outside `.aether/data/`.
+9. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>`.
+10. Route from the finalizer result to `/ant-build 1` or a runtime-surfaced
+    recovery command.
+
+Focused verification:
+
+- `go test ./cmd -run 'TestPlan|TestDispatchRealPlanningWorkers' -count=1`
 
 Watcher audit notes before flipping `/ant-plan` wrappers:
 

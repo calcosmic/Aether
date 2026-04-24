@@ -309,6 +309,164 @@ func TestPlanDepthMapsToGranularityBounds(t *testing.T) {
 	}
 }
 
+func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-plan-finalize-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	goal := "Finalize external planning workers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--depth", "fast"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --plan-only returned error: %v", err)
+	}
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	manifest := env["result"].(map[string]interface{})["plan_manifest"].(map[string]interface{})
+	dispatches := manifest["dispatches"].([]interface{})
+	if len(dispatches) != 2 {
+		t.Fatalf("expected 2 dispatches, got %d", len(dispatches))
+	}
+
+	scout := dispatches[0].(map[string]interface{})
+	routeSetter := dispatches[1].(map[string]interface{})
+	completion := map[string]interface{}{
+		"plan_manifest": manifest,
+		"dispatches": []map[string]interface{}{
+			{
+				"name":    scout["name"],
+				"caste":   scout["caste"],
+				"stage":   scout["stage"],
+				"wave":    scout["wave"],
+				"task_id": scout["task_id"],
+				"status":  "completed",
+				"summary": "Scout mapped the current planning surface.",
+				"scout_report": map[string]interface{}{
+					"findings": []map[string]interface{}{
+						{"area": "Runtime", "discovery": "Plan finalization belongs in Go", "source": "cmd/codex_plan.go"},
+					},
+					"gaps":        []string{},
+					"confidence":  91,
+					"study_files": []string{"cmd/codex_plan.go"},
+				},
+			},
+			{
+				"name":    routeSetter["name"],
+				"caste":   routeSetter["caste"],
+				"stage":   routeSetter["stage"],
+				"wave":    routeSetter["wave"],
+				"task_id": routeSetter["task_id"],
+				"status":  "completed",
+				"summary": "Route-Setter shaped the executable phases.",
+				"phase_plan": map[string]interface{}{
+					"phases": []map[string]interface{}{
+						{
+							"name":        "External plan foundation",
+							"description": "Land external planning finalization.",
+							"tasks": []map[string]interface{}{
+								{
+									"goal":             "Record wrapper planning outputs through the runtime",
+									"constraints":      []string{"Go owns state"},
+									"hints":            []string{"cmd/codex_plan_finalize.go"},
+									"success_criteria": []string{"Planning finalizer writes state"},
+								},
+							},
+							"success_criteria": []string{"Finalizer exists"},
+						},
+						{
+							"name":        "Wrapper plan ceremony",
+							"description": "Wire Claude/OpenCode plan wrappers.",
+							"tasks": []map[string]interface{}{
+								{
+									"goal":             "Spawn Scout and Route-Setter from manifest",
+									"constraints":      []string{"Use plan-finalize"},
+									"hints":            []string{".claude/commands/ant/plan.md"},
+									"success_criteria": []string{"Wrapper contract is tested"},
+									"depends_on":       []string{"1.1"},
+								},
+							},
+							"success_criteria": []string{"Wrappers use real agents"},
+						},
+					},
+					"confidence": map[string]interface{}{"knowledge": 91, "requirements": 88, "risks": 82, "dependencies": 80, "effort": 84, "overall": 86},
+					"gaps":       []string{"Manual platform smoke still needed."},
+				},
+			},
+		},
+	}
+	completionPath := filepath.Join(root, "plan-completion.json")
+	data, err := json.Marshal(completion)
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	if err := os.WriteFile(completionPath, data, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"plan-finalize", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan-finalize returned error: %v", err)
+	}
+	finalEnv := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := finalEnv["result"].(map[string]interface{})
+	if result["dispatch_mode"].(string) != "external-task" {
+		t.Fatalf("dispatch_mode = %q, want external-task", result["dispatch_mode"])
+	}
+	if result["next"].(string) != "aether build 1" {
+		t.Fatalf("next = %q, want aether build 1", result["next"])
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.State != colony.StateREADY || state.CurrentPhase != 1 {
+		t.Fatalf("state/current_phase = %s/%d, want READY/1", state.State, state.CurrentPhase)
+	}
+	if state.PlanGranularity != colony.GranularitySprint {
+		t.Fatalf("plan_granularity = %q, want sprint", state.PlanGranularity)
+	}
+	if len(state.Plan.Phases) != 2 || state.Plan.Phases[0].Status != colony.PhaseReady {
+		t.Fatalf("unexpected phases after finalizer: %+v", state.Plan.Phases)
+	}
+	if state.Plan.GeneratedAt == nil || state.Plan.Confidence == nil || *state.Plan.Confidence <= 0 {
+		t.Fatalf("plan metadata missing after finalizer: %+v", state.Plan)
+	}
+
+	for _, rel := range []string{
+		filepath.Join("planning", "SCOUT.md"),
+		filepath.Join("planning", "ROUTE-SETTER.md"),
+		filepath.Join("planning", "phase-plan.json"),
+		filepath.Join("phase-research", "phase-1-research.md"),
+		"spawn-tree.txt",
+	} {
+		if _, err := os.Stat(filepath.Join(dataDir, rel)); err != nil {
+			t.Fatalf("expected %s: %v", rel, err)
+		}
+	}
+	contextData, err := os.ReadFile(filepath.Join(root, ".aether", "CONTEXT.md"))
+	if err != nil {
+		t.Fatalf("expected CONTEXT.md: %v", err)
+	}
+	if !strings.Contains(string(contextData), "aether build 1") {
+		t.Fatalf("CONTEXT.md missing next build guidance:\n%s", string(contextData))
+	}
+}
+
 func TestPlanIncludesDispatchContract(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
