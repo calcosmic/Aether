@@ -10,15 +10,18 @@ import (
 )
 
 type codexContinueExternalDispatch struct {
-	Stage     string `json:"stage"`
-	Wave      int    `json:"wave"`
-	Caste     string `json:"caste"`
-	AgentName string `json:"agent_name"`
-	Name      string `json:"name"`
-	Task      string `json:"task"`
-	TaskID    string `json:"task_id"`
-	Status    string `json:"status"`
-	Brief     string `json:"brief,omitempty"`
+	Stage     string   `json:"stage"`
+	Wave      int      `json:"wave"`
+	Caste     string   `json:"caste"`
+	AgentName string   `json:"agent_name,omitempty"`
+	Name      string   `json:"name"`
+	Task      string   `json:"task"`
+	TaskID    string   `json:"task_id"`
+	Status    string   `json:"status"`
+	Summary   string   `json:"summary,omitempty"`
+	Blockers  []string `json:"blockers,omitempty"`
+	Duration  float64  `json:"duration,omitempty"`
+	Brief     string   `json:"brief,omitempty"`
 }
 
 type codexContinuePlanManifest struct {

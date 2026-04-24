@@ -610,6 +610,7 @@ func init() {
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
+	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
 	rootCmd.AddCommand(layEggsCmd)
@@ -618,6 +619,7 @@ func init() {
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(buildFinalizeCmd)
 	rootCmd.AddCommand(continueCmd)
+	rootCmd.AddCommand(continueFinalizeCmd)
 	rootCmd.AddCommand(sealCmd)
 	rootCmd.AddCommand(focusCmd)
 	rootCmd.AddCommand(redirectCmd)

@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T04:51:45Z
+Last updated: 2026-04-24T05:00:39Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -281,6 +281,42 @@ Next exact slice:
 - It should re-load current state, re-run verification/claims, merge wrapper
   watcher/review results, run the existing gate/assessment path, then use the
   existing atomic advancement/report/session update logic.
+
+## Completed Slice: Continue Finalize For Wrapper Agents
+
+Implemented in this slice:
+
+- New command: `aether continue-finalize --completion-file <path|->`.
+- Completion JSON must include the original `continue_manifest` from
+  `aether continue --plan-only` plus terminal wrapper worker results.
+- The finalizer re-loads current state and rejects stale phase mismatch.
+- It re-runs runtime-owned verification commands and build-claim checks at
+  finalization time.
+- It merges the external Watcher result into the verification report.
+- It merges external Gatekeeper/Auditor/Probe results into the review report.
+- It writes:
+  - `.aether/data/build/phase-N/verification.json`
+  - `.aether/data/build/phase-N/gates.json`
+  - `.aether/data/build/phase-N/review.json`
+  - `.aether/data/build/phase-N/continue.json`
+- It records/updates spawn-tree entries for wrapper continue workers without
+  duplicating entries when wrappers already called `spawn-log`.
+- It uses the existing gate, assessment, housekeeping, context, and atomic
+  advancement behavior to move to the next phase or block safely.
+
+Expected continue wrapper flow:
+
+1. `AETHER_OUTPUT_MODE=json aether continue --plan-only`
+2. Parse `result.continue_manifest`
+3. Spawn Watcher first, then Gatekeeper/Auditor/Probe from the manifest
+4. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+5. Write a completion JSON file outside `.aether/data/`
+6. `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`
+7. Route based on the finalizer's runtime result
+
+Focused verification:
+
+- `go test ./cmd -run 'TestContinuePlanOnly|TestContinueFinalizeRecordsExternalReviewAndAdvances' -count=1`
 
 ## Completed Slice: Go Narrator Launcher
 
