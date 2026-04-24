@@ -1,34 +1,28 @@
-# Requirements: Aether v1.6
+# Requirements: Aether v1.7
 
-**Defined:** 2026-04-23
+**Defined:** 2026-04-24
 **Core Value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
 
-## v1.6 Requirements
+## v1.7 Requirements
 
-### Publish Integrity
+### Plan Recovery
 
-- [x] **PUB-01** (R059): Stable publish updates stable binary and stable hub to the same version atomically
-- [x] **PUB-02** (R060): Dev publish updates only `aether-dev` binary and `~/.aether-dev` hub with zero stable contamination
-- [x] **PUB-03** (R061): Downstream `aether update --force` detects and reports stale or incomplete publishes instead of silently succeeding
-- [x] **PUB-04** (R061): Downstream `aether-dev update --force` detects and reports stale or incomplete publishes instead of silently succeeding
+- [ ] **PLAN-01** (R069): `aether plan --force` succeeds when no real build work has happened, resetting phase status to allow replanning regardless of current phase state
+- [ ] **PLAN-02** (R070): On `--force`, route-setter fallback artifacts are cleared so the route-setter can always write a fresh worker-written plan
 
-### Release Validation
+### Timeout Policy
 
-- [x] **REL-01** (R062): Release integrity check validates source version, binary version, hub version, companion-file surfaces, and downstream update result together
-- [x] **REL-02** (R063): Medic/dedicated diagnostics flag incomplete stable and dev publishes with exact recovery commands
-- [x] **REL-03** (R064): Operations guide, publish-update-runbook, and AGENTS.md match actual runtime behavior exactly
-- [x] **REL-04** (R065): End-to-end regression coverage for both stable and dev publish/update flows
+- [ ] **TIME-01** (R071): Default scout worker timeout raised from 5m to 10m, reducing premature fallback to local synthesis in larger repos
 
-### Evidence & Consistency
+### Verification
 
-- [x] **EVD-01** (R066): Archived release and milestone evidence is internally consistent — no contradictions after ship
-- [x] **EVD-02** (R067): Verify whether stuck `aether plan` issue still reproduces in freshly updated stable and dev repos; if yes, fix with regression test
-
-### OpenCode Blocker
-
-- [x] **OPN-01** (R068): Aether ships valid OpenCode agent frontmatter — OpenCode startup in downstream repos no longer crashes
+- [ ] **TEST-01** (R072): E2E test proving: init → plan (with timeout/fallback) → `--force` replan → route-setter writes real plan, all without manual state manipulation
 
 ## Completed (Prior Milestones)
+
+### v1.6 (R059-R068)
+- Status: completed
+- Summary: Release pipeline integrity — stable/dev publish sync, stale publish detection, release integrity checks, medic diagnostics, doc alignment, E2E regression, stuck-plan investigation.
 
 ### v1.5 (R045-R058)
 - Status: completed
@@ -48,33 +42,25 @@
 
 | Feature | Reason |
 |---------|--------|
-| goreleaser replacement | Current release tooling works; fix the pipeline around it |
-| npm package restructuring | Companion file delivery works; fix version sync |
-| New agent castes | No new agents needed for pipeline integrity |
-| Feature expansion | v1.6 is pipeline integrity only — no new colony features |
+| Fallback plan quality improvements | v1.7 is about recovery, not fallback plan quality |
+| New agent castes | No new agents needed |
+| Publish pipeline changes | v1.6 shipped that; not revisiting |
+| UI/visual changes | Pipeline recovery is internal behavior |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPN-01 (R068) | Phase 39: OpenCode Agent Frontmatter Fix | Complete |
-| PUB-01 (R059) | Phase 40: Stable Publish Hardening | Complete |
-| PUB-02 (R060) | Phase 41: Dev-Channel Isolation | Complete |
-| PUB-03 (R061) | Phase 44.2: Command Hygiene and Agent Parity | Complete (44.2-01) |
-| PUB-04 (R061) | Phase 42: Downstream Stale-Publish Detection | Complete |
-| REL-01 (R062) | Phase 44.2: Command Hygiene and Agent Parity | Complete (44.2-01) |
-| REL-02 (R063) | Phase 43: Release Integrity Checks and Diagnostics | Complete (43-02) |
-| REL-03 (R064) | Phase 44: Doc Alignment and Archive Consistency | Complete |
-| EVD-01 (R066) | Phase 44: Doc Alignment and Archive Consistency | Complete |
-| REL-04 (R065) | Phase 45: End-to-End Regression Coverage | Complete |
-| EVD-02 (R067) | Phase 46: Stuck-Plan Investigation and Release Decision | Complete |
+| PLAN-01 (R069) | Phase 47: Plan Force Recovery | — |
+| PLAN-02 (R070) | Phase 47: Plan Force Recovery | — |
+| TIME-01 (R071) | Phase 47: Plan Force Recovery | — |
+| TEST-01 (R072) | Phase 48: E2E Recovery Verification | — |
 
 **Coverage:**
-- v1.6 requirements: 11 total
-- Mapped to phases: 11
-- Satisfied: 11
+- v1.7 requirements: 4 total
+- Mapped to phases: 4
+- Satisfied: 0
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-04-23*
-*Last updated: 2026-04-24 after Phase 46 milestone audit -- all 11 requirements marked complete*
+*Requirements defined: 2026-04-24*

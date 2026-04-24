@@ -36,7 +36,8 @@ That means:
 - Full trace instrumentation: every run leaves a structured trace with replay, summary, and inspect capabilities
 - All 49 slash commands verified working across Claude Code, OpenCode, and Codex CLI
 - Previous milestones: v1.0 (MVP), v1.1 (Trusted Context), v1.2 (Live Dispatch Truth), v1.3 (Visual Truth) all shipped
-- v1.6 Release Pipeline Integrity in progress: Phase 41 complete — channel isolation guards enforce stable/dev separation at runtime
+- v1.6 Release Pipeline Integrity complete: Phases 39-46, 11/11 requirements, shipped v1.0.20
+- v1.7 Planning Pipeline Recovery in progress: fix plan --force, route-setter overwrite, scout timeout
 
 ## Architecture / Key Patterns
 
@@ -59,11 +60,12 @@ See [.planning/REQUIREMENTS.md](/Users/callumcowie/repos/Aether/.planning/REQUIR
 - [x] v1.3 Visual Truth and Core Hardening — Phases 17-24 (shipped 2026-04-21)
 - [x] v1.4 Self-Healing Colony — Phases 25-30 (completed 2026-04-21)
 - [x] v1.5 Runtime Truth Recovery — Phases 31-38 (completed 2026-04-23, product v1.0.20)
-- [~] v1.6 Release Pipeline Integrity — Phases 39-46 (in progress, Phase 41 complete)
+- [x] v1.6 Release Pipeline Integrity — Phases 39-46 (completed 2026-04-24)
+- [ ] v1.7 Planning Pipeline Recovery — Phases 47+
 
 ## Previous Milestone Result
 
-`v1.3` is complete at source commit `1b6829b5` (`Backfill gap closure artifacts for phases 19-23`).
+`v1.6` is complete. All 11 requirements satisfied, stuck-plan investigation confirmed resolved, v1.0.20 ready to ship.
 
 **v1.3 delivered:**
 - Visual UX fully restored (caste identity, stage separators, emoji consistency, Codex parity)
@@ -93,21 +95,16 @@ The milestone now delivers:
 - application-aware curation that closes the read/write gap
 - a benchmarkable proof/evaluation harness for the trusted-context claim
 
-## Current Milestone: v1.6 Release Pipeline Integrity
+## Current Milestone: v1.7 Planning Pipeline Recovery
 
-**Goal:** Lock down Aether's stable and dev release/update pipeline so it behaves exactly as documented — honest versions, isolated channels, trustworthy evidence.
+**Goal:** Fix the planning pipeline so colonies don't get trapped in unrecoverable states after failed or partial operations.
 
 **Target features:**
 
-- **Stable/dev publish synchronization** — Stable binary and hub must agree; dev must never contaminate stable
-- **Stale publish detection** — Downstream `aether update` must surface incomplete publishes instead of silently succeeding
-- **Release integrity validation** — Source, binary, hub, companion-file surfaces, and downstream result checked together
-- **Medic/release diagnostics** — Flag incomplete stable/dev publishes with exact recovery commands
-- **Doc-runtime alignment** — Operations guide, runbook, and AGENTS.md match actual behavior exactly
-- **E2E regression coverage** — Automated stable and dev publish/update flow validation
-- **Archive consistency** — Milestone/release evidence internally consistent after ship
-- **OpenCode agent frontmatter fix** — Ship valid OpenCode schema instead of crashing downstream startups
-- **Stuck-plan investigation** — Verify whether `aether plan` issue still reproduces in freshly updated repos
+- **Plan --force always recovers** — When no real build work has happened, `aether plan --force` resets phase status and replans regardless of current state
+- **Route-setter overwrites stale fallback** — On `--force`, fallback artifacts are cleared so the route-setter can always write a fresh plan
+- **Longer default scout timeout** — Raise from 5m to 10m so larger repos don't immediately fall back to local synthesis
+- **E2E recovery test** — Automated test proving init → failed plan → --force replan → real worker plan works end-to-end
 
 ## Milestone Sequence
 
@@ -117,11 +114,11 @@ The milestone now delivers:
 - [x] v1.3 Visual Truth and Core Hardening — Phases 17-24 (shipped 2026-04-21)
 - [x] v1.4 Self-Healing Colony — Phases 25-30 (completed 2026-04-21)
 - [x] v1.5 Runtime Truth Recovery — Phases 31-38 (completed 2026-04-23, product v1.0.20)
-- [ ] v1.6 Release Pipeline Integrity — Phases 39+
+- [ ] v1.7 Planning Pipeline Recovery — Phases 47+
 
 ## Next Move
 
-Execute v1.6 phases starting with Phase 39.
+Execute v1.7 phases starting with Phase 47.
 
 ## Evolution
 

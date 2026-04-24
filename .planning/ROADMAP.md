@@ -8,7 +8,8 @@
 - **v1.3 Visual Truth and Core Hardening** - Phases 17-24 (shipped 2026-04-21)
 - **v1.4 Self-Healing Colony** - Phases 25-30 (completed 2026-04-21)
 - **v1.5 Runtime Truth Recovery** - Phases 31-38 (completed 2026-04-23, product v1.0.20)
-- **v1.6 Release Pipeline Integrity** - Phases 39-46 (in progress)
+- **v1.6 Release Pipeline Integrity** - Phases 39-46 (completed 2026-04-24)
+- **v1.7 Planning Pipeline Recovery** - Phases 47-48 (in progress)
 
 ## Phases
 
@@ -208,6 +209,32 @@ Plans:
 
 </details>
 
+<details>
+<summary>v1.7 Planning Pipeline Recovery (Phases 47-48)</summary>
+
+### Phase 47: Plan Force Recovery
+**Goal:** Fix `aether plan --force` so it always recovers a colony from a bad plan, regardless of phase status, and raise the default scout timeout to reduce premature fallbacks.
+**Requirements:** PLAN-01 (R069), PLAN-02 (R070), TIME-01 (R071)
+**Success Criteria:**
+1. `aether plan --force` resets phase status to allow replanning even when phase is `in_progress` and no real build artifacts exist
+2. On `--force`, fallback planning artifacts (ROUTE-SETTER.md, phase-plan.json) are cleared so route-setter can write fresh output
+3. Default scout worker timeout raised from 5m to 10m
+4. `go test ./...` passes with zero failures
+5. Existing plan behavior (without --force) is unchanged
+**Depends on:** none (standalone fix)
+
+### Phase 48: E2E Recovery Verification
+**Goal:** Automated test proving the full recovery path: init → failed plan → --force replan → real worker plan.
+**Requirements:** TEST-01 (R072)
+**Success Criteria:**
+1. E2E test: init colony → plan with short timeout (fallback) → plan --force → verify worker artifacts written
+2. Test proves route-setter output replaces fallback artifacts after --force
+3. Test proves phase status is correctly reset and replan succeeds
+4. Test runnable in CI (`go test`)
+**Depends on:** Phase 47
+
+</details>
+
 ## Progress
 
 | Milestone | Phases | Status | Completed |
@@ -218,4 +245,5 @@ Plans:
 | v1.3 | 17-24 | Complete | 2026-04-21 |
 | v1.4 | 25-30 | Complete | 2026-04-21 |
 | v1.5 | 31-38 | Complete | 2026-04-23 |
-| v1.6 | 39-46 | In Progress | -- |
+| v1.6 | 39-46 | Complete | 2026-04-24 |
+| v1.7 | 47-48 | In Progress | -- |
