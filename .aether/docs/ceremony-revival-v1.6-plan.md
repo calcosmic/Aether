@@ -76,12 +76,13 @@ Completed after this checkpoint:
 - Prove missing Node/runtime is non-fatal.
 - Prove sidecar stdout is routed through Go's visual output mutex.
 
-Remaining before Phase 2 is complete:
+Phase 2/3 foundation checkpoint:
 
-- Manual installed-hub smoke: `aether install --package-dir "$PWD"` and a
-  fixture `aether update --force` should prove the launcher finds the hub
-  runtime outside the source checkout.
-- Optional TTY live redraw/debounce polish for the rolling activity frame.
+- Manual installed-hub smoke passed in a temporary HOME and fixture repo.
+- The fixture removed local `.aether/ts`, and `AETHER_NARRATOR=on aether build
+  1 --synthetic` still rendered `COLONY ACTIVITY` from the hub fallback.
+- Optional TTY live redraw/debounce is deferred until real wrapper output can
+  guide the terminal contract.
 
 The detailed implementation contract is tracked in
 `.aether/docs/ceremony-revival-v1.6-handoff.md`.
@@ -93,7 +94,8 @@ The detailed implementation contract is tracked in
 - Render wave progress, active workers, completed workers, tool counts, blockers,
   and token counts where available. (Initial foundation exists.)
 - Strip ANSI when stdout is not a TTY unless explicitly forced.
-- Debounce live redraws if event volume makes the terminal flicker.
+- Debounce live redraws if event volume makes the terminal flicker. (Deferred
+  pending real wrapper output.)
 
 ## Phase 4: Subagent Spawn Restoration
 

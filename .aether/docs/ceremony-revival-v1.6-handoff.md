@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T04:12:13Z
+Last updated: 2026-04-24T04:17:03Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -54,6 +54,9 @@ Implemented foundation:
   narrator text.
 - The narrator now keeps an in-memory activity frame and renders worker
   sections for active, completed, blocked, and other workers.
+- Temporary HOME smoke verified the source-built binary can launch the narrator
+  from the installed hub fallback when the fixture repo has no local
+  `.aether/ts` runtime.
 
 Verification already passed for the pushed foundation:
 
@@ -327,12 +330,14 @@ Tests:
 
 - `renders rolling activity frame with active and completed workers`
 - `renders blocked workers and truncates long frame text`
+- `keeps multi-wave activity history while current wave advances`
 
 Remaining display work:
 
-- TTY live redraw and debounce.
-- Snapshot fixtures for longer multi-wave histories.
 - Visual polish after seeing real build output in Claude/OpenCode/Codex.
+- TTY live redraw/debounce is consciously deferred. The child narrator writes to
+  a Go pipe, so true terminal redraw needs an explicit parent-controlled
+  terminal contract such as a `--live` flag or Go-side redraw coordinator.
 
 ## Later Phases: Real Agent Spawning Bridge
 
@@ -390,11 +395,10 @@ Before release:
 
 ## Current Next Step
 
-Next, run an installed-hub smoke and then continue display polish. Do not begin
-wrapper rewrites until:
+Next, start the real agent-spawning bridge for Claude/OpenCode wrappers. The
+preconditions are now satisfied:
 
-1. `aether install --package-dir "$PWD"` publishes the runtime and launcher can
-   find the hub fallback from a fixture repo;
-2. TTY live redraw is either implemented or consciously deferred;
-3. longer multi-wave TS fixtures pass;
-4. full Go and TS gates pass again.
+1. hub fallback smoke passed in a temporary HOME;
+2. TTY live redraw is consciously deferred;
+3. multi-wave TS fixture passes;
+4. focused Go and TS gates pass.

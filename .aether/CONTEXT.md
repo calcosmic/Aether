@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T04:12:13Z |
+| **Last Updated** | 2026-04-24T04:17:03Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -43,6 +43,8 @@ Specialist reviews for the launcher slice are complete. Scout recommended build-
 Launcher implementation completed: `cmd/narrator_launcher.go` auto-launches the dependency-free Node sidecar for visual build output, never in JSON mode; `cmd/ceremony_emitter.go` persists build ceremony events and forwards the exact persisted event to the sidecar; `cmd/codex_build.go` and `cmd/codex_build_worktree.go` emit prewave, wave start, spawn, tool-use, and wave-end events. User-controlled event text/lists are trimmed before persistence.
 
 Rolling display foundation completed: `.aether/ts/narrator.ts` now keeps a stateful ceremony frame and renders a `COLONY ACTIVITY` view with wave progress plus Active, Completed, Blocked, and Other worker sections. It preserves the compatibility event line first so existing Go smoke tests continue to work. `.aether/ts/dist/narrator.js` has been regenerated.
+
+Hub fallback smoke completed in a temporary HOME: install/update synced the package, fixture-local `.aether/ts` was removed, and `AETHER_NARRATOR=on aether build 1 --synthetic` still rendered `COLONY ACTIVITY` from the installed hub runtime. TTY live redraw/debounce is intentionally deferred until real wrapper output gives a better terminal contract.
 
 ---
 
@@ -90,15 +92,16 @@ Rolling display foundation completed: `.aether/ts/narrator.ts` now keeps a state
 - 2026-04-24T03:40:41Z|handoff|docs|Tracked v1.6 launcher and remaining-phase implementation handoff created for context recovery
 - 2026-04-24T04:06:48Z|phase2_launcher|build|Go narrator launcher and build ceremony emitter implemented; full Go/TS/race/vet verification passed
 - 2026-04-24T04:12:13Z|phase3_display_foundation|build|TS narrator activity frame added with active/completed/blocked worker tests
+- 2026-04-24T04:17:03Z|phase3_smoke|test|Temp HOME installed-hub fallback smoke and multi-wave activity fixture passed
 
 ---
 
 ## Next Steps
 
-1. Commit and push the rolling display foundation
-2. Run an installed-hub smoke if time allows: `aether install --package-dir "$PWD"` and `aether update --force` in a fixture repo
-3. Decide whether to implement TTY live redraw/debounce now or defer it
-4. Add longer multi-wave TS fixtures before wrapper rewrites
+1. Commit and push the hub-smoke/multi-wave fixture checkpoint
+2. Start Claude/OpenCode build wrapper restoration for real agent spawning
+3. Keep Go as state/event source of truth; wrappers own Task-tool spawning
+4. Emit `spawn-log`/`spawn-complete` around real wrapper Task calls
 
 ---
 
@@ -109,7 +112,6 @@ Rolling display foundation completed: `.aether/ts/narrator.ts` now keeps a state
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the rolling display foundation
-- Optionally smoke the installed hub runtime lookup path
-- Add TTY redraw/debounce or explicitly defer it
-- Add longer multi-wave display fixtures
+- Commit and push the hub-smoke/multi-wave fixture checkpoint
+- Restore Claude/OpenCode build wrappers as real orchestrators
+- Add wrapper tests/snapshots proving build wrappers call Go manifest flow and instruct Task-tool spawning

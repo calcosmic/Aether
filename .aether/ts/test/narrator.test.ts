@@ -246,3 +246,73 @@ test("renders blocked workers and truncates long frame text", () => {
   assert.doesNotMatch(workerLine, new RegExp(longMessage));
   assert.match(workerLine, /\.\.\./);
 });
+
+test("keeps multi-wave activity history while current wave advances", () => {
+  const frame = createCeremonyFrame();
+  for (const raw of [
+    {
+      topic: "ceremony.build.wave.start",
+      payload: { phase: 4, phase_name: "Multi-wave display", wave: 1, total: 1, status: "starting" }
+    },
+    {
+      topic: "ceremony.build.spawn",
+      payload: {
+        phase: 4,
+        wave: 1,
+        spawn_id: "arch-1",
+        caste: "archaeologist",
+        name: "Archive-9",
+        task_id: "4.1",
+        task: "Excavate prior ceremony code",
+        status: "completed",
+        token_count: 1200
+      }
+    },
+    {
+      topic: "ceremony.build.wave.end",
+      payload: { phase: 4, phase_name: "Multi-wave display", wave: 1, completed: 1, total: 1, status: "completed" }
+    },
+    {
+      topic: "ceremony.build.wave.start",
+      payload: { phase: 4, phase_name: "Multi-wave display", wave: 2, total: 2, status: "starting" }
+    },
+    {
+      topic: "ceremony.build.spawn",
+      payload: {
+        phase: 4,
+        wave: 2,
+        spawn_id: "builder-2",
+        caste: "builder",
+        name: "Mason-14",
+        task_id: "4.2",
+        task: "Restore wrapper bridge",
+        status: "running",
+        tool_count: 6
+      }
+    },
+    {
+      topic: "ceremony.build.spawn",
+      payload: {
+        phase: 4,
+        wave: 2,
+        spawn_id: "watcher-2",
+        caste: "watcher",
+        name: "Vigil-22",
+        task_id: "4.3",
+        task: "Verify wrapper bridge",
+        status: "blocked",
+        blockers: ["needs Claude Task-tool smoke"]
+      }
+    }
+  ]) {
+    const event = parseEvent(JSON.stringify(raw));
+    assert.ok(event);
+    applyEventToFrame(frame, event);
+  }
+
+  const rendered = renderActivityFrame(frame);
+  assert.match(rendered, /Wave 2: 0\/2 starting/);
+  assert.match(rendered, /Completed:\n  archaeologist:Archive-9 completed task=4\.1 tokens=1200 Excavate prior ceremony code/);
+  assert.match(rendered, /Active:\n  builder:Mason-14 running task=4\.2 tools=6 Restore wrapper bridge/);
+  assert.match(rendered, /Blocked:\n  watcher:Vigil-22 blocked task=4\.3 blockers=1 Verify wrapper bridge/);
+});
