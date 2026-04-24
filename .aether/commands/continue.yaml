@@ -14,7 +14,7 @@ wrapper_additions:
     Restore real wrapper verification orchestration:
     1. Run `AETHER_OUTPUT_MODE=json aether continue --plan-only`.
     2. Parse `result.continue_manifest`; do not parse visual output.
-    3. For each planned wave, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, then call `aether spawn-complete`.
+    3. For each planned wave, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
     4. Wave 1 must complete before wave 2; wave 2 review agents may run in parallel when the platform supports it.
     5. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
     6. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>` to let the runtime re-run deterministic verification, write reports, apply gates, and advance or block.

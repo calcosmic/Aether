@@ -33,6 +33,11 @@ type codexPlanningDispatch struct {
 	FilesModified []string                 `json:"files_modified,omitempty"`
 	ScoutReport   *codexScoutReport        `json:"scout_report,omitempty"`
 	PhasePlan     *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
+	SkillSection  string                   `json:"skill_section,omitempty"`
+	SkillCount    int                      `json:"skill_count,omitempty"`
+	ColonySkills  int                      `json:"colony_skill_count,omitempty"`
+	DomainSkills  int                      `json:"domain_skill_count,omitempty"`
+	MatchedSkills []string                 `json:"matched_skills,omitempty"`
 	Claimed       []string                 `json:"-"`
 }
 
@@ -591,7 +596,7 @@ func firstBuildablePhase(phases []colony.Phase) int {
 }
 
 func plannedPlanningWorkers(root string) []codexPlanningDispatch {
-	return []codexPlanningDispatch{
+	dispatches := []codexPlanningDispatch{
 		{
 			Stage:     "scouting",
 			Wave:      1,
@@ -614,6 +619,19 @@ func plannedPlanningWorkers(root string) []codexPlanningDispatch {
 			Outputs:   []string{"ROUTE-SETTER.md"},
 			Status:    "spawned",
 		},
+	}
+	attachPlanningDispatchSkillAssignments(dispatches)
+	return dispatches
+}
+
+func attachPlanningDispatchSkillAssignments(dispatches []codexPlanningDispatch) {
+	for i := range dispatches {
+		assignment := resolveWorkerSkillAssignment(dispatches[i].Caste, dispatches[i].Task)
+		dispatches[i].SkillSection = assignment.Section
+		dispatches[i].SkillCount = assignment.SkillCount
+		dispatches[i].ColonySkills = assignment.ColonyCount
+		dispatches[i].DomainSkills = assignment.DomainCount
+		dispatches[i].MatchedSkills = append([]string{}, assignment.MatchedNames...)
 	}
 }
 

@@ -16,7 +16,7 @@ wrapper_additions:
     1. Run `AETHER_OUTPUT_MODE=visual aether status`.
     2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>`.
     3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
-    4. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, and `agent_name`.
+    4. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `agent_name`, and each dispatch's runtime-provided `skill_section` when present.
     5. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
     6. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
     7. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.

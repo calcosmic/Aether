@@ -220,6 +220,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
 
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
@@ -295,6 +296,7 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 		if int(dispatch["execution_wave"].(float64)) <= 0 {
 			t.Fatalf("dispatch missing execution_wave: %+v", dispatch)
 		}
+		assertDispatchHasRuntimeSkillAssignment(t, dispatch)
 	}
 
 	manifest := result["dispatch_manifest"].(map[string]interface{})
@@ -310,6 +312,8 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if workerBriefs := manifest["worker_briefs"].([]interface{}); len(workerBriefs) != 0 {
 		t.Fatalf("plan-only manifest should not write worker briefs, got %v", workerBriefs)
 	}
+	manifestDispatches := manifest["dispatches"].([]interface{})
+	assertDispatchHasRuntimeSkillAssignment(t, manifestDispatches[0].(map[string]interface{}))
 	executionPlan := manifest["execution_plan"].([]interface{})
 	if len(executionPlan) != 9 {
 		t.Fatalf("execution_plan = %d, want 9 steps: %#v", len(executionPlan), executionPlan)
@@ -1196,6 +1200,39 @@ func TestResolveSkillSection_ReturnsEmptyWhenNoMatches(t *testing.T) {
 	section := resolveSkillSection("builder", "some task")
 	if section != "" {
 		t.Fatalf("expected empty skill section when no skills exist, got:\n%s", section)
+	}
+}
+
+func setupRuntimeSkillAssignmentHub(t *testing.T) {
+	t.Helper()
+	hubDir := filepath.Join(t.TempDir(), "hub")
+	skillsDir := filepath.Join(hubDir, "skills", "colony", "runtime-assignment")
+	if err := os.MkdirAll(skillsDir, 0755); err != nil {
+		t.Fatalf("failed to create skill dir: %v", err)
+	}
+	skillContent := `---
+name: runtime-assignment
+type: colony
+category: testing
+roles: archaeologist, architect, ambassador, auditor, builder, chaos, gatekeeper, measurer, oracle, probe, route_setter, scout, watcher
+---
+Runtime assignment skill content.`
+	if err := os.WriteFile(filepath.Join(skillsDir, "SKILL.md"), []byte(skillContent), 0644); err != nil {
+		t.Fatalf("failed to write skill: %v", err)
+	}
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+}
+
+func assertDispatchHasRuntimeSkillAssignment(t *testing.T, dispatch map[string]interface{}) {
+	t.Helper()
+	if count := intValue(dispatch["skill_count"]); count < 1 {
+		t.Fatalf("dispatch missing skill_count: %+v", dispatch)
+	}
+	if names := stringSliceValue(dispatch["matched_skills"]); !containsString(names, "runtime-assignment") {
+		t.Fatalf("dispatch missing runtime-assignment skill: %+v", dispatch)
+	}
+	if section := strings.TrimSpace(stringValue(dispatch["skill_section"])); !strings.Contains(section, "### Skill: runtime-assignment") {
+		t.Fatalf("dispatch missing runtime skill section: %+v", dispatch)
 	}
 }
 

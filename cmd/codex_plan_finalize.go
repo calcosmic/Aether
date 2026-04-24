@@ -412,6 +412,13 @@ func planningDispatchMaps(dispatches []codexPlanningDispatch) []map[string]inter
 		if dispatch.Duration > 0 {
 			entry["duration"] = dispatch.Duration
 		}
+		if dispatch.SkillCount > 0 {
+			entry["skill_count"] = dispatch.SkillCount
+			entry["colony_skill_count"] = dispatch.ColonySkills
+			entry["domain_skill_count"] = dispatch.DomainSkills
+			entry["matched_skills"] = append([]string{}, dispatch.MatchedSkills...)
+			entry["skill_section"] = dispatch.SkillSection
+		}
 		maps = append(maps, entry)
 	}
 	return maps

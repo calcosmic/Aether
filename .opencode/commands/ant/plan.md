@@ -51,7 +51,7 @@ For each dispatch in the manifest, execute the planned workers by wave:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
 3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
-4. Inject the selected depth, survey context, manifest `brief`, active signals, and exact task metadata.
+4. Inject the selected depth, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
 5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
 6. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
