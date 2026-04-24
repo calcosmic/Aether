@@ -274,6 +274,8 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 		updatedState.Worktrees = latestState.Worktrees
 	}
 	updatedState.State = colony.StateBUILT
+	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
+	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
 	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs); err != nil {
 		return nil, err
 	}
@@ -876,6 +878,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			dispatches[idx].Summary = strings.TrimSpace(result.WorkerResult.Summary)
 			dispatches[idx].Blockers = append([]string{}, result.WorkerResult.Blockers...)
 			dispatches[idx].Duration = result.WorkerResult.Duration.Seconds()
+			dispatches[idx].Outputs = buildDispatchClaimOutputs(*result.WorkerResult)
 		}
 		if result.Error != nil && len(dispatches[idx].Blockers) == 0 {
 			dispatches[idx].Blockers = []string{result.Error.Error()}
@@ -991,6 +994,7 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
 	briefOutputs := map[string]string{}
+	finalOutputs := map[string][]string{}
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
@@ -1004,7 +1008,19 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 	}
 	sort.Strings(briefPaths)
 
+	if isFinalBuildDispatchMode(dispatchMode) {
+		var err error
+		finalOutputs, dispatches, err = writeCodexBuildOutcomeReports(root, phase, buildDirRel, dispatches, time.Now().UTC(), dispatchMode)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	for i := range dispatches {
+		if outputs := finalOutputs[dispatches[i].Name]; len(outputs) > 0 {
+			dispatches[i].Outputs = outputs
+			continue
+		}
 		if output := briefOutputs[dispatches[i].Name]; output != "" {
 			dispatches[i].Outputs = []string{output}
 		}
@@ -1017,6 +1033,167 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 	}
 
 	return briefPaths, dispatches, nil
+}
+
+func buildDispatchClaimOutputs(result codex.WorkerResult) []string {
+	outputs := make([]string, 0, len(result.FilesCreated)+len(result.FilesModified)+len(result.TestsWritten))
+	outputs = append(outputs, result.FilesCreated...)
+	outputs = append(outputs, result.FilesModified...)
+	outputs = append(outputs, result.TestsWritten...)
+	return uniqueSortedStrings(outputs)
+}
+
+func reconcileCompletedBuildTasks(state *colony.ColonyState, phaseNum int, dispatches []codexBuildDispatch) []string {
+	if state == nil || phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
+		return nil
+	}
+	completed := completedBuildTaskIDs(dispatches)
+	if len(completed) == 0 {
+		return nil
+	}
+	taskIDs := make([]string, 0, len(completed))
+	phase := &state.Plan.Phases[phaseNum-1]
+	for idx := range phase.Tasks {
+		taskID := buildTaskID(phase.Tasks[idx], idx)
+		if _, ok := completed[taskID]; !ok {
+			continue
+		}
+		phase.Tasks[idx].Status = colony.TaskCompleted
+		taskIDs = append(taskIDs, taskID)
+	}
+	return uniqueSortedStrings(taskIDs)
+}
+
+func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} {
+	completed := map[string]struct{}{}
+	for _, dispatch := range dispatches {
+		taskID := strings.TrimSpace(dispatch.TaskID)
+		if taskID == "" || strings.TrimSpace(dispatch.Status) != "completed" {
+			continue
+		}
+		completed[taskID] = struct{}{}
+	}
+	return completed
+}
+
+func isFinalBuildDispatchMode(dispatchMode string) bool {
+	mode := strings.ToLower(strings.TrimSpace(dispatchMode))
+	return mode != "" && mode != "plan-only"
+}
+
+func writeCodexBuildOutcomeReports(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, recordedAt time.Time, dispatchMode string) (map[string][]string, []codexBuildDispatch, error) {
+	outputsByName := make(map[string][]string, len(dispatches))
+	for i := range dispatches {
+		reportRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-reports", fmt.Sprintf("%s.md", dispatches[i].Name)))
+		claimedOutputs := nonAssignmentBuildOutputs(dispatches[i].Outputs)
+		content := renderCodexBuildWorkerOutcomeReport(root, phase, dispatches[i], claimedOutputs, recordedAt, dispatchMode)
+		if err := store.AtomicWrite(reportRel, []byte(content)); err != nil {
+			return nil, nil, fmt.Errorf("failed to write worker outcome report for %s: %w", dispatches[i].Name, err)
+		}
+		reportPath := displayDataPath(reportRel)
+		outputsByName[dispatches[i].Name] = finalBuildOutputPaths(reportPath, claimedOutputs)
+		dispatches[i].Outputs = outputsByName[dispatches[i].Name]
+	}
+	return outputsByName, dispatches, nil
+}
+
+func nonAssignmentBuildOutputs(outputs []string) []string {
+	filtered := make([]string, 0, len(outputs))
+	for _, output := range outputs {
+		output = strings.TrimSpace(output)
+		if output == "" || strings.Contains(filepath.ToSlash(output), "/worker-briefs/") {
+			continue
+		}
+		filtered = append(filtered, output)
+	}
+	return uniqueSortedStrings(filtered)
+}
+
+func finalBuildOutputPaths(reportPath string, claimedOutputs []string) []string {
+	rest := uniqueSortedStrings(claimedOutputs)
+	outputs := []string{strings.TrimSpace(reportPath)}
+	for _, output := range rest {
+		if output == "" || output == reportPath {
+			continue
+		}
+		outputs = append(outputs, output)
+	}
+	return outputs
+}
+
+func renderCodexBuildWorkerOutcomeReport(root string, phase colony.Phase, dispatch codexBuildDispatch, claimedOutputs []string, recordedAt time.Time, dispatchMode string) string {
+	var b strings.Builder
+	b.WriteString("# Worker Outcome: ")
+	b.WriteString(dispatch.Name)
+	b.WriteString("\n\n")
+	b.WriteString("## Assignment\n")
+	b.WriteString("- Phase: ")
+	b.WriteString(strconv.Itoa(phase.ID))
+	if phase.Name != "" {
+		b.WriteString(" - ")
+		b.WriteString(phase.Name)
+	}
+	b.WriteString("\n")
+	b.WriteString("- Caste: ")
+	b.WriteString(dispatch.Caste)
+	b.WriteString("\n")
+	if dispatch.TaskID != "" {
+		b.WriteString("- Task ID: ")
+		b.WriteString(dispatch.TaskID)
+		b.WriteString("\n")
+	}
+	b.WriteString("- Task: ")
+	b.WriteString(dispatch.Task)
+	b.WriteString("\n")
+	if root != "" {
+		b.WriteString("- Root: ")
+		b.WriteString(root)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n## Recorded Outcome\n")
+	b.WriteString("- Status: ")
+	b.WriteString(strings.TrimSpace(dispatch.Status))
+	if strings.TrimSpace(dispatch.Status) == "" {
+		b.WriteString("unknown")
+	}
+	b.WriteString("\n")
+	b.WriteString("- Dispatch mode: ")
+	b.WriteString(strings.TrimSpace(dispatchMode))
+	b.WriteString("\n")
+	b.WriteString("- Recorded at: ")
+	b.WriteString(recordedAt.UTC().Format(time.RFC3339))
+	b.WriteString("\n")
+	if dispatch.Duration > 0 {
+		b.WriteString("- Duration seconds: ")
+		b.WriteString(strconv.FormatFloat(dispatch.Duration, 'f', 3, 64))
+		b.WriteString("\n")
+	}
+	if summary := strings.TrimSpace(dispatch.Summary); summary != "" {
+		b.WriteString("- Summary: ")
+		b.WriteString(summary)
+		b.WriteString("\n")
+	}
+	if len(dispatch.Blockers) > 0 {
+		b.WriteString("- Blockers:\n")
+		for _, blocker := range dispatch.Blockers {
+			b.WriteString("  - ")
+			b.WriteString(blocker)
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString("- Blockers: none\n")
+	}
+	if len(claimedOutputs) > 0 {
+		b.WriteString("- Claimed artifacts:\n")
+		for _, output := range claimedOutputs {
+			b.WriteString("  - ")
+			b.WriteString(output)
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString("- Claimed artifacts: none reported\n")
+	}
+	return b.String()
 }
 
 func rollbackCodexBuildFailure(previous colony.ColonyState, phaseNum int, startedAt time.Time, dispatchErr error) {

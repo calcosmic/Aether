@@ -168,11 +168,33 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
 		t.Fatalf("phase status = %s, want in_progress", state.Plan.Phases[0].Status)
 	}
-	if state.Plan.Phases[0].Tasks[0].Status != colony.TaskInProgress {
-		t.Fatalf("task 1 status = %s, want in_progress", state.Plan.Phases[0].Tasks[0].Status)
+	if state.Plan.Phases[0].Tasks[0].Status != colony.TaskCompleted {
+		t.Fatalf("task 1 status = %s, want completed", state.Plan.Phases[0].Tasks[0].Status)
 	}
-	if state.Plan.Phases[0].Tasks[1].Status != colony.TaskPending {
-		t.Fatalf("task 2 status = %s, want pending", state.Plan.Phases[0].Tasks[1].Status)
+	if state.Plan.Phases[0].Tasks[1].Status != colony.TaskCompleted {
+		t.Fatalf("task 2 status = %s, want completed", state.Plan.Phases[0].Tasks[1].Status)
+	}
+	if manifest.Tasks[0].Status != colony.TaskCompleted || manifest.Tasks[1].Status != colony.TaskCompleted {
+		t.Fatalf("manifest task statuses = %s/%s, want completed/completed", manifest.Tasks[0].Status, manifest.Tasks[1].Status)
+	}
+	for _, dispatch := range manifest.Dispatches {
+		if dispatch.TaskID == "" || dispatch.Status != "completed" {
+			continue
+		}
+		if len(dispatch.Outputs) == 0 {
+			t.Fatalf("completed task dispatch %s has no output evidence", dispatch.Name)
+		}
+		outputRel := strings.TrimPrefix(dispatch.Outputs[0], ".aether/data/")
+		outputData, err := os.ReadFile(filepath.Join(dataDir, outputRel))
+		if err != nil {
+			t.Fatalf("read output evidence for %s: %v", dispatch.Name, err)
+		}
+		if !strings.Contains(string(outputData), "## Recorded Outcome") || !strings.Contains(string(outputData), "Status: completed") {
+			t.Fatalf("output evidence for %s is not a final outcome report:\n%s", dispatch.Name, string(outputData))
+		}
+		if strings.Contains(dispatch.Outputs[0], "/worker-briefs/") && !strings.Contains(string(outputData), "## Recorded Outcome") {
+			t.Fatalf("output evidence for %s points to assignment-only worker brief %s", dispatch.Name, dispatch.Outputs[0])
+		}
 	}
 	if len(state.Events) < 2 || !strings.Contains(strings.Join(state.Events[len(state.Events)-2:], "\n"), "build_dispatched|build") {
 		t.Fatalf("expected build_dispatched event, got %v", state.Events)
@@ -499,6 +521,9 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 	if state.BuildStartedAt == nil {
 		t.Fatal("expected BuildStartedAt to be set")
 	}
+	if state.Plan.Phases[0].Tasks[0].Status != colony.TaskCompleted {
+		t.Fatalf("task status = %s, want completed", state.Plan.Phases[0].Tasks[0].Status)
+	}
 
 	var finalManifest codexBuildManifest
 	if err := store.LoadJSON("build/phase-1/manifest.json", &finalManifest); err != nil {
@@ -513,9 +538,26 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 	if len(finalManifest.Dispatches) != len(manifest.Dispatches) {
 		t.Fatalf("final manifest dispatches = %d, want %d", len(finalManifest.Dispatches), len(manifest.Dispatches))
 	}
+	if len(finalManifest.Tasks) != 1 || finalManifest.Tasks[0].Status != colony.TaskCompleted {
+		t.Fatalf("final manifest task status = %+v, want completed", finalManifest.Tasks)
+	}
 	for _, dispatch := range finalManifest.Dispatches {
 		if dispatch.Status != "completed" {
 			t.Fatalf("dispatch %s status = %s, want completed", dispatch.Name, dispatch.Status)
+		}
+		if dispatch.TaskID == "" {
+			continue
+		}
+		if len(dispatch.Outputs) == 0 {
+			t.Fatalf("completed task dispatch %s has no output evidence", dispatch.Name)
+		}
+		outputRel := strings.TrimPrefix(dispatch.Outputs[0], ".aether/data/")
+		outputData, err := os.ReadFile(filepath.Join(dataDir, outputRel))
+		if err != nil {
+			t.Fatalf("read output evidence for %s: %v", dispatch.Name, err)
+		}
+		if !strings.Contains(string(outputData), "## Recorded Outcome") || !strings.Contains(string(outputData), "wrapper-evidence.txt") {
+			t.Fatalf("output evidence for %s does not contain final outcome evidence:\n%s", dispatch.Name, string(outputData))
 		}
 	}
 
@@ -664,8 +706,8 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	if state.Plan.Phases[0].Tasks[0].Status != colony.TaskCompleted {
 		t.Fatalf("task 1 status = %s, want completed", state.Plan.Phases[0].Tasks[0].Status)
 	}
-	if state.Plan.Phases[0].Tasks[1].Status != colony.TaskInProgress {
-		t.Fatalf("task 2 status = %s, want in_progress", state.Plan.Phases[0].Tasks[1].Status)
+	if state.Plan.Phases[0].Tasks[1].Status != colony.TaskCompleted {
+		t.Fatalf("task 2 status = %s, want completed", state.Plan.Phases[0].Tasks[1].Status)
 	}
 }
 
@@ -746,11 +788,11 @@ func TestBuildRecoversMissingPlanFromPersistedPlanningArtifact(t *testing.T) {
 	if state.Plan.Phases[2].Status != colony.PhaseInProgress {
 		t.Fatalf("phase 3 status = %s, want in_progress", state.Plan.Phases[2].Status)
 	}
-	if state.Plan.Phases[2].Tasks[0].Status != colony.TaskInProgress {
-		t.Fatalf("phase 3 task 1 status = %s, want in_progress", state.Plan.Phases[2].Tasks[0].Status)
+	if state.Plan.Phases[2].Tasks[0].Status != colony.TaskCompleted {
+		t.Fatalf("phase 3 task 1 status = %s, want completed", state.Plan.Phases[2].Tasks[0].Status)
 	}
-	if state.Plan.Phases[2].Tasks[1].Status != colony.TaskInProgress {
-		t.Fatalf("phase 3 task 2 status = %s, want in_progress", state.Plan.Phases[2].Tasks[1].Status)
+	if state.Plan.Phases[2].Tasks[1].Status != colony.TaskCompleted {
+		t.Fatalf("phase 3 task 2 status = %s, want completed", state.Plan.Phases[2].Tasks[1].Status)
 	}
 }
 

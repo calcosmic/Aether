@@ -505,7 +505,7 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 		"Continue Worker Flow",
 		"Continue watcher rejected the phase",
 		"blocked",
-		"aether continue",
+		"aether continue --reconcile-task 1.1",
 		"A R T I F A C T S",
 		".aether/data/build/phase-1/verification.json",
 		".aether/data/build/phase-1/gates.json",
@@ -516,8 +516,8 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 			t.Errorf("blocked continue visual output missing %q\n%s", want, output)
 		}
 	}
-	if strings.Contains(output, "--reconcile-task") {
-		t.Fatalf("expected blocked continue next step to stay on plain re-verification, got:\n%s", output)
+	if strings.Contains(output, "Run `aether continue` to recover the blocked work") {
+		t.Fatalf("blocked continue suggested the identical no-op retry:\n%s", output)
 	}
 	if strings.Contains(output, "Forge-141 [builder] completed") {
 		t.Fatalf("expected blocked continue worker flow to avoid builder closure entries, got:\n%s", output)

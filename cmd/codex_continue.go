@@ -250,6 +250,11 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if state.BuildStartedAt == nil && !manifest.Present {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
 	}
+	if changed, reconcileErr := reconcileContinueCompletedBuildTasks(&state, &phase, &manifest); reconcileErr != nil {
+		return nil, state, colony.Phase{}, nil, nil, false, reconcileErr
+	} else if changed {
+		state.Plan.Phases[currentIdx] = phase
+	}
 
 	// Abandoned build detection: if all dispatches are still "spawned" and the
 	// build started more than 10 minutes ago, the build was abandoned mid-execution.
@@ -607,6 +612,75 @@ func loadCodexContinueManifest(phaseID int) codexContinueManifest {
 		Path:    rel,
 		Data:    manifest,
 	}
+}
+
+func reconcileContinueCompletedBuildTasks(state *colony.ColonyState, phase *colony.Phase, manifest *codexContinueManifest) (bool, error) {
+	if state == nil || phase == nil || manifest == nil || !manifest.Present {
+		return false, nil
+	}
+	completed := completedBuildTaskIDs(manifest.Data.Dispatches)
+	if len(completed) == 0 {
+		return false, nil
+	}
+
+	changedState := false
+	for idx := range phase.Tasks {
+		taskID := buildTaskID(phase.Tasks[idx], idx)
+		if _, ok := completed[taskID]; !ok {
+			continue
+		}
+		if phase.Tasks[idx].Status != colony.TaskCompleted {
+			phase.Tasks[idx].Status = colony.TaskCompleted
+			changedState = true
+		}
+	}
+	for phaseIdx := range state.Plan.Phases {
+		if state.Plan.Phases[phaseIdx].ID != phase.ID {
+			continue
+		}
+		for idx := range state.Plan.Phases[phaseIdx].Tasks {
+			taskID := buildTaskID(state.Plan.Phases[phaseIdx].Tasks[idx], idx)
+			if _, ok := completed[taskID]; !ok {
+				continue
+			}
+			if state.Plan.Phases[phaseIdx].Tasks[idx].Status != colony.TaskCompleted {
+				state.Plan.Phases[phaseIdx].Tasks[idx].Status = colony.TaskCompleted
+				changedState = true
+			}
+		}
+		break
+	}
+
+	changedManifest := false
+	if len(manifest.Data.Tasks) == 0 {
+		manifest.Data.Tasks = codexBuildTaskPlans(*phase)
+		changedManifest = true
+	}
+	for idx := range manifest.Data.Tasks {
+		taskID := strings.TrimSpace(manifest.Data.Tasks[idx].ID)
+		if taskID == "" {
+			continue
+		}
+		if _, ok := completed[taskID]; !ok {
+			continue
+		}
+		if manifest.Data.Tasks[idx].Status != colony.TaskCompleted {
+			manifest.Data.Tasks[idx].Status = colony.TaskCompleted
+			changedManifest = true
+		}
+	}
+
+	if changedState {
+		if err := store.SaveJSON("COLONY_STATE.json", *state); err != nil {
+			return false, fmt.Errorf("failed to reconcile completed build tasks in colony state: %w", err)
+		}
+	}
+	if changedManifest && strings.TrimSpace(manifest.Path) != "" {
+		if err := store.SaveJSON(manifest.Path, manifest.Data); err != nil {
+			return false, fmt.Errorf("failed to reconcile completed build tasks in manifest: %w", err)
+		}
+	}
+	return changedState || changedManifest, nil
 }
 
 type codexContinueReviewSpec struct {
@@ -1276,11 +1350,11 @@ func continueNextCommandForAssessment(assessment codexContinueAssessment) string
 	if strings.TrimSpace(assessment.Recovery.RedispatchCommand) != "" {
 		return assessment.Recovery.RedispatchCommand
 	}
-	if continueAssessmentPrefersReverify(assessment) && strings.TrimSpace(assessment.Recovery.ReverifyCommand) != "" {
-		return assessment.Recovery.ReverifyCommand
-	}
 	if strings.TrimSpace(assessment.Recovery.ReconcileCommand) != "" {
 		return assessment.Recovery.ReconcileCommand
+	}
+	if continueAssessmentPrefersReverify(assessment) && strings.TrimSpace(assessment.Recovery.ReverifyCommand) != "" {
+		return assessment.Recovery.ReverifyCommand
 	}
 	if strings.TrimSpace(assessment.Recovery.ReverifyCommand) != "" {
 		return assessment.Recovery.ReverifyCommand

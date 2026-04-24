@@ -190,6 +190,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	updatedState := state
 	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs)
 	updatedState.State = colony.StateBUILT
+	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
 	updatedState.Events = append(trimmedEvents(updatedState.Events),
 		fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", completedAt.Format(time.RFC3339), phaseNum),
@@ -198,6 +199,11 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	claims := completion.claimsOrAggregate(phaseNum, startedAt, dispatches)
 	if err := store.SaveJSON(claimsRel, claims); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build claims: %w", err)
+	}
+
+	_, dispatches, err = writeCodexBuildOutcomeReports(root, updatedPhase, buildDirRel, dispatches, completedAt, "external-task")
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
 	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, manifest.Playbooks, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false)

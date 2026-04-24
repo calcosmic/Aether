@@ -1343,8 +1343,9 @@ func TestContinueBlocksWhenContinueWatcherRejectsPhase(t *testing.T) {
 	if advanced, _ := result["advanced"].(bool); advanced {
 		t.Fatalf("expected advanced:false, got %v", result)
 	}
-	if next := result["next"].(string); next != "aether continue" {
-		t.Fatalf("next = %q, want aether continue when the continue watcher blocks advancement", next)
+	wantNext := "aether continue --reconcile-task " + taskID
+	if next := result["next"].(string); next != wantNext {
+		t.Fatalf("next = %q, want %q when blockers are unchanged", next, wantNext)
 	}
 
 	verification := result["verification"].(map[string]interface{})
