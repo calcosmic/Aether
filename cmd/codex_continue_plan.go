@@ -10,19 +10,24 @@ import (
 )
 
 type codexContinueExternalDispatch struct {
-	Stage     string   `json:"stage"`
-	Wave      int      `json:"wave"`
-	Caste     string   `json:"caste"`
-	AgentName string   `json:"agent_name,omitempty"`
-	Name      string   `json:"name"`
-	Task      string   `json:"task"`
-	TaskID    string   `json:"task_id"`
-	Timeout   int      `json:"timeout_seconds,omitempty"`
-	Status    string   `json:"status"`
-	Summary   string   `json:"summary,omitempty"`
-	Blockers  []string `json:"blockers,omitempty"`
-	Duration  float64  `json:"duration,omitempty"`
-	Brief     string   `json:"brief,omitempty"`
+	Stage         string   `json:"stage"`
+	Wave          int      `json:"wave"`
+	Caste         string   `json:"caste"`
+	AgentName     string   `json:"agent_name,omitempty"`
+	Name          string   `json:"name"`
+	Task          string   `json:"task"`
+	TaskID        string   `json:"task_id"`
+	Timeout       int      `json:"timeout_seconds,omitempty"`
+	Status        string   `json:"status"`
+	Summary       string   `json:"summary,omitempty"`
+	Blockers      []string `json:"blockers,omitempty"`
+	Duration      float64  `json:"duration,omitempty"`
+	Brief         string   `json:"brief,omitempty"`
+	SkillSection  string   `json:"skill_section,omitempty"`
+	SkillCount    int      `json:"skill_count,omitempty"`
+	ColonySkills  int      `json:"colony_skill_count,omitempty"`
+	DomainSkills  int      `json:"domain_skill_count,omitempty"`
+	MatchedSkills []string `json:"matched_skills,omitempty"`
 }
 
 type codexContinuePlanManifest struct {
@@ -164,32 +169,44 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 
 func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
+	watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
 	dispatches := []codexContinueExternalDispatch{
 		{
-			Stage:     "verification",
-			Wave:      1,
-			Caste:     "watcher",
-			AgentName: codexAgentNameForCaste("watcher"),
-			Name:      deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID)),
-			Task:      "Independent verification before advancement",
-			TaskID:    fmt.Sprintf("continue-verification-%d", phase.ID),
-			Timeout:   timeoutSeconds,
-			Status:    "planned",
-			Brief:     renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher),
+			Stage:         "verification",
+			Wave:          1,
+			Caste:         "watcher",
+			AgentName:     codexAgentNameForCaste("watcher"),
+			Name:          deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID)),
+			Task:          "Independent verification before advancement",
+			TaskID:        fmt.Sprintf("continue-verification-%d", phase.ID),
+			Timeout:       timeoutSeconds,
+			Status:        "planned",
+			Brief:         renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher),
+			SkillSection:  watcherSkillAssignment.Section,
+			SkillCount:    watcherSkillAssignment.SkillCount,
+			ColonySkills:  watcherSkillAssignment.ColonyCount,
+			DomainSkills:  watcherSkillAssignment.DomainCount,
+			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
 		},
 	}
 	for _, spec := range codexContinueReviewSpecs {
+		assignment := resolveWorkerSkillAssignmentForWorkflow("continue", spec.Caste, spec.Task)
 		dispatches = append(dispatches, codexContinueExternalDispatch{
-			Stage:     "review",
-			Wave:      2,
-			Caste:     spec.Caste,
-			AgentName: codexAgentNameForCaste(spec.Caste),
-			Name:      deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste)),
-			Task:      continueReviewTaskForCaste(spec.Caste),
-			TaskID:    fmt.Sprintf("continue-review-%s", spec.Caste),
-			Timeout:   timeoutSeconds,
-			Status:    "planned",
-			Brief:     renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
+			Stage:         "review",
+			Wave:          2,
+			Caste:         spec.Caste,
+			AgentName:     codexAgentNameForCaste(spec.Caste),
+			Name:          deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste)),
+			Task:          continueReviewTaskForCaste(spec.Caste),
+			TaskID:        fmt.Sprintf("continue-review-%s", spec.Caste),
+			Timeout:       timeoutSeconds,
+			Status:        "planned",
+			Brief:         renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
+			SkillSection:  assignment.Section,
+			SkillCount:    assignment.SkillCount,
+			ColonySkills:  assignment.ColonyCount,
+			DomainSkills:  assignment.DomainCount,
+			MatchedSkills: append([]string{}, assignment.MatchedNames...),
 		})
 	}
 	return dispatches

@@ -16,8 +16,8 @@ const (
 	expectedCodexAgents      = 25
 	expectedClaudeMirror     = 25
 	expectedCodexMirror      = 25
-	expectedColonySkills     = 11 // 10 existing + 1 medic
-	expectedDomainSkills     = 18
+	expectedColonySkills     = 52
+	expectedDomainSkills     = 31
 	expectedCodexSkills      = expectedColonySkills + expectedDomainSkills
 )
 

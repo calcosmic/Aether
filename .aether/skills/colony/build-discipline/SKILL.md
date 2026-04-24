@@ -69,6 +69,17 @@ If your implementation fails (test failure, build error, runtime crash):
 - If you discover work that needs doing but is outside your task scope, flag it -- do not do it.
 - If a task is blocked, report the blocker clearly instead of working around it silently.
 
+## Wave and Workstream Discipline
+
+When a phase is split into waves, respect the dependency order exactly:
+
+- Do not start a task until its declared dependencies are complete.
+- Treat tasks in the same wave as parallel siblings, not hidden prerequisites.
+- Keep file ownership explicit in your result so downstream verification can reconcile what changed.
+- If you discover a dependency cycle, missing dependency, or shared-file conflict, stop and report it instead of guessing an execution order.
+
+When multiple workstreams are active, keep your changes limited to your assigned stream. Do not consume another worker's scope unless the task was explicitly reassigned.
+
 ## Output Standards
 
 End your work summary with:

@@ -30,6 +30,11 @@ type codexBuildDispatch struct {
 	Outputs       []string `json:"outputs,omitempty"`
 	Blockers      []string `json:"blockers,omitempty"`
 	Duration      float64  `json:"duration,omitempty"`
+	SkillSection  string   `json:"skill_section,omitempty"`
+	SkillCount    int      `json:"skill_count,omitempty"`
+	ColonySkills  int      `json:"colony_skill_count,omitempty"`
+	DomainSkills  int      `json:"domain_skill_count,omitempty"`
+	MatchedSkills []string `json:"matched_skills,omitempty"`
 }
 
 type codexBuildTaskPlan struct {
@@ -136,6 +141,7 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	attachBuildDispatchSkillAssignments(dispatches)
 
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
@@ -843,7 +849,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			TaskID:           normalizedDispatchTaskID(dispatch),
 			TaskBrief:        renderCodexBuildWorkerBrief(root, phase, dispatch, playbooks, startedAt),
 			ContextCapsule:   capsule,
-			SkillSection:     resolveSkillSection(dispatch.Caste, dispatch.Task),
+			SkillSection:     resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
 			Wave:             normalizedDispatchWave(dispatch),
@@ -976,6 +982,13 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 		}
 		if len(dispatch.Outputs) > 0 {
 			entry["outputs"] = dispatch.Outputs
+		}
+		if dispatch.SkillCount > 0 {
+			entry["skill_count"] = dispatch.SkillCount
+			entry["colony_skill_count"] = dispatch.ColonySkills
+			entry["domain_skill_count"] = dispatch.DomainSkills
+			entry["matched_skills"] = append([]string{}, dispatch.MatchedSkills...)
+			entry["skill_section"] = dispatch.SkillSection
 		}
 		if dispatch.Summary != "" {
 			entry["summary"] = dispatch.Summary
@@ -1561,13 +1574,56 @@ func normalizedDispatchTaskID(dispatch codexBuildDispatch) string {
 }
 
 func resolveSkillSectionResult(caste, task string) skillInjectResult {
-	return renderSkillInjectResult(matchSkills(resolveHubPath(), caste, task))
+	return resolveSkillSectionResultForWorkflow("", caste, task)
+}
+
+func resolveSkillSectionResultForWorkflow(workflow, caste, task string) skillInjectResult {
+	return renderSkillInjectResult(matchSkillsForWorkflow(resolveHubPath(), workflow, caste, task))
+}
+
+type codexWorkerSkillAssignment struct {
+	Section      string
+	SkillCount   int
+	ColonyCount  int
+	DomainCount  int
+	MatchedNames []string
+}
+
+func resolveWorkerSkillAssignment(caste, task string) codexWorkerSkillAssignment {
+	return resolveWorkerSkillAssignmentForWorkflow("", caste, task)
+}
+
+func resolveWorkerSkillAssignmentForWorkflow(workflow, caste, task string) codexWorkerSkillAssignment {
+	result := resolveSkillSectionResultForWorkflow(workflow, caste, task)
+	names := append(extractResolvedSkillNames(result.ColonySkills), extractResolvedSkillNames(result.DomainSkills)...)
+	return codexWorkerSkillAssignment{
+		Section:      result.SkillSection,
+		SkillCount:   result.SkillCount,
+		ColonyCount:  result.ColonyCount,
+		DomainCount:  result.DomainCount,
+		MatchedNames: uniqueSortedSkillStrings(names),
+	}
+}
+
+func attachBuildDispatchSkillAssignments(dispatches []codexBuildDispatch) {
+	for i := range dispatches {
+		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
+		dispatches[i].SkillSection = assignment.Section
+		dispatches[i].SkillCount = assignment.SkillCount
+		dispatches[i].ColonySkills = assignment.ColonyCount
+		dispatches[i].DomainSkills = assignment.DomainCount
+		dispatches[i].MatchedSkills = append([]string{}, assignment.MatchedNames...)
+	}
 }
 
 // resolveSkillSection matches skills for the given role and task through the
 // shared runtime resolver and returns the rendered markdown section.
 func resolveSkillSection(caste, task string) string {
-	result := resolveSkillSectionResult(caste, task)
+	return resolveSkillSectionForWorkflow("", caste, task)
+}
+
+func resolveSkillSectionForWorkflow(workflow, caste, task string) string {
+	result := resolveSkillSectionResultForWorkflow(workflow, caste, task)
 	emitSkillActivationCeremonies(result)
 	return result.SkillSection
 }

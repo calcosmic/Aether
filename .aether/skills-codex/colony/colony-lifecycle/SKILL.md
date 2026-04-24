@@ -19,14 +19,12 @@ Every command must leave the user with a clear next action. No dead ends. The co
 When the user message is already a literal `aether ...` command, treat it as an instruction to run that command directly.
 
 - Do not inspect repo files first to infer what the command "might mean".
-- Do not translate the command into `/ant-` language in Codex.
 - Use `aether --help` or `aether <subcommand> --help` only to confirm availability or flags.
 - Treat the installed `aether` binary as the source of truth if docs and runtime disagree.
 - If the binary does not expose a documented command, say so plainly and follow the binary's actual command surface.
 - When invoking lifecycle commands through Codex shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants JSON.
-- Do not prepend exploratory narration like "I'm checking the repo" or "I'm treating this as..."
-- Do not append a generic "Next Up" explanation when the CLI already printed the result.
-- For read-only commands like `aether status`, `aether history`, `aether version`, or `aether pheromones`, your own post-command summary should be zero or one short sentence.
+- Do not prepend exploratory narration like "I'm checking the repo" or "I'm treating this as..." before a literal command.
+- If the `aether` CLI already rendered the result, do not restate the same guidance in a second synthetic "Next Up" block.
 
 ## State Machine
 
@@ -36,10 +34,10 @@ The colony progresses through these states in order:
 IDLE -> READY -> PLANNING -> EXECUTING -> SEALED -> ENTOMBED -> IDLE
 ```
 
-In Codex, the authoritative runtime values in `COLONY_STATE.json` are `IDLE`,
-`READY`, `EXECUTING`, `BUILT`, and `COMPLETED`. Terms like "planning",
-"sealed", and "entombed" describe lifecycle moments and next steps, not always
-literal persisted state values.
+The authoritative runtime values in `COLONY_STATE.json` are `IDLE`, `READY`,
+`EXECUTING`, `BUILT`, and `COMPLETED`. Terms like "planning", "sealed", and
+"entombed" describe lifecycle moments and next steps, not always literal
+persisted state values.
 
 | State | Meaning | Entered By | Next Action |
 |-------|---------|------------|-------------|
@@ -54,15 +52,11 @@ literal persisted state values.
 
 Every command output must end with a "Next Up" block. This block tells the user exactly what to do next based on the current state.
 
-Literal CLI exception:
-- If the `aether` CLI already rendered the result, do not restate the same guidance in a second synthetic "Next Up" block.
-- Only add your own next-step note when the CLI output is missing, failed, or ambiguous.
-
 ### Format
 
 ```
 ━━ N E X T   U P ━━
-Run `aether continue` to verify work and advance to the next phase.
+Run /ant-continue or `aether continue` to verify work and advance to the next phase.
 ```
 
 ### Rules
@@ -77,12 +71,24 @@ Run `aether continue` to verify work and advance to the next phase.
 
 | Current State | Primary Next Up | Alternatives |
 |---------------|-----------------|--------------|
-| READY | `aether plan` | `aether colonize` (if existing code) |
-| PLANNING | `aether build 1` | `aether focus` / `aether redirect` (to set signals first) |
-| EXECUTING (just built) | `aether continue` | `aether status` (to review) |
-| EXECUTING (just verified) | `aether build N+1` | `aether seal` (if last phase) |
-| SEALED | `aether entomb` | -- |
-| ENTOMBED | `aether init "new goal"` | -- |
+| READY | `/ant-plan` or `aether plan` | `/ant-colonize` or `aether colonize` (if existing code) |
+| PLANNING | `/ant-build 1` or `aether build 1` | `/ant-focus` or `aether focus` / `/ant-redirect` or `aether redirect` (to set signals first) |
+| EXECUTING (just built) | `/ant-continue` or `aether continue` | `/ant-status` or `aether status` (to review) |
+| EXECUTING (just verified) | `/ant-build N+1` or `aether build N+1` | `/ant-seal` or `aether seal` (if last phase) |
+| SEALED | `/ant-entomb` or `aether entomb` | -- |
+| ENTOMBED | `/ant-init "new goal"` or `aether init "new goal"` | -- |
+
+## Routing and Autopilot Guardrails
+
+When user intent is freeform, classify it before acting:
+
+- Small, well-defined task: route to a quick build path with normal verification.
+- Ambiguous idea: route to discuss, assumption surfacing, or spec refinement.
+- Existing active phase with completed build evidence: route to continue.
+- Failed or inconsistent state: route to medic or a repair/reconcile action, not a blind retry.
+- Multi-phase autonomous work: continue only while the next step is deterministic and stop when a real user decision is needed.
+
+Do not let "autopilot" bypass lifecycle gates. It may chain valid steps, but each step must still leave state, evidence, and Next Up output consistent.
 
 ## Command Chaining Awareness
 

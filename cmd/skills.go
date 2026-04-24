@@ -16,36 +16,40 @@ import (
 )
 
 type skillFrontmatter struct {
-	Name           string   `json:"name" yaml:"name"`
-	Description    string   `json:"description" yaml:"description"`
-	Type           string   `json:"type,omitempty" yaml:"type"`
-	Category       string   `json:"category,omitempty" yaml:"category"`
-	Domains        []string `json:"domains,omitempty" yaml:"domains"`
-	AgentRoles     []string `json:"agent_roles,omitempty" yaml:"agent_roles"`
-	Roles          []string `json:"roles,omitempty" yaml:"roles"`
-	DetectFiles    []string `json:"detect_files,omitempty" yaml:"detect_files"`
-	DetectPackages []string `json:"detect_packages,omitempty" yaml:"detect_packages"`
-	Detect         []string `json:"detect,omitempty" yaml:"detect"`
-	Priority       string   `json:"priority,omitempty" yaml:"priority"`
-	Version        string   `json:"version,omitempty" yaml:"version"`
+	Name             string   `json:"name" yaml:"name"`
+	Description      string   `json:"description" yaml:"description"`
+	Type             string   `json:"type,omitempty" yaml:"type"`
+	Category         string   `json:"category,omitempty" yaml:"category"`
+	Domains          []string `json:"domains,omitempty" yaml:"domains"`
+	AgentRoles       []string `json:"agent_roles,omitempty" yaml:"agent_roles"`
+	Roles            []string `json:"roles,omitempty" yaml:"roles"`
+	WorkflowTriggers []string `json:"workflow_triggers,omitempty" yaml:"workflow_triggers"`
+	TaskKeywords     []string `json:"task_keywords,omitempty" yaml:"task_keywords"`
+	DetectFiles      []string `json:"detect_files,omitempty" yaml:"detect_files"`
+	DetectPackages   []string `json:"detect_packages,omitempty" yaml:"detect_packages"`
+	Detect           []string `json:"detect,omitempty" yaml:"detect"`
+	Priority         string   `json:"priority,omitempty" yaml:"priority"`
+	Version          string   `json:"version,omitempty" yaml:"version"`
 }
 
 type skillIndexEntry struct {
-	Name           string   `json:"name"`
-	Description    string   `json:"description"`
-	Type           string   `json:"type"`
-	Category       string   `json:"category"`
-	Domains        []string `json:"domains,omitempty"`
-	AgentRoles     []string `json:"agent_roles,omitempty"`
-	Roles          []string `json:"roles,omitempty"`
-	DetectFiles    []string `json:"detect_files,omitempty"`
-	DetectPackages []string `json:"detect_packages,omitempty"`
-	Detect         []string `json:"detect,omitempty"`
-	Priority       string   `json:"priority,omitempty"`
-	Version        string   `json:"version,omitempty"`
-	Path           string   `json:"path"`
-	IsUserCreated  bool     `json:"is_user_created"`
-	Source         string   `json:"source,omitempty"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	Type             string   `json:"type"`
+	Category         string   `json:"category"`
+	Domains          []string `json:"domains,omitempty"`
+	AgentRoles       []string `json:"agent_roles,omitempty"`
+	Roles            []string `json:"roles,omitempty"`
+	WorkflowTriggers []string `json:"workflow_triggers,omitempty"`
+	TaskKeywords     []string `json:"task_keywords,omitempty"`
+	DetectFiles      []string `json:"detect_files,omitempty"`
+	DetectPackages   []string `json:"detect_packages,omitempty"`
+	Detect           []string `json:"detect,omitempty"`
+	Priority         string   `json:"priority,omitempty"`
+	Version          string   `json:"version,omitempty"`
+	Path             string   `json:"path"`
+	IsUserCreated    bool     `json:"is_user_created"`
+	Source           string   `json:"source,omitempty"`
 }
 
 type skillIndexData struct {
@@ -89,6 +93,7 @@ type scoredSkill struct {
 
 type skillMatchResult struct {
 	Role         string               `json:"role"`
+	Workflow     string               `json:"workflow,omitempty"`
 	Task         string               `json:"task,omitempty"`
 	Root         string               `json:"root,omitempty"`
 	ColonySkills []skillResolvedEntry `json:"colony_skills"`
@@ -99,6 +104,7 @@ type skillMatchResult struct {
 
 type skillInjectResult struct {
 	Role         string               `json:"role"`
+	Workflow     string               `json:"workflow,omitempty"`
 	Task         string               `json:"task,omitempty"`
 	Root         string               `json:"root,omitempty"`
 	Section      string               `json:"section"`
@@ -123,6 +129,13 @@ var workspaceFileSnapshotCache = struct {
 	snapshots map[string]*workspaceFileSnapshot
 }{
 	snapshots: map[string]*workspaceFileSnapshot{},
+}
+
+var skillIndexRuntimeCache = struct {
+	mu      sync.Mutex
+	entries map[string][]skillIndexEntry
+}{
+	entries: map[string][]skillIndexEntry{},
 }
 
 var skillScanSkipDirs = map[string]struct{}{
@@ -269,12 +282,13 @@ var skillMatchCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		role, task := resolveSkillMatchInput(cmd, args)
+		workflow, _ := cmd.Flags().GetString("workflow")
 		if role == "" {
 			outputError(1, "worker role is required", nil)
 			return nil
 		}
 
-		result := matchSkills(resolveHubPath(), role, task)
+		result := matchSkillsForWorkflow(resolveHubPath(), workflow, role, task)
 		outputOK(result)
 		return nil
 	},
@@ -286,12 +300,13 @@ var skillInjectCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		role, task := resolveSkillMatchInput(cmd, args)
+		workflow, _ := cmd.Flags().GetString("workflow")
 		if role == "" {
 			outputError(1, "worker role is required", nil)
 			return nil
 		}
 
-		match := matchSkills(resolveHubPath(), role, task)
+		match := matchSkillsForWorkflow(resolveHubPath(), workflow, role, task)
 		outputOK(renderSkillInjectResult(match))
 		return nil
 	},
@@ -625,38 +640,74 @@ func indexSkillDir(dir string, isUserCreated bool, source ...string) *skillIndex
 	}
 
 	return &skillIndexEntry{
-		Name:           fm.Name,
-		Description:    fm.Description,
-		Type:           fm.Type,
-		Category:       fm.Category,
-		Domains:        fm.Domains,
-		AgentRoles:     fm.AgentRoles,
-		Roles:          fm.Roles,
-		DetectFiles:    fm.DetectFiles,
-		DetectPackages: fm.DetectPackages,
-		Detect:         fm.Detect,
-		Priority:       fm.Priority,
-		Version:        fm.Version,
-		Path:           skillPath,
-		IsUserCreated:  isUserCreated,
-		Source:         sourceName,
+		Name:             fm.Name,
+		Description:      fm.Description,
+		Type:             fm.Type,
+		Category:         fm.Category,
+		Domains:          fm.Domains,
+		AgentRoles:       fm.AgentRoles,
+		Roles:            fm.Roles,
+		WorkflowTriggers: fm.WorkflowTriggers,
+		TaskKeywords:     fm.TaskKeywords,
+		DetectFiles:      fm.DetectFiles,
+		DetectPackages:   fm.DetectPackages,
+		Detect:           fm.Detect,
+		Priority:         fm.Priority,
+		Version:          fm.Version,
+		Path:             skillPath,
+		IsUserCreated:    isUserCreated,
+		Source:           sourceName,
 	}
 }
 
 func loadSkillIndexOrBuild(hub string) []skillIndexEntry {
+	cacheKey := skillIndexRuntimeCacheKey(hub)
+	skillIndexRuntimeCache.mu.Lock()
+	if cached, ok := skillIndexRuntimeCache.entries[cacheKey]; ok {
+		result := append([]skillIndexEntry(nil), cached...)
+		skillIndexRuntimeCache.mu.Unlock()
+		return result
+	}
+	skillIndexRuntimeCache.mu.Unlock()
+
+	entries := buildFullIndex(hub)
+	if len(entries) > 0 {
+		skillIndexRuntimeCache.mu.Lock()
+		skillIndexRuntimeCache.entries[cacheKey] = append([]skillIndexEntry(nil), entries...)
+		skillIndexRuntimeCache.mu.Unlock()
+		return entries
+	}
+
 	indexPath := filepath.Join(hub, "skills", "index.json")
 	raw, err := os.ReadFile(indexPath)
 	if err != nil {
-		return buildFullIndex(hub)
+		return entries
 	}
 	var data skillIndexData
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return buildFullIndex(hub)
+		return entries
 	}
 	if len(data.Entries) == 0 {
-		return buildFullIndex(hub)
+		return entries
 	}
+	skillIndexRuntimeCache.mu.Lock()
+	skillIndexRuntimeCache.entries[cacheKey] = append([]skillIndexEntry(nil), data.Entries...)
+	skillIndexRuntimeCache.mu.Unlock()
 	return data.Entries
+}
+
+func skillIndexRuntimeCacheKey(hub string) string {
+	parts := []string{hub}
+	if hubAbs, err := filepath.Abs(hub); err == nil {
+		parts[0] = hubAbs
+	}
+	if wd, err := os.Getwd(); err == nil {
+		if wdAbs, absErr := filepath.Abs(wd); absErr == nil {
+			wd = wdAbs
+		}
+		parts = append(parts, wd)
+	}
+	return strings.Join(parts, "|")
 }
 
 func resolveSkillMatchInput(cmd *cobra.Command, args []string) (string, string) {
@@ -672,17 +723,34 @@ func resolveSkillMatchInput(cmd *cobra.Command, args []string) (string, string) 
 }
 
 func matchSkills(hub, role, task string) skillMatchResult {
-	return resolveSkillMatchesForRoot(hub, skillWorkspaceRoot(), role, task)
+	return matchSkillsForWorkflow(hub, "", role, task)
+}
+
+func matchSkillsForWorkflow(hub, workflow, role, task string) skillMatchResult {
+	return resolveSkillMatchesForRootWithWorkflow(hub, skillWorkspaceRoot(), workflow, role, task)
 }
 
 func resolveSkillMatchesForRoot(hub, root, role, task string) skillMatchResult {
+	return resolveSkillMatchesForRootWithWorkflow(hub, root, "", role, task)
+}
+
+func resolveSkillMatchesForRootWithWorkflow(hub, root, workflow, role, task string) skillMatchResult {
 	entries := loadSkillIndexOrBuild(hub)
 	var colonyMatches []scoredSkill
 	var domainMatches []scoredSkill
+	workflow = strings.ToLower(strings.TrimSpace(workflow))
 	taskLower := strings.ToLower(strings.TrimSpace(task))
 
 	for _, e := range entries {
-		reasons := resolveSkillMatchReasons(root, e, role, taskLower)
+		reasons := resolveSkillMatchReasons(root, e, workflow, role, taskLower)
+		if e.Type == "colony" && skillRequiresWorkflowOrTaskEvidence(e) {
+			if skillHasRoleGate(e) && !skillRoleMatches(e, role) {
+				continue
+			}
+			if !skillHasRequiredCuratedSkillEvidence(e, reasons) {
+				continue
+			}
+		}
 		if e.Type == "domain" && !skillHasNonRoleReason(reasons) {
 			continue
 		}
@@ -719,6 +787,7 @@ func resolveSkillMatchesForRoot(hub, root, role, task string) skillMatchResult {
 
 	return skillMatchResult{
 		Role:         role,
+		Workflow:     workflow,
 		Task:         task,
 		Root:         root,
 		ColonySkills: colonySkills,
@@ -728,19 +797,33 @@ func resolveSkillMatchesForRoot(hub, root, role, task string) skillMatchResult {
 	}
 }
 
-func resolveSkillMatchReasons(root string, entry skillIndexEntry, role, taskLower string) []skillMatchReason {
+func resolveSkillMatchReasons(root string, entry skillIndexEntry, workflow, role, taskLower string) []skillMatchReason {
 	reasons := []skillMatchReason{}
-	if role != "" && (containsString(entry.AgentRoles, role) || containsString(entry.Roles, role)) {
+	if role != "" && skillRoleMatches(entry, role) {
 		reasons = append(reasons, skillMatchReason{
 			Code:     "role_match",
 			Score:    3,
 			Evidence: []string{strings.ToLower(strings.TrimSpace(role))},
 		})
 	}
+	if workflow != "" && containsString(entry.WorkflowTriggers, workflow) {
+		reasons = append(reasons, skillMatchReason{
+			Code:     "workflow_trigger",
+			Score:    4,
+			Evidence: []string{workflow},
+		})
+	}
 
 	reasons = append(reasons, skillWorkspaceMatchReasons(root, entry)...)
 
 	if taskLower != "" {
+		if keywords := skillTaskKeywordEvidence(entry.TaskKeywords, taskLower); len(keywords) > 0 {
+			reasons = append(reasons, skillMatchReason{
+				Code:     "task_keyword",
+				Score:    2,
+				Evidence: keywords,
+			})
+		}
 		nameLower := strings.ToLower(strings.TrimSpace(entry.Name))
 		if nameLower != "" && (strings.Contains(nameLower, taskLower) || strings.Contains(taskLower, nameLower)) {
 			reasons = append(reasons, skillMatchReason{
@@ -805,12 +888,63 @@ func skillTaskDomainEvidence(domains []string, taskLower string) []string {
 	return uniqueSortedSkillStrings(matched)
 }
 
+func skillTaskKeywordEvidence(keywords []string, taskLower string) []string {
+	matched := []string{}
+	for _, keyword := range keywords {
+		keyword = strings.ToLower(strings.TrimSpace(keyword))
+		if keyword != "" && strings.Contains(taskLower, keyword) {
+			matched = append(matched, keyword)
+		}
+	}
+	return uniqueSortedSkillStrings(matched)
+}
+
+func skillRequiresWorkflowOrTaskEvidence(entry skillIndexEntry) bool {
+	return len(entry.WorkflowTriggers) > 0 || len(entry.TaskKeywords) > 0
+}
+
+func skillHasRoleGate(entry skillIndexEntry) bool {
+	return len(entry.AgentRoles) > 0 || len(entry.Roles) > 0
+}
+
+func skillRoleMatches(entry skillIndexEntry, role string) bool {
+	return containsString(entry.AgentRoles, role) || containsString(entry.Roles, role)
+}
+
 func reasonScoreTotal(reasons []skillMatchReason) int {
 	total := 0
 	for _, reason := range reasons {
 		total += reason.Score
 	}
 	return total
+}
+
+func skillHasAnyReason(reasons []skillMatchReason, codes ...string) bool {
+	for _, reason := range reasons {
+		for _, code := range codes {
+			if reason.Code == code {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func skillHasRequiredCuratedSkillEvidence(entry skillIndexEntry, reasons []skillMatchReason) bool {
+	hasWorkflowRule := len(entry.WorkflowTriggers) > 0
+	hasKeywordRule := len(entry.TaskKeywords) > 0
+	workflowMatched := skillHasAnyReason(reasons, "workflow_trigger")
+	keywordMatched := skillHasAnyReason(reasons, "task_keyword")
+	switch {
+	case hasWorkflowRule && hasKeywordRule:
+		return workflowMatched && keywordMatched
+	case hasWorkflowRule:
+		return workflowMatched
+	case hasKeywordRule:
+		return keywordMatched
+	default:
+		return true
+	}
 }
 
 func skillHasNonRoleReason(reasons []skillMatchReason) bool {
@@ -835,6 +969,7 @@ func renderSkillInjectResult(match skillMatchResult) skillInjectResult {
 	section := strings.Join(sections, "\n\n---\n\n")
 	return skillInjectResult{
 		Role:         match.Role,
+		Workflow:     match.Workflow,
 		Task:         match.Task,
 		Root:         match.Root,
 		Section:      section,
@@ -1123,8 +1258,10 @@ func init() {
 	skillParseFrontmatterCmd.Flags().String("file", "", "Path to SKILL.md (required)")
 	skillMatchCmd.Flags().String("role", "", "Worker role")
 	skillMatchCmd.Flags().String("task", "", "Task description")
+	skillMatchCmd.Flags().String("workflow", "", "Aether workflow context (optional)")
 	skillInjectCmd.Flags().String("role", "", "Worker role")
 	skillInjectCmd.Flags().String("task", "", "Task description")
+	skillInjectCmd.Flags().String("workflow", "", "Aether workflow context (optional)")
 	skillDiffCmd.Flags().String("skill", "", "Skill name (required)")
 	skillIsUserCreatedCmd.Flags().String("skill", "", "Skill name (required)")
 

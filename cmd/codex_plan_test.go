@@ -189,6 +189,7 @@ func TestPlanReturnsExistingPlanWithoutRefresh(t *testing.T) {
 func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	t.Setenv("AETHER_NARRATOR", "on")
 
@@ -242,10 +243,12 @@ func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	if first["caste"].(string) != "scout" || first["agent_name"].(string) != "aether-scout" || first["status"].(string) != "planned" {
 		t.Fatalf("unexpected scout dispatch: %+v", first)
 	}
+	assertDispatchHasRuntimeSkillAssignment(t, first)
 	second := dispatches[1].(map[string]interface{})
 	if second["caste"].(string) != "route_setter" || second["agent_name"].(string) != "aether-route-setter" || second["wave"].(float64) != 2 {
 		t.Fatalf("unexpected route-setter dispatch: %+v", second)
 	}
+	assertDispatchHasRuntimeSkillAssignment(t, second)
 
 	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "session.json", "event-bus.jsonl", "runtime-spawn-runs.jsonl"} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); err == nil {

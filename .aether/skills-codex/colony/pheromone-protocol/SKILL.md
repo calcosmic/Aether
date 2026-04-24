@@ -42,6 +42,15 @@ FEEDBACK signals are calibration from past experience. You may incorporate flexi
 - You may deviate from FEEDBACK with good reason, but note the deviation in your output.
 - FEEDBACK accumulates -- multiple FEEDBACK signals pointing the same direction carry more weight than a single one.
 
+## Signal Conflict and History Awareness
+
+When multiple signals overlap, preserve the strongest actionable guidance:
+
+- A REDIRECT overrides conflicting FOCUS or FEEDBACK.
+- Recent reinforced signals carry more weight than old weak signals.
+- If two active signals conflict at the same priority, surface the conflict instead of silently choosing one.
+- When a signal changes worker behavior, mention that influence in the result summary.
+
 ## Role-Specific Adaptations
 
 Different roles adapt signal handling to their function:
