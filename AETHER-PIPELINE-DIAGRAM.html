@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aether: The Complete Pipeline</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fff;
+            color: #1a1a2e;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 100%;
+        }
+
+        /* --- Title page --- */
+        .title-page {
+            padding: 120px 60px 80px;
+            page-break-after: always;
+        }
+        .title-page h1 {
+            font-size: 3em;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 12px;
+        }
+        .title-page .subtitle {
+            font-size: 1.3em;
+            color: #5a6070;
+        }
+
+        /* --- Sections --- */
+        .section {
+            padding: 28px 50px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        h2 {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #e0e2ea;
+        }
+
+        h3 {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #2a2a3e;
+            margin-top: 18px;
+            margin-bottom: 8px;
+        }
+
+        p {
+            margin-bottom: 10px;
+            color: #4a4a5e;
+            font-size: 0.95em;
+        }
+
+        /* --- Diagrams: fill the page width --- */
+        .diagram-wrapper {
+            background: #f8f9fc;
+            border: 1px solid #dde0e8;
+            border-radius: 6px;
+            padding: 20px 16px;
+            margin: 12px 0 16px;
+            overflow-x: auto;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .diagram-wrapper .mermaid {
+            width: 100%;
+        }
+
+        /* Scale up SVG diagrams to fill width */
+        .diagram-wrapper svg {
+            max-width: 100% !important;
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0 16px;
+            font-size: 0.88em;
+        }
+
+        th {
+            background: #f0f1f5;
+            color: #1a1a2e;
+            font-weight: 600;
+            text-align: left;
+            padding: 7px 10px;
+            border-bottom: 2px solid #d0d2da;
+        }
+
+        td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #e8e8ef;
+            color: #3a3a4e;
+        }
+
+        code {
+            background: #eef0f6;
+            color: #3b5fc0;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 0.85em;
+        }
+
+        ol, ul {
+            margin: 8px 0 14px 20px;
+            color: #4a4a5e;
+            font-size: 0.92em;
+        }
+
+        li { margin-bottom: 4px; }
+
+        strong { color: #1a1a2e; }
+
+        .summary-box {
+            background: #f5f6fa;
+            border: 1px solid #dde0e8;
+            border-radius: 6px;
+            padding: 20px 24px;
+            margin: 16px 0;
+        }
+        .summary-box ol {
+            counter-reset: layer;
+            list-style: none;
+        }
+        .summary-box ol li {
+            counter-increment: layer;
+            margin-bottom: 12px;
+            padding-left: 40px;
+            position: relative;
+            color: #3a3a4e;
+        }
+        .summary-box ol li::before {
+            content: counter(layer);
+            position: absolute;
+            left: 0; top: 0;
+            width: 28px; height: 28px;
+            background: #238636;
+            color: white;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.85em;
+        }
+        .summary-box ol li:nth-child(2)::before { background: #1f6feb; }
+        .summary-box ol li:nth-child(3)::before { background: #7c3aed; }
+
+        .note {
+            background: #f0f4ff;
+            border-left: 3px solid #3b5fc0;
+            padding: 10px 14px;
+            margin: 10px 0;
+            border-radius: 0 6px 6px 0;
+            color: #3a3a4e;
+            font-size: 0.92em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="title-page">
+            <h1>Aether: The Complete Pipeline</h1>
+            <p class="subtitle">How code goes from your laptop to users' projects.</p>
+        </div>
+
+        <!-- 1 -->
+        <div class="section">
+            <h2>1. The Big Picture</h2>
+            <p>The entire system at a glance - a factory with three stages.</p>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart TB
+    subgraph SR["THIS REPO (The Factory)"]
+        SRC["Source Code and Config"]
+    end
+    subgraph HUB["THE HUB (~/.aether/)"]
+        SYS["system/ - Packaged Files"]
+        BIN["bin/ - Go Binary"]
+        VER["version.json"]
+    end
+    subgraph GH["GITHUB (The Store)"]
+        REL["GitHub Releases"]
+        NPM["npm: aether-colony"]
+    end
+    subgraph DOWN["DOWNSTREAM REPOS (Users Projects)"]
+        CL[".claude/"]
+        OC[".opencode/"]
+        CX[".codex/"]
+        AE[".aether/"]
+    end
+    SRC -->|"aether publish"| SYS
+    SRC -->|"aether publish"| BIN
+    SRC -->|"aether publish"| VER
+    SRC -->|"git tag + push"| REL
+    REL -->|"goreleaser"| NPM
+    NPM -->|"npx aether-colony"| SYS
+    SYS -->|"aether update"| CL
+    SYS -->|"aether update"| OC
+    SYS -->|"aether update"| CX
+    SYS -->|"aether update"| AE
+
+    style SR fill:#e8edf5,color:#1a1a2e,stroke:#8899bb
+    style HUB fill:#dbeafe,color:#1a1a2e,stroke:#6b8fc7
+    style GH fill:#ede9fe,color:#1a1a2e,stroke:#9b8fc7
+    style DOWN fill:#e0f2fe,color:#1a1a2e,stroke:#7bb8d9
+                </pre>
+            </div>
+        </div>
+
+        <!-- 2 -->
+        <div class="section">
+            <h2>2. What Lives In This Repo</h2>
+            <p>Everything starts here. This is the source of truth.</p>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart LR
+    subgraph REPO["Aether Source Repo"]
+        direction TB
+        subgraph GO["Go Source (The Engine)"]
+            CMD["cmd/*.go (80+ subcommands)"]
+            PKG["pkg/ (Shared packages)"]
+            EMB["embedded_assets.go"]
+        end
+        subgraph COMPANION["Companion Files (The Content)"]
+            AE_C["commands/*.yaml (50 definitions)"]
+            AE_W["workers.md"]
+            AE_SK["skills/ (29 skills)"]
+            AE_D["docs/"]
+            AE_T["templates/ (12)"]
+            AE_R["rules/"]
+        end
+        subgraph CLAUDE["Claude Code Wrappers"]
+            CC["commands/ant/*.md (50)"]
+            CA["agents/ant/*.md (25)"]
+        end
+        subgraph OPENCODE["OpenCode Wrappers"]
+            OCC["commands/ant/*.md (50)"]
+            OCA["agents/*.md (25)"]
+        end
+        subgraph CODEX["Codex Wrappers"]
+            CXA["agents/*.toml (25)"]
+            CXM["CODEX.md"]
+        end
+        subgraph MIRRORS["Packaging Mirrors"]
+            AC["agents-claude/"]
+            AX["agents-codex/"]
+            SKC["skills-codex/"]
+        end
+    end
+
+    style REPO fill:#f0f1f5,color:#1a1a2e,stroke:#b0b8c8
+    style GO fill:#fee2e2,color:#1a1a2e,stroke:#c88
+    style COMPANION fill:#dbeafe,color:#1a1a2e,stroke:#6b8fc7
+    style CLAUDE fill:#e0f2fe,color:#1a1a2e,stroke:#7bb8d9
+    style OPENCODE fill:#ede9fe,color:#1a1a2e,stroke:#9b8fc7
+    style CODEX fill:#fce7f3,color:#1a1a2e,stroke:#c78baa
+    style MIRRORS fill:#f0f1f5,color:#1a1a2e,stroke:#b0b8c8
+                </pre>
+            </div>
+
+            <h3>What Each Part Does</h3>
+            <table>
+                <thead><tr><th>Part</th><th>What It Is</th><th>Role</th></tr></thead>
+                <tbody>
+                    <tr><td><strong>Go Source</strong></td><td>The engine</td><td>The program that runs everything</td></tr>
+                    <tr><td><strong>Companion Files</strong></td><td>The content</td><td>Templates, docs, skills - knowledge to distribute</td></tr>
+                    <tr><td><strong>Claude Wrappers</strong></td><td>Claude's interface</td><td>Slash commands and agent definitions for Claude Code</td></tr>
+                    <tr><td><strong>OpenCode Wrappers</strong></td><td>OpenCode's interface</td><td>Same for the OpenCode platform</td></tr>
+                    <tr><td><strong>Codex Wrappers</strong></td><td>Codex's interface</td><td>Same for Codex CLI (TOML format)</td></tr>
+                    <tr><td><strong>Mirrors</strong></td><td>Packaging copies</td><td>Exact copies baked into the Go binary for distribution</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 3 -->
+        <div class="section">
+            <h2>3. The Publish Pipeline (Source to Hub)</h2>
+            <p><code>aether publish</code> copies everything to a central hub on your machine.</p>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart LR
+    subgraph SOURCE["Source Repo"]
+        S1[".aether/*"]
+        S2[".claude/commands/ant/"]
+        S3[".claude/agents/ant/"]
+        S4[".opencode/commands/ant/"]
+        S5[".opencode/agents/"]
+        S6[".codex/agents/"]
+        S7[".aether/agents-claude/"]
+        S8[".aether/skills-codex/"]
+    end
+    subgraph HUB["Hub (~/.aether/system/)"]
+        H1["Companion files"]
+        H2["commands/claude/"]
+        H3["agents-claude/"]
+        H4["commands/opencode/"]
+        H5["agents/"]
+        H6["codex/"]
+        H7["agents-claude/ (mirror)"]
+        H8["skills-codex/"]
+    end
+    subgraph BINARY["Binary"]
+        B1["~/.aether/bin/aether + version.json"]
+    end
+    S1 -->|"bulk sync"| H1
+    S2 --> H2
+    S3 --> H3
+    S4 --> H4
+    S5 --> H5
+    S6 --> H6
+    S7 --> H7
+    S8 --> H8
+    SOURCE -->|"build binary"| B1
+
+    style SOURCE fill:#e8edf5,color:#1a1a2e,stroke:#8899bb
+    style HUB fill:#dbeafe,color:#1a1a2e,stroke:#6b8fc7
+    style BINARY fill:#fee2e2,color:#1a1a2e,stroke:#c88
+                </pre>
+            </div>
+
+            <h3>What <code>aether publish</code> does</h3>
+            <ol>
+                <li><strong>Builds the Go binary</strong> and stamps the version</li>
+                <li><strong>Copies companion files</strong> to <code>~/.aether/system/</code></li>
+                <li><strong>Copies platform wrappers</strong> (Claude, OpenCode, Codex) to the hub</li>
+                <li><strong>Verifies versions match</strong> between binary and hub</li>
+            </ol>
+            <h3>Excluded (never leaves your machine)</h3>
+            <ul>
+                <li><code>.aether/data/</code> (colony state) &bull; <code>.aether/dreams/</code> (notes) &bull; <code>.aether/oracle/</code> (research) &bull; <code>.aether/locks/</code></li>
+            </ul>
+        </div>
+
+        <!-- 4 -->
+        <div class="section">
+            <h2>4. The Update Pipeline (Hub to Downstream)</h2>
+            <p><code>aether update</code> flows files FROM the hub INTO a user's project repo.</p>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart LR
+    subgraph HUB["Hub (~/.aether/system/)"]
+        HS["Companion files"]
+        HC["commands/claude/"]
+        HA["agents-claude/"]
+        HO["commands/opencode/"]
+        HOC["agents/"]
+        HCD["codex/"]
+        HSK["skills-codex/"]
+        HR["rules/"]
+        HSET["settings/claude/"]
+    end
+    subgraph REPO["Users Project Repo"]
+        R1[".aether/"]
+        R2[".claude/commands/ant/"]
+        R3[".claude/agents/ant/"]
+        R4[".opencode/commands/ant/"]
+        R5[".opencode/agents/"]
+        R6[".codex/agents/"]
+        R7[".codex/skills/aether/"]
+        R8[".claude/rules/"]
+        R9[".claude/settings.json"]
+    end
+    HS -->|"pair 1"| R1
+    HC -->|"pair 2"| R2
+    HA -->|"pair 3"| R3
+    HO -->|"pair 4"| R4
+    HOC -->|"pair 5"| R5
+    HCD -->|"pair 6"| R6
+    HSK -->|"pair 7"| R7
+    HR -->|"pair 8"| R8
+    HSET -->|"pair 9"| R9
+
+    style HUB fill:#dbeafe,color:#1a1a2e,stroke:#6b8fc7
+    style REPO fill:#e0f2fe,color:#1a1a2e,stroke:#7bb8d9
+                </pre>
+            </div>
+
+            <table>
+                <thead><tr><th>#</th><th>From Hub</th><th>To Repo</th><th>What</th></tr></thead>
+                <tbody>
+                    <tr><td>1</td><td><code>system/</code></td><td><code>.aether/</code></td><td>Skills, docs, templates</td></tr>
+                    <tr><td>2</td><td><code>commands/claude/</code></td><td><code>.claude/commands/ant/</code></td><td>50 slash commands</td></tr>
+                    <tr><td>3</td><td><code>agents-claude/</code></td><td><code>.claude/agents/ant/</code></td><td>25 agent definitions</td></tr>
+                    <tr><td>4</td><td><code>commands/opencode/</code></td><td><code>.opencode/commands/ant/</code></td><td>50 slash commands</td></tr>
+                    <tr><td>5</td><td><code>agents/</code></td><td><code>.opencode/agents/</code></td><td>25 agent definitions</td></tr>
+                    <tr><td>6</td><td><code>codex/</code></td><td><code>.codex/agents/</code></td><td>25 Codex agents (TOML)</td></tr>
+                    <tr><td>7</td><td><code>skills-codex/</code></td><td><code>.codex/skills/aether/</code></td><td>29 skill files</td></tr>
+                    <tr><td>8</td><td><code>rules/</code></td><td><code>.claude/rules/</code></td><td>Coding rules</td></tr>
+                    <tr><td>9</td><td><code>settings/claude/</code></td><td><code>.claude/settings.json</code></td><td>Hook config</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 5 -->
+        <div class="section">
+            <h2>5. The GitHub Release Pipeline (Source to World)</h2>
+            <p>Push a version tag and GitHub automatically builds and publishes.</p>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart TB
+    subgraph LOCAL["Your Machine"]
+        TAG["git tag v1.0.20"]
+    end
+    subgraph GHA["GitHub Actions"]
+        VERIFY["Verify version.json, package.json, tag agree"]
+        GOREL["GoReleaser: binaries for linux/darwin/windows on amd64/arm64"]
+        NPM_JOB["Publish aether-colony to npm registry"]
+    end
+    subgraph OUTPUTS["Published"]
+        REL["GitHub Releases (binaries + checksums)"]
+        NPM_REG["npm Registry (aether-colony@1.0.20)"]
+    end
+    TAG --> GHA --> VERIFY --> GOREL --> REL
+    VERIFY --> NPM_JOB --> NPM_REG
+
+    style LOCAL fill:#e8edf5,color:#1a1a2e,stroke:#8899bb
+    style GHA fill:#ede9fe,color:#1a1a2e,stroke:#9b8fc7
+    style OUTPUTS fill:#e0f2fe,color:#1a1a2e,stroke:#7bb8d9
+                </pre>
+            </div>
+
+            <h3>The npm Bootstrap Path</h3>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart LR
+    A["npx aether-colony"] --> B["npm downloads bootstrap"]
+    B --> C["Download Go binary\nfrom GitHub Releases"]
+    C --> D["Verify SHA-256 checksum"]
+    D --> E["aether install\n(materialize companion files)"]
+    E --> F["Ready to use"]
+
+    style A fill:#fee2e2,color:#1a1a2e,stroke:#c88
+    style F fill:#d1fae5,color:#1a1a2e,stroke:#6bc78b
+                </pre>
+            </div>
+        </div>
+
+        <!-- 6 -->
+        <div class="section">
+            <h2>6. The Two-Channel System (Dev vs Stable)</h2>
+            <p>Two separate installations - like a test kitchen and the main restaurant.</p>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart TB
+    REPO["THIS REPO (Source Code)"]
+    subgraph DEV["DEV CHANNEL (Test Kitchen)"]
+        DP["aether publish --channel dev"]
+        DH["~/.aether-dev/"]
+        DB["aether-dev binary"]
+        DU["aether-dev update --force"]
+    end
+    subgraph STABLE["STABLE CHANNEL (Production)"]
+        SP["aether publish"]
+        SH["~/.aether/"]
+        SB["aether binary"]
+        SU["aether update --force"]
+    end
+    REPO --> DP --> DH --> DB --> DU
+    REPO --> SP --> SH --> SB --> SU
+
+    style DEV fill:#fee2e2,color:#1a1a2e,stroke:#c88
+    style STABLE fill:#d1fae5,color:#1a1a2e,stroke:#6bc78b
+    style REPO fill:#e8edf5,color:#1a1a2e,stroke:#8899bb
+                </pre>
+            </div>
+
+            <table>
+                <thead><tr><th>Aspect</th><th>Stable</th><th>Dev</th></tr></thead>
+                <tbody>
+                    <tr><td>Binary</td><td><code>aether</code></td><td><code>aether-dev</code></td></tr>
+                    <tr><td>Hub</td><td><code>~/.aether/</code></td><td><code>~/.aether-dev/</code></td></tr>
+                    <tr><td>Global sync</td><td>Yes</td><td><strong>No</strong></td></tr>
+                    <tr><td>npm</td><td>Yes</td><td>No</td></tr>
+                    <tr><td>Purpose</td><td>Production</td><td>Testing</td></tr>
+                </tbody>
+            </table>
+            <div class="note">Dev <strong>never touches</strong> <code>~/.claude/</code>, <code>~/.opencode/</code>, or <code>~/.codex/</code> - your stable install stays clean.</div>
+        </div>
+
+        <!-- 7 -->
+        <div class="section">
+            <h2>7. The Complete File Map</h2>
+            <p>Every source file and where it ends up downstream.</p>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart LR
+    subgraph S["SOURCE"]
+        s1["commands/*.yaml"]
+        s2["skills/"]
+        s3["docs/"]
+        s4["templates/"]
+        s5["workers.md"]
+        s6["rules/"]
+        s7["exchange/"]
+        s8["schemas/"]
+        s9["utils/"]
+        s10["claude/commands/"]
+        s11["claude/agents/"]
+        s12["opencode/commands/"]
+        s13["opencode/agents/"]
+        s14["codex/agents/"]
+        s15["agents-claude/"]
+        s16["skills-codex/"]
+        s17["claude/settings.json"]
+        s18["Go binary (cmd/)"]
+    end
+    subgraph H["HUB"]
+        h1["commands/"]
+        h2["skills/"]
+        h3["docs/"]
+        h4["templates/"]
+        h5["workers.md"]
+        h6["rules/"]
+        h7["exchange/"]
+        h8["schemas/"]
+        h9["utils/"]
+        h10["commands/claude/"]
+        h11["agents-claude/"]
+        h12["commands/opencode/"]
+        h13["agents/"]
+        h14["codex/"]
+        h15["agents-claude/"]
+        h16["skills-codex/"]
+        h17["settings/claude/"]
+        h18["bin/aether"]
+    end
+    subgraph D["DOWNSTREAM"]
+        d1[".aether/commands/"]
+        d2[".aether/skills/"]
+        d3[".aether/docs/"]
+        d4[".aether/templates/"]
+        d5[".aether/workers.md"]
+        d6[".claude/rules/"]
+        d7[".aether/exchange/"]
+        d8[".aether/schemas/"]
+        d9[".aether/utils/"]
+        d10[".claude/commands/ant/"]
+        d11[".claude/agents/ant/"]
+        d12[".opencode/commands/ant/"]
+        d13[".opencode/agents/"]
+        d14[".codex/agents/"]
+        d15[".claude/agents/ant/"]
+        d16[".codex/skills/aether/"]
+        d17[".claude/settings.json"]
+    end
+    s1 --> h1 --> d1
+    s2 --> h2 --> d2
+    s3 --> h3 --> d3
+    s4 --> h4 --> d4
+    s5 --> h5 --> d5
+    s6 --> h6 --> d6
+    s7 --> h7 --> d7
+    s8 --> h8 --> d8
+    s9 --> h9 --> d9
+    s10 --> h10 --> d10
+    s11 --> h11 --> d11
+    s12 --> h12 --> d12
+    s13 --> h13 --> d13
+    s14 --> h14 --> d14
+    s15 --> h15 --> d15
+    s16 --> h16 --> d16
+    s17 --> h17 --> d17
+    s18 --> h18
+
+    style S fill:#e8edf5,color:#1a1a2e,stroke:#8899bb
+    style H fill:#dbeafe,color:#1a1a2e,stroke:#6b8fc7
+    style D fill:#e0f2fe,color:#1a1a2e,stroke:#7bb8d9
+                </pre>
+            </div>
+            <div class="note"><code>.aether/data/</code> and <code>.aether/dreams/</code> never leave the source repo.</div>
+        </div>
+
+        <!-- 8 -->
+        <div class="section">
+            <h2>8. Your Development Workflow</h2>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart TB
+    A["You have an idea"] --> B["Edit files in this repo"]
+    B --> C["Run tests"]
+    C --> D["aether publish --channel dev"]
+    D --> E["Test in a repo:\naether-dev update --force"]
+    E --> F{"Works?"}
+    F -->|"No"| B
+    F -->|"Yes"| G["Commit + push"]
+    G --> H["PR or merge to main"]
+    H --> I["aether publish (stable)"]
+    I --> J["Tag release v1.0.X"]
+    J --> K["GitHub builds + npm publish"]
+    K --> L["Users get it"]
+
+    style A fill:#fee2e2,color:#1a1a2e,stroke:#c88
+    style L fill:#d1fae5,color:#1a1a2e,stroke:#6bc78b
+                </pre>
+            </div>
+        </div>
+
+        <!-- 9 -->
+        <div class="section">
+            <h2>9. Summary: The Three Layers</h2>
+            <div class="diagram-wrapper">
+                <pre class="mermaid">
+flowchart LR
+    subgraph L1["Layer 1: Go Binary"]
+        L1A["cmd/*.go - The program"]
+        L1B["embedded_assets.go\nFiles baked into binary"]
+    end
+    subgraph L2["Layer 2: Hub (Local Cache)"]
+        L2A["~/.aether/system/\nCompanion files"]
+        L2B["~/.aether/bin/aether\nThe binary"]
+        L2C["~/.aether/version.json\nVersion tracking"]
+    end
+    subgraph L3["Layer 3: Platform Wrappers"]
+        L3A[".claude/ (Claude Code)\ncommands, agents, rules"]
+        L3B[".opencode/ (OpenCode)\ncommands, agents"]
+        L3C[".codex/ (Codex CLI)\nagents, skills"]
+        L3D[".aether/ (Runtime)\nskills, docs, templates"]
+    end
+    L1 -->|"aether publish"| L2
+    L2 -->|"aether update"| L3
+
+    style L1 fill:#fee2e2,color:#1a1a2e,stroke:#c88
+    style L2 fill:#dbeafe,color:#1a1a2e,stroke:#6b8fc7
+    style L3 fill:#e0f2fe,color:#1a1a2e,stroke:#7bb8d9
+                </pre>
+            </div>
+
+            <div class="summary-box">
+                <ol>
+                    <li><strong>Layer 1 (The Engine)</strong> - The Go code. Compiled into a binary.</li>
+                    <li><strong>Layer 2 (The Warehouse)</strong> - Local cache at <code>~/.aether/</code>. The middleman between source and destination.</li>
+                    <li><strong>Layer 3 (The Storefronts)</strong> - Files that Claude, OpenCode, and Codex read in each project.</li>
+                </ol>
+                <p style="margin-top: 12px;">You edit in the source repo, publish to the hub, and the hub distributes everywhere.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#e8edf5',
+                primaryTextColor: '#1a1a2e',
+                primaryBorderColor: '#8899bb',
+                lineColor: '#5577aa',
+                secondaryColor: '#dbeafe',
+                tertiaryColor: '#e0f2fe',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '16px',
+                nodeTextColor: '#1a1a2e',
+                clusterBkg: '#f5f6fa',
+                clusterBorder: '#b0b8c8',
+                edgeLabelBackground: '#ffffff',
+                nodeBorder: '#8899bb'
+            },
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis',
+                padding: 16,
+                nodeSpacing: 25,
+                rankSpacing: 40
+            }
+        });
+    </script>
+</body>
+</html>
