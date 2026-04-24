@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseEvent, renderEvent, sanitizeTerminalText } from "../narrator.js";
+import { parseEvent, parseVisualContract, renderEvent, sanitizeTerminalText } from "../narrator.js";
 
 test("renders ceremony event identity and status", () => {
   const event = parseEvent(
@@ -94,6 +94,36 @@ test("renders the shared Go ceremony payload shape", () => {
   assert.match(rendered, /criteria=1/);
   assert.match(rendered, /status=complete/);
   assert.match(rendered, /Verify stream protocol/);
+});
+
+test("renders caste identity from Go-owned visual metadata", () => {
+  const visuals = parseVisualContract({
+    ok: true,
+    result: {
+      castes: {
+        builder: {
+          emoji: "🔨",
+          color: "33",
+          label: "Builder"
+        }
+      }
+    }
+  });
+
+  const rendered = renderEvent(
+    {
+      topic: "ceremony.build.spawn",
+      payload: {
+        caste: "builder",
+        name: "Mason-67",
+        status: "starting"
+      }
+    },
+    visuals
+  );
+
+  assert.match(rendered, /🔨 Builder:Mason-67/);
+  assert.match(rendered, /status=starting/);
 });
 
 test("ignores empty event lines", () => {

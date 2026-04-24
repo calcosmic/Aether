@@ -1,5 +1,5 @@
 import readline from "node:readline";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 function isRecord(value) {
@@ -10,6 +10,30 @@ function asPayload(value) {
         return {};
     }
     return value;
+}
+export function parseVisualContract(value) {
+    const candidate = isRecord(value) && isRecord(value.result) ? value.result : value;
+    if (!isRecord(candidate) || !isRecord(candidate.castes)) {
+        throw new Error("visual contract is missing castes");
+    }
+    const castes = {};
+    for (const [key, rawVisual] of Object.entries(candidate.castes)) {
+        if (!isRecord(rawVisual)) {
+            continue;
+        }
+        const visual = {};
+        if (typeof rawVisual.emoji === "string") {
+            visual.emoji = rawVisual.emoji;
+        }
+        if (typeof rawVisual.color === "string") {
+            visual.color = rawVisual.color;
+        }
+        if (typeof rawVisual.label === "string") {
+            visual.label = rawVisual.label;
+        }
+        castes[normalizeCaste(key)] = visual;
+    }
+    return { castes };
 }
 export function sanitizeTerminalText(value) {
     return String(value)
@@ -40,7 +64,31 @@ export function parseEvent(line) {
     }
     return event;
 }
-export function renderEvent(event) {
+function normalizeCaste(caste) {
+    return caste.trim().toLowerCase().replace(/[-\s]+/g, "_");
+}
+function formatIdentity(payload, visuals) {
+    if (payload.caste === undefined && payload.name === undefined) {
+        return null;
+    }
+    const caste = payload.caste === undefined ? "" : sanitizeTerminalText(payload.caste);
+    const normalizedCaste = normalizeCaste(caste);
+    const visual = normalizedCaste === "" ? undefined : visuals?.castes[normalizedCaste];
+    const label = visual?.label === undefined ? caste : sanitizeTerminalText(visual.label);
+    const emoji = visual?.emoji === undefined ? "" : `${sanitizeTerminalText(visual.emoji)} `;
+    const name = payload.name === undefined ? "" : sanitizeTerminalText(payload.name);
+    if (label !== "" && name !== "") {
+        return `${emoji}${label}:${name}`;
+    }
+    if (label !== "") {
+        return `${emoji}${label}`;
+    }
+    if (name !== "") {
+        return name;
+    }
+    return null;
+}
+export function renderEvent(event, visuals) {
     const payload = asPayload(event.payload);
     const parts = ["[CEREMONY]", sanitizeTerminalText(event.topic)];
     if (payload.phase !== undefined) {
@@ -55,15 +103,9 @@ export function renderEvent(event) {
     if (payload.spawn_id !== undefined) {
         parts.push(`spawn=${sanitizeTerminalText(payload.spawn_id)}`);
     }
-    if (payload.caste !== undefined || payload.name !== undefined) {
-        const identityParts = [];
-        if (payload.caste !== undefined) {
-            identityParts.push(sanitizeTerminalText(payload.caste));
-        }
-        if (payload.name !== undefined) {
-            identityParts.push(sanitizeTerminalText(payload.name));
-        }
-        parts.push(identityParts.join(":"));
+    const identity = formatIdentity(payload, visuals);
+    if (identity !== null) {
+        parts.push(identity);
     }
     if (payload.status !== undefined) {
         parts.push(`status=${sanitizeTerminalText(payload.status)}`);
@@ -112,7 +154,7 @@ export function renderEvent(event) {
     }
     return parts.filter((part) => part.trim() !== "").join(" ");
 }
-export function runNarrator(input = process.stdin, output = process.stdout, errorOutput = process.stderr) {
+export function runNarrator(input = process.stdin, output = process.stdout, errorOutput = process.stderr, visuals) {
     const rl = readline.createInterface({
         input,
         crlfDelay: Infinity
@@ -121,7 +163,7 @@ export function runNarrator(input = process.stdin, output = process.stdout, erro
         try {
             const event = parseEvent(line);
             if (event !== null) {
-                output.write(`${renderEvent(event)}\n`);
+                output.write(`${renderEvent(event, visuals)}\n`);
             }
         }
         catch (error) {
@@ -130,6 +172,20 @@ export function runNarrator(input = process.stdin, output = process.stdout, erro
         }
     });
     return rl;
+}
+export function loadVisualsFromPath(path) {
+    return parseVisualContract(JSON.parse(readFileSync(path, "utf8")));
+}
+function parseCLIVisuals(args) {
+    const visualFlagIndex = args.findIndex((arg) => arg === "--visuals");
+    if (visualFlagIndex === -1) {
+        return undefined;
+    }
+    const visualPath = args[visualFlagIndex + 1];
+    if (visualPath === undefined || visualPath.trim() === "") {
+        throw new Error("--visuals requires a path");
+    }
+    return loadVisualsFromPath(visualPath);
 }
 function realpathOrResolve(path) {
     try {
@@ -146,5 +202,5 @@ function isEntrypoint(importURL, argvPath) {
     return realpathOrResolve(fileURLToPath(importURL)) === realpathOrResolve(argvPath);
 }
 if (isEntrypoint(import.meta.url, process.argv[1])) {
-    runNarrator();
+    runNarrator(process.stdin, process.stdout, process.stderr, parseCLIVisuals(process.argv.slice(2)));
 }

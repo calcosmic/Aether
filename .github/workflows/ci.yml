@@ -62,8 +62,9 @@ jobs:
           git diff --exit-code -- .aether/ts/dist/narrator.js
           npm --prefix .aether/ts run typecheck
           npm --prefix .aether/ts test
+          go run ./cmd/aether visuals-dump --json > /tmp/aether-visuals.json
           mv .aether/ts/node_modules .aether/ts/node_modules.disabled
-          printf '%s\n' '{"topic":"ceremony.build.spawn","payload":{"phase":1,"caste":"builder","name":"Mason-67","status":"starting"}}' | node .aether/ts/dist/narrator.js
+          printf '%s\n' '{"topic":"ceremony.build.spawn","payload":{"phase":1,"caste":"builder","name":"Mason-67","status":"starting"}}' | node .aether/ts/dist/narrator.js --visuals /tmp/aether-visuals.json
           mv .aether/ts/node_modules.disabled .aether/ts/node_modules
 
       - name: Run npm bootstrap tests

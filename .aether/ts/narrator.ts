@@ -1,5 +1,5 @@
 import readline from "node:readline";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +36,16 @@ export interface CeremonyPayload {
   success_criteria?: string[];
 }
 
+export interface CasteVisual {
+  emoji?: string;
+  color?: string;
+  label?: string;
+}
+
+export interface VisualContract {
+  castes: Record<string, CasteVisual>;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -45,6 +55,33 @@ function asPayload(value: unknown): CeremonyPayload {
     return {};
   }
   return value as CeremonyPayload;
+}
+
+export function parseVisualContract(value: unknown): VisualContract {
+  const candidate = isRecord(value) && isRecord(value.result) ? value.result : value;
+  if (!isRecord(candidate) || !isRecord(candidate.castes)) {
+    throw new Error("visual contract is missing castes");
+  }
+
+  const castes: Record<string, CasteVisual> = {};
+  for (const [key, rawVisual] of Object.entries(candidate.castes)) {
+    if (!isRecord(rawVisual)) {
+      continue;
+    }
+    const visual: CasteVisual = {};
+    if (typeof rawVisual.emoji === "string") {
+      visual.emoji = rawVisual.emoji;
+    }
+    if (typeof rawVisual.color === "string") {
+      visual.color = rawVisual.color;
+    }
+    if (typeof rawVisual.label === "string") {
+      visual.label = rawVisual.label;
+    }
+    castes[normalizeCaste(key)] = visual;
+  }
+
+  return { castes };
 }
 
 export function sanitizeTerminalText(value: unknown): string {
@@ -78,7 +115,35 @@ export function parseEvent(line: string): CeremonyEvent | null {
   return event;
 }
 
-export function renderEvent(event: CeremonyEvent): string {
+function normalizeCaste(caste: string): string {
+  return caste.trim().toLowerCase().replace(/[-\s]+/g, "_");
+}
+
+function formatIdentity(payload: CeremonyPayload, visuals?: VisualContract): string | null {
+  if (payload.caste === undefined && payload.name === undefined) {
+    return null;
+  }
+
+  const caste = payload.caste === undefined ? "" : sanitizeTerminalText(payload.caste);
+  const normalizedCaste = normalizeCaste(caste);
+  const visual = normalizedCaste === "" ? undefined : visuals?.castes[normalizedCaste];
+  const label = visual?.label === undefined ? caste : sanitizeTerminalText(visual.label);
+  const emoji = visual?.emoji === undefined ? "" : `${sanitizeTerminalText(visual.emoji)} `;
+  const name = payload.name === undefined ? "" : sanitizeTerminalText(payload.name);
+
+  if (label !== "" && name !== "") {
+    return `${emoji}${label}:${name}`;
+  }
+  if (label !== "") {
+    return `${emoji}${label}`;
+  }
+  if (name !== "") {
+    return name;
+  }
+  return null;
+}
+
+export function renderEvent(event: CeremonyEvent, visuals?: VisualContract): string {
   const payload = asPayload(event.payload);
   const parts: string[] = ["[CEREMONY]", sanitizeTerminalText(event.topic)];
 
@@ -94,15 +159,9 @@ export function renderEvent(event: CeremonyEvent): string {
   if (payload.spawn_id !== undefined) {
     parts.push(`spawn=${sanitizeTerminalText(payload.spawn_id)}`);
   }
-  if (payload.caste !== undefined || payload.name !== undefined) {
-    const identityParts: string[] = [];
-    if (payload.caste !== undefined) {
-      identityParts.push(sanitizeTerminalText(payload.caste));
-    }
-    if (payload.name !== undefined) {
-      identityParts.push(sanitizeTerminalText(payload.name));
-    }
-    parts.push(identityParts.join(":"));
+  const identity = formatIdentity(payload, visuals);
+  if (identity !== null) {
+    parts.push(identity);
   }
   if (payload.status !== undefined) {
     parts.push(`status=${sanitizeTerminalText(payload.status)}`);
@@ -155,7 +214,8 @@ export function renderEvent(event: CeremonyEvent): string {
 export function runNarrator(
   input: NodeJS.ReadableStream = process.stdin,
   output: NodeJS.WritableStream = process.stdout,
-  errorOutput: NodeJS.WritableStream = process.stderr
+  errorOutput: NodeJS.WritableStream = process.stderr,
+  visuals?: VisualContract
 ): readline.Interface {
   const rl = readline.createInterface({
     input,
@@ -166,7 +226,7 @@ export function runNarrator(
     try {
       const event = parseEvent(line);
       if (event !== null) {
-        output.write(`${renderEvent(event)}\n`);
+        output.write(`${renderEvent(event, visuals)}\n`);
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -175,6 +235,22 @@ export function runNarrator(
   });
 
   return rl;
+}
+
+export function loadVisualsFromPath(path: string): VisualContract {
+  return parseVisualContract(JSON.parse(readFileSync(path, "utf8")));
+}
+
+function parseCLIVisuals(args: string[]): VisualContract | undefined {
+  const visualFlagIndex = args.findIndex((arg) => arg === "--visuals");
+  if (visualFlagIndex === -1) {
+    return undefined;
+  }
+  const visualPath = args[visualFlagIndex + 1];
+  if (visualPath === undefined || visualPath.trim() === "") {
+    throw new Error("--visuals requires a path");
+  }
+  return loadVisualsFromPath(visualPath);
 }
 
 function realpathOrResolve(path: string): string {
@@ -193,5 +269,5 @@ function isEntrypoint(importURL: string, argvPath: string | undefined): boolean 
 }
 
 if (isEntrypoint(import.meta.url, process.argv[1])) {
-  runNarrator();
+  runNarrator(process.stdin, process.stdout, process.stderr, parseCLIVisuals(process.argv.slice(2)));
 }

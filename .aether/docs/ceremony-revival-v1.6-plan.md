@@ -48,7 +48,7 @@ and real worker bridge on top of the current runtime instead of replacing it.
 - Add `event-bus-subscribe --stream --filter ceremony.*` for NDJSON streaming.
   (Initial scaffold exists.)
 - Add `visuals-dump --json` so TS consumes Go's caste emoji/color/label maps.
-  (Initial scaffold exists.)
+  (Initial scaffold exists; narrator can consume the envelope via `--visuals`.)
 - Build a narrator stub that reads NDJSON from stdin and prints one ceremony line
   per event. (Initial scaffold exists; `dist/narrator.js` is dependency-free at
   runtime; Go auto-launch is not wired yet.)
