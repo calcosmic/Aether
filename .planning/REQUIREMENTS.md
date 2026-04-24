@@ -7,16 +7,16 @@
 
 ### Plan Recovery
 
-- [ ] **PLAN-01** (R069): `aether plan --force` succeeds when no real build work has happened, resetting phase status to allow replanning regardless of current phase state
-- [ ] **PLAN-02** (R070): On `--force`, route-setter fallback artifacts are cleared so the route-setter can always write a fresh worker-written plan
+- [x] **PLAN-01** (R069): `aether plan --force` succeeds when no real build work has happened, resetting phase status to allow replanning regardless of current phase state
+- [x] **PLAN-02** (R070): On `--force`, route-setter fallback artifacts are cleared so the route-setter can always write a fresh worker-written plan
 
 ### Timeout Policy
 
-- [ ] **TIME-01** (R071): Default scout worker timeout raised from 5m to 10m, reducing premature fallback to local synthesis in larger repos
+- [x] **TIME-01** (R071): Default scout worker timeout raised from 5m to 10m, reducing premature fallback to local synthesis in larger repos
 
 ### Verification
 
-- [ ] **TEST-01** (R072): E2E test proving: init → plan (with timeout/fallback) → `--force` replan → route-setter writes real plan, all without manual state manipulation
+- [x] **TEST-01** (R072): E2E test proving: init → plan (with timeout/fallback) → `--force` replan → route-setter writes real plan, all without manual state manipulation
 
 ## Completed (Prior Milestones)
 
