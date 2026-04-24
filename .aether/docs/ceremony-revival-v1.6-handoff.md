@@ -1,11 +1,12 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T12:00:05Z
+Last updated: 2026-04-24T12:14:23Z
 
 Branch: `codex/ceremony-lifecycle-events-v16`
 Base: `origin/main` after merged PR #7
 Previous PR: `https://github.com/calcosmic/Aether/pull/5` (merged/closed; covered only the early branch state through `c1880184`)
 Merged PRs: `https://github.com/calcosmic/Aether/pull/6`, `https://github.com/calcosmic/Aether/pull/7`
+Open PR: `https://github.com/calcosmic/Aether/pull/8` (draft; not merged)
 
 ## Purpose
 
@@ -33,7 +34,7 @@ There are two separate progress tracks in this checkout:
    lifecycle state only. Do not manually edit it to match code progress.
 2. **Branch implementation progress**: git commits plus this tracked handoff are
    the source of truth for what has actually been implemented on
-   `codex/ceremony-narrator-foundation-v16`.
+   `codex/ceremony-lifecycle-events-v16`.
 
 This mismatch is expected for this branch because implementation slices were
 committed directly while the persisted colony lifecycle was not advanced through
@@ -48,15 +49,17 @@ committed directly while the persisted colony lifecycle was not advanced through
 | Phase 3: rolling activity display | Implemented foundation | `.aether/ts/narrator.ts`, multi-wave activity tests, `dist/narrator.js` | TTY live redraw/debounce deferred until real terminal contract is clear |
 | Phase 4: build subagent bridge | Implemented for wrappers | `build --plan-only`, `build-finalize`, manifest `execution_plan`, Claude/OpenCode build wrappers, wrapper contract tests | Live platform smoke and any future specialist prompt polish |
 | Phase 5: continue and plan orchestration | Implemented for wrappers | `continue --plan-only`, `continue-finalize`, `plan --plan-only`, `plan-finalize`, wrapper contract tests | Live platform smoke; stall/confidence ceremony polish |
-| Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; uncommitted TS slice renders generic lifecycle stages and context notices | Emit Go-backed events for plan, continue, colonize, pheromones, chamber sealing, graves/entomb; surface skill/QUEEN/Hive/midden context from real state |
+| Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; TS renders generic lifecycle stages and context notices; Go emits pheromone/chamber plus plan/colonize/continue wave events | Emit skill activation and remaining QUEEN/Hive/midden/graveyard context from real state |
 | Phase 7: parity verification and release | Not done | Release/rollback notes exist | Cross-platform smoke, install/update release checks, PR review, release hardening |
 
-Safe continuation point: PR #6 and PR #7 are merged. Current branch is
-`codex/ceremony-lifecycle-events-v16` from `origin/main`. Go-side wrapper smoke
-passed for `build 1 --plan-only`; true Claude/OpenCode Task-tool smoke remains
-pending because Codex cannot execute those platform Task-tool wrappers directly.
-The current working-tree slice starts Phase 6 Go-backed lifecycle ceremony
-emission for pheromones and chamber sealing.
+Safe continuation point: PR #6 and PR #7 are merged. PR #8 is still open as a
+draft for `codex/ceremony-lifecycle-events-v16`; it is not on `main` yet.
+The old `codex/ceremony-narrator-foundation-v16` branch still appears on
+GitHub because PR #7 was merged without deleting its source branch. Go-side
+wrapper smoke passed for `build 1 --plan-only`; true Claude/OpenCode Task-tool
+smoke remains pending because Codex cannot execute those platform Task-tool
+wrappers directly. The current working-tree slice continues Phase 6 Go-backed
+lifecycle ceremony emission for plan, colonize, and continue wave events.
 
 ## Already Shipped On This Branch
 
@@ -1013,6 +1016,47 @@ Verification run:
 - `go test ./... -count=1 -timeout 300s`
 - `go vet ./...`
 
+## Working Tree Slice: Phase 6 Plan, Colonize, And Continue Wave Events
+
+Date: 2026-04-24
+
+This slice broadens Go-backed lifecycle ceremony emission beyond build,
+pheromones, and seal.
+
+Changed files:
+
+- `pkg/events/ceremony.go`
+- `cmd/ceremony_emitter.go`
+- `cmd/codex_plan.go`
+- `cmd/codex_plan_finalize.go`
+- `cmd/codex_colonize.go`
+- `cmd/codex_continue.go`
+- `cmd/codex_continue_finalize.go`
+- `cmd/ceremony_emitter_test.go`
+
+Implemented behavior:
+
+- New event topics:
+  `ceremony.plan.wave.start`, `ceremony.plan.spawn`,
+  `ceremony.plan.wave.end`, `ceremony.colonize.wave.start`,
+  `ceremony.colonize.spawn`, `ceremony.colonize.wave.end`,
+  `ceremony.continue.wave.start`, `ceremony.continue.spawn`, and
+  `ceremony.continue.wave.end`.
+- `emitLifecycleCeremonySequence` converts completed Go-owned lifecycle worker
+  results into retrospective wave start/spawn/wave end event sequences.
+- `plan` and `plan-finalize` now persist Scout/Route-Setter ceremony events.
+- `colonize` now persists surveyor ceremony events.
+- `continue` and `continue-finalize` now persist verification, review, and
+  housekeeping ceremony events from the final worker flow.
+
+Verification run:
+
+- `go test ./cmd -run 'Test.*Ceremony|TestCeremony|TestPlanEmitsLifecycleCeremonyEvents|TestColonizeEmitsLifecycleCeremonyEvents|TestContinueEmitsLifecycleCeremonyEvents' -count=1`
+- `go test ./cmd -count=1`
+- `git diff --check`
+- `go test ./... -count=1 -timeout 300s`
+- `go vet ./...`
+
 ## Release And Rollback
 
 Rollback controls:
@@ -1033,24 +1077,25 @@ Before release:
 
 ## Current Next Step
 
-Next, commit and push the Phase 6 pheromone/chamber event slice, then continue
-lifecycle event emission for plan, continue, colonize, and visible worker/skill
-context. Platform Task-tool smoke is still required when Claude or OpenCode is
-available. The preconditions now satisfied are:
+Next, commit and push the Phase 6 plan/colonize/continue wave event slice to
+PR #8, then continue with visible worker/skill context events. Platform
+Task-tool smoke is still required when Claude or OpenCode is available. The
+preconditions now satisfied are:
 
 1. hub fallback smoke passed in a temporary HOME;
 2. TTY live redraw is consciously deferred;
 3. multi-wave TS fixture passes;
 4. build, continue, and plan wrappers now have plan-only/finalizer bridges;
 5. focused Go, full Go, TS, vet, and whitespace gates pass;
-6. draft PR #6 is open;
+6. PR #8 is open as a draft and not merged;
 7. the branch has merged the PR #5 squash commit from `main` with an
    ancestry-only merge because its tree already matched branch commit
    `c1880184`;
-8. PR #6 is clean/mergeable;
+8. PR #6 and PR #7 are merged;
 9. Go-side wrapper smoke passed for
    `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`, producing
    standard-depth builder wave 11, Probe wave 12, and Watcher wave 13;
-10. PR #6 and PR #7 are merged;
-11. Phase 6 pheromone/chamber event hooks are implemented in the working tree
-    with focused, full cmd, full repo, vet, and whitespace checks passing.
+10. Phase 6 pheromone/chamber event hooks are implemented and verified;
+11. Phase 6 plan/colonize/continue wave event hooks are implemented in the
+    working tree with focused, full cmd, full repo, vet, and whitespace checks
+    passing.

@@ -167,6 +167,7 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 			return nil, fmt.Errorf("failed to update surveyor completion: %w", err)
 		}
 	}
+	emitColonizeCeremonyDispatchSequence("aether-colonize", dispatches)
 
 	surveyedAt := time.Now().UTC().Format(time.RFC3339)
 	if err := updateSurveyState(surveyedAt, len(surveyFiles)); err != nil {

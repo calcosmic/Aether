@@ -129,6 +129,216 @@ func emitLifecycleCeremony(topic string, payload events.CeremonyPayload, source 
 	_, _ = bus.Publish(context.Background(), topic, raw, source)
 }
 
+type lifecycleCeremonyTopics struct {
+	WaveStart string
+	Spawn     string
+	WaveEnd   string
+}
+
+type lifecycleCeremonyStep struct {
+	Wave     int
+	SpawnID  string
+	Caste    string
+	Name     string
+	TaskID   string
+	Task     string
+	Status   string
+	Message  string
+	Blockers []string
+}
+
+func emitLifecycleCeremonySequence(topics lifecycleCeremonyTopics, source, lifecycle string, phase int, phaseName string, steps []lifecycleCeremonyStep) {
+	if len(steps) == 0 || strings.TrimSpace(topics.WaveStart) == "" || strings.TrimSpace(topics.Spawn) == "" || strings.TrimSpace(topics.WaveEnd) == "" {
+		return
+	}
+	lifecycle = strings.TrimSpace(lifecycle)
+	if lifecycle == "" {
+		lifecycle = "lifecycle"
+	}
+
+	waves := map[int][]lifecycleCeremonyStep{}
+	waveOrder := []int{}
+	for _, step := range steps {
+		wave := step.Wave
+		if wave <= 0 {
+			wave = 1
+		}
+		step.Wave = wave
+		if _, seen := waves[wave]; !seen {
+			waveOrder = append(waveOrder, wave)
+		}
+		waves[wave] = append(waves[wave], step)
+	}
+
+	for _, wave := range waveOrder {
+		waveSteps := waves[wave]
+		emitLifecycleCeremony(topics.WaveStart, events.CeremonyPayload{
+			Phase:     phase,
+			PhaseName: phaseName,
+			Wave:      wave,
+			Total:     len(waveSteps),
+			Status:    "starting",
+			Message:   fmt.Sprintf("%s wave %d with %d worker(s)", lifecycle, wave, len(waveSteps)),
+		}, source)
+
+		completed := 0
+		blockers := []string{}
+		for _, step := range waveSteps {
+			status := ceremonyStepStatus(step.Status)
+			if ceremonyStepCompleted(status) {
+				completed++
+			}
+			blockers = append(blockers, step.Blockers...)
+			if !ceremonyStepCompleted(status) && strings.TrimSpace(step.Message) != "" {
+				blockers = append(blockers, step.Message)
+			}
+			emitLifecycleCeremony(topics.Spawn, events.CeremonyPayload{
+				Phase:     phase,
+				PhaseName: phaseName,
+				Wave:      wave,
+				SpawnID:   step.SpawnID,
+				Caste:     step.Caste,
+				Name:      step.Name,
+				TaskID:    step.TaskID,
+				Task:      step.Task,
+				Status:    status,
+				Message:   step.Message,
+				Blockers:  step.Blockers,
+			}, source)
+		}
+
+		waveStatus := "completed"
+		if completed < len(waveSteps) || len(blockers) > 0 {
+			waveStatus = "blocked"
+		}
+		emitLifecycleCeremony(topics.WaveEnd, events.CeremonyPayload{
+			Phase:     phase,
+			PhaseName: phaseName,
+			Wave:      wave,
+			Status:    waveStatus,
+			Completed: completed,
+			Total:     len(waveSteps),
+			Blockers:  blockers,
+			Message:   fmt.Sprintf("%s wave %d %s", lifecycle, wave, waveStatus),
+		}, source)
+	}
+}
+
+func ceremonyStepStatus(status string) string {
+	status = strings.TrimSpace(status)
+	if status == "" || status == "spawned" || status == "planned" {
+		return "completed"
+	}
+	return status
+}
+
+func ceremonyStepCompleted(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "", "completed", "manually-reconciled", "skipped":
+		return true
+	default:
+		return false
+	}
+}
+
+func emitPlanCeremonyDispatchSequence(source string, dispatches []codexPlanningDispatch) {
+	steps := make([]lifecycleCeremonyStep, 0, len(dispatches))
+	for idx, dispatch := range dispatches {
+		wave := dispatch.Wave
+		if wave <= 0 {
+			wave = idx + 1
+		}
+		taskID := strings.TrimSpace(dispatch.TaskID)
+		if taskID == "" {
+			taskID = fmt.Sprintf("plan-%d", idx)
+		}
+		message := strings.TrimSpace(dispatch.Summary)
+		if message == "" {
+			message = strings.Join(dispatch.Outputs, ", ")
+		}
+		steps = append(steps, lifecycleCeremonyStep{
+			Wave:     wave,
+			SpawnID:  taskID,
+			Caste:    dispatch.Caste,
+			Name:     dispatch.Name,
+			TaskID:   taskID,
+			Task:     dispatch.Task,
+			Status:   dispatch.Status,
+			Message:  message,
+			Blockers: append([]string{}, dispatch.Blockers...),
+		})
+	}
+	emitLifecycleCeremonySequence(lifecycleCeremonyTopics{
+		WaveStart: events.CeremonyTopicPlanWaveStart,
+		Spawn:     events.CeremonyTopicPlanSpawn,
+		WaveEnd:   events.CeremonyTopicPlanWaveEnd,
+	}, source, "plan", 0, "Planning", steps)
+}
+
+func emitColonizeCeremonyDispatchSequence(source string, dispatches []codexSurveyorDispatch) {
+	steps := make([]lifecycleCeremonyStep, 0, len(dispatches))
+	for idx, dispatch := range dispatches {
+		taskID := fmt.Sprintf("survey-%d", idx)
+		message := strings.TrimSpace(dispatch.Summary)
+		if message == "" {
+			message = strings.Join(dispatch.Outputs, ", ")
+		}
+		steps = append(steps, lifecycleCeremonyStep{
+			Wave:    1,
+			SpawnID: taskID,
+			Caste:   dispatch.Caste,
+			Name:    dispatch.Name,
+			TaskID:  taskID,
+			Task:    dispatch.Task,
+			Status:  dispatch.Status,
+			Message: message,
+		})
+	}
+	emitLifecycleCeremonySequence(lifecycleCeremonyTopics{
+		WaveStart: events.CeremonyTopicColonizeWaveStart,
+		Spawn:     events.CeremonyTopicColonizeSpawn,
+		WaveEnd:   events.CeremonyTopicColonizeWaveEnd,
+	}, source, "colonize", 0, "Territory Survey", steps)
+}
+
+func emitContinueCeremonyFlowSequence(source string, phase colony.Phase, workerFlow []codexContinueWorkerFlowStep) {
+	steps := make([]lifecycleCeremonyStep, 0, len(workerFlow))
+	for idx, step := range workerFlow {
+		taskID := fmt.Sprintf("continue-%d", idx)
+		if stage := strings.TrimSpace(step.Stage); stage != "" {
+			taskID = fmt.Sprintf("continue-%s-%d", stage, idx)
+		}
+		steps = append(steps, lifecycleCeremonyStep{
+			Wave:    continueCeremonyWaveForStage(step.Stage),
+			SpawnID: taskID,
+			Caste:   step.Caste,
+			Name:    step.Name,
+			TaskID:  taskID,
+			Task:    continueWorkerFlowTask(step),
+			Status:  step.Status,
+			Message: step.Summary,
+		})
+	}
+	emitLifecycleCeremonySequence(lifecycleCeremonyTopics{
+		WaveStart: events.CeremonyTopicContinueWaveStart,
+		Spawn:     events.CeremonyTopicContinueSpawn,
+		WaveEnd:   events.CeremonyTopicContinueWaveEnd,
+	}, source, "continue", phase.ID, phase.Name, steps)
+}
+
+func continueCeremonyWaveForStage(stage string) int {
+	switch strings.ToLower(strings.TrimSpace(stage)) {
+	case "verification":
+		return 1
+	case "review":
+		return 2
+	case "housekeeping":
+		return 3
+	default:
+		return 1
+	}
+}
+
 func syntheticCeremonyEvent(topic string, payload json.RawMessage, source string) events.Event {
 	now := time.Now().UTC()
 	return events.Event{

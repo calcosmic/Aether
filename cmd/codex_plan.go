@@ -342,6 +342,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			return nil, fmt.Errorf("failed to update planning completion: %w", err)
 		}
 	}
+	emitPlanCeremonyDispatchSequence("aether-plan", dispatches)
 
 	now := time.Now().UTC()
 	state.State = colony.StateREADY

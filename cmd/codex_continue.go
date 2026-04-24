@@ -268,12 +268,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		_ = store.SaveJSON(
 			filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json")),
 			codexContinueReport{
-				Phase:         phase.ID,
-				GeneratedAt:   now.Format(time.RFC3339),
-				Summary:       abandonedSummary,
-				Recovery:      recovery,
-				Advanced:      false,
-				Completed:     false,
+				Phase:       phase.ID,
+				GeneratedAt: now.Format(time.RFC3339),
+				Summary:     abandonedSummary,
+				Recovery:    recovery,
+				Advanced:    false,
+				Completed:   false,
 			},
 		)
 		finishRuntimeSpawnRun(runHandle, "blocked-abandoned", now)
@@ -349,6 +349,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowWithWatcher(nil, watcherFlow)
+		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForAssessment(assessment)
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
 			Phase:              phase.ID,
@@ -409,6 +410,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowWithWatcher(review.Workers, watcherFlow)
+		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForAssessment(assessment)
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
 			Phase:              phase.ID,
@@ -528,6 +530,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err := applyCodexContinueWorkerClosures(closedWorkerDetails); err != nil {
 		return nil, state, phase, nil, &housekeeping, false, err
 	}
+	emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 	updated.Events = append(updated.Events, continueWorkerFlowEvents(now, workerFlow)...)
 	// Persist side-effect events (review, housekeeping) into colony state.
 	// This is a best-effort append; the core advancement was already committed.

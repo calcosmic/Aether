@@ -374,6 +374,7 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	if err := store.SaveJSON("COLONY_STATE.json", blockedState); err != nil {
 		return nil, state, fmt.Errorf("failed to save colony state: %w", err)
 	}
+	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, workerFlow)
 	updateSessionSummary("continue-finalize", nextCommand, summary)
 	result := map[string]interface{}{
 		"advanced":            false,
@@ -467,6 +468,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 	if err := applyCodexContinueWorkerClosures(closedWorkerDetails); err != nil {
 		return nil, state, nil, &housekeeping, final, err
 	}
+	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, fullWorkerFlow)
 	updated.Events = append(updated.Events, continueWorkerFlowEvents(now, fullWorkerFlow)...)
 	_ = store.SaveJSON("COLONY_STATE.json", updated)
 

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 )
@@ -253,6 +255,92 @@ func TestSealEmitsChamberCeremonyEvent(t *testing.T) {
 	}
 }
 
+func TestPlanEmitsLifecycleCeremonyEvents(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	goal := "Plan ceremony events"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	if _, err := runCodexPlanWithOptions(root, codexPlanOptions{Synthetic: true}); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	assertCeremonyTopics(t, readPersistedCeremonyEvents(t),
+		events.CeremonyTopicPlanWaveStart,
+		events.CeremonyTopicPlanSpawn,
+		events.CeremonyTopicPlanWaveEnd,
+	)
+}
+
+func TestColonizeEmitsLifecycleCeremonyEvents(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	if _, err := runCodexColonizeWithOptions(root, codexColonizeOptions{}); err != nil {
+		t.Fatalf("colonize returned error: %v", err)
+	}
+
+	assertCeremonyTopics(t, readPersistedCeremonyEvents(t),
+		events.CeremonyTopicColonizeWaveStart,
+		events.CeremonyTopicColonizeSpawn,
+		events.CeremonyTopicColonizeWaveEnd,
+	)
+}
+
+func TestContinueEmitsLifecycleCeremonyEvents(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	now := time.Now().UTC()
+	goal := "Continue ceremony events"
+	taskID := "1.1"
+	state := colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Continue hooks",
+			Status: colony.PhaseInProgress,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Emit continue ceremony events", Status: colony.TaskPending}},
+		}}},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+	seedContinueBuildPacket(t, s.BasePath(), 1, "Continue hooks", goal, []codexBuildDispatch{{
+		Stage:  "implementation",
+		Caste:  "builder",
+		Name:   "Mason-67",
+		TaskID: taskID,
+		Task:   "Emit continue ceremony events",
+		Status: "completed",
+	}})
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &continueUnavailableInvoker{} }
+
+	if _, _, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{}); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	assertCeremonyTopics(t, readPersistedCeremonyEvents(t),
+		events.CeremonyTopicContinueWaveStart,
+		events.CeremonyTopicContinueSpawn,
+		events.CeremonyTopicContinueWaveEnd,
+	)
+}
+
 func TestActiveBuildCeremonyScopeRestoresPreviousEmitter(t *testing.T) {
 	saveGlobals(t)
 	outer := &buildCeremonyEmitter{phaseID: 1, phaseName: "outer"}
@@ -273,6 +361,36 @@ func TestActiveBuildCeremonyScopeRestoresPreviousEmitter(t *testing.T) {
 	restoreOuter()
 	if currentBuildCeremony() != nil {
 		t.Fatal("active emitter was not cleared")
+	}
+}
+
+func readPersistedCeremonyEvents(t *testing.T) []events.Event {
+	t.Helper()
+	lines, err := store.ReadJSONL("event-bus.jsonl")
+	if err != nil {
+		t.Fatalf("read event bus: %v", err)
+	}
+	persisted := make([]events.Event, 0, len(lines))
+	for _, line := range lines {
+		var evt events.Event
+		if err := json.Unmarshal(line, &evt); err != nil {
+			t.Fatalf("unmarshal event: %v", err)
+		}
+		persisted = append(persisted, evt)
+	}
+	return persisted
+}
+
+func assertCeremonyTopics(t *testing.T, persisted []events.Event, wants ...string) {
+	t.Helper()
+	seen := map[string]bool{}
+	for _, evt := range persisted {
+		seen[evt.Topic] = true
+	}
+	for _, want := range wants {
+		if !seen[want] {
+			t.Fatalf("missing ceremony topic %q in %+v", want, persisted)
+		}
 	}
 }
 

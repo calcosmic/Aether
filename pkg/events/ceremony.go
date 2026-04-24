@@ -3,14 +3,23 @@ package events
 import "encoding/json"
 
 const (
-	CeremonyTopicBuildPrewave   = "ceremony.build.prewave"
-	CeremonyTopicBuildWaveStart = "ceremony.build.wave.start"
-	CeremonyTopicBuildSpawn     = "ceremony.build.spawn"
-	CeremonyTopicBuildToolUse   = "ceremony.build.tool_use"
-	CeremonyTopicBuildWaveEnd   = "ceremony.build.wave.end"
-	CeremonyTopicPheromoneEmit  = "ceremony.pheromone.emit"
-	CeremonyTopicSkillActivate  = "ceremony.skill.activate"
-	CeremonyTopicChamberSeal    = "ceremony.chamber.seal"
+	CeremonyTopicBuildPrewave      = "ceremony.build.prewave"
+	CeremonyTopicBuildWaveStart    = "ceremony.build.wave.start"
+	CeremonyTopicBuildSpawn        = "ceremony.build.spawn"
+	CeremonyTopicBuildToolUse      = "ceremony.build.tool_use"
+	CeremonyTopicBuildWaveEnd      = "ceremony.build.wave.end"
+	CeremonyTopicPlanWaveStart     = "ceremony.plan.wave.start"
+	CeremonyTopicPlanSpawn         = "ceremony.plan.spawn"
+	CeremonyTopicPlanWaveEnd       = "ceremony.plan.wave.end"
+	CeremonyTopicColonizeWaveStart = "ceremony.colonize.wave.start"
+	CeremonyTopicColonizeSpawn     = "ceremony.colonize.spawn"
+	CeremonyTopicColonizeWaveEnd   = "ceremony.colonize.wave.end"
+	CeremonyTopicContinueWaveStart = "ceremony.continue.wave.start"
+	CeremonyTopicContinueSpawn     = "ceremony.continue.spawn"
+	CeremonyTopicContinueWaveEnd   = "ceremony.continue.wave.end"
+	CeremonyTopicPheromoneEmit     = "ceremony.pheromone.emit"
+	CeremonyTopicSkillActivate     = "ceremony.skill.activate"
+	CeremonyTopicChamberSeal       = "ceremony.chamber.seal"
 )
 
 // CeremonyPayload is the shared event shape consumed by the bundled narrator.
@@ -55,6 +64,15 @@ func CeremonyTopics() []string {
 		CeremonyTopicBuildSpawn,
 		CeremonyTopicBuildToolUse,
 		CeremonyTopicBuildWaveEnd,
+		CeremonyTopicPlanWaveStart,
+		CeremonyTopicPlanSpawn,
+		CeremonyTopicPlanWaveEnd,
+		CeremonyTopicColonizeWaveStart,
+		CeremonyTopicColonizeSpawn,
+		CeremonyTopicColonizeWaveEnd,
+		CeremonyTopicContinueWaveStart,
+		CeremonyTopicContinueSpawn,
+		CeremonyTopicContinueWaveEnd,
 		CeremonyTopicPheromoneEmit,
 		CeremonyTopicSkillActivate,
 		CeremonyTopicChamberSeal,

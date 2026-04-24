@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T12:00:05Z |
+| **Last Updated** | 2026-04-24T12:14:23Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -70,11 +70,13 @@ TypeScript lifecycle-context rendering slice is in the working tree: `.aether/ts
 
 Broad checkpoint verification passed on 2026-04-24T11:27:54Z: TS install/typecheck/test/build, `gofmt`, `git diff --check`, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, and `go vet ./...`.
 
-GitHub PR status: PR #5, PR #6, and PR #7 are merged. Current implementation branch is `codex/ceremony-lifecycle-events-v16`, based on `origin/main` at PR #7.
+GitHub PR status: PR #5, PR #6, and PR #7 are merged. PR #8 is still open as a draft for `codex/ceremony-lifecycle-events-v16`; it is not on `main` yet. The old `codex/ceremony-narrator-foundation-v16` branch still appears on GitHub because PR #7 was merged but the source branch was not deleted.
 
 Go-side wrapper smoke passed with `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`: the standard-depth manifest emitted builder execution wave 11, Probe wave 12, and Watcher wave 13. True Claude/OpenCode Task-tool smoke remains pending because Codex cannot execute those platform wrapper tools directly.
 
 Phase 6 first Go-backed lifecycle ceremony slice is complete in the working tree: `emitLifecycleCeremony` persists non-build ceremony events to `event-bus.jsonl`; `pheromone-write` now emits `ceremony.pheromone.emit`; `aether seal` now emits `ceremony.chamber.seal`. Focused tests, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, `go vet ./...`, and `git diff --check` passed.
+
+Phase 6 plan/colonize/continue ceremony slice is complete in the working tree: `pkg/events/ceremony.go` defines `ceremony.plan.*`, `ceremony.colonize.*`, and `ceremony.continue.*` wave/spawn topics; `cmd/ceremony_emitter.go` has a shared lifecycle sequence emitter; `plan`, `plan-finalize`, `colonize`, `continue`, and `continue-finalize` persist retrospective wave start/spawn/wave end events from Go-owned command results. Focused ceremony tests, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, `go vet ./...`, and `git diff --check` passed.
 
 ---
 
@@ -140,13 +142,15 @@ Phase 6 first Go-backed lifecycle ceremony slice is complete in the working tree
 - 2026-04-24T11:36:13Z|go_side_wrapper_smoke|test|PR #6 clean/mergeable; build --plan-only emitted execution_plan for builder/probe/watcher waves
 - 2026-04-24T11:56:31Z|phase6_lifecycle_events|build|Pheromone and chamber seal ceremony events now persist through Go-owned lifecycle hooks
 - 2026-04-24T12:00:05Z|phase6_lifecycle_verified|test|Pheromone/chamber ceremony event slice passed focused, full cmd, full repo, vet, and whitespace checks
+- 2026-04-24T12:14:23Z|phase6_wave_events|build|Plan, colonize, and continue commands now persist ceremony wave/spawn event sequences from Go-owned lifecycle results
+- 2026-04-24T12:14:23Z|phase6_wave_events_verified|test|Lifecycle wave event slice passed focused ceremony tests, full cmd, full repo, vet, and whitespace checks
 
 ---
 
 ## Next Steps
 
-1. Commit/push the Phase 6 pheromone/chamber ceremony event slice
-2. Continue lifecycle event emission for plan, continue, colonize, and worker/skill context
+1. Commit/push the Phase 6 plan/colonize/continue lifecycle wave event slice to PR #8
+2. Continue Phase 6 worker/skill context events, especially `ceremony.skill.activate` from real skill activation points
 3. Run true Claude/OpenCode build wrapper smoke with platform Task-tool agents when available
 4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 

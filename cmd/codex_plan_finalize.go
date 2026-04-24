@@ -206,6 +206,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
 	}
+	emitPlanCeremonyDispatchSequence("aether-plan-finalize", dispatches)
 
 	nextPhase := firstBuildablePhase(phases)
 	nextCommand := "aether build 1"
