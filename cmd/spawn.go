@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
 
@@ -52,15 +54,26 @@ var spawnLogCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to record spawn: %v", err), nil)
 			return nil
 		}
+		eventID := emitSpawnTreeCeremony(events.CeremonyPayload{
+			SpawnID: name,
+			Caste:   caste,
+			Name:    name,
+			Task:    task,
+			Status:  "spawned",
+		})
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"recorded": true,
 			"parent":   parent,
 			"caste":    caste,
 			"name":     name,
 			"task":     task,
 			"depth":    depth,
-		})
+		}
+		if eventID != "" {
+			result["event_id"] = eventID
+		}
+		outputOK(result)
 		return nil
 	},
 }
@@ -90,6 +103,18 @@ var spawnCompleteCmd = &cobra.Command{
 			outputError(1, fmt.Sprintf("failed to update status: %v", err), nil)
 			return nil
 		}
+		entry := latestSpawnEntryByName(st, name)
+		payload := events.CeremonyPayload{
+			SpawnID: name,
+			Name:    name,
+			Status:  status,
+			Message: summary,
+		}
+		if entry != nil {
+			payload.Caste = entry.Caste
+			payload.Task = entry.Task
+		}
+		eventID := emitSpawnTreeCeremony(payload)
 
 		result := map[string]interface{}{
 			"completed": true,
@@ -99,9 +124,46 @@ var spawnCompleteCmd = &cobra.Command{
 		if summary != "" {
 			result["summary"] = summary
 		}
+		if eventID != "" {
+			result["event_id"] = eventID
+		}
 		outputOK(result)
 		return nil
 	},
+}
+
+func emitSpawnTreeCeremony(payload events.CeremonyPayload) string {
+	if store == nil {
+		return ""
+	}
+	payload = trimCeremonyPayload(payload)
+	raw, err := payload.RawMessage()
+	if err != nil {
+		return ""
+	}
+	bus := events.NewBus(store, events.DefaultConfig())
+	evt, err := bus.Publish(context.Background(), events.CeremonyTopicBuildSpawn, raw, "aether-spawn")
+	if err != nil || evt == nil {
+		return ""
+	}
+	return evt.ID
+}
+
+func latestSpawnEntryByName(st *agent.SpawnTree, name string) *agent.SpawnEntry {
+	if st == nil {
+		return nil
+	}
+	entries, err := st.Parse()
+	if err != nil {
+		return nil
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		if entries[i].AgentName == name {
+			entry := entries[i]
+			return &entry
+		}
+	}
+	return nil
 }
 
 var spawnCanSpawnCmd = &cobra.Command{

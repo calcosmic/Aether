@@ -31,7 +31,7 @@ var installCmd = &cobra.Command{
 		"machine already share that binary; `aether update` there only syncs companion\n" +
 		"files unless `--download-binary` is explicitly requested.\n\n" +
 		"Copies:\n" +
-		"  .claude/commands/ant/  -> ~/.claude/commands/ant/\n" +
+		"  .claude/commands/ant/  -> ~/.claude/commands/ant-*.md\n" +
 		"  .claude/agents/ant/    -> ~/.claude/agents/ant/\n" +
 		"  .opencode/commands/ant/ -> ~/.opencode/command/\n" +
 		"  .opencode/agents/      -> ~/.opencode/agent/\n" +
@@ -102,41 +102,9 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	results := []map[string]interface{}{}
 	var syncErrors []string
 
-	if shouldSyncPlatformHomes(channel) {
-		for _, pair := range installSyncPairs() {
-			srcDir := filepath.Join(packageDir, filepath.FromSlash(pair.srcRel))
-			destDir := filepath.Join(homeDir, filepath.FromSlash(pair.destRel))
-
-			result := syncDir(srcDir, destDir, syncOptions{
-				cleanup:              pair.cleanup,
-				preserveLocalChanges: pair.preserveLocalChanges,
-				validate:             pair.validate,
-				include:              pair.include,
-			})
-			entry := map[string]interface{}{
-				"label":   pair.label,
-				"src":     pair.srcRel,
-				"dest":    pair.destRel,
-				"copied":  result.copied,
-				"skipped": result.skipped,
-				"removed": len(result.removed),
-			}
-			if len(result.errors) > 0 {
-				entry["errors"] = result.errors
-				syncErrors = append(syncErrors, result.errors...)
-			}
-			results = append(results, entry)
-		}
-	} else {
-		results = append(results, map[string]interface{}{
-			"label":   "Platform homes",
-			"src":     ".claude/.opencode/.codex",
-			"dest":    "skipped",
-			"copied":  0,
-			"skipped": 0,
-			"note":    "Dev channel leaves global Claude/OpenCode/Codex home assets untouched by default.",
-		})
-	}
+	platformResults, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel)
+	results = append(results, platformResults...)
+	syncErrors = append(syncErrors, platformErrors...)
 
 	// Set up hub directory
 	hubDir := resolveHubPathForHome(homeDir, channel)
@@ -297,6 +265,8 @@ type syncOptions struct {
 	protectedFiles       map[string]bool
 	validate             syncValidator
 	include              syncFilter
+	mapRelPath           syncRelPathMapper
+	cleanupInclude       syncFilter
 }
 
 // syncDir copies files from src to dest, optionally preserving changed local
@@ -332,13 +302,20 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 	var ignored int
 	srcFiles, ignored = filterIgnoredSyncFiles(srcFiles)
 	result.skipped += ignored
+	destFilesFromSource := make([]string, 0, len(srcFiles))
 	for _, relPath := range srcFiles {
-		if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
+		destRelPath := mapSyncDestRelPath(relPath, opts.mapRelPath)
+		if destRelPath == "" {
+			result.skipped++
+			continue
+		}
+		destFilesFromSource = append(destFilesFromSource, destRelPath)
+		if syncPathProtected(destRelPath, opts.protectedDirs, opts.protectedFiles) {
 			result.skipped++
 			continue
 		}
 		srcPath := filepath.Join(src, relPath)
-		destPath := filepath.Join(dest, relPath)
+		destPath := filepath.Join(dest, destRelPath)
 
 		// Create parent directories
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
@@ -379,7 +356,7 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 		}
 
 		// Make .sh files executable
-		if strings.HasSuffix(relPath, ".sh") {
+		if strings.HasSuffix(destRelPath, ".sh") {
 			if err := os.Chmod(destPath, 0755); err != nil {
 				log.Printf("install: failed to chmod %s: %v", destPath, err)
 			}
@@ -391,13 +368,20 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 	if opts.cleanup {
 		// Remove stale files (in dest but not in src)
 		destFiles := listFilesRecursive(dest)
-		srcSet := make(map[string]struct{}, len(srcFiles))
-		for _, f := range srcFiles {
+		srcSet := make(map[string]struct{}, len(destFilesFromSource))
+		for _, f := range destFilesFromSource {
 			srcSet[f] = struct{}{}
+		}
+		cleanupFilter := opts.cleanupInclude
+		if cleanupFilter == nil {
+			cleanupFilter = opts.include
 		}
 
 		for _, relPath := range destFiles {
 			if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
+				continue
+			}
+			if cleanupFilter != nil && !cleanupFilter(relPath) {
 				continue
 			}
 			if syncPathIgnored(relPath) {
@@ -407,9 +391,6 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 				} else if !os.IsNotExist(err) {
 					result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", destPath, err))
 				}
-				continue
-			}
-			if opts.include != nil && !opts.include(relPath) {
 				continue
 			}
 			if _, exists := srcSet[relPath]; !exists {
@@ -426,12 +407,73 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 		if len(result.removed) > 0 {
 			cleanEmptyDirs(dest)
 		}
-		removed, errors := removeIgnoredDirsRecursive(dest, opts.protectedDirs, opts.include)
+		removed, errors := removeIgnoredDirsRecursive(dest, opts.protectedDirs, cleanupFilter)
 		result.removed = append(result.removed, removed...)
 		result.errors = append(result.errors, errors...)
 	}
 
 	return result
+}
+
+func mapSyncDestRelPath(relPath string, mapper syncRelPathMapper) string {
+	if mapper == nil {
+		return relPath
+	}
+	mapped := mapper(relPath)
+	if mapped == "" {
+		return ""
+	}
+	return filepath.Clean(mapped)
+}
+
+func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel) ([]map[string]interface{}, []string) {
+	results := []map[string]interface{}{}
+	var syncErrors []string
+
+	if !shouldSyncPlatformHomes(channel) {
+		return append(results, map[string]interface{}{
+			"label":   "Platform homes",
+			"src":     ".claude/.opencode/.codex",
+			"dest":    "skipped",
+			"copied":  0,
+			"skipped": 0,
+			"note":    "Dev channel leaves global Claude/OpenCode/Codex home assets untouched by default.",
+		}), syncErrors
+	}
+
+	for _, pair := range installSyncPairs() {
+		srcDir := filepath.Join(packageDir, filepath.FromSlash(pair.srcRel))
+		destDir := filepath.Join(homeDir, filepath.FromSlash(pair.destRel))
+
+		result := syncDir(srcDir, destDir, syncOptions{
+			cleanup:              pair.cleanup,
+			preserveLocalChanges: pair.preserveLocalChanges,
+			validate:             pair.validate,
+			include:              pair.include,
+			mapRelPath:           pair.mapRelPath,
+			cleanupInclude:       pair.cleanupInclude,
+		})
+		if pair.cleanupLegacyClaude && pair.cleanup {
+			removed, errors := removeLegacyClaudeCommandNamespace(destDir)
+			result.removed = append(result.removed, removed...)
+			result.errors = append(result.errors, errors...)
+		}
+		entry := map[string]interface{}{
+			"label":   pair.label,
+			"src":     pair.srcRel,
+			"dest":    pair.destRel,
+			"copied":  result.copied,
+			"skipped": result.skipped,
+			"removed": len(result.removed),
+		}
+		if len(result.errors) > 0 {
+			entry["errors"] = result.errors
+			syncErrors = append(syncErrors, result.errors...)
+		}
+		results = append(results, entry)
+	}
+
+	return results, syncErrors
 }
 
 func filterSyncFiles(relPaths []string, include syncFilter) []string {

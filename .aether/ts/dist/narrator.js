@@ -77,6 +77,32 @@ export function parseEvent(line) {
 function normalizeCaste(caste) {
     return caste.trim().toLowerCase().replace(/[-\s]+/g, "_");
 }
+function shouldUseAnsiColors() {
+    if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR.trim() !== "") {
+        return false;
+    }
+    if (process.env.AETHER_FORCE_COLOR === "1" || process.env.CLICOLOR_FORCE !== undefined) {
+        return true;
+    }
+    const mode = process.env.AETHER_OUTPUT_MODE?.trim().toLowerCase();
+    if (mode === "json") {
+        return false;
+    }
+    if (mode === "visual" || mode === "human" || mode === "pretty") {
+        return true;
+    }
+    return Boolean(process.stdout.isTTY);
+}
+function colorize(text, color) {
+    if (color === undefined || color.trim() === "" || !shouldUseAnsiColors()) {
+        return text;
+    }
+    const code = sanitizeTerminalText(color).trim();
+    if (!/^\d{1,3}(;\d{1,3})*$/.test(code)) {
+        return text;
+    }
+    return `\u001B[${code}m${text}\u001B[0m`;
+}
 function formatIdentity(payload, visuals) {
     if (payload.caste === undefined && payload.name === undefined) {
         return null;
@@ -84,7 +110,8 @@ function formatIdentity(payload, visuals) {
     const caste = payload.caste === undefined ? "" : sanitizeTerminalText(payload.caste);
     const normalizedCaste = normalizeCaste(caste);
     const visual = normalizedCaste === "" ? undefined : visuals?.castes[normalizedCaste];
-    const label = visual?.label === undefined ? caste : sanitizeTerminalText(visual.label);
+    const rawLabel = visual?.label === undefined ? caste : sanitizeTerminalText(visual.label);
+    const label = colorize(rawLabel, visual?.color);
     const emoji = visual?.emoji === undefined ? "" : `${sanitizeTerminalText(visual.emoji)} `;
     const name = payload.name === undefined ? "" : sanitizeTerminalText(payload.name);
     if (label !== "" && name !== "") {
@@ -102,7 +129,8 @@ function formatWorkerIdentity(worker, visuals) {
     const caste = worker.caste === undefined ? "" : sanitizeTerminalText(worker.caste);
     const normalizedCaste = normalizeCaste(caste);
     const visual = normalizedCaste === "" ? undefined : visuals?.castes[normalizedCaste];
-    const label = visual?.label === undefined ? caste : sanitizeTerminalText(visual.label);
+    const rawLabel = visual?.label === undefined ? caste : sanitizeTerminalText(visual.label);
+    const label = colorize(rawLabel, visual?.color);
     const emoji = visual?.emoji === undefined ? "" : `${sanitizeTerminalText(visual.emoji)} `;
     const name = worker.name === undefined ? "" : sanitizeTerminalText(worker.name);
     if (label !== "" && name !== "") {
@@ -423,12 +451,23 @@ export function runNarrator(input = process.stdin, output = process.stdout, erro
         crlfDelay: Infinity
     });
     const frame = createCeremonyFrame();
+    let previousFrameLines = 0;
     rl.on("line", (line) => {
         try {
             const event = parseEvent(line);
             if (event !== null) {
                 applyEventToFrame(frame, event);
-                output.write(`${renderActivityFrame(frame, visuals)}\n`);
+                const rendered = renderActivityFrame(frame, visuals);
+                if (shouldRedrawOutput(output)) {
+                    for (let i = 0; i < previousFrameLines; i += 1) {
+                        output.write("\u001B[1A\u001B[2K");
+                    }
+                    output.write(`${rendered}\n`);
+                    previousFrameLines = rendered.split("\n").length;
+                }
+                else {
+                    output.write(`${rendered}\n`);
+                }
             }
         }
         catch (error) {
@@ -437,6 +476,13 @@ export function runNarrator(input = process.stdin, output = process.stdout, erro
         }
     });
     return rl;
+}
+function shouldRedrawOutput(output) {
+    const live = process.env.AETHER_NARRATOR_LIVE?.trim().toLowerCase();
+    if (live === "off" || live === "false" || live === "0" || live === "no") {
+        return false;
+    }
+    return Boolean(output.isTTY);
 }
 export function loadVisualsFromPath(path) {
     return parseVisualContract(JSON.parse(readFileSync(path, "utf8")));

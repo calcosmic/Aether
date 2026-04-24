@@ -333,8 +333,8 @@ func TestSyncDirToHubSkipsIgnoredAndExcludedArtifacts(t *testing.T) {
 	}
 }
 
-// TestInstallCopiesClaudeCommands verifies that install copies .claude/commands/ant/
-// files to the target directory.
+// TestInstallCopiesClaudeCommands verifies that install copies Claude commands
+// into the flat ant-*.md layout Claude Code exposes as /ant-* commands.
 func TestInstallCopiesClaudeCommands(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -343,14 +343,25 @@ func TestInstallCopiesClaudeCommands(t *testing.T) {
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant")
-	destDir := filepath.Join(homeDir, ".claude", "commands", "ant")
+	destDir := filepath.Join(homeDir, ".claude", "commands")
 
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
+	legacyDir := filepath.Join(destDir, "ant")
+	if err := os.MkdirAll(legacyDir, 0755); err != nil {
+		t.Fatalf("failed to create legacy dir: %v", err)
+	}
+	generatedLegacy := []byte("<!-- Generated from .aether/commands/test.yaml - DO NOT EDIT DIRECTLY -->\n---\nname: ant-test\n---\n")
+	if err := os.WriteFile(filepath.Join(legacyDir, "test.md"), generatedLegacy, 0644); err != nil {
+		t.Fatalf("failed to create legacy generated file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "custom.md"), []byte("# Custom command"), 0644); err != nil {
+		t.Fatalf("failed to create legacy custom file: %v", err)
+	}
 
 	// Create a test command file
-	if err := os.WriteFile(filepath.Join(srcDir, "test.md"), []byte("# Test command"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "test.md"), generatedLegacy, 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -366,9 +377,22 @@ func TestInstallCopiesClaudeCommands(t *testing.T) {
 	}
 
 	// Verify file was copied
-	destFile := filepath.Join(destDir, "test.md")
+	destFile := filepath.Join(destDir, "ant-test.md")
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", destFile)
+	}
+	if _, err := os.Stat(filepath.Join(legacyDir, "test.md")); err == nil {
+		t.Errorf("expected generated legacy command to be removed")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat generated legacy command: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyDir, "custom.md")); err != nil {
+		t.Errorf("expected non-Aether legacy command to be preserved: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "test.md")); err == nil {
+		t.Errorf("did not expect unprefixed Claude command at %s", filepath.Join(destDir, "test.md"))
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat unprefixed Claude command: %v", err)
 	}
 
 	// Verify output mentions copied files
@@ -555,7 +579,7 @@ func TestInstallIdempotent(t *testing.T) {
 	}
 
 	// File should still exist
-	destFile := filepath.Join(homeDir, ".claude", "commands", "ant", "test.md")
+	destFile := filepath.Join(homeDir, ".claude", "commands", "ant-test.md")
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file to still exist after second install")
 	}
@@ -611,7 +635,7 @@ func TestInstallRemovesStale(t *testing.T) {
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant")
-	destDir := filepath.Join(homeDir, ".claude", "commands", "ant")
+	destDir := filepath.Join(homeDir, ".claude", "commands")
 
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create src dir: %v", err)
@@ -648,12 +672,12 @@ func TestInstallRemovesStale(t *testing.T) {
 	}
 
 	// keep.md should still exist
-	if _, err := os.Stat(filepath.Join(destDir, "keep.md")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(destDir, "ant-keep.md")); os.IsNotExist(err) {
 		t.Errorf("expected keep.md to still exist")
 	}
 
 	// stale.md should be removed
-	if _, err := os.Stat(filepath.Join(destDir, "stale.md")); err == nil {
+	if _, err := os.Stat(filepath.Join(destDir, "ant-stale.md")); err == nil {
 		t.Errorf("expected stale.md to be removed")
 	}
 }
@@ -749,7 +773,7 @@ func TestInstallWithSubdirs(t *testing.T) {
 		t.Fatalf("install command failed: %v", err)
 	}
 
-	destFile := filepath.Join(homeDir, ".claude", "commands", "ant", "subdir", "nested.md")
+	destFile := filepath.Join(homeDir, ".claude", "commands", "ant-nested.md")
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected nested file %s to exist", destFile)
 	}
@@ -853,7 +877,7 @@ func TestInstallShellScriptsGetExecutable(t *testing.T) {
 		t.Fatalf("install command failed: %v", err)
 	}
 
-	destFile := filepath.Join(homeDir, ".claude", "commands", "ant", "script.sh")
+	destFile := filepath.Join(homeDir, ".claude", "commands", "script.sh")
 	info, err := os.Stat(destFile)
 	if err != nil {
 		t.Fatalf("failed to stat dest file: %v", err)

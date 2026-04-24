@@ -956,7 +956,7 @@ func TestUpdateSyncNestedDirs(t *testing.T) {
 		t.Errorf("expected at least 1 file copied, got %d", result.copied)
 	}
 
-	destFile := filepath.Join(repoDir, ".claude", "commands", "ant", "subdir", "nested.md")
+	destFile := filepath.Join(repoDir, ".claude", "commands", "ant-nested.md")
 	destContent, err := os.ReadFile(destFile)
 	if err != nil {
 		t.Fatalf("expected nested file to exist: %v", err)
@@ -1500,7 +1500,7 @@ func TestUpdateSyncMultipleSyncPairs(t *testing.T) {
 	// Verify specific destinations exist
 	expectedDests := []string{
 		filepath.Join(repoDir, ".aether", "workers.md"),
-		filepath.Join(repoDir, ".claude", "commands", "ant", "test.md"),
+		filepath.Join(repoDir, ".claude", "commands", "ant-test.md"),
 		filepath.Join(repoDir, ".claude", "agents", "ant", "test.md"),
 		filepath.Join(repoDir, ".claude", "rules", "test.md"),
 	}
@@ -1508,6 +1508,49 @@ func TestUpdateSyncMultipleSyncPairs(t *testing.T) {
 		if _, err := os.Stat(dest); os.IsNotExist(err) {
 			t.Errorf("expected %s to exist after sync", dest)
 		}
+	}
+}
+
+func TestRunUpdateSyncForceRemovesLegacyClaudeCommandNamespace(t *testing.T) {
+	saveGlobals(t)
+
+	hubDir := t.TempDir()
+	repoDir := t.TempDir()
+	hubCommands := filepath.Join(hubDir, "system", "commands", "claude")
+	if err := os.MkdirAll(hubCommands, 0755); err != nil {
+		t.Fatalf("failed to create hub commands: %v", err)
+	}
+	generated := []byte("<!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->\n---\nname: ant-build\n---\n")
+	if err := os.WriteFile(filepath.Join(hubCommands, "build.md"), generated, 0644); err != nil {
+		t.Fatalf("failed to write hub command: %v", err)
+	}
+
+	legacyDir := filepath.Join(repoDir, ".claude", "commands", "ant")
+	if err := os.MkdirAll(legacyDir, 0755); err != nil {
+		t.Fatalf("failed to create legacy command dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "build.md"), generated, 0644); err != nil {
+		t.Fatalf("failed to write generated legacy command: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "custom.md"), []byte("# Custom command\n"), 0644); err != nil {
+		t.Fatalf("failed to write custom legacy command: %v", err)
+	}
+
+	result := runUpdateSync(hubDir, repoDir, true)
+	if len(result.errors) > 0 {
+		t.Fatalf("runUpdateSync returned errors: %v", result.errors)
+	}
+
+	if _, err := os.Stat(filepath.Join(repoDir, ".claude", "commands", "ant-build.md")); err != nil {
+		t.Fatalf("expected flat Claude command to exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyDir, "build.md")); err == nil {
+		t.Fatal("expected generated legacy Claude command to be removed")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat generated legacy command: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyDir, "custom.md")); err != nil {
+		t.Fatalf("expected custom legacy command to be preserved: %v", err)
 	}
 }
 

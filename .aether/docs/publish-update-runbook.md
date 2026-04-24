@@ -5,6 +5,7 @@ This runbook is the authoritative workflow for publishing Aether changes and ver
 ## Rule of Thumb
 
 - `aether install --package-dir "$PWD"` publishes companion files from an Aether source checkout into the shared hub on this machine and rebuilds the shared local `aether` binary.
+- `aether publish` is the preferred source-checkout publish command. On the stable channel it refreshes the stable hub and the user-level platform assets; on the dev channel it keeps platform home assets untouched.
 - `aether update` in another repo only pulls companion files from that hub. It does not publish source-checkout changes by itself.
 - `aether update --force` should be the default downstream refresh when you need stale Aether-managed files removed.
 - `aether update --download-binary` downloads a published release binary. Use it when you need the released runtime, not an unreleased local source change.
@@ -50,6 +51,8 @@ Behavior:
 - Builds the binary (unless `--skip-build-binary`)
 - Validates channel isolation (rejects cross-channel publish, e.g. dev binary targeting stable hub)
 - Syncs companion files to the hub
+- On the stable channel, refreshes user-level Claude/OpenCode/Codex assets from the same source checkout
+- On the dev channel, intentionally skips user-level platform asset sync so development does not overwrite the stable command surface
 - Verifies binary and hub versions agree after sync
 - Prints a warning if hub version changed
 - Prints an advisory note if stable and dev binaries co-locate in the same directory
@@ -71,8 +74,14 @@ aether update --force
 > **Backward compatibility:** `aether install --package-dir "$PWD"` still works as an alternative.
 
 Why this works:
-- `aether publish` builds the binary, refreshes `~/.aether/system/` from the current checkout, and verifies version agreement.
+- `aether publish` builds the binary, refreshes `~/.aether/system/` and stable user-level platform assets from the current checkout, and verifies version agreement.
 - `update --force` refreshes tracked companion files from the hub and removes stale managed files.
+
+Claude command layout:
+- Aether source keeps generated Claude wrappers under `.claude/commands/ant/*.md` for parity with OpenCode generation.
+- Stable install/publish/update writes Claude commands as flat `ant-*.md` files under `.claude/commands/` or `~/.claude/commands/`.
+- Generated legacy files under `.claude/commands/ant/*.md` are removed on force/update or stable publish so Claude Code exposes `/ant-build`, not an `ant:` namespace.
+- Non-Aether custom files in `.claude/commands/ant/` are preserved.
 
 ## Isolated Dev Workflow
 

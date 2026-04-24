@@ -2,14 +2,17 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -687,6 +690,25 @@ func TestSpawnLog(t *testing.T) {
 	if result["depth"] != float64(1) {
 		t.Errorf("depth = %v, want 1", result["depth"])
 	}
+	if strings.TrimSpace(result["event_id"].(string)) == "" {
+		t.Fatal("expected spawn-log to publish a ceremony event")
+	}
+
+	bus := events.NewBus(s, events.DefaultConfig())
+	evts, err := bus.Query(context.Background(), events.CeremonyTopicBuildSpawn, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("query ceremony events: %v", err)
+	}
+	if len(evts) != 1 {
+		t.Fatalf("ceremony events = %d, want 1", len(evts))
+	}
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(evts[0].Payload, &payload); err != nil {
+		t.Fatalf("decode ceremony payload: %v", err)
+	}
+	if payload.Caste != "builder" || payload.Name != "worker-1" || payload.Status != "spawned" {
+		t.Fatalf("unexpected ceremony payload: %+v", payload)
+	}
 }
 
 func TestSpawnLogLegacyFlagAliases(t *testing.T) {
@@ -752,6 +774,25 @@ func TestSpawnComplete(t *testing.T) {
 	}
 	if result["status"] != "completed" {
 		t.Errorf("status = %v, want completed", result["status"])
+	}
+	if strings.TrimSpace(result["event_id"].(string)) == "" {
+		t.Fatal("expected spawn-complete to publish a ceremony event")
+	}
+
+	bus := events.NewBus(s, events.DefaultConfig())
+	evts, err := bus.Query(context.Background(), events.CeremonyTopicBuildSpawn, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("query ceremony events: %v", err)
+	}
+	if len(evts) != 1 {
+		t.Fatalf("ceremony events = %d, want 1", len(evts))
+	}
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(evts[0].Payload, &payload); err != nil {
+		t.Fatalf("decode ceremony payload: %v", err)
+	}
+	if payload.Caste != "builder" || payload.Name != "worker-1" || payload.Status != "completed" || payload.Task != "build" {
+		t.Fatalf("unexpected ceremony payload: %+v", payload)
 	}
 }
 

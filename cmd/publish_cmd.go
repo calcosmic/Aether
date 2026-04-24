@@ -105,6 +105,12 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
 		return fmt.Errorf("hub sync failed: %v", errVal)
 	}
+	if shouldSyncPlatformHomes(channel) {
+		_, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel)
+		if len(platformErrors) > 0 {
+			return fmt.Errorf("platform home sync failed: %s", strings.Join(platformErrors, "; "))
+		}
+	}
 
 	// Verification: ensure binary version and hub version agree
 	hubVersion := readHubVersionAtPath(hubDir)

@@ -158,8 +158,8 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 			t.Error("hub opencode agent mirror not created")
 		}
 
-		// Verify claude commands were installed
-		claudeCmdDest := filepath.Join(homeDir, ".claude", "commands", "ant", "init.md")
+		// Verify claude commands were installed in the flat /ant-* layout.
+		claudeCmdDest := filepath.Join(homeDir, ".claude", "commands", "ant-init.md")
 		if _, err := os.Stat(claudeCmdDest); os.IsNotExist(err) {
 			t.Error("claude commands not installed to home dir")
 		}
@@ -365,7 +365,7 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 		}
 
 		// Verify updated command was synced
-		repoUpdatedCmd := filepath.Join(repoDir, ".claude", "commands", "ant", "updated.md")
+		repoUpdatedCmd := filepath.Join(repoDir, ".claude", "commands", "ant-updated.md")
 		if _, err := os.Stat(repoUpdatedCmd); os.IsNotExist(err) {
 			t.Error("updated command not synced to repo")
 		}
