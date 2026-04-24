@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T04:25:35Z
+Last updated: 2026-04-24T04:34:19Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -36,6 +36,7 @@ These commits are pushed:
 - `f8d91afa feat: launch narrator for build ceremony events`
 - `28b9e857 feat: render ceremony activity frames`
 - `d7564ca6 test: cover multi-wave ceremony activity`
+- `2dd4070c feat: add build plan-only manifest`
 
 Implemented foundation:
 
@@ -66,6 +67,9 @@ Implemented foundation:
 - Plan-only dispatch entries include the intended caste, deterministic worker
   name, `agent_name`, wave/task metadata, and `planned` status so wrappers can
   spawn real Task-tool agents from JSON instead of scraping visual output.
+- `aether build-finalize <phase> --completion-file <path|->` records externally
+  spawned wrapper Task results as the build manifest and claims packet that
+  `aether continue` already trusts.
 
 Verification already passed for the pushed foundation:
 
@@ -155,11 +159,52 @@ Focused verification:
 
 Important limitation:
 
-- This is only the planning half of the bridge. The next runtime surface should
-  record/finalize externally spawned wrapper workers after `spawn-log` and
-  `spawn-complete` have captured their results. Do not make wrappers call a fake
-  `aether build --synthetic` after real Task work; that would overwrite the
-  evidence trail with simulated dispatch.
+- This is only the planning half of the wrapper bridge unless paired with
+  `aether build-finalize`. Do not make wrappers call a fake `aether build
+  --synthetic` after real Task work; that would overwrite the evidence trail
+  with simulated dispatch.
+
+## Completed Slice: Build Finalize For Wrapper Agents
+
+Architect review confirmed the missing contract:
+
+- `spawn-log` and `spawn-complete` are visibility only.
+- `aether continue` trusts `.aether/data/build/phase-N/manifest.json` and
+  `.aether/data/last-build-claims.json`.
+- Therefore wrappers need one Go-owned finalization packet after real Task-tool
+  execution, not fake `aether build` execution.
+
+Implemented behavior:
+
+- New command: `aether build-finalize <phase> --completion-file <path|->`.
+- Completion JSON must include the original `dispatch_manifest` from
+  `aether build --plan-only` plus terminal worker results.
+- The finalizer validates phase/state/task filters, manifest identity, dispatch
+  identity, terminal statuses, and critical pre-build gates.
+- It writes:
+  - `.aether/data/checkpoints/pre-build-phase-N.json`
+  - `.aether/data/build/phase-N/manifest.json` with
+    `dispatch_mode: "external-task"` and terminal dispatch statuses
+  - `.aether/data/last-build-claims.json`, either from explicit claims or
+    aggregated completed worker file/test claims
+  - `spawn-tree.txt` entries/statuses if wrappers did not already record them
+- It sets colony state to `BUILT`, keeps the phase `in_progress`, and points the
+  next action at `aether continue`.
+
+Expected wrapper flow:
+
+1. `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`
+2. Parse `result.dispatch_manifest`
+3. For each dispatch wave, call `spawn-log`, spawn the matching Task/subagent,
+   then call `spawn-complete`
+4. Write a completion JSON file containing the original `dispatch_manifest` and
+   the worker results/claims
+5. `AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <file>`
+6. `aether continue`
+
+Focused verification:
+
+- `go test ./cmd -run 'TestBuildPlanOnly|TestBuildFinalizeRecordsExternalTaskResultsForContinue' -count=1`
 
 ## Completed Slice: Go Narrator Launcher
 

@@ -965,6 +965,29 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 	return b.String()
 }
 
+func renderBuildFinalizeVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Finalize %d", phase.ID)))
+	b.WriteString(visualDivider)
+	b.WriteString("External Task worker results recorded.\n")
+	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
+	b.WriteString("\n")
+	b.WriteString("Phase: ")
+	b.WriteString(phase.Name)
+	b.WriteString("\n\n")
+	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
+	b.WriteString(renderArtifactsSection(
+		displayDataPath(fmt.Sprintf("build/phase-%d/manifest.json", phase.ID)),
+		displayDataPath("last-build-claims.json"),
+		displayDataPath("spawn-tree.txt"),
+	))
+	b.WriteString(renderNextUp(
+		`Run `+"`aether continue`"+` to verify the external Task work and advance honestly.`,
+		`Run `+"`aether status`"+` if you want to inspect the recorded worker evidence first.`,
+	))
+	return b.String()
+}
+
 func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Dispatch %d", phase.ID)))

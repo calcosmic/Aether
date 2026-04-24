@@ -113,6 +113,9 @@ The detailed implementation contract is tracked in
   wrappers advance phase state. Do not finalize by running `aether build
   --synthetic` after real wrapper agents; that would mix simulated evidence with
   real Task-tool execution.
+  (Implemented as `AETHER_OUTPUT_MODE=json aether build-finalize <phase>
+  --completion-file <path|->`; it writes the external-task manifest, claims,
+  spawn tree statuses, and BUILT state that `aether continue` verifies.)
 
 ## Phase 5: Continue and Plan Orchestration
 

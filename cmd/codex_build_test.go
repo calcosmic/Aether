@@ -314,6 +314,165 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 }
 
+func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Finalize wrapper-spawned agents"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Wrapper finalize",
+				Description: "Record external Task tool worker results as build evidence",
+				Status:      colony.PhaseReady,
+				Tasks:       []colony.Task{{ID: &taskID, Goal: "Create wrapper evidence", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	if err := os.WriteFile(filepath.Join(root, "wrapper-evidence.txt"), []byte("external work\n"), 0644); err != nil {
+		t.Fatalf("failed to write claimed file: %v", err)
+	}
+
+	dispatchResults := make([]codexExternalBuildWorkerResult, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		worker := codexExternalBuildWorkerResult{
+			Stage:    dispatch.Stage,
+			Wave:     dispatch.Wave,
+			Caste:    dispatch.Caste,
+			Name:     dispatch.Name,
+			TaskID:   dispatch.TaskID,
+			Status:   "completed",
+			Summary:  dispatch.Name + " completed externally",
+			Duration: 1.25,
+		}
+		if dispatch.Caste == "builder" {
+			worker.FilesCreated = []string{"wrapper-evidence.txt"}
+			worker.TestsWritten = []string{"wrapper-evidence.txt"}
+		}
+		dispatchResults = append(dispatchResults, worker)
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Dispatches:       dispatchResults,
+	}
+	completionData, err := json.MarshalIndent(completion, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	completionPath := filepath.Join(root, "completion.json")
+	if err := os.WriteFile(completionPath, completionData, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"build-finalize", "1", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build-finalize returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse finalize output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got %v", envelope)
+	}
+	finalizeResult := envelope["result"].(map[string]interface{})
+	if finalizeResult["dispatch_mode"].(string) != "external-task" {
+		t.Fatalf("dispatch_mode = %q, want external-task", finalizeResult["dispatch_mode"])
+	}
+	if finalizeResult["next"].(string) != "aether continue" {
+		t.Fatalf("next = %q, want aether continue", finalizeResult["next"])
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("state = %s, want BUILT", state.State)
+	}
+	if state.CurrentPhase != 1 {
+		t.Fatalf("current_phase = %d, want 1", state.CurrentPhase)
+	}
+	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
+		t.Fatalf("phase status = %s, want in_progress", state.Plan.Phases[0].Status)
+	}
+	if state.BuildStartedAt == nil {
+		t.Fatal("expected BuildStartedAt to be set")
+	}
+
+	var finalManifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &finalManifest); err != nil {
+		t.Fatalf("failed to load final manifest: %v", err)
+	}
+	if finalManifest.PlanOnly {
+		t.Fatal("final manifest should not be plan_only")
+	}
+	if finalManifest.DispatchMode != "external-task" {
+		t.Fatalf("manifest dispatch mode = %q, want external-task", finalManifest.DispatchMode)
+	}
+	if len(finalManifest.Dispatches) != len(manifest.Dispatches) {
+		t.Fatalf("final manifest dispatches = %d, want %d", len(finalManifest.Dispatches), len(manifest.Dispatches))
+	}
+	for _, dispatch := range finalManifest.Dispatches {
+		if dispatch.Status != "completed" {
+			t.Fatalf("dispatch %s status = %s, want completed", dispatch.Name, dispatch.Status)
+		}
+	}
+
+	var claims codexBuildClaims
+	if err := store.LoadJSON("last-build-claims.json", &claims); err != nil {
+		t.Fatalf("failed to load claims: %v", err)
+	}
+	if claims.BuildPhase != 1 {
+		t.Fatalf("claims phase = %d, want 1", claims.BuildPhase)
+	}
+	if len(claims.FilesCreated) != 1 || claims.FilesCreated[0] != "wrapper-evidence.txt" {
+		t.Fatalf("claims files created = %v, want wrapper-evidence.txt", claims.FilesCreated)
+	}
+	if len(claims.TaskClaims) != 1 || claims.TaskClaims[0].TaskID != taskID {
+		t.Fatalf("task claims = %+v, want task %s", claims.TaskClaims, taskID)
+	}
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	entries, err := spawnTree.Parse()
+	if err != nil {
+		t.Fatalf("parse spawn tree: %v", err)
+	}
+	if len(entries) != len(manifest.Dispatches) {
+		t.Fatalf("spawn entries = %d, want %d", len(entries), len(manifest.Dispatches))
+	}
+	for _, entry := range entries {
+		if entry.Status != "completed" {
+			t.Fatalf("spawn entry %s status = %s, want completed", entry.AgentName, entry.Status)
+		}
+	}
+}
+
 func TestBuildWaveExecutionPlansRespectParallelMode(t *testing.T) {
 	dispatches := []codexBuildDispatch{
 		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-1", Task: "Task one"},

@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T04:25:35Z |
+| **Last Updated** | 2026-04-24T04:34:19Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -47,6 +47,8 @@ Rolling display foundation completed: `.aether/ts/narrator.ts` now keeps a state
 Hub fallback smoke completed in a temporary HOME: install/update synced the package, fixture-local `.aether/ts` was removed, and `AETHER_NARRATOR=on aether build 1 --synthetic` still rendered `COLONY ACTIVITY` from the installed hub runtime. TTY live redraw/debounce is intentionally deferred until real wrapper output gives a better terminal contract.
 
 Build plan-only bridge slice completed: `aether build <phase> --plan-only` now emits a read-only JSON `dispatch_manifest` for wrapper orchestration. It validates the same buildability gates as real build, includes deterministic worker names plus `agent_name`, wave execution, playbooks, selected tasks, and success criteria, and does not mutate `COLONY_STATE.json` or write build artifacts. Focused Go tests passed.
+
+Build finalize bridge slice completed: `aether build-finalize <phase> --completion-file <path|->` now records externally spawned wrapper Task results as `dispatch_mode: external-task`, writes the build manifest and `last-build-claims.json`, updates/creates spawn-tree statuses, sets colony state to BUILT, and points the next action at `aether continue`. This is the missing runtime-owned input packet after Claude/OpenCode wrappers spawn real agents.
 
 ---
 
@@ -96,14 +98,15 @@ Build plan-only bridge slice completed: `aether build <phase> --plan-only` now e
 - 2026-04-24T04:12:13Z|phase3_display_foundation|build|TS narrator activity frame added with active/completed/blocked worker tests
 - 2026-04-24T04:17:03Z|phase3_smoke|test|Temp HOME installed-hub fallback smoke and multi-wave activity fixture passed
 - 2026-04-24T04:25:35Z|phase4_plan_manifest|build|Read-only build --plan-only dispatch_manifest added for Claude/OpenCode wrapper spawning bridge
+- 2026-04-24T04:34:19Z|phase4_finalize|build|build-finalize external-task manifest and claims recording added for wrapper-spawned agents
 
 ---
 
 ## Next Steps
 
-1. Commit and push the build plan-only manifest checkpoint
-2. Add the runtime record/finalize surface for wrapper-spawned Task agents
-3. Restore Claude/OpenCode build wrappers to call `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`, spawn real agents, and emit `spawn-log`/`spawn-complete`
+1. Commit and push the build-finalize checkpoint
+2. Restore Claude/OpenCode build wrappers to call `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`, spawn real agents, emit `spawn-log`/`spawn-complete`, write completion JSON, then call `build-finalize`
+3. Update wrapper parity tests/snapshots for the new orchestrator contract
 4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
@@ -115,7 +118,6 @@ Build plan-only bridge slice completed: `aether build <phase> --plan-only` now e
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the build plan-only manifest checkpoint
-- Design/implement wrapper-build finalize recording
+- Commit and push the build-finalize checkpoint
 - Restore Claude/OpenCode build wrappers as real orchestrators
 - Add wrapper tests/snapshots proving build wrappers call Go manifest flow and instruct Task-tool spawning

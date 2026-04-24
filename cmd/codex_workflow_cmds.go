@@ -594,6 +594,7 @@ func init() {
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("plan-only", false, "Print the build dispatch manifest without mutating colony state or spawning workers")
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
+	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
@@ -601,6 +602,7 @@ func init() {
 	rootCmd.AddCommand(colonizeCmd)
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(buildFinalizeCmd)
 	rootCmd.AddCommand(continueCmd)
 	rootCmd.AddCommand(sealCmd)
 	rootCmd.AddCommand(focusCmd)
