@@ -1,11 +1,11 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T13:24:10Z
+Last updated: 2026-04-24T14:40:00Z
 
-Branch: `codex/phase7-release-hygiene`
-Base: `origin/main` after merged PR #11
-Previous PRs: `https://github.com/calcosmic/Aether/pull/5` through `https://github.com/calcosmic/Aether/pull/11` are merged
-Open PR: release-hygiene PR pending from `codex/phase7-release-hygiene`
+Branch: `main`
+Base: `origin/main` after merged PR #12 and v1.0.22 release
+Previous PRs: `https://github.com/calcosmic/Aether/pull/5` through `https://github.com/calcosmic/Aether/pull/12` are merged
+Current patch: post-release command-layout and live-ceremony hardening for v1.0.23
 
 ## Purpose
 
@@ -38,6 +38,20 @@ There are two separate progress tracks in this checkout:
 This mismatch is expected for this branch because implementation slices were
 committed directly while the persisted colony lifecycle was not advanced through
 `aether build` / `aether continue`.
+
+## Post-Release Gap Audit
+
+These items were checked after the v1.0.22 release exposed a stale Claude
+command surface:
+
+| Gap | Current Status | Evidence |
+|-----|----------------|----------|
+| A: Narrator does not persist across CLI invocations | Partially fixed | `spawn-log` and `spawn-complete` now publish `ceremony.build.spawn` events to the persistent event bus. A full long-running narrator daemon is still not implemented. |
+| B: ANSI colors not applied | Fixed | `.aether/ts/narrator.ts` applies Go-owned visual `color` metadata when ANSI color is enabled; `cmd/narrator_launcher.go` forwards Go's ANSI decision to the Node sidecar. |
+| C: No live redraw | Partially fixed | Direct TTY narrator runs redraw in place; piped output remains append-only. The Go-launched sidecar still uses Go's stdout pipe, so true parent-controlled live redraw remains a later terminal-contract decision. |
+| D: Milestone bookkeeping stale | Not changed here | `.planning/STATE.md` still reports v1.7 complete. This handoff records ceremony implementation progress without advancing unrelated planning state. |
+| E: Tests not verified | Fixed | Focused Go tests, full Go tests, race tests, Go vet, Go build, TypeScript tests/typecheck/build, npm tests, npm pack dry run, `goreleaser check`, version agreement, and whitespace checks passed before v1.0.23 release prep. |
+| Publish/update confidence | Fixed in code and temp-smoked | Stable `publish` now refreshes user-level platform assets as well as the stable hub; Claude commands install/update as flat `ant-*.md` files and remove generated legacy `ant/*.md` files while preserving custom files. A temp HOME smoke verified flat `ant-build.md` creation and generated legacy cleanup. |
 
 ## Progress Matrix
 

@@ -20,6 +20,9 @@ type installSyncPair struct {
 	preserveLocalChanges bool
 	validate             syncValidator
 	include              syncFilter
+	mapRelPath           syncRelPathMapper
+	cleanupInclude       syncFilter
+	cleanupLegacyClaude  bool
 }
 
 type repoSyncPair struct {
@@ -30,10 +33,14 @@ type repoSyncPair struct {
 	preserveLocalChanges bool
 	validate             syncValidator
 	include              syncFilter
+	mapRelPath           syncRelPathMapper
+	cleanupInclude       syncFilter
+	cleanupLegacyClaude  bool
 }
 
 type syncValidator func(srcPath, relPath string, data []byte) error
 type syncFilter func(relPath string) bool
+type syncRelPathMapper func(relPath string) string
 
 type codexAgentDefinition struct {
 	Name                  string   `toml:"name"`
@@ -44,7 +51,7 @@ type codexAgentDefinition struct {
 
 func installSyncPairs() []installSyncPair {
 	return []installSyncPair{
-		{srcRel: ".claude/commands/ant", destRel: ".claude/commands/ant", label: "Commands (claude)", cleanup: true},
+		{srcRel: ".claude/commands/ant", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
 		{srcRel: ".claude/agents/ant", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
 		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode)", cleanup: true},
 		{srcRel: ".opencode/agents", destRel: ".opencode/agent", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
@@ -56,7 +63,7 @@ func installSyncPairs() []installSyncPair {
 func repoSyncPairs() []repoSyncPair {
 	return []repoSyncPair{
 		{hubRel: ".", destRel: ".", label: "System files"},
-		{hubRel: "commands/claude", destRel: "../.claude/commands/ant", label: "Commands (claude)"},
+		{hubRel: "commands/claude", destRel: "../.claude/commands", label: "Commands (claude)", mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
 		{hubRel: "settings/claude", destRel: "../.claude", label: "Settings (claude)", preserveLocalChanges: true, include: isClaudeSettingsFile},
 		{hubRel: "commands/opencode", destRel: "../.opencode/commands/ant", label: "Commands (opencode)"},
 		{hubRel: "agents", destRel: "../.opencode/agents", label: "Agents (opencode)", validate: validateOpenCodeAgentFile},
@@ -74,6 +81,76 @@ func isShippedAetherCodexAgent(relPath string) bool {
 
 func isClaudeSettingsFile(relPath string) bool {
 	return filepath.Base(relPath) == "settings.json"
+}
+
+func claudeCommandDestRelPath(relPath string) string {
+	base := filepath.Base(filepath.Clean(relPath))
+	if filepath.Ext(base) != ".md" {
+		return relPath
+	}
+	if strings.HasPrefix(base, "ant-") {
+		return base
+	}
+	return "ant-" + base
+}
+
+func isManagedFlatClaudeCommandPath(relPath string) bool {
+	clean := filepath.ToSlash(filepath.Clean(relPath))
+	if strings.Contains(clean, "/") {
+		return false
+	}
+	base := filepath.Base(clean)
+	return strings.HasPrefix(base, "ant-") && filepath.Ext(base) == ".md"
+}
+
+func isGeneratedAetherCommandWrapper(data []byte) bool {
+	firstLine := strings.SplitN(string(data), "\n", 2)[0]
+	return strings.HasPrefix(firstLine, "<!-- Generated from .aether/commands/") &&
+		strings.HasSuffix(firstLine, ".yaml - DO NOT EDIT DIRECTLY -->")
+}
+
+func removeLegacyClaudeCommandNamespace(commandsDir string) ([]string, []string) {
+	legacyDir := filepath.Join(commandsDir, "ant")
+	entries, err := os.ReadDir(legacyDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, []string{fmt.Sprintf("read legacy Claude commands %s: %v", legacyDir, err)}
+	}
+
+	var removed []string
+	var errs []string
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
+			continue
+		}
+		path := filepath.Join(legacyDir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("read legacy Claude command %s: %v", path, err))
+			continue
+		}
+		if !isGeneratedAetherCommandWrapper(data) {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Sprintf("remove legacy Claude command %s: %v", path, err))
+			continue
+		}
+		removed = append(removed, filepath.Join("ant", entry.Name()))
+	}
+
+	if len(removed) > 0 {
+		if err := os.Remove(legacyDir); err != nil && !os.IsNotExist(err) {
+			if entries, readErr := os.ReadDir(legacyDir); readErr == nil && len(entries) > 0 {
+				return removed, errs
+			}
+			errs = append(errs, fmt.Sprintf("remove legacy Claude command namespace %s: %v", legacyDir, err))
+		}
+	}
+
+	return removed, errs
 }
 
 func validateCodexAgentFile(srcPath, relPath string, data []byte) error {

@@ -1,6 +1,6 @@
 {
   "name": "aether-colony",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "description": "Bootstrap installer for the Aether ant colony CLI",
   "license": "Apache-2.0",
   "homepage": "https://github.com/calcosmic/Aether#readme",

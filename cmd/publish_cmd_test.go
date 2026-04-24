@@ -120,6 +120,49 @@ func TestPublishVerificationFailure(t *testing.T) {
 	}
 }
 
+func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+	packageDir := createMockSourceCheckout(t, "1.0.20")
+	commandDir := filepath.Join(packageDir, ".claude", "commands", "ant")
+	if err := os.MkdirAll(commandDir, 0755); err != nil {
+		t.Fatalf("failed to create command dir: %v", err)
+	}
+	generated := []byte("<!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->\n---\nname: ant-build\n---\n")
+	if err := os.WriteFile(filepath.Join(commandDir, "build.md"), generated, 0644); err != nil {
+		t.Fatalf("failed to write command: %v", err)
+	}
+
+	legacyDir := filepath.Join(homeDir, ".claude", "commands", "ant")
+	if err := os.MkdirAll(legacyDir, 0755); err != nil {
+		t.Fatalf("failed to create legacy dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "build.md"), generated, 0644); err != nil {
+		t.Fatalf("failed to write legacy command: %v", err)
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"publish", "--package-dir", packageDir, "--home-dir", homeDir, "--skip-build-binary", "--channel", "stable"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(homeDir, ".claude", "commands", "ant-build.md")); err != nil {
+		t.Fatalf("expected publish to sync flat Claude command: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyDir, "build.md")); err == nil {
+		t.Fatal("expected publish to remove generated legacy Claude command")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat legacy command: %v", err)
+	}
+}
+
 // createMockSourceCheckout creates a minimal Aether source directory for testing.
 func createMockSourceCheckout(t *testing.T, version string) string {
 	t.Helper()

@@ -134,6 +134,49 @@ test("renders caste identity from Go-owned visual metadata", () => {
   assert.match(rendered, /status=starting/);
 });
 
+test("applies ANSI color from Go-owned visual metadata when forced", () => {
+  const previous = process.env.AETHER_FORCE_COLOR;
+  const previousNoColor = process.env.NO_COLOR;
+  process.env.AETHER_FORCE_COLOR = "1";
+  delete process.env.NO_COLOR;
+  try {
+    const visuals = parseVisualContract({
+      castes: {
+        builder: {
+          emoji: "🔨",
+          color: "33",
+          label: "Builder"
+        }
+      }
+    });
+
+    const rendered = renderEvent(
+      {
+        topic: "ceremony.build.spawn",
+        payload: {
+          caste: "builder",
+          name: "Mason-67",
+          status: "starting"
+        }
+      },
+      visuals
+    );
+
+    assert.match(rendered, /\u001B\[33mBuilder\u001B\[0m:Mason-67/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.AETHER_FORCE_COLOR;
+    } else {
+      process.env.AETHER_FORCE_COLOR = previous;
+    }
+    if (previousNoColor === undefined) {
+      delete process.env.NO_COLOR;
+    } else {
+      process.env.NO_COLOR = previousNoColor;
+    }
+  }
+});
+
 test("ignores empty event lines", () => {
   assert.equal(parseEvent("   "), null);
 });

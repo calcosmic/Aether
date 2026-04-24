@@ -94,7 +94,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"actions": []string{
 				"Sync .aether/ system files (commands, agents, skills, templates, docs)",
 				"Refresh repo-level Codex guidance (AGENTS.md, .codex/CODEX.md) when managed by Aether",
-				"Sync .claude/commands/ant/",
+				"Sync .claude/commands/ant-*.md",
 				"Sync .claude/settings.json",
 				"Sync .claude/agents/ant/",
 				"Sync .codex/agents/",
@@ -290,7 +290,14 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 			protectedFiles:       protectedFiles,
 			validate:             pair.validate,
 			include:              pair.include,
+			mapRelPath:           pair.mapRelPath,
+			cleanupInclude:       pair.cleanupInclude,
 		})
+		if pair.cleanupLegacyClaude && force {
+			removed, errors := removeLegacyClaudeCommandNamespace(destDir)
+			syncRes.removed = append(syncRes.removed, removed...)
+			syncRes.errors = append(syncRes.errors, errors...)
+		}
 		entry := map[string]interface{}{
 			"label":   pair.label,
 			"copied":  syncRes.copied,

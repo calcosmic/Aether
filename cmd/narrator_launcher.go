@@ -64,6 +64,9 @@ func maybeLaunchNarrator(ctx context.Context, root string) *narratorLauncher {
 
 	childCtx, cancel := context.WithCancel(ctx)
 	cmd := narratorCommandContext(childCtx, nodePath, runtimePath, "--visuals", visualPath)
+	if shouldUseANSIColors() {
+		cmd.Env = append(os.Environ(), "AETHER_FORCE_COLOR=1")
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

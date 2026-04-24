@@ -160,7 +160,7 @@ This does **all** of the following:
 - rebuilds the **dev binary** as `aether-dev`
 - refreshes the **dev hub** at `~/.aether-dev/`
 - verifies binary and hub versions agree after publish
-- leaves the public/stable runtime alone
+- leaves the public/stable runtime and user-level Claude/OpenCode/Codex assets alone
 
 > **Isolation guarantee:** See Section 11 (Safe Testing Matrix) for the complete
 > separation rules. When testing dev changes, always use a **separate repo copy or worktree**
@@ -186,6 +186,23 @@ After install or update:
 - open a **fresh** session in that repo
 
 **Why:** file changes on disk do not automatically refresh a live tool session.
+
+### **Stable Publish and Platform Homes**
+
+Stable `aether publish` refreshes both:
+
+- the stable hub at `~/.aether/`
+- the user-level platform assets under `~/.claude/`, `~/.opencode/`, and `~/.codex/`
+
+Dev `aether publish --channel dev` refreshes only `~/.aether-dev/` and the
+`aether-dev` binary. It intentionally skips user-level platform assets so an
+unreleased dev build cannot overwrite the public command surface.
+
+Claude commands are installed as flat `ant-*.md` files under `.claude/commands/`
+and `~/.claude/commands/`. If generated legacy files exist under
+`.claude/commands/ant/*.md` or `~/.claude/commands/ant/*.md`, force update or
+stable publish removes only those generated Aether files and preserves custom
+non-Aether files in that folder.
 
 ### **Version Agreement Verification**
 
