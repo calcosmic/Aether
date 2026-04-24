@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T04:34:19Z
+Last updated: 2026-04-24T04:42:16Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -205,6 +205,46 @@ Expected wrapper flow:
 Focused verification:
 
 - `go test ./cmd -run 'TestBuildPlanOnly|TestBuildFinalizeRecordsExternalTaskResultsForContinue' -count=1`
+
+## Completed Slice: Build Wrapper Restoration
+
+Claude/OpenCode build wrappers now use the bridge instead of the old
+pass-through contract.
+
+Changed files:
+
+- `.aether/commands/build.yaml`
+- `.claude/commands/ant/build.md`
+- `.opencode/commands/ant/build.md`
+- `.aether/docs/wrapper-runtime-ux-contract.md`
+- `cmd/build_wrapper_ceremony_test.go`
+- `cmd/platform_doc_hygiene_test.go`
+
+Wrapper flow now required:
+
+1. Ground with `AETHER_OUTPUT_MODE=visual aether status`.
+2. Request the authoritative plan with
+   `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only`.
+3. Parse `result.dispatch_manifest`.
+4. Load `.aether/docs/command-playbooks/build-wave.md`.
+5. Spawn real platform agents using `subagent_type="{agent_name}"` or the
+   platform equivalent, with names/castes/waves/tasks from the manifest.
+6. Call `aether spawn-log` before each worker and `aether spawn-complete` after.
+7. Write a completion JSON file outside `.aether/data/`.
+8. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS
+   --completion-file <file>`.
+9. Route to `/ant-continue`.
+
+Important guardrails now enforced:
+
+- Wrappers must not run `AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS`.
+- Wrappers must not run `aether build --synthetic` after real agents finish.
+- Wrappers must not invent castes, waves, or names.
+- Wrappers must not parse visual output as truth.
+
+Focused verification:
+
+- `go test ./cmd -run 'TestBuildWrapperCeremonyContract|TestPlatformDocHygiene|TestClaudeOpenCodeCommandParity|TestCommandWrappersDeclareGeneratedSource' -count=1`
 
 ## Completed Slice: Go Narrator Launcher
 

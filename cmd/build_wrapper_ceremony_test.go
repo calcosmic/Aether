@@ -28,22 +28,36 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"why each signal matters right now",
 		"## Phase Framing",
 		"Phase N of M — Name",
-		"## Spawn Ritual",
-		"do not guess the worker mix ahead of the runtime",
-		"runtime reveal the actual castes, names, waves, and outcomes",
-		"Dispatching workers now...",
-		"AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS",
+		"## Dispatch Manifest",
+		"Asking the runtime for the dispatch manifest...",
+		"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
+		"result.dispatch_manifest",
+		"## Playbook Procedure",
+		".aether/docs/command-playbooks/build-wave.md",
+		"## Wave Execution",
+		"dispatch_manifest.dispatches",
+		"aether spawn-log",
+		"subagent_type",
+		"aether spawn-complete",
+		"## Completion Packet",
+		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
+		"dispatch_mode: external-task",
 		"## After the Build",
 		"/ant-continue",
+		"Do NOT run `aether build` without `--plan-only`",
+		"Do NOT run `aether build --synthetic` after real",
 	}
 
 	inOrder := []string{
 		"## Colony Context",
 		"## Active Signals",
 		"## Phase Framing",
-		"## Spawn Ritual",
-		"Dispatching workers now...",
-		"AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS",
+		"## Dispatch Manifest",
+		"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
+		"## Playbook Procedure",
+		"## Wave Execution",
+		"## Completion Packet",
+		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"## After the Build",
 	}
 
@@ -61,6 +75,14 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		}
 
 		assertSubstringsInOrder(t, wrapperPath, text, inOrder)
+		for _, forbidden := range []string{
+			"Do NOT load playbooks",
+			"AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS",
+		} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s still contains old pass-through contract %q", wrapperPath, forbidden)
+			}
+		}
 	}
 }
 

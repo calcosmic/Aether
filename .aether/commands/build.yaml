@@ -2,26 +2,34 @@ name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS"
+  command: "AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only"
 wrapper_additions:
   pre_build: |
-    Ground the build before dispatching:
+    Ground the build before planning:
     1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
     2. Surface active pheromones as a compact steering block with REDIRECT first, then FOCUS, then FEEDBACK.
     3. Include strength or remaining-life context so the user understands why each signal matters right now.
     4. Frame the requested work as `Phase N of M — Name` with a one-line purpose.
-    5. Deliver a short dispatch preface that explains the colony is about to move, but do not guess the worker mix or name likely castes before the runtime speaks.
-    6. Immediately before the runtime call, say: `Dispatching workers now...`
+    5. Immediately before requesting the manifest, say: `Asking the runtime for the dispatch manifest...`
+  orchestration: |
+    Restore real wrapper orchestration:
+    1. Run `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only`.
+    2. Parse `result.dispatch_manifest`; do not parse visual output.
+    3. Load `.aether/docs/command-playbooks/build-wave.md` as the spawning procedure.
+    4. For each planned wave, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, then call `aether spawn-complete`.
+    5. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
+    6. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.
   post_build: |
     Close with a short colony-language synthesis:
-    1. Summarize what moved forward and which workers or castes the runtime actually dispatched.
+    1. Summarize what moved forward and which workers/castes actually ran.
     2. Note only the most relevant signal or risk.
     3. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
 guardrails:
-  - "Do NOT load playbooks or reimplement build orchestration."
   - "Do NOT read or write colony state files by hand."
   - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."
   - "Do NOT parse visual output as authoritative state."
+  - "Do NOT run `aether build` without `--plan-only` from Claude/OpenCode wrapper orchestration."
+  - "Do NOT run `aether build --synthetic` after real wrapper Task agents complete."
   - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."
   - "If docs and runtime disagree, runtime wins."
 follow_up:

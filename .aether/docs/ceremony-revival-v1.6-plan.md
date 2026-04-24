@@ -100,10 +100,13 @@ The detailed implementation contract is tracked in
 ## Phase 4: Subagent Spawn Restoration
 
 - Restore Claude/OpenCode build wrappers as orchestrators, not pass-throughs.
+  (Implemented for build wrappers.)
 - Run `aether build --plan-only <phase>` or equivalent manifest generation.
   (Implemented as `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`;
   it is read-only and emits `dispatch_manifest`.)
 - For each wave, spawn real caste agents via the platform agent tool.
+  (Build wrappers now instruct this from `dispatch_manifest`; live platform
+  smoke remains next.)
 - Restore pre-wave Archaeologist, Oracle, Architect, and Ambassador hooks.
 - Restore Builder waves, Probe verification, Watcher verification, Measurer, and
   Chaos.

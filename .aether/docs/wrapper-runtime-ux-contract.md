@@ -4,10 +4,12 @@ Updated: 2026-04-19
 
 This contract defines the ownership boundary between the Go runtime and the
 platform wrapper layer (Claude Code, OpenCode). It ensures wrappers enhance
-presentation without duplicating logic or drifting from runtime truth.
+presentation and execute platform-only Task-tool spawns without duplicating
+runtime planning logic or drifting from runtime truth.
 
 Use the Go `aether` CLI as the source of truth for runtime behavior. Wrappers
-only add presentation and pacing on top of that runtime contract.
+add presentation, pacing, and platform-owned Task-tool execution on top of that
+runtime contract.
 
 ## Runtime Surface (Go — Authoritative)
 
@@ -22,6 +24,7 @@ The Go runtime owns ALL of the following. Wrappers must never replicate them:
 ### Build/Continue Workflow
 - Build manifest generation (`cmd/codex_build.go`)
 - Worker dispatch planning and wave allocation
+- External worker finalization (`aether build-finalize`)
 - Verification step execution
 - Gate evaluation (security, quality, coverage, performance)
 - Claims collection and persistence
@@ -62,6 +65,14 @@ Wrappers MAY add the following on top of runtime output:
 - Status updates with colony framing
 - Noting when workers encounter issues
 
+### Task-Tool Execution Bridge
+- Requesting the build dispatch manifest with
+  `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`
+- Spawning Claude/OpenCode agents from `result.dispatch_manifest`
+- Recording live visibility with `aether spawn-log` and `aether spawn-complete`
+- Sending terminal worker results back through
+  `AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <file>`
+
 ### Post-Build Summary
 - What was accomplished in colony terms
 - Key decisions made during the phase
@@ -80,8 +91,10 @@ Wrappers MUST NOT:
 1. **Mutate state files** — Never write to COLONY_STATE.json, session.json,
    pheromones.json, or any file in `.aether/data/` directly.
 
-2. **Replay orchestration logic** — Never duplicate build dispatch planning,
+2. **Replay runtime logic** — Never duplicate build dispatch planning,
    verification sequencing, gate evaluation, or phase advancement logic.
+   Wrappers may spawn the exact workers from `dispatch_manifest`; they must not
+   invent the worker mix.
 
 3. **Parse visual text as truth** — Never scrape ANSI-formatted output to
    extract state information. Use JSON mode if programmatic data is needed.
