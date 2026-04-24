@@ -85,6 +85,17 @@ var buildCmd = &cobra.Command{
 		}
 
 		selectedTasks := normalizeCLIStringList(mustGetStringArray(cmd, "task"))
+		planOnly, _ := cmd.Flags().GetBool("plan-only")
+		if planOnly {
+			result, state, phase, dispatches, err := runCodexBuildPlanOnly(skillWorkspaceRoot(), phaseNum, selectedTasks)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return nil
+			}
+			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches))
+			return nil
+		}
+
 		syntheticBuild, _ := cmd.Flags().GetBool("synthetic")
 		result, err := runCodexBuild(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild)
 		if err != nil {
@@ -581,6 +592,7 @@ func init() {
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
+	buildCmd.Flags().Bool("plan-only", false, "Print the build dispatch manifest without mutating colony state or spawning workers")
 	buildCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")

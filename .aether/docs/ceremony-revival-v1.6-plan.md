@@ -101,12 +101,18 @@ The detailed implementation contract is tracked in
 
 - Restore Claude/OpenCode build wrappers as orchestrators, not pass-throughs.
 - Run `aether build --plan-only <phase>` or equivalent manifest generation.
+  (Implemented as `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`;
+  it is read-only and emits `dispatch_manifest`.)
 - For each wave, spawn real caste agents via the platform agent tool.
 - Restore pre-wave Archaeologist, Oracle, Architect, and Ambassador hooks.
 - Restore Builder waves, Probe verification, Watcher verification, Measurer, and
   Chaos.
 - Call `aether spawn-log` before each Task call and `aether spawn-complete` after
   each returned result so the narrator and spawn tree reflect real work.
+- Add a runtime record/finalize surface for wrapper-spawned work before the
+  wrappers advance phase state. Do not finalize by running `aether build
+  --synthetic` after real wrapper agents; that would mix simulated evidence with
+  real Task-tool execution.
 
 ## Phase 5: Continue and Plan Orchestration
 

@@ -941,6 +941,30 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	return b.String()
 }
 
+func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Plan %d", phase.ID)))
+	b.WriteString(visualDivider)
+	b.WriteString("Dispatch manifest only. No state was changed and no workers were spawned.\n")
+	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
+	b.WriteString("\n")
+	b.WriteString("Phase: ")
+	b.WriteString(phase.Name)
+	b.WriteString("\n")
+	if strings.TrimSpace(phase.Description) != "" {
+		b.WriteString("Objective: ")
+		b.WriteString(strings.TrimSpace(phase.Description))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
+	b.WriteString(renderNextUp(
+		`Use the JSON `+"`dispatch_manifest`"+` to spawn wrapper agents with the Task tool.`,
+		`Run `+"`AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`"+` when a machine-readable manifest is needed.`,
+	))
+	return b.String()
+}
+
 func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Dispatch %d", phase.ID)))
@@ -2083,7 +2107,7 @@ func renderSpawnPlanForDispatches(dispatches []codexBuildDispatch, parallelMode 
 
 func writeDispatchExecutionStatus(b *strings.Builder, dispatch codexBuildDispatch) {
 	status := strings.TrimSpace(dispatch.Status)
-	if status == "" || status == "spawned" {
+	if status == "" || status == "spawned" || status == "planned" {
 		return
 	}
 	icon := "\u2717"

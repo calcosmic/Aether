@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T04:17:03Z
+Last updated: 2026-04-24T04:25:35Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -33,6 +33,9 @@ These commits are pushed:
 - `19bd3d66 feat: let narrator consume visual metadata`
 - `aa8d6d4b test: pipe event stream through narrator runtime`
 - `e2882ff2 docs: add ceremony revival handoff`
+- `f8d91afa feat: launch narrator for build ceremony events`
+- `28b9e857 feat: render ceremony activity frames`
+- `d7564ca6 test: cover multi-wave ceremony activity`
 
 Implemented foundation:
 
@@ -57,6 +60,12 @@ Implemented foundation:
 - Temporary HOME smoke verified the source-built binary can launch the narrator
   from the installed hub fallback when the fixture repo has no local
   `.aether/ts` runtime.
+- `aether build <phase> --plan-only` now prints a machine-readable
+  `dispatch_manifest` without changing colony state, writing checkpoints,
+  writing worker briefs, writing claims, or spawning workers.
+- Plan-only dispatch entries include the intended caste, deterministic worker
+  name, `agent_name`, wave/task metadata, and `planned` status so wrappers can
+  spawn real Task-tool agents from JSON instead of scraping visual output.
 
 Verification already passed for the pushed foundation:
 
@@ -113,6 +122,44 @@ Gatekeeper guardrails:
 Existing non-narrator dependency advisories were noted by Gatekeeper but not
 changed in this slice. They should be handled as a separate release-hardening
 task, not mixed into the launcher.
+
+## Completed Slice: Build Plan-Only Manifest
+
+Purpose:
+
+- Give Claude Code and OpenCode wrappers a safe machine-readable dispatch
+  contract before restoring real Task-tool spawning.
+- Keep Go authoritative for phase/task/wave planning while keeping wrapper
+  execution outside the Go binary.
+- Avoid the unsafe fallback of parsing the visual spawn plan.
+
+Implemented behavior:
+
+- `aether build <phase> --plan-only` validates the requested phase, task filter,
+  critical pre-build gates, and build order using the same checks as a real
+  build.
+- The command returns JSON with `plan_only: true`, `dispatch_mode: "plan-only"`,
+  top-level `dispatches`, and a structured `dispatch_manifest`.
+- The manifest includes phase metadata, root, colony depth, parallel mode, wave
+  execution strategy, playbooks, task plans, success criteria, selected tasks,
+  and planned dispatches.
+- Dispatch maps include `agent_name` values such as `aether-builder` and
+  `aether-watcher` for wrapper Task-tool routing.
+- The command does not call the worker invoker, does not publish ceremony
+  events, does not update `COLONY_STATE.json`, does not update session context,
+  and does not write build/checkpoint/claim artifacts.
+
+Focused verification:
+
+- `go test ./cmd -run 'TestBuildPlanOnly|TestBuildWritesDispatchArtifactsAndUpdatesState|TestBuildSupportsTaskScopedRedispatch' -count=1`
+
+Important limitation:
+
+- This is only the planning half of the bridge. The next runtime surface should
+  record/finalize externally spawned wrapper workers after `spawn-log` and
+  `spawn-complete` have captured their results. Do not make wrappers call a fake
+  `aether build --synthetic` after real Task work; that would overwrite the
+  evidence trail with simulated dispatch.
 
 ## Completed Slice: Go Narrator Launcher
 

@@ -195,6 +195,125 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 }
 
+func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Expose wrapper-spawn build plans"
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Wrapper bridge",
+					Description: "Let Claude and OpenCode spawn workers from a runtime manifest",
+					Status:      colony.PhaseReady,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Define the structured build manifest", Status: colony.TaskPending},
+						{ID: &taskTwoID, Goal: "Use the manifest in wrappers", Status: colony.TaskPending, DependsOn: []string{taskOneID}},
+					},
+					SuccessCriteria: []string{"Wrappers do not parse visual output"},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --plan-only returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse plan-only output: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got %v", envelope)
+	}
+	result := envelope["result"].(map[string]interface{})
+	if result["plan_only"] != true {
+		t.Fatalf("plan_only = %v, want true", result["plan_only"])
+	}
+	if got := result["dispatch_mode"].(string); got != "plan-only" {
+		t.Fatalf("dispatch_mode = %q, want plan-only", got)
+	}
+	if got := int(result["dispatch_count"].(float64)); got != 7 {
+		t.Fatalf("dispatch_count = %d, want 7", got)
+	}
+	dispatches := result["dispatches"].([]interface{})
+	if len(dispatches) != 7 {
+		t.Fatalf("dispatches = %d, want 7", len(dispatches))
+	}
+	for _, raw := range dispatches {
+		dispatch := raw.(map[string]interface{})
+		if dispatch["status"].(string) != "planned" {
+			t.Fatalf("dispatch status = %q, want planned", dispatch["status"])
+		}
+		if strings.TrimSpace(dispatch["agent_name"].(string)) == "" {
+			t.Fatalf("dispatch missing agent_name: %+v", dispatch)
+		}
+	}
+
+	manifest := result["dispatch_manifest"].(map[string]interface{})
+	if manifest["plan_only"] != true {
+		t.Fatalf("manifest plan_only = %v, want true", manifest["plan_only"])
+	}
+	if manifest["dispatch_mode"].(string) != "plan-only" {
+		t.Fatalf("manifest dispatch_mode = %q, want plan-only", manifest["dispatch_mode"])
+	}
+	if manifest["checkpoint"].(string) != "" || manifest["claims_path"].(string) != "" {
+		t.Fatalf("plan-only manifest should not claim artifact paths: %+v", manifest)
+	}
+	if workerBriefs := manifest["worker_briefs"].([]interface{}); len(workerBriefs) != 0 {
+		t.Fatalf("plan-only manifest should not write worker briefs, got %v", workerBriefs)
+	}
+
+	for _, rel := range []string{
+		"checkpoints/pre-build-phase-1.json",
+		"build/phase-1/manifest.json",
+		"last-build-claims.json",
+	} {
+		if _, err := os.Stat(filepath.Join(dataDir, rel)); !os.IsNotExist(err) {
+			t.Fatalf("plan-only unexpectedly wrote %s (err=%v)", rel, err)
+		}
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload colony state: %v", err)
+	}
+	if state.State != colony.StateREADY {
+		t.Fatalf("state = %s, want READY", state.State)
+	}
+	if state.CurrentPhase != 0 {
+		t.Fatalf("current_phase = %d, want 0", state.CurrentPhase)
+	}
+	if state.BuildStartedAt != nil {
+		t.Fatal("BuildStartedAt should remain nil")
+	}
+	if state.Plan.Phases[0].Status != colony.PhaseReady {
+		t.Fatalf("phase status = %s, want ready", state.Plan.Phases[0].Status)
+	}
+}
+
 func TestBuildWaveExecutionPlansRespectParallelMode(t *testing.T) {
 	dispatches := []codexBuildDispatch{
 		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-1", Task: "Task one"},
@@ -914,12 +1033,12 @@ func (i *inRepoClaimsInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) 
 		return codex.WorkerResult{}, err
 	}
 	return codex.WorkerResult{
-		WorkerName:    cfg.WorkerName,
-		Caste:         cfg.Caste,
-		TaskID:        cfg.TaskID,
-		Status:        "completed",
-		Summary:       "in-repo build completed",
-		FilesCreated:  []string{"pkg/feature.txt"},
+		WorkerName:   cfg.WorkerName,
+		Caste:        cfg.Caste,
+		TaskID:       cfg.TaskID,
+		Status:       "completed",
+		Summary:      "in-repo build completed",
+		FilesCreated: []string{"pkg/feature.txt"},
 	}, nil
 }
 

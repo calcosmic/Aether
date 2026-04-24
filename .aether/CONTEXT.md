@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T04:17:03Z |
+| **Last Updated** | 2026-04-24T04:25:35Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -45,6 +45,8 @@ Launcher implementation completed: `cmd/narrator_launcher.go` auto-launches the 
 Rolling display foundation completed: `.aether/ts/narrator.ts` now keeps a stateful ceremony frame and renders a `COLONY ACTIVITY` view with wave progress plus Active, Completed, Blocked, and Other worker sections. It preserves the compatibility event line first so existing Go smoke tests continue to work. `.aether/ts/dist/narrator.js` has been regenerated.
 
 Hub fallback smoke completed in a temporary HOME: install/update synced the package, fixture-local `.aether/ts` was removed, and `AETHER_NARRATOR=on aether build 1 --synthetic` still rendered `COLONY ACTIVITY` from the installed hub runtime. TTY live redraw/debounce is intentionally deferred until real wrapper output gives a better terminal contract.
+
+Build plan-only bridge slice completed: `aether build <phase> --plan-only` now emits a read-only JSON `dispatch_manifest` for wrapper orchestration. It validates the same buildability gates as real build, includes deterministic worker names plus `agent_name`, wave execution, playbooks, selected tasks, and success criteria, and does not mutate `COLONY_STATE.json` or write build artifacts. Focused Go tests passed.
 
 ---
 
@@ -93,15 +95,16 @@ Hub fallback smoke completed in a temporary HOME: install/update synced the pack
 - 2026-04-24T04:06:48Z|phase2_launcher|build|Go narrator launcher and build ceremony emitter implemented; full Go/TS/race/vet verification passed
 - 2026-04-24T04:12:13Z|phase3_display_foundation|build|TS narrator activity frame added with active/completed/blocked worker tests
 - 2026-04-24T04:17:03Z|phase3_smoke|test|Temp HOME installed-hub fallback smoke and multi-wave activity fixture passed
+- 2026-04-24T04:25:35Z|phase4_plan_manifest|build|Read-only build --plan-only dispatch_manifest added for Claude/OpenCode wrapper spawning bridge
 
 ---
 
 ## Next Steps
 
-1. Commit and push the hub-smoke/multi-wave fixture checkpoint
-2. Start Claude/OpenCode build wrapper restoration for real agent spawning
-3. Keep Go as state/event source of truth; wrappers own Task-tool spawning
-4. Emit `spawn-log`/`spawn-complete` around real wrapper Task calls
+1. Commit and push the build plan-only manifest checkpoint
+2. Add the runtime record/finalize surface for wrapper-spawned Task agents
+3. Restore Claude/OpenCode build wrappers to call `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`, spawn real agents, and emit `spawn-log`/`spawn-complete`
+4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
 
@@ -112,6 +115,7 @@ Hub fallback smoke completed in a temporary HOME: install/update synced the pack
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the hub-smoke/multi-wave fixture checkpoint
+- Commit and push the build plan-only manifest checkpoint
+- Design/implement wrapper-build finalize recording
 - Restore Claude/OpenCode build wrappers as real orchestrators
 - Add wrapper tests/snapshots proving build wrappers call Go manifest flow and instruct Task-tool spawning

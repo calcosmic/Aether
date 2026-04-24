@@ -44,6 +44,7 @@ type codexBuildManifest struct {
 	PhaseName       string                   `json:"phase_name"`
 	Goal            string                   `json:"goal,omitempty"`
 	Root            string                   `json:"root"`
+	PlanOnly        bool                     `json:"plan_only,omitempty"`
 	ParallelMode    string                   `json:"parallel_mode,omitempty"`
 	WaveExecution   []codexWaveExecutionPlan `json:"wave_execution,omitempty"`
 	ColonyDepth     string                   `json:"colony_depth"`
@@ -84,6 +85,76 @@ type codexBuildClaims struct {
 }
 
 var newCodexWorkerInvoker = codex.NewWorkerInvoker
+
+func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	if store == nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
+	}
+
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	if len(state.Plan.Phases) == 0 {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
+	}
+	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
+	}
+	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
+	phase := state.Plan.Phases[phaseNum-1]
+	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+
+	generatedAt := time.Now().UTC()
+	depth := normalizedBuildDepth(state.ColonyDepth)
+	playbooks := codexBuildPlaybooks()
+	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs)
+	for i := range dispatches {
+		dispatches[i].Status = "planned"
+	}
+	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+
+	parallelMode := effectiveParallelMode(state)
+	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
+	manifest := buildCodexBuildManifest(root, state, phase, "", "", playbooks, dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true)
+
+	result := map[string]interface{}{
+		"plan_only":         true,
+		"phase":             phaseNum,
+		"phase_name":        phase.Name,
+		"state":             state.State,
+		"playbooks":         playbooks,
+		"next":              "spawn wrapper agents from dispatches, then record completion",
+		"currentTask":       phase.Tasks,
+		"dispatches":        codexBuildDispatchMaps(dispatches),
+		"dispatch_manifest": manifest,
+		"dispatch_count":    len(dispatches),
+		"wave_count":        len(waveExecution),
+		"parallel_waves":    countParallelWaveExecutionPlans(waveExecution),
+		"parallel_mode":     string(parallelMode),
+		"wave_execution":    waveExecution,
+		"dispatch_mode":     "plan-only",
+		"selected_tasks":    selectedTaskIDs,
+		"wrapper_contract": map[string]interface{}{
+			"source_command":          "AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+			"spawn_log_required":      true,
+			"spawn_complete_required": true,
+			"finalize_surface":        "pending",
+		},
+	}
+	return result, state, phase, dispatches, nil
+}
 
 func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, synthetic bool) (map[string]interface{}, error) {
 	if store == nil {
@@ -224,38 +295,7 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 
 	updateSessionSummary("build", "aether continue", fmt.Sprintf("Phase %d dispatched to %d workers across %d waves", phaseNum, len(dispatches), max(waveCount, 1)))
 
-	dispatchMaps := make([]map[string]interface{}, 0, len(dispatches))
-	for _, dispatch := range dispatches {
-		entry := map[string]interface{}{
-			"stage":  dispatch.Stage,
-			"caste":  dispatch.Caste,
-			"name":   dispatch.Name,
-			"task":   dispatch.Task,
-			"status": dispatch.Status,
-		}
-		if dispatch.Wave > 0 {
-			entry["wave"] = dispatch.Wave
-		}
-		if dispatch.TaskID != "" {
-			entry["task_id"] = dispatch.TaskID
-		}
-		if len(dispatch.DependsOn) > 0 {
-			entry["depends_on"] = dispatch.DependsOn
-		}
-		if len(dispatch.Outputs) > 0 {
-			entry["outputs"] = dispatch.Outputs
-		}
-		if dispatch.Summary != "" {
-			entry["summary"] = dispatch.Summary
-		}
-		if dispatch.Duration > 0 {
-			entry["duration"] = dispatch.Duration
-		}
-		if len(dispatch.Blockers) > 0 {
-			entry["blockers"] = dispatch.Blockers
-		}
-		dispatchMaps = append(dispatchMaps, entry)
-	}
+	dispatchMaps := codexBuildDispatchMaps(dispatches)
 
 	result := map[string]interface{}{
 		"phase":          phaseNum,
@@ -704,22 +744,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	return dispatches, claims, mode, nil
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string) ([]string, []codexBuildDispatch, error) {
-	briefPaths := make([]string, 0, len(dispatches))
-	briefOutputs := map[string]string{}
-
-	for i := range dispatches {
-		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
-		content := renderCodexBuildWorkerBrief(root, phase, dispatches[i], playbooks, startedAt)
-		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
-			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
-		}
-		displayPath := displayDataPath(briefRel)
-		briefPaths = append(briefPaths, displayPath)
-		briefOutputs[dispatches[i].Name] = displayPath
-	}
-	sort.Strings(briefPaths)
-
+func codexBuildTaskPlans(phase colony.Phase) []codexBuildTaskPlan {
 	taskPlans := make([]codexBuildTaskPlan, 0, len(phase.Tasks))
 	waves := taskWaves(phase.Tasks)
 	taskWave := map[int]int{}
@@ -737,37 +762,111 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 			DependsOn: append([]string{}, task.DependsOn...),
 		})
 	}
+	return taskPlans
+}
 
+func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony.Phase, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, workerBriefs []string, planOnly bool) codexBuildManifest {
 	goal := ""
 	if state.Goal != nil {
 		goal = strings.TrimSpace(*state.Goal)
 	}
-	for i := range dispatches {
-		if output := briefOutputs[dispatches[i].Name]; output != "" {
-			dispatches[i].Outputs = []string{output}
-		}
+
+	checkpoint := ""
+	if strings.TrimSpace(checkpointRel) != "" {
+		checkpoint = displayDataPath(checkpointRel)
+	}
+	claimsPath := ""
+	if strings.TrimSpace(claimsRel) != "" {
+		claimsPath = displayDataPath(claimsRel)
+	}
+	briefs := append([]string{}, workerBriefs...)
+	if briefs == nil {
+		briefs = []string{}
 	}
 
-	manifest := codexBuildManifest{
+	return codexBuildManifest{
 		Phase:           phase.ID,
 		PhaseName:       phase.Name,
 		Goal:            goal,
 		Root:            root,
+		PlanOnly:        planOnly,
 		ParallelMode:    string(effectiveParallelMode(state)),
 		WaveExecution:   buildWaveExecutionPlans(dispatches, effectiveParallelMode(state)),
 		ColonyDepth:     normalizedBuildDepth(state.ColonyDepth),
 		DispatchMode:    strings.TrimSpace(dispatchMode),
 		GeneratedAt:     startedAt.Format(time.RFC3339),
 		State:           string(state.State),
-		Checkpoint:      displayDataPath(checkpointRel),
-		ClaimsPath:      displayDataPath(claimsRel),
+		Checkpoint:      checkpoint,
+		ClaimsPath:      claimsPath,
 		Playbooks:       append([]string{}, playbooks...),
-		WorkerBriefs:    briefPaths,
-		Dispatches:      dispatches,
+		WorkerBriefs:    briefs,
+		Dispatches:      append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:   append([]string{}, selectedTaskIDs...),
-		Tasks:           taskPlans,
+		Tasks:           codexBuildTaskPlans(phase),
 		SuccessCriteria: append([]string{}, phase.SuccessCriteria...),
 	}
+}
+
+func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interface{} {
+	dispatchMaps := make([]map[string]interface{}, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		entry := map[string]interface{}{
+			"stage":      dispatch.Stage,
+			"caste":      dispatch.Caste,
+			"agent_name": codexAgentNameForCaste(dispatch.Caste),
+			"name":       dispatch.Name,
+			"task":       dispatch.Task,
+			"status":     dispatch.Status,
+		}
+		if dispatch.Wave > 0 {
+			entry["wave"] = dispatch.Wave
+		}
+		if dispatch.TaskID != "" {
+			entry["task_id"] = dispatch.TaskID
+		}
+		if len(dispatch.DependsOn) > 0 {
+			entry["depends_on"] = dispatch.DependsOn
+		}
+		if len(dispatch.Outputs) > 0 {
+			entry["outputs"] = dispatch.Outputs
+		}
+		if dispatch.Summary != "" {
+			entry["summary"] = dispatch.Summary
+		}
+		if dispatch.Duration > 0 {
+			entry["duration"] = dispatch.Duration
+		}
+		if len(dispatch.Blockers) > 0 {
+			entry["blockers"] = dispatch.Blockers
+		}
+		dispatchMaps = append(dispatchMaps, entry)
+	}
+	return dispatchMaps
+}
+
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string) ([]string, []codexBuildDispatch, error) {
+	briefPaths := make([]string, 0, len(dispatches))
+	briefOutputs := map[string]string{}
+
+	for i := range dispatches {
+		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
+		content := renderCodexBuildWorkerBrief(root, phase, dispatches[i], playbooks, startedAt)
+		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
+			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
+		}
+		displayPath := displayDataPath(briefRel)
+		briefPaths = append(briefPaths, displayPath)
+		briefOutputs[dispatches[i].Name] = displayPath
+	}
+	sort.Strings(briefPaths)
+
+	for i := range dispatches {
+		if output := briefOutputs[dispatches[i].Name]; output != "" {
+			dispatches[i].Outputs = []string{output}
+		}
+	}
+
+	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, playbooks, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false)
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	if err := store.SaveJSON(manifestRel, manifest); err != nil {
 		return nil, nil, fmt.Errorf("failed to write build manifest: %w", err)
