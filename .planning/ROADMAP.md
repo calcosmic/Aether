@@ -196,7 +196,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 46-01-PLAN.md -- Stuck-plan E2E reproduction test and v1.6 milestone audit
+- [x] 46-01-PLAN.md -- Stuck-plan E2E reproduction test and v1.6 milestone audit
 
 **Success Criteria:**
 1. Stuck `aether plan` issue is reproduced or proven stale in freshly updated repos
