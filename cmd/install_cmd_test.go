@@ -213,6 +213,126 @@ func TestSyncDirSkipsNestedNodeModules(t *testing.T) {
 	}
 }
 
+func TestSyncDirSkipsDSStoreAndRemovesStaleDSStore(t *testing.T) {
+	src := t.TempDir()
+	dest := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "ts"), 0755); err != nil {
+		t.Fatalf("failed to create source fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dest, "ts"), 0755); err != nil {
+		t.Fatalf("failed to create dest fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dest, "ts", "node_modules", "tsx"), 0755); err != nil {
+		t.Fatalf("failed to create stale dest node_modules fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts", "narrator.ts"), []byte("export {};\n"), 0644); err != nil {
+		t.Fatalf("failed to write narrator fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, ".DS_Store"), []byte("metadata"), 0644); err != nil {
+		t.Fatalf("failed to write source root metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts", ".DS_Store"), []byte("metadata"), 0644); err != nil {
+		t.Fatalf("failed to write source nested metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "ts", ".DS_Store"), []byte("stale"), 0644); err != nil {
+		t.Fatalf("failed to write stale dest metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "ts", "node_modules", "tsx", "index.js"), []byte("stale"), 0644); err != nil {
+		t.Fatalf("failed to write stale dest node_modules file: %v", err)
+	}
+
+	result := syncDir(src, dest, syncOptions{cleanup: true})
+	if len(result.errors) > 0 {
+		t.Fatalf("syncDir returned errors: %v", result.errors)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "ts", "narrator.ts")); err != nil {
+		t.Fatalf("expected narrator fixture to sync: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(dest, ".DS_Store"),
+		filepath.Join(dest, "ts", ".DS_Store"),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("syncDir should not leave .DS_Store at %s", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dest, "ts", "node_modules")); err == nil {
+		t.Fatal("syncDir should remove stale node_modules directories during cleanup")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat stale node_modules: %v", err)
+	}
+}
+
+func TestSyncDirToHubSkipsIgnoredAndExcludedArtifacts(t *testing.T) {
+	src := t.TempDir()
+	dest := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "ts", "dist"), 0755); err != nil {
+		t.Fatalf("failed to create source fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dest, "ts"), 0755); err != nil {
+		t.Fatalf("failed to create dest fixture: %v", err)
+	}
+	for _, dir := range []string{
+		filepath.Join(dest, "archive"),
+		filepath.Join(dest, "backups"),
+		filepath.Join(dest, "chambers"),
+		filepath.Join(dest, ".aether", "locks"),
+		filepath.Join(dest, "ts", "node_modules", "tsx"),
+	} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("failed to create stale dest dir %s: %v", dir, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts", "dist", "narrator.js"), []byte("export {};\n"), 0644); err != nil {
+		t.Fatalf("failed to write narrator fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts", ".DS_Store"), []byte("metadata"), 0644); err != nil {
+		t.Fatalf("failed to write source metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "ts", ".DS_Store"), []byte("stale"), 0644); err != nil {
+		t.Fatalf("failed to write stale dest metadata: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(dest, "archive", "old.md"),
+		filepath.Join(dest, "backups", "old.md"),
+		filepath.Join(dest, "chambers", "old.md"),
+		filepath.Join(dest, ".aether", "locks", "stale.lock"),
+		filepath.Join(dest, "ts", "node_modules", "tsx", "index.js"),
+	} {
+		if err := os.WriteFile(path, []byte("stale"), 0644); err != nil {
+			t.Fatalf("failed to write stale dest file %s: %v", path, err)
+		}
+	}
+
+	result := syncDirToHub(src, dest)
+	if len(result.errors) > 0 {
+		t.Fatalf("syncDirToHub returned errors: %v", result.errors)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "ts", "dist", "narrator.js")); err != nil {
+		t.Fatalf("expected narrator fixture to sync: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "ts", ".DS_Store")); err == nil {
+		t.Fatal("syncDirToHub should not leave .DS_Store in the hub")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat stale metadata: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(dest, "archive"),
+		filepath.Join(dest, "backups"),
+		filepath.Join(dest, "chambers"),
+		filepath.Join(dest, ".aether"),
+		filepath.Join(dest, "ts", "node_modules"),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("syncDirToHub should remove stale ignored or excluded artifact at %s", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat stale artifact %s: %v", path, err)
+		}
+	}
+}
+
 // TestInstallCopiesClaudeCommands verifies that install copies .claude/commands/ant/
 // files to the target directory.
 func TestInstallCopiesClaudeCommands(t *testing.T) {

@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T12:22:11Z |
+| **Last Updated** | 2026-04-24T13:24:10Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -27,6 +27,8 @@ Restore the agent spawning bridge — bring back full ceremony, real agent dispa
 ## What's In Progress
 
 Blended v1.6 ceremony revival plan persisted: Go owns state/events, TypeScript narrator owns visuals, wrappers own real Task-tool spawning. Current persisted colony phase: Assumptions and gap audit.
+
+Phase 7 release hygiene is in progress on `codex/phase7-release-hygiene`. PR #5 through PR #11 are merged into `origin/main`; the active branch contains only publish/update artifact hygiene plus tests and tracked handoff updates. Stable and dev were republished separately from source at `1.0.22` with `aether publish --channel stable --binary-dest "$HOME/.local/bin"` and `aether publish --channel dev --binary-dest "$HOME/.local/bin"`.
 
 Detailed handoff note: `.aether/dreams/2026-04-24-ceremony-revival-v1.6-handoff.md`.
 
@@ -70,7 +72,7 @@ TypeScript lifecycle-context rendering slice is in the working tree: `.aether/ts
 
 Broad checkpoint verification passed on 2026-04-24T11:27:54Z: TS install/typecheck/test/build, `gofmt`, `git diff --check`, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, and `go vet ./...`.
 
-GitHub PR status: PR #5, PR #6, PR #7, PR #8, and PR #9 are merged. PR #10 is open, clean, and mergeable for `codex/ceremony-context-events-v16`. The old `codex/ceremony-narrator-foundation-v16` branch still appears on GitHub because PR #7 was merged but the source branch was not deleted.
+GitHub PR status: PR #5 through PR #11 are merged. Next GitHub step is to open/review/merge the release-hygiene PR from `codex/phase7-release-hygiene` before any public tag/release.
 
 Go-side wrapper smoke passed with `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`: the standard-depth manifest emitted builder execution wave 11, Probe wave 12, and Watcher wave 13. True Claude/OpenCode Task-tool smoke remains pending because Codex cannot execute those platform wrapper tools directly.
 
@@ -82,7 +84,7 @@ Phase 6 skill activation ceremony slice is complete in the working tree: `resolv
 
 Phase 6 lifecycle context event slice is complete in the working tree on `codex/ceremony-context-events-v16`: entomb, midden-write, queen-promote, hive-store, and hive-promote now emit Go-owned ceremony context events (`ceremony.chamber.entomb`, `ceremony.midden.record`, `ceremony.queen.promote`, `ceremony.hive.store`, `ceremony.hive.promote`). The TypeScript narrator renders these as generic Context notices. Focused Go ceremony tests, `npm run typecheck --prefix .aether/ts`, `npm test --prefix .aether/ts`, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, `go vet ./...`, and `git diff --check` passed.
 
-PR #10 URL: `https://github.com/calcosmic/Aether/pull/10`
+Phase 7 release hygiene verification completed on the working branch: focused sync tests, `go test ./...`, race tests, vet, build, TS ci/typecheck/test/build, dist drift check, npm bootstrap tests, npm pack dry run, stable/dev integrity, downstream stable/dev update smokes, JSON/visual narrator smokes, and missing-Node fallback smoke all passed. Hubs now have `.aether/ts/dist/narrator.js` and no stale `.DS_Store`, local-only hub dirs, or `node_modules` under `system/`.
 
 ---
 
@@ -160,9 +162,10 @@ PR #10 URL: `https://github.com/calcosmic/Aether/pull/10`
 
 ## Next Steps
 
-1. Review/merge PR #10
+1. Open/review/merge the release-hygiene PR from `codex/phase7-release-hygiene`
 2. Run true Claude/OpenCode build wrapper smoke with platform Task-tool agents when available
 3. Keep Go as state/event source of truth; wrappers own Task-tool spawning
+4. Tag/release only after the release-hygiene PR is merged and final release checks are repeated from main
 
 ---
 
@@ -173,4 +176,5 @@ PR #10 URL: `https://github.com/calcosmic/Aether/pull/10`
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
+- Open/merge release-hygiene PR
 - Live smoke the build wrapper path with real platform agents
