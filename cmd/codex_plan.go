@@ -149,18 +149,31 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}, nil
 	}
 
-	if opts.Refresh && state.CurrentPhase > 0 {
-		hasBuiltPhase := false
-		for _, phase := range state.Plan.Phases {
-			if phase.Status == colony.PhaseInProgress || phase.Status == colony.PhaseCompleted {
-				hasBuiltPhase = true
-				break
+	if opts.Refresh {
+		if state.CurrentPhase > 0 {
+			hasCompletedPhase := false
+			for _, phase := range state.Plan.Phases {
+				if phase.Status == colony.PhaseCompleted {
+					hasCompletedPhase = true
+					break
+				}
+			}
+			if hasCompletedPhase {
+				return nil, fmt.Errorf("cannot force-replan after completed phases; archive this colony and start a new one")
+			}
+			// In-progress phase with no completed work — stale state. Reset for fresh plan.
+			for i := range state.Plan.Phases {
+				state.Plan.Phases[i].Status = colony.PhaseReady
+				for j := range state.Plan.Phases[i].Tasks {
+					state.Plan.Phases[i].Tasks[j].Status = colony.TaskPending
+				}
+			}
+			state.CurrentPhase = 0
+			state.State = colony.StateREADY
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				return nil, fmt.Errorf("failed to reset stale phase state for force-replan: %w", err)
 			}
 		}
-		if hasBuiltPhase {
-			return nil, fmt.Errorf("cannot refresh the plan while phase %d is already active", state.CurrentPhase)
-		}
-		// Colony is READY/pending only — safe to refresh. Clear stale planning artifacts.
 		clearFallbackPlanningArtifacts(root)
 	}
 
