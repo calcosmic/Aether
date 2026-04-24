@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
 
@@ -184,6 +185,16 @@ var pheromoneWriteCmd = &cobra.Command{
 				_ = tracer.LogPheromone(*state.RunID, sigType, "pheromone-write")
 			}
 		}
+		status := "created"
+		if replaced {
+			status = "reinforced"
+		}
+		emitLifecycleCeremony(events.CeremonyTopicPheromoneEmit, events.CeremonyPayload{
+			PheromoneType: sigType,
+			Strength:      strength,
+			Status:        status,
+			Message:       extractText(signal.Content),
+		}, "aether-pheromone")
 
 		outputOK(map[string]interface{}{
 			"created":  true,

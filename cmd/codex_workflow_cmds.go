@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
 
@@ -242,6 +243,14 @@ var sealCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
 			return nil
 		}
+		emitLifecycleCeremony(events.CeremonyTopicChamberSeal, events.CeremonyPayload{
+			Phase:     state.CurrentPhase,
+			PhaseName: "Crowned Anthill",
+			Status:    "sealed",
+			Message:   "Colony sealed at Crowned Anthill",
+			Completed: completedPhaseCount(state),
+			Total:     len(state.Plan.Phases),
+		}, "aether-seal")
 		updateSessionSummary("seal", "aether entomb", "Colony sealed")
 
 		result := map[string]interface{}{

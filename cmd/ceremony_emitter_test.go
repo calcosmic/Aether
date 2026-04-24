@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -116,6 +117,139 @@ func TestBuildCeremonyEmitterTrimsUserControlledPayload(t *testing.T) {
 		if len(blocker) > ceremonyListItemLimit {
 			t.Fatalf("blocker not trimmed: %d", len(blocker))
 		}
+	}
+}
+
+func TestLifecycleCeremonyPersistsTrimmedEvent(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	long := strings.Repeat("x", ceremonyTextLimit+50)
+	emitLifecycleCeremony(events.CeremonyTopicPheromoneEmit, events.CeremonyPayload{
+		PheromoneType: "FOCUS",
+		Strength:      0.8,
+		Status:        "created",
+		Message:       long,
+	}, "unit-test")
+
+	lines, err := s.ReadJSONL("event-bus.jsonl")
+	if err != nil {
+		t.Fatalf("read event bus: %v", err)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("persisted events = %d, want 1", len(lines))
+	}
+	var persisted events.Event
+	if err := json.Unmarshal(lines[0], &persisted); err != nil {
+		t.Fatalf("unmarshal persisted event: %v", err)
+	}
+	if persisted.Topic != events.CeremonyTopicPheromoneEmit {
+		t.Fatalf("topic = %q, want %q", persisted.Topic, events.CeremonyTopicPheromoneEmit)
+	}
+	if persisted.Source != "unit-test" {
+		t.Fatalf("source = %q, want unit-test", persisted.Source)
+	}
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(persisted.Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload.PheromoneType != "FOCUS" || payload.Status != "created" || payload.Strength != 0.8 {
+		t.Fatalf("payload = %+v", payload)
+	}
+	if len(payload.Message) > ceremonyTextLimit {
+		t.Fatalf("message was not trimmed: %d", len(payload.Message))
+	}
+}
+
+func TestPheromoneWriteEmitsCeremonyEvent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, _ := newTestStore(t)
+	store = s
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"pheromone-write", "--type", "FOCUS", "--content", "Surface lifecycle context", "--strength", "0.75"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("pheromone-write returned error: %v", err)
+	}
+
+	lines, err := s.ReadJSONL("event-bus.jsonl")
+	if err != nil {
+		t.Fatalf("read event bus: %v", err)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("persisted events = %d, want 1", len(lines))
+	}
+	var persisted events.Event
+	if err := json.Unmarshal(lines[0], &persisted); err != nil {
+		t.Fatalf("unmarshal persisted event: %v", err)
+	}
+	if persisted.Topic != events.CeremonyTopicPheromoneEmit {
+		t.Fatalf("topic = %q, want %q", persisted.Topic, events.CeremonyTopicPheromoneEmit)
+	}
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(persisted.Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload.PheromoneType != "FOCUS" || payload.Status != "created" || payload.Strength != 0.75 {
+		t.Fatalf("payload = %+v", payload)
+	}
+	if payload.Message != "Surface lifecycle context" {
+		t.Fatalf("message = %q", payload.Message)
+	}
+}
+
+func TestSealEmitsChamberCeremonyEvent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, _ := newTestStore(t)
+	store = s
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Seal ceremony events"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Complete work",
+			Status: colony.PhaseCompleted,
+		}}},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"seal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("seal returned error: %v", err)
+	}
+
+	lines, err := s.ReadJSONL("event-bus.jsonl")
+	if err != nil {
+		t.Fatalf("read event bus: %v", err)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("persisted events = %d, want 1", len(lines))
+	}
+	var persisted events.Event
+	if err := json.Unmarshal(lines[0], &persisted); err != nil {
+		t.Fatalf("unmarshal persisted event: %v", err)
+	}
+	if persisted.Topic != events.CeremonyTopicChamberSeal {
+		t.Fatalf("topic = %q, want %q", persisted.Topic, events.CeremonyTopicChamberSeal)
+	}
+	var payload events.CeremonyPayload
+	if err := json.Unmarshal(persisted.Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload.Status != "sealed" || payload.PhaseName != "Crowned Anthill" || payload.Completed != 1 || payload.Total != 1 {
+		t.Fatalf("payload = %+v", payload)
 	}
 }
 

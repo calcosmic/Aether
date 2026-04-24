@@ -1,11 +1,11 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T11:36:13Z
+Last updated: 2026-04-24T12:00:05Z
 
-Branch: `codex/ceremony-narrator-foundation-v16`
-Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
+Branch: `codex/ceremony-lifecycle-events-v16`
+Base: `origin/main` after merged PR #7
 Previous PR: `https://github.com/calcosmic/Aether/pull/5` (merged/closed; covered only the early branch state through `c1880184`)
-Current PR: `https://github.com/calcosmic/Aether/pull/6` (draft)
+Merged PRs: `https://github.com/calcosmic/Aether/pull/6`, `https://github.com/calcosmic/Aether/pull/7`
 
 ## Purpose
 
@@ -51,12 +51,12 @@ committed directly while the persisted colony lifecycle was not advanced through
 | Phase 6: full lifecycle ceremony and skills | Partially implemented | Build ceremony emits from Go; uncommitted TS slice renders generic lifecycle stages and context notices | Emit Go-backed events for plan, continue, colonize, pheromones, chamber sealing, graves/entomb; surface skill/QUEEN/Hive/midden context from real state |
 | Phase 7: parity verification and release | Not done | Release/rollback notes exist | Cross-platform smoke, install/update release checks, PR review, release hardening |
 
-Safe continuation point: PR #6 is open as a draft. The verified Phase 4
-specialist execution-plan and TypeScript lifecycle-context checkpoint is pushed,
-and the branch has merged the PR #5 squash commit from `main` with an
-ancestry-only merge. PR #6 is clean and mergeable. Go-side wrapper smoke passed
-for `build 1 --plan-only`; true Claude/OpenCode Task-tool smoke remains next
-before moving on to later lifecycle event emission.
+Safe continuation point: PR #6 and PR #7 are merged. Current branch is
+`codex/ceremony-lifecycle-events-v16` from `origin/main`. Go-side wrapper smoke
+passed for `build 1 --plan-only`; true Claude/OpenCode Task-tool smoke remains
+pending because Codex cannot execute those platform Task-tool wrappers directly.
+The current working-tree slice starts Phase 6 Go-backed lifecycle ceremony
+emission for pheromones and chamber sealing.
 
 ## Already Shipped On This Branch
 
@@ -981,6 +981,38 @@ Skill work:
 - Ensure wrapper-spawned agents receive matched skill sections.
 - Emit `ceremony.skill.activate` when a worker activates a skill.
 
+## Working Tree Slice: Phase 6 Pheromone And Chamber Events
+
+Date: 2026-04-24
+
+This slice begins Go-backed lifecycle ceremony emission beyond build.
+
+Changed files:
+
+- `cmd/ceremony_emitter.go`
+- `cmd/pheromone_write.go`
+- `cmd/codex_workflow_cmds.go`
+- `cmd/ceremony_emitter_test.go`
+
+Implemented behavior:
+
+- `emitLifecycleCeremony` persists non-build ceremony events to
+  `event-bus.jsonl` using the existing `pkg/events` bus.
+- `pheromone-write` emits `ceremony.pheromone.emit` with signal type, strength,
+  created/reinforced status, and sanitized signal text.
+- `aether seal` emits `ceremony.chamber.seal` with Crowned Anthill status and
+  completed/total phase counts.
+- The generic publisher reuses the existing ceremony payload trimming rules so
+  user-controlled event text is bounded before persistence.
+
+Verification run:
+
+- `go test ./cmd -run 'TestLifecycleCeremonyPersistsTrimmedEvent|TestPheromoneWriteEmitsCeremonyEvent|TestSealEmitsChamberCeremonyEvent|TestBuildCeremonyEmitter' -count=1`
+- `git diff --check`
+- `go test ./cmd -count=1`
+- `go test ./... -count=1 -timeout 300s`
+- `go vet ./...`
+
 ## Release And Rollback
 
 Rollback controls:
@@ -1001,8 +1033,10 @@ Before release:
 
 ## Current Next Step
 
-Next, continue in order with live build-wrapper smoke before starting later
-lifecycle event emission. The preconditions now satisfied are:
+Next, commit and push the Phase 6 pheromone/chamber event slice, then continue
+lifecycle event emission for plan, continue, colonize, and visible worker/skill
+context. Platform Task-tool smoke is still required when Claude or OpenCode is
+available. The preconditions now satisfied are:
 
 1. hub fallback smoke passed in a temporary HOME;
 2. TTY live redraw is consciously deferred;
@@ -1016,4 +1050,7 @@ lifecycle event emission. The preconditions now satisfied are:
 8. PR #6 is clean/mergeable;
 9. Go-side wrapper smoke passed for
    `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`, producing
-   standard-depth builder wave 11, Probe wave 12, and Watcher wave 13.
+   standard-depth builder wave 11, Probe wave 12, and Watcher wave 13;
+10. PR #6 and PR #7 are merged;
+11. Phase 6 pheromone/chamber event hooks are implemented in the working tree
+    with focused, full cmd, full repo, vet, and whitespace checks passing.

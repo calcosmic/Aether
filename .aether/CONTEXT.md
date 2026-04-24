@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T11:36:13Z |
+| **Last Updated** | 2026-04-24T12:00:05Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -70,9 +70,11 @@ TypeScript lifecycle-context rendering slice is in the working tree: `.aether/ts
 
 Broad checkpoint verification passed on 2026-04-24T11:27:54Z: TS install/typecheck/test/build, `gofmt`, `git diff --check`, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, and `go vet ./...`.
 
-GitHub PR status: previous PR #5 for this branch is already merged/closed and only covered the early branch state through `c1880184`. Current draft PR is #6: `https://github.com/calcosmic/Aether/pull/6`. The branch has merged the PR #5 squash commit from `main` with an ancestry-only merge because `origin/main` already matched the branch's `c1880184` tree.
+GitHub PR status: PR #5, PR #6, and PR #7 are merged. Current implementation branch is `codex/ceremony-lifecycle-events-v16`, based on `origin/main` at PR #7.
 
-PR #6 status after sync: draft, clean, mergeable, 48 changed files. Go-side wrapper smoke passed with `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`: the standard-depth manifest emitted builder execution wave 11, Probe wave 12, and Watcher wave 13. True Claude/OpenCode Task-tool smoke remains pending because Codex cannot execute those platform wrapper tools directly.
+Go-side wrapper smoke passed with `AETHER_OUTPUT_MODE=json go run ./cmd/aether build 1 --plan-only`: the standard-depth manifest emitted builder execution wave 11, Probe wave 12, and Watcher wave 13. True Claude/OpenCode Task-tool smoke remains pending because Codex cannot execute those platform wrapper tools directly.
+
+Phase 6 first Go-backed lifecycle ceremony slice is complete in the working tree: `emitLifecycleCeremony` persists non-build ceremony events to `event-bus.jsonl`; `pheromone-write` now emits `ceremony.pheromone.emit`; `aether seal` now emits `ceremony.chamber.seal`. Focused tests, `go test ./cmd -count=1`, `go test ./... -count=1 -timeout 300s`, `go vet ./...`, and `git diff --check` passed.
 
 ---
 
@@ -136,14 +138,17 @@ PR #6 status after sync: draft, clean, mergeable, 48 changed files. Go-side wrap
 - 2026-04-24T11:27:54Z|checkpoint_verified|test|Phase 4 specialist execution-plan and TS lifecycle-context checkpoint passed TS, Go, vet, and whitespace verification
 - 2026-04-24T11:33:58Z|draft_pr_opened|github|Draft PR #6 opened and branch ancestry synced with main's PR #5 squash commit
 - 2026-04-24T11:36:13Z|go_side_wrapper_smoke|test|PR #6 clean/mergeable; build --plan-only emitted execution_plan for builder/probe/watcher waves
+- 2026-04-24T11:56:31Z|phase6_lifecycle_events|build|Pheromone and chamber seal ceremony events now persist through Go-owned lifecycle hooks
+- 2026-04-24T12:00:05Z|phase6_lifecycle_verified|test|Pheromone/chamber ceremony event slice passed focused, full cmd, full repo, vet, and whitespace checks
 
 ---
 
 ## Next Steps
 
-1. Run true Claude/OpenCode build wrapper smoke with platform Task-tool agents
-2. Continue in order with lifecycle event emission after wrapper smoke
-3. Keep Go as state/event source of truth; wrappers own Task-tool spawning
+1. Commit/push the Phase 6 pheromone/chamber ceremony event slice
+2. Continue lifecycle event emission for plan, continue, colonize, and worker/skill context
+3. Run true Claude/OpenCode build wrapper smoke with platform Task-tool agents when available
+4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
 

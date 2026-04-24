@@ -112,6 +112,23 @@ func (e *buildCeremonyEmitter) emitToNarrator(evt events.Event) {
 	e.narrator.EmitEvent(evt)
 }
 
+func emitLifecycleCeremony(topic string, payload events.CeremonyPayload, source string) {
+	if store == nil || strings.TrimSpace(topic) == "" {
+		return
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		source = "aether"
+	}
+	payload = trimCeremonyPayload(payload)
+	raw, err := payload.RawMessage()
+	if err != nil {
+		return
+	}
+	bus := events.NewBus(store, events.DefaultConfig())
+	_, _ = bus.Publish(context.Background(), topic, raw, source)
+}
+
 func syntheticCeremonyEvent(topic string, payload json.RawMessage, source string) events.Event {
 	now := time.Now().UTC()
 	return events.Event{
