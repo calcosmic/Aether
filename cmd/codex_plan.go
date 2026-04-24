@@ -16,14 +16,19 @@ import (
 )
 
 type codexPlanningDispatch struct {
-	Caste    string   `json:"caste"`
-	Name     string   `json:"name"`
-	Task     string   `json:"task"`
-	Outputs  []string `json:"outputs"`
-	Status   string   `json:"status"`
-	Summary  string   `json:"summary,omitempty"`
-	Duration float64  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
-	Claimed  []string `json:"-"`
+	Stage     string   `json:"stage,omitempty"`
+	Wave      int      `json:"wave,omitempty"`
+	Caste     string   `json:"caste"`
+	AgentName string   `json:"agent_name,omitempty"`
+	Name      string   `json:"name"`
+	Task      string   `json:"task"`
+	TaskID    string   `json:"task_id,omitempty"`
+	Outputs   []string `json:"outputs"`
+	Status    string   `json:"status"`
+	Summary   string   `json:"summary,omitempty"`
+	Duration  float64  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
+	Brief     string   `json:"brief,omitempty"`
+	Claimed   []string `json:"-"`
 }
 
 type codexSurveyContext struct {
@@ -100,7 +105,28 @@ type phaseTaskTemplate struct {
 type codexPlanOptions struct {
 	Refresh       bool
 	Synthetic     bool
+	PlanOnly      bool
+	Depth         string
 	WorkerTimeout time.Duration
+}
+
+type codexPlanManifest struct {
+	Goal               string                  `json:"goal"`
+	Root               string                  `json:"root"`
+	GeneratedAt        string                  `json:"generated_at"`
+	Refresh            bool                    `json:"refresh"`
+	ExistingPlan       bool                    `json:"existing_plan"`
+	ExistingPhaseCount int                     `json:"existing_phase_count,omitempty"`
+	Depth              string                  `json:"depth"`
+	Granularity        string                  `json:"granularity"`
+	GranularityMin     int                     `json:"granularity_min"`
+	GranularityMax     int                     `json:"granularity_max"`
+	Survey             codexSurveyContext      `json:"survey"`
+	Dispatches         []codexPlanningDispatch `json:"dispatches"`
+	DispatchMode       string                  `json:"dispatch_mode"`
+	DispatchContract   map[string]interface{}  `json:"dispatch_contract"`
+	FinalizeSurface    string                  `json:"finalize_surface"`
+	RequiresFinalizer  bool                    `json:"requires_finalizer"`
 }
 
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
@@ -120,12 +146,19 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 
-	granularity := normalizedGranularity(state.PlanGranularity)
+	granularity, planDepth, err := resolvePlanGranularityDepth(state.PlanGranularity, opts.Depth)
+	if err != nil {
+		return nil, err
+	}
 	pending := loadPendingDecisionFile()
 	unresolvedClarifications := countPendingClarifications(pending)
 	clarificationWarning := ""
 	if unresolvedClarifications > 0 {
 		clarificationWarning = "Unresolved clarifications exist. Run `aether discuss` to resolve them before planning, or proceed with implicit assumptions."
+	}
+
+	if opts.PlanOnly {
+		return runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
 	}
 
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
@@ -141,6 +174,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			"goal":                      *state.Goal,
 			"phases":                    state.Plan.Phases,
 			"count":                     len(state.Plan.Phases),
+			"depth":                     planDepth,
 			"granularity":               string(granularity),
 			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
 			"unresolved_clarifications": unresolvedClarifications,
@@ -355,6 +389,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"goal":                      *state.Goal,
 		"phases":                    phases,
 		"count":                     len(phases),
+		"depth":                     planDepth,
 		"granularity":               string(granularity),
 		"granularity_min":           granularityMin(granularity),
 		"granularity_max":           granularityMax(granularity),
@@ -384,11 +419,145 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	return result, nil
 }
 
+func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
+	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
+		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
+	}
+	if len(state.Plan.Phases) > 0 && !opts.Refresh {
+		nextPhase := firstBuildablePhase(state.Plan.Phases)
+		nextCommand := "aether build 1"
+		if nextPhase > 0 {
+			nextCommand = fmt.Sprintf("aether build %d", nextPhase)
+		}
+		return map[string]interface{}{
+			"plan_only":                 true,
+			"planned":                   true,
+			"existing_plan":             true,
+			"goal":                      *state.Goal,
+			"phases":                    state.Plan.Phases,
+			"count":                     len(state.Plan.Phases),
+			"depth":                     planDepth,
+			"granularity":               string(granularity),
+			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
+			"dispatch_mode":             "plan-only",
+			"requires_finalizer":        false,
+			"unresolved_clarifications": unresolvedClarifications,
+			"clarification_warning":     clarificationWarning,
+			"next":                      nextCommand,
+		}, nil
+	}
+	if opts.Refresh && state.CurrentPhase > 0 {
+		for _, phase := range state.Plan.Phases {
+			if phase.Status == colony.PhaseCompleted {
+				return nil, fmt.Errorf("cannot force-replan after completed phases; archive this colony and start a new one")
+			}
+		}
+	}
+
+	survey, err := loadCodexSurveyContext(root)
+	if err != nil {
+		return nil, err
+	}
+	dispatches := plannedPlanningWorkers(root)
+	for i := range dispatches {
+		dispatches[i].Status = "planned"
+		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[i])
+	}
+	generatedAt := time.Now().UTC()
+	manifest := codexPlanManifest{
+		Goal:               *state.Goal,
+		Root:               root,
+		GeneratedAt:        generatedAt.Format(time.RFC3339),
+		Refresh:            opts.Refresh,
+		ExistingPlan:       len(state.Plan.Phases) > 0,
+		ExistingPhaseCount: len(state.Plan.Phases),
+		Depth:              planDepth,
+		Granularity:        string(granularity),
+		GranularityMin:     granularityMin(granularity),
+		GranularityMax:     granularityMax(granularity),
+		Survey:             survey,
+		Dispatches:         dispatches,
+		DispatchMode:       "plan-only",
+		DispatchContract:   planningDispatchContractWithTimeout(opts.WorkerTimeout),
+		FinalizeSurface:    "pending",
+		RequiresFinalizer:  true,
+	}
+
+	return map[string]interface{}{
+		"plan_only":                 true,
+		"planned":                   true,
+		"existing_plan":             false,
+		"refreshed":                 opts.Refresh,
+		"goal":                      *state.Goal,
+		"depth":                     planDepth,
+		"granularity":               string(granularity),
+		"granularity_min":           granularityMin(granularity),
+		"granularity_max":           granularityMax(granularity),
+		"plan_manifest":             manifest,
+		"planning_manifest":         manifest,
+		"dispatches":                dispatches,
+		"dispatch_count":            len(dispatches),
+		"dispatch_mode":             "plan-only",
+		"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
+		"unresolved_clarifications": unresolvedClarifications,
+		"clarification_warning":     clarificationWarning,
+		"next":                      "spawn wrapper planning agents, then record completion",
+		"wrapper_contract": map[string]interface{}{
+			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive>",
+			"spawn_log_required":      true,
+			"spawn_complete_required": true,
+			"finalize_surface":        "pending",
+			"runtime_state_only":      true,
+		},
+	}, nil
+}
+
 func normalizedGranularity(value colony.PlanGranularity) colony.PlanGranularity {
 	if value.Valid() {
 		return value
 	}
 	return colony.GranularityMilestone
+}
+
+func resolvePlanGranularityDepth(current colony.PlanGranularity, depth string) (colony.PlanGranularity, string, error) {
+	depth = strings.ToLower(strings.TrimSpace(depth))
+	if depth == "" {
+		granularity := normalizedGranularity(current)
+		return granularity, planningDepthForGranularity(granularity), nil
+	}
+	switch depth {
+	case "fast", "quick", "light":
+		return colony.GranularitySprint, "fast", nil
+	case "balanced", "standard", "default":
+		return colony.GranularityMilestone, "balanced", nil
+	case "deep":
+		return colony.GranularityQuarter, "deep", nil
+	case "exhaustive", "full":
+		return colony.GranularityMajor, "exhaustive", nil
+	case string(colony.GranularitySprint):
+		return colony.GranularitySprint, "fast", nil
+	case string(colony.GranularityMilestone):
+		return colony.GranularityMilestone, "balanced", nil
+	case string(colony.GranularityQuarter):
+		return colony.GranularityQuarter, "deep", nil
+	case string(colony.GranularityMajor):
+		return colony.GranularityMajor, "exhaustive", nil
+	default:
+		return "", "", fmt.Errorf("invalid planning depth %q: must be fast, balanced, deep, or exhaustive", depth)
+	}
+}
+
+func planningDepthForGranularity(granularity colony.PlanGranularity) string {
+	switch granularity {
+	case colony.GranularitySprint:
+		return "fast"
+	case colony.GranularityQuarter:
+		return "deep"
+	case colony.GranularityMajor:
+		return "exhaustive"
+	default:
+		return "balanced"
+	}
 }
 
 func granularityMin(value colony.PlanGranularity) int {
@@ -418,18 +587,26 @@ func firstBuildablePhase(phases []colony.Phase) int {
 func plannedPlanningWorkers(root string) []codexPlanningDispatch {
 	return []codexPlanningDispatch{
 		{
-			Caste:   "scout",
-			Name:    deterministicAntName("scout", root+"|plan|scout"),
-			Task:    "Survey the repo and distill planning findings from available territory reports",
-			Outputs: []string{"SCOUT.md"},
-			Status:  "spawned",
+			Stage:     "scouting",
+			Wave:      1,
+			Caste:     "scout",
+			AgentName: codexAgentNameForCaste("scout"),
+			Name:      deterministicAntName("scout", root+"|plan|scout"),
+			Task:      "Survey the repo and distill planning findings from available territory reports",
+			TaskID:    "plan-scout",
+			Outputs:   []string{"SCOUT.md"},
+			Status:    "spawned",
 		},
 		{
-			Caste:   "route_setter",
-			Name:    deterministicAntName("route_setter", root+"|plan|route-setter"),
-			Task:    "Convert surveyed findings into an executable multi-phase colony plan",
-			Outputs: []string{"ROUTE-SETTER.md"},
-			Status:  "spawned",
+			Stage:     "routing",
+			Wave:      2,
+			Caste:     "route_setter",
+			AgentName: codexAgentNameForCaste("route_setter"),
+			Name:      deterministicAntName("route_setter", root+"|plan|route-setter"),
+			Task:      "Convert surveyed findings into an executable multi-phase colony plan",
+			TaskID:    "plan-route-setter",
+			Outputs:   []string{"ROUTE-SETTER.md"},
+			Status:    "spawned",
 		},
 	}
 }

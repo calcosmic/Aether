@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T05:10:05Z
+Last updated: 2026-04-24T05:20:37Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -41,6 +41,7 @@ These commits are pushed:
 - `99a729d5 feat: restore build wrapper orchestration`
 - `315d4ee8 feat: add continue plan-only manifest`
 - `dfd7f6da feat: finalize external continue workers`
+- `7c1d25f4 feat: restore continue wrapper orchestration`
 
 Implemented foundation:
 
@@ -83,6 +84,9 @@ Implemented foundation:
   blocks through runtime gates.
 - Claude/OpenCode continue wrappers now spawn real manifest-driven review
   agents and finalize through `continue-finalize`.
+- `aether plan --plan-only --depth <fast|balanced|deep|exhaustive>` now emits a
+  read-only `plan_manifest` / `planning_manifest` for wrapper-spawned Scout and
+  Route-Setter agents.
 
 Verification already passed for the pushed foundation:
 
@@ -373,6 +377,110 @@ Important guardrails now enforced:
 Focused verification:
 
 - `go test ./cmd -run 'TestContinueWrapperCeremonyContract|TestPlatformCommandDocsAvoidLegacyShellRuntime|TestContinuePlanOnly|TestContinueFinalizeRecordsExternalReviewAndAdvances' -count=1`
+
+## Completed Slice: Plan Plan-Only Manifest
+
+Architect review confirmed the plan bridge should mirror build/continue:
+
+- Keep normal `aether plan` as the direct Codex/runtime compatibility path.
+- Add a read-only manifest surface for Claude/OpenCode wrappers.
+- Preserve one Go-owned planning-depth mapping instead of inventing a separate
+  wrapper-only depth system.
+- Add `plan-finalize` next; wrappers should not write `.aether/data/planning`
+  as the authority path.
+
+Implemented in this slice:
+
+- `aether plan --plan-only --depth <fast|balanced|deep|exhaustive>` runs the
+  same plan preflight checks but does not mutate state, write planning
+  artifacts, update session context, record spawn-tree entries, or spawn
+  Go-side planning workers.
+- Depth maps to existing plan granularity:
+  - fast -> sprint (1-3 phases)
+  - balanced -> milestone (4-7 phases)
+  - deep -> quarter (8-12 phases)
+  - exhaustive -> major (13-20 phases)
+- The command emits both `result.plan_manifest` and `result.planning_manifest`
+  for wrapper compatibility.
+- The manifest includes:
+  - goal/root/generated_at
+  - depth and granularity bounds
+  - survey context
+  - dispatch contract
+  - two planned workers: Scout wave 1 and Route-Setter wave 2
+  - worker names, castes, `agent_name`, waves, task IDs, status `planned`, and
+    rendered worker briefs
+  - `finalize_surface: "pending"` and `requires_finalizer: true`
+- Existing plans without `--refresh` return `existing_plan: true` and
+  `requires_finalizer: false`, preserving the direct "use current plan" path.
+
+Expected plan wrapper flow after the next slices:
+
+1. Ground with `AETHER_OUTPUT_MODE=visual aether status`.
+2. Ask the user for planning depth: Fast, Balanced, Deep, or Exhaustive.
+3. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>`.
+4. Parse `result.plan_manifest` or `result.planning_manifest`.
+5. Spawn Scout from wave 1.
+6. Spawn Route-Setter from wave 2 with Scout findings and the exact
+   `phase-plan.json` schema.
+7. Call `aether spawn-log` before each worker and `aether spawn-complete` after.
+8. Write a completion JSON file outside `.aether/data/`.
+9. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>`.
+10. Route from the finalizer result to `/ant-build 1` or a runtime-surfaced
+    recovery command.
+
+Plan-finalize contract for the next worker:
+
+- New command: `aether plan-finalize --completion-file <path|->`.
+- Completion JSON should include the original `plan_manifest`/`planning_manifest`
+  and terminal worker results.
+- Prefer embedded completion data as authority:
+  - Scout result: `summary`, sourced `findings`, `gaps`, optional `scout_report`
+  - Route-Setter result: `phase_plan` matching `codexWorkerPlanArtifact`
+- Support claimed file fallback only after validation.
+- Re-load current state and reject stale goal/state/refresh conflicts.
+- Validate dispatch identities by name/caste/wave/task_id.
+- Write canonical planning artifacts:
+  - `.aether/data/planning/SCOUT.md`
+  - `.aether/data/planning/ROUTE-SETTER.md`
+  - `.aether/data/planning/phase-plan.json`
+  - `.aether/data/phase-research/phase-N-research.md`
+- Update spawn tree/run status for wrapper workers without duplicating
+  `spawn-log` entries.
+- Update `COLONY_STATE.json`: `READY`, first buildable phase, selected
+  granularity, generated plan/confidence, `build_started_at: nil`, and planning
+  events.
+- Update session/CONTEXT/HANDOFF through existing runtime helpers.
+
+Focused verification:
+
+- `go test ./cmd -run 'TestPlanOnlyPrintsManifestWithoutMutatingState|TestPlanDepthMapsToGranularityBounds|TestPlanIncludesDispatchContract|TestPlanUsesSurveyAndRecordsPlanningDispatches|TestDispatchRealPlanningWorkers' -count=1`
+
+Watcher audit notes before flipping `/ant-plan` wrappers:
+
+- Add `plan-finalize` first. The wrappers must not move to manifest-driven
+  orchestration while the finalizer surface is missing.
+- Add `TestPlanWrapperCeremonyContract` before editing `.claude`/`.opencode`
+  plan markdown. It should require the depth prompt, JSON `plan --plan-only
+  --depth`, `result.plan_manifest` / `result.planning_manifest`, Scout wave 1,
+  Route-Setter wave 2, spawn-log/spawn-complete, completion JSON outside
+  `.aether/data`, and `plan-finalize`.
+- Preserve direct CLI compatibility explicitly: direct `aether plan --depth
+  deep` must still generate and persist a plan without `plan_only`, without
+  `requires_finalizer`, and with `next: aether build N`.
+- Extend plan-only non-mutation coverage whenever finalizer work touches nearby
+  state paths. Current coverage checks planning dirs, phase research, spawn tree,
+  session, event bus, runtime spawn-run files, CONTEXT, HANDOFF, and colony plan
+  state.
+
+Plan wrapper rollback note:
+
+- If plan wrapper orchestration misbehaves, revert only `.aether/commands/plan.yaml`,
+  `.claude/commands/ant/plan.md`, `.opencode/commands/ant/plan.md`, and their
+  wrapper contract tests back to direct `AETHER_OUTPUT_MODE=visual aether plan`.
+- Keep direct `aether plan` unchanged throughout; this remains the fallback
+  runtime path for Codex/direct CLI users.
+- Do not roll back build/continue bridges unless their own tests regress.
 
 ## Completed Slice: Go Narrator Launcher
 

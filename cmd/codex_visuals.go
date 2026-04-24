@@ -775,6 +775,15 @@ func renderPlanVisual(result map[string]interface{}) string {
 		b.WriteString(contract)
 		b.WriteString("\n")
 	}
+	if planOnly, _ := result["plan_only"].(bool); planOnly {
+		if existing, _ := result["existing_plan"].(bool); !existing {
+			b.WriteString(renderNextUp(
+				`Use the JSON `+"`plan_manifest`"+` to spawn wrapper Scout and Route-Setter agents.`,
+				`This surface is read-only; pair it with the plan finalizer before replacing the normal `+"`aether plan`"+` flow.`,
+			))
+			return b.String()
+		}
+	}
 	if files := stringSliceValue(result["planning_files"]); len(files) > 0 {
 		b.WriteString("Planning Artifacts\n")
 		b.WriteString(renderIndentedList(files))

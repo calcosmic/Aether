@@ -186,6 +186,129 @@ func TestPlanReturnsExistingPlanWithoutRefresh(t *testing.T) {
 	}
 }
 
+func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	t.Setenv("AETHER_NARRATOR", "on")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-plan-only-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	goal := "Expose planning workers to wrappers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--depth", "deep"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --plan-only returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if result["plan_only"] != true {
+		t.Fatalf("plan_only = %v, want true", result["plan_only"])
+	}
+	if result["dispatch_mode"].(string) != "plan-only" {
+		t.Fatalf("dispatch_mode = %q, want plan-only", result["dispatch_mode"])
+	}
+	manifest := result["plan_manifest"].(map[string]interface{})
+	if _, ok := result["planning_manifest"].(map[string]interface{}); !ok {
+		t.Fatalf("planning_manifest alias missing from result")
+	}
+	if manifest["dispatch_mode"].(string) != "plan-only" {
+		t.Fatalf("manifest dispatch_mode = %q, want plan-only", manifest["dispatch_mode"])
+	}
+	if manifest["depth"].(string) != "deep" || manifest["granularity"].(string) != "quarter" {
+		t.Fatalf("manifest depth/granularity = %v/%v, want deep/quarter", manifest["depth"], manifest["granularity"])
+	}
+	if manifest["requires_finalizer"] != true {
+		t.Fatalf("manifest requires_finalizer = %v, want true", manifest["requires_finalizer"])
+	}
+	dispatches := manifest["dispatches"].([]interface{})
+	if len(dispatches) != 2 {
+		t.Fatalf("expected 2 planning dispatches, got %d", len(dispatches))
+	}
+	first := dispatches[0].(map[string]interface{})
+	if first["caste"].(string) != "scout" || first["agent_name"].(string) != "aether-scout" || first["status"].(string) != "planned" {
+		t.Fatalf("unexpected scout dispatch: %+v", first)
+	}
+	second := dispatches[1].(map[string]interface{})
+	if second["caste"].(string) != "route_setter" || second["agent_name"].(string) != "aether-route-setter" || second["wave"].(float64) != 2 {
+		t.Fatalf("unexpected route-setter dispatch: %+v", second)
+	}
+
+	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "session.json", "event-bus.jsonl", "runtime-spawn-runs.jsonl"} {
+		if _, err := os.Stat(filepath.Join(dataDir, rel)); err == nil {
+			t.Fatalf("plan --plan-only unexpectedly wrote %s", rel)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+	for _, rel := range []string{filepath.Join(".aether", "CONTEXT.md"), filepath.Join(".aether", "HANDOFF.md")} {
+		if _, err := os.Stat(filepath.Join(root, rel)); err == nil {
+			t.Fatalf("plan --plan-only unexpectedly wrote %s", rel)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(state.Plan.Phases) != 0 || state.CurrentPhase != 0 || state.Plan.GeneratedAt != nil {
+		t.Fatalf("plan --plan-only mutated state: %+v", state)
+	}
+}
+
+func TestPlanDepthMapsToGranularityBounds(t *testing.T) {
+	tests := []struct {
+		depth       string
+		wantDepth   string
+		wantGran    colony.PlanGranularity
+		wantMin     int
+		wantMax     int
+		expectError bool
+	}{
+		{depth: "fast", wantDepth: "fast", wantGran: colony.GranularitySprint, wantMin: 1, wantMax: 3},
+		{depth: "balanced", wantDepth: "balanced", wantGran: colony.GranularityMilestone, wantMin: 4, wantMax: 7},
+		{depth: "deep", wantDepth: "deep", wantGran: colony.GranularityQuarter, wantMin: 8, wantMax: 12},
+		{depth: "exhaustive", wantDepth: "exhaustive", wantGran: colony.GranularityMajor, wantMin: 13, wantMax: 20},
+		{depth: "quarter", wantDepth: "deep", wantGran: colony.GranularityQuarter, wantMin: 8, wantMax: 12},
+		{depth: "bad", expectError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.depth, func(t *testing.T) {
+			gotGran, gotDepth, err := resolvePlanGranularityDepth("", tt.depth)
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotGran != tt.wantGran || gotDepth != tt.wantDepth {
+				t.Fatalf("got %s/%s, want %s/%s", gotDepth, gotGran, tt.wantDepth, tt.wantGran)
+			}
+			if min, max := colony.GranularityRange(gotGran); min != tt.wantMin || max != tt.wantMax {
+				t.Fatalf("range = %d-%d, want %d-%d", min, max, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
 func TestPlanIncludesDispatchContract(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

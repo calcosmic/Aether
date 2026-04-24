@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T05:10:05Z |
+| **Last Updated** | 2026-04-24T05:20:37Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -57,6 +57,8 @@ Continue plan-only bridge slice completed: `aether continue --plan-only` now run
 Continue finalize bridge slice completed: `aether continue-finalize --completion-file <path|->` now re-loads current state, re-runs verification and claim checks, merges wrapper Watcher/Gatekeeper/Auditor/Probe results, writes verification/gate/review/continue reports, records continue worker flow without duplicating wrapper spawn-log entries, and advances or blocks through the existing runtime gates and atomic state transition.
 
 Continue wrapper restoration completed: `.aether/commands/continue.yaml`, `.claude/commands/ant/continue.md`, and `.opencode/commands/ant/continue.md` now use the runtime bridge: status -> JSON `continue --plan-only` -> parse `continue_manifest` -> spawn Watcher first, then Gatekeeper/Auditor/Probe with manifest names/castes/waves -> `spawn-log`/`spawn-complete` -> completion JSON -> `continue-finalize` -> route to `/ant-build N+1`, `/ant-continue`, or `/ant-seal`. Wrapper tests now forbid the old visual pass-through continue command.
+
+Plan plan-only bridge slice completed: `aether plan --plan-only --depth <fast|balanced|deep|exhaustive>` now emits a read-only JSON `plan_manifest`/`planning_manifest` for wrapper-spawned Scout and Route-Setter agents. Depth maps to existing plan granularity: fast=sprint, balanced=milestone, deep=quarter, exhaustive=major. It does not mutate colony state, write planning artifacts, or spawn Go-side planning workers. `plan-finalize` remains the next runtime surface.
 
 ---
 
@@ -111,15 +113,17 @@ Continue wrapper restoration completed: `.aether/commands/continue.yaml`, `.clau
 - 2026-04-24T04:51:45Z|phase5_continue_plan|build|continue --plan-only read-only manifest added for wrapper-spawned verification/review agents
 - 2026-04-24T05:00:39Z|phase5_continue_finalize|build|continue-finalize added for wrapper-spawned verification/review results
 - 2026-04-24T05:10:05Z|phase5_continue_wrappers|build|Claude/OpenCode continue wrappers restored as manifest-driven verification/review orchestrators
+- 2026-04-24T05:20:37Z|phase5_plan_manifest|build|plan --plan-only read-only manifest added for wrapper-spawned Scout and Route-Setter agents
 
 ---
 
 ## Next Steps
 
-1. Run full verification for the continue-wrapper restoration
-2. Commit and push the continue-wrapper checkpoint
-3. Start plan wrapper orchestration: depth prompt, Scout + Route-Setter manifests, finalizer/state handoff
-4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
+1. Run full verification for the plan-only manifest checkpoint
+2. Commit and push the plan-only checkpoint
+3. Implement `aether plan-finalize --completion-file <path|->`
+4. Restore Claude/OpenCode plan wrappers to prompt for depth, spawn Scout then Route-Setter, and call `plan-finalize`
+5. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
 
@@ -130,5 +134,6 @@ Continue wrapper restoration completed: `.aether/commands/continue.yaml`, `.clau
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the continue-wrapper checkpoint
+- Commit and push the plan-only checkpoint
+- Implement plan-finalize
 - Restore plan wrappers as real orchestrators

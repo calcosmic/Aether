@@ -54,6 +54,8 @@ var planCmd = &cobra.Command{
 		refresh, _ := cmd.Flags().GetBool("refresh")
 		forceAlias, _ := cmd.Flags().GetBool("force")
 		synthetic, _ := cmd.Flags().GetBool("synthetic")
+		planOnly, _ := cmd.Flags().GetBool("plan-only")
+		depth, _ := cmd.Flags().GetString("depth")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -62,6 +64,8 @@ var planCmd = &cobra.Command{
 		result, err := runCodexPlanWithOptions(skillWorkspaceRoot(), codexPlanOptions{
 			Refresh:       refresh || forceAlias,
 			Synthetic:     synthetic,
+			PlanOnly:      planOnly,
+			Depth:         depth,
 			WorkerTimeout: workerTimeout,
 		})
 		if err != nil {
@@ -602,6 +606,8 @@ func init() {
 	colonizeCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real surveyor dispatches (e.g. 5m)")
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
+	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
+	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
