@@ -14,14 +14,7 @@ version: "1.0"
 
 All colony output must look consistent. Users should never see mismatched banner styles, missing progress bars, or unformatted raw output. This skill standardizes every visual element.
 
-## Literal CLI Commands
-
-When the user already typed a literal `aether ...` command and you run it through the shell:
-
-- Let the CLI's own visual output stand on its own.
-- Do not paraphrase the banner, progress, or next-step block back to the user.
-- Do not wrap the command with extra decorative commentary before and after execution.
-- Add your own short note only when the CLI failed, the output needs one sentence of clarification, or the user explicitly asked for explanation.
+When the user asks Codex to run a literal `aether ...` command, do not add extra framing. Let the CLI's own visual output stand on its own. Do not wrap the command with extra decorative commentary before and after execution.
 
 ## Banner Format
 
@@ -82,6 +75,16 @@ Ensure columns are padded for alignment. Never use unaligned or ragged tables.
 - **Bold** for labels and headings.
 - *Italic* for supplementary notes.
 - Use color sparingly and consistently -- green for success, red for errors, yellow for warnings.
+
+## Dashboard and Statistics Output
+
+When rendering dashboard-style output, prioritize orientation over decoration:
+
+- Show current phase, state, active blockers, recent worker activity, and the exact next action.
+- Prefer compact tables for phase status and dependency visibility.
+- Highlight stale or missing evidence before celebratory summaries.
+- For statistics, include only metrics that can be traced to state, git, or runtime artifacts.
+- Do not invent velocity or completion percentages when the underlying evidence is absent.
 
 ## Emoji Reference Map
 

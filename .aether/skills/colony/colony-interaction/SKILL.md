@@ -20,8 +20,11 @@ These touchpoints do not apply when the user already gave an explicit literal CL
 
 - Execute the literal command first.
 - Do not convert it into a planning conversation or repo archaeology pass.
+- Do not announce skill usage, intent interpretation, or a preflight summary before running the command.
+- Do not inspect repo files first unless the command itself fails and you need evidence to explain that failure.
 - Do not ask for extra confirmation for read-only or maintenance commands the user explicitly named.
 - If the command itself fails or needs unavailable arguments, report the concrete CLI issue and the exact follow-up command.
+- After the command returns, keep your own wrapper to one short sentence at most. The CLI output is the primary result.
 
 ## Mandatory Touchpoints
 

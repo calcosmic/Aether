@@ -97,8 +97,9 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 		writeFile(t, aetherDir, fmt.Sprintf("agents-codex/agent%d.toml", i), []byte("test"))
 	}
 
-	// Create colony skills
-	for _, name := range []string{"build-discipline", "colony-interaction", "colony-lifecycle", "colony-visuals", "context-management", "error-presentation", "pheromone-protocol", "pheromone-visibility", "state-safety", "worker-priming", "medic"} {
+	// Create expected number of colony skills
+	for i := 0; i < expectedColonySkills; i++ {
+		name := fmt.Sprintf("colony-skill-%d", i)
 		skillDir := filepath.Join(aetherDir, "skills", "colony", name)
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
@@ -106,9 +107,9 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 		writeFile(t, aetherDir, fmt.Sprintf("skills/colony/%s/SKILL.md", name), []byte("test"))
 	}
 
-	// Create domain skills (18 directories, skip README)
-	domainSkills := []string{"django", "docker", "golang", "graphql", "html-css", "nextjs", "nodejs", "postgresql", "prisma", "python", "rails", "react", "rest-api", "svelte", "tailwind", "testing", "typescript", "vue"}
-	for _, name := range domainSkills {
+	// Create expected number of domain skills
+	for i := 0; i < expectedDomainSkills; i++ {
+		name := fmt.Sprintf("domain-skill-%d", i)
 		skillDir := filepath.Join(aetherDir, "skills", "domain", name)
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
@@ -238,14 +239,16 @@ func TestScanHubPublishIntegrityHealthy(t *testing.T) {
 		writeFile(t, systemDir, fmt.Sprintf("codex/agent%d.toml", i), []byte("test"))
 	}
 
-	for _, name := range []string{"build-discipline", "colony-interaction", "colony-lifecycle", "colony-visuals", "context-management", "error-presentation", "pheromone-protocol", "pheromone-visibility", "state-safety", "worker-priming", "medic"} {
+	for i := 0; i < expectedColonySkills; i++ {
+		name := fmt.Sprintf("colony-skill-%d", i)
 		skillDir := filepath.Join(systemDir, "skills-codex", "colony", name)
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
 		writeFile(t, systemDir, fmt.Sprintf("skills-codex/colony/%s/SKILL.md", name), []byte("test"))
 	}
-	for _, name := range []string{"django", "docker", "golang", "graphql", "html-css", "nextjs", "nodejs", "postgresql", "prisma", "python", "rails", "react", "rest-api", "svelte", "tailwind", "testing", "typescript", "vue"} {
+	for i := 0; i < expectedDomainSkills; i++ {
+		name := fmt.Sprintf("domain-skill-%d", i)
 		skillDir := filepath.Join(systemDir, "skills-codex", "domain", name)
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)

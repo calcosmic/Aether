@@ -282,8 +282,8 @@ aether phase-insert --after 1 --name "Fix auth" --description "Stabilize auth fl
 aether run --headless --max-phases 3
 aether swarm "build flakes in auth"
 aether oracle "auth flake investigation"
-aether skill-match --role builder --task "react form validation"
-aether skill-inject --role builder --task "react form validation"
+aether skill-match --workflow build --role builder --task "react form validation"
+aether skill-inject --workflow build --role builder --task "react form validation"
 aether data-clean        # Clean test artifacts
 ```
 

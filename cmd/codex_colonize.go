@@ -459,7 +459,7 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 			TaskID:           fmt.Sprintf("survey-%d", i),
 			TaskBrief:        taskBrief,
 			ContextCapsule:   capsule,
-			SkillSection:     resolveSkillSection(spec.Caste, spec.Task),
+			SkillSection:     resolveSkillSectionForWorkflow("colonize", spec.Caste, spec.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
 			Timeout:          workerTimeout,

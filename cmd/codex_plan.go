@@ -626,7 +626,7 @@ func plannedPlanningWorkers(root string) []codexPlanningDispatch {
 
 func attachPlanningDispatchSkillAssignments(dispatches []codexPlanningDispatch) {
 	for i := range dispatches {
-		assignment := resolveWorkerSkillAssignment(dispatches[i].Caste, dispatches[i].Task)
+		assignment := resolveWorkerSkillAssignmentForWorkflow("plan", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section
 		dispatches[i].SkillCount = assignment.SkillCount
 		dispatches[i].ColonySkills = assignment.ColonyCount
@@ -686,7 +686,7 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 			TaskID:           fmt.Sprintf("plan-%d", i),
 			TaskBrief:        renderPlanningWorkerBrief(root, survey, spec),
 			ContextCapsule:   capsule,
-			SkillSection:     resolveSkillSection(spec.Caste, spec.Task),
+			SkillSection:     resolveSkillSectionForWorkflow("plan", spec.Caste, spec.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
 			Wave:             i + 1,

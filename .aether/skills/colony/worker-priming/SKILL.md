@@ -68,6 +68,18 @@ When context sources conflict, resolve in this order (highest priority first):
 2. **REDIRECT signals** -- Hard constraints that override everything except the task itself.
 3. **User preferences** -- The user's stated wishes.
 4. **FOCUS signals** -- Areas to prioritize.
+
+## Context Budget Awareness
+
+Before deep work, estimate whether the task can fit in the available context. If the prompt is large or the task spans many files:
+
+- Identify the smallest file set needed for the current task.
+- Summarize old context instead of re-reading everything.
+- Prefer targeted searches over broad file dumps.
+- Report when missing context materially affects confidence.
+- Leave a concise handoff if you approach context exhaustion before finishing.
+
+If you are spawned as part of a parallel wave, assume other workers may be editing nearby areas. Keep your result precise about files touched, evidence produced, and any assumptions another worker must know.
 5. **Phase learnings** -- Project-specific experience.
 6. **Hive wisdom** -- Cross-colony patterns.
 7. **FEEDBACK signals** -- Gentle adjustments.

@@ -22,7 +22,7 @@ OpenCode, and Codex CLI.
 |------|--------------|
 | Version | v1.0.19 |
 | Agent definitions | 25 (TOML in `.codex/agents/`) |
-| Skills | 29 (11 colony + 18 domain) |
+| Skills | 83 (52 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Verification | `go test ./...` and `go test ./... -race` clean |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
@@ -188,7 +188,7 @@ flowchart LR
 
     subgraph SK[Skill Matching]
         direction TB
-        SIDX[skill-index cache] --> SMATCH[skill-match<br/>role + task + pheromones]
+        SIDX[skill-index cache] --> SMATCH[skill-match<br/>workflow + role + task + codebase]
         SMATCH --> SINJ[skill-inject<br/>8K budget]
     end
 
@@ -361,8 +361,8 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 | `aether parallel-mode get` | Show the active parallel execution mode |
 | `aether parallel-mode set <mode>` | Change between `in-repo` and `worktree` execution |
 | `aether skill-list` | List installed skills |
-| `aether skill-match --role <role> --task "<task>"` | Match skills for a worker |
-| `aether skill-inject --role <role> --task "<task>"` | Render injected skill context |
+| `aether skill-match --workflow <workflow> --role <role> --task "<task>"` | Match skills for a worker |
+| `aether skill-inject --workflow <workflow> --role <role> --task "<task>"` | Render injected skill context |
 
 ### Typical Workflow
 
@@ -561,8 +561,9 @@ on demand. Two categories:
 
 1. Colony-prime builds a skills index via `skill-index` (cached for performance)
 2. `skill-match` scores each skill against the current worker using:
+   - Workflow context (`build`, `colonize`, `plan`, `continue`)
    - Worker role (builder, watcher, etc.)
-   - Active pheromone signals (FOCUS/REDIRECT)
+   - Task keywords from the worker assignment
    - `skill-detect` patterns matched against the codebase
 3. Top 3 colony skills + top 3 domain skills are selected per worker
 
@@ -571,7 +572,7 @@ on demand. Two categories:
 - Own 8K character budget (independent of the colony-prime token budget)
 - Injected into builder and watcher prompts
 - `skill-inject` assembles matched skills into a prompt section
-- In Codex CLI, skills are automatically matched and injected into worker prompts during `build`, `colonize`, and `plan` dispatches
+- In Codex CLI, skills are automatically matched and injected into worker prompts during `build`, `colonize`, `plan`, and `continue` dispatches
 
 ### Subcommands
 
@@ -579,7 +580,7 @@ on demand. Two categories:
 |------------|---------|
 | `skill-index` | Build/read cached skills index |
 | `skill-detect` | Detect domain skills matching codebase |
-| `skill-match` | Match skills to worker by role + task + pheromones |
+| `skill-match` | Match skills to worker by workflow + role + task + codebase |
 | `skill-inject` | Load matched skills into prompt section |
 | `skill-list` | List all installed skills |
 | `skill-parse-frontmatter` | Parse SKILL.md frontmatter to JSON |

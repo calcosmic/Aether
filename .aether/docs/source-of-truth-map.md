@@ -67,16 +67,16 @@ This document defines which files are authoritative for runtime behavior, which 
 
 | Category | Location | Count |
 |---|---|---:|
-| YAML wrapper specs | `.aether/commands/*.yaml` | 49 |
-| Claude commands | `.claude/commands/ant/*.md` | 49 |
-| OpenCode commands | `.opencode/commands/ant/*.md` | 49 |
-| Claude agents | `.claude/agents/ant/*.md` | 24 |
-| OpenCode agents | `.opencode/agents/*.md` | 24 |
-| Codex agents (shipped Aether surface) | `.codex/agents/aether-*.toml` | 24 |
-| Codex helper agents (repo-local GSD) | `.codex/agents/gsd-*.toml` | 33 |
-| Codex packaging mirror | `.aether/agents-codex/*.toml` | 24 |
-| Shared skills | `.aether/skills/**/SKILL.md` | 28 |
-| Codex skill mirror | `.aether/skills-codex/**/SKILL.md` | 28 |
+| YAML wrapper specs | `.aether/commands/*.yaml` | 50 |
+| Claude commands | `.claude/commands/ant/*.md` | 50 |
+| OpenCode commands | `.opencode/commands/ant/*.md` | 50 |
+| Claude agents | `.claude/agents/ant/*.md` | 25 |
+| OpenCode agents | `.opencode/agents/*.md` | 25 |
+| Codex agents (shipped Aether surface) | `.codex/agents/aether-*.toml` | 25 |
+| Codex helper agents (repo-local GSD) | `.codex/agents/gsd-*.toml` | 0 |
+| Codex packaging mirror | `.aether/agents-codex/*.toml` | 25 |
+| Shared skills | `.aether/skills/**/SKILL.md` | 83 |
+| Codex skill mirror | `.aether/skills-codex/**/SKILL.md` | 83 |
 
 ## Notes
 
