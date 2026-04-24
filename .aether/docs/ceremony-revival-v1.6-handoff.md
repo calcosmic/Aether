@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T05:33:11Z
+Last updated: 2026-04-24T05:41:20Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -43,6 +43,7 @@ These commits are pushed:
 - `dfd7f6da feat: finalize external continue workers`
 - `7c1d25f4 feat: restore continue wrapper orchestration`
 - `feabf3f1 feat: add plan-only orchestration manifest`
+- `f67635c3 feat: finalize external plan workers`
 
 Implemented foundation:
 
@@ -91,6 +92,9 @@ Implemented foundation:
 - `aether plan-finalize --completion-file <path|->` records externally spawned
   Scout/Route-Setter results as the canonical colony plan and planning
   artifacts.
+- Claude/OpenCode plan wrappers now prompt for depth, spawn real
+  manifest-driven Scout/Route-Setter agents, and finalize through
+  `plan-finalize`.
 
 Verification already passed for the pushed foundation:
 
@@ -506,6 +510,48 @@ Expected plan wrapper flow now:
 Focused verification:
 
 - `go test ./cmd -run 'TestPlan|TestDispatchRealPlanningWorkers' -count=1`
+
+## Completed Slice: Plan Wrapper Restoration
+
+Claude/OpenCode plan wrappers now use the planning bridge instead of the old
+direct visual pass-through contract.
+
+Changed files:
+
+- `.aether/commands/plan.yaml`
+- `.claude/commands/ant/plan.md`
+- `.opencode/commands/ant/plan.md`
+- `cmd/plan_wrapper_ceremony_test.go`
+- `cmd/platform_doc_hygiene_test.go`
+
+Wrapper flow now required:
+
+1. Prompt for planning depth: Fast, Balanced, Deep, or Exhaustive.
+2. Ground with `AETHER_OUTPUT_MODE=visual aether status`.
+3. Request the authoritative manifest with
+   `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>`.
+4. Parse `result.plan_manifest` or `result.planning_manifest`.
+5. Spawn Scout from wave 1.
+6. Spawn Route-Setter from wave 2, requiring a `phase_plan` payload matching the
+   existing `phase-plan.json` schema.
+7. Call `aether spawn-log` before each worker and `aether spawn-complete` after.
+8. Write a completion JSON file outside `.aether/data/`.
+9. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>`.
+10. Route to `/ant-build 1` or the runtime-surfaced next build command.
+
+Important guardrails now enforced:
+
+- Wrappers must not run direct `AETHER_OUTPUT_MODE=visual aether plan
+  $ARGUMENTS`.
+- Wrappers must not run direct non-plan-only `aether plan`.
+- Wrappers must not run `aether plan --synthetic` after real agents finish.
+- Wrappers must not invent Scout/Route-Setter names, castes, waves, or task IDs.
+- Wrappers must not write `.aether/data/planning` as the authority path.
+- Direct `aether plan` remains available for Codex/direct CLI compatibility.
+
+Focused verification:
+
+- `go test ./cmd -run 'TestPlanWrapperCeremonyContract|TestPlatformCommandDocsAvoidLegacyShellRuntime|TestClaudeOpenCodeCommandParity|TestCommandWrappersDeclareGeneratedSource' -count=1`
 
 Watcher audit notes before flipping `/ant-plan` wrappers:
 

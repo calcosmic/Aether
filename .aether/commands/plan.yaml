@@ -1,8 +1,34 @@
 name: ant-plan
-description: "📋 Generate or review a project plan through the Aether CLI runtime"
+description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=visual aether plan $ARGUMENTS"
+  command: "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive>"
+wrapper_additions:
+  depth_ceremony: |
+    Prompt for planning depth before requesting the manifest:
+    1. Fast — sprint granularity, 1-3 phases.
+    2. Balanced — milestone granularity, 4-7 phases. Recommended default.
+    3. Deep — quarter granularity, 8-12 phases.
+    4. Exhaustive — major granularity, 13-20 phases.
+    If `$ARGUMENTS` already contains a depth, use it and state the selected depth.
+  orchestration: |
+    Restore real wrapper planning orchestration:
+    1. Run `AETHER_OUTPUT_MODE=visual aether status`.
+    2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>`.
+    3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
+    4. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, and `agent_name`.
+    5. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
+    6. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
+    7. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
+  post_plan: |
+    Close from the `plan-finalize` result only:
+    1. Summarize selected depth, phase count, confidence, and which planning agents ran.
+    2. Route first to `/ant-build 1` or the runtime-surfaced next build command.
+    3. If finalization blocks, follow the runtime recovery command first.
 guardrails:
-  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do NOT run `aether plan` without `--plan-only` from Claude/OpenCode wrapper orchestration."
+  - "Do NOT run `aether plan --synthetic` after real wrapper Task agents complete."
+  - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."
+  - "Do NOT parse visual output as authoritative state."
+  - "Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`."
   - "If docs and runtime disagree, runtime wins."

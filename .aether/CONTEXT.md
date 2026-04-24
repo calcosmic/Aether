@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T05:33:11Z |
+| **Last Updated** | 2026-04-24T05:41:20Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -61,6 +61,8 @@ Continue wrapper restoration completed: `.aether/commands/continue.yaml`, `.clau
 Plan plan-only bridge slice completed: `aether plan --plan-only --depth <fast|balanced|deep|exhaustive>` now emits a read-only JSON `plan_manifest`/`planning_manifest` for wrapper-spawned Scout and Route-Setter agents. Depth maps to existing plan granularity: fast=sprint, balanced=milestone, deep=quarter, exhaustive=major. It does not mutate colony state, write planning artifacts, or spawn Go-side planning workers. `plan-finalize` remains the next runtime surface.
 
 Plan finalize bridge slice completed: `aether plan-finalize --completion-file <path|->` now consumes the wrapper planning manifest plus terminal Scout/Route-Setter results, validates manifest/state/dispatch identity, writes canonical SCOUT/ROUTE-SETTER/phase-plan/phase-research artifacts, records spawn-tree statuses, updates colony state to READY with the selected plan granularity, and routes to the first build phase.
+
+Plan wrapper restoration completed: `.aether/commands/plan.yaml`, `.claude/commands/ant/plan.md`, and `.opencode/commands/ant/plan.md` now use the runtime bridge: depth ceremony -> status -> JSON `plan --plan-only --depth <choice>` -> parse `plan_manifest`/`planning_manifest` -> spawn Scout wave 1 then Route-Setter wave 2 -> `spawn-log`/`spawn-complete` -> completion JSON -> `plan-finalize` -> route to `/ant-build 1`. Wrapper tests now forbid the old direct visual plan pass-through.
 
 ---
 
@@ -117,16 +119,16 @@ Plan finalize bridge slice completed: `aether plan-finalize --completion-file <p
 - 2026-04-24T05:10:05Z|phase5_continue_wrappers|build|Claude/OpenCode continue wrappers restored as manifest-driven verification/review orchestrators
 - 2026-04-24T05:20:37Z|phase5_plan_manifest|build|plan --plan-only read-only manifest added for wrapper-spawned Scout and Route-Setter agents
 - 2026-04-24T05:33:11Z|phase5_plan_finalize|build|plan-finalize added for wrapper-spawned Scout and Route-Setter results
+- 2026-04-24T05:41:20Z|phase5_plan_wrappers|build|Claude/OpenCode plan wrappers restored as depth-prompted manifest-driven Scout/Route-Setter orchestrators
 
 ---
 
 ## Next Steps
 
-1. Run full verification for the plan-finalize checkpoint
-2. Commit and push the plan-finalize checkpoint
-3. Restore Claude/OpenCode plan wrappers to prompt for depth, spawn Scout then Route-Setter, and call `plan-finalize`
-4. Add `TestPlanWrapperCeremonyContract` and update platform doc hygiene to forbid the old direct visual plan pass-through
-5. Keep Go as state/event source of truth; wrappers own Task-tool spawning
+1. Run full verification for the plan-wrapper checkpoint
+2. Commit and push the plan-wrapper checkpoint
+3. Start lifecycle ceremony expansion: colonize, plan/continue narrator events, pheromones, chamber sealing, graveyard/entomb
+4. Keep Go as state/event source of truth; wrappers own Task-tool spawning
 
 ---
 
@@ -137,5 +139,5 @@ Plan finalize bridge slice completed: `aether plan-finalize --completion-file <p
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the plan-finalize checkpoint
-- Restore plan wrappers as real orchestrators
+- Commit and push the plan-wrapper checkpoint
+- Expand narrator ceremonies beyond build

@@ -126,9 +126,11 @@ The detailed implementation contract is tracked in
   (Continue plan-only manifest, continue-finalize, and Claude/OpenCode wrapper
   orchestration are implemented.)
 - Restore plan depth ceremony: Fast, Balanced, Deep, Exhaustive.
-  (`aether plan --plan-only --depth <choice>` manifest and `plan-finalize`
-  implemented; wrapper rewrite remains next.)
+  (`aether plan --plan-only --depth <choice>`, `plan-finalize`, and
+  Claude/OpenCode wrapper orchestration are implemented.)
 - Run Scout plus Route-Setter planning loops with stall detection and confidence.
+  (Scout/Route-Setter wrapper loop implemented; stall/confidence polish can be
+  expanded in lifecycle ceremony work.)
 - Persist validated learnings, midden failures, and blocker status honestly.
 
 ## Phase 6: Full Lifecycle Ceremony and Skills
