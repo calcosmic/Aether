@@ -72,6 +72,16 @@ func TestRunUpdateSyncCopiesNarratorPackageButSkipsNodeModules(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(hubTS, "node_modules", "tsx", "index.js"), []byte("module.exports = {};\n"), 0644); err != nil {
 		t.Fatalf("failed to write node_modules fixture: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(hubTS, ".DS_Store"), []byte("metadata"), 0644); err != nil {
+		t.Fatalf("failed to write .DS_Store fixture: %v", err)
+	}
+	localTS := filepath.Join(repoDir, ".aether", "ts")
+	if err := os.MkdirAll(filepath.Join(localTS, "node_modules", "tsx"), 0755); err != nil {
+		t.Fatalf("failed to create stale local node_modules fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localTS, "node_modules", "tsx", "index.js"), []byte("stale"), 0644); err != nil {
+		t.Fatalf("failed to write stale local node_modules fixture: %v", err)
+	}
 
 	result := runUpdateSync(hubDir, repoDir, true)
 	if len(result.errors) > 0 {
@@ -84,6 +94,9 @@ func TestRunUpdateSyncCopiesNarratorPackageButSkipsNodeModules(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "ts", "node_modules")); err == nil {
 		t.Fatal("update sync should not copy .aether/ts/node_modules")
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "ts", ".DS_Store")); err == nil {
+		t.Fatal("update sync should not copy .aether/ts/.DS_Store")
 	}
 }
 
@@ -563,8 +576,8 @@ func TestUpdateSyncNewFilesAreCopied(t *testing.T) {
 	}
 }
 
-// TestRunUpdateSyncPreservesProtectedDirs verifies that data/ and dreams/
-// directories are never overwritten.
+// TestRunUpdateSyncPreservesProtectedDirs verifies that local-only directories
+// are never overwritten.
 func TestUpdateSyncPreservesProtectedDirs(t *testing.T) {
 	saveGlobals(t)
 
@@ -572,39 +585,72 @@ func TestUpdateSyncPreservesProtectedDirs(t *testing.T) {
 	repoDir := t.TempDir()
 
 	hubSystem := filepath.Join(hubDir, "system")
-	hubData := filepath.Join(hubSystem, "data")
-	if err := os.MkdirAll(hubData, 0755); err != nil {
-		t.Fatalf("failed to create hub data dir: %v", err)
-	}
-
-	// Hub has a data file that differs from local
-	hubDataContent := []byte(`{"goal":"hub_goal","state":"HUB"}`)
-	if err := os.WriteFile(filepath.Join(hubData, "COLONY_STATE.json"), hubDataContent, 0644); err != nil {
-		t.Fatalf("failed to write hub data file: %v", err)
-	}
-
 	localAether := filepath.Join(repoDir, ".aether")
-	localData := filepath.Join(localAether, "data")
-	if err := os.MkdirAll(localData, 0755); err != nil {
-		t.Fatalf("failed to create local data dir: %v", err)
+	fixtures := map[string]struct {
+		name         string
+		hubContent   []byte
+		localContent []byte
+	}{
+		"archive": {
+			name:         "notes.md",
+			hubContent:   []byte("# Hub archive"),
+			localContent: []byte("# Local archive"),
+		},
+		"backups": {
+			name:         "backup.json",
+			hubContent:   []byte(`{"source":"hub"}`),
+			localContent: []byte(`{"source":"local"}`),
+		},
+		"chambers": {
+			name:         "chamber.md",
+			hubContent:   []byte("# Hub chamber"),
+			localContent: []byte("# Local chamber"),
+		},
+		"data": {
+			name:         "COLONY_STATE.json",
+			hubContent:   []byte(`{"goal":"hub_goal","state":"HUB"}`),
+			localContent: []byte(`{"goal":"user_goal","state":"ACTIVE"}`),
+		},
+		"dreams": {
+			name:         "dream.md",
+			hubContent:   []byte("# Hub dream"),
+			localContent: []byte("# Local dream"),
+		},
+		"oracle": {
+			name:         "research.md",
+			hubContent:   []byte("# Hub research"),
+			localContent: []byte("# Local research"),
+		},
 	}
-
-	localDataContent := []byte(`{"goal":"user_goal","state":"ACTIVE"}`)
-	if err := os.WriteFile(filepath.Join(localData, "COLONY_STATE.json"), localDataContent, 0644); err != nil {
-		t.Fatalf("failed to write local data file: %v", err)
+	for dir, fixture := range fixtures {
+		hubPath := filepath.Join(hubSystem, dir)
+		localPath := filepath.Join(localAether, dir)
+		if err := os.MkdirAll(hubPath, 0755); err != nil {
+			t.Fatalf("failed to create hub %s dir: %v", dir, err)
+		}
+		if err := os.MkdirAll(localPath, 0755); err != nil {
+			t.Fatalf("failed to create local %s dir: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(hubPath, fixture.name), fixture.hubContent, 0644); err != nil {
+			t.Fatalf("failed to write hub %s file: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(localPath, fixture.name), fixture.localContent, 0644); err != nil {
+			t.Fatalf("failed to write local %s file: %v", dir, err)
+		}
 	}
 
 	// Sync with force=true -- protected dirs should still be safe
 	result := runUpdateSync(hubDir, repoDir, true)
 	_ = result
 
-	// The data dir should have been skipped, not copied
-	content, err := os.ReadFile(filepath.Join(localData, "COLONY_STATE.json"))
-	if err != nil {
-		t.Fatalf("failed to read local data file: %v", err)
-	}
-	if string(content) != string(localDataContent) {
-		t.Errorf("protected data/ was overwritten\ngot:  %s\nwant: %s", string(content), string(localDataContent))
+	for dir, fixture := range fixtures {
+		content, err := os.ReadFile(filepath.Join(localAether, dir, fixture.name))
+		if err != nil {
+			t.Fatalf("failed to read local %s file: %v", dir, err)
+		}
+		if string(content) != string(fixture.localContent) {
+			t.Errorf("protected %s/ was overwritten\ngot:  %s\nwant: %s", dir, string(content), string(fixture.localContent))
+		}
 	}
 }
 
@@ -928,7 +974,7 @@ func TestUpdateSyncForceDoesNotRemoveProtectedStale(t *testing.T) {
 	hubDir := t.TempDir()
 	repoDir := t.TempDir()
 
-	// Hub has no data/ directory at all
+	// Hub has no protected local-only directories at all
 	hubSystem := filepath.Join(hubDir, "system")
 	if err := os.MkdirAll(hubSystem, 0755); err != nil {
 		t.Fatalf("failed to create hub system: %v", err)
@@ -937,27 +983,31 @@ func TestUpdateSyncForceDoesNotRemoveProtectedStale(t *testing.T) {
 		t.Fatalf("failed to write hub file: %v", err)
 	}
 
-	// Local has a data/ directory with user files
 	localAether := filepath.Join(repoDir, ".aether")
-	localData := filepath.Join(localAether, "data")
-	if err := os.MkdirAll(localData, 0755); err != nil {
-		t.Fatalf("failed to create local data dir: %v", err)
-	}
 	userFile := []byte(`{"user":"data"}`)
-	if err := os.WriteFile(filepath.Join(localData, "user.json"), userFile, 0644); err != nil {
-		t.Fatalf("failed to write local user file: %v", err)
+	protectedDirs := []string{"archive", "backups", "chambers", "data", "dreams", "oracle"}
+	for _, dir := range protectedDirs {
+		localDir := filepath.Join(localAether, dir)
+		if err := os.MkdirAll(localDir, 0755); err != nil {
+			t.Fatalf("failed to create local %s dir: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(localDir, "user.json"), userFile, 0644); err != nil {
+			t.Fatalf("failed to write local %s user file: %v", dir, err)
+		}
 	}
 
 	// Force sync should NOT remove files in protected dirs
 	result := runUpdateSync(hubDir, repoDir, true)
 	_ = result
 
-	content, err := os.ReadFile(filepath.Join(localData, "user.json"))
-	if err != nil {
-		t.Fatalf("protected user file was removed: %v", err)
-	}
-	if string(content) != string(userFile) {
-		t.Errorf("protected user file was modified\ngot:  %s\nwant: %s", string(content), string(userFile))
+	for _, dir := range protectedDirs {
+		content, err := os.ReadFile(filepath.Join(localAether, dir, "user.json"))
+		if err != nil {
+			t.Fatalf("protected %s user file was removed: %v", dir, err)
+		}
+		if string(content) != string(userFile) {
+			t.Errorf("protected %s user file was modified\ngot:  %s\nwant: %s", dir, string(content), string(userFile))
+		}
 	}
 }
 

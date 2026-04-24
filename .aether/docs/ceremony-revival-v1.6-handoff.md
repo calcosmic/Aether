@@ -1,11 +1,11 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T12:38:25Z
+Last updated: 2026-04-24T13:24:10Z
 
-Branch: `codex/ceremony-context-events-v16`
-Base: `origin/main` after merged PR #9
-Previous PRs: `https://github.com/calcosmic/Aether/pull/5` through `https://github.com/calcosmic/Aether/pull/9` are merged
-Open PR: `https://github.com/calcosmic/Aether/pull/10` (clean/mergeable)
+Branch: `codex/phase7-release-hygiene`
+Base: `origin/main` after merged PR #11
+Previous PRs: `https://github.com/calcosmic/Aether/pull/5` through `https://github.com/calcosmic/Aether/pull/11` are merged
+Open PR: release-hygiene PR pending from `codex/phase7-release-hygiene`
 
 ## Purpose
 
@@ -49,15 +49,13 @@ committed directly while the persisted colony lifecycle was not advanced through
 | Phase 4: build subagent bridge | Implemented for wrappers | `build --plan-only`, `build-finalize`, manifest `execution_plan`, Claude/OpenCode build wrappers, wrapper contract tests | Live platform smoke and any future specialist prompt polish |
 | Phase 5: continue and plan orchestration | Implemented for wrappers | `continue --plan-only`, `continue-finalize`, `plan --plan-only`, `plan-finalize`, wrapper contract tests | Live platform smoke; stall/confidence ceremony polish |
 | Phase 6: full lifecycle ceremony and skills | Implemented for Go-owned transitions | Build ceremony emits from Go; TS renders generic lifecycle stages and context notices; Go emits pheromone/chamber, plan/colonize/continue wave events, skill activation, entomb, midden, QUEEN, and Hive notices | None known beyond live platform smoke and release polish |
-| Phase 7: parity verification and release | Not done | Release/rollback notes exist | Cross-platform smoke, install/update release checks, PR review, release hardening |
+| Phase 7: parity verification and release | In release hygiene | Stable/dev publish and downstream update smokes passed on `codex/phase7-release-hygiene` | Open/merge release-hygiene PR, then tag/release only after final review |
 
-Safe continuation point: PR #5 through PR #9 are merged. PR #10 is open,
-clean, and mergeable for `codex/ceremony-context-events-v16`. The old
-`codex/ceremony-narrator-foundation-v16` branch still appears on GitHub
-because PR #7 was merged without deleting its source branch. Go-side wrapper
-smoke passed for `build 1 --plan-only`; true Claude/OpenCode Task-tool smoke
-remains pending because Codex cannot execute those platform Task-tool wrappers
-directly.
+Safe continuation point: PR #5 through PR #11 are merged into `origin/main`.
+The current release-hygiene branch contains only publish/update artifact hygiene
+and regression tests. Go-side wrapper smoke passed for `build 1 --plan-only`;
+true Claude/OpenCode Task-tool smoke remains pending because Codex cannot
+execute those platform Task-tool wrappers directly.
 
 ## Already Shipped Across Merged Ceremony Branches
 
@@ -1131,6 +1129,75 @@ Verification run:
 - `go vet ./...`
 - `git diff --check`
 
+## Working Tree Slice: Phase 7 Release Hygiene
+
+Date: 2026-04-24
+
+This slice covers the release/publish hygiene found during final verification:
+stable publish had not synced `.aether/ts` into `~/.aether/system`, and older
+hub publishes could leave stale local-only directories or ignored files in the
+shared hub. The fix keeps the stable and dev channels separate while making
+publish/update clean up generated artifacts predictably.
+
+Changed files:
+
+- `cmd/install_cmd.go`
+- `cmd/install_cmd_test.go`
+- `cmd/update_cmd.go`
+- `cmd/update_cmd_test.go`
+- `.aether/docs/ceremony-revival-v1.6-handoff.md`
+
+Implemented behavior:
+
+- Install/publish sync ignores `.DS_Store` and `node_modules` as sync artifacts.
+- Hub publishing removes stale excluded local-only directories from
+  `~/.aether/system` and `~/.aether-dev/system`, including `archive/`,
+  `backups/`, `chambers/`, nested `.aether/`, and nested `node_modules/`.
+- `aether update --force` still removes stale managed files, but preserves
+  local-only state directories such as `archive/`, `backups/`, `chambers/`,
+  `data/`, `dreams/`, `oracle/`, `checkpoints/`, `locks/`, and `temp/`.
+- Stable and dev were republished separately with:
+  - `go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"`
+  - `go run ./cmd/aether publish --channel dev --binary-dest "$HOME/.local/bin"`
+- Stable `aether` and dev `aether-dev` both report version `1.0.22`; both
+  channel-specific integrity checks pass.
+
+Verification run:
+
+- `go test ./cmd -run 'TestSyncDirSkipsDSStoreAndRemovesStaleDSStore|TestSyncDirToHubSkipsIgnoredAndExcludedArtifacts|TestRunUpdateSyncCopiesNarratorPackageButSkipsNodeModules|TestUpdateSyncPreservesProtectedDirs|TestUpdateSyncForceDoesNotRemoveProtectedStale' -count=1`
+- `go test ./... -count=1`
+- `go test ./... -race -count=1 -timeout 600s`
+- `go vet ./...`
+- `go build ./cmd/aether`
+- `git diff --check`
+- `npm --prefix .aether/ts ci`
+- `npm --prefix .aether/ts run typecheck`
+- `npm --prefix .aether/ts test`
+- `npm --prefix .aether/ts run build`
+- `git diff --exit-code -- .aether/ts/dist/narrator.js`
+- `npm --prefix npm test`
+- `npm pack --dry-run` from `npm/`
+- `AETHER_OUTPUT_MODE=json aether integrity --source --json`
+- `AETHER_OUTPUT_MODE=json aether-dev integrity --source --channel dev --json`
+- Downstream update smoke for both `aether` and `aether-dev`: narrator runtime
+  synced, stale `.DS_Store` and `node_modules` removed, local `archive/` and
+  `chambers/` preserved, and `binary_refresh_mode` stayed `unchanged`.
+- Runtime narrator smoke: JSON mode stayed parseable and ceremony-free; visual
+  mode emitted the ceremony frame; missing Node fallback produced output without
+  crashing.
+
+Release rule reminder:
+
+- Use `aether publish --channel stable` to refresh `~/.aether` and rebuild the
+  stable `aether` binary from this source checkout.
+- Use `aether publish --channel dev` to refresh `~/.aether-dev` and rebuild the
+  dev `aether-dev` binary from this source checkout.
+- Use `aether update --force` or `aether-dev update --force` in downstream repos
+  to sync companion files. Update does not rebuild the binary unless
+  `--download-binary` is explicitly used for a published release.
+- Do not use `aether update` as proof that an unreleased local runtime change
+  reached the shared binary. Source-runtime changes require publish.
+
 ## Release And Rollback
 
 Rollback controls:
@@ -1142,8 +1209,12 @@ Rollback controls:
 
 Before release:
 
-- Verify `aether install --package-dir "$PWD"` publishes `.aether/ts` to hub.
-- Verify `aether update --force` syncs `.aether/ts` into a fixture repo.
+- Verify `aether publish --channel stable --binary-dest "$HOME/.local/bin"`
+  publishes `.aether/ts` to `~/.aether/system` and rebuilds stable `aether`.
+- Verify `aether publish --channel dev --binary-dest "$HOME/.local/bin"`
+  publishes `.aether/ts` to `~/.aether-dev/system` and rebuilds `aether-dev`.
+- Verify downstream `aether update --force` and `aether-dev update --force` sync
+  `.aether/ts` into fixture repos while preserving local-only state dirs.
 - Verify missing Node falls back cleanly.
 - Verify JSON mode is never polluted.
 - Verify Claude Code, OpenCode, and Codex docs correctly describe their
@@ -1151,11 +1222,13 @@ Before release:
 
 ## Current Next Step
 
-Next, review/merge PR #10, then run platform Task-tool smoke when Claude or
+Next, open and review the release-hygiene PR from
+`codex/phase7-release-hygiene`, then merge it before tagging or publishing a
+public release. After that, run platform Task-tool smoke when Claude or
 OpenCode is available. The preconditions now satisfied are:
 
-1. PR #5 through PR #9 are merged;
-2. PR #10 is open, clean, and mergeable;
+1. PR #5 through PR #11 are merged;
+2. `codex/phase7-release-hygiene` is based on current `origin/main`;
 3. hub fallback smoke passed in a temporary HOME;
 4. TTY live redraw is consciously deferred;
 5. multi-wave TS fixture passes;
@@ -1171,5 +1244,10 @@ OpenCode is available. The preconditions now satisfied are:
 11. Phase 6 skill activation event hooks are merged with focused, full cmd,
     full repo, vet, and whitespace checks passing;
 12. Phase 6 lifecycle context events for entomb, midden, QUEEN, and Hive are
-    implemented in the working tree with focused Go, TS narrator, full cmd,
-    full repo, vet, and whitespace gates passing.
+    merged with focused Go, TS narrator, full cmd, full repo, vet, and
+    whitespace gates passing;
+13. stable and dev publishes were run separately from source and both channel
+    integrity checks pass at `1.0.22`;
+14. downstream stable/dev update smokes passed with narrator sync, ignored
+    artifact cleanup, local state preservation, and unchanged binary reporting;
+15. JSON, visual narrator, and missing-Node fallback smokes passed.

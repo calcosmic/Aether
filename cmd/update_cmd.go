@@ -263,8 +263,16 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 
 	// Directories to never overwrite or remove (user data)
 	protectedDirs := map[string]bool{
-		"data":   true,
-		"dreams": true,
+		".aether":     true,
+		"archive":     true,
+		"backups":     true,
+		"chambers":    true,
+		"checkpoints": true,
+		"data":        true,
+		"dreams":      true,
+		"locks":       true,
+		"oracle":      true,
+		"temp":        true,
 	}
 	protectedFiles := map[string]bool{
 		"QUEEN.md":           true,

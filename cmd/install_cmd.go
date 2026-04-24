@@ -329,11 +329,10 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 	if opts.include != nil {
 		srcFiles = filterSyncFiles(srcFiles, opts.include)
 	}
+	var ignored int
+	srcFiles, ignored = filterIgnoredSyncFiles(srcFiles)
+	result.skipped += ignored
 	for _, relPath := range srcFiles {
-		if syncPathHasComponent(relPath, "node_modules") {
-			result.skipped++
-			continue
-		}
 		if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
 			result.skipped++
 			continue
@@ -398,10 +397,16 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 		}
 
 		for _, relPath := range destFiles {
-			if syncPathHasComponent(relPath, "node_modules") {
+			if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
 				continue
 			}
-			if syncPathProtected(relPath, opts.protectedDirs, opts.protectedFiles) {
+			if syncPathIgnored(relPath) {
+				destPath := filepath.Join(dest, relPath)
+				if err := os.Remove(destPath); err == nil {
+					result.removed = append(result.removed, relPath)
+				} else if !os.IsNotExist(err) {
+					result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", destPath, err))
+				}
 				continue
 			}
 			if opts.include != nil && !opts.include(relPath) {
@@ -421,6 +426,9 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 		if len(result.removed) > 0 {
 			cleanEmptyDirs(dest)
 		}
+		removed, errors := removeIgnoredDirsRecursive(dest, opts.protectedDirs, opts.include)
+		result.removed = append(result.removed, removed...)
+		result.errors = append(result.errors, errors...)
 	}
 
 	return result
@@ -553,6 +561,8 @@ var hubExcludeDirs = map[string]bool{
 	"temp":         true,
 	"archive":      true,
 	"chambers":     true,
+	"backups":      true,
+	".aether":      true,
 	"agents":       true, // agents/ is opencode-only, agents-claude/ is the packaging mirror
 	"examples":     true,
 	"node_modules": true,
@@ -701,11 +711,10 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 	if include != nil {
 		srcFiles = filterSyncFiles(srcFiles, include)
 	}
+	var ignored int
+	srcFiles, ignored = filterIgnoredSyncFiles(srcFiles)
+	result.skipped += ignored
 	for _, relPath := range srcFiles {
-		if syncPathHasComponent(relPath, "node_modules") {
-			result.skipped++
-			continue
-		}
 		srcPath := filepath.Join(src, relPath)
 		destPath := filepath.Join(dest, relPath)
 
@@ -750,8 +759,17 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 		srcSet[f] = struct{}{}
 	}
 	for _, relPath := range destFiles {
-		// Don't remove files in excluded dirs (they may have been added manually)
-		if pathHasExcludedComponent(relPath, exclude) || syncPathHasComponent(relPath, "node_modules") {
+		if syncPathIgnored(relPath) {
+			destPath := filepath.Join(dest, relPath)
+			if err := os.Remove(destPath); err == nil {
+				result.removed = append(result.removed, relPath)
+			} else if !os.IsNotExist(err) {
+				result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", destPath, err))
+			}
+			continue
+		}
+		// Excluded hub dirs are removed as whole directories after stale-file cleanup.
+		if pathHasExcludedComponent(relPath, exclude) {
 			continue
 		}
 		if include != nil && !include(relPath) {
@@ -770,6 +788,9 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, valida
 	if len(result.removed) > 0 {
 		cleanEmptyDirs(dest)
 	}
+	removed, errors := removeExcludedDirsRecursive(dest, exclude)
+	result.removed = append(result.removed, removed...)
+	result.errors = append(result.errors, errors...)
 
 	return result
 }
@@ -798,6 +819,80 @@ func listFilesRecursiveWithExclusion(baseDir string, exclude map[string]bool) []
 		return nil
 	})
 	return files
+}
+
+func filterIgnoredSyncFiles(relPaths []string) ([]string, int) {
+	filtered := make([]string, 0, len(relPaths))
+	skipped := 0
+	for _, relPath := range relPaths {
+		if syncPathIgnored(relPath) {
+			skipped++
+			continue
+		}
+		filtered = append(filtered, relPath)
+	}
+	return filtered, skipped
+}
+
+func syncPathIgnored(relPath string) bool {
+	if filepath.Base(relPath) == ".DS_Store" {
+		return true
+	}
+	return syncPathHasComponent(relPath, "node_modules")
+}
+
+func removeIgnoredDirsRecursive(baseDir string, protectedDirs map[string]bool, include syncFilter) ([]string, []string) {
+	var removed []string
+	var errs []string
+	if include != nil {
+		return removed, errs
+	}
+	_ = filepath.WalkDir(baseDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() || path == baseDir {
+			return nil
+		}
+		rel, relErr := filepath.Rel(baseDir, path)
+		if relErr != nil {
+			return nil
+		}
+		if syncPathProtected(rel, protectedDirs, nil) {
+			return filepath.SkipDir
+		}
+		if filepath.Base(rel) != "node_modules" {
+			return nil
+		}
+		if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Sprintf("remove ignored %s: %v", path, err))
+			return filepath.SkipDir
+		}
+		removed = append(removed, rel)
+		return filepath.SkipDir
+	})
+	return removed, errs
+}
+
+func removeExcludedDirsRecursive(baseDir string, exclude map[string]bool) ([]string, []string) {
+	var removed []string
+	var errs []string
+	if len(exclude) == 0 {
+		return removed, errs
+	}
+	_ = filepath.WalkDir(baseDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() || path == baseDir {
+			return nil
+		}
+		rel, relErr := filepath.Rel(baseDir, path)
+		if relErr != nil || !pathHasExcludedComponent(rel, exclude) {
+			return nil
+		}
+		if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, fmt.Sprintf("remove excluded %s: %v", path, err))
+			return filepath.SkipDir
+		}
+		removed = append(removed, rel)
+		return filepath.SkipDir
+	})
+	return removed, errs
 }
 
 func pathHasExcludedComponent(relPath string, exclude map[string]bool) bool {
