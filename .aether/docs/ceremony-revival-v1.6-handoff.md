@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T05:00:39Z
+Last updated: 2026-04-24T05:10:05Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -37,6 +37,10 @@ These commits are pushed:
 - `28b9e857 feat: render ceremony activity frames`
 - `d7564ca6 test: cover multi-wave ceremony activity`
 - `2dd4070c feat: add build plan-only manifest`
+- `8929274e feat: finalize external build workers`
+- `99a729d5 feat: restore build wrapper orchestration`
+- `315d4ee8 feat: add continue plan-only manifest`
+- `dfd7f6da feat: finalize external continue workers`
 
 Implemented foundation:
 
@@ -70,6 +74,15 @@ Implemented foundation:
 - `aether build-finalize <phase> --completion-file <path|->` records externally
   spawned wrapper Task results as the build manifest and claims packet that
   `aether continue` already trusts.
+- Claude/OpenCode build wrappers now spawn real manifest-driven Task/subagents
+  and finalize through `build-finalize`.
+- `aether continue --plan-only` emits a read-only `continue_manifest` for
+  wrapper-spawned Watcher/Gatekeeper/Auditor/Probe review.
+- `aether continue-finalize --completion-file <path|->` merges wrapper review
+  results, re-runs deterministic verification, writes reports, and advances or
+  blocks through runtime gates.
+- Claude/OpenCode continue wrappers now spawn real manifest-driven review
+  agents and finalize through `continue-finalize`.
 
 Verification already passed for the pushed foundation:
 
@@ -269,7 +282,7 @@ Implemented in this slice:
   - planned wrapper workers: Watcher, Gatekeeper, Auditor, Probe
   - worker names, castes, `agent_name`, waves, task IDs, status `planned`, and
     rendered worker briefs
-  - `finalize_surface: "pending"` until `continue-finalize` lands
+  - `finalize_surface: "pending"` as the wrapper handoff marker
 
 Focused verification:
 
@@ -317,6 +330,49 @@ Expected continue wrapper flow:
 Focused verification:
 
 - `go test ./cmd -run 'TestContinuePlanOnly|TestContinueFinalizeRecordsExternalReviewAndAdvances' -count=1`
+
+## Completed Slice: Continue Wrapper Restoration
+
+Claude/OpenCode continue wrappers now use the continue bridge instead of the old
+visual pass-through contract.
+
+Changed files:
+
+- `.aether/commands/continue.yaml`
+- `.claude/commands/ant/continue.md`
+- `.opencode/commands/ant/continue.md`
+- `cmd/continue_wrapper_ceremony_test.go`
+- `cmd/platform_doc_hygiene_test.go`
+- `cmd/codex_visuals.go`
+
+Wrapper flow now required:
+
+1. Ground with `AETHER_OUTPUT_MODE=visual aether status`.
+2. Request the authoritative plan with
+   `AETHER_OUTPUT_MODE=json aether continue --plan-only $ARGUMENTS`.
+3. Parse `result.continue_manifest`.
+4. Spawn Watcher first from wave 1.
+5. Spawn Gatekeeper, Auditor, and Probe from wave 2; these can run in parallel
+   when the platform supports it.
+6. Call `aether spawn-log` before each worker and `aether spawn-complete` after.
+7. Write a completion JSON file outside `.aether/data/`.
+8. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file
+   <file>`.
+9. Route from the finalizer result to `/ant-build N+1`, `/ant-continue`, or
+   `/ant-seal`.
+
+Important guardrails now enforced:
+
+- Wrappers must not run `AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS`.
+- Wrappers must not run direct non-plan-only `aether continue`.
+- Wrappers must not invent castes, waves, or names.
+- Wrappers must not parse visual output as truth.
+- The normal direct `aether continue` path remains available for Codex/direct
+  CLI compatibility.
+
+Focused verification:
+
+- `go test ./cmd -run 'TestContinueWrapperCeremonyContract|TestPlatformCommandDocsAvoidLegacyShellRuntime|TestContinuePlanOnly|TestContinueFinalizeRecordsExternalReviewAndAdvances' -count=1`
 
 ## Completed Slice: Go Narrator Launcher
 
@@ -545,27 +601,9 @@ Remaining display work:
 
 ## Later Phases: Real Agent Spawning Bridge
 
-After narrator display is reliable, restore Claude/OpenCode wrapper behavior.
-
-Build wrapper work:
-
-- `.claude/commands/ant/build.md` becomes an orchestrator again.
-- `.opencode/commands/ant/build.md` gets structural parity.
-- The wrapper calls Go for a manifest/plan-only build surface, then spawns real
-  caste agents with the platform agent tool.
-- Pre-wave specialists: Archaeologist, Oracle, Architect, Ambassador.
-- Builder waves run with full context injection.
-- Post-wave specialists: Watcher, Probe, Measurer, Chaos, Gatekeeper/Auditor as
-  needed.
-- Wrapper calls `aether spawn-log` before Task calls and `aether spawn-complete`
-  after returns.
-
-Continue wrapper work:
-
-- Verification gates must run before phase advancement.
-- Watcher verifies claims.
-- Gatekeeper, Auditor, Probe, and Measurer gates fire where appropriate.
-- Failures go to midden/graves, not silent state flips.
+Build and continue wrapper bridges are implemented for Claude/OpenCode. Remaining
+work is to broaden the same bridge pattern across planning and later lifecycle
+ceremonies.
 
 Plan wrapper work:
 
@@ -599,10 +637,11 @@ Before release:
 
 ## Current Next Step
 
-Next, start the real agent-spawning bridge for Claude/OpenCode wrappers. The
-preconditions are now satisfied:
+Next, commit/push the continue-wrapper checkpoint, then start plan wrapper
+orchestration. The preconditions are now satisfied:
 
 1. hub fallback smoke passed in a temporary HOME;
 2. TTY live redraw is consciously deferred;
 3. multi-wave TS fixture passes;
-4. focused Go and TS gates pass.
+4. build and continue wrappers now have plan-only/finalizer bridges;
+5. focused Go and TS gates pass.

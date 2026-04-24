@@ -22,7 +22,13 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	}
 
 	required := []string{
-		"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=visual aether status",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only $ARGUMENTS",
+		"result.continue_manifest",
+		"AETHER_OUTPUT_MODE=json aether spawn-log",
+		`subagent_type="{agent_name}"`,
+		"AETHER_OUTPUT_MODE=json aether spawn-complete",
+		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"## Verification Gates",
 		"Gatekeeper",
 		"Auditor",
@@ -42,10 +48,13 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	inOrder := []string{
 		"## What Continue Means",
-		"## Verification Gates",
+		"## Colony Context",
+		"## Continue Manifest",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only $ARGUMENTS",
+		"## Wave Execution",
+		"## Completion Packet",
+		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"## Learning Extraction",
-		"## Execute",
-		"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
 		"## After Continue",
 		"### If the phase advanced",
 		"### If continue is blocked",
@@ -62,6 +71,14 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		for _, want := range required {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s missing %q", wrapperPath, want)
+			}
+		}
+		if guardrail := "Do NOT run `aether continue` without `--plan-only` from this wrapper."; !strings.Contains(text, guardrail) {
+			t.Errorf("%s missing guardrail %q", wrapperPath, guardrail)
+		}
+		for _, forbidden := range []string{"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS"} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s should not contain direct visual continue pass-through %q", wrapperPath, forbidden)
 			}
 		}
 

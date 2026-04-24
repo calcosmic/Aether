@@ -2,26 +2,37 @@ name: ant-continue
 description: "👁️ Verify build work, extract learnings, and advance the colony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS"
+  command: "AETHER_OUTPUT_MODE=json aether continue --plan-only"
 wrapper_additions:
   pre_continue: |
-    Frame continue as the colony's verification-and-learning moment:
-    1. Set expectation that continue is where verification, gates, and advancement truth are revealed by the runtime.
-    2. Name the runtime-owned gate castes briefly: Gatekeeper for safety, Auditor for quality, and Probe for coverage and weak spots.
-    3. Keep the learning framing compact and consequential; learnings must come from runtime evidence, not wrapper invention.
+    Ground continue before spawning review workers:
+    1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
+    2. Frame continue as the colony's inspection point, not another build pass.
+    3. Name the review castes briefly: Watcher for independent verification, Gatekeeper for safety, Auditor for quality, and Probe for coverage and weak spots.
+    4. Immediately before requesting the manifest, say: `Asking the runtime for the continue manifest...`
+  orchestration: |
+    Restore real wrapper verification orchestration:
+    1. Run `AETHER_OUTPUT_MODE=json aether continue --plan-only`.
+    2. Parse `result.continue_manifest`; do not parse visual output.
+    3. For each planned wave, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, then call `aether spawn-complete`.
+    4. Wave 1 must complete before wave 2; wave 2 review agents may run in parallel when the platform supports it.
+    5. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
+    6. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>` to let the runtime re-run deterministic verification, write reports, apply gates, and advance or block.
   post_continue: |
-    Close with branch-specific colony synthesis:
-    1. If the phase advanced, summarize what was verified, what the colony learned, and route first to `/ant-build N+1`.
+    Close from the `continue-finalize` result only:
+    1. If the phase advanced, summarize what was verified, which review workers ran, what the colony learned, and route first to `/ant-build N+1`.
     2. If continue blocked, translate the blocker into plain language and follow the runtime's recovery command first when it surfaces one; only fall back to `/ant-continue` when the runtime stayed generic.
     3. If the colony completed, mark the achievement briefly and route first to `/ant-seal`.
-    4. Only after successful advance or final completion, say it is safe to clear context and point to `/ant-resume`.
-    5. Mention signal housekeeping only if the runtime surfaced it, and keep that note to one short line.
-    6. When signal housekeeping appears, explain what expired, what remained active, and what that means for the next phase or final seal without diffing pheromone files directly.
+    4. Mention signal housekeeping only if the runtime surfaced it, and keep that note to one short line.
+    5. When signal housekeeping appears, explain what expired, what remained active, and what that means for the next phase or final seal without diffing pheromone files directly.
 guardrails:
-  - "Do NOT replay verification loops or reimplement gate logic."
+  - "Do NOT run `aether continue` without `--plan-only` from Claude/OpenCode wrapper orchestration."
+  - "Do NOT run `aether continue --synthetic` after real wrapper Task agents complete."
+  - "Do NOT replay verification loops or reimplement runtime gate logic."
   - "Do NOT read or write colony state files by hand."
   - "Do NOT mutate COLONY_STATE.json, session.json, CONTEXT.md, or HANDOFF.md directly."
   - "Do NOT parse visual output as authoritative state."
+  - "Do NOT invent worker names, castes, or waves; use `continue_manifest`."
   - "Do NOT add extra option menus or manual state surgery unless the runtime explicitly asks."
   - "If docs and runtime disagree, runtime wins."
 follow_up:

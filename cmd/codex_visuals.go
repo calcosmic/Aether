@@ -1107,7 +1107,7 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 	}
 	b.WriteString(renderNextUp(
 		`Use the JSON `+"`continue_manifest`"+` to spawn wrapper verification/review agents.`,
-		`Run the eventual continue finalizer after wrapper agents return terminal results.`,
+		`Run `+"`AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`"+` after wrapper agents return terminal results.`,
 	))
 	return b.String()
 }

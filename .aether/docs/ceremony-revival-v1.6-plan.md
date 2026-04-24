@@ -123,8 +123,8 @@ The detailed implementation contract is tracked in
 ## Phase 5: Continue and Plan Orchestration
 
 - Restore continue as real verification before advancement.
-  (Continue plan-only manifest and continue-finalize implemented; wrapper
-  rewrite is next.)
+  (Continue plan-only manifest, continue-finalize, and Claude/OpenCode wrapper
+  orchestration are implemented.)
 - Restore plan depth ceremony: Fast, Balanced, Deep, Exhaustive.
 - Run Scout plus Route-Setter planning loops with stall detection and confidence.
 - Persist validated learnings, midden failures, and blocker status honestly.
