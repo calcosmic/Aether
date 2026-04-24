@@ -154,6 +154,70 @@ parallel mode, and context capsule -- all within a token budget (see Token Budge
 
 **See `RUNTIME UPDATE ARCHITECTURE.md` for complete distribution flow.**
 
+### Runtime Lifecycle Diagram
+
+One build cycle, model-agnostic. Shows both parallel modes in a single graph:
+the `in-repo` path is solid, the `worktree` path with sync-back is dashed. The
+Skill Matching sub-graph is the `skill-match` → `skill-inject` flow called out
+in the Skills System section.
+
+For beginners: the Queen is the head chef, colony-prime is the whiteboard she
+reads before giving each cook their recipe, the sub-graph labelled "Skill
+Matching" picks which recipe cards (skills) to hand out, and the quality gates
+at the end are the tasters before a plate leaves the kitchen.
+
+```mermaid
+flowchart LR
+    U[User CLI<br/>aether build N] --> Q((Queen))
+
+    subgraph CP[colony-prime context assembly]
+        direction TB
+        PH[(pheromones.json)]
+        QM[(~/.aether/QUEEN.md)]
+        HV[(hive/wisdom.json)]
+        IN[(instincts.json)]
+        CS[(COLONY_STATE.json)]
+        MD[(midden.json)]
+        PH --> CTX{context bundle<br/>8K / 4K budget}
+        QM --> CTX
+        HV --> CTX
+        IN --> CTX
+        CS --> CTX
+        MD --> CTX
+    end
+
+    subgraph SK[Skill Matching]
+        direction TB
+        SIDX[skill-index cache] --> SMATCH[skill-match<br/>role + task + pheromones]
+        SMATCH --> SINJ[skill-inject<br/>8K budget]
+    end
+
+    Q --> CP
+    Q --> SK
+    CP -->|injected prompt| WRK[Builder + Watcher<br/>+ specialists]
+    SK -->|injected prompt| WRK
+
+    WRK --> PM{parallel_mode}
+    PM -->|in-repo default| IR[workers share<br/>working tree]
+    PM -.->|worktree| WT[isolated git worktree<br/>per worker]
+    WT -.->|sync back| IR
+    IR --> OUT[(code + tests)]
+
+    OUT --> VER[Watcher verify]
+    VER --> GATES[Gatekeeper → Auditor<br/>→ Probe → Measurer]
+    GATES --> ADV[aether continue<br/>extract learnings]
+    ADV -->|updates| CS
+    ADV -->|failures| MD
+    ADV -->|auto-emit| PH
+    ADV -->|observations| OBS[see Wisdom Pipeline]
+```
+
+Verify: every node maps to a real artifact. `pheromones.json`, `COLONY_STATE.json`,
+`midden.json`, `instincts.json` live under `.aether/data/`. `QUEEN.md` and
+`hive/wisdom.json` live under `~/.aether/`. `skill-index`, `skill-match`, and
+`skill-inject` are real subcommands (see Skills System). Gate order matches the
+Quality Gates table.
+
 ---
 
 ## Development Workflow
@@ -709,6 +773,48 @@ wisdom.
 | 5. Inject | colony-prime | Injected into worker context |
 | 6. Hive store | `hive-promote` | Abstracts to hive (confidence >= 0.8) |
 | 7. Hive read | `hive-read` | Cross-colony retrieval by domain |
+
+### Wisdom Pipeline Diagram
+
+The same seven stages drawn as a flow. The multi-repo confidence sub-graph is
+the boost table from the Hive Brain section -- one colony's observation becomes
+stronger as more repos confirm the same pattern.
+
+For beginners: think of it as a rumour travelling through a village. One person
+notices something (observe), the village weighs how trustworthy they are (trust
+score), it gets shouted in the square (event bus), and after two people say the
+same thing it becomes common knowledge (instinct). Really solid rumours get
+written into the village history book (Hive Brain) that neighbouring villages
+also read.
+
+```mermaid
+flowchart LR
+    OBS[memory-capture<br/>observation] --> TS[trust-score-compute<br/>40/35/25 weighted]
+    TS --> BUS[event-bus-publish<br/>JSONL + TTL]
+    BUS -->|2+ observations| PROMOTE{auto-promote}
+    PROMOTE --> INST[instinct-create<br/>instincts.json]
+    INST --> QP[queen-promote<br/>QUEEN.md]
+    QP --> CP2[colony-prime injection<br/>next worker spawn]
+
+    INST -->|confidence >= 0.8<br/>at aether seal| HP[hive-promote]
+    HP --> HA[hive-abstract<br/>generalize]
+    HA --> HS[hive-store<br/>200-cap LRU]
+    HS --> HV2[(~/.aether/hive/wisdom.json)]
+    HV2 -->|hive-read<br/>domain filter| CP2
+
+    subgraph CONF[multi-repo confidence boost]
+        direction TB
+        C1[1 repo: source confidence] --> C2[2 repos: 0.70]
+        C2 --> C3[3 repos: 0.85]
+        C3 --> C4[4+ repos: 0.95]
+    end
+    HS -.-> CONF
+```
+
+Verify: every node maps to a real subcommand (`memory-capture`,
+`trust-score-compute`, `event-bus-publish`, `instinct-create`, `queen-promote`,
+`hive-promote`, `hive-abstract`, `hive-store`, `hive-read`) or a real file path.
+Confidence thresholds match the Multi-Repo Confidence Boosting table.
 
 **See `.aether/docs/structural-learning-stack.md` for full documentation.**
 
