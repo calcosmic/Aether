@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseEvent, parseVisualContract, renderEvent, sanitizeTerminalText } from "../narrator.js";
+import {
+  applyEventToFrame,
+  createCeremonyFrame,
+  parseEvent,
+  parseVisualContract,
+  renderActivityFrame,
+  renderEvent,
+  sanitizeTerminalText
+} from "../narrator.js";
 
 test("renders ceremony event identity and status", () => {
   const event = parseEvent(
@@ -132,4 +140,109 @@ test("ignores empty event lines", () => {
 
 test("sanitizeTerminalText preserves printable text", () => {
   assert.equal(sanitizeTerminalText("plain text"), "plain text");
+});
+
+test("renders rolling activity frame with active and completed workers", () => {
+  const visuals = parseVisualContract({
+    castes: {
+      builder: { emoji: "🔨", label: "Builder" },
+      watcher: { emoji: "👁️", label: "Watcher" }
+    }
+  });
+  const frame = createCeremonyFrame();
+
+  for (const raw of [
+    {
+      topic: "ceremony.build.wave.start",
+      payload: {
+        phase: 2,
+        phase_name: "Narrator launcher",
+        wave: 1,
+        total: 2,
+        status: "starting"
+      }
+    },
+    {
+      topic: "ceremony.build.spawn",
+      payload: {
+        phase: 2,
+        wave: 1,
+        spawn_id: "builder-1",
+        caste: "builder",
+        name: "Mason-67",
+        task_id: "2.1",
+        task: "Wire launch events",
+        status: "running",
+        tool_count: 3
+      }
+    },
+    {
+      topic: "ceremony.build.spawn",
+      payload: {
+        phase: 2,
+        wave: 1,
+        spawn_id: "watcher-1",
+        caste: "watcher",
+        name: "Vigil-17",
+        task_id: "2.2",
+        task: "Verify JSON safety",
+        status: "completed",
+        files_modified: ["cmd/narrator_launcher.go"],
+        tests_written: ["cmd/narrator_launcher_test.go"]
+      }
+    },
+    {
+      topic: "ceremony.build.wave.end",
+      payload: {
+        phase: 2,
+        phase_name: "Narrator launcher",
+        wave: 1,
+        completed: 1,
+        total: 2,
+        status: "completed"
+      }
+    }
+  ]) {
+    const event = parseEvent(JSON.stringify(raw));
+    assert.ok(event);
+    applyEventToFrame(frame, event);
+  }
+
+  const rendered = renderActivityFrame(frame, visuals);
+  assert.match(rendered, /\[CEREMONY\] ceremony\.build\.wave\.end/);
+  assert.match(rendered, /\[CEREMONY\] COLONY ACTIVITY phase=2 Narrator launcher/);
+  assert.match(rendered, /Wave 1: 1\/2 completed/);
+  assert.match(rendered, /Active:\n  🔨 Builder:Mason-67 running task=2\.1 tools=3 Wire launch events/);
+  assert.match(rendered, /Completed:\n  👁️ Watcher:Vigil-17 completed task=2\.2 files=1 tests=1 Verify JSON safety/);
+});
+
+test("renders blocked workers and truncates long frame text", () => {
+  const frame = createCeremonyFrame();
+  const longMessage = "x".repeat(160);
+  const event = parseEvent(
+    JSON.stringify({
+      topic: "ceremony.build.spawn",
+      payload: {
+        phase: 3,
+        wave: 2,
+        caste: "builder",
+        name: "Mason-13",
+        status: "failed",
+        blockers: ["broken pipe"],
+        message: longMessage
+      }
+    })
+  );
+  assert.ok(event);
+  applyEventToFrame(frame, event);
+
+  const rendered = renderActivityFrame(frame);
+  const workerLine = rendered
+    .split("\n")
+    .find((line) => line.trim().startsWith("builder:Mason-13"));
+  assert.match(rendered, /Blocked:/);
+  assert.match(rendered, /builder:Mason-13 failed blockers=1/);
+  assert.ok(workerLine);
+  assert.doesNotMatch(workerLine, new RegExp(longMessage));
+  assert.match(workerLine, /\.\.\./);
 });

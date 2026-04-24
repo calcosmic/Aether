@@ -40,6 +40,16 @@ export function sanitizeTerminalText(value) {
         .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, "")
         .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "");
 }
+function truncateDisplayText(value, maxLength = 96) {
+    const text = sanitizeTerminalText(value).trim().replace(/\s+/g, " ");
+    if (text.length <= maxLength) {
+        return text;
+    }
+    if (maxLength <= 3) {
+        return text.slice(0, maxLength);
+    }
+    return `${text.slice(0, maxLength - 3).trim()}...`;
+}
 export function parseEvent(line) {
     const trimmed = line.trim();
     if (trimmed === "") {
@@ -87,6 +97,24 @@ function formatIdentity(payload, visuals) {
         return name;
     }
     return null;
+}
+function formatWorkerIdentity(worker, visuals) {
+    const caste = worker.caste === undefined ? "" : sanitizeTerminalText(worker.caste);
+    const normalizedCaste = normalizeCaste(caste);
+    const visual = normalizedCaste === "" ? undefined : visuals?.castes[normalizedCaste];
+    const label = visual?.label === undefined ? caste : sanitizeTerminalText(visual.label);
+    const emoji = visual?.emoji === undefined ? "" : `${sanitizeTerminalText(visual.emoji)} `;
+    const name = worker.name === undefined ? "" : sanitizeTerminalText(worker.name);
+    if (label !== "" && name !== "") {
+        return `${emoji}${label}:${name}`;
+    }
+    if (label !== "") {
+        return `${emoji}${label}`;
+    }
+    if (name !== "") {
+        return name;
+    }
+    return worker.key;
 }
 export function renderEvent(event, visuals) {
     const payload = asPayload(event.payload);
@@ -154,16 +182,180 @@ export function renderEvent(event, visuals) {
     }
     return parts.filter((part) => part.trim() !== "").join(" ");
 }
+export function createCeremonyFrame() {
+    return {
+        workers: {},
+        waves: {}
+    };
+}
+export function applyEventToFrame(frame, event) {
+    const payload = asPayload(event.payload);
+    frame.last_event = event;
+    if (payload.phase !== undefined) {
+        frame.phase = payload.phase;
+    }
+    if (payload.phase_name !== undefined) {
+        frame.phase_name = sanitizeTerminalText(payload.phase_name);
+    }
+    if (payload.wave !== undefined) {
+        frame.current_wave = payload.wave;
+    }
+    if (event.topic === "ceremony.build.wave.start" || event.topic === "ceremony.build.wave.end") {
+        const wave = payload.wave ?? frame.current_wave ?? 0;
+        if (wave > 0) {
+            const key = String(wave);
+            const existing = frame.waves[key] ?? { wave };
+            const next = { ...existing };
+            assignDefined(next, "total", payload.total);
+            assignDefined(next, "completed", payload.completed);
+            assignDefined(next, "status", payload.status);
+            assignDefined(next, "message", payload.message);
+            frame.waves[key] = next;
+        }
+    }
+    if (payload.caste !== undefined || payload.name !== undefined || payload.spawn_id !== undefined) {
+        const key = workerKey(payload, frame);
+        const existing = frame.workers[key] ?? { key };
+        const next = { ...existing };
+        assignDefined(next, "phase", payload.phase ?? frame.phase);
+        assignDefined(next, "phase_name", payload.phase_name ?? frame.phase_name);
+        assignDefined(next, "wave", payload.wave ?? frame.current_wave);
+        assignDefined(next, "spawn_id", payload.spawn_id);
+        assignDefined(next, "caste", payload.caste);
+        assignDefined(next, "name", payload.name);
+        assignDefined(next, "task_id", payload.task_id);
+        assignDefined(next, "task", payload.task);
+        assignDefined(next, "status", payload.status);
+        assignDefined(next, "message", payload.message);
+        assignDefined(next, "tool_count", payload.tool_count);
+        assignDefined(next, "token_count", payload.token_count);
+        assignDefined(next, "files_created", payload.files_created?.length);
+        assignDefined(next, "files_modified", payload.files_modified?.length);
+        assignDefined(next, "tests_written", payload.tests_written?.length);
+        assignDefined(next, "blockers", payload.blockers?.length);
+        frame.workers[key] = next;
+    }
+    return frame;
+}
+function assignDefined(target, key, value) {
+    if (value !== undefined) {
+        target[key] = value;
+    }
+}
+function workerKey(payload, frame) {
+    if (payload.spawn_id !== undefined && payload.spawn_id.trim() !== "") {
+        return sanitizeTerminalText(payload.spawn_id);
+    }
+    return [
+        payload.phase ?? frame.phase ?? "",
+        payload.wave ?? frame.current_wave ?? "",
+        payload.caste ?? "",
+        payload.name ?? "",
+        payload.task_id ?? ""
+    ].map((part) => sanitizeTerminalText(part)).join(":");
+}
+export function renderActivityFrame(frame, visuals) {
+    const lines = [];
+    if (frame.last_event !== undefined) {
+        lines.push(renderEvent(frame.last_event, visuals));
+    }
+    const titleParts = ["[CEREMONY]", "COLONY ACTIVITY"];
+    if (frame.phase !== undefined) {
+        titleParts.push(`phase=${sanitizeTerminalText(frame.phase)}`);
+    }
+    if (frame.phase_name !== undefined && frame.phase_name.trim() !== "") {
+        titleParts.push(truncateDisplayText(frame.phase_name, 48));
+    }
+    lines.push(titleParts.join(" "));
+    const currentWave = frame.current_wave === undefined ? undefined : frame.waves[String(frame.current_wave)];
+    if (currentWave !== undefined) {
+        lines.push(`Wave ${currentWave.wave}: ${formatWaveProgress(currentWave)}`);
+    }
+    const workers = Object.values(frame.workers).sort(compareWorkers);
+    if (workers.length === 0) {
+        lines.push("Workers: none active yet");
+        return lines.join("\n");
+    }
+    const active = workers.filter((worker) => isActiveStatus(worker.status));
+    const completed = workers.filter((worker) => worker.status === "completed");
+    const blocked = workers.filter((worker) => isBlockedStatus(worker.status));
+    const other = workers.filter((worker) => !active.includes(worker) && !completed.includes(worker) && !blocked.includes(worker));
+    appendWorkerSection(lines, "Active", active, visuals);
+    appendWorkerSection(lines, "Completed", completed, visuals);
+    appendWorkerSection(lines, "Blocked", blocked, visuals);
+    appendWorkerSection(lines, "Other", other, visuals);
+    return lines.join("\n");
+}
+function compareWorkers(a, b) {
+    return (a.wave ?? 0) - (b.wave ?? 0) || a.key.localeCompare(b.key);
+}
+function formatWaveProgress(wave) {
+    if (wave.completed !== undefined && wave.total !== undefined) {
+        return `${wave.completed}/${wave.total} ${wave.status ?? "running"}`;
+    }
+    if (wave.total !== undefined) {
+        return `0/${wave.total} ${wave.status ?? "running"}`;
+    }
+    return wave.status ?? "running";
+}
+function isActiveStatus(status) {
+    return status === "starting" || status === "running" || status === "active" || status === "spawned";
+}
+function isBlockedStatus(status) {
+    return status === "failed" || status === "timeout" || status === "blocked";
+}
+function appendWorkerSection(lines, label, workers, visuals) {
+    if (workers.length === 0) {
+        return;
+    }
+    lines.push(`${label}:`);
+    for (const worker of workers) {
+        lines.push(`  ${formatWorkerLine(worker, visuals)}`);
+    }
+}
+function formatWorkerLine(worker, visuals) {
+    const identity = formatWorkerIdentity(worker, visuals);
+    const details = [identity];
+    if (worker.status !== undefined) {
+        details.push(worker.status);
+    }
+    if (worker.task_id !== undefined) {
+        details.push(`task=${truncateDisplayText(worker.task_id, 32)}`);
+    }
+    if (worker.tool_count !== undefined) {
+        details.push(`tools=${worker.tool_count}`);
+    }
+    if (worker.token_count !== undefined) {
+        details.push(`tokens=${worker.token_count}`);
+    }
+    const fileCount = (worker.files_created ?? 0) + (worker.files_modified ?? 0);
+    if (fileCount > 0) {
+        details.push(`files=${fileCount}`);
+    }
+    if ((worker.tests_written ?? 0) > 0) {
+        details.push(`tests=${worker.tests_written}`);
+    }
+    if ((worker.blockers ?? 0) > 0) {
+        details.push(`blockers=${worker.blockers}`);
+    }
+    const note = worker.message ?? worker.task;
+    if (note !== undefined && note.trim() !== "") {
+        details.push(truncateDisplayText(note));
+    }
+    return details.join(" ");
+}
 export function runNarrator(input = process.stdin, output = process.stdout, errorOutput = process.stderr, visuals) {
     const rl = readline.createInterface({
         input,
         crlfDelay: Infinity
     });
+    const frame = createCeremonyFrame();
     rl.on("line", (line) => {
         try {
             const event = parseEvent(line);
             if (event !== null) {
-                output.write(`${renderEvent(event, visuals)}\n`);
+                applyEventToFrame(frame, event);
+                output.write(`${renderActivityFrame(frame, visuals)}\n`);
             }
         }
         catch (error) {

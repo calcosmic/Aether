@@ -81,15 +81,17 @@ Remaining before Phase 2 is complete:
 - Manual installed-hub smoke: `aether install --package-dir "$PWD"` and a
   fixture `aether update --force` should prove the launcher finds the hub
   runtime outside the source checkout.
+- Optional TTY live redraw/debounce polish for the rolling activity frame.
 
 The detailed implementation contract is tracked in
 `.aether/docs/ceremony-revival-v1.6-handoff.md`.
 
 ## Phase 3: Rolling Activity Display
 
-- Maintain an in-memory ceremony frame keyed by spawn ID.
+- Maintain an in-memory ceremony frame keyed by spawn ID. (Initial foundation
+  exists.)
 - Render wave progress, active workers, completed workers, tool counts, blockers,
-  and token counts where available.
+  and token counts where available. (Initial foundation exists.)
 - Strip ANSI when stdout is not a TTY unless explicitly forced.
 - Debounce live redraws if event volume makes the terminal flicker.
 

@@ -1,6 +1,6 @@
 # Ceremony Revival v1.6 Handoff
 
-Last updated: 2026-04-24T04:06:48Z
+Last updated: 2026-04-24T04:12:13Z
 
 Branch: `codex/ceremony-narrator-foundation-v16`
 Remote branch: `origin/codex/ceremony-narrator-foundation-v16`
@@ -52,6 +52,8 @@ Implemented foundation:
   JSON mode.
 - `AETHER_NARRATOR` launch gating is implemented with JSON mode protected from
   narrator text.
+- The narrator now keeps an in-memory activity frame and renders worker
+  sections for active, completed, blocked, and other workers.
 
 Verification already passed for the pushed foundation:
 
@@ -299,34 +301,38 @@ Completed verification on 2026-04-24:
 - `git diff --check`
 - `rm -rf .aether/ts/node_modules`
 
-## Phase After Launcher: Rolling Activity Display
+## Completed Slice: Rolling Activity Display Foundation
 
-Once the launcher is wired, improve `.aether/ts/narrator.ts` from single-line
-events into a ceremony frame.
+The first rolling display slice is implemented in `.aether/ts/narrator.ts`.
+The narrator preserves the compatibility event line, then renders a stateful
+`COLONY ACTIVITY` frame.
 
 State model:
 
-- Track active wave number.
-- Track spawns by `spawn_id` or `phase/wave/caste/name/task_id`.
-- Track worker status, task summary, tool count, token count, blockers, files,
+- Tracks active wave number.
+- Tracks spawns by `spawn_id` or `phase/wave/caste/name/task_id`.
+- Tracks worker status, task summary, tool count, token count, blockers, files,
   tests, and last message.
-- Track wave progress from `completed` and `total`.
+- Tracks wave progress from `completed` and `total`.
 
 Rendering rules:
 
-- Keep a plain non-TTY mode that prints stable lines.
-- Use live redraw only for TTY output.
-- Debounce redraws to about 4Hz if events arrive rapidly.
-- Strip ANSI/control sequences from all event text.
-- Truncate long user-controlled strings before rendering.
-- Continue to accept Go visual metadata through `--visuals`.
+- Plain output prints stable lines, preserving the existing event line first.
+- Frame output groups workers into Active, Completed, Blocked, and Other.
+- ANSI/control sequences are stripped through the existing sanitizer.
+- Long frame text is truncated.
+- Go visual metadata through `--visuals` drives caste labels and emoji.
 
 Tests:
 
-- Vitest snapshots for wave start, active workers, completion, failure, blockers,
-  and no-visuals fallback.
-- A fixture where one worker exits early and later events still render.
-- A fixture with overlong task/blocker text proving truncation.
+- `renders rolling activity frame with active and completed workers`
+- `renders blocked workers and truncates long frame text`
+
+Remaining display work:
+
+- TTY live redraw and debounce.
+- Snapshot fixtures for longer multi-wave histories.
+- Visual polish after seeing real build output in Claude/OpenCode/Codex.
 
 ## Later Phases: Real Agent Spawning Bridge
 
@@ -384,12 +390,11 @@ Before release:
 
 ## Current Next Step
 
-Start with the rolling activity display slice above. Do not begin wrapper
-rewrites until:
+Next, run an installed-hub smoke and then continue display polish. Do not begin
+wrapper rewrites until:
 
-1. the narrator renders a stable multi-worker frame from the persisted build
-   events now emitted by Go;
-2. non-TTY output remains readable and low-noise;
-3. long event text is visibly truncated;
-4. TS snapshot tests cover active, completed, failed, and blocked workers;
-5. full Go and TS gates pass again.
+1. `aether install --package-dir "$PWD"` publishes the runtime and launcher can
+   find the hub fallback from a fixture repo;
+2. TTY live redraw is either implemented or consciously deferred;
+3. longer multi-wave TS fixtures pass;
+4. full Go and TS gates pass again.

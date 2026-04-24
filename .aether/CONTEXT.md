@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-04-24T04:06:48Z |
+| **Last Updated** | 2026-04-24T04:12:13Z |
 | **Current Phase** | 1 |
 | **Phase Name** | Assumptions and gap audit |
 | **Phase Status** | ready |
@@ -41,6 +41,8 @@ Detailed tracked handoff: `.aether/docs/ceremony-revival-v1.6-handoff.md`.
 Specialist reviews for the launcher slice are complete. Scout recommended build-specific lifecycle insertion points in `cmd/codex_build_worktree.go` and `cmd/codex_build.go`. Watcher listed launcher tests for env gating, missing Node/runtime, early exits, cleanup, event persistence, and JSON non-pollution. Gatekeeper required absolute `node` + `dist/narrator.js`, no shell/npm/npx/tsx at runtime, non-fatal missing dependencies, and child stdout routed back through Go's visual output mutex. Those launcher requirements are implemented and verified.
 
 Launcher implementation completed: `cmd/narrator_launcher.go` auto-launches the dependency-free Node sidecar for visual build output, never in JSON mode; `cmd/ceremony_emitter.go` persists build ceremony events and forwards the exact persisted event to the sidecar; `cmd/codex_build.go` and `cmd/codex_build_worktree.go` emit prewave, wave start, spawn, tool-use, and wave-end events. User-controlled event text/lists are trimmed before persistence.
+
+Rolling display foundation completed: `.aether/ts/narrator.ts` now keeps a stateful ceremony frame and renders a `COLONY ACTIVITY` view with wave progress plus Active, Completed, Blocked, and Other worker sections. It preserves the compatibility event line first so existing Go smoke tests continue to work. `.aether/ts/dist/narrator.js` has been regenerated.
 
 ---
 
@@ -87,15 +89,16 @@ Launcher implementation completed: `cmd/narrator_launcher.go` auto-launches the 
 - 2026-04-24T03:24:26Z|phase2_stream_smoke|test|Event-bus stream to dependency-free narrator runtime smoke added; full Go/TS/race verification passed
 - 2026-04-24T03:40:41Z|handoff|docs|Tracked v1.6 launcher and remaining-phase implementation handoff created for context recovery
 - 2026-04-24T04:06:48Z|phase2_launcher|build|Go narrator launcher and build ceremony emitter implemented; full Go/TS/race/vet verification passed
+- 2026-04-24T04:12:13Z|phase3_display_foundation|build|TS narrator activity frame added with active/completed/blocked worker tests
 
 ---
 
 ## Next Steps
 
-1. Commit and push the launcher implementation
+1. Commit and push the rolling display foundation
 2. Run an installed-hub smoke if time allows: `aether install --package-dir "$PWD"` and `aether update --force` in a fixture repo
-3. Start the rolling activity display slice in `.aether/ts/narrator.ts`
-4. Add TS snapshots for active, completed, failed, and blocked workers
+3. Decide whether to implement TTY live redraw/debounce now or defer it
+4. Add longer multi-wave TS fixtures before wrapper rewrites
 
 ---
 
@@ -106,7 +109,7 @@ Launcher implementation completed: `cmd/narrator_launcher.go` auto-launches the 
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Commit and push the Go narrator launcher slice
+- Commit and push the rolling display foundation
 - Optionally smoke the installed hub runtime lookup path
-- Build the rolling activity display frame in `.aether/ts/narrator.ts`
-- Add TS snapshot coverage for active/completed/failed/blocked worker frames
+- Add TTY redraw/debounce or explicitly defer it
+- Add longer multi-wave display fixtures
