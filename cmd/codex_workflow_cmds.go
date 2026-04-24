@@ -132,10 +132,16 @@ var continueCmd = &cobra.Command{
 	Short: "Verify the active build packet, close dispatched workers, and advance honestly",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+				WorkerTimeout:    workerTimeout,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -147,6 +153,7 @@ var continueCmd = &cobra.Command{
 
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
 			ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+			WorkerTimeout:    workerTimeout,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -626,6 +633,7 @@ func init() {
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
+	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 

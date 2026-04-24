@@ -252,7 +252,9 @@ func loadActiveRecoveryGuidance(state colony.ColonyState) *activeRecoveryGuidanc
 
 	next := strings.TrimSpace(report.Next)
 	if next == "" {
-		next = continueNextCommandForAssessment(codexContinueAssessment{Recovery: report.Recovery})
+		if fallback := continueNextCommandForAssessment(codexContinueAssessment{Recovery: report.Recovery}); fallback != "aether continue" {
+			next = fallback
+		}
 	}
 	summary := strings.TrimSpace(report.Summary)
 	reportPath := displayDataPath(rel)

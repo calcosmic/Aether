@@ -505,7 +505,7 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 		"Continue Worker Flow",
 		"Continue watcher rejected the phase",
 		"blocked",
-		"aether continue --reconcile-task 1.1",
+		"Fix the blocking issues, then run `aether continue` again.",
 		"A R T I F A C T S",
 		".aether/data/build/phase-1/verification.json",
 		".aether/data/build/phase-1/gates.json",

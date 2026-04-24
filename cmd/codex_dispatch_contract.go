@@ -11,7 +11,7 @@ var (
 	planningScoutTimeout       = 15 * time.Minute
 	planningRouteSetterTimeout = 15 * time.Minute
 	surveyorDispatchTimeout    = 5 * time.Minute
-	continueReviewTimeout      = 5 * time.Minute
+	continueReviewTimeout      = 15 * time.Minute
 )
 
 func effectivePlanningDispatchTimeout(override time.Duration) time.Duration {
@@ -26,6 +26,13 @@ func effectiveSurveyorDispatchTimeout(override time.Duration) time.Duration {
 		return override
 	}
 	return surveyorDispatchTimeout
+}
+
+func effectiveContinueReviewTimeout(override time.Duration) time.Duration {
+	if override > 0 {
+		return override
+	}
+	return continueReviewTimeout
 }
 
 type codexDispatchContract struct {

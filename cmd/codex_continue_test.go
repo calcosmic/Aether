@@ -1343,9 +1343,8 @@ func TestContinueBlocksWhenContinueWatcherRejectsPhase(t *testing.T) {
 	if advanced, _ := result["advanced"].(bool); advanced {
 		t.Fatalf("expected advanced:false, got %v", result)
 	}
-	wantNext := "aether continue --reconcile-task " + taskID
-	if next := result["next"].(string); next != wantNext {
-		t.Fatalf("next = %q, want %q when blockers are unchanged", next, wantNext)
+	if next := result["next"].(string); next != "" {
+		t.Fatalf("next = %q, want empty guidance so blocked watcher output does not suggest an identical retry", next)
 	}
 
 	verification := result["verification"].(map[string]interface{})
@@ -2679,12 +2678,14 @@ type continueWatcherTestInvoker struct {
 	watcherSummary string
 	watcherCalls   int
 	watcherName    string
+	timeouts       []time.Duration
 }
 
 func (f *continueWatcherTestInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
 	if config.Caste == "watcher" {
 		f.watcherCalls++
 		f.watcherName = config.WorkerName
+		f.timeouts = append(f.timeouts, config.Timeout)
 		status := strings.TrimSpace(f.watcherStatus)
 		if status == "" {
 			status = "completed"
@@ -2728,6 +2729,76 @@ func (i *continueUnavailableInvoker) Invoke(ctx context.Context, config codex.Wo
 func (i *continueUnavailableInvoker) IsAvailable(ctx context.Context) bool { return false }
 
 func (i *continueUnavailableInvoker) ValidateAgent(path string) error { return nil }
+
+func TestContinueCommandExposesWorkerTimeoutFlag(t *testing.T) {
+	if continueCmd.Flags().Lookup("worker-timeout") == nil {
+		t.Fatal("expected continue command to expose --worker-timeout")
+	}
+}
+
+func TestContinueWatcherUsesWorkerTimeoutOverride(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Continue watcher honors timeout override"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Timeout override phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Verify with override", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Advance after override", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Timeout override phase", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-391", Task: "Verify with override", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-392", Task: "Build-time verification", Status: "completed"},
+	})
+
+	invoker := &continueWatcherTestInvoker{
+		watcherStatus:  "completed",
+		watcherSummary: "Continue watcher completed with override",
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"continue", "--worker-timeout", "17m"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	if len(invoker.timeouts) == 0 {
+		t.Fatal("expected watcher timeout to be recorded")
+	}
+	if got := invoker.timeouts[0]; got != 17*time.Minute {
+		t.Fatalf("watcher timeout = %s, want 17m", got)
+	}
+}
 
 // TestContinue_BlocksOnVerifiedPartial verifies that a phase with a
 // non-completed worker does NOT advance even when verification steps pass.
@@ -2871,6 +2942,9 @@ func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
 	}
 	if advanced, _ := result["advanced"].(bool); advanced {
 		t.Fatalf("expected advanced:false on watcher timeout, got %v", result)
+	}
+	if next := result["next"].(string); next != "aether continue --worker-timeout 30m" {
+		t.Fatalf("next = %q, want timeout recovery command", next)
 	}
 
 	verification := result["verification"].(map[string]interface{})

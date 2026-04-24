@@ -17,6 +17,7 @@ type codexContinueExternalDispatch struct {
 	Name      string   `json:"name"`
 	Task      string   `json:"task"`
 	TaskID    string   `json:"task_id"`
+	Timeout   int      `json:"timeout_seconds,omitempty"`
 	Status    string   `json:"status"`
 	Summary   string   `json:"summary,omitempty"`
 	Blockers  []string `json:"blockers,omitempty"`
@@ -33,6 +34,7 @@ type codexContinuePlanManifest struct {
 	Verification      codexContinueVerificationReport `json:"verification"`
 	Assessment        codexContinueAssessment         `json:"assessment"`
 	ReconcileTaskIDs  []string                        `json:"reconcile_task_ids,omitempty"`
+	WorkerTimeout     int                             `json:"worker_timeout_seconds,omitempty"`
 	Dispatches        []codexContinueExternalDispatch `json:"dispatches"`
 	DispatchMode      string                          `json:"dispatch_mode"`
 	FinalizeSurface   string                          `json:"finalize_surface"`
@@ -78,7 +80,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment)
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout)
 	plan := codexContinuePlanManifest{
 		Phase:             phase.ID,
 		PhaseName:         phase.Name,
@@ -88,6 +90,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		Verification:      verification,
 		Assessment:        assessment,
 		ReconcileTaskIDs:  append([]string{}, options.ReconcileTaskIDs...),
+		WorkerTimeout:     int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
 		Dispatches:        dispatches,
 		DispatchMode:      "plan-only",
 		FinalizeSurface:   "pending",
@@ -111,6 +114,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 			"source_command":            "AETHER_OUTPUT_MODE=json aether continue --plan-only",
 			"spawn_log_required":        true,
 			"spawn_complete_required":   true,
+			"worker_timeout_seconds":    int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
 			"finalize_surface":          "pending",
 			"runtime_verification_only": true,
 		},
@@ -158,7 +162,8 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 	}
 }
 
-func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment) []codexContinueExternalDispatch {
+func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration) []codexContinueExternalDispatch {
+	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	dispatches := []codexContinueExternalDispatch{
 		{
 			Stage:     "verification",
@@ -168,6 +173,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			Name:      deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID)),
 			Task:      "Independent verification before advancement",
 			TaskID:    fmt.Sprintf("continue-verification-%d", phase.ID),
+			Timeout:   timeoutSeconds,
 			Status:    "planned",
 			Brief:     renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher),
 		},
@@ -181,6 +187,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			Name:      deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste)),
 			Task:      continueReviewTaskForCaste(spec.Caste),
 			TaskID:    fmt.Sprintf("continue-review-%s", spec.Caste),
+			Timeout:   timeoutSeconds,
 			Status:    "planned",
 			Brief:     renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
 		})
