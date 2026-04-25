@@ -22,11 +22,11 @@
 
 ### Repair
 
-- [ ] **REPAIR-01** (R082): `aether recover --apply` auto-fixes the 5 safe classes: missing packet, stale workers, partial phase, broken survey, missing agents
-- [ ] **REPAIR-02** (R083): `aether recover --apply` requires user confirmation for dirty worktree fixes (stash or discard)
-- [ ] **REPAIR-03** (R084): `aether recover --apply` requires user confirmation for corrupted manifest repair (rebuild from disk state)
-- [ ] **REPAIR-04** (R085): All repairs create backups before mutating state, following the existing medic backup-first pattern
-- [ ] **REPAIR-05** (R086): Repairs that touch multiple state files do so atomically — all succeed or all roll back
+- [x] **REPAIR-01** (R082): `aether recover --apply` auto-fixes the 5 safe classes: missing packet, stale workers, partial phase, broken survey, missing agents
+- [x] **REPAIR-02** (R083): `aether recover --apply` requires user confirmation for dirty worktree fixes (stash or discard)
+- [x] **REPAIR-03** (R084): `aether recover --apply` requires user confirmation for corrupted manifest repair (rebuild from disk state)
+- [x] **REPAIR-04** (R085): All repairs create backups before mutating state, following the existing medic backup-first pattern
+- [x] **REPAIR-05** (R086): Repairs that touch multiple state files do so atomically — all succeed or all roll back
 
 ### Verification
 

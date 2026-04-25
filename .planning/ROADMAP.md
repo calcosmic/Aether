@@ -98,7 +98,7 @@
 ### v1.8 Colony Recovery (Phases 49-51)
 
 - [x] **Phase 49: Stuck-State Scanner and Diagnosis** - Detect all 7 stuck-state classes and present clean diagnosis (completed 2026-04-25)
-- [ ] **Phase 50: Repair Pipeline** - Auto-fix safe issues, prompt for destructive ones, backup-first
+- [x] **Phase 50: Repair Pipeline** - Auto-fix safe issues, prompt for destructive ones, backup-first (completed 2026-04-25)
 - [ ] **Phase 51: Recovery Verification** - E2E tests for all 7 states, compound recovery, no false positives
 
 ## Phase Details
@@ -132,8 +132,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 50-01-PLAN.md -- Repair engine: orchestrator, 7 repair functions, backup, rollback, confirmation
-- [ ] 50-02-PLAN.md -- Wiring: --apply flag integration, re-scan, visual rendering for repair output
+- [x] 50-01-PLAN.md -- Repair engine: orchestrator, 7 repair functions, backup, rollback, confirmation
+- [x] 50-02-PLAN.md -- Wiring: --apply flag integration, re-scan, visual rendering for repair output
 
 ### Phase 51: Recovery Verification
 **Goal**: Every recovery path is proven correct through automated tests, including edge cases and compound scenarios
