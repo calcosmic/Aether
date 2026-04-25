@@ -1586,10 +1586,31 @@ func renderBinaryActionVisual(title, message, version, path string) string {
 		b.WriteString(path)
 		b.WriteString("\n")
 	}
-	b.WriteString(renderNextUp(
-		`Run ` + "`aether lay-eggs`" + ` in a repo to use the refreshed binary and companion files.`,
-	))
+	b.WriteString(renderBinaryActionNextUp(title))
 	return b.String()
+}
+
+func renderBinaryActionNextUp(title string) string {
+	switch strings.ToLower(strings.TrimSpace(title)) {
+	case "publish complete":
+		return renderNextUp(
+			`Existing repos: run `+"`aether update --force`"+` to refresh companion files from the hub.`,
+			`New repos: run `+"`aether lay-eggs`"+` to set up Aether.`,
+			`Active Codex chats: restart after updating if Codex skills or agents changed.`,
+		)
+	case "binary build":
+		return renderNextUp(
+			`The shared binary is available on the next `+"`aether`"+` invocation.`,
+			`Existing repos: run `+"`aether update --force`"+` after publish/install completes if companion files changed.`,
+			`New repos: run `+"`aether lay-eggs`"+` to set up Aether.`,
+		)
+	default:
+		return renderNextUp(
+			`The shared binary is available on the next `+"`aether`"+` invocation.`,
+			`Existing repos: run `+"`aether update --force`"+` if companion files also need refresh.`,
+			`New repos: run `+"`aether lay-eggs`"+` to set up Aether.`,
+		)
+	}
 }
 
 func renderPauseVisual(result map[string]interface{}) string {

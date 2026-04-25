@@ -780,6 +780,22 @@ func TestInstallVisualOutput(t *testing.T) {
 	}
 }
 
+func TestRenderBinaryActionVisualPublishGuidanceSeparatesRepoSetupFromUpdate(t *testing.T) {
+	output := renderBinaryActionVisual("Publish Complete", "Aether v1.0.24 published", "1.0.24", "/tmp/home/.aether")
+
+	for _, want := range []string{
+		"Existing repos: run `aether update --force` to refresh companion files from the hub.",
+		"New repos: run `aether lay-eggs` to set up Aether.",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("publish visual output missing %q\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "lay-eggs` in a repo to use the refreshed binary and companion files") {
+		t.Fatalf("publish visual output still uses ambiguous lay-eggs guidance:\n%s", output)
+	}
+}
+
 func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 	output := renderUpdateVisual(
 		"/tmp/example",

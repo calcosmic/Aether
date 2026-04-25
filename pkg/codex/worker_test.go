@@ -784,6 +784,7 @@ func TestOpenCodeDispatcher_Invoke_ParsesJSONEventText(t *testing.T) {
 	if err := os.WriteFile(agentPath, []byte(`---
 name: aether-builder
 description: Builder
+mode: subagent
 ---
 You are the Builder.
 `), 0644); err != nil {
@@ -805,6 +806,7 @@ EOF
 
 	invoker := &OpenCodeDispatcher{binaryName: scriptPath}
 	t.Setenv("ARGS_PATH", argsPath)
+	t.Setenv(envOpenCodePrimary, "")
 
 	result, err := invoker.Invoke(context.Background(), WorkerConfig{
 		AgentName:      "aether-builder",
@@ -834,11 +836,88 @@ EOF
 		t.Fatalf("failed to read captured args: %v", err)
 	}
 	argsText := string(argsData)
+	if !strings.Contains(argsText, "--agent\nbuild") {
+		t.Fatalf("expected opencode to run through primary build agent, got:\n%s", argsText)
+	}
+	if strings.Contains(argsText, "--agent\naether-builder") {
+		t.Fatalf("opencode args attempted to run subagent directly:\n%s", argsText)
+	}
 	if !strings.Contains(argsText, "--format\njson") {
 		t.Fatalf("expected opencode json format args, got:\n%s", argsText)
 	}
 	if strings.Contains(argsText, "--format\ndefault") {
 		t.Fatalf("opencode args still use formatted output:\n%s", argsText)
+	}
+	for _, want := range []string{`Use the Task tool exactly once`, `subagent_type: "aether-builder"`, `Goal: test`, `Final Response Contract`} {
+		if !strings.Contains(argsText, want) {
+			t.Fatalf("captured args missing %q:\n%s", want, argsText)
+		}
+	}
+}
+
+func TestOpenCodeDispatcher_Invoke_UsesPrimaryAgentOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	agentPath := filepath.Join(dir, "aether-oracle.md")
+	if err := os.WriteFile(agentPath, []byte(`---
+name: aether-oracle
+description: Oracle
+mode: subagent
+---
+You are the Oracle.
+`), 0644); err != nil {
+		t.Fatalf("failed to write agent markdown: %v", err)
+	}
+
+	argsPath := filepath.Join(dir, "captured-args.txt")
+	scriptPath := filepath.Join(dir, "fake-opencode.sh")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$ARGS_PATH"
+cat <<'EOF'
+{"type":"message.part.updated","part":{"type":"text","text":"{\"ant_name\":\"Oracle-1\",\"caste\":\"oracle\",\"task_id\":\"1.1\",\"status\":\"completed\",\"summary\":\"researched via opencode json events\",\"files_created\":[],\"files_modified\":[],\"tests_written\":[],\"tool_count\":1,\"blockers\":[],\"spawns\":[]}"}}
+EOF
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake opencode script: %v", err)
+	}
+
+	invoker := &OpenCodeDispatcher{binaryName: scriptPath}
+	t.Setenv("ARGS_PATH", argsPath)
+	t.Setenv(envOpenCodePrimary, "plan")
+
+	result, err := invoker.Invoke(context.Background(), WorkerConfig{
+		AgentName:      "aether-oracle",
+		AgentTOMLPath:  agentPath,
+		Caste:          "oracle",
+		WorkerName:     "Oracle-1",
+		TaskID:         "1.1",
+		TaskBrief:      "Research the feature.",
+		ContextCapsule: "Goal: test",
+		Root:           dir,
+	})
+	if err != nil {
+		t.Fatalf("OpenCode Invoke returned error: %v", err)
+	}
+	if result.Status != "completed" {
+		t.Fatalf("status = %q, want completed", result.Status)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("failed to read captured args: %v", err)
+	}
+	argsText := string(argsData)
+	if !strings.Contains(argsText, "--agent\nplan") {
+		t.Fatalf("expected opencode primary agent override, got:\n%s", argsText)
+	}
+	if strings.Contains(argsText, "--agent\naether-oracle") {
+		t.Fatalf("opencode args attempted to run oracle subagent directly:\n%s", argsText)
+	}
+	if !strings.Contains(argsText, `subagent_type: "aether-oracle"`) {
+		t.Fatalf("captured args missing oracle subagent dispatch:\n%s", argsText)
 	}
 }
 

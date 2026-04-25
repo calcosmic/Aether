@@ -20,8 +20,11 @@ const (
 	envWorkerPlatform  = "AETHER_WORKER_PLATFORM"
 	envClaudePath      = "AETHER_CLAUDE_PATH"
 	envOpenCodePath    = "AETHER_OPENCODE_PATH"
+	envOpenCodePrimary = "AETHER_OPENCODE_PRIMARY_AGENT"
 	defaultProbeTimout = 3 * time.Second
 )
+
+const defaultOpenCodePrimaryAgent = "build"
 
 type Platform string
 
@@ -436,10 +439,46 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 }
 
 func (o *OpenCodeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
-	args := []string{"run", "--agent", strings.TrimSpace(config.AgentName), "--format", "json"}
-	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
+	args := []string{"run", "--agent", openCodePrimaryAgent(), "--format", "json"}
+	workerPrompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
+	prompt := renderOpenCodeSubagentDispatchPrompt(config, workerPrompt)
 	args = append(args, prompt)
 	return invokeHostedWorker(ctx, o, config, observer, args, "opencode")
+}
+
+func openCodePrimaryAgent() string {
+	agent := strings.TrimSpace(os.Getenv(envOpenCodePrimary))
+	if agent == "" {
+		return defaultOpenCodePrimaryAgent
+	}
+	return agent
+}
+
+func renderOpenCodeSubagentDispatchPrompt(config WorkerConfig, workerPrompt string) string {
+	agentName := strings.TrimSpace(config.AgentName)
+	description := fmt.Sprintf("%s %s: task %s", strings.TrimSpace(config.Caste), strings.TrimSpace(config.WorkerName), strings.TrimSpace(config.TaskID))
+	description = strings.TrimSpace(description)
+	if description == "" {
+		description = "Aether worker dispatch"
+	}
+	return strings.TrimSpace(fmt.Sprintf(`Aether worker dispatch request.
+
+Use the Task tool exactly once with:
+- subagent_type: %q
+- description: %q
+- prompt: the complete worker prompt below
+
+The final worker claims JSON must preserve:
+- ant_name: %q
+- caste: %q
+- task_id: %q
+
+Wait for the Task tool to finish. Then return ONLY the worker claims JSON produced by that subagent.
+Do not summarize, wrap, or reformat the JSON. Do not run the worker task yourself unless the Task tool is unavailable; if unavailable, return a failed worker claims JSON object that names the Task tool as the blocker.
+
+## Worker Prompt
+
+%s`, agentName, description, strings.TrimSpace(config.WorkerName), strings.TrimSpace(config.Caste), strings.TrimSpace(config.TaskID), workerPrompt))
 }
 
 func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, config WorkerConfig, observer WorkerProgressObserver, args []string, label string) (WorkerResult, error) {
