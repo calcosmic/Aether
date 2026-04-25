@@ -143,7 +143,10 @@ Plans:
   1. E2E tests prove recovery works for each of the 7 stuck states individually (each state is seeded, recovered, and verified clean)
   2. E2E test proves recovery works when multiple stuck states exist simultaneously (compound scenario)
   3. Test proves `aether recover` reports zero issues on a healthy, active colony (no false positives)
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 51-01-PLAN.md -- E2E test file with 10 tests: 7 individual state scans, 2 compound repair scenarios, 1 healthy colony no-false-positive
 
 ## Progress
 
