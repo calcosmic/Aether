@@ -12,7 +12,7 @@ import (
 // renderRecoverDiagnosis renders the human-readable diagnosis report for
 // aether recover. It follows the same visual patterns as medic_cmd.go
 // (renderBanner, renderStageMarker, renderNextUp) for consistency.
-func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState) string {
+func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repairResult *RepairResult) string {
 	var b strings.Builder
 
 	b.WriteString(renderBanner(commandEmoji("recover"), "Colony Recovery"))
@@ -77,8 +77,16 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState) stri
 	}
 	b.WriteString("\n")
 
+	// Repair Log stage (if repairs were performed).
+	if repairResult != nil {
+		b.WriteString(renderStageMarker("Repair Log"))
+		b.WriteString(renderRepairLog(repairResult))
+		b.WriteString("\n")
+	}
+
 	// Summary stage.
 	b.WriteString(renderStageMarker("Summary"))
+
 	b.WriteString(fmt.Sprintf("%d issues found (%d critical, %d warning, %d info)\n",
 		len(issues), len(critical), len(warnings), len(infos)))
 
@@ -108,22 +116,13 @@ func writeRecoverIssueLine(b *strings.Builder, issue HealthIssue) {
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[2m") // dim
 		}
-		b.WriteString("    Fixable with --apply\n")
+		if isDestructiveCategory(issue.Category) {
+			b.WriteString("    Needs confirmation with --apply\n")
+		} else {
+			b.WriteString("    Fixable with --apply\n")
+		}
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[0m")
-		}
-	} else {
-		hint := recoverFixHint(issue.Category)
-		if hint != "" {
-			if shouldUseANSIColors() {
-				b.WriteString("\x1b[2m") // dim
-			}
-			b.WriteString("    ")
-			b.WriteString(hint)
-			b.WriteString("\n")
-			if shouldUseANSIColors() {
-				b.WriteString("\x1b[0m")
-			}
 		}
 	}
 }
@@ -159,7 +158,7 @@ func recoverNextStep(issues []HealthIssue) string {
 		case "bad_manifest":
 			return "Run `aether recover --apply --force` to repair the manifest."
 		case "dirty_worktree":
-			return "Commit or stash changes in worktrees, then re-run recover."
+			return "Run `aether recover --apply --force` to auto-fix with confirmation bypassed."
 		default:
 			return "Review the critical issues above."
 		}
@@ -206,7 +205,7 @@ type recoverSummary struct {
 }
 
 // renderRecoverJSON renders the structured JSON diagnosis report.
-func renderRecoverJSON(issues []HealthIssue, state colony.ColonyState, duration time.Duration) string {
+func renderRecoverJSON(issues []HealthIssue, state colony.ColonyState, duration time.Duration, repairResult *RepairResult) string {
 	goal := ""
 	if state.Goal != nil {
 		goal = *state.Goal
@@ -243,7 +242,20 @@ func renderRecoverJSON(issues []HealthIssue, state colony.ColonyState, duration 
 	if err != nil {
 		return fmt.Sprintf(`{"error": "failed to marshal report: %v"}`, err)
 	}
-	return string(data) + "\n"
+
+	result := string(data)
+	if repairResult != nil {
+		// Inject repairs into the JSON output.
+		repairsJSON, _ := json.MarshalIndent(map[string]interface{}{
+			"attempted": repairResult.Attempted,
+			"succeeded": repairResult.Succeeded,
+			"failed":    repairResult.Failed,
+			"skipped":   repairResult.Skipped,
+			"details":   repairResult.Repairs,
+		}, "", "  ")
+		result = result[:len(result)-2] + ",\n  \"repairs\": " + string(repairsJSON) + "\n}"
+	}
+	return result + "\n"
 }
 
 // recoverExitCode returns 0 if no issues, 1 if any issues found.
@@ -254,4 +266,26 @@ func recoverExitCode(issues []HealthIssue) int {
 		return 1
 	}
 	return 0
+}
+
+// renderRepairLog renders a human-readable log of repair actions taken.
+func renderRepairLog(result *RepairResult) string {
+	var b strings.Builder
+	for _, rec := range result.Repairs {
+		status := "OK"
+		if !rec.Success {
+			status = "FAILED"
+		}
+		b.WriteString(fmt.Sprintf("  [%s] %s", status, rec.Action))
+		if rec.File != "" {
+			b.WriteString(fmt.Sprintf(" (%s)", rec.File))
+		}
+		if rec.Error != "" {
+			b.WriteString(fmt.Sprintf(": %s", rec.Error))
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString(fmt.Sprintf("Summary: %d attempted, %d succeeded, %d failed, %d skipped\n",
+		result.Attempted, result.Succeeded, result.Failed, result.Skipped))
+	return b.String()
 }

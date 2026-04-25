@@ -1509,7 +1509,6 @@ func TestPerformRecoverRepairs_SkipsInJsonMode(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected skip reason to mention 'non-interactive mode'")
-		}
 	}
 }
 
@@ -1765,9 +1764,6 @@ func TestRecoverNextStep_BadManifest(t *testing.T) {
 	next := recoverNextStep(issues)
 	if !strings.Contains(next, "--force") {
 		t.Errorf("next step for bad_manifest should mention --force, got: %s", next)
-		}
 	}
 }
 
-	}
-}

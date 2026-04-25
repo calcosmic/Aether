@@ -43,9 +43,6 @@ func runRecover(cmd *cobra.Command, args []string) error {
 	force, _ := cmd.Flags().GetBool("force")
 	jsonOut, _ := cmd.Flags().GetBool("json")
 
-	_ = apply
-	_ = force
-
 	scanStart := time.Now()
 	issues, scanErr := performStuckStateScan(dataDir)
 	scanDuration := time.Since(scanStart)
@@ -54,10 +51,37 @@ func runRecover(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	var repairResult *RepairResult
+	if apply && len(issues) > 0 {
+		repairResult, err = performRecoverRepairs(issues, dataDir, force, jsonOut)
+		if err != nil {
+			fmt.Fprintf(stdout, "Repair failed: %v\n", err)
+			if jsonOut {
+				fmt.Fprint(stdout, renderRecoverJSON(issues, state, scanDuration, nil))
+			} else {
+				output := renderRecoverDiagnosis(issues, state, nil)
+				fmt.Fprint(stdout, output)
+			}
+			if recoverExitCode(issues) != 0 {
+				cmd.SilenceUsage = true
+				return fmt.Errorf("issues detected")
+			}
+			return nil
+		}
+
+		// Re-scan to get post-repair state (matches medic pattern).
+		postIssues, postErr := performStuckStateScan(dataDir)
+		if postErr != nil {
+			fmt.Fprintf(stdout, "Post-repair scan failed: %v\n", postErr)
+		} else {
+			issues = postIssues
+		}
+	}
+
 	if jsonOut {
-		fmt.Fprint(stdout, renderRecoverJSON(issues, state, scanDuration))
+		fmt.Fprint(stdout, renderRecoverJSON(issues, state, scanDuration, repairResult))
 	} else {
-		output := renderRecoverDiagnosis(issues, state)
+		output := renderRecoverDiagnosis(issues, state, repairResult)
 		fmt.Fprint(stdout, output)
 	}
 
