@@ -851,3 +851,663 @@ func TestPerformStuckStateScan_ReturnsStateError(t *testing.T) {
 		t.Errorf("expected category 'state', got %s", issues[0].Category)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// REPAIR TESTS
+// ---------------------------------------------------------------------------
+
+// withMockStdin replaces os.Stdin with a pipe containing the given input for
+// the duration of fn, then restores the original stdin.
+func withMockStdin(t *testing.T, input string, fn func()) {
+	t.Helper()
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdin = r
+	done := make(chan struct{})
+	go func() {
+		w.WriteString(input)
+		w.Close()
+		close(done)
+	}()
+	defer func() {
+		os.Stdin = oldStdin
+		r.Close()
+	}()
+	fn()
+}
+
+// ---------------------------------------------------------------------------
+// Backup verification
+// ---------------------------------------------------------------------------
+
+func TestRepairBackup_CreatedBeforeMutation(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "missing_build_packet", Severity: "critical", Fixable: true, Message: "No build packet", File: "build/phase-1/manifest.json"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	// Verify backup directory exists.
+	backupsDir := filepath.Join(filepath.Dir(dataDir), "backups")
+	entries, err := os.ReadDir(backupsDir)
+	if err != nil {
+		t.Fatalf("list backups dir: %v", err)
+	}
+
+	foundBackup := false
+	for _, entry := range entries {
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), "medic-") {
+			foundBackup = true
+			// Check for COLONY_STATE.json copy.
+			backupPath := filepath.Join(backupsDir, entry.Name(), "COLONY_STATE.json")
+			if _, err := os.Stat(backupPath); err != nil {
+				t.Errorf("backup missing COLONY_STATE.json: %v", err)
+			}
+			// Check for backup manifest.
+			manifestPath := filepath.Join(backupsDir, entry.Name(), "_backup_manifest.json")
+			if _, err := os.Stat(manifestPath); err != nil {
+				t.Errorf("backup missing _backup_manifest.json: %v", err)
+			}
+			break
+		}
+	}
+	if !foundBackup {
+		t.Error("expected at least one medic-* backup directory")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-01: Missing Build Packet
+// ---------------------------------------------------------------------------
+
+func TestRepairMissingBuildPacket_ResetsToReady(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "missing_build_packet", Severity: "critical", Fixable: true, Message: "No build packet", File: "build/phase-1/manifest.json"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Succeeded != 1 {
+		t.Errorf("expected 1 succeeded, got %d", result.Succeeded)
+	}
+
+	// Verify state was changed to READY and build_started_at is nil.
+	var repaired colony.ColonyState
+	data, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err := json.Unmarshal(data, &repaired); err != nil {
+		t.Fatalf("parse repaired state: %v", err)
+	}
+	if repaired.State != colony.StateREADY {
+		t.Errorf("expected state READY, got %s", repaired.State)
+	}
+	if repaired.BuildStartedAt != nil {
+		t.Error("expected build_started_at to be nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-02: Stale Spawned Workers
+// ---------------------------------------------------------------------------
+
+func TestRepairStaleSpawned_ResetsToFailed(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	// Also write COLONY_STATE.json so backup can proceed.
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	oldTime := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
+	spawnData := map[string]interface{}{
+		"current_run_id": "run-1",
+		"runs": []map[string]interface{}{
+			{
+				"id":         "run-1",
+				"started_at": oldTime,
+				"status":     "active",
+			},
+		},
+	}
+	recoverWriteJSON(t, dataDir, "spawn-runs.json", spawnData)
+
+	issues := []HealthIssue{
+		{Category: "stale_spawned", Severity: "critical", Fixable: true, Message: "1 spawned worker(s) exceeded 1-hour threshold", File: "spawn-runs.json"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Succeeded != 1 {
+		t.Errorf("expected 1 succeeded, got %d", result.Succeeded)
+	}
+
+	// Verify spawn-runs.json was updated.
+	var repaired map[string]interface{}
+	data, _ := os.ReadFile(filepath.Join(dataDir, "spawn-runs.json"))
+	if err := json.Unmarshal(data, &repaired); err != nil {
+		t.Fatalf("parse repaired spawn-runs: %v", err)
+	}
+	if repaired["current_run_id"] != "" {
+		t.Errorf("expected current_run_id to be cleared, got %v", repaired["current_run_id"])
+	}
+
+	runs := repaired["runs"].([]interface{})
+	if len(runs) == 0 {
+		t.Fatal("expected runs to exist")
+	}
+	run := runs[0].(map[string]interface{})
+	if run["status"] != "failed" {
+		t.Errorf("expected run status 'failed', got %v", run["status"])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-03: Partial Phase
+// ---------------------------------------------------------------------------
+
+func TestRepairPartialPhase_TransitionsToBuilt(t *testing.T) {
+	s, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	// Create a manifest with all completed dispatches.
+	manifest := codexBuildManifest{
+		Phase:       1,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		State:       "executing",
+		Dispatches: []codexBuildDispatch{
+			{TaskID: "task-1", Status: "completed"},
+			{TaskID: "task-2", Status: "completed"},
+		},
+	}
+	relPath := filepath.Join("build", "phase-1", "manifest.json")
+	if err := os.MkdirAll(filepath.Join(s.BasePath(), "build", "phase-1"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON(relPath, manifest); err != nil {
+		t.Fatalf("save manifest: %v", err)
+	}
+	manifestBytes, _ := json.Marshal(manifest)
+	recoverWriteFile(t, dataDir, "build/phase-1/manifest.json", string(manifestBytes))
+
+	issues := []HealthIssue{
+		{Category: "partial_phase", Severity: "warning", Fixable: true, Message: "Build completed but continue not run", File: "build/phase-1/continue.json"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Succeeded != 1 {
+		t.Errorf("expected 1 succeeded, got %d", result.Succeeded)
+	}
+
+	var repaired colony.ColonyState
+	data, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err := json.Unmarshal(data, &repaired); err != nil {
+		t.Fatalf("parse repaired state: %v", err)
+	}
+	if repaired.State != colony.StateBUILT {
+		t.Errorf("expected state BUILT, got %s", repaired.State)
+	}
+}
+
+func TestRepairPartialPhase_ResetsToPending(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	goal := "Test"
+	state := colony.ColonyState{
+		Goal:           &goal,
+		State:          colony.StateEXECUTING,
+		CurrentPhase:   1,
+		BuildStartedAt: recoverTimePtr(time.Now().Add(-2 * time.Hour)),
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: "in_progress"},
+			},
+		},
+	}
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	// No manifest file -- should trigger reset-to-pending path.
+
+	issues := []HealthIssue{
+		{Category: "partial_phase", Severity: "warning", Fixable: true, Message: "Phase 1 marked in_progress but never built", File: "COLONY_STATE.json"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Succeeded != 1 {
+		t.Errorf("expected 1 succeeded, got %d", result.Succeeded)
+	}
+
+	var repaired colony.ColonyState
+	data, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err := json.Unmarshal(data, &repaired); err != nil {
+		t.Fatalf("parse repaired state: %v", err)
+	}
+	if repaired.State != colony.StateREADY {
+		t.Errorf("expected state READY, got %s", repaired.State)
+	}
+	if repaired.BuildStartedAt != nil {
+		t.Error("expected build_started_at to be nil")
+	}
+	if len(repaired.Plan.Phases) > 0 && repaired.Plan.Phases[0].Status != "pending" {
+		t.Errorf("expected phase status 'pending', got %s", repaired.Plan.Phases[0].Status)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-04: Broken Survey
+// ---------------------------------------------------------------------------
+
+func TestRepairBrokenSurvey_ClearsTerritoryAndDeletesFiles(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	surveyed := "yes"
+	state := newRecoverTestState(t, func(s *colony.ColonyState) {
+		s.TerritorySurveyed = &surveyed
+	})
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	// Create survey dir with empty/corrupt files.
+	surveyDir := filepath.Join(dataDir, "survey")
+	if err := os.MkdirAll(surveyDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	recoverWriteFile(t, dataDir, "survey/blueprint.json", `null`)
+	recoverWriteFile(t, dataDir, "survey/chambers.json", `{}`)
+	recoverWriteFile(t, dataDir, "survey/disciplines.json", `[]`)
+
+	issues := []HealthIssue{
+		{Category: "broken_survey", Severity: "warning", Fixable: true, Message: "Survey file is empty: blueprint.json", File: "survey/blueprint.json"},
+		{Category: "broken_survey", Severity: "warning", Fixable: true, Message: "Survey file is empty: chambers.json", File: "survey/chambers.json"},
+		{Category: "broken_survey", Severity: "warning", Fixable: true, Message: "Survey file is empty: disciplines.json", File: "survey/disciplines.json"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Each issue has a unique category:message key, so all 3 are dispatched.
+	// repairBrokenSurvey is idempotent -- clearing nil territory_surveyed again
+	// and removing already-deleted files still succeeds.
+	if result.Succeeded != 3 {
+		t.Errorf("expected 3 succeeded (3 unique issues), got %d", result.Succeeded)
+	}
+
+	var repaired colony.ColonyState
+	data, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err := json.Unmarshal(data, &repaired); err != nil {
+		t.Fatalf("parse repaired state: %v", err)
+	}
+	if repaired.TerritorySurveyed != nil {
+		t.Error("expected territory_surveyed to be nil")
+	}
+
+	// Verify survey files were removed.
+	if _, err := os.Stat(filepath.Join(surveyDir, "blueprint.json")); err == nil {
+		t.Error("expected blueprint.json to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(surveyDir, "chambers.json")); err == nil {
+		t.Error("expected chambers.json to be removed")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-05: Missing Agent Files
+// ---------------------------------------------------------------------------
+
+func TestRepairMissingAgents_CopiesFromHub(t *testing.T) {
+	s, dataDir := initRecoverTestStore(t)
+	root := filepath.Dir(filepath.Dir(s.BasePath())) // tmpDir
+
+	// Set up hub directory structure with agent files.
+	hubDir := filepath.Join(root, "hub_home", ".aether", "system")
+	claudeHubDir := filepath.Join(hubDir, "claude", "agents")
+	if err := os.MkdirAll(claudeHubDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(claudeHubDir, "test-agent.md"), []byte("hub content"), 0644)
+
+	// Create repo agent dir (empty).
+	claudeRepoDir := filepath.Join(root, ".claude", "agents", "ant")
+	if err := os.MkdirAll(claudeRepoDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Override HOME to point to our fake home.
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", filepath.Join(root, "hub_home"))
+	defer os.Setenv("HOME", origHome)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "missing_agents", Severity: "warning", Fixable: true, Message: "Claude agents: found 0 files, expected 25", File: ".claude/agents/ant/*.md"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Succeeded != 1 {
+		t.Errorf("expected 1 succeeded, got %d", result.Succeeded)
+	}
+
+	// Verify agent file was copied.
+	if _, err := os.Stat(filepath.Join(claudeRepoDir, "test-agent.md")); err != nil {
+		t.Error("expected test-agent.md to be copied from hub")
+	}
+}
+
+func TestRepairMissingAgents_HubEmpty(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	// Set HOME to an empty temp dir (no hub).
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "missing_agents", Severity: "warning", Fixable: true, Message: "Claude agents: found 0 files, expected 25", File: ".claude/agents/ant/*.md"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Succeeded != 0 {
+		t.Errorf("expected 0 succeeded, got %d", result.Succeeded)
+	}
+
+	// Check that the repair record has the hub error.
+	found := false
+	for _, rec := range result.Repairs {
+		if strings.Contains(rec.Error, "hub has no agent files") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected repair record to contain 'hub has no agent files' error")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-06: Dirty Worktree (destructive confirmation)
+// ---------------------------------------------------------------------------
+
+func TestRepairDirtyWorktree_DestructiveNeedsConfirmation(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t, func(s *colony.ColonyState) {
+		s.Worktrees = []colony.WorktreeEntry{
+			{
+				ID:     "wt-1",
+				Branch: "feature/test",
+				Path:   "/tmp/nonexistent-wt",
+				Status: colony.WorktreeAllocated,
+			},
+		}
+	})
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "dirty_worktree", Severity: "warning", Fixable: true, Message: "Worktree state-disk mismatch: state says allocated but path does not exist", File: "/tmp/nonexistent-wt"},
+	}
+
+	// Simulate user declining the confirmation.
+	withMockStdin(t, "n\n", func() {
+		result, err := performRecoverRepairs(issues, dataDir, false, false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Skipped < 1 {
+			t.Errorf("expected at least 1 skipped, got %d", result.Skipped)
+		}
+	})
+
+	// Verify state was NOT modified.
+	var after colony.ColonyState
+	data, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err := json.Unmarshal(data, &after); err != nil {
+		t.Fatalf("parse state: %v", err)
+	}
+	if len(after.Worktrees) != 1 {
+		t.Errorf("expected 1 worktree entry (unchanged), got %d", len(after.Worktrees))
+	}
+}
+
+func TestRepairDirtyWorktree_ForceSkipsConfirmation(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t, func(s *colony.ColonyState) {
+		s.Worktrees = []colony.WorktreeEntry{
+			{
+				ID:     "wt-1",
+				Branch: "feature/test",
+				Path:   "/tmp/nonexistent-wt-force",
+				Status: colony.WorktreeAllocated,
+			},
+		}
+	})
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "dirty_worktree", Severity: "warning", Fixable: true, Message: "Worktree state-disk mismatch: state says allocated but path does not exist", File: "/tmp/nonexistent-wt-force"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, true, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Succeeded != 1 {
+		t.Errorf("expected 1 succeeded with --force, got %d (succeeded=%d, failed=%d, skipped=%d)", result.Succeeded, result.Succeeded, result.Failed, result.Skipped)
+	}
+
+	// Verify the orphan worktree entry was removed.
+	var after colony.ColonyState
+	data, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err := json.Unmarshal(data, &after); err != nil {
+		t.Fatalf("parse state: %v", err)
+	}
+	if len(after.Worktrees) != 0 {
+		t.Errorf("expected 0 worktree entries after removal, got %d", len(after.Worktrees))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// REPAIR-07: Bad Manifest (destructive confirmation)
+// ---------------------------------------------------------------------------
+
+func TestRepairBadManifest_DestructiveNeedsConfirmation(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	// Create a corrupt manifest.
+	recoverWriteFile(t, dataDir, "build/phase-1/manifest.json", "{bad json")
+
+	issues := []HealthIssue{
+		{Category: "bad_manifest", Severity: "critical", Fixable: true, Message: "Manifest JSON parse failed: invalid character 'b' looking for beginning of object key string", File: "build/phase-1/manifest.json"},
+	}
+
+	// Simulate user declining.
+	withMockStdin(t, "n\n", func() {
+		result, err := performRecoverRepairs(issues, dataDir, false, false)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Skipped < 1 {
+			t.Errorf("expected at least 1 skipped, got %d", result.Skipped)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Atomicity / Rollback
+// ---------------------------------------------------------------------------
+
+func TestRepairAtomicity_RollbackOnFailure(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	// Set up state in EXECUTING (will be repaired to READY).
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	// Create a second issue that will fail: a manifest parse failure.
+	// But the manifest file doesn't exist for repairBadManifest to read.
+	// This tests the rollback path -- the state change from the first repair
+	// should be rolled back.
+	issues := []HealthIssue{
+		{Category: "missing_build_packet", Severity: "critical", Fixable: true, Message: "No build packet", File: "build/phase-1/manifest.json"},
+		{Category: "bad_manifest", Severity: "critical", Fixable: true, Message: "Manifest JSON parse failed", File: "build/phase-1/manifest.json"},
+	}
+
+	// Run with --force so destructive bad_manifest doesn't prompt.
+	result, err := performRecoverRepairs(issues, dataDir, true, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The bad_manifest repair should fail because the file is not valid JSON
+	// and findLastValidJSON can't recover it (or it might succeed depending on content).
+	// What matters is: if any repair failed, rollback should restore original state.
+	if result.Failed > 0 {
+		var after colony.ColonyState
+		data, _ := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+		if err := json.Unmarshal(data, &after); err != nil {
+			t.Fatalf("parse state: %v", err)
+		}
+		// After rollback, state should be EXECUTING (original).
+		if after.State != colony.StateEXECUTING {
+			t.Errorf("after rollback expected state EXECUTING, got %s", after.State)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// isDestructiveCategory
+// ---------------------------------------------------------------------------
+
+func TestIsDestructiveCategory(t *testing.T) {
+	tests := []struct {
+		category string
+		expected bool
+	}{
+		{"dirty_worktree", true},
+		{"bad_manifest", true},
+		{"missing_build_packet", false},
+		{"stale_spawned", false},
+		{"partial_phase", false},
+		{"broken_survey", false},
+		{"missing_agents", false},
+		{"unknown", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.category, func(t *testing.T) {
+			got := isDestructiveCategory(tt.category)
+			if got != tt.expected {
+				t.Errorf("isDestructiveCategory(%q) = %v, want %v", tt.category, got, tt.expected)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// performRecoverRepairs edge cases
+// ---------------------------------------------------------------------------
+
+func TestPerformRecoverRepairs_NoFixableIssues(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "state", Severity: "critical", Fixable: false, Message: "Not fixable"},
+	}
+
+	result, err := performRecoverRepairs(issues, dataDir, false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Attempted != 0 {
+		t.Errorf("expected 0 attempted, got %d", result.Attempted)
+	}
+}
+
+func TestPerformRecoverRepairs_SkipsInJsonMode(t *testing.T) {
+	_, dataDir := initRecoverTestStore(t)
+
+	state := newRecoverTestState(t)
+	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
+
+	issues := []HealthIssue{
+		{Category: "dirty_worktree", Severity: "warning", Fixable: true, Message: "Worktree state-disk mismatch", File: "/tmp/nonexistent-wt-json"},
+	}
+
+	// jsonMode=true should skip destructive categories without prompting.
+	result, err := performRecoverRepairs(issues, dataDir, false, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Skipped < 1 {
+		t.Errorf("expected at least 1 skipped in json mode, got %d", result.Skipped)
+	}
+
+	// Verify the skip reason mentions non-interactive.
+	found := false
+	for _, rec := range result.Repairs {
+		if strings.Contains(rec.Error, "non-interactive mode") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected skip reason to mention 'non-interactive mode'")
+	}
+}

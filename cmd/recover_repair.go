@@ -230,6 +230,8 @@ func dispatchRecoverRepair(issue HealthIssue, dataDir string, force bool) Repair
 
 // repairMissingBuildPacket resets colony state from EXECUTING/BUILT to READY
 // and clears build_started_at. This lets the user re-run aether build.
+// When the current state is EXECUTING, the repair transitions through BUILT
+// first since EXECUTING -> READY is not a legal direct transition.
 func repairMissingBuildPacket(issue HealthIssue, dataDir string) RepairRecord {
 	record := RepairRecord{
 		Category: issue.Category,
@@ -251,13 +253,26 @@ func repairMissingBuildPacket(issue HealthIssue, dataDir string) RepairRecord {
 
 	record.Before = string(state.State)
 
-	// Validate the transition is legal.
-	if err := colony.Transition(state.State, colony.StateREADY); err != nil {
-		record.Error = fmt.Sprintf("invalid transition %s -> READY: %v", state.State, err)
+	// Transition to READY. EXECUTING requires going through BUILT first.
+	switch state.State {
+	case colony.StateEXECUTING:
+		if err := colony.Transition(state.State, colony.StateBUILT); err != nil {
+			record.Error = fmt.Sprintf("invalid transition %s -> BUILT: %v", state.State, err)
+			return record
+		}
+		state.State = colony.StateBUILT
+		fallthrough
+	case colony.StateBUILT:
+		if err := colony.Transition(state.State, colony.StateREADY); err != nil {
+			record.Error = fmt.Sprintf("invalid transition %s -> READY: %v", state.State, err)
+			return record
+		}
+		state.State = colony.StateREADY
+	default:
+		record.Error = fmt.Sprintf("unexpected state %s for missing_build_packet repair", state.State)
 		return record
 	}
 
-	state.State = colony.StateREADY
 	state.BuildStartedAt = nil
 
 	encoded, err := json.MarshalIndent(state, "", "  ")
@@ -417,6 +432,14 @@ func repairPartialPhase(issue HealthIssue, dataDir string) RepairRecord {
 				state.Plan.Phases[i].Status = "pending"
 				break
 			}
+		}
+		// Transition EXECUTING -> BUILT -> READY (EXECUTING -> READY is not legal).
+		if state.State == colony.StateEXECUTING {
+			if err := colony.Transition(state.State, colony.StateBUILT); err != nil {
+				record.Error = fmt.Sprintf("invalid transition %s -> BUILT: %v", state.State, err)
+				return record
+			}
+			state.State = colony.StateBUILT
 		}
 		if err := colony.Transition(state.State, colony.StateREADY); err != nil {
 			record.Error = fmt.Sprintf("invalid transition %s -> READY: %v", state.State, err)
