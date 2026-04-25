@@ -612,7 +612,7 @@ func TestRenderRecoverDiagnosis_ContainsSummary(t *testing.T) {
 		},
 	}
 
-	output := renderRecoverDiagnosis(issues, state)
+	output := renderRecoverDiagnosis(issues, state, nil)
 
 	if !strings.Contains(output, "Diagnosis") {
 		t.Error("output should contain 'Diagnosis'")
@@ -639,7 +639,7 @@ func TestRenderRecoverDiagnosis_NoIssues(t *testing.T) {
 		},
 	}
 
-	output := renderRecoverDiagnosis(nil, state)
+	output := renderRecoverDiagnosis(nil, state, nil)
 
 	if !strings.Contains(output, "No stuck-state conditions detected") {
 		t.Error("output should contain 'No stuck-state conditions detected'")
@@ -661,7 +661,7 @@ func TestRenderRecoverDiagnosis_ShowsFixableHint(t *testing.T) {
 		Plan:         colony.Plan{Phases: make([]colony.Phase, 1)},
 	}
 
-	output := renderRecoverDiagnosis(issues, state)
+	output := renderRecoverDiagnosis(issues, state, nil)
 
 	if !strings.Contains(output, "Fixable with --apply") {
 		t.Error("output should show fixable hint")
@@ -723,7 +723,7 @@ func TestRenderRecoverJSON_ValidStructure(t *testing.T) {
 		},
 	}
 
-	output := renderRecoverJSON(issues, state, 100*time.Millisecond)
+	output := renderRecoverJSON(issues, state, 100*time.Millisecond, nil)
 
 	// Must be valid JSON.
 	var parsed map[string]interface{}
@@ -785,7 +785,7 @@ func TestRenderRecoverJSON_NoIssues(t *testing.T) {
 		CurrentPhase: 0,
 	}
 
-	output := renderRecoverJSON(nil, state, 50*time.Millisecond)
+	output := renderRecoverJSON(nil, state, 50*time.Millisecond, nil)
 
 	var parsed map[string]interface{}
 	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
@@ -1509,5 +1509,265 @@ func TestPerformRecoverRepairs_SkipsInJsonMode(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected skip reason to mention 'non-interactive mode'")
+		}
+	}
+}
+
+// Repair wiring and visual output integration tests (Plan 02, Task 2)
+// ---------------------------------------------------------------------------
+
+func TestRenderRecoverDiagnosis_WithRepairLog(t *testing.T) {
+	issues := []HealthIssue{
+		{Severity: "critical", Category: "stale_spawned", Message: "Stale workers", Fixable: true},
+	}
+	goal := "Test"
+	state := colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: make([]colony.Phase, 1)},
+	}
+	repairResult := &RepairResult{
+		Attempted: 3,
+		Succeeded: 2,
+		Failed:    1,
+		Skipped:   0,
+		Repairs: []RepairRecord{
+			{Category: "stale_spawned", Action: "reset_stale_spawn_runs", File: "spawn-runs.json", Success: true},
+			{Category: "partial_phase", Action: "reset_phase_state", File: "COLONY_STATE.json", Success: true},
+			{Category: "bad_manifest", Action: "rebuild_manifest", File: "build/phase-1/manifest.json", Success: false, Error: "write failed"},
+		},
+	}
+
+	output := renderRecoverDiagnosis(issues, state, repairResult)
+
+	if !strings.Contains(output, "Repair Log") {
+		t.Error("output should contain 'Repair Log' stage marker")
+	}
+	if !strings.Contains(output, "[OK]") {
+		t.Error("output should contain '[OK]' for succeeded repairs")
+	}
+	if !strings.Contains(output, "[FAILED]") {
+		t.Error("output should contain '[FAILED]' for failed repairs")
+	}
+	if !strings.Contains(output, "Summary: 3 attempted, 2 succeeded, 1 failed, 0 skipped") {
+		t.Errorf("output should contain correct summary, got: %s", extractLineContaining(output, "Summary:"))
+	}
+}
+
+func TestRenderRecoverDiagnosis_NoRepairResult(t *testing.T) {
+	issues := []HealthIssue{
+		{Severity: "critical", Category: "stale_spawned", Message: "Stale workers", Fixable: true},
+	}
+	goal := "Test"
+	state := colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: make([]colony.Phase, 1)},
+	}
+
+	output := renderRecoverDiagnosis(issues, state, nil)
+
+	if strings.Contains(output, "Repair Log") {
+		t.Error("output should NOT contain 'Repair Log' when repairResult is nil")
+	}
+}
+
+func extractLineContaining(s, substr string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if strings.Contains(line, substr) {
+			return line
+		}
+	}
+	return ""
+}
+
+func TestRenderRepairLog_FormatsCorrectly(t *testing.T) {
+	result := &RepairResult{
+		Attempted: 3,
+		Succeeded: 2,
+		Failed:    1,
+		Skipped:   0,
+		Repairs: []RepairRecord{
+			{Category: "stale_spawned", Action: "reset_stale_spawn_runs", File: "spawn-runs.json", Success: true},
+			{Category: "partial_phase", Action: "reset_phase_state", File: "COLONY_STATE.json", Success: true},
+			{Category: "bad_manifest", Action: "rebuild_manifest", File: "build/phase-1/manifest.json", Success: false, Error: "write failed"},
+		},
+	}
+
+	output := renderRepairLog(result)
+
+	// Check succeeded repairs format: "[OK] action (file)"
+	if !strings.Contains(output, "[OK] reset_stale_spawn_runs (spawn-runs.json)") {
+		t.Error("output should contain '[OK] reset_stale_spawn_runs (spawn-runs.json)'")
+	}
+	if !strings.Contains(output, "[OK] reset_phase_state (COLONY_STATE.json)") {
+		t.Error("output should contain '[OK] reset_phase_state (COLONY_STATE.json)'")
+	}
+	// Check failed repair format: "[FAILED] action (file): error"
+	if !strings.Contains(output, "[FAILED] rebuild_manifest (build/phase-1/manifest.json): write failed") {
+		t.Error("output should contain '[FAILED] rebuild_manifest (build/phase-1/manifest.json): write failed'")
+	}
+	// Check summary line
+	if !strings.Contains(output, "Summary: 3 attempted, 2 succeeded, 1 failed, 0 skipped") {
+		t.Errorf("expected correct summary line, got: %s", extractLineContaining(output, "Summary:"))
+	}
+}
+
+func TestWriteRecoverIssueLine_SafeCategory(t *testing.T) {
+	issue := HealthIssue{
+		Severity: "critical",
+		Category: "stale_spawned",
+		Message:  "Stale workers",
+		File:     "spawn-runs.json",
+		Fixable:  true,
+	}
+
+	var b strings.Builder
+	writeRecoverIssueLine(&b, issue)
+	output := b.String()
+
+	if !strings.Contains(output, "Fixable with --apply") {
+		t.Error("safe category should show 'Fixable with --apply'")
+	}
+	if strings.Contains(output, "Needs confirmation") {
+		t.Error("safe category should NOT show 'Needs confirmation'")
+	}
+}
+
+func TestWriteRecoverIssueLine_DestructiveCategory(t *testing.T) {
+	issue := HealthIssue{
+		Severity: "warning",
+		Category: "dirty_worktree",
+		Message:  "Worktree mismatch",
+		File:     "COLONY_STATE.json",
+		Fixable:  true,
+	}
+
+	var b strings.Builder
+	writeRecoverIssueLine(&b, issue)
+	output := b.String()
+
+	if !strings.Contains(output, "Needs confirmation with --apply") {
+		t.Error("destructive category should show 'Needs confirmation with --apply'")
+	}
+	if strings.Contains(output, "Fixable with --apply") {
+		t.Error("destructive category should NOT show 'Fixable with --apply'")
+	}
+}
+
+func TestWriteRecoverIssueLine_DestructiveCategoryManifest(t *testing.T) {
+	issue := HealthIssue{
+		Severity: "critical",
+		Category: "bad_manifest",
+		Message:  "Corrupt manifest",
+		File:     "build/phase-1/manifest.json",
+		Fixable:  true,
+	}
+
+	var b strings.Builder
+	writeRecoverIssueLine(&b, issue)
+	output := b.String()
+
+	if !strings.Contains(output, "Needs confirmation with --apply") {
+		t.Error("bad_manifest should show 'Needs confirmation with --apply'")
+	}
+}
+
+func TestRenderRecoverJSON_WithRepairs(t *testing.T) {
+	issues := []HealthIssue{
+		{Severity: "critical", Category: "stale_spawned", Message: "Stale workers", Fixable: true},
+	}
+	goal := "Test"
+	state := colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: make([]colony.Phase, 1)},
+	}
+	repairResult := &RepairResult{
+		Attempted: 1,
+		Succeeded: 1,
+		Failed:    0,
+		Skipped:   0,
+		Repairs: []RepairRecord{
+			{Category: "stale_spawned", Action: "reset_stale_spawn_runs", File: "spawn-runs.json", Success: true},
+		},
+	}
+
+	output := renderRecoverJSON(issues, state, 50*time.Millisecond, repairResult)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+
+	repairs, ok := parsed["repairs"].(map[string]interface{})
+	if !ok {
+		t.Fatal("JSON output missing 'repairs' object")
+	}
+	if repairs["attempted"].(float64) != 1 {
+		t.Errorf("expected repairs.attempted=1, got %v", repairs["attempted"])
+	}
+	if repairs["succeeded"].(float64) != 1 {
+		t.Errorf("expected repairs.succeeded=1, got %v", repairs["succeeded"])
+	}
+	if repairs["failed"].(float64) != 0 {
+		t.Errorf("expected repairs.failed=0, got %v", repairs["failed"])
+	}
+	if repairs["skipped"].(float64) != 0 {
+		t.Errorf("expected repairs.skipped=0, got %v", repairs["skipped"])
+	}
+	if _, ok := repairs["details"]; !ok {
+		t.Error("repairs object missing 'details' field")
+	}
+}
+
+func TestRenderRecoverJSON_NoRepairs(t *testing.T) {
+	issues := []HealthIssue{
+		{Severity: "critical", Category: "stale_spawned", Message: "Stale workers", Fixable: true},
+	}
+	goal := "Test"
+	state := colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: make([]colony.Phase, 1)},
+	}
+
+	output := renderRecoverJSON(issues, state, 50*time.Millisecond, nil)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+
+	if _, ok := parsed["repairs"]; ok {
+		t.Error("JSON output should NOT have 'repairs' field when repairResult is nil")
+	}
+}
+
+func TestRecoverNextStep_DirtyWorktree(t *testing.T) {
+	issues := []HealthIssue{
+		{Severity: "critical", Category: "dirty_worktree", Message: "Worktree mismatch"},
+	}
+	next := recoverNextStep(issues)
+	if !strings.Contains(next, "--force") {
+		t.Errorf("next step for dirty_worktree should mention --force, got: %s", next)
+	}
+}
+
+func TestRecoverNextStep_BadManifest(t *testing.T) {
+	issues := []HealthIssue{
+		{Severity: "critical", Category: "bad_manifest", Message: "Corrupt manifest"},
+	}
+	next := recoverNextStep(issues)
+	if !strings.Contains(next, "--force") {
+		t.Errorf("next step for bad_manifest should mention --force, got: %s", next)
+		}
+	}
+}
+
 	}
 }
