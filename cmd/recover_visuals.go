@@ -238,24 +238,32 @@ func renderRecoverJSON(issues []HealthIssue, state colony.ColonyState, duration 
 		ScanDurationMs: duration.Milliseconds(),
 	}
 
-	data, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return fmt.Sprintf(`{"error": "failed to marshal report: %v"}`, err)
+	// Use a map to build the full output, adding repairs if present.
+	outputMap := map[string]interface{}{
+		"timestamp":        output.Timestamp,
+		"goal":             output.Goal,
+		"phase":            output.Phase,
+		"total_phases":     output.TotalPhases,
+		"state":            output.State,
+		"issues":           output.Issues,
+		"summary":          output.Summary,
+		"exit_code":        output.ExitCode,
+		"scan_duration_ms": output.ScanDurationMs,
 	}
-
-	result := string(data)
 	if repairResult != nil {
-		// Inject repairs into the JSON output.
-		repairsJSON, _ := json.MarshalIndent(map[string]interface{}{
+		outputMap["repairs"] = map[string]interface{}{
 			"attempted": repairResult.Attempted,
 			"succeeded": repairResult.Succeeded,
 			"failed":    repairResult.Failed,
 			"skipped":   repairResult.Skipped,
 			"details":   repairResult.Repairs,
-		}, "", "  ")
-		result = result[:len(result)-2] + ",\n  \"repairs\": " + string(repairsJSON) + "\n}"
+		}
 	}
-	return result + "\n"
+	data, err := json.MarshalIndent(outputMap, "", "  ")
+	if err != nil {
+		return fmt.Sprintf(`{"error": "failed to marshal report: %v"}`, err)
+	}
+	return string(data) + "\n"
 }
 
 // recoverExitCode returns 0 if no issues, 1 if any issues found.

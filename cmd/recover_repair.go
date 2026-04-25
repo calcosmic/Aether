@@ -121,6 +121,16 @@ func performRecoverRepairs(issues []HealthIssue, dataDir string, force bool, jso
 		if rollbackErr := restoreFromBackup(backupPath, dataDir); rollbackErr != nil {
 			// Log the rollback failure but don't mask the original result.
 			fmt.Fprintf(os.Stderr, "  [warn] rollback failed: %v\n", rollbackErr)
+		} else {
+			// Rollback succeeded -- mark previously-succeeded repairs as rolled back
+			// so the result accurately reflects the final state on disk.
+			for i := range result.Repairs {
+				if result.Repairs[i].Success {
+					result.Repairs[i].Action += " (rolled back)"
+					result.Succeeded--
+					result.Failed++
+				}
+			}
 		}
 	}
 
