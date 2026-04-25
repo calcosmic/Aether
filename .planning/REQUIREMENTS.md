@@ -7,18 +7,18 @@
 
 ### Detection (Scanner)
 
-- [ ] **DETECT-01** (R073): `aether recover` detects missing build packet — build was started (phase marked EXECUTING) but no build packet file exists on disk
-- [ ] **DETECT-02** (R074): `aether recover` detects stale spawned workers — spawned.json references workers that never completed and have exceeded the abandoned threshold
-- [ ] **DETECT-03** (R075): `aether recover` detects partial phase — phase marked in_progress but no real build artifacts exist
-- [ ] **DETECT-04** (R076): `aether recover` detects bad manifest — manifest JSON is unparseable or references files/directories that don't exist
-- [ ] **DETECT-05** (R077): `aether recover` detects dirty worktree — uncommitted changes left by an interrupted worker in a worktree-parallel colony
-- [ ] **DETECT-06** (R078): `aether recover` detects broken survey — survey data files under .aether/data/survey/ are incomplete or reference missing files
-- [ ] **DETECT-07** (R079): `aether recover` detects missing agent files — expected agent definitions are absent from .claude/agents/ant/ or .opencode/agents/
+- [x] **DETECT-01** (R073): `aether recover` detects missing build packet — build was started (phase marked EXECUTING) but no build packet file exists on disk
+- [x] **DETECT-02** (R074): `aether recover` detects stale spawned workers — spawned.json references workers that never completed and have exceeded the abandoned threshold
+- [x] **DETECT-03** (R075): `aether recover` detects partial phase — phase marked in_progress but no real build artifacts exist
+- [x] **DETECT-04** (R076): `aether recover` detects bad manifest — manifest JSON is unparseable or references files/directories that don't exist
+- [x] **DETECT-05** (R077): `aether recover` detects dirty worktree — uncommitted changes left by an interrupted worker in a worktree-parallel colony
+- [x] **DETECT-06** (R078): `aether recover` detects broken survey — survey data files under .aether/data/survey/ are incomplete or reference missing files
+- [x] **DETECT-07** (R079): `aether recover` detects missing agent files — expected agent definitions are absent from .claude/agents/ant/ or .opencode/agents/
 
 ### Output
 
-- [ ] **OUTP-01** (R080): `aether recover` prints a single clean diagnosis listing all detected issues with severity and a one-line description (not debug output)
-- [ ] **OUTP-02** (R081): `aether recover` exits 0 when no issues found, exits 1 when issues detected (usable in scripts)
+- [x] **OUTP-01** (R080): `aether recover` prints a single clean diagnosis listing all detected issues with severity and a one-line description (not debug output)
+- [x] **OUTP-02** (R081): `aether recover` exits 0 when no issues found, exits 1 when issues detected (usable in scripts)
 
 ### Repair
 

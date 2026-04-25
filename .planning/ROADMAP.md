@@ -97,7 +97,7 @@
 
 ### v1.8 Colony Recovery (Phases 49-51)
 
-- [ ] **Phase 49: Stuck-State Scanner and Diagnosis** - Detect all 7 stuck-state classes and present clean diagnosis
+- [x] **Phase 49: Stuck-State Scanner and Diagnosis** - Detect all 7 stuck-state classes and present clean diagnosis (completed 2026-04-25)
 - [ ] **Phase 50: Repair Pipeline** - Auto-fix safe issues, prompt for destructive ones, backup-first
 - [ ] **Phase 51: Recovery Verification** - E2E tests for all 7 states, compound recovery, no false positives
 
@@ -115,9 +115,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 49-01-PLAN.md -- Cobra command registration and 7 stuck-state detection functions
-- [ ] 49-02-PLAN.md -- Visual and JSON output rendering, exit code logic
-- [ ] 49-03-PLAN.md -- Unit tests for all 7 detectors and output functions
+- [x] 49-01-PLAN.md -- Cobra command registration and 7 stuck-state detection functions
+- [x] 49-02-PLAN.md -- Visual and JSON output rendering, exit code logic
+- [x] 49-03-PLAN.md -- Unit tests for all 7 detectors and output functions
 
 ### Phase 50: Repair Pipeline
 **Goal**: Users can run `aether recover --apply` and have all safe issues fixed automatically, with confirmation required only for potentially destructive operations
