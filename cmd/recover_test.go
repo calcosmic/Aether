@@ -612,7 +612,7 @@ func TestRenderRecoverDiagnosis_ContainsSummary(t *testing.T) {
 		},
 	}
 
-	output := renderRecoverDiagnosis(issues, state)
+	output := renderRecoverDiagnosis(issues, state, nil)
 
 	if !strings.Contains(output, "Diagnosis") {
 		t.Error("output should contain 'Diagnosis'")
@@ -639,7 +639,7 @@ func TestRenderRecoverDiagnosis_NoIssues(t *testing.T) {
 		},
 	}
 
-	output := renderRecoverDiagnosis(nil, state)
+	output := renderRecoverDiagnosis(nil, state, nil)
 
 	if !strings.Contains(output, "No stuck-state conditions detected") {
 		t.Error("output should contain 'No stuck-state conditions detected'")
@@ -661,7 +661,7 @@ func TestRenderRecoverDiagnosis_ShowsFixableHint(t *testing.T) {
 		Plan:         colony.Plan{Phases: make([]colony.Phase, 1)},
 	}
 
-	output := renderRecoverDiagnosis(issues, state)
+	output := renderRecoverDiagnosis(issues, state, nil)
 
 	if !strings.Contains(output, "Fixable with --apply") {
 		t.Error("output should show fixable hint")
@@ -723,7 +723,7 @@ func TestRenderRecoverJSON_ValidStructure(t *testing.T) {
 		},
 	}
 
-	output := renderRecoverJSON(issues, state, 100*time.Millisecond)
+	output := renderRecoverJSON(issues, state, 100*time.Millisecond, nil)
 
 	// Must be valid JSON.
 	var parsed map[string]interface{}
@@ -785,7 +785,7 @@ func TestRenderRecoverJSON_NoIssues(t *testing.T) {
 		CurrentPhase: 0,
 	}
 
-	output := renderRecoverJSON(nil, state, 50*time.Millisecond)
+	output := renderRecoverJSON(nil, state, 50*time.Millisecond, nil)
 
 	var parsed map[string]interface{}
 	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
