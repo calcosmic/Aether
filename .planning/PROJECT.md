@@ -28,16 +28,27 @@ That means:
 
 ## Current State
 
-- Go runtime is healthy and release-ready
-- `v1.3` is complete and shipped 2026-04-21
-- Visual UX fully restored: caste identity, stage separators, emoji consistency, Codex parity
-- Core paths hardened: resume freshness checks, gate integration, transactional updates, model slot system
-- Recovery made reliable: worktree lifecycle fixes, deferred cleanup, orphan branch detection
-- Full trace instrumentation: every run leaves a structured trace with replay, summary, and inspect capabilities
-- All 49 slash commands verified working across Claude Code, OpenCode, and Codex CLI
-- Previous milestones: v1.0 (MVP), v1.1 (Trusted Context), v1.2 (Live Dispatch Truth), v1.3 (Visual Truth) all shipped
-- v1.6 Release Pipeline Integrity complete: Phases 39-46, 11/11 requirements, shipped v1.0.20
-- v1.7 Planning Pipeline Recovery in progress: fix plan --force, route-setter overwrite, scout timeout
+- Go runtime is healthy, v1.0.24 shipped
+- All 8 milestones complete (48 phases, 111 plans)
+- 2900+ tests passing, full E2E regression coverage
+- Stable and dev publish channels with integrity verification
+- Plan recovery pipeline hardened (`--force` always recovers)
+- All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
+- Awaiting next milestone direction (v1.8)
+
+<details>
+<summary>Prior State History</summary>
+
+- v1.0 (MVP, Phases 1-6): Colony ceremony and runtime visibility
+- v1.1 (Trusted Context, Phases 7-11): Context proof and skill routing
+- v1.2 (Live Dispatch Truth, Phases 12-16): Worker dispatch honesty
+- v1.3 (Visual Truth, Phases 17-24): Caste identity, stage separators, trace logging
+- v1.4 (Self-Healing, Phases 25-30): Medic ant, ceremony integrity
+- v1.5 (Runtime Truth Recovery, Phases 31-38): Continue unblock, release v1.0.20
+- v1.6 (Release Pipeline, Phases 39-46): Publish hardening, E2E regression
+- v1.7 (Planning Pipeline, Phases 47-48): Plan --force recovery, E2E recovery test
+
+</details>
 
 ## Architecture / Key Patterns
 
@@ -95,16 +106,13 @@ The milestone now delivers:
 - application-aware curation that closes the read/write gap
 - a benchmarkable proof/evaluation harness for the trusted-context claim
 
-## Current Milestone: v1.7 Planning Pipeline Recovery
+## Next Milestone Goals
 
-**Goal:** Fix the planning pipeline so colonies don't get trapped in unrecoverable states after failed or partial operations.
-
-**Target features:**
-
-- **Plan --force always recovers** — When no real build work has happened, `aether plan --force` resets phase status and replans regardless of current state
-- **Route-setter overwrites stale fallback** — On `--force`, fallback artifacts are cleared so the route-setter can always write a fresh plan
-- **Longer default scout timeout** — Raise from 5m to 10m so larger repos don't immediately fall back to local synthesis
-- **E2E recovery test** — Automated test proving init → failed plan → --force replan → real worker plan works end-to-end
+Awaiting direction. Potential v1.8 candidates:
+- OpenCode subagent dispatch improvements (branch exists: codex/fix-opencode-subagent-dispatch)
+- Codex platform experience improvements
+- New agent capabilities or workflow features
+- Performance optimization or scale testing
 
 ## Milestone Sequence
 
@@ -114,11 +122,12 @@ The milestone now delivers:
 - [x] v1.3 Visual Truth and Core Hardening — Phases 17-24 (shipped 2026-04-21)
 - [x] v1.4 Self-Healing Colony — Phases 25-30 (completed 2026-04-21)
 - [x] v1.5 Runtime Truth Recovery — Phases 31-38 (completed 2026-04-23, product v1.0.20)
-- [ ] v1.7 Planning Pipeline Recovery — Phases 47+
+- [x] v1.6 Release Pipeline Integrity — Phases 39-46 (completed 2026-04-24)
+- [x] v1.7 Planning Pipeline Recovery — Phases 47-48 (completed 2026-04-24)
 
 ## Next Move
 
-Execute v1.7 phases starting with Phase 47.
+Awaiting v1.8 direction.
 
 ## Evolution
 

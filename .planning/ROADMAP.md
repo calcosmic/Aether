@@ -10,6 +10,7 @@
 - **v1.5 Runtime Truth Recovery** - Phases 31-38 (completed 2026-04-23, product v1.0.20)
 - **v1.6 Release Pipeline Integrity** - Phases 39-46 (completed 2026-04-24)
 - **v1.7 Planning Pipeline Recovery** - Phases 47-48 (completed 2026-04-24)
+- **v1.8** - TBD
 
 ## Phases
 
@@ -76,162 +77,21 @@
 <details>
 <summary>v1.5 Runtime Truth Recovery (Phases 31-38) -- COMPLETED 2026-04-23</summary>
 
-8 phases, 17 plans, 176 commits. P0 runtime truth fixes, continue unblock, dispatch robustness, cleanup, platform parity, v1.0.20 release, codebase hygiene, Nyquist validation. Product version: v1.0.20. [Full archive -> milestones/v1.5-ROADMAP.md]
+8 phases, 17 plans, 176 commits. P0 runtime truth fixes, continue unblock, dispatch robustness, cleanup, platform parity, v1.0.20 release, codebase hygiene, Nyquist validation. [Full archive -> milestones/v1.5-ROADMAP.md]
 
 </details>
 
 <details>
-<summary>v1.6 Release Pipeline Integrity (Phases 39-46) -- IN PROGRESS (Phases 44.1, 44.2 inserted)</summary>
+<summary>v1.6 Release Pipeline Integrity (Phases 39-46) -- COMPLETED 2026-04-24</summary>
 
-### Phase 39: OpenCode Agent Frontmatter Fix
-**Goal:** Fix the urgent blocker where Aether ships invalid OpenCode agent frontmatter that crashes OpenCode startup in downstream repos.
-**Requirements:** OPN-01 (R068)
-**Success Criteria:**
-1. OpenCode launches successfully in a repo after `aether update --force`
-2. All .opencode/agents/ files have valid OpenCode-schema frontmatter
-3. Install/update validates agent frontmatter before writing to downstream repos
-4. E2E test proves OpenCode startup does not fail on agent config
-**Depends on:** none (urgent blocker)
-
-### Phase 40: Stable Publish Hardening -- COMPLETE 2026-04-23
-**Goal:** Ensure stable publish atomically syncs binary and hub to the same version -- no more 1.0.20 binary with 1.0.19 hub.
-**Requirements:** PUB-01 (R059)
-**Success Criteria:**
-1. `aether install --package-dir "$PWD"` sets hub version.json to match source version
-2. After publish, `aether version` and `~/.aether/system/version.json` agree
-3. Publish fails loudly if binary and hub cannot be synchronized
-4. Reproduce the current 1.0.19/1.0.20 mismatch, then prove it's fixed
-**Depends on:** Phase 39 (ship frontmatter fix before touching publish)
-
-### Phase 41: Dev-Channel Isolation -- COMPLETE 2026-04-23
-**Goal:** Dev publish touches only `aether-dev` and `~/.aether-dev` -- zero contamination of stable channel.
-**Requirements:** PUB-02 (R060)
-**Success Criteria:**
-1. Dev publish does not modify any file under `~/.aether/` or the `aether` binary
-2. Stable publish does not modify any file under `~/.aether-dev/` or `aether-dev` binary
-3. Both channels can be published independently without interference
-4. Test proves channel isolation with concurrent publish scenarios
-**Depends on:** Phase 40
-
-### Phase 42: Downstream Stale-Publish Detection
-**Goal:** `aether update --force` and `aether-dev update --force` detect and report stale/incomplete publishes instead of silently succeeding.
-**Requirements:** PUB-03 (R061), PUB-04 (R061)
-**Success Criteria:**
-1. Downstream update detects when hub version is older than source/binary version
-2. Downstream update reports exactly what is stale (binary, companion files, or both)
-3. Update returns non-zero exit code on stale/incomplete publish
-4. Works for both stable and dev channels independently
-**Depends on:** Phase 40, Phase 41
-
-### Phase 43: Release Integrity Checks and Diagnostics
-**Goal:** Single integrity check validates the full chain (source -> binary -> hub -> downstream) and medic flags incomplete publishes with recovery commands.
-**Requirements:** REL-01 (R062), REL-02 (R063)
-**Success Criteria:**
-1. `aether` command validates source version, binary version, hub version, and companion surfaces together
-2. Medic flags incomplete stable/dev publishes and prints exact recovery command
-3. Integrity check is runnable both locally (source repo) and downstream (consumer repo)
-4. Diagnostic output is human-readable and actionable
-**Depends on:** Phase 42
-
-### Phase 44: Doc Alignment and Archive Consistency
-**Goal:** Operations guide, runbook, and AGENTS.md match actual runtime behavior exactly. Archived milestone evidence is internally consistent.
-**Requirements:** REL-03 (R064), EVD-01 (R066)
-**Plans:** 2 plans
-
-Plans:
-- [ ] 44-01-PLAN.md -- Core docs alignment (operations guide, runbook, CLAUDE.md, CODEX.md, OPENCODE.md)
-- [ ] 44-02-PLAN.md -- Agent/skill docs and v1.5 archive consistency
-
-**Success Criteria:**
-1. AETHER-OPERATIONS-GUIDE.md verification checklist passes as written
-2. publish-update-runbook.md steps match actual command behavior
-3. AGENTS.md operator flows are accurate for both channels
-4. Archived v1.5 docs no longer contain internal contradictions
-5. Any behavior changes from Phases 39-43 are reflected in docs
-**Depends on:** Phase 43 (docs must reflect final behavior)
-
-### Phase 44.1: Downstream Runtime Bugs (INSERTED)
-**Goal:** Fix three runtime bugs found during downstream testing in Sodalitas: false Codex skills count warning, rigid plan --refresh guard, and low default scout timeout.
-**Requirements:** PUB-03 (R061), EVD-02 (R067)
-**Success Criteria:**
-1. `aether update --force` reports correct Codex skills count (no false "1 found, expected 29")
-2. `aether plan --refresh` is allowed when Phase 1 is "ready" with no built artifacts (not blocked)
-3. Default scout/worker timeout raised to 15m (configurable)
-4. Downstream repro confirms all three fixes work in a real repo
-**Depends on:** Phase 44
-
-### Phase 44.2: Command Hygiene and Agent Parity (INSERTED)
-**Goal:** Fix aether-medic.md agent body parity mismatch between Claude and OpenCode, and rename all Aether slash commands from colon format (`ant:command`) to hyphen format (`ant-command`) to comply with current Claude Code skill naming rules.
-**Requirements:** PUB-03 (R061), REL-01 (R059)
-**Plans:** 1 plan
-
-Plans:
-- [x] 44.2-01-PLAN.md -- Medic parity fix and colon-to-hyphen rename across repo
-
-**Success Criteria:**
-1. `TestClaudeOpenCodeAgentContentParity` passes (aether-medic.md matches between Claude and OpenCode)
-2. All 50 slash commands use hyphen format (e.g., `ant-build` not `ant:build`)
-3. All command references in YAML sources, wrappers, docs, and tests updated
-4. `go test ./...` passes with zero failures
-**Depends on:** Phase 44.1
-
-### Phase 45: End-to-End Regression Coverage
-**Goal:** Automated E2E tests for stable and dev publish/update flows that catch regressions before they ship.
-**Requirements:** REL-04 (R065)
-**Plans:** 1 plan
-
-Plans:
-- [x] 45-01-PLAN.md -- Four E2E regression tests for stable/dev publish-update pipeline
-
-**Success Criteria:**
-1. E2E test for stable publish -> downstream update -> version agreement
-2. E2E test for dev publish -> dev downstream update -> version agreement
-3. E2E test for stale publish detection (intentionally stale hub)
-4. E2E test for channel isolation (dev publish does not touch stable)
-5. Tests runnable in CI (`go test`)
-**Depends on:** Phase 43
-
-### Phase 46: Stuck-Plan Investigation and Release Decision -- COMPLETE 2026-04-24
-**Goal:** Verify the stuck `aether plan` issue; make the v1.6 release decision.
-**Requirements:** EVD-02 (R067)
-**Plans:** 1 plan
-
-Plans:
-- [x] 46-01-PLAN.md -- Stuck-plan E2E reproduction test and v1.6 milestone audit
-
-**Success Criteria:**
-1. Stuck `aether plan` issue is reproduced or proven stale in freshly updated repos
-2. If reproducible: fix shipped with regression test
-3. If stale-install fallout: documented as resolved by pipeline hardening
-4. All v1.6 requirements verified and milestone audit passes
-5. Source, binary, hub, and downstream versions all agree for both channels
-**Depends on:** Phase 44, Phase 45
+8 phases (including inserted 44.1, 44.2), 10 plans. OpenCode agent frontmatter fix, stable publish hardening, dev channel isolation, stale publish detection, release integrity checks, doc alignment, E2E regression coverage, stuck-plan investigation. [Full archive -> milestones/v1.6-ROADMAP.md]
 
 </details>
 
 <details>
-<summary>v1.7 Planning Pipeline Recovery (Phases 47-48)</summary>
+<summary>v1.7 Planning Pipeline Recovery (Phases 47-48) -- COMPLETED 2026-04-24</summary>
 
-### Phase 47: Plan Force Recovery
-**Goal:** Fix `aether plan --force` so it always recovers a colony from a bad plan, regardless of phase status, and raise the default scout timeout to reduce premature fallbacks.
-**Requirements:** PLAN-01 (R069), PLAN-02 (R070), TIME-01 (R071)
-**Success Criteria:**
-1. `aether plan --force` resets phase status to allow replanning even when phase is `in_progress` and no real build artifacts exist
-2. On `--force`, fallback planning artifacts (ROUTE-SETTER.md, phase-plan.json) are cleared so route-setter can write fresh output
-3. Default scout worker timeout raised from 5m to 10m
-4. `go test ./...` passes with zero failures
-5. Existing plan behavior (without --force) is unchanged
-**Depends on:** none (standalone fix)
-
-### Phase 48: E2E Recovery Verification
-**Goal:** Automated test proving the full recovery path: init → failed plan → --force replan → real worker plan.
-**Requirements:** TEST-01 (R072)
-**Success Criteria:**
-1. E2E test: init colony → plan with short timeout (fallback) → plan --force → verify worker artifacts written
-2. Test proves route-setter output replaces fallback artifacts after --force
-3. Test proves phase status is correctly reset and replan succeeds
-4. Test runnable in CI (`go test`)
-**Depends on:** Phase 47
+2 phases. Plan --force recovery, fallback artifact cleanup, scout timeout, E2E recovery test. [Full archive -> milestones/v1.7-ROADMAP.md]
 
 </details>
 
