@@ -168,7 +168,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs); err != nil {
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, false); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 

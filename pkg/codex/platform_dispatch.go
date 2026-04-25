@@ -97,9 +97,9 @@ func NewOpenCodeDispatcher() *OpenCodeDispatcher {
 	return &OpenCodeDispatcher{binaryName: name}
 }
 
-func (f *FakeInvoker) Platform() Platform { return PlatformFake }
-func (r *RealInvoker) Platform() Platform { return PlatformCodex }
-func (c *ClaudeDispatcher) Platform() Platform { return PlatformClaude }
+func (f *FakeInvoker) Platform() Platform        { return PlatformFake }
+func (r *RealInvoker) Platform() Platform        { return PlatformCodex }
+func (c *ClaudeDispatcher) Platform() Platform   { return PlatformClaude }
 func (o *OpenCodeDispatcher) Platform() Platform { return PlatformOpenCode }
 
 func (s *SelectedInvoker) Platform() Platform {
@@ -275,7 +275,9 @@ func DescribeInvokerAvailability(invoker WorkerInvoker, ctx context.Context) str
 	active := DetectActivePlatform()
 	if meta, ok := invoker.(selectionMetadata); ok {
 		active = meta.ActivePlatform()
-		if availability, ok := invoker.(interface{ Availability(context.Context) AvailabilityStatus }); ok {
+		if availability, ok := invoker.(interface {
+			Availability(context.Context) AvailabilityStatus
+		}); ok {
 			status := availability.Availability(ctx)
 			if status.Available {
 				if active != PlatformUnknown {
@@ -289,7 +291,9 @@ func DescribeInvokerAvailability(invoker WorkerInvoker, ctx context.Context) str
 		}
 		return describeAvailabilitySet(active, meta.CandidateStatuses())
 	}
-	if availability, ok := invoker.(interface{ Availability(context.Context) AvailabilityStatus }); ok {
+	if availability, ok := invoker.(interface {
+		Availability(context.Context) AvailabilityStatus
+	}); ok {
 		status := availability.Availability(ctx)
 		if status.Available {
 			if active != PlatformUnknown {
@@ -392,10 +396,14 @@ func (o *OpenCodeDispatcher) Availability(ctx context.Context) AvailabilityStatu
 	return status
 }
 
-func (c *ClaudeDispatcher) IsAvailable(ctx context.Context) bool { return c.Availability(ctx).Available }
-func (o *OpenCodeDispatcher) IsAvailable(ctx context.Context) bool { return o.Availability(ctx).Available }
-func (c *ClaudeDispatcher) ValidateAgent(path string) error     { return validateMarkdownAgent(path) }
-func (o *OpenCodeDispatcher) ValidateAgent(path string) error   { return validateMarkdownAgent(path) }
+func (c *ClaudeDispatcher) IsAvailable(ctx context.Context) bool {
+	return c.Availability(ctx).Available
+}
+func (o *OpenCodeDispatcher) IsAvailable(ctx context.Context) bool {
+	return o.Availability(ctx).Available
+}
+func (c *ClaudeDispatcher) ValidateAgent(path string) error   { return validateMarkdownAgent(path) }
+func (o *OpenCodeDispatcher) ValidateAgent(path string) error { return validateMarkdownAgent(path) }
 
 func (c *ClaudeDispatcher) Invoke(ctx context.Context, config WorkerConfig) (WorkerResult, error) {
 	return c.InvokeWithProgress(ctx, config, nil)
@@ -406,7 +414,19 @@ func (o *OpenCodeDispatcher) Invoke(ctx context.Context, config WorkerConfig) (W
 }
 
 func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
-	args := []string{"-p", "--output-format", "text", "--agent", strings.TrimSpace(config.AgentName), "--permission-mode", "bypassPermissions"}
+	start := time.Now()
+	schemaJSON, err := marshalJSON(workerClaimsSchema())
+	if err != nil {
+		return WorkerResult{
+			WorkerName: config.WorkerName,
+			Caste:      config.Caste,
+			TaskID:     config.TaskID,
+			Status:     "failed",
+			Duration:   time.Since(start),
+			Error:      fmt.Errorf("marshal worker claims schema: %w", err),
+		}, err
+	}
+	args := []string{"-p", "--output-format", "json", "--json-schema", string(schemaJSON), "--agent", strings.TrimSpace(config.AgentName), "--permission-mode", "bypassPermissions"}
 	if root := strings.TrimSpace(config.Root); root != "" {
 		args = append(args, "--add-dir", root)
 	}
@@ -416,7 +436,7 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 }
 
 func (o *OpenCodeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
-	args := []string{"run", "--agent", strings.TrimSpace(config.AgentName), "--format", "default"}
+	args := []string{"run", "--agent", strings.TrimSpace(config.AgentName), "--format", "json"}
 	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
 	args = append(args, prompt)
 	return invokeHostedWorker(ctx, o, config, observer, args, "opencode")
@@ -496,9 +516,13 @@ waitLoop:
 	if waitErr != nil {
 		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: rawOutput, Error: classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())}, nil
 	}
-	claims, parseErr := ParseWorkerOutput(rawOutput)
+	claims, parseErr := parseHostedWorkerOutput(label, rawOutput)
 	if parseErr != nil {
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: rawOutput, Error: classifyWorkerFinalMessageError("parse worker output", parseErr, running.Observed())}, nil
+		err := classifyWorkerFinalMessageError("parse worker output", parseErr, running.Observed())
+		if debugPath := writeHostedWorkerOutputDebug(config.Root, label, config, args, stdout.String(), stderr.String(), parseErr); debugPath != "" {
+			err = fmt.Errorf("%w (debug: %s)", err, debugPath)
+		}
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: rawOutput, Error: err}, nil
 	}
 	claims = normalizeWorkerClaims(claims, config)
 	return WorkerResult{
@@ -516,6 +540,207 @@ waitLoop:
 		Duration:      duration,
 		RawOutput:     rawOutput,
 	}, nil
+}
+
+func parseHostedWorkerOutput(label, output string) (workerClaims, error) {
+	platform := strings.ToLower(strings.TrimSpace(label))
+	switch platform {
+	case "claude", "opencode":
+		if claims, err := parseHostedJSONWorkerOutput(platform, output); err == nil {
+			return claims, nil
+		}
+	}
+	return ParseWorkerOutput(output)
+}
+
+func parseHostedJSONWorkerOutput(label, output string) (workerClaims, error) {
+	candidates := hostedJSONTextCandidates(output)
+	for i := len(candidates) - 1; i >= 0; i-- {
+		claims, err := ParseWorkerOutput(candidates[i])
+		if err == nil {
+			return claims, nil
+		}
+	}
+	if len(candidates) > 0 {
+		if claims, err := ParseWorkerOutput(strings.Join(candidates, "\n")); err == nil {
+			return claims, nil
+		}
+	}
+	return workerClaims{}, fmt.Errorf("parse %s json output: no worker claims found", strings.TrimSpace(label))
+}
+
+func hostedJSONTextCandidates(output string) []string {
+	var candidates []string
+	trimmed := strings.TrimSpace(stripANSIEscapeCodes(output))
+	if trimmed == "" {
+		return nil
+	}
+	var fullEvent interface{}
+	if err := json.Unmarshal([]byte(trimmed), &fullEvent); err == nil {
+		collectHostedTextCandidates(fullEvent, &candidates)
+	}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(stripANSIEscapeCodes(line))
+		if line == "" {
+			continue
+		}
+		var event interface{}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		collectHostedTextCandidates(event, &candidates)
+	}
+	return compactStrings(candidates)
+}
+
+func collectHostedTextCandidates(value interface{}, candidates *[]string) {
+	switch typed := value.(type) {
+	case string:
+		appendHostedTextCandidate(candidates, typed)
+	case []interface{}:
+		for _, item := range typed {
+			collectHostedTextCandidates(item, candidates)
+		}
+	case map[string]interface{}:
+		if isWorkerClaimsMap(typed) {
+			if data, err := json.Marshal(typed); err == nil {
+				appendHostedTextCandidate(candidates, string(data))
+			}
+		}
+		for _, key := range []string{
+			"text",
+			"content",
+			"message",
+			"output",
+			"result",
+			"final",
+			"delta",
+			"part",
+			"parts",
+			"properties",
+			"data",
+		} {
+			if nested, ok := typed[key]; ok {
+				collectHostedTextCandidates(nested, candidates)
+			}
+		}
+	}
+}
+
+func appendHostedTextCandidate(candidates *[]string, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	if !strings.Contains(value, "{") && !strings.Contains(value, "ant_name") {
+		return
+	}
+	*candidates = append(*candidates, value)
+}
+
+func isWorkerClaimsMap(value map[string]interface{}) bool {
+	matches := 0
+	for _, key := range []string{
+		"ant_name",
+		"caste",
+		"task_id",
+		"status",
+		"summary",
+		"files_created",
+		"files_modified",
+		"tests_written",
+		"blockers",
+		"spawns",
+	} {
+		if _, ok := value[key]; ok {
+			matches++
+		}
+	}
+	return matches >= 2
+}
+
+func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args []string, stdoutText, stderrText string, cause error) string {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return ""
+	}
+	debugDir := filepath.Join(root, ".aether", "data", "worker-debug")
+	if err := os.MkdirAll(debugDir, 0755); err != nil {
+		return ""
+	}
+	now := time.Now().UTC()
+	filename := fmt.Sprintf("%s-%s-%d.json", safeDebugToken(label), safeDebugToken(config.WorkerName), now.UnixNano())
+	relPath := filepath.ToSlash(filepath.Join(".aether", "data", "worker-debug", filename))
+	payload := map[string]interface{}{
+		"created_at":     now.Format(time.RFC3339Nano),
+		"platform":       strings.TrimSpace(label),
+		"worker_name":    strings.TrimSpace(config.WorkerName),
+		"caste":          strings.TrimSpace(config.Caste),
+		"task_id":        strings.TrimSpace(config.TaskID),
+		"agent_name":     strings.TrimSpace(config.AgentName),
+		"args":           safeHostedWorkerArgs(args),
+		"stdout_bytes":   len(stdoutText),
+		"stderr_bytes":   len(stderrText),
+		"stdout_excerpt": workerOutputExcerpt(stdoutText),
+		"stderr_excerpt": workerOutputExcerpt(stderrText),
+		"error":          strings.TrimSpace(cause.Error()),
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return ""
+	}
+	if err := os.WriteFile(filepath.Join(debugDir, filename), data, 0644); err != nil {
+		return ""
+	}
+	return relPath
+}
+
+func safeHostedWorkerArgs(args []string) []string {
+	if len(args) == 0 {
+		return nil
+	}
+	out := make([]string, len(args))
+	copy(out, args)
+	last := strings.TrimSpace(out[len(out)-1])
+	if last != "" {
+		out[len(out)-1] = fmt.Sprintf("<prompt: %d bytes>", len(last))
+	}
+	return out
+}
+
+func workerOutputExcerpt(value string) string {
+	value = strings.TrimSpace(stripANSIEscapeCodes(value))
+	const limit = 4000
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit]) + "\n[truncated]"
+}
+
+func safeDebugToken(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "worker"
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	token := strings.Trim(b.String(), "-_")
+	if token == "" {
+		return "worker"
+	}
+	return token
 }
 
 func normalizePlatform(raw string) Platform {

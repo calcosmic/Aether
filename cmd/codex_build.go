@@ -108,6 +108,7 @@ var errRuntimeStateSuperseded = errors.New("runtime state superseded")
 
 type codexBuildOptions struct {
 	WorkerTimeout time.Duration
+	Force         bool
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -133,7 +134,7 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs); err != nil {
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, false); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
@@ -209,7 +210,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
 		return nil, err
 	}
-	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs); err != nil {
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
 		return nil, err
 	}
 	originalState, err := cloneColonyState(state)
@@ -349,6 +350,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"parallel_mode":  string(parallelMode),
 		"wave_execution": waveExecution,
 		"dispatch_mode":  mode,
+		"force":          options.Force,
 		"selected_tasks": selectedTaskIDs,
 		"checkpoint":     displayDataPath(checkpointRel),
 		"build_dir":      displayDataPath(buildDirRel),
@@ -360,9 +362,16 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	return result, nil
 }
 
-func validateCodexBuildState(state colony.ColonyState, phaseNum int, selectedTaskIDs []string) error {
+func validateCodexBuildState(state colony.ColonyState, phaseNum int, selectedTaskIDs []string, force bool) error {
 	retryBuiltPhase := false
-	recoveryBuild := len(selectedTaskIDs) > 0 && state.CurrentPhase == phaseNum
+	forceActivePhase := force && state.CurrentPhase == phaseNum
+	if force && !forceActivePhase {
+		if state.CurrentPhase > 0 {
+			return fmt.Errorf("--force can only redispatch the active phase %d", state.CurrentPhase)
+		}
+		return fmt.Errorf("--force can only redispatch an active phase")
+	}
+	recoveryBuild := (len(selectedTaskIDs) > 0 || forceActivePhase) && state.CurrentPhase == phaseNum
 	switch state.State {
 	case colony.StateEXECUTING:
 		if recoveryBuild {

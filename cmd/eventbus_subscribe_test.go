@@ -128,7 +128,7 @@ func TestStreamEventBusNDJSONDoesNotStarveSameSecondBurstWithLowLimit(t *testing
 	stdout = &buf
 
 	timestamp := "2026-04-24T02:00:00Z"
-	expiresAt := "2026-04-25T02:00:00Z"
+	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
 	for i, name := range []string{"Mason-1", "Mason-2", "Mason-3"} {
 		payload, err := (events.CeremonyPayload{Name: name, Status: "starting"}).RawMessage()
 		if err != nil {

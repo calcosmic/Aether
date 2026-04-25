@@ -155,6 +155,18 @@ not even a brace`
 	}
 }
 
+func TestParseWorkerOutput_RejectsUnrelatedJSONEvent(t *testing.T) {
+	output := `{"type":"session.updated","status":"completed"}`
+
+	_, err := ParseWorkerOutput(output)
+	if err == nil {
+		t.Fatal("ParseWorkerOutput should return error for unrelated event JSON")
+	}
+	if !strings.Contains(err.Error(), "no JSON") {
+		t.Errorf("error should mention 'no JSON', got: %v", err)
+	}
+}
+
 func TestParseWorkerOutput_HandlesMultipleJSONObjects(t *testing.T) {
 	output := `{"event":"log","message":"started"}
 Some text between
@@ -690,6 +702,209 @@ printf '{"ant_name":"Hammer-23","caste":"builder","task_id":"2.1","status":"comp
 	}
 	if len(statuses) == 0 || statuses[0] != "running" {
 		t.Fatalf("expected running progress event, got %v", statuses)
+	}
+}
+
+func TestClaudeDispatcher_Invoke_UsesJSONSchemaAndParsesResult(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	agentPath := filepath.Join(dir, "aether-builder.md")
+	if err := os.WriteFile(agentPath, []byte(`---
+name: aether-builder
+description: Builder
+---
+You are the Builder.
+`), 0644); err != nil {
+		t.Fatalf("failed to write agent markdown: %v", err)
+	}
+
+	argsPath := filepath.Join(dir, "captured-args.txt")
+	scriptPath := filepath.Join(dir, "fake-claude.sh")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$ARGS_PATH"
+cat <<'EOF'
+{"type":"result","result":"{\"ant_name\":\"Mason-1\",\"caste\":\"builder\",\"task_id\":\"2.1\",\"status\":\"completed\",\"summary\":\"implemented via claude json result\",\"files_created\":[],\"files_modified\":[\"worker.go\"],\"tests_written\":[\"worker_test.go\"],\"tool_count\":4,\"blockers\":[],\"spawns\":[]}"}
+EOF
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake claude script: %v", err)
+	}
+
+	invoker := &ClaudeDispatcher{binaryName: scriptPath}
+	t.Setenv("ARGS_PATH", argsPath)
+
+	result, err := invoker.Invoke(context.Background(), WorkerConfig{
+		AgentName:      "aether-builder",
+		AgentTOMLPath:  agentPath,
+		Caste:          "builder",
+		WorkerName:     "Mason-1",
+		TaskID:         "2.1",
+		TaskBrief:      "Build the feature.",
+		ContextCapsule: "Goal: test",
+		Root:           dir,
+	})
+	if err != nil {
+		t.Fatalf("Claude Invoke returned error: %v", err)
+	}
+	if result.Status != "completed" {
+		t.Fatalf("status = %q, want completed", result.Status)
+	}
+	if result.Summary != "implemented via claude json result" {
+		t.Fatalf("summary = %q", result.Summary)
+	}
+	if len(result.FilesModified) != 1 || result.FilesModified[0] != "worker.go" {
+		t.Fatalf("FilesModified = %v, want [worker.go]", result.FilesModified)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("failed to read captured args: %v", err)
+	}
+	argsText := string(argsData)
+	for _, want := range []string{"--output-format\njson", "--json-schema", `"ant_name"`} {
+		if !strings.Contains(argsText, want) {
+			t.Fatalf("captured args missing %q:\n%s", want, argsText)
+		}
+	}
+	if strings.Contains(argsText, "--output-format\ntext") {
+		t.Fatalf("claude args still use text output:\n%s", argsText)
+	}
+}
+
+func TestOpenCodeDispatcher_Invoke_ParsesJSONEventText(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	agentPath := filepath.Join(dir, "aether-builder.md")
+	if err := os.WriteFile(agentPath, []byte(`---
+name: aether-builder
+description: Builder
+---
+You are the Builder.
+`), 0644); err != nil {
+		t.Fatalf("failed to write agent markdown: %v", err)
+	}
+
+	argsPath := filepath.Join(dir, "captured-args.txt")
+	scriptPath := filepath.Join(dir, "fake-opencode.sh")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$ARGS_PATH"
+cat <<'EOF'
+{"type":"session.started","status":"ok"}
+{"type":"message.part.updated","part":{"type":"text","text":"{\"ant_name\":\"Forge-1\",\"caste\":\"builder\",\"task_id\":\"2.1\",\"status\":\"code_written\",\"summary\":\"implemented via opencode json events\",\"files_created\":[],\"files_modified\":[\"worker.go\"],\"tests_written\":[\"worker_test.go\"],\"tool_count\":4,\"blockers\":[],\"spawns\":[]}"}}
+EOF
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake opencode script: %v", err)
+	}
+
+	invoker := &OpenCodeDispatcher{binaryName: scriptPath}
+	t.Setenv("ARGS_PATH", argsPath)
+
+	result, err := invoker.Invoke(context.Background(), WorkerConfig{
+		AgentName:      "aether-builder",
+		AgentTOMLPath:  agentPath,
+		Caste:          "builder",
+		WorkerName:     "Forge-1",
+		TaskID:         "2.1",
+		TaskBrief:      "Build the feature.",
+		ContextCapsule: "Goal: test",
+		Root:           dir,
+	})
+	if err != nil {
+		t.Fatalf("OpenCode Invoke returned error: %v", err)
+	}
+	if result.Status != "completed" {
+		t.Fatalf("status = %q, want completed", result.Status)
+	}
+	if result.Summary != "implemented via opencode json events" {
+		t.Fatalf("summary = %q", result.Summary)
+	}
+	if len(result.FilesModified) != 1 || result.FilesModified[0] != "worker.go" {
+		t.Fatalf("FilesModified = %v, want [worker.go]", result.FilesModified)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("failed to read captured args: %v", err)
+	}
+	argsText := string(argsData)
+	if !strings.Contains(argsText, "--format\njson") {
+		t.Fatalf("expected opencode json format args, got:\n%s", argsText)
+	}
+	if strings.Contains(argsText, "--format\ndefault") {
+		t.Fatalf("opencode args still use formatted output:\n%s", argsText)
+	}
+}
+
+func TestOpenCodeDispatcher_Invoke_WritesDebugArtifactOnParseFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	agentPath := filepath.Join(dir, "aether-builder.md")
+	if err := os.WriteFile(agentPath, []byte(`---
+name: aether-builder
+description: Builder
+---
+You are the Builder.
+`), 0644); err != nil {
+		t.Fatalf("failed to write agent markdown: %v", err)
+	}
+
+	scriptPath := filepath.Join(dir, "fake-opencode.sh")
+	script := `#!/bin/sh
+cat <<'EOF'
+{"type":"message.part.updated","part":{"type":"text","text":"plain text with no claims"}}
+EOF
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake opencode script: %v", err)
+	}
+
+	invoker := &OpenCodeDispatcher{binaryName: scriptPath}
+	result, err := invoker.Invoke(context.Background(), WorkerConfig{
+		AgentName:      "aether-builder",
+		AgentTOMLPath:  agentPath,
+		Caste:          "builder",
+		WorkerName:     "Forge-2",
+		TaskID:         "2.2",
+		TaskBrief:      "Build the feature.",
+		ContextCapsule: "Goal: test",
+		Root:           dir,
+	})
+	if err != nil {
+		t.Fatalf("OpenCode Invoke returned process error: %v", err)
+	}
+	if result.Status != "failed" {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "debug: .aether/data/worker-debug/") {
+		t.Fatalf("expected debug artifact path in error, got: %v", result.Error)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(dir, ".aether", "data", "worker-debug", "*.json"))
+	if err != nil {
+		t.Fatalf("glob failed: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("debug artifact count = %d, want 1", len(matches))
+	}
+	data, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatalf("failed to read debug artifact: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{`"platform": "opencode"`, `"worker_name": "Forge-2"`, `"stdout_bytes"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("debug artifact missing %q:\n%s", want, text)
+		}
 	}
 }
 

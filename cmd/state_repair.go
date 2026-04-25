@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	continueAdvanceEventPattern  = regexp.MustCompile(`\|phase_advanced\|continue\|Completed phase (\d+), ready for phase (\d+)`)
-	continueCompleteEventPattern = regexp.MustCompile(`\|phase_completed\|continue\|Completed final phase (\d+)`)
+	continueAdvanceEventPattern  = regexp.MustCompile(`\|phase_advanced\|(?:continue|skip-phase)\|(?:Completed|Skipped) phase (\d+), ready for phase (\d+)`)
+	continueCompleteEventPattern = regexp.MustCompile(`\|phase_completed\|(?:continue|skip-phase)\|(?:Completed|Skipped) final phase (\d+)`)
 	legacyPhaseCompletePattern   = regexp.MustCompile(`(?i)\bphase[- ]?(\d+)[-_ ]?(?:complete|completed)\b`)
 )
 

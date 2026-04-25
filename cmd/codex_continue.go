@@ -99,6 +99,8 @@ type codexContinueOptions struct {
 	WorkerTimeout    time.Duration
 }
 
+const abandonedBuildThreshold = 10 * time.Minute
+
 // detectAbandonedBuild checks whether all manifest dispatches are stuck at
 // "spawned" and the build started long enough ago to be considered abandoned.
 // Returns (true, elapsed, summary) when the build is abandoned.
@@ -115,7 +117,7 @@ func detectAbandonedBuild(manifest codexContinueManifest, state colony.ColonySta
 		}
 	}
 	elapsed := time.Since(*state.BuildStartedAt)
-	if elapsed < 10*time.Minute {
+	if elapsed < abandonedBuildThreshold {
 		return false, 0, ""
 	}
 	return true, elapsed, fmt.Sprintf("Build was abandoned %.0f minutes ago: all %d dispatches stuck at 'spawned'", elapsed.Minutes(), len(manifest.Data.Dispatches))
@@ -135,6 +137,50 @@ func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 		}
 	}
 	return ids
+}
+
+func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phase, options codexContinueOptions) map[string]interface{} {
+	now := time.Now().UTC()
+	runHandle, _ := beginRuntimeSpawnRun("continue", now)
+	recovery := codexContinueRecoveryPlan{
+		RedispatchCommand: buildForceRedispatchCommand(phase.ID),
+		SkipCommand:       buildSkipPhaseCommand(phase.ID),
+	}
+	summary := fmt.Sprintf("No active build packet was found for phase %d. The previous build may have been interrupted before worker results were recorded.", phase.ID)
+	if state.BuildStartedAt != nil {
+		elapsed := now.Sub(state.BuildStartedAt.UTC())
+		if elapsed > 0 {
+			summary = fmt.Sprintf("%s Build has been active for %s.", summary, formatDurationForCLI(elapsed.Round(time.Second)))
+		}
+	}
+	continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
+	_ = store.SaveJSON(continueReportRel, codexContinueReport{
+		Phase:       phase.ID,
+		GeneratedAt: now.Format(time.RFC3339),
+		Summary:     summary,
+		Recovery:    recovery,
+		Advanced:    false,
+		Completed:   false,
+		Next:        recovery.RedispatchCommand,
+	})
+	updateSessionSummary("continue", recovery.RedispatchCommand, summary)
+	finishRuntimeSpawnRun(runHandle, "blocked-missing-build-packet", now)
+	result := map[string]interface{}{
+		"advanced":        false,
+		"blocked":         true,
+		"missing_packet":  true,
+		"current_phase":   state.CurrentPhase,
+		"phase_name":      phase.Name,
+		"state":           state.State,
+		"recovery":        recovery,
+		"next":            recovery.RedispatchCommand,
+		"continue_report": displayDataPath(continueReportRel),
+		"blocking_issues": []string{summary},
+	}
+	if options.WorkerTimeout > 0 {
+		result["worker_timeout_sec"] = int(options.WorkerTimeout / time.Second)
+	}
+	return result
 }
 
 // cleanupStaleContinueReports removes stale report files from a phase's build
@@ -164,6 +210,7 @@ type codexContinueRecoveryPlan struct {
 	ReconcileCommand  string   `json:"reconcile_command,omitempty"`
 	RedispatchTasks   []string `json:"redispatch_tasks,omitempty"`
 	RedispatchCommand string   `json:"redispatch_command,omitempty"`
+	SkipCommand       string   `json:"skip_command,omitempty"`
 }
 
 type codexContinueAssessment struct {
@@ -249,8 +296,8 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, colony.Phase{}, nil, nil, false, err
 	}
 	manifest := loadCodexContinueManifest(phase.ID)
-	if state.BuildStartedAt == nil && !manifest.Present {
-		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
+	if !manifest.Present {
+		return missingBuildPacketBlockedResult(state, phase, options), state, phase, nil, nil, false, nil
 	}
 	if changed, reconcileErr := reconcileContinueCompletedBuildTasks(&state, &phase, &manifest); reconcileErr != nil {
 		if errors.Is(reconcileErr, errRuntimeStateSuperseded) {
@@ -274,6 +321,11 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			RedispatchCommand: buildTargetedRedispatchCommand(phase.ID, taskIDs),
 			ReconcileTasks:    taskIDs,
 			ReconcileCommand:  buildContinueReconcileCommand(taskIDs),
+			SkipCommand:       buildSkipPhaseCommand(phase.ID),
+		}
+		nextCommand := recovery.RedispatchCommand
+		if strings.TrimSpace(nextCommand) == "" {
+			nextCommand = buildForceRedispatchCommand(phase.ID)
 		}
 		_ = store.SaveJSON(
 			filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json")),
@@ -284,6 +336,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 				Recovery:    recovery,
 				Advanced:    false,
 				Completed:   false,
+				Next:        nextCommand,
 			},
 		)
 		finishRuntimeSpawnRun(runHandle, "blocked-abandoned", now)
@@ -296,6 +349,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"phase_name":      phase.Name,
 			"state":           state.State,
 			"recovery":        recovery,
+			"next":            nextCommand,
 			"blocking_issues": []string{abandonedSummary},
 		}, state, phase, nil, nil, false, nil
 	}
@@ -1389,6 +1443,14 @@ func buildTargetedRedispatchCommand(phaseID int, taskIDs []string) string {
 		b.WriteString(taskID)
 	}
 	return b.String()
+}
+
+func buildForceRedispatchCommand(phaseID int) string {
+	return fmt.Sprintf("aether build %d --force", phaseID)
+}
+
+func buildSkipPhaseCommand(phaseID int) string {
+	return fmt.Sprintf("aether skip-phase %d --force", phaseID)
 }
 
 func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers []string, options codexContinueOptions) string {

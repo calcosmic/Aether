@@ -266,7 +266,11 @@ func streamEventBusNDJSON(ctx context.Context, bus *events.Bus, filter string, s
 			return err
 		}
 		newThisPoll := 0
+		latestSeenAt := since
 		for _, evt := range evts {
+			if parsed, err := time.Parse(time.RFC3339, evt.Timestamp); err == nil && parsed.After(latestSeenAt) {
+				latestSeenAt = parsed
+			}
 			if _, ok := seen[evt.ID]; ok {
 				continue
 			}
@@ -278,20 +282,18 @@ func streamEventBusNDJSON(ctx context.Context, bus *events.Bus, filter string, s
 			}
 			fmt.Fprintln(stdout, string(data))
 			written++
-			if parsed, err := time.Parse(time.RFC3339, evt.Timestamp); err == nil && parsed.After(since) {
-				since = parsed
-			}
 			if maxEvents > 0 && written >= maxEvents {
 				return nil
 			}
 		}
-		if len(evts) >= queryLimit && newThisPoll == 0 {
+		if len(evts) >= queryLimit {
 			queryLimit *= 2
 			continue
 		}
 		if queryLimit > baseQueryLimit && len(evts) < queryLimit {
 			queryLimit = baseQueryLimit
 		}
+		since = latestSeenAt
 
 		select {
 		case <-ctx.Done():

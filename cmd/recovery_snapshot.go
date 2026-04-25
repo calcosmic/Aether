@@ -203,6 +203,11 @@ func nextCommandFromState(state colony.ColonyState) string {
 		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
 			return fmt.Sprintf("aether build %d", state.CurrentPhase)
 		}
+		if state.CurrentPhase > 0 && state.BuildStartedAt != nil && time.Since(state.BuildStartedAt.UTC()) >= abandonedBuildThreshold {
+			if manifest := loadCodexContinueManifest(state.CurrentPhase); !manifest.Present {
+				return buildForceRedispatchCommand(state.CurrentPhase)
+			}
+		}
 		if guidance := loadActiveRecoveryGuidance(state); guidance != nil && strings.TrimSpace(guidance.Next) != "" {
 			return guidance.Next
 		}

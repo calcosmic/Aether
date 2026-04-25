@@ -309,6 +309,7 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 | `aether colonize` | Analyze existing codebase |
 | `aether plan` | Generate project phases |
 | `aether build <phase>` | Execute a phase with Codex worker dispatch |
+| `aether build <phase> --force` | Redispatch the current active phase after an interrupted build |
 | `aether continue` | Verify work, extract learnings, advance |
 | `aether run` | Autopilot the remaining build/continue loop |
 | `aether swarm [problem]` | Route to the right explicit workflow step or watch active workers |
@@ -349,6 +350,7 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 | Command | Purpose |
 |---------|---------|
 | `aether seal` | Seal colony (Crowned Anthill) |
+| `aether skip-phase <phase> --force --reason "<why>"` | Emergency escape hatch for intentionally abandoning a blocked active phase |
 | `aether update` | Update system files from hub |
 
 ### Advanced

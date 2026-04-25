@@ -121,6 +121,7 @@ var commandEmojiMap = map[string]string{
 	"resume":            "💾",
 	"patrol":            "📊",
 	"phase":             "🧱",
+	"skip-phase":        "⏭️",
 	"history":           "📜",
 	"spawn-plan":        "🐜",
 	"swarm":             "🔥",
@@ -1162,6 +1163,8 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	secondary := `Run ` + "`aether status`" + ` to inspect the active colony before retrying.`
 	if reconcile := strings.TrimSpace(stringValue(recovery["reconcile_command"])); reconcile != "" {
 		secondary = `Run ` + "`" + reconcile + "`" + ` if the code landed manually and only needs reconciliation.`
+	} else if skip := strings.TrimSpace(stringValue(recovery["skip_command"])); skip != "" {
+		secondary = `Run ` + "`" + skip + "`" + ` only if you intend to abandon this phase and move on.`
 	}
 	b.WriteString(renderNextUp(primary, secondary))
 	return b.String()

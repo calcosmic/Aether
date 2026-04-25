@@ -123,7 +123,7 @@ type WorkerInvoker interface {
 	// Invoke spawns a codex CLI subprocess for the given worker configuration.
 	Invoke(ctx context.Context, config WorkerConfig) (WorkerResult, error)
 
-// IsAvailable checks whether the platform dispatcher is installed and authenticated.
+	// IsAvailable checks whether the platform dispatcher is installed and authenticated.
 	IsAvailable(ctx context.Context) bool
 
 	// ValidateAgent checks that a TOML agent file is parseable and contains
@@ -579,6 +579,9 @@ func ParseWorkerOutput(output string) (workerClaims, error) {
 	if err := json.Unmarshal([]byte(jsonStr), &claims); err != nil {
 		return claims, fmt.Errorf("parse worker output: invalid JSON: %w", err)
 	}
+	if !isWorkerClaimsLike(claims) {
+		return claims, fmt.Errorf("parse worker output: no JSON found in output")
+	}
 
 	return normalizeWorkerClaims(claims, WorkerConfig{}), nil
 }
@@ -654,7 +657,41 @@ func unmarshalWorkerClaims(text string) (workerClaims, bool) {
 	if err := json.Unmarshal([]byte(text), &claims); err != nil {
 		return workerClaims{}, false
 	}
+	if !isWorkerClaimsLike(claims) {
+		return workerClaims{}, false
+	}
 	return claims, true
+}
+
+func isWorkerClaimsLike(claims workerClaims) bool {
+	score := 0
+	for _, value := range []string{
+		claims.AntName,
+		claims.Caste,
+		claims.TaskID,
+		claims.Status,
+		claims.Summary,
+	} {
+		if strings.TrimSpace(value) != "" {
+			score++
+		}
+	}
+	if len(claims.FilesCreated) > 0 {
+		score++
+	}
+	if len(claims.FilesModified) > 0 {
+		score++
+	}
+	if len(claims.TestsWritten) > 0 {
+		score++
+	}
+	if len(claims.Blockers) > 0 {
+		score++
+	}
+	if len(claims.Spawns) > 0 {
+		score++
+	}
+	return score >= 2
 }
 
 func renderResponseContract(config WorkerConfig) string {

@@ -1,6 +1,6 @@
 # Known Issues and Workarounds
 
-Updated: 2026-04-17
+Updated: 2026-04-25
 
 This file tracks live Aether limitations that are still relevant to the current Go-based runtime.
 Historical bash/npm migration bugs were removed once the affected paths stopped existing.
@@ -12,6 +12,12 @@ Historical bash/npm migration bugs were removed once the affected paths stopped 
   - `go test ./...` and `go test ./... -race` are expected to stay clean for release readiness.
 
 ## Open Limitations
+
+### Interrupted build workers can require explicit recovery
+
+- **Area:** Codex and wrapper build lifecycle
+- **Impact:** If a worker run is interrupted before the build packet is finalized, the colony can remain on an active phase with no usable worker manifest.
+- **Mitigation:** Run `aether continue` first. It now writes blocked recovery guidance when the build packet is missing. Use `aether build <phase> --force` to redispatch the active phase. If the phase is intentionally abandoned, use the audited escape hatch: `aether skip-phase <phase> --force --reason "<why>"`.
 
 ### Worker artifact contracts are only as good as the worker following them
 
