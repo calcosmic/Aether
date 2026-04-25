@@ -112,7 +112,12 @@
   2. Output is a clean diagnosis table (not debug output) showing issue class, severity, and fix hint for each detected problem
   3. Command exits 0 when colony is healthy and exits 1 when issues are detected, making it usable in shell scripts
   4. `--json` flag produces structured output with the same diagnosis data for programmatic consumption
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 49-01-PLAN.md -- Cobra command registration and 7 stuck-state detection functions
+- [ ] 49-02-PLAN.md -- Visual and JSON output rendering, exit code logic
+- [ ] 49-03-PLAN.md -- Unit tests for all 7 detectors and output functions
 
 ### Phase 50: Repair Pipeline
 **Goal**: Users can run `aether recover --apply` and have all safe issues fixed automatically, with confirmation required only for potentially destructive operations
