@@ -129,7 +129,11 @@ Plans:
   3. Every repair creates a timestamped backup of `.aether/data/` before mutating any state files
   4. Multi-file repairs are atomic -- if any step fails, all changes roll back to the backup
   5. After repairs, the command re-scans and reports what was fixed and what still needs attention
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 50-01-PLAN.md -- Repair engine: orchestrator, 7 repair functions, backup, rollback, confirmation
+- [ ] 50-02-PLAN.md -- Wiring: --apply flag integration, re-scan, visual rendering for repair output
 
 ### Phase 51: Recovery Verification
 **Goal**: Every recovery path is proven correct through automated tests, including edge cases and compound scenarios
