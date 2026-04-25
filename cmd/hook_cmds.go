@@ -24,6 +24,8 @@ type claudeHookInput struct {
 	LastAssistantMessage string                 `json:"last_assistant_message"`
 }
 
+const postResumeStopGracePeriod = 15 * time.Minute
+
 var hookPreToolUseCmd = &cobra.Command{
 	Use:    "hook-pre-tool-use [tool_name] [target]",
 	Short:  "Claude hook: validate edits before tool execution",
@@ -108,6 +110,9 @@ var hookStopCmd = &cobra.Command{
 		if (state.State != colony.StateEXECUTING && state.State != colony.StateBUILT) || state.Paused {
 			return nil
 		}
+		if allowStopAfterRecentResume() {
+			return nil
+		}
 
 		phaseLabel := fmt.Sprintf("phase %d", state.CurrentPhase)
 		if state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
@@ -155,6 +160,27 @@ var hookPreCompactCmd = &cobra.Command{
 		ensureSessionSummary(state, "hook-pre-compact", next, summary)
 		return nil
 	},
+}
+
+func allowStopAfterRecentResume() bool {
+	if store == nil {
+		return false
+	}
+
+	var session colony.SessionFile
+	if err := store.LoadJSON("session.json", &session); err != nil {
+		return false
+	}
+	if session.LastCommand != "resume-colony" {
+		return false
+	}
+
+	resumedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(session.LastCommandAt))
+	if err != nil {
+		return false
+	}
+	age := time.Since(resumedAt)
+	return age >= 0 && age <= postResumeStopGracePeriod
 }
 
 func readClaudeHookInput() claudeHookInput {

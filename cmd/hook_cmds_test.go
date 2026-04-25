@@ -228,6 +228,110 @@ func TestHookStopAllowsPausedActiveExecution(t *testing.T) {
 	}
 }
 
+func TestHookStopAllowsImmediatePostResumeStop(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	goal := "test resumed hook stop"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+				{ID: 2, Name: "Phase Two", Status: colony.PhaseInProgress},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON("session.json", colony.SessionFile{
+		SessionID:     "resume-hook-test",
+		LastCommand:   "resume-colony",
+		LastCommandAt: time.Now().UTC().Format(time.RFC3339),
+		ColonyGoal:    goal,
+		CurrentPhase:  2,
+		SuggestedNext: "aether continue",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+	rootCmd.SetArgs([]string{"hook-stop"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-stop returned error: %v", err)
+	}
+
+	if got := strings.TrimSpace(buf.String()); got != "" {
+		t.Fatalf("expected immediate post-resume stop to allow without stdout, got %q", got)
+	}
+}
+
+func TestHookStopBlocksStalePostResumeStop(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	goal := "test stale resumed hook stop"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+				{ID: 2, Name: "Phase Two", Status: colony.PhaseInProgress},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveJSON("session.json", colony.SessionFile{
+		SessionID:     "stale-resume-hook-test",
+		LastCommand:   "resume-colony",
+		LastCommandAt: time.Now().UTC().Add(-time.Hour).Format(time.RFC3339),
+		ColonyGoal:    goal,
+		CurrentPhase:  2,
+		SuggestedNext: "aether continue",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+	rootCmd.SetArgs([]string{"hook-stop"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-stop returned error: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &result); err != nil {
+		t.Fatalf("unmarshal hook output: %v", err)
+	}
+	if result["decision"] != "block" {
+		t.Fatalf("decision = %v, want block", result["decision"])
+	}
+}
+
 func TestHookPreCompactUpdatesSessionSummary(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
