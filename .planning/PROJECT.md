@@ -34,7 +34,7 @@ That means:
 - Stable and dev publish channels with integrity verification
 - Plan recovery pipeline hardened (`--force` always recovers)
 - All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
-- Awaiting next milestone direction (v1.8)
+- v1.8 Colony Recovery in progress: `aether recover` stuck-state rescue button
 
 <details>
 <summary>Prior State History</summary>
@@ -72,7 +72,7 @@ See [.planning/REQUIREMENTS.md](/Users/callumcowie/repos/Aether/.planning/REQUIR
 - [x] v1.4 Self-Healing Colony — Phases 25-30 (completed 2026-04-21)
 - [x] v1.5 Runtime Truth Recovery — Phases 31-38 (completed 2026-04-23, product v1.0.20)
 - [x] v1.6 Release Pipeline Integrity — Phases 39-46 (completed 2026-04-24)
-- [ ] v1.7 Planning Pipeline Recovery — Phases 47+
+- [ ] v1.8 Colony Recovery — Phases 49+
 
 ## Previous Milestone Result
 
@@ -106,13 +106,15 @@ The milestone now delivers:
 - application-aware curation that closes the read/write gap
 - a benchmarkable proof/evaluation harness for the trusted-context claim
 
-## Next Milestone Goals
+## Current Milestone: v1.8 Colony Recovery
 
-Awaiting direction. Potential v1.8 candidates:
-- OpenCode subagent dispatch improvements (branch exists: codex/fix-opencode-subagent-dispatch)
-- Codex platform experience improvements
-- New agent capabilities or workflow features
-- Performance optimization or scale testing
+**Goal:** One command that rescues any stuck colony — detect, diagnose, fix.
+
+**Target features:**
+- `aether recover` — scans colony for 7 classes of stuck state, prints a clean diagnosis
+- `aether recover --apply` — auto-fixes everything it can
+- Detection: missing build packet, stale spawned workers, partial phase, bad manifest, dirty worktree, broken survey, missing agent files
+- Clean, single-answer output (not a wall of debug logs)
 
 ## Milestone Sequence
 
@@ -127,7 +129,7 @@ Awaiting direction. Potential v1.8 candidates:
 
 ## Next Move
 
-Awaiting v1.8 direction.
+Execute v1.8 phases starting with Phase 49.
 
 ## Evolution
 
@@ -148,10 +150,9 @@ This document evolves at phase transitions and milestone boundaries.
 
 ## Explicit Deferrals
 
-These remain promising, but they are not the next best move until dispatch truth and recovery are solid:
+These remain promising but are not the next best move:
 
 - pheromone markets and reputation exchange
 - swarm memory beyond the current hive/wisdom path
 - federation / inter-colony coordination
 - self-mutating agents / evolution engine
-- more agents without first fixing dispatch truth, recovery, and runtime honesty

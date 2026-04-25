@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.8
-milestone_name: TBD
-status: awaiting_milestone
-stopped_at: v1.7 archived, awaiting v1.8 direction
-last_updated: "2026-04-25T14:00:00.000Z"
-last_activity: 2026-04-25 -- v1.7 milestone archived
+milestone_name: Colony Recovery
+status: defining_requirements
+stopped_at: ""
+last_updated: "2026-04-25T14:30:00.000Z"
+last_activity: 2026-04-25 -- Milestone v1.8 started
 progress:
-  total_phases: 48
-  completed_phases: 48
-  total_plans: 2
-  completed_plans: 2
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,18 +21,18 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** v1.7 archived — awaiting v1.8 direction
+**Current focus:** v1.8 Colony Recovery — `aether recover` stuck-state rescue
 
 ## Current Position
 
-Phase: 48 (last completed)
-Plan: Complete
-Status: Between milestones
-Last activity: 2026-04-25 — v1.7 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-25 — Milestone v1.8 started
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 113 (111 prior + 2 v1.7)
+- Total plans completed: 113 (prior milestones)
 - All tests green (2900+ passing)
