@@ -55,28 +55,28 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DETECT-01 (R073) | — | Pending |
-| DETECT-02 (R074) | — | Pending |
-| DETECT-03 (R075) | — | Pending |
-| DETECT-04 (R076) | — | Pending |
-| DETECT-05 (R077) | — | Pending |
-| DETECT-06 (R078) | — | Pending |
-| DETECT-07 (R079) | — | Pending |
-| OUTP-01 (R080) | — | Pending |
-| OUTP-02 (R081) | — | Pending |
-| REPAIR-01 (R082) | — | Pending |
-| REPAIR-02 (R083) | — | Pending |
-| REPAIR-03 (R084) | — | Pending |
-| REPAIR-04 (R085) | — | Pending |
-| REPAIR-05 (R086) | — | Pending |
-| TEST-01 (R087) | — | Pending |
-| TEST-02 (R088) | — | Pending |
-| TEST-03 (R089) | — | Pending |
+| DETECT-01 (R073) | Phase 49 | Pending |
+| DETECT-02 (R074) | Phase 49 | Pending |
+| DETECT-03 (R075) | Phase 49 | Pending |
+| DETECT-04 (R076) | Phase 49 | Pending |
+| DETECT-05 (R077) | Phase 49 | Pending |
+| DETECT-06 (R078) | Phase 49 | Pending |
+| DETECT-07 (R079) | Phase 49 | Pending |
+| OUTP-01 (R080) | Phase 49 | Pending |
+| OUTP-02 (R081) | Phase 49 | Pending |
+| REPAIR-01 (R082) | Phase 50 | Pending |
+| REPAIR-02 (R083) | Phase 50 | Pending |
+| REPAIR-03 (R084) | Phase 50 | Pending |
+| REPAIR-04 (R085) | Phase 50 | Pending |
+| REPAIR-05 (R086) | Phase 50 | Pending |
+| TEST-01 (R087) | Phase 51 | Pending |
+| TEST-02 (R088) | Phase 51 | Pending |
+| TEST-03 (R089) | Phase 51 | Pending |
 
 **Coverage:**
 - v1.8 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-25*
