@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -103,6 +104,12 @@ type codexBuildClaims struct {
 
 var newCodexWorkerInvoker = codex.NewWorkerInvoker
 
+var errRuntimeStateSuperseded = errors.New("runtime state superseded")
+
+type codexBuildOptions struct {
+	WorkerTimeout time.Duration
+}
+
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
@@ -175,6 +182,10 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 }
 
 func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, synthetic bool) (map[string]interface{}, error) {
+	return runCodexBuildWithOptions(root, phaseNum, selectedTaskIDs, synthetic, codexBuildOptions{})
+}
+
+func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []string, synthetic bool, options codexBuildOptions) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
@@ -268,16 +279,13 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 	if synthetic {
 		buildInvoker = &codex.FakeInvoker{}
 	}
-	dispatches, claims, mode, err := executeCodexBuildDispatches(context.Background(), root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode)
+	dispatches, claims, mode, err := executeCodexBuildDispatches(context.Background(), root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
 	}
 	if err := writeCodexBuildClaims(claimsRel, phaseNum, startedAt, claims); err != nil {
 		return nil, err
-	}
-	if latestState, loadErr := loadActiveColonyState(); loadErr == nil {
-		updatedState.Worktrees = latestState.Worktrees
 	}
 	updatedState.State = colony.StateBUILT
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
@@ -286,9 +294,23 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 		return nil, err
 	}
 
-	updatedState.Events = append(trimmedEvents(updatedState.Events),
-		fmt.Sprintf("%s|build_completed|build|Phase %d build packet prepared (%s dispatch)", startedAt.Format(time.RFC3339), phaseNum, mode),
-	)
+	var committedState colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
+		if err := validateRuntimeStateStillCurrent(committedState, phaseNum, &startedAt, colony.StateEXECUTING); err != nil {
+			return err
+		}
+		committedState.State = colony.StateBUILT
+		reconcileCompletedBuildTasks(&committedState, phaseNum, dispatches)
+		committedState.Events = append(trimmedEvents(committedState.Events),
+			fmt.Sprintf("%s|build_completed|build|Phase %d build packet prepared (%s dispatch)", startedAt.Format(time.RFC3339), phaseNum, mode),
+		)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("failed to save built colony state: %w", err)
+	}
+	updatedState = committedState
+	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
+
 	if tracer != nil && updatedState.RunID != nil {
 		_ = tracer.LogPhaseChange(*updatedState.RunID, phaseNum, string(colony.PhaseCompleted), "codex-build-complete")
 		for _, dispatch := range dispatches {
@@ -309,10 +331,6 @@ func runCodexBuild(root string, phaseNum int, selectedTaskIDs []string, syntheti
 			})
 		}
 	}
-	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
-		return nil, fmt.Errorf("failed to save built colony state: %w", err)
-	}
-
 	updateSessionSummary("build", "aether continue", fmt.Sprintf("Phase %d dispatched to %d workers across %d waves", phaseNum, len(dispatches), max(waveCount, 1)))
 
 	dispatchMaps := codexBuildDispatchMaps(dispatches)
@@ -826,7 +844,7 @@ func buildTaskID(task colony.Task, idx int) string {
 	return fmt.Sprintf("task-%d", idx+1)
 }
 
-func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
+func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
 	}
@@ -852,6 +870,7 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			SkillSection:     resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
+			Timeout:          workerTimeout,
 			Wave:             normalizedDispatchWave(dispatch),
 		})
 		indexByName[dispatch.Name] = i
@@ -1227,7 +1246,14 @@ func rollbackCodexBuildFailure(previous colony.ColonyState, phaseNum int, starte
 		_ = tracer.LogPhaseChange(*rollback.RunID, phaseNum, "failed", "codex-build-fail")
 	}
 
-	if err := store.SaveJSON("COLONY_STATE.json", rollback); err != nil {
+	var current colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &current, func() error {
+		if err := validateRuntimeStateStillCurrent(current, phaseNum, &startedAt, colony.StateEXECUTING, colony.StateBUILT); err != nil {
+			return err
+		}
+		current = rollback
+		return nil
+	}); err != nil {
 		return
 	}
 	_, _ = syncColonyArtifacts(rollback, colonyArtifactOptions{
@@ -1238,6 +1264,64 @@ func rollbackCodexBuildFailure(previous colony.ColonyState, phaseNum int, starte
 		HandoffTitle:  "Build Dispatch Failed",
 		WriteHandoff:  true,
 	})
+}
+
+func validateRuntimeStateStillCurrent(state colony.ColonyState, phaseNum int, expectedStartedAt *time.Time, allowedStates ...colony.State) error {
+	if state.Paused {
+		return runtimeStateSupersededError(phaseNum, "colony is paused")
+	}
+	if state.CurrentPhase != phaseNum {
+		return runtimeStateSupersededError(phaseNum, fmt.Sprintf("current phase is %d", state.CurrentPhase))
+	}
+	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
+		return runtimeStateSupersededError(phaseNum, "phase is no longer present")
+	}
+	if state.Plan.Phases[phaseNum-1].Status != colony.PhaseInProgress {
+		return runtimeStateSupersededError(phaseNum, fmt.Sprintf("phase status is %s", state.Plan.Phases[phaseNum-1].Status))
+	}
+	if !runtimeStartedAtMatches(state.BuildStartedAt, expectedStartedAt) {
+		return runtimeStateSupersededError(phaseNum, "build start timestamp changed")
+	}
+	if len(allowedStates) == 0 {
+		return nil
+	}
+	for _, allowed := range allowedStates {
+		if state.State == allowed {
+			return nil
+		}
+	}
+	return runtimeStateSupersededError(phaseNum, fmt.Sprintf("state is %s", state.State))
+}
+
+func validateRuntimeStateMatchesExpected(state, expected colony.ColonyState) error {
+	if state.Paused {
+		return runtimeStateSupersededError(expected.CurrentPhase, "colony is paused")
+	}
+	if state.State != expected.State {
+		return runtimeStateSupersededError(expected.CurrentPhase, fmt.Sprintf("state is %s", state.State))
+	}
+	if state.CurrentPhase != expected.CurrentPhase {
+		return runtimeStateSupersededError(expected.CurrentPhase, fmt.Sprintf("current phase is %d", state.CurrentPhase))
+	}
+	if !runtimeStartedAtMatches(state.BuildStartedAt, expected.BuildStartedAt) {
+		return runtimeStateSupersededError(expected.CurrentPhase, "build start timestamp changed")
+	}
+	return nil
+}
+
+func runtimeStartedAtMatches(actual, expected *time.Time) bool {
+	if actual == nil || expected == nil {
+		return actual == nil && expected == nil
+	}
+	return actual.Equal(*expected)
+}
+
+func runtimeStateSupersededError(phaseNum int, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "state changed while runtime command was active"
+	}
+	return fmt.Errorf("%w for phase %d: %s", errRuntimeStateSuperseded, phaseNum, reason)
 }
 
 func cloneColonyState(state colony.ColonyState) (colony.ColonyState, error) {

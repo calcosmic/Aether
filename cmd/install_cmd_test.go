@@ -446,7 +446,7 @@ func TestInstallCopiesOpenCodeCommands(t *testing.T) {
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".opencode", "commands", "ant")
-	destDir := filepath.Join(homeDir, ".opencode", "command")
+	destDir := filepath.Join(homeDir, ".config", "opencode", "commands", "ant")
 
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create src dir: %v", err)
@@ -454,6 +454,9 @@ func TestInstallCopiesOpenCodeCommands(t *testing.T) {
 
 	if err := os.WriteFile(filepath.Join(srcDir, "init.md"), []byte("# Init command"), 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "run.md"), []byte("# Run command"), 0644); err != nil {
+		t.Fatalf("failed to create run command fixture: %v", err)
 	}
 
 	var buf bytes.Buffer
@@ -471,6 +474,10 @@ func TestInstallCopiesOpenCodeCommands(t *testing.T) {
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", destFile)
 	}
+	runDestFile := filepath.Join(destDir, "run.md")
+	if _, err := os.Stat(runDestFile); os.IsNotExist(err) {
+		t.Errorf("expected file %s to exist after install", runDestFile)
+	}
 }
 
 // TestInstallCopiesOpenCodeAgents verifies OpenCode agents are copied.
@@ -481,7 +488,7 @@ func TestInstallCopiesOpenCodeAgents(t *testing.T) {
 	tmpDir := t.TempDir()
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".opencode", "agents")
-	destDir := filepath.Join(homeDir, ".opencode", "agent")
+	destDir := filepath.Join(homeDir, ".config", "opencode", "agents")
 
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create src dir: %v", err)

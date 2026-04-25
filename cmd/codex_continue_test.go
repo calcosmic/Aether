@@ -2171,6 +2171,47 @@ func TestResolveCodexVerificationCommandsReadsCODEXAndOPENCODEDocs(t *testing.T)
 	}
 }
 
+func TestVerificationCommandParserRejectsFragmentsAndFilenames(t *testing.T) {
+	commands := extractVerificationCommands("## Commands\n" +
+		"- Types: `\"type\": \"module\"`\n" +
+		"- Tests: `Foo.ts`\n" +
+		"- Build: `bun run build`\n" +
+		"- Types: `npx tsc --noEmit`\n" +
+		"- Tests: `bun test`\n")
+
+	if commands.Type != "npx tsc --noEmit" {
+		t.Fatalf("types command = %q, want npx tsc --noEmit", commands.Type)
+	}
+	if commands.Test != "bun test" {
+		t.Fatalf("tests command = %q, want bun test", commands.Test)
+	}
+	if commands.Build != "bun run build" {
+		t.Fatalf("build command = %q, want bun run build", commands.Build)
+	}
+}
+
+func TestVerificationCommandParserAcceptsBunAndNpxCommands(t *testing.T) {
+	commands := extractVerificationCommands(`## Commands
+- Build: ` + "`bun run build`" + `
+- Tests: ` + "`bun run test`" + `
+- Lint: ` + "`bun run lint`" + `
+- Types: ` + "`npx tsc --noEmit`" + `
+`)
+
+	if commands.Build != "bun run build" {
+		t.Fatalf("build command = %q, want bun run build", commands.Build)
+	}
+	if commands.Test != "bun run test" {
+		t.Fatalf("tests command = %q, want bun run test", commands.Test)
+	}
+	if commands.Lint != "bun run lint" {
+		t.Fatalf("lint command = %q, want bun run lint", commands.Lint)
+	}
+	if commands.Type != "npx tsc --noEmit" {
+		t.Fatalf("types command = %q, want npx tsc --noEmit", commands.Type)
+	}
+}
+
 func TestContinueReconcileTaskDoesNotTrustOtherTasks(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -2799,6 +2840,97 @@ func TestContinueWatcherUsesWorkerTimeoutOverride(t *testing.T) {
 	}
 	if got := invoker.timeouts[0]; got != 17*time.Minute {
 		t.Fatalf("watcher timeout = %s, want 17m", got)
+	}
+}
+
+func TestContinueStaleStateDoesNotOverwritePausedState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Do not advance over pause"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Pause during continue",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Pause while continue runs", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Must not be readied",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Wait for explicit resume", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Pause during continue", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-stale-1", Task: "Pause while continue runs", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-stale-1", Task: "Build-time verification", Status: "completed"},
+	})
+
+	mutated := false
+	recorder := &timeoutRecordingInvoker{
+		onInvoke: func(config codex.WorkerConfig) {
+			if mutated || config.TaskID != "continue-verification-1" {
+				return
+			}
+			mutated = true
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatalf("load state during continue invoke: %v", err)
+			}
+			pausedAt := time.Now().UTC().Format(time.RFC3339)
+			state.Paused = true
+			state.PausedAt = &pausedAt
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatalf("pause state during continue invoke: %v", err)
+			}
+		},
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return recorder }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	result, _, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{})
+	if err != nil {
+		t.Fatalf("runCodexContinue returned error: %v", err)
+	}
+	if superseded, _ := result["superseded"].(bool); !superseded {
+		t.Fatalf("expected superseded result, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false, got %v", result)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if !state.Paused {
+		t.Fatalf("expected paused state to be preserved, got %+v", state)
+	}
+	if state.CurrentPhase != 1 {
+		t.Fatalf("current phase = %d, want 1", state.CurrentPhase)
+	}
+	if state.Plan.Phases[1].Status == colony.PhaseReady {
+		t.Fatalf("stale continue readied phase 2")
 	}
 }
 

@@ -1345,3 +1345,48 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 		t.Fatalf("autopilot status = %q, want paused", autopilot.Status)
 	}
 }
+
+func TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	if runCompatibilityCmd.Flags().Lookup("worker-timeout") == nil {
+		t.Fatal("expected run command to expose --worker-timeout")
+	}
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Run one autopilot phase with timeout override"
+	now := time.Now().UTC()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		CurrentPhase:  1,
+		InitializedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Timeout phase", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: ptrString("1.1"), Goal: "Implement with timeout", Status: colony.TaskPending}}},
+			},
+		},
+	})
+
+	recorder := &timeoutRecordingInvoker{}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return recorder }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"run", "--max-phases", "1", "--worker-timeout", "23m"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	if !recorder.hasCall("1.1", 23*time.Minute) {
+		t.Fatalf("expected build worker timeout to be 23m, got %+v", recorder.calls)
+	}
+	if !recorder.hasCall("continue-verification-1", 23*time.Minute) {
+		t.Fatalf("expected continue watcher timeout to be 23m, got %+v", recorder.calls)
+	}
+}

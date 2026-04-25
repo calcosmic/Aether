@@ -22,6 +22,7 @@ type runCompatibilityOptions struct {
 	DryRun                bool
 	Headless              bool
 	Verbose               bool
+	WorkerTimeout         time.Duration
 }
 
 var watchCmd = &cobra.Command{
@@ -84,6 +85,11 @@ var runCompatibilityCmd = &cobra.Command{
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		headless, _ := cmd.Flags().GetBool("headless")
 		verbose, _ := cmd.Flags().GetBool("verbose")
+		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 
 		result, err := runCompatibilityAutopilot(skillWorkspaceRoot(), runCompatibilityOptions{
 			MaxPhases:             maxPhases,
@@ -92,6 +98,7 @@ var runCompatibilityCmd = &cobra.Command{
 			DryRun:                dryRun,
 			Headless:              headless,
 			Verbose:               verbose,
+			WorkerTimeout:         workerTimeout,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -112,6 +119,7 @@ func init() {
 	runCompatibilityCmd.Flags().Bool("dry-run", false, "Preview the autopilot steps without mutating state")
 	runCompatibilityCmd.Flags().Bool("headless", false, "Record headless mode in autopilot state")
 	runCompatibilityCmd.Flags().BoolP("verbose", "v", false, "Include extra execution detail in the result")
+	runCompatibilityCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build and continue dispatches (e.g. 15m)")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)
@@ -208,11 +216,15 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				return buildRunExecutionResult(state, opts, steps, phasesCompleted, "completed", "aether seal"), nil
 			}
 
-			buildResult, err := runCodexBuild(root, phase.ID, nil, false)
+			buildResult, err := runCodexBuildWithOptions(root, phase.ID, nil, false, codexBuildOptions{
+				WorkerTimeout: opts.WorkerTimeout,
+			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "⚠ Build failed for phase %d, attempting single retry...\n", phase.ID)
 				time.Sleep(2 * time.Second)
-				buildResult, err = runCodexBuild(root, phase.ID, nil, false)
+				buildResult, err = runCodexBuildWithOptions(root, phase.ID, nil, false, codexBuildOptions{
+					WorkerTimeout: opts.WorkerTimeout,
+				})
 				if err != nil {
 					_ = syncRunAutopilotState(state, opts, "paused")
 					return nil, err
@@ -234,7 +246,9 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			}
 
 		case colony.StateEXECUTING, colony.StateBUILT:
-			continueResult, updatedState, phase, _, _, final, err := runCodexContinue(root, codexContinueOptions{})
+			continueResult, updatedState, phase, _, _, final, err := runCodexContinue(root, codexContinueOptions{
+				WorkerTimeout: opts.WorkerTimeout,
+			})
 			if err != nil {
 				_ = syncRunAutopilotState(state, opts, "paused")
 				return nil, err

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -181,6 +182,49 @@ func TestHookStopBlocksActiveExecution(t *testing.T) {
 	}
 	if !strings.Contains(result["reason"].(string), "aether continue") {
 		t.Fatalf("reason = %q, want continue guidance", result["reason"])
+	}
+}
+
+func TestHookStopAllowsPausedActiveExecution(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	goal := "test paused hook stop"
+	pausedAt := time.Now().UTC().Format(time.RFC3339)
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 2,
+		Paused:       true,
+		PausedAt:     &pausedAt,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+				{ID: 2, Name: "Phase Two", Status: colony.PhaseInProgress},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+	rootCmd.SetArgs([]string{"hook-stop"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-stop returned error: %v", err)
+	}
+
+	if got := strings.TrimSpace(buf.String()); got != "" {
+		t.Fatalf("expected paused active state to allow stop without stdout, got %q", got)
 	}
 }
 

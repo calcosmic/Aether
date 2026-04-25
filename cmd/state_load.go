@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -16,8 +19,8 @@ func loadActiveColonyState() (colony.ColonyState, error) {
 		return colony.ColonyState{}, fmt.Errorf("no store initialized")
 	}
 
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+	state, err := loadColonyStateWithCompatibilityRepair()
+	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return colony.ColonyState{}, errNoColonyInitialized
 		}
@@ -32,6 +35,64 @@ func loadActiveColonyState() (colony.ColonyState, error) {
 		return colony.ColonyState{}, err
 	}
 	return repaired, nil
+}
+
+func loadColonyStateWithCompatibilityRepair() (colony.ColonyState, error) {
+	var state colony.ColonyState
+	loadErr := store.LoadJSON("COLONY_STATE.json", &state)
+	if loadErr == nil {
+		return state, nil
+	}
+
+	raw, rawErr := store.LoadRawJSON("COLONY_STATE.json")
+	if rawErr != nil {
+		return colony.ColonyState{}, loadErr
+	}
+
+	repairedRaw, repaired, repairErr := repairLegacyNumericStringFields(raw)
+	if repairErr != nil || !repaired {
+		return colony.ColonyState{}, loadErr
+	}
+	if err := json.Unmarshal(repairedRaw, &state); err != nil {
+		return colony.ColonyState{}, loadErr
+	}
+
+	state.Events = append(trimmedEvents(state.Events),
+		fmt.Sprintf("%s|state_repaired|load|Normalized legacy numeric string fields in COLONY_STATE.json", time.Now().UTC().Format(time.RFC3339)),
+	)
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		return colony.ColonyState{}, fmt.Errorf("failed to persist repaired colony state: %w", err)
+	}
+	return state, nil
+}
+
+func repairLegacyNumericStringFields(raw []byte) ([]byte, bool, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, false, err
+	}
+
+	rawPhase, ok := fields["current_phase"]
+	if !ok {
+		return raw, false, nil
+	}
+
+	var phaseText string
+	if err := json.Unmarshal(rawPhase, &phaseText); err != nil {
+		return raw, false, nil
+	}
+
+	phase, err := strconv.Atoi(strings.TrimSpace(phaseText))
+	if err != nil {
+		return raw, false, nil
+	}
+	fields["current_phase"] = json.RawMessage([]byte(strconv.Itoa(phase)))
+
+	repaired, err := json.Marshal(fields)
+	if err != nil {
+		return nil, false, err
+	}
+	return repaired, true, nil
 }
 
 func normalizeLegacyColonyState(state colony.ColonyState) colony.ColonyState {

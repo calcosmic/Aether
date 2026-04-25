@@ -171,13 +171,13 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 		}
 
 		// Verify opencode commands were installed
-		ocCmdDest := filepath.Join(homeDir, ".opencode", "command", "init.md")
+		ocCmdDest := filepath.Join(homeDir, ".config", "opencode", "commands", "ant", "init.md")
 		if _, err := os.Stat(ocCmdDest); os.IsNotExist(err) {
 			t.Error("opencode commands not installed to home dir")
 		}
 
 		// Verify opencode agents were installed
-		ocAgentDest := filepath.Join(homeDir, ".opencode", "agent", "builder.md")
+		ocAgentDest := filepath.Join(homeDir, ".config", "opencode", "agents", "builder.md")
 		if _, err := os.Stat(ocAgentDest); os.IsNotExist(err) {
 			t.Error("opencode agents not installed to home dir")
 		}

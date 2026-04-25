@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -917,6 +919,253 @@ func (f *buildFailInvoker) Invoke(ctx context.Context, config codex.WorkerConfig
 func (f *buildFailInvoker) IsAvailable(ctx context.Context) bool { return false }
 
 func (f *buildFailInvoker) ValidateAgent(path string) error { return nil }
+
+type recordedWorkerCall struct {
+	TaskID  string
+	Caste   string
+	Timeout time.Duration
+}
+
+type timeoutRecordingInvoker struct {
+	mu       sync.Mutex
+	calls    []recordedWorkerCall
+	onInvoke func(codex.WorkerConfig)
+}
+
+func (i *timeoutRecordingInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	if i.onInvoke != nil {
+		i.onInvoke(config)
+	}
+	i.mu.Lock()
+	i.calls = append(i.calls, recordedWorkerCall{
+		TaskID:  config.TaskID,
+		Caste:   config.Caste,
+		Timeout: config.Timeout,
+	})
+	i.mu.Unlock()
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "recorded worker completed",
+		Duration:   time.Millisecond,
+	}, nil
+}
+
+func (i *timeoutRecordingInvoker) IsAvailable(ctx context.Context) bool { return true }
+
+func (i *timeoutRecordingInvoker) ValidateAgent(path string) error { return nil }
+
+func (i *timeoutRecordingInvoker) hasCall(taskID string, timeout time.Duration) bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	for _, call := range i.calls {
+		if call.TaskID == taskID && call.Timeout == timeout {
+			return true
+		}
+	}
+	return false
+}
+
+func (i *timeoutRecordingInvoker) allTimeoutsEqual(timeout time.Duration) bool {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if len(i.calls) == 0 {
+		return false
+	}
+	for _, call := range i.calls {
+		if call.Timeout != timeout {
+			return false
+		}
+	}
+	return true
+}
+
+type unavailableMutatingInvoker struct {
+	mutated bool
+	mutate  func()
+}
+
+func (i *unavailableMutatingInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{}, context.DeadlineExceeded
+}
+
+func (i *unavailableMutatingInvoker) IsAvailable(ctx context.Context) bool {
+	if !i.mutated && i.mutate != nil {
+		i.mutated = true
+		i.mutate()
+	}
+	return false
+}
+
+func (i *unavailableMutatingInvoker) ValidateAgent(path string) error { return nil }
+
+func TestBuildCommandExposesWorkerTimeoutFlag(t *testing.T) {
+	if buildCmd.Flags().Lookup("worker-timeout") == nil {
+		t.Fatal("expected build command to expose --worker-timeout")
+	}
+}
+
+func TestBuildUsesWorkerTimeoutOverride(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Build honors timeout override"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Timeout phase",
+				Status: colony.PhaseReady,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Record timeout", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	recorder := &timeoutRecordingInvoker{}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return recorder }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	if _, err := runCodexBuildWithOptions(root, 1, nil, false, codexBuildOptions{WorkerTimeout: 19 * time.Minute}); err != nil {
+		t.Fatalf("runCodexBuildWithOptions returned error: %v", err)
+	}
+	if !recorder.allTimeoutsEqual(19 * time.Minute) {
+		t.Fatalf("expected all build worker timeouts to be 19m, got %+v", recorder.calls)
+	}
+}
+
+func TestBuildFinalizationDoesNotOverwritePausedState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Do not overwrite pause"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Pause during build",
+				Status: colony.PhaseReady,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Pause while worker runs", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	mutated := false
+	recorder := &timeoutRecordingInvoker{
+		onInvoke: func(config codex.WorkerConfig) {
+			if mutated {
+				return
+			}
+			mutated = true
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatalf("load state during invoke: %v", err)
+			}
+			pausedAt := time.Now().UTC().Format(time.RFC3339)
+			state.Paused = true
+			state.PausedAt = &pausedAt
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatalf("pause state during invoke: %v", err)
+			}
+		},
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return recorder }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	_, err := runCodexBuildWithOptions(root, 1, nil, false, codexBuildOptions{})
+	if !errors.Is(err, errRuntimeStateSuperseded) {
+		t.Fatalf("expected superseded build error, got %v", err)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if !state.Paused {
+		t.Fatalf("expected paused state to be preserved, got %+v", state)
+	}
+	if state.State == colony.StateBUILT {
+		t.Fatalf("stale build overwrote state to BUILT")
+	}
+}
+
+func TestBuildRollbackDoesNotOverwritePausedState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Do not rollback over pause"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Rollback pause",
+				Status: colony.PhaseReady,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Fail after pause", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	invoker := &unavailableMutatingInvoker{mutate: func() {
+		var state colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatalf("load state during availability: %v", err)
+		}
+		pausedAt := time.Now().UTC().Format(time.RFC3339)
+		state.Paused = true
+		state.PausedAt = &pausedAt
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			t.Fatalf("pause state during availability: %v", err)
+		}
+	}}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	if _, err := runCodexBuild(root, 1, nil, false); err == nil {
+		t.Fatal("expected build failure")
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if !state.Paused {
+		t.Fatalf("expected paused state to survive rollback, got %+v", state)
+	}
+	if state.State == colony.StateREADY && state.BuildStartedAt == nil {
+		t.Fatalf("stale rollback restored pre-build READY state")
+	}
+}
 
 func TestBuildRollsBackStateWhenDispatchFails(t *testing.T) {
 	saveGlobals(t)
