@@ -99,7 +99,7 @@
 
 - [x] **Phase 49: Stuck-State Scanner and Diagnosis** - Detect all 7 stuck-state classes and present clean diagnosis (completed 2026-04-25)
 - [x] **Phase 50: Repair Pipeline** - Auto-fix safe issues, prompt for destructive ones, backup-first (completed 2026-04-25)
-- [ ] **Phase 51: Recovery Verification** - E2E tests for all 7 states, compound recovery, no false positives
+- [x] **Phase 51: Recovery Verification** - E2E tests for all 7 states, compound recovery, no false positives (completed 2026-04-25)
 
 ## Phase Details
 
@@ -146,7 +146,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 51-01-PLAN.md -- E2E test file with 10 tests: 7 individual state scans, 2 compound repair scenarios, 1 healthy colony no-false-positive
+- [x] 51-01-PLAN.md -- E2E test file with 10 tests: 7 individual state scans, 2 compound repair scenarios, 1 healthy colony no-false-positive
 
 ## Progress
 

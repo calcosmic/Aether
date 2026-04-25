@@ -30,9 +30,9 @@
 
 ### Verification
 
-- [ ] **TEST-01** (R087): E2E test proving recovery from each of the 7 stuck states individually
-- [ ] **TEST-02** (R088): E2E test proving recovery from a compound stuck state (multiple issues simultaneously)
-- [ ] **TEST-03** (R089): Test proving recover does not false-positive on an active, healthy colony
+- [x] **TEST-01** (R087): E2E test proving recovery from each of the 7 stuck states individually
+- [x] **TEST-02** (R088): E2E test proving recovery from a compound stuck state (multiple issues simultaneously)
+- [x] **TEST-03** (R089): Test proving recover does not false-positive on an active, healthy colony
 
 ## Deferred
 
@@ -69,9 +69,9 @@
 | REPAIR-03 (R084) | Phase 50 | Pending |
 | REPAIR-04 (R085) | Phase 50 | Pending |
 | REPAIR-05 (R086) | Phase 50 | Pending |
-| TEST-01 (R087) | Phase 51 | Pending |
-| TEST-02 (R088) | Phase 51 | Pending |
-| TEST-03 (R089) | Phase 51 | Pending |
+| TEST-01 (R087) | Phase 51 | Complete |
+| TEST-02 (R088) | Phase 51 | Complete |
+| TEST-03 (R089) | Phase 51 | Complete |
 
 **Coverage:**
 - v1.8 requirements: 16 total
