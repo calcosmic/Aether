@@ -124,7 +124,11 @@
   2. The `codexContinueWorkerFlowStep` struct carries `Blockers`, `Duration`, and `Report` fields through the continue pipeline without data loss
   3. Claude and OpenCode wrappers pass the `report` field in their completion packet and the runtime preserves it in the merged result
   4. Old completion packets that lack `report`, `blockers`, or `duration` fields still work correctly with no errors
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 52-01-PLAN.md -- Go runtime: struct fields, merge propagation, report writing, Codex-native path, tests
+- [ ] 52-02-PLAN.md -- Wrapper docs: report field in Claude and OpenCode continue.md completion packets
 
 ### Phase 53: Domain-Ledger CRUD Subcommands
 **Goal**: Structured review findings persist across phases in 7 domain-specific ledgers, queryable and resolvable via CLI
@@ -181,7 +185,7 @@ Phases execute in numeric order: 52 -> 53 -> 54 -> 55 -> 56
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 52. Continue-Review Worker Outcome Reports | 0/? | Not started | - |
+| 52. Continue-Review Worker Outcome Reports | 0/2 | Planning complete | - |
 | 53. Domain-Ledger CRUD Subcommands | 0/? | Not started | - |
 | 54. Colony-Prime Prior-Reviews Section | 0/? | Not started | - |
 | 55. Agent Definition Updates | 0/? | Not started | - |
