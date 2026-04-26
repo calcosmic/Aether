@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -499,6 +500,16 @@ func writeLocalQueenText(text string) error {
 	return os.WriteFile(p, []byte(text), 0644)
 }
 
+// normalizeQueenEntry strips date/timestamp patterns and normalizes whitespace
+// for dedup comparison. This catches semantic duplicates where the same wisdom
+// gets promoted multiple times with different dates attached.
+var queenDatePattern = regexp.MustCompile(`\s*\(.*?\)\s*$`)
+
+func normalizeQueenEntry(line string) string {
+	normalized := queenDatePattern.ReplaceAllString(line, "")
+	return strings.TrimSpace(strings.Join(strings.Fields(normalized), " "))
+}
+
 func sanitizeQueenInline(value string) string {
 	value = strings.ReplaceAll(value, "\r", " ")
 	value = strings.ReplaceAll(value, "\n", " ")
@@ -513,9 +524,42 @@ func appendEntriesToQueenSection(text, section string, entries []string) string 
 	if len(entries) == 0 {
 		return text
 	}
+
+	// Extract existing entries from the target section for dedup
+	existingNormalized := map[string]bool{}
 	sectionHeader := "## " + section
-	block := strings.Join(entries, "\n")
 	idx := strings.Index(text, sectionHeader)
+	if idx != -1 {
+		afterHeader := text[idx+len(sectionHeader):]
+		// Scan until next ## header or end of text
+		nextSection := strings.Index(afterHeader, "\n## ")
+		var sectionBody string
+		if nextSection != -1 {
+			sectionBody = afterHeader[:nextSection]
+		} else {
+			sectionBody = afterHeader
+		}
+		for _, line := range strings.Split(sectionBody, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "- ") {
+				existingNormalized[normalizeQueenEntry(trimmed)] = true
+			}
+		}
+	}
+
+	// Filter out duplicates
+	var filtered []string
+	for _, entry := range entries {
+		if !existingNormalized[normalizeQueenEntry(entry)] {
+			filtered = append(filtered, entry)
+		}
+	}
+	if len(filtered) == 0 {
+		return text
+	}
+
+	block := strings.Join(filtered, "\n")
+	idx = strings.Index(text, sectionHeader)
 	if idx == -1 {
 		if !strings.HasSuffix(text, "\n") {
 			text += "\n"
