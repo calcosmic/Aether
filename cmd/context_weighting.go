@@ -118,6 +118,8 @@ func sectionRelevanceScore(name string) float64 {
 		return 0.55
 	case "hive_wisdom":
 		return 0.25
+	case "global_queen_md":
+		return 0.75
 	case "learnings":
 		return 0.25
 	case "recent_narrative":
@@ -141,6 +143,8 @@ func protectedSectionPolicy(name string) (bool, string) {
 		return true, "explicit user preferences"
 	case "clarified_intent":
 		return true, "clarified user intent"
+	case "global_queen_md":
+		return true, "cross-colony wisdom must survive trimming"
 	default:
 		return false, ""
 	}

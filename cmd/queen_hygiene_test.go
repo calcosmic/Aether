@@ -53,3 +53,53 @@ func TestQueenWisdomHygiene(t *testing.T) {
 		t.Fatalf("QUEEN.md contains non-structural duplicate wisdom lines:\n%s", strings.Join(duplicates, "\n"))
 	}
 }
+
+func TestGlobalQueenWisdomHygiene(t *testing.T) {
+	hubDir := os.Getenv("AETHER_HUB_DIR")
+	if hubDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Skip("cannot determine home directory")
+		}
+		hubDir = filepath.Join(home, ".aether")
+	}
+	globalQueenPath := filepath.Join(hubDir, "QUEEN.md")
+
+	content, err := os.ReadFile(globalQueenPath)
+	if err != nil {
+		t.Skipf("global QUEEN.md not found at %s", globalQueenPath)
+	}
+
+	text := strings.ReplaceAll(string(content), "\r\n", "\n")
+	for _, marker := range []string{"test-colony", "test content", "lint:sync", "npm run lint"} {
+		if strings.Contains(text, marker) {
+			t.Fatalf("global QUEEN.md contains blocked junk marker %q", marker)
+		}
+	}
+
+	allowedDuplicates := map[string]bool{
+		"---":                                true,
+		"|------|--------|------|---------|": true,
+	}
+
+	counts := map[string]int{}
+	for _, rawLine := range strings.Split(text, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || allowedDuplicates[line] {
+			continue
+		}
+		counts[line]++
+	}
+
+	var duplicates []string
+	for line, count := range counts {
+		if count > 1 {
+			duplicates = append(duplicates, line)
+		}
+	}
+	slices.Sort(duplicates)
+
+	if len(duplicates) > 0 {
+		t.Fatalf("global QUEEN.md contains non-structural duplicate wisdom lines:\n%s", strings.Join(duplicates, "\n"))
+	}
+}

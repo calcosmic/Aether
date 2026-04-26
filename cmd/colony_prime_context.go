@@ -555,6 +555,30 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		})
 	}
 
+	// Global QUEEN.md wisdom (cross-colony, hub-level)
+	globalQueenPath := filepath.Join(hubDir, "QUEEN.md")
+	globalWisdom := readQUEENMd(globalQueenPath)
+	if len(globalWisdom) > 0 {
+		var gwSB strings.Builder
+		gwSB.WriteString("## GLOBAL QUEEN WISDOM (Cross-Colony)\n\n")
+		for _, v := range globalWisdom {
+			gwSB.WriteString(fmt.Sprintf("- %s\n", v))
+		}
+		gqProtected, gqPreserveReason := protectedSectionPolicy("global_queen_md")
+		sections = append(sections, colonyPrimeSection{
+			name:              "global_queen_md",
+			title:             "Global Queen Wisdom",
+			source:            globalQueenPath,
+			content:           gwSB.String(),
+			priority:          5,
+			freshnessScore:    0.85,
+			confirmationScore: 0.90,
+			relevanceScore:    sectionRelevanceScore("global_queen_md"),
+			protected:         gqProtected,
+			preserveReason:    gqPreserveReason,
+		})
+	}
+
 	queenPath := filepath.Join(hubDir, "QUEEN.md")
 	userPrefs := readUserPreferences(queenPath)
 	// Also read local repo QUEEN.md user preferences
