@@ -154,8 +154,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 58-01-PLAN.md -- Depth resolution logic, tests, and CLI flags (DEPTH-01, DEPTH-02, DEPTH-03, DEPTH-04)
-- [ ] 58-02-PLAN.md -- Build/continue dispatch filtering, visual display, colony-prime injection (DEPTH-02, DEPTH-05, DEPTH-06)
+- [x] 58-01-PLAN.md -- Depth resolution logic, tests, and CLI flags (DEPTH-01, DEPTH-02, DEPTH-03, DEPTH-04)
+- [x] 58-02-PLAN.md -- Build/continue dispatch filtering, visual display, colony-prime injection (DEPTH-02, DEPTH-05, DEPTH-06)
 
 ### Phase 59: Gate Failure Recovery
 **Goal**: When verification gates fail, the user gets clear recovery instructions and can fix and re-check only what failed -- no more starting from scratch
