@@ -186,6 +186,185 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	}
 }
 
+func TestEntomb_ReviewsArchive(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Archive reviews colony"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeMeta,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Release",
+					Status: colony.PhaseCompleted,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Seal the colony", Status: colony.TaskCompleted}},
+				},
+			},
+		},
+	})
+
+	// Create review data in the active data directory
+	reviewsDir := filepath.Join(dataDir, "reviews", "security")
+	if err := os.MkdirAll(reviewsDir, 0755); err != nil {
+		t.Fatalf("failed to create reviews dir: %v", err)
+	}
+	ledger := colony.ReviewLedgerFile{
+		Entries: []colony.ReviewLedgerEntry{
+			{ID: "sec-1-001", Phase: 1, Agent: "gatekeeper", Status: "open", Severity: colony.ReviewSeverityHigh, Description: "Exposed secret"},
+			{ID: "sec-1-002", Phase: 1, Agent: "gatekeeper", Status: "resolved", Severity: colony.ReviewSeverityMedium, Description: "Missing validation"},
+		},
+		Summary: colony.ComputeSummary([]colony.ReviewLedgerEntry{
+			{ID: "sec-1-001", Phase: 1, Agent: "gatekeeper", Status: "open", Severity: colony.ReviewSeverityHigh, Description: "Exposed secret"},
+			{ID: "sec-1-002", Phase: 1, Agent: "gatekeeper", Status: "resolved", Severity: colony.ReviewSeverityMedium, Description: "Missing validation"},
+		}),
+	}
+	ledgerData, err := json.MarshalIndent(ledger, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal ledger: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(reviewsDir, "ledger.json"), append(ledgerData, '\n'), 0644); err != nil {
+		t.Fatalf("write review ledger: %v", err)
+	}
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"entombed":true`) {
+		t.Fatalf("expected entomb success JSON, got: %s", output)
+	}
+
+	// Verify reviews were archived into the chamber
+	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 chamber, got %d", len(entries))
+	}
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+	archivedLedger := filepath.Join(chamberDir, "reviews", "security", "ledger.json")
+	if _, err := os.Stat(archivedLedger); err != nil {
+		t.Fatalf("expected archived reviews/security/ledger.json: %v", err)
+	}
+
+	// Verify reviews were cleaned from active data
+	if _, err := os.Stat(filepath.Join(dataDir, "reviews")); !os.IsNotExist(err) {
+		t.Fatalf("expected reviews directory to be removed after entomb, stat err=%v", err)
+	}
+}
+
+func TestEntomb_NoReviewsArchive(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Archive colony without reviews"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeProject,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Release",
+					Status: colony.PhaseCompleted,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Seal the colony", Status: colony.TaskCompleted}},
+				},
+			},
+		},
+	})
+
+	// No reviews directory created -- backward compatible colony
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"entombed":true`) {
+		t.Fatalf("expected entomb success JSON without reviews, got: %s", output)
+	}
+
+	// Verify chamber has required files (reviews not in required list)
+	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 chamber, got %d", len(entries))
+	}
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+	for _, required := range []string{"manifest.json", "COLONY_STATE.json", "CROWNED-ANTHILL.md", "colony-archive.xml"} {
+		if _, err := os.Stat(filepath.Join(chamberDir, required)); err != nil {
+			t.Fatalf("expected archived file %s: %v", required, err)
+		}
+	}
+}
+
 func TestEntombLegacyScopeDefaultsToProject(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
