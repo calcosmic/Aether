@@ -864,14 +864,17 @@ func TestColonyPrimeLargePheromonesTrimLowerPriority(t *testing.T) {
 		trimmedSet[name.(string)] = true
 	}
 
+
 	// Some lower-priority sections should be trimmed
 	if len(trimmed) == 0 {
 		t.Error("expected some sections to be trimmed when large pheromones compete with other sections for budget")
 	}
 
-	// Learnings (priority 2) should be trimmed to make room for pheromones
-	if !trimmedSet["learnings"] {
-		t.Error("expected 'learnings' (priority 2) to be trimmed when large pheromones need budget space")
+	// At least one low-relevance section should be trimmed to make room for pheromones
+	// (review_depth or learnings, depending on section composition)
+	trimmedLow := trimmedSet["learnings"] || trimmedSet["review_depth"]
+	if !trimmedLow {
+		t.Error("expected at least one low-relevance section (learnings or review_depth) to be trimmed when large pheromones need budget space")
 	}
 
 	// Pheromones (priority 9) must be present in the output

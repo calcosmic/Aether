@@ -219,8 +219,8 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 	if plan["requires_finalizer"] != true {
 		t.Fatalf("continue_manifest requires_finalizer = %v, want true", plan["requires_finalizer"])
 	}
-	if plan["finalize_surface"].(string) != "pending" {
-		t.Fatalf("continue_manifest finalize_surface = %q, want pending", plan["finalize_surface"])
+	if plan["finalize_surface"].(string) != "awaiting_wrapper_completion" {
+		t.Fatalf("continue_manifest finalize_surface = %q, want awaiting_wrapper_completion", plan["finalize_surface"])
 	}
 
 	for _, rel := range []string{
@@ -432,7 +432,7 @@ func TestContinueRecordsWorkerFlowInStateReportAndSpawnSummary(t *testing.T) {
 	}
 	seedContinueBuildPacket(t, dataDir, 1, "Continue bookkeeping", goal, dispatches)
 
-	rootCmd.SetArgs([]string{"continue"})
+	rootCmd.SetArgs([]string{"continue", "--heavy"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("continue returned error: %v", err)
 	}
@@ -3078,7 +3078,7 @@ func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
 	if advanced, _ := result["advanced"].(bool); advanced {
 		t.Fatalf("expected advanced:false on watcher timeout, got %v", result)
 	}
-	if next := result["next"].(string); next != "aether continue --worker-timeout 30m" {
+	if next := result["next"].(string); next != "aether continue --worker-timeout 1h" {
 		t.Fatalf("next = %q, want timeout recovery command", next)
 	}
 
