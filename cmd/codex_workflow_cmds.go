@@ -12,6 +12,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -253,8 +254,15 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		summaryPath := filepath.Join(filepath.Dir(store.BasePath()), "CROWNED-ANTHILL.md")
-		summary := buildSealSummary(state, now)
+		// Scan for high-severity open findings before building summary
+		warnings := scanHighSeverityOpen(store)
+
+		// Archive reviews directory alongside CROWNED-ANTHILL.md
+		aetherDir := filepath.Dir(store.BasePath())
+		_ = copyDirIfExists(filepath.Join(filepath.Dir(store.BasePath()), "data", "reviews"), filepath.Join(aetherDir, "reviews-archive"))
+
+		summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
+		summary := buildSealSummary(state, now, warnings)
 		if err := os.WriteFile(summaryPath, []byte(summary), 0644); err != nil {
 			outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
 			return nil
@@ -570,7 +578,37 @@ func detectDomainsFromRoot(root string) []string {
 	return domains
 }
 
-func buildSealSummary(state colony.ColonyState, sealedAt string) string {
+// scanHighSeverityOpen iterates all domain ledgers and collects warning strings
+// for entries that are both open and HIGH severity.
+func scanHighSeverityOpen(s *storage.Store) []string {
+	var warnings []string
+	for _, d := range colony.DomainOrder {
+		ledgerPath := fmt.Sprintf("reviews/%s/ledger.json", d)
+		var lf colony.ReviewLedgerFile
+		if err := s.LoadJSON(ledgerPath, &lf); err != nil {
+			continue
+		}
+		for _, e := range lf.Entries {
+			if e.Status == "open" && e.Severity == colony.ReviewSeverityHigh {
+				loc := ""
+				if e.File != "" {
+					loc = e.File
+					if e.Line > 0 {
+						loc = fmt.Sprintf("%s:%d", e.File, e.Line)
+					}
+				}
+				if loc != "" {
+					warnings = append(warnings, fmt.Sprintf("- [%s] %s: %s (%s)", d, e.ID, e.Description, loc))
+				} else {
+					warnings = append(warnings, fmt.Sprintf("- [%s] %s: %s", d, e.ID, e.Description))
+				}
+			}
+		}
+	}
+	return warnings
+}
+
+func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string) string {
 	goal := ""
 	if state.Goal != nil {
 		goal = *state.Goal
@@ -583,6 +621,14 @@ func buildSealSummary(state colony.ColonyState, sealedAt string) string {
 	if state.CurrentPhase > 0 {
 		b.WriteString(fmt.Sprintf("- Final phase: %d\n", state.CurrentPhase))
 	}
+	// Add review warnings section if any high-severity open findings exist
+	if len(warnings) > 0 {
+		b.WriteString(fmt.Sprintf("\n## Review Warnings\nWARNING: %d high-severity unresolved finding(s):\n", len(warnings)))
+		for _, w := range warnings {
+			b.WriteString(w + "\n")
+		}
+	}
+
 	b.WriteString("\n## Phase Summary\n")
 	for _, phase := range state.Plan.Phases {
 		b.WriteString(fmt.Sprintf("- Phase %d: %s [%s]\n", phase.ID, phase.Name, phase.Status))
