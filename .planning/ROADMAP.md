@@ -10,7 +10,7 @@
 - **v1.5 Runtime Truth Recovery** - Phases 31-38 (completed 2026-04-23, product v1.0.20)
 - **v1.6 Release Pipeline Integrity** - Phases 39-46 (completed 2026-04-24)
 - **v1.7 Planning Pipeline Recovery** - Phases 47-48 (completed 2026-04-24)
-- **v1.8 Colony Recovery** - Phases 49-51
+- **v1.8 Colony Recovery** - Phases 49-51 (shipped 2026-04-25)
 
 ## Phases
 
@@ -95,58 +95,14 @@
 
 </details>
 
-### v1.8 Colony Recovery (Phases 49-51)
+<details>
+<summary>v1.8 Colony Recovery (Phases 49-51) -- SHIPPED 2026-04-25</summary>
 
-- [x] **Phase 49: Stuck-State Scanner and Diagnosis** - Detect all 7 stuck-state classes and present clean diagnosis (completed 2026-04-25)
-- [x] **Phase 50: Repair Pipeline** - Auto-fix safe issues, prompt for destructive ones, backup-first (completed 2026-04-25)
-- [x] **Phase 51: Recovery Verification** - E2E tests for all 7 states, compound recovery, no false positives (completed 2026-04-25)
+3 phases, 6 plans, 17 requirements. Stuck-state scanner (7 detectors), auto-repair pipeline (backup-first, atomic rollback), 10 E2E tests. [Full archive -> milestones/v1.8-ROADMAP.md]
+
+</details>
 
 ## Phase Details
-
-### Phase 49: Stuck-State Scanner and Diagnosis
-**Goal**: Users can run `aether recover` and see a clear, actionable diagnosis of everything wrong with their stuck colony
-**Depends on**: v1.7 complete (Phase 48)
-**Requirements**: DETECT-01, DETECT-02, DETECT-03, DETECT-04, DETECT-05, DETECT-06, DETECT-07, OUTP-01, OUTP-02
-**Success Criteria** (what must be TRUE):
-  1. `aether recover` scans for all 7 stuck-state classes (missing packet, stale workers, partial phase, bad manifest, dirty worktree, broken survey, missing agents) and reports each one found with severity and a one-line description
-  2. Output is a clean diagnosis table (not debug output) showing issue class, severity, and fix hint for each detected problem
-  3. Command exits 0 when colony is healthy and exits 1 when issues are detected, making it usable in shell scripts
-  4. `--json` flag produces structured output with the same diagnosis data for programmatic consumption
-**Plans**: 3 plans
-
-Plans:
-- [x] 49-01-PLAN.md -- Cobra command registration and 7 stuck-state detection functions
-- [x] 49-02-PLAN.md -- Visual and JSON output rendering, exit code logic
-- [x] 49-03-PLAN.md -- Unit tests for all 7 detectors and output functions
-
-### Phase 50: Repair Pipeline
-**Goal**: Users can run `aether recover --apply` and have all safe issues fixed automatically, with confirmation required only for potentially destructive operations
-**Depends on**: Phase 49
-**Requirements**: REPAIR-01, REPAIR-02, REPAIR-03, REPAIR-04, REPAIR-05
-**Success Criteria** (what must be TRUE):
-  1. `aether recover --apply` auto-fixes all 5 safe classes (missing packet, stale workers, partial phase, broken survey, missing agents) without user interaction
-  2. Dirty worktree and bad manifest repairs prompt the user for confirmation before proceeding
-  3. Every repair creates a timestamped backup of `.aether/data/` before mutating any state files
-  4. Multi-file repairs are atomic -- if any step fails, all changes roll back to the backup
-  5. After repairs, the command re-scans and reports what was fixed and what still needs attention
-**Plans**: 2 plans
-
-Plans:
-- [x] 50-01-PLAN.md -- Repair engine: orchestrator, 7 repair functions, backup, rollback, confirmation
-- [x] 50-02-PLAN.md -- Wiring: --apply flag integration, re-scan, visual rendering for repair output
-
-### Phase 51: Recovery Verification
-**Goal**: Every recovery path is proven correct through automated tests, including edge cases and compound scenarios
-**Depends on**: Phase 50
-**Requirements**: TEST-01, TEST-02, TEST-03
-**Success Criteria** (what must be TRUE):
-  1. E2E tests prove recovery works for each of the 7 stuck states individually (each state is seeded, recovered, and verified clean)
-  2. E2E test proves recovery works when multiple stuck states exist simultaneously (compound scenario)
-  3. Test proves `aether recover` reports zero issues on a healthy, active colony (no false positives)
-**Plans**: 1 plan
-
-Plans:
-- [x] 51-01-PLAN.md -- E2E test file with 10 tests: 7 individual state scans, 2 compound repair scenarios, 1 healthy colony no-false-positive
 
 ## Progress
 

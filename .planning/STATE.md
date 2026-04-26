@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.8
 milestone_name: Colony Recovery
 status: complete
-stopped_at: v1.8 milestone complete
-last_updated: "2026-04-25T21:10:32Z"
-last_activity: 2026-04-25
+stopped_at: v1.8 milestone archived
+last_updated: "2026-04-26T00:00:00Z"
+last_activity: 2026-04-26
 progress:
   total_phases: 3
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** v1.8 Colony Recovery complete
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 51 (complete)
-Plan: 01 (complete)
-Status: Milestone complete
-Last activity: 2026-04-25
+Phase: 51 (complete — last in v1.8)
+Plan: All complete
+Status: Milestone v1.8 archived
+Last activity: 2026-04-26
 
 Progress: [##########] 100%
 
@@ -36,20 +36,17 @@ Progress: [##########] 100%
 
 **Velocity:**
 
-- Total plans completed: 119 (118 prior + 1 this milestone)
+- Total plans completed: 119 (across 9 milestones)
 - All tests green (2910+ passing)
 
 ## Accumulated Context
 
 ### Decisions
 
-- Research confirmed 90%+ infrastructure exists in medic; recover is primarily wiring
+- Recovery reuses medic infrastructure rather than building parallel systems
 - Detection order matters: stale workers before missing packet, bad manifest before partial phase
 - 5 safe auto-fixes, 2 requiring user confirmation (dirty worktree, bad manifest)
-- Compose existing subsystems rather than monolithic implementation
-- resetFlags(rootCmd) before each e2eRunRecover to prevent Cobra flag leakage
-- Compound tests verify detection and repair pipeline execution rather than clean post-repair state due to atomic rollback
-- bad_manifest corrupt JSON not marked fixable by scanner (known scanner/repair contract mismatch)
+- Atomic rollback: any failure undoes all repairs (data safety over partial success)
 
 ### Pending Todos
 
@@ -61,8 +58,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-25T21:10:32Z
-Stopped at: v1.8 milestone complete
+Last session: 2026-04-26
+Stopped at: v1.8 milestone archived
 Resume file: None
 
-**Completed Phase:** 51 (recovery-verification) -- 1 plan -- 2026-04-25
+**Next step:** Run `/gsd-new-milestone` to start planning next milestone
