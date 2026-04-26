@@ -99,54 +99,54 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEPTH-01 | | Pending |
-| DEPTH-02 | | Pending |
-| DEPTH-03 | | Pending |
-| DEPTH-04 | | Pending |
-| DEPTH-05 | | Pending |
-| DEPTH-06 | | Pending |
-| GATE-01 | | Pending |
-| GATE-02 | | Pending |
-| GATE-03 | | Pending |
-| PORT-01 | | Pending |
-| PORT-02 | | Pending |
-| PORT-03 | | Pending |
-| PORT-04 | | Pending |
-| PORT-05 | | Pending |
-| CERE-01 | | Pending |
-| CERE-02 | | Pending |
-| CERE-03 | | Pending |
-| CERE-04 | | Pending |
-| CERE-05 | | Pending |
-| CERE-06 | | Pending |
-| CERE-07 | | Pending |
-| CERE-08 | | Pending |
-| CERE-09 | | Pending |
-| CERE-10 | | Pending |
-| CERE-11 | | Pending |
-| CERE-12 | | Pending |
-| ORCL-01 | | Pending |
-| ORCL-02 | | Pending |
-| ORCL-03 | | Pending |
-| ORCL-04 | | Pending |
-| SHELF-01 | | Pending |
-| SHELF-02 | | Pending |
-| SHELF-03 | | Pending |
-| SHELF-04 | | Pending |
-| SHELF-05 | | Pending |
-| QUEE-01 | | Pending |
-| QUEE-02 | | Pending |
-| QUEE-03 | | Pending |
-| QUEE-04 | | Pending |
-| QUEE-05 | | Pending |
-| QUEE-06 | | Pending |
-| QUEE-07 | | Pending |
+| DEPTH-01 | Phase 58 | Pending |
+| DEPTH-02 | Phase 58 | Pending |
+| DEPTH-03 | Phase 58 | Pending |
+| DEPTH-04 | Phase 58 | Pending |
+| DEPTH-05 | Phase 58 | Pending |
+| DEPTH-06 | Phase 58 | Pending |
+| GATE-01 | Phase 59 | Pending |
+| GATE-02 | Phase 59 | Pending |
+| GATE-03 | Phase 59 | Pending |
+| PORT-01 | Phase 61 | Pending |
+| PORT-02 | Phase 61 | Pending |
+| PORT-03 | Phase 61 | Pending |
+| PORT-04 | Phase 61 | Pending |
+| PORT-05 | Phase 61 | Pending |
+| CERE-01 | Phase 62 | Pending |
+| CERE-02 | Phase 62 | Pending |
+| CERE-03 | Phase 62 | Pending |
+| CERE-04 | Phase 62 | Pending |
+| CERE-05 | Phase 62 | Pending |
+| CERE-06 | Phase 63 | Pending |
+| CERE-07 | Phase 63 | Pending |
+| CERE-08 | Phase 63 | Pending |
+| CERE-09 | Phase 64 | Pending |
+| CERE-10 | Phase 64 | Pending |
+| CERE-11 | Phase 64 | Pending |
+| CERE-12 | Phase 64 | Pending |
+| ORCL-01 | Phase 60 | Pending |
+| ORCL-02 | Phase 60 | Pending |
+| ORCL-03 | Phase 60 | Pending |
+| ORCL-04 | Phase 60 | Pending |
+| SHELF-01 | Phase 65 | Pending |
+| SHELF-02 | Phase 65 | Pending |
+| SHELF-03 | Phase 65 | Pending |
+| SHELF-04 | Phase 65 | Pending |
+| SHELF-05 | Phase 65 | Pending |
+| QUEE-01 | Phase 57 | Pending |
+| QUEE-02 | Phase 57 | Pending |
+| QUEE-03 | Phase 57 | Pending |
+| QUEE-04 | Phase 57 | Pending |
+| QUEE-05 | Phase 57 | Pending |
+| QUEE-06 | Phase 57 | Pending |
+| QUEE-07 | Phase 57 | Pending |
 
 **Coverage:**
 - v1.10 requirements: 37 total
-- Mapped to phases: 0
-- Unmapped: 37
+- Mapped to phases: 37
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after milestone definition*
+*Last updated: 2026-04-26 after roadmap creation*

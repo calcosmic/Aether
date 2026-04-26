@@ -110,12 +110,132 @@
 
 </details>
 
+### v1.10 Colony Polish (Phases 57-65) -- IN PROGRESS
+
+- [ ] **Phase 57: QUEEN.md Pipeline Fix** - Data cleanup, dedup, colony-prime wiring, auto-promotion
+- [ ] **Phase 58: Smart Review Depth** - Auto/light/heavy review modes, --light flag, final-phase override
+- [ ] **Phase 59: Gate Failure Recovery** - Actionable recovery instructions, incremental gate checking, veto confirmation
+- [ ] **Phase 60: Oracle Loop Fix** - Callback fix, research formulation, depth selection, state management
+- [ ] **Phase 61: Porter Ant** - 26th caste registration, agent definitions across 4 surfaces, seal lifecycle wiring
+- [ ] **Phase 62: Lifecycle Ceremony -- Seal and Init** - Flag blocking, wisdom promotion, pheromone cleanup, rich init research
+- [ ] **Phase 63: Lifecycle Ceremony -- Status, Entomb, Resume** - Version display, wisdom extraction, staleness checks
+- [ ] **Phase 64: Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol** - Codebase-aware questioning, auto-flagging, persistence suggestions, health checks
+- [ ] **Phase 65: Idea Shelving** - Persistent shelf, auto-shelve at seal, surface at init, entomb preservation
+
+## Phase Details
+
+### Phase 57: QUEEN.md Pipeline Fix
+**Goal**: The QUEEN.md wisdom pipeline is fully wired -- no duplicate entries, global wisdom reaches all workers, and high-confidence instincts promote automatically
+**Depends on**: Nothing (first phase in milestone -- foundational)
+**Requirements**: QUEE-01, QUEE-02, QUEE-03, QUEE-04, QUEE-05, QUEE-06, QUEE-07
+**Success Criteria** (what must be TRUE):
+  1. Running `queen-seed-from-hive` twice reports 0 new entries on the second run (no duplicates)
+  2. Colony-prime worker prompt includes global QUEEN.md wisdom, Philosophies, and Anti-Patterns sections alongside local wisdom
+  3. `queen-promote-instinct` writes to global `~/.aether/QUEEN.md` so promoted instincts reach all colonies
+  4. Running `/ant-seal` automatically promotes instincts with confidence >= 0.8 to QUEEN.md without manual commands
+  5. Hive wisdom test entry and all ~270 duplicate `<repo> wisdom` lines are removed from QUEEN.md
+**Plans**: TBD
+
+### Phase 58: Smart Review Depth
+**Goal**: Intermediate phases get fast, light review while final phases and security-sensitive phases always get full review -- saving time without sacrificing safety
+**Depends on**: Phase 57 (colony-prime changes in QUEEN.md fix affect same code area)
+**Requirements**: DEPTH-01, DEPTH-02, DEPTH-03, DEPTH-04, DEPTH-05, DEPTH-06
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-build` on an intermediate phase skips Auditor, Gatekeeper, Probe, Weaver, Medic, Measurer, and Chaos by default
+  2. Running `/ant-build` on the final phase always runs the full review gauntlet regardless of any flags
+  3. Phases with security or release keywords in their name automatically get heavy review
+  4. User sees a review depth message like "Review depth: light (Phase 3 of 7)" in wrapper output
+  5. `--light` flag is accepted by build and continue commands but cannot override final-phase heavy review
+**Plans**: TBD
+
+### Phase 59: Gate Failure Recovery
+**Goal**: When verification gates fail, the user gets clear recovery instructions and can fix and re-check only what failed -- no more starting from scratch
+**Depends on**: Phase 58 (review depth changes affect same continue verification flow)
+**Requirements**: GATE-01, GATE-02, GATE-03
+**Success Criteria** (what must be TRUE):
+  1. When a verification gate fails, the output shows specific recovery instructions (not just "FAILED")
+  2. Watcher Veto asks for explicit user confirmation before stashing work -- no silent auto-stash
+  3. Re-running `/ant-continue` after a gate failure only re-checks the previously failed gates, not all gates
+**Plans**: TBD
+
+### Phase 60: Oracle Loop Fix
+**Goal**: The Oracle has a working research formulation step, depth selection, and proper state management -- it produces deep research, not shallow one-shots
+**Depends on**: Nothing (standalone, no dependency on prior phases)
+**Requirements**: ORCL-01, ORCL-02, ORCL-03, ORCL-04
+**Success Criteria** (what must be TRUE):
+  1. Oracle research begins with a formulated research brief that provides context before iterative research starts
+  2. User can choose research depth (quick, balanced, exhaustive) before the Oracle starts working
+  3. Research state (configuration, gaps, synthesis, progress) persists across Oracle iterations
+  4. OpenCode worker callback uses the correct messaging endpoint (not LiteLLM proxy)
+**Plans**: TBD
+
+### Phase 61: Porter Ant
+**Goal**: Aether has a Porter ant (26th caste) that surfaces interactive publish/push/deploy options after seal -- delivery is part of the lifecycle, not a separate manual step
+**Depends on**: Nothing (caste registration is independent; seal integration can coexist with Phase 62 changes)
+**Requirements**: PORT-01, PORT-02, PORT-03, PORT-04, PORT-05
+**Success Criteria** (what must be TRUE):
+  1. Porter appears as the 26th caste with correct emoji, color, label, and name prefixes in all visual maps
+  2. Porter agent definition files exist across all 4 surfaces (Claude, agents-claude mirror, OpenCode, Codex TOML)
+  3. After seal completes, Porter prompts the user interactively with publish/push/deploy options
+  4. `/ant-porter` command exists in YAML source and all platform wrappers
+  5. `porter check` subcommand reports pipeline alignment and readiness
+**Plans**: TBD
+
+### Phase 62: Lifecycle Ceremony -- Seal and Init
+**Goal**: Seal and init have real ceremony -- seal blocks on active blockers, promotes wisdom, cleans pheromones, and enriches the archive; init researches the codebase deeply before planning starts
+**Depends on**: Phase 57 (QUEE-06/07 auto-promotion wiring needed for CERE-02 seal hive promotion)
+**Requirements**: CERE-01, CERE-02, CERE-03, CERE-04, CERE-05
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-seal` with active blocker-severity flags blocks completion (with `--force` override available)
+  2. Seal automatically promotes instincts with confidence >= 0.8 to Hive Brain (non-blocking -- failures logged but don't stop)
+  3. Seal expires all FOCUS pheromones while preserving REDIRECT pheromones (hard constraints survive)
+  4. CROWNED-ANTHILL.md includes learnings count, promoted instincts count, expired signals, and flags resolved
+  5. Running `/ant-init` provides deeper codebase analysis -- reads README, scans directory structure, detects test frameworks, checks CI configs, reads key source files
+**Plans**: TBD
+
+### Phase 63: Lifecycle Ceremony -- Status, Entomb, Resume
+**Goal**: Status shows runtime context, entomb extracts near-miss wisdom and cleans up properly, and resume detects stale state that could mislead
+**Depends on**: Phase 62 (seal ceremony should be established before entomb and resume changes)
+**Requirements**: CERE-06, CERE-07, CERE-08
+**Success Criteria** (what must be TRUE):
+  1. `/ant-status` dashboard shows runtime version line and a one-line signal summary
+  2. `/ant-entomb` extracts near-miss wisdom (confidence 0.5-0.8), cleans temp files (spawn trees, manifests, review artifacts), and updates registry to inactive with final stats
+  3. `/ant-resume` detects stale FOCUS pheromones referencing completed phases and suggests review
+**Plans**: TBD
+
+### Phase 64: Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol
+**Goal**: Discuss/council asks comprehensive codebase-aware questions, chaos auto-flags findings, oracle suggests persisting research, and patrol does active health checks
+**Depends on**: Phase 63 (wrapper-level changes, no hard dependency but follows lifecycle ceremony progression)
+**Requirements**: CERE-09, CERE-10, CERE-11, CERE-12
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-discuss` or `/ant-council` analyzes the codebase first, then asks comprehensive multiple-choice questions covering features, priorities, scope, trade-offs, and architecture
+  2. Running `/ant-chaos` auto-flags HIGH severity findings and suggests REDIRECT for recurring midden patterns
+  3. Running `/ant-oracle` suggests persisting high-value research findings as pheromone signals or hive wisdom entries
+  4. Running `/ant-patrol` detects stale pheromones, verifies data file integrity (valid JSON), and checks for interrupted builds
+**Plans**: TBD
+
+### Phase 65: Idea Shelving
+**Goal**: Colonies have continuity -- promising ideas get shelved at seal, surface at init, recurring REDIRECTs become permanent guidance, and shelved ideas survive entomb
+**Depends on**: Phase 62 (seal ceremony integration), Phase 63 (entomb preservation)
+**Requirements**: SHELF-01, SHELF-02, SHELF-03, SHELF-04, SHELF-05
+**Success Criteria** (what must be TRUE):
+  1. A persistent shelf file (`.aether/data/shelf.json`) stores deferred ideas with trigger conditions and metadata
+  2. Running `/ant-seal` automatically shelves promising but unimplemented ideas (low-confidence instincts, unaddressed pheromones, user-mentioned ideas)
+  3. Running `/ant-init` surfaces relevant shelved ideas and lets the user promote them to the new colony or defer again
+  4. REDIRECT pheromones recurring across 2+ phases (same content hash) get auto-shelved as permanent guidance
+  5. Shelved ideas survive `/ant-entomb` -- archived to chambers, not lost
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 52. Continue-Review Worker Outcome Reports | v1.9 | 2/2 | Complete | 2026-04-26 |
-| 53. Domain-Ledger CRUD Subcommands | v1.9 | 2/2 | Complete | 2026-04-26 |
-| 54. Colony-Prime Prior-Reviews Section | v1.9 | 1/1 | Complete | 2026-04-26 |
-| 55. Agent Definition Updates | v1.9 | 2/2 | Complete | 2026-04-26 |
-| 56. Lifecycle Integration | v1.9 | 2/2 | Complete | 2026-04-26 |
+| 57. QUEEN.md Pipeline Fix | v1.10 | 0/? | Not started | - |
+| 58. Smart Review Depth | v1.10 | 0/? | Not started | - |
+| 59. Gate Failure Recovery | v1.10 | 0/? | Not started | - |
+| 60. Oracle Loop Fix | v1.10 | 0/? | Not started | - |
+| 61. Porter Ant | v1.10 | 0/? | Not started | - |
+| 62. Lifecycle Ceremony -- Seal and Init | v1.10 | 0/? | Not started | - |
+| 63. Lifecycle Ceremony -- Status, Entomb, Resume | v1.10 | 0/? | Not started | - |
+| 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 0/? | Not started | - |
+| 65. Idea Shelving | v1.10 | 0/? | Not started | - |
