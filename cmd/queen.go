@@ -282,6 +282,16 @@ var queenPromoteInstinctCmd = &cobra.Command{
 			return nil
 		}
 
+		// Write to global hub QUEEN.md (per D-07)
+		if hs := hubStore(); hs != nil {
+			if hubText, _, err := loadQueenText(hs); err == nil {
+				hubText = appendEntryToQueenSection(hubText, "Wisdom", entry)
+				if err := writeQueenText(hs, hubText); err != nil {
+					log.Printf("queen-promote-instinct: failed to write hub QUEEN.md: %v", err)
+				}
+			}
+		}
+
 		emitLifecycleCeremony(events.CeremonyTopicQueenPromote, events.CeremonyPayload{
 			TaskID:  instinctID,
 			Task:    "Wisdom",
@@ -289,7 +299,11 @@ var queenPromoteInstinctCmd = &cobra.Command{
 			Message: sanitizeQueenInline(action),
 		}, "aether-queen")
 
-		outputOK(map[string]interface{}{"promoted": true, "instinct_id": instinctID})
+		outputOK(map[string]interface{}{
+			"promoted":    true,
+			"instinct_id": instinctID,
+			"hub_written": true,
+		})
 		return nil
 	},
 }
