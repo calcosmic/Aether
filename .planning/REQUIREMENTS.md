@@ -50,11 +50,11 @@
 
 ### Lifecycle
 
-- [ ] **LIFE-01**: `/ant-seal` archives `.aether/data/reviews/` directory alongside existing survey and build archives
-- [ ] **LIFE-02**: `/ant-seal` flags high-severity unresolved findings in the seal report
-- [ ] **LIFE-03**: `/ant-entomb` includes reviews directory in the chamber archive
-- [ ] **LIFE-04**: `/ant-status` displays review ledger counts per domain showing total and open entries
-- [ ] **LIFE-05**: Colony init clears stale reviews from prior colony (prevent cross-colony contamination)
+- [x] **LIFE-01**: `/ant-seal` archives `.aether/data/reviews/` directory alongside existing survey and build archives
+- [x] **LIFE-02**: `/ant-seal` flags high-severity unresolved findings in the seal report
+- [x] **LIFE-03**: `/ant-entomb` includes reviews directory in the chamber archive
+- [x] **LIFE-04**: `/ant-status` displays review ledger counts per domain showing total and open entries
+- [x] **LIFE-05**: Colony init clears stale reviews from prior colony (prevent cross-colony contamination)
 
 ## v1.10 Requirements
 
@@ -119,11 +119,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGENT-08 | 55 | Done |
 | AGENT-09 | 55 | Done |
 | AGENT-10 | 55 | Complete |
-| LIFE-01 | 56 | Pending |
-| LIFE-02 | 56 | Pending |
-| LIFE-03 | 56 | Pending |
-| LIFE-04 | 56 | Pending |
-| LIFE-05 | 56 | Pending |
+| LIFE-01 | 56 | Complete |
+| LIFE-02 | 56 | Complete |
+| LIFE-03 | 56 | Complete |
+| LIFE-04 | 56 | Complete |
+| LIFE-05 | 56 | Complete |
 
 **Coverage:**
 - v1.9 requirements: 36 total

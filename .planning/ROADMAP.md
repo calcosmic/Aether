@@ -111,7 +111,7 @@
 - [x] **Phase 53: Domain-Ledger CRUD Subcommands** - Four CLI subcommands for structured review finding persistence across 7 domains (completed 2026-04-26)
 - [x] **Phase 54: Colony-Prime Prior-Reviews Section** - Open review findings injected into downstream worker context (completed 2026-04-26)
 - [x] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails (completed 2026-04-26)
-- [ ] **Phase 56: Lifecycle Integration** - Seal, entomb, status, and init updated for review ledger lifecycle
+- [x] **Phase 56: Lifecycle Integration** - Seal, entomb, status, and init updated for review ledger lifecycle (completed 2026-04-26)
 
 ## Phase Details
 
@@ -176,6 +176,8 @@ Plans:
 Plans:
 - [x] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync (completed 2026-04-26)
 - [x] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
+
+### Phase 56: Lifecycle Integration
 **Goal**: Review ledgers integrate with colony lifecycle -- archived at seal, included in entomb chambers, visible in status, and cleaned at init
 **Depends on**: Phase 53 (ledgers must exist), Phase 54 (colony-prime reads ledgers)
 **Requirements**: LIFE-01, LIFE-02, LIFE-03, LIFE-04, LIFE-05
@@ -188,8 +190,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [x] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync
-- [x] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
+- [x] 56-01-PLAN.md -- Seal review archival + high-severity warnings (LIFE-01, LIFE-02) and init review cleanup (LIFE-05)
+- [ ] 56-02-PLAN.md -- Entomb review archive (LIFE-03) and status review findings display (LIFE-04)
 
 ## Progress
 
@@ -202,4 +204,4 @@ Phases execute in numeric order: 52 -> 53 -> 54 -> 55 -> 56
 | 53. Domain-Ledger CRUD Subcommands | 2/2 | Complete    | 2026-04-26 |
 | 54. Colony-Prime Prior-Reviews Section | 1/1 | Complete | 2026-04-26 |
 | 55. Agent Definition Updates | 2/2 | Complete    | 2026-04-26 |
-| 56. Lifecycle Integration | 0/? | Not started | - |
+| 56. Lifecycle Integration | 1/2 | Complete    | 2026-04-26 |
