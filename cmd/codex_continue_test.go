@@ -3930,3 +3930,345 @@ func TestVerifyCodexBuildClaims_SubdirectoryRelativePaths(t *testing.T) {
 		}
 	}
 }
+func TestContinueWorkerFlowStepJSONRoundTrip(t *testing.T) {
+	original := codexContinueWorkerFlowStep{
+		Stage:   "review",
+		Caste:   "watcher",
+		Name:    "Keen-42",
+		Task:    "Verify findings",
+		Status:  "completed",
+		Summary: "All checks passed",
+		Blockers: []string{"issue-1", "issue-2"},
+		Duration: 42.5,
+		Report:   "# Findings\n\nDetailed report here.",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded codexContinueWorkerFlowStep
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if decoded.Stage != original.Stage {
+		t.Errorf("Stage = %q, want %q", decoded.Stage, original.Stage)
+	}
+	if decoded.Caste != original.Caste {
+		t.Errorf("Caste = %q, want %q", decoded.Caste, original.Caste)
+	}
+	if decoded.Name != original.Name {
+		t.Errorf("Name = %q, want %q", decoded.Name, original.Name)
+	}
+	if decoded.Status != original.Status {
+		t.Errorf("Status = %q, want %q", decoded.Status, original.Status)
+	}
+	if decoded.Summary != original.Summary {
+		t.Errorf("Summary = %q, want %q", decoded.Summary, original.Summary)
+	}
+	if len(decoded.Blockers) != len(original.Blockers) {
+		t.Fatalf("Blockers len = %d, want %d", len(decoded.Blockers), len(original.Blockers))
+	}
+	for i, b := range decoded.Blockers {
+		if b != original.Blockers[i] {
+			t.Errorf("Blockers[%d] = %q, want %q", i, b, original.Blockers[i])
+		}
+	}
+	if decoded.Duration != original.Duration {
+		t.Errorf("Duration = %f, want %f", decoded.Duration, original.Duration)
+	}
+	if decoded.Report != original.Report {
+		t.Errorf("Report = %q, want %q", decoded.Report, original.Report)
+	}
+}
+
+func TestContinueExternalDispatchReportRoundTrip(t *testing.T) {
+	original := codexContinueExternalDispatch{
+		Stage:    "review",
+		Wave:     1,
+		Caste:    "watcher",
+		Name:     "Keen-42",
+		Task:     "Verify findings",
+		TaskID:   "1.1",
+		Status:   "completed",
+		Summary:  "All checks passed",
+		Blockers: []string{"blocker-1"},
+		Duration: 30.0,
+		Report:   "# Watcher Report\n\nAll tests green.",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded codexContinueExternalDispatch
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if decoded.Report != original.Report {
+		t.Errorf("Report = %q, want %q", decoded.Report, original.Report)
+	}
+	if decoded.Duration != original.Duration {
+		t.Errorf("Duration = %f, want %f", decoded.Duration, original.Duration)
+	}
+	if decoded.Name != original.Name {
+		t.Errorf("Name = %q, want %q", decoded.Name, original.Name)
+	}
+}
+
+func TestContinueBackwardCompatOldJSON(t *testing.T) {
+	// Old JSON for codexContinueWorkerFlowStep without new fields
+	oldFlowJSON := `{"stage":"review","caste":"watcher","name":"Keen-42","task":"Verify","status":"completed","summary":"Done"}`
+	var step codexContinueWorkerFlowStep
+	if err := json.Unmarshal([]byte(oldFlowJSON), &step); err != nil {
+		t.Fatalf("unmarshal old flow step JSON: %v", err)
+	}
+	if step.Blockers != nil {
+		t.Errorf("expected nil Blockers for old JSON, got %v", step.Blockers)
+	}
+	if step.Duration != 0 {
+		t.Errorf("expected zero Duration for old JSON, got %f", step.Duration)
+	}
+	if step.Report != "" {
+		t.Errorf("expected empty Report for old JSON, got %q", step.Report)
+	}
+
+	// Old JSON for codexContinueExternalDispatch without Report field
+	oldDispatchJSON := `{"stage":"review","wave":1,"caste":"watcher","name":"Keen-42","task":"Verify","task_id":"1.1","status":"completed","summary":"Done","blockers":["b1"],"duration":10.5}`
+	var dispatch codexContinueExternalDispatch
+	if err := json.Unmarshal([]byte(oldDispatchJSON), &dispatch); err != nil {
+		t.Fatalf("unmarshal old dispatch JSON: %v", err)
+	}
+	if dispatch.Report != "" {
+		t.Errorf("expected empty Report for old JSON, got %q", dispatch.Report)
+	}
+	if dispatch.Duration != 10.5 {
+		t.Errorf("Duration = %f, want 10.5", dispatch.Duration)
+	}
+}
+
+func TestMergeExternalContinuePropagatesReportFields(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Phase: 1,
+		Dispatches: []codexContinueExternalDispatch{
+			{Stage: "review", Wave: 1, Caste: "watcher", Name: "Keen-42", Task: "Verify", TaskID: "1.1"},
+			{Stage: "review", Wave: 1, Caste: "gatekeeper", Name: "Guard-43", Task: "Security", TaskID: "1.2"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{
+			Stage:    "review",
+			Wave:     1,
+			Caste:    "watcher",
+			Name:     "Keen-42",
+			Task:     "Verify",
+			TaskID:   "1.1",
+			Status:   "completed",
+			Summary:  "All green",
+			Blockers: []string{},
+			Duration: 15.0,
+			Report:   "# Watcher Report\n\nTests passed.",
+		},
+		{
+			Stage:    "review",
+			Wave:     1,
+			Caste:    "gatekeeper",
+			Name:     "Guard-43",
+			Task:     "Security",
+			TaskID:   "1.2",
+			Status:   "completed",
+			Summary:  "No issues",
+			Blockers: []string{"secret-found"},
+			Duration: 22.5,
+			Report:   "# Gatekeeper Report\n\nOne blocker found.",
+		},
+	}
+
+	flow, err := mergeExternalContinueResults(plan, results)
+	if err != nil {
+		t.Fatalf("mergeExternalContinueResults: %v", err)
+	}
+	if len(flow) != 2 {
+		t.Fatalf("flow len = %d, want 2", len(flow))
+	}
+
+	// Check first worker (watcher)
+	if flow[0].Name != "Keen-42" {
+		t.Errorf("flow[0].Name = %q, want %q", flow[0].Name, "Keen-42")
+	}
+	if flow[0].Duration != 15.0 {
+		t.Errorf("flow[0].Duration = %f, want 15.0", flow[0].Duration)
+	}
+	if flow[0].Report != "# Watcher Report\n\nTests passed." {
+		t.Errorf("flow[0].Report = %q, want report content", flow[0].Report)
+	}
+	if len(flow[0].Blockers) != 0 {
+		t.Errorf("flow[0].Blockers = %v, want empty", flow[0].Blockers)
+	}
+
+	// Check second worker (gatekeeper with blockers)
+	if flow[1].Name != "Guard-43" {
+		t.Errorf("flow[1].Name = %q, want %q", flow[1].Name, "Guard-43")
+	}
+	if flow[1].Duration != 22.5 {
+		t.Errorf("flow[1].Duration = %f, want 22.5", flow[1].Duration)
+	}
+	if flow[1].Report != "# Gatekeeper Report\n\nOne blocker found." {
+		t.Errorf("flow[1].Report = %q, want report content", flow[1].Report)
+	}
+	if len(flow[1].Blockers) != 1 || flow[1].Blockers[0] != "secret-found" {
+		t.Errorf("flow[1].Blockers = %v, want [secret-found]", flow[1].Blockers)
+	}
+}
+
+func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Write worker outcome reports"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Outcome report phase",
+					Description: "Test outcome report writing",
+					Status:      colony.PhaseInProgress,
+					Tasks:       []colony.Task{{ID: &taskID, Goal: "Build task", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Next task", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	buildDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Build task", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification", Status: "completed"},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "Outcome report phase", goal, buildDispatches)
+
+	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly: %v", err)
+	}
+	plan := planResult["continue_manifest"].(codexContinuePlanManifest)
+
+	// Build results with Report content for some workers, empty for others
+	results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
+	for i, dispatch := range plan.Dispatches {
+		r := codexContinueExternalDispatch{
+			Stage:    dispatch.Stage,
+			Wave:     dispatch.Wave,
+			Caste:    dispatch.Caste,
+			Name:     dispatch.Name,
+			Task:     dispatch.Task,
+			TaskID:   dispatch.TaskID,
+			Status:   "completed",
+			Summary:  dispatch.Name + " completed",
+			Duration: float64(i+1) * 10.0,
+		}
+		// Give report content to first worker, leave second empty
+		if i == 0 {
+			r.Report = "# Report for " + dispatch.Name + "\n\nDetailed findings here."
+		}
+		// Give blockers to third worker if it exists
+		if i == 2 {
+			r.Blockers = []string{"blocker-one"}
+		}
+		results = append(results, r)
+	}
+
+	completion := codexExternalContinueCompletion{
+		ContinueManifest: &plan,
+		Dispatches:       results,
+	}
+	completionData, err := json.MarshalIndent(completion, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	completionPath := filepath.Join(root, "continue-completion.json")
+	if err := os.WriteFile(completionPath, completionData, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"continue-finalize", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue-finalize: %v", err)
+	}
+
+	// Verify report files exist for each dispatched worker
+	for _, dispatch := range plan.Dispatches {
+		reportRel := filepath.Join(dataDir, "build", fmt.Sprintf("phase-%d", 1), "worker-reports", dispatch.Name+".md")
+		data, err := os.ReadFile(reportRel)
+		if err != nil {
+			t.Errorf("expected report file %s: %v", reportRel, err)
+			continue
+		}
+		content := string(data)
+
+		// Check required sections
+		for _, section := range []string{"# Worker Outcome:", "## Assignment", "## Recorded Outcome", "## Blockers", "## Report"} {
+			if !strings.Contains(content, section) {
+				t.Errorf("report for %s missing section %q", dispatch.Name, section)
+			}
+		}
+
+		// Check worker name in heading
+		if !strings.Contains(content, dispatch.Name) {
+			t.Errorf("report for %s missing name in heading", dispatch.Name)
+		}
+	}
+
+	// Check first worker has report content
+	firstReportRel := filepath.Join(dataDir, "build", "phase-1", "worker-reports", plan.Dispatches[0].Name+".md")
+	if data, err := os.ReadFile(firstReportRel); err == nil {
+		content := string(data)
+		if !strings.Contains(content, "Detailed findings here.") {
+			t.Errorf("first worker report missing report content")
+		}
+		if strings.Contains(content, "No detailed report provided.") {
+			t.Errorf("first worker report should have content, not placeholder")
+		}
+	}
+
+	// Check second worker has "No detailed report provided." (empty report)
+	if len(plan.Dispatches) > 1 {
+		secondReportRel := filepath.Join(dataDir, "build", "phase-1", "worker-reports", plan.Dispatches[1].Name+".md")
+		if data, err := os.ReadFile(secondReportRel); err == nil {
+			content := string(data)
+			if !strings.Contains(content, "No detailed report provided.") {
+				t.Errorf("second worker report should have placeholder")
+			}
+		}
+	}
+
+	// Check duration in report
+	firstReportData, _ := os.ReadFile(firstReportRel)
+	if firstReportData != nil && !strings.Contains(string(firstReportData), "Duration seconds: 10.000") {
+		t.Errorf("first worker report missing or wrong duration")
+	}
+}
+

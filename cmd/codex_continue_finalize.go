@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,6 +154,10 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write gate report: %w", err)
 	}
 
+	if err := writeCodexContinueWorkerOutcomeReports(root, phase, workerFlow, now); err != nil {
+		return nil, state, phase, nil, nil, false, err
+	}
+
 	if !gates.Passed {
 		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel)
 		if err != nil {
@@ -246,12 +252,15 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 			summary = strings.Join(blockers, "; ")
 		}
 		flow = append(flow, codexContinueWorkerFlowStep{
-			Stage:   dispatch.Stage,
-			Caste:   dispatch.Caste,
-			Name:    dispatch.Name,
-			Task:    dispatch.Task,
-			Status:  status,
-			Summary: summary,
+			Stage:    dispatch.Stage,
+			Caste:    dispatch.Caste,
+			Name:     dispatch.Name,
+			Task:     dispatch.Task,
+			Status:   status,
+			Summary:  summary,
+			Blockers: blockers,
+			Duration: result.Duration,
+			Report:   strings.TrimSpace(result.Report),
 		})
 	}
 	return flow, nil
@@ -556,6 +565,86 @@ func recordExternalContinueWorkerFlow(workerFlow []codexContinueWorkerFlowStep) 
 		}
 		if err := spawnTree.UpdateStatus(name, continueWorkerFlowStatus(step.Status), continueWorkerFlowLogSummary(step)); err != nil {
 			return fmt.Errorf("failed to finalize continue flow %s: %w", name, err)
+		}
+	}
+	return nil
+}
+func renderContinueWorkerOutcomeReport(root string, phase colony.Phase, step codexContinueWorkerFlowStep, recordedAt time.Time) string {
+	var b strings.Builder
+	b.WriteString("# Worker Outcome: ")
+	b.WriteString(step.Name)
+	b.WriteString("\n\n")
+
+	b.WriteString("## Assignment\n")
+	b.WriteString("- Phase: ")
+	b.WriteString(strconv.Itoa(phase.ID))
+	if phase.Name != "" {
+		b.WriteString(" - ")
+		b.WriteString(phase.Name)
+	}
+	b.WriteString("\n")
+	b.WriteString("- Caste: ")
+	b.WriteString(step.Caste)
+	b.WriteString("\n")
+	b.WriteString("- Task: ")
+	b.WriteString(step.Task)
+	b.WriteString("\n")
+	if root != "" {
+		b.WriteString("- Root: ")
+		b.WriteString(root)
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n## Recorded Outcome\n")
+	b.WriteString("- Status: ")
+	b.WriteString(step.Status)
+	b.WriteString("\n")
+	b.WriteString("- Recorded at: ")
+	b.WriteString(recordedAt.UTC().Format(time.RFC3339))
+	b.WriteString("\n")
+	if step.Duration > 0 {
+		b.WriteString("- Duration seconds: ")
+		b.WriteString(strconv.FormatFloat(step.Duration, 'f', 3, 64))
+		b.WriteString("\n")
+	}
+	if summary := strings.TrimSpace(step.Summary); summary != "" {
+		b.WriteString("- Summary: ")
+		b.WriteString(summary)
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n## Blockers\n")
+	if len(step.Blockers) > 0 {
+		for _, blocker := range step.Blockers {
+			b.WriteString("- ")
+			b.WriteString(blocker)
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString("none\n")
+	}
+
+	b.WriteString("\n## Report\n")
+	if report := strings.TrimSpace(step.Report); report != "" {
+		b.WriteString(report)
+		b.WriteString("\n")
+	} else {
+		b.WriteString("No detailed report provided.\n")
+	}
+
+	return b.String()
+}
+
+func writeCodexContinueWorkerOutcomeReports(root string, phase colony.Phase, workerFlow []codexContinueWorkerFlowStep, recordedAt time.Time) error {
+	for _, step := range workerFlow {
+		name := strings.TrimSpace(step.Name)
+		if name == "" {
+			continue
+		}
+		reportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "worker-reports", fmt.Sprintf("%s.md", name)))
+		content := renderContinueWorkerOutcomeReport(root, phase, step, recordedAt)
+		if err := store.AtomicWrite(reportRel, []byte(content)); err != nil {
+			return fmt.Errorf("failed to write continue worker outcome report for %s: %w", name, err)
 		}
 	}
 	return nil

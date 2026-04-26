@@ -245,6 +245,9 @@ type codexContinueWorkerFlowStep struct {
 	Task    string `json:"task,omitempty"`
 	Status  string `json:"status"`
 	Summary string `json:"summary,omitempty"`
+	Blockers []string `json:"blockers,omitempty"`
+	Duration float64  `json:"duration,omitempty"`
+	Report   string   `json:"report,omitempty"`
 }
 
 type codexContinueReviewReport struct {
@@ -852,6 +855,9 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 						}
 					}
 				}
+				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
+				step.Duration = result.WorkerResult.Duration.Seconds()
+				step.Report = strings.TrimSpace(result.WorkerResult.RawOutput)
 			}
 			if step.Summary == "" && result.Error != nil {
 				step.Summary = strings.TrimSpace(result.Error.Error())
