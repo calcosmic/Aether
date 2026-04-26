@@ -75,6 +75,7 @@ That means:
 - [x] v1.7 Planning Pipeline Recovery -- Phases 47-48 (completed 2026-04-24)
 - [x] v1.8 Colony Recovery -- Phases 49-51 (completed 2026-04-25)
 - [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
+- [ ] v1.10 Colony Polish -- Phases 57+
 
 ## Requirements
 
@@ -95,7 +96,13 @@ That means:
 
 ### Active
 
-(Next milestone requirements to be defined)
+- Smart review depth (auto/light/heavy) -- v1.10
+- Gate failure recovery -- v1.10
+- Porter ant (26th caste, interactive delivery) -- v1.10
+- Lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol) -- v1.10
+- Oracle loop fix (research formulation + depth selection) -- v1.10
+- Idea shelving system (persistent colony backlog) -- v1.10
+- QUEEN.md pipeline fix (dedup, wiring, auto-promotion) -- v1.10
 
 ### Out of Scope
 
@@ -133,6 +140,21 @@ These remain promising but are not the next best move:
 - federation / inter-colony coordination
 - self-mutating agents / evolution engine
 
+## Current Milestone: v1.10 Colony Polish
+
+**Goal:** Make every colony interaction feel complete and self-sustaining — review depth is smart, gate failures are recoverable, lifecycle commands have real ceremony, delivery has an interactive ant, the Oracle has proper research formulation, ideas get shelved for future colonies, and QUEEN.md is fully wired.
+
+**Target features:**
+- Smart review depth — auto/light/heavy modes, `--light` flag, final phase always heavy
+- Gate failure recovery — clear, actionable recovery paths when verification gates fail
+- Porter ant — 26th caste, wired into lifecycle (especially seal), interactive publishing prompts
+- Lifecycle ceremony — seal (flags, midden, wisdom, pheromone cleanup), init (deeper analysis), status (version info), entomb (wisdom extraction), resume (staleness), discuss/council (codebase-aware comprehensive questioning), chaos/oracle/patrol (signal integration)
+- Oracle loop fix — fix callback URL AND restore research formulation with depth selection
+- Idea shelving — persistent backlog, auto-shelve at seal, surface at init
+- QUEEN.md full fix — dedup explosion, pipeline wiring (global wisdom not injected, sections ignored, auto-promotion missing)
+
+**Design context:** Full plan detail preserved in `.planning/research/v1.10-PLANS-CONTEXT.md`
+
 ## Next Move
 
 Plan next milestone with `/gsd-new-milestone`.
@@ -141,4 +163,4 @@ Plan next milestone with `/gsd-new-milestone`.
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-26 after v1.9 milestone completion*
+*Last updated: 2026-04-26 after starting v1.10 milestone*
