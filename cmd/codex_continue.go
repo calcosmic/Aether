@@ -97,6 +97,8 @@ type codexVerificationCommands struct {
 type codexContinueOptions struct {
 	ReconcileTaskIDs []string
 	WorkerTimeout    time.Duration
+	LightFlag        bool
+	HeavyFlag        bool
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
@@ -292,6 +294,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 
 	currentIdx := state.CurrentPhase - 1
 	phase := state.Plan.Phases[currentIdx]
+	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
 	if phase.Status != colony.PhaseInProgress {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
@@ -469,7 +472,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout)
+	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth)
 	reviewReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "review.json"))
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
@@ -807,7 +810,7 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 	},
 }
 
-func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration) codexContinueReviewReport {
+func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth ReviewDepth) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -822,7 +825,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 		return report
 	}
 
-	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout)
+	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth)
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	results, err := dispatchBatchByWaveWithVisuals(
 		context.Background(),
@@ -889,12 +892,16 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 	return report
 }
 
-func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration) []codex.WorkerDispatch {
+func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth ReviewDepth) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
 	pheromoneSection := resolvePheromoneSection()
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
-	dispatches := make([]codex.WorkerDispatch, 0, len(codexContinueReviewSpecs))
-	for idx, spec := range codexContinueReviewSpecs {
+	specs := codexContinueReviewSpecs
+	if reviewDepth == ReviewDepthLight {
+		specs = []codexContinueReviewSpec{}
+	}
+	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
+	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)
 		dispatches = append(dispatches, codex.WorkerDispatch{
 			ID:               fmt.Sprintf("continue-review-%d", idx),
@@ -1130,7 +1137,7 @@ func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest co
 		AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
 		Caste:            "watcher",
 		TaskID:           fmt.Sprintf("continue-verification-%d", phase.ID),
-		TaskBrief:        renderCodexContinueWatcherBrief(root, phase, manifest, steps, claims, buildWatcher),
+		TaskBrief:        renderCodexContinueWatcherBrief(root, phase, manifest, steps, claims, buildWatcher, workerTimeout),
 		ContextCapsule:   resolveCodexWorkerContext(),
 		SkillSection:     resolveSkillSectionForWorkflow("continue", "watcher", "Independent verification before advancement"),
 		PheromoneSection: resolvePheromoneSection(),
@@ -1140,14 +1147,16 @@ func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest co
 	}
 }
 
-func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification) string {
+func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, workerTimeout time.Duration) string {
 	var b strings.Builder
 	b.WriteString("# Continue Verification\n\n")
 	b.WriteString("- Phase: ")
 	b.WriteString(fmt.Sprintf("%d — %s\n", phase.ID, phase.Name))
 	b.WriteString("- Repo: ")
 	b.WriteString(root)
-	b.WriteString("\n\n")
+	b.WriteString(fmt.Sprintf("\n- Time limit: %s — prioritize critical checks and return partial results rather than timing out\n",
+		effectiveContinueReviewTimeout(workerTimeout)))
+	b.WriteString("\n")
 	b.WriteString("Confirm whether this phase is safe to advance right now.\n")
 	b.WriteString("This is a read-only verification pass. Do not modify repo files. Return status `completed` only if the current workspace and recorded artifacts justify advancement. Return status `blocked` if anything is missing, stale, or misleading.\n\n")
 	b.WriteString("Evidence to inspect:\n")

@@ -109,9 +109,13 @@ var buildCmd = &cobra.Command{
 		}
 
 		syntheticBuild, _ := cmd.Flags().GetBool("synthetic")
+		lightFlag, _ := cmd.Flags().GetBool("light")
+		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
 			WorkerTimeout: workerTimeout,
 			Force:         forceBuild,
+			LightFlag:     lightFlag,
+			HeavyFlag:     heavyFlag,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -148,10 +152,14 @@ var continueCmd = &cobra.Command{
 			return nil
 		}
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
+		lightFlag, _ := cmd.Flags().GetBool("light")
+		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
 				WorkerTimeout:    workerTimeout,
+				LightFlag:        lightFlag,
+				HeavyFlag:        heavyFlag,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -164,6 +172,8 @@ var continueCmd = &cobra.Command{
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
 			ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
 			WorkerTimeout:    workerTimeout,
+			LightFlag:        lightFlag,
+			HeavyFlag:        heavyFlag,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)

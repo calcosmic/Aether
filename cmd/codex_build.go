@@ -109,6 +109,8 @@ var errRuntimeStateSuperseded = errors.New("runtime state superseded")
 type codexBuildOptions struct {
 	WorkerTimeout time.Duration
 	Force         bool
+	LightFlag     bool
+	HeavyFlag     bool
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -141,7 +143,8 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	generatedAt := time.Now().UTC()
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	playbooks := codexBuildPlaybooks()
-	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs)
+	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), false, false)
+	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
@@ -158,6 +161,7 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	result := map[string]interface{}{
 		"plan_only":         true,
 		"phase":             phaseNum,
+		"review_depth":      string(reviewDepth),
 		"phase_name":        phase.Name,
 		"state":             state.State,
 		"playbooks":         playbooks,
@@ -176,7 +180,7 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 			"source_command":          "AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
-			"finalize_surface":        "pending",
+			"finalize_surface":        "awaiting_wrapper_completion",
 		},
 	}
 	return result, state, phase, dispatches, nil
@@ -232,8 +236,9 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if depth == "" {
 		depth = "standard"
 	}
+	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
 	playbooks := codexBuildPlaybooks()
-	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs)
+	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
 	if err != nil {
 		return nil, err
@@ -338,6 +343,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 
 	result := map[string]interface{}{
 		"phase":          phaseNum,
+		"review_depth":   string(reviewDepth),
 		"phase_name":     updatedPhase.Name,
 		"state":          updatedState.State,
 		"playbooks":      playbooks,
@@ -502,7 +508,7 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 	phase := state.Plan.Phases[phaseNum-1]
 	state.Events = append(trimmedEvents(state.Events),
 		fmt.Sprintf("%s|phase_started|build|Phase %d: %s", startedAt.Format(time.RFC3339), phaseNum, phase.Name),
-		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelection(phase, normalizedBuildDepth(state.ColonyDepth), selectedTaskIDs)), phaseNum),
+		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelection(phase, normalizedBuildDepth(state.ColonyDepth), selectedTaskIDs, ReviewDepthLight)), phaseNum),
 	)
 
 	if tracer != nil && state.RunID != nil {
@@ -563,10 +569,10 @@ func codexBuildPlaybooks() []string {
 }
 
 func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispatch {
-	return plannedBuildDispatchesForSelection(phase, depth, nil)
+	return plannedBuildDispatchesForSelection(phase, depth, nil, ReviewDepthLight)
 }
 
-func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string) []codexBuildDispatch {
+func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth ReviewDepth) []codexBuildDispatch {
 	depth = normalizedBuildDepth(depth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
@@ -640,16 +646,26 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 		Task:          "Independent verification before advancement" + findingsInjectionForCaste("watcher"),
 		Status:        "spawned",
 	})
-	if len(selected) == 0 && (depth == "deep" || depth == "full") {
+	if len(selected) == 0 && (depth == "deep" || depth == "full") && reviewDepth == ReviewDepthHeavy {
 		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "measurement", lastTaskExecutionWave+3, "measurer", "Performance and cost surface review after implementation"+findingsInjectionForCaste("measurer")))
 	}
-	if depth == "full" {
+	if depth == "full" && reviewDepth == ReviewDepthHeavy {
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:         "resilience",
 			ExecutionWave: lastTaskExecutionWave + 4,
 			Caste:         "chaos",
 			Name:          deterministicAntName("chaos", fmt.Sprintf("phase:%d:chaos", phase.ID)),
 			Task:          "Resilience probing after verification" + findingsInjectionForCaste("chaos"),
+			Status:        "spawned",
+		})
+	}
+	if reviewDepth == ReviewDepthLight && chaosShouldRunInLightMode(phase.ID) {
+		dispatches = append(dispatches, codexBuildDispatch{
+			Stage:         "resilience",
+			ExecutionWave: lastTaskExecutionWave + 4,
+			Caste:         "chaos",
+			Name:          deterministicAntName("chaos", fmt.Sprintf("phase:%d:chaos", phase.ID)),
+			Task:          "Light-mode resilience sampling (30% deterministic)" + findingsInjectionForCaste("chaos"),
 			Status:        "spawned",
 		})
 	}
