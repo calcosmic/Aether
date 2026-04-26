@@ -11,6 +11,7 @@
 - **v1.6 Release Pipeline Integrity** - Phases 39-46 (completed 2026-04-24)
 - **v1.7 Planning Pipeline Recovery** - Phases 47-48 (completed 2026-04-24)
 - **v1.8 Colony Recovery** - Phases 49-51 (shipped 2026-04-25)
+- **v1.9 Review Persistence** - Phases 52-56 (in progress)
 
 ## Phases
 
@@ -102,18 +103,86 @@
 
 </details>
 
+### v1.9 Review Persistence (In Progress)
+
+**Milestone Goal:** Review agent findings survive `/clear` and accumulate across phases so downstream workers can learn from prior reviews.
+
+- [ ] **Phase 52: Continue-Review Worker Outcome Reports** - Per-worker .md reports for review workers, mirroring build report pattern
+- [ ] **Phase 53: Domain-Ledger CRUD Subcommands** - Four CLI subcommands for structured review finding persistence across 7 domains
+- [ ] **Phase 54: Colony-Prime Prior-Reviews Section** - Open review findings injected into downstream worker context
+- [ ] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails
+- [ ] **Phase 56: Lifecycle Integration** - Seal, entomb, status, and init updated for review ledger lifecycle
+
 ## Phase Details
+
+### Phase 52: Continue-Review Worker Outcome Reports
+**Goal**: Continue-review workers produce per-worker outcome reports on disk, closing the asymmetry with build workers
+**Depends on**: Nothing (first phase of v1.9)
+**Requirements**: CONT-01, CONT-02, CONT-03, CONT-04, CONT-05, CONT-06
+**Success Criteria** (what must be TRUE):
+  1. After `/ant-continue`, each review worker (Watcher, Gatekeeper, Auditor, Probe) has a `.md` file at `build/phase-N/worker-reports/{name}.md` containing its full findings
+  2. The `codexContinueWorkerFlowStep` struct carries `Blockers`, `Duration`, and `Report` fields through the continue pipeline without data loss
+  3. Claude and OpenCode wrappers pass the `report` field in their completion packet and the runtime preserves it in the merged result
+  4. Old completion packets that lack `report`, `blockers`, or `duration` fields still work correctly with no errors
+**Plans**: TBD
+
+### Phase 53: Domain-Ledger CRUD Subcommands
+**Goal**: Structured review findings persist across phases in 7 domain-specific ledgers, queryable and resolvable via CLI
+**Depends on**: Phase 52 (struct fields from continue pipeline)
+**Requirements**: LEDG-01, LEDG-02, LEDG-03, LEDG-04, LEDG-05, LEDG-06, LEDG-07, LEDG-08, LEDG-09, LEDG-10
+**Success Criteria** (what must be TRUE):
+  1. `aether review-ledger-write --domain security --phase 2 --findings '<json>'` creates `reviews/security/ledger.json` with deterministic IDs like `sec-2-001` and a computed summary
+  2. `aether review-ledger-read --domain quality --status open` returns only open quality findings, filterable by phase
+  3. `aether review-ledger-summary` prints one line per domain showing total, open, and severity breakdowns
+  4. `aether review-ledger-resolve --domain security --id sec-2-001` marks the entry resolved with a timestamp
+  5. All 7 domain directories exist under `.aether/data/reviews/` and writes use file-locking atomic writes from `pkg/storage/`
+**Plans**: TBD
+
+### Phase 54: Colony-Prime Prior-Reviews Section
+**Goal**: Downstream workers see open review findings from prior phases in their context, so review knowledge survives `/clear`
+**Depends on**: Phase 53 (must be able to read domain ledgers)
+**Requirements**: PRIME-01, PRIME-02, PRIME-03, PRIME-04, PRIME-05
+**Success Criteria** (what must be TRUE):
+  1. Colony-prime assembles a `prior-reviews` section in worker prompts at priority 8 (between user_preferences at 7 and pheromones at 9)
+  2. The section shows open findings per domain with severity and file/location summary (e.g., "Security (5 open): HIGH -- bcrypt..., MEDIUM -- auth...")
+  3. The section is capped at 800 chars in normal mode and 400 chars in compact mode
+  4. When no review ledgers exist, the section is omitted entirely (no empty placeholder)
+  5. Colony-prime reads from a cached summary file for performance rather than 7 direct ledger reads on every call
+**Plans**: TBD
+
+### Phase 55: Agent Definition Updates
+**Goal**: Seven review agents can persist findings to their domain ledgers, with write-scope guardrails preventing escape
+**Depends on**: Phase 53 (agents need `review-ledger-write` to exist as a target)
+**Requirements**: AGENT-01, AGENT-02, AGENT-03, AGENT-04, AGENT-05, AGENT-06, AGENT-07, AGENT-08, AGENT-09, AGENT-10
+**Success Criteria** (what must be TRUE):
+  1. Each of the 7 review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) has Write tool in its `tools:` frontmatter
+  2. Each agent's instructions include findings write instructions targeting its designated domain(s) (e.g., Gatekeeper writes to security)
+  3. Write-scope guardrails explicitly restrict agents to ONLY write to their designated review ledger files under `.aether/data/reviews/`, never source code, tests, or colony state
+  4. All 7 agents are synced across all 4 surfaces: `.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` (28 files verified in sync)
+  5. Build and continue dispatch flows inject findings-path instructions into review agent task prompts so agents know where to write
+**Plans**: TBD
+
+### Phase 56: Lifecycle Integration
+**Goal**: Review ledgers integrate with colony lifecycle -- archived at seal, included in entomb chambers, visible in status, and cleaned at init
+**Depends on**: Phase 53 (ledgers must exist), Phase 54 (colony-prime reads ledgers)
+**Requirements**: LIFE-01, LIFE-02, LIFE-03, LIFE-04, LIFE-05
+**Success Criteria** (what must be TRUE):
+  1. `/ant-seal` archives the `.aether/data/reviews/` directory alongside existing survey and build archives
+  2. `/ant-seal` flags any high-severity unresolved findings in the seal report before archiving
+  3. `/ant-entomb` includes the reviews directory in the chamber archive
+  4. `/ant-status` displays review ledger counts per domain (total and open entries)
+  5. `/ant-init` clears stale reviews from any prior colony to prevent cross-colony contamination
+**Plans**: TBD
 
 ## Progress
 
-| Milestone | Phases | Status | Completed |
-|-----------|--------|--------|-----------|
-| v1.0 | 1-6 | Complete | 2026-04-21 |
-| v1.1 | 7-11 | Complete | 2026-04-21 |
-| v1.2 | 12-16 | Complete | 2026-04-21 |
-| v1.3 | 17-24 | Complete | 2026-04-21 |
-| v1.4 | 25-30 | Complete | 2026-04-21 |
-| v1.5 | 31-38 | Complete | 2026-04-23 |
-| v1.6 | 39-46 | Complete | 2026-04-24 |
-| v1.7 | 47-48 | Complete | 2026-04-24 |
-| v1.8 | 49-51 | Complete | 2026-04-25 |
+**Execution Order:**
+Phases execute in numeric order: 52 -> 53 -> 54 -> 55 -> 56
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 52. Continue-Review Worker Outcome Reports | 0/? | Not started | - |
+| 53. Domain-Ledger CRUD Subcommands | 0/? | Not started | - |
+| 54. Colony-Prime Prior-Reviews Section | 0/? | Not started | - |
+| 55. Agent Definition Updates | 0/? | Not started | - |
+| 56. Lifecycle Integration | 0/? | Not started | - |

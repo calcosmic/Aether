@@ -88,48 +88,48 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONT-01 | — | Pending |
-| CONT-02 | — | Pending |
-| CONT-03 | — | Pending |
-| CONT-04 | — | Pending |
-| CONT-05 | — | Pending |
-| CONT-06 | — | Pending |
-| LEDG-01 | — | Pending |
-| LEDG-02 | — | Pending |
-| LEDG-03 | — | Pending |
-| LEDG-04 | — | Pending |
-| LEDG-05 | — | Pending |
-| LEDG-06 | — | Pending |
-| LEDG-07 | — | Pending |
-| LEDG-08 | — | Pending |
-| LEDG-09 | — | Pending |
-| LEDG-10 | — | Pending |
-| PRIME-01 | — | Pending |
-| PRIME-02 | — | Pending |
-| PRIME-03 | — | Pending |
-| PRIME-04 | — | Pending |
-| PRIME-05 | — | Pending |
-| AGENT-01 | — | Pending |
-| AGENT-02 | — | Pending |
-| AGENT-03 | — | Pending |
-| AGENT-04 | — | Pending |
-| AGENT-05 | — | Pending |
-| AGENT-06 | — | Pending |
-| AGENT-07 | — | Pending |
-| AGENT-08 | — | Pending |
-| AGENT-09 | — | Pending |
-| AGENT-10 | — | Pending |
-| LIFE-01 | — | Pending |
-| LIFE-02 | — | Pending |
-| LIFE-03 | — | Pending |
-| LIFE-04 | — | Pending |
-| LIFE-05 | — | Pending |
+| CONT-01 | 52 | Pending |
+| CONT-02 | 52 | Pending |
+| CONT-03 | 52 | Pending |
+| CONT-04 | 52 | Pending |
+| CONT-05 | 52 | Pending |
+| CONT-06 | 52 | Pending |
+| LEDG-01 | 53 | Pending |
+| LEDG-02 | 53 | Pending |
+| LEDG-03 | 53 | Pending |
+| LEDG-04 | 53 | Pending |
+| LEDG-05 | 53 | Pending |
+| LEDG-06 | 53 | Pending |
+| LEDG-07 | 53 | Pending |
+| LEDG-08 | 53 | Pending |
+| LEDG-09 | 53 | Pending |
+| LEDG-10 | 53 | Pending |
+| PRIME-01 | 54 | Pending |
+| PRIME-02 | 54 | Pending |
+| PRIME-03 | 54 | Pending |
+| PRIME-04 | 54 | Pending |
+| PRIME-05 | 54 | Pending |
+| AGENT-01 | 55 | Pending |
+| AGENT-02 | 55 | Pending |
+| AGENT-03 | 55 | Pending |
+| AGENT-04 | 55 | Pending |
+| AGENT-05 | 55 | Pending |
+| AGENT-06 | 55 | Pending |
+| AGENT-07 | 55 | Pending |
+| AGENT-08 | 55 | Pending |
+| AGENT-09 | 55 | Pending |
+| AGENT-10 | 55 | Pending |
+| LIFE-01 | 56 | Pending |
+| LIFE-02 | 56 | Pending |
+| LIFE-03 | 56 | Pending |
+| LIFE-04 | 56 | Pending |
+| LIFE-05 | 56 | Pending |
 
 **Coverage:**
 - v1.9 requirements: 36 total
-- Mapped to phases: 0
-- Unmapped: 36 ⚠️
+- Mapped to phases: 36
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after initial definition*
+*Last updated: 2026-04-26 after roadmap creation*
