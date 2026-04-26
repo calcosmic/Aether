@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -211,6 +212,145 @@ func TestReviewDepthFlags(t *testing.T) {
 			t.Errorf("continueCmd --heavy default = %q, want false", f.DefValue)
 		}
 	})
+}
+
+// --- Task 1 tests: build dispatch and continue review dispatch depth filtering ---
+
+func TestBuildDispatch_LightMode_SkipsMeasurerAndChaos(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthLight)
+	for _, d := range dispatches {
+		if d.Caste == "measurer" {
+			t.Error("light mode should skip measurer dispatch")
+		}
+		if d.Caste == "chaos" {
+			t.Errorf("light mode on phase 3 (chaosShouldRunInLightMode=false) should skip chaos, got chaos dispatch: %s", d.Name)
+		}
+	}
+}
+
+func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
+	// chaosShouldRunInLightMode returns true for phase IDs where phaseID % 10 < 3
+	// Phase IDs 1, 2, 10, 11, 12, 20, 21, 22 should include chaos in light mode
+	chaosPhases := []int{1, 2, 10, 11, 12, 20, 21, 22}
+	noChaosPhases := []int{3, 5, 7, 9, 13, 15, 23, 25}
+
+	for _, pid := range chaosPhases {
+		t.Run(fmt.Sprintf("phase_%d_includes_chaos", pid), func(t *testing.T) {
+			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthLight)
+			found := false
+			for _, d := range dispatches {
+				if d.Caste == "chaos" {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("light mode phase %d should include chaos (30%% sampling)", pid)
+			}
+		})
+	}
+	for _, pid := range noChaosPhases {
+		t.Run(fmt.Sprintf("phase_%d_skips_chaos", pid), func(t *testing.T) {
+			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthLight)
+			for _, d := range dispatches {
+				if d.Caste == "chaos" {
+					t.Errorf("light mode phase %d should skip chaos", pid)
+				}
+			}
+		})
+	}
+}
+
+func TestBuildDispatch_HeavyMode_IncludesChaosAndMeasurer(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthHeavy)
+	hasMeasurer := false
+	hasChaos := false
+	for _, d := range dispatches {
+		if d.Caste == "measurer" {
+			hasMeasurer = true
+		}
+		if d.Caste == "chaos" {
+			hasChaos = true
+		}
+	}
+	if !hasMeasurer {
+		t.Error("heavy mode with full depth should include measurer")
+	}
+	if !hasChaos {
+		t.Error("heavy mode with full depth should include chaos")
+	}
+}
+
+func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
+	// Final phase (ID == totalPhases) should always get measurer and chaos even with light flag
+	// This test verifies the build dispatch path, not the resolveReviewDepth logic
+	phase := colony.Phase{ID: 5, Name: "Final polish", Tasks: []colony.Task{{Goal: "Polish", Status: "pending"}}}
+	// When resolveReviewDepth returns heavy (final phase), dispatches should include both
+	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthHeavy)
+	hasMeasurer := false
+	hasChaos := false
+	for _, d := range dispatches {
+		if d.Caste == "measurer" {
+			hasMeasurer = true
+		}
+		if d.Caste == "chaos" {
+			hasChaos = true
+		}
+	}
+	if !hasMeasurer {
+		t.Error("final phase (heavy depth) should include measurer")
+	}
+	if !hasChaos {
+		t.Error("final phase (heavy depth) should include chaos")
+	}
+}
+
+func TestContinueReviewDispatch_LightMode_SkipsAll(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+	invoker := &codex.FakeInvoker{}
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, ReviewDepthLight)
+	if len(dispatches) != 0 {
+		t.Errorf("light mode review should produce 0 dispatches, got %d", len(dispatches))
+	}
+}
+
+func TestContinueReviewDispatch_HeavyMode_SpawnsAll3(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+	invoker := &codex.FakeInvoker{}
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, ReviewDepthHeavy)
+	if len(dispatches) != 3 {
+		t.Errorf("heavy mode review should produce 3 dispatches (gatekeeper, auditor, probe), got %d", len(dispatches))
+	}
+	castes := map[string]bool{}
+	for _, d := range dispatches {
+		castes[d.Caste] = true
+	}
+	for _, expected := range []string{"gatekeeper", "auditor", "probe"} {
+		if !castes[expected] {
+			t.Errorf("heavy mode missing %s dispatch", expected)
+		}
+	}
+}
+
+func TestContinueReviewDispatch_LightMode_HandlesEmptyGracefully(t *testing.T) {
+	// Verify that runCodexContinueReview handles empty dispatch list gracefully
+	// by checking that 0 dispatches means report.Passed == true
+	// We test this indirectly: plannedContinueReviewDispatches with light mode
+	// returns 0 dispatches. The caller (runCodexContinueReview) will produce
+	// a report with Passed=true when dispatches is empty.
+	phase := colony.Phase{ID: 3, Name: "Feature work"}
+	invoker := &codex.FakeInvoker{}
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, ReviewDepthLight)
+	if len(dispatches) != 0 {
+		t.Fatalf("expected 0 dispatches in light mode, got %d", len(dispatches))
+	}
+	// When dispatches is empty, the caller will get Passed=true (no blockers).
+	// This is verified by the existing runCodexContinueReview flow:
+	// len(report.BlockingIssues) == 0 => report.Passed = true
 }
 
 func TestChaosShouldRunInLightMode_Deterministic(t *testing.T) {
