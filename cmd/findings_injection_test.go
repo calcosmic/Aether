@@ -97,9 +97,13 @@ func TestContinueReviewBrief_GatekeeperHasFindingsInjection(t *testing.T) {
 
 func TestContinueReviewBrief_AuditorHasFindingsInjection(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Quality audit"}
-	spec := codexContinueReviewSpec{
-		Caste: "auditor",
-		Task:  "Audit whether the completed work actually satisfies the phase tasks.",
+	// Use the production spec which includes domain names in the Task text
+	var spec codexContinueReviewSpec
+	for _, s := range codexContinueReviewSpecs {
+		if s.Caste == "auditor" {
+			spec = s
+			break
+		}
 	}
 	brief := renderCodexContinueReviewBrief("/tmp/test", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, spec)
 

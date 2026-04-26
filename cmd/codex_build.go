@@ -578,7 +578,7 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 	dispatches := make([]codexBuildDispatch, 0, len(phase.Tasks)+8)
 
 	if len(selected) == 0 && depth == "full" {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "prep", 1, "archaeologist", "Git history analysis before implementation"))
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "prep", 1, "archaeologist", "Git history analysis before implementation"+findingsInjectionForCaste("archaeologist")))
 	}
 
 	if len(selected) == 0 && (depth == "deep" || depth == "full") {
@@ -637,11 +637,11 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 		ExecutionWave: lastTaskExecutionWave + 2,
 		Caste:         "watcher",
 		Name:          deterministicAntName("watcher", fmt.Sprintf("phase:%d:watcher", phase.ID)),
-		Task:          "Independent verification before advancement",
+		Task:          "Independent verification before advancement" + findingsInjectionForCaste("watcher"),
 		Status:        "spawned",
 	})
 	if len(selected) == 0 && (depth == "deep" || depth == "full") {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "measurement", lastTaskExecutionWave+3, "measurer", "Performance and cost surface review after implementation"))
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "measurement", lastTaskExecutionWave+3, "measurer", "Performance and cost surface review after implementation"+findingsInjectionForCaste("measurer")))
 	}
 	if depth == "full" {
 		dispatches = append(dispatches, codexBuildDispatch{
@@ -649,12 +649,30 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 			ExecutionWave: lastTaskExecutionWave + 4,
 			Caste:         "chaos",
 			Name:          deterministicAntName("chaos", fmt.Sprintf("phase:%d:chaos", phase.ID)),
-			Task:          "Resilience probing after verification",
+			Task:          "Resilience probing after verification" + findingsInjectionForCaste("chaos"),
 			Status:        "spawned",
 		})
 	}
 
 	return dispatches
+}
+
+// findingsInjectionForCaste returns findings-path injection text for review castes
+// dispatched during the build flow. Non-review castes return empty string.
+// Per D-05, the agent body has generic guardrails; this adds the concrete path.
+func findingsInjectionForCaste(caste string) string {
+	domainMap := map[string][]string{
+		"watcher":       {"testing", "quality"},
+		"chaos":         {"resilience"},
+		"measurer":      {"performance"},
+		"archaeologist": {"history"},
+	}
+	domains, ok := domainMap[caste]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("\n\nPersist your %s findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent %s",
+		strings.Join(domains, " and "), caste)
 }
 
 func codexBuildSpecialistDispatch(phase colony.Phase, stage string, executionWave int, caste string, task string) codexBuildDispatch {
