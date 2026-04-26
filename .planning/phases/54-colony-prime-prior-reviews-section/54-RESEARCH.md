@@ -403,17 +403,11 @@ func severityRank(s colony.ReviewSeverity) int {
 | A4 | Cache refresh on every colony-prime call (D-05) is acceptable performance | Architecture Patterns | Low -- colony-prime runs once per build/continue, not in a hot loop |
 | A5 | No new test helper functions needed -- `setupReviewLedgerTest` from `review_ledger_test.go` is reusable | Validation Architecture | Medium -- the test helper sets up `store` global; colony-prime tests need a full store with COLONY_STATE.json too |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should `domainOrder` be moved to `pkg/colony/review_ledger.go`?**
-   - What we know: `domainOrder` currently lives in `cmd/review_ledger.go` (line 36). The new section builder also needs it. `pkg/colony/review_ledger.go` has `ValidReviewDomains` as a map (no order).
-   - What's unclear: Whether moving it to pkg/ would create any import cycles.
-   - Recommendation: Add a `DomainOrder []string` variable to `pkg/colony/review_ledger.go`, update `cmd/review_ledger.go` to use `colony.DomainOrder`, and use it in the new section builder.
+1. **Should `domainOrder` be moved to `pkg/colony/review_ledger.go`?** RESOLVED: Yes. Plan Task 1 moves `DomainOrder` to `pkg/colony/review_ledger.go` and updates `cmd/review_ledger.go` to use `colony.DomainOrder`.
 
-2. **Should the cache store per-domain open counts for the LogLine?**
-   - What we know: The LogLine currently shows signal count and instinct count. Adding review finding count would be useful.
-   - What's unclear: Whether to include it in LogLine or just in the section content.
-   - Recommendation: Add `ReviewCount int` to `colonyPrimeOutput` and include in LogLine: `"colony-prime loaded N signal(s), M instinct(s), R review finding(s), used X/Y chars"`.
+2. **Should the cache store per-domain open counts for the LogLine?** RESOLVED: Yes. Plan Task 2 adds `ReviewCount int` to `colonyPrimeOutput` and updates the LogLine format.
 
 ## Environment Availability
 
