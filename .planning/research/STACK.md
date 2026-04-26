@@ -1,147 +1,158 @@
-# Technology Stack: aether recover
+# Technology Stack
 
-**Project:** Aether Colony Recovery Command
-**Researched:** 2026-04-25
+**Project:** Aether v1.9 -- Review Findings Persistence and Domain-Ledger System
+**Researched:** 2026-04-26
 **Confidence:** HIGH (all findings verified by reading source code directly)
 
 ## Executive Summary
 
-The `aether recover` command needs almost zero new infrastructure. The codebase already contains a complete health scanning pipeline (`cmd/medic_scanner.go`), a repair pipeline (`cmd/medic_repair.go`), state recovery from artifacts (`cmd/state_repair.go`), abandoned build detection (`cmd/codex_continue.go`), worktree orphan scanning (`cmd/worktree.go`), and checkpoint/rollback support (`cmd/autofix.go`). The gap is orchestration: a single command that chains these detectors and repairers into a coherent diagnosis-and-fix flow with clean output.
+The domain-ledger system and continue-review outcome reports need zero new external dependencies. Every capability required -- structured JSON persistence with file locking, append-with-deduplication, CLI subcommand registration, deterministic ID generation, and colony-prime context injection -- already exists within established patterns in `cmd/` and `pkg/`. The recommended approach is three new files (one types file, one commands file, functions added to an existing finalize file) plus targeted modifications to six existing files.
 
 ## Recommended Stack
 
-### Core Framework (all existing, zero additions)
+### Data Persistence Layer
 
-| Technology | Location | Purpose | Why reuse |
-|------------|----------|---------|-----------|
-| cobra.Command | `cmd/root.go` | CLI subcommand registration | Standard pattern for all aether commands |
-| pkg/storage.Store | `pkg/storage/storage.go` | Atomic JSON read/write with file locking | Already initialized globally as `store` in every command |
-| pkg/storage.FileLocker | `pkg/storage/lock.go` | Cross-process exclusive and shared locks | Needed when recover modifies state files |
-| pkg/storage.CreateBackup + RotateBackups | `pkg/storage/backup.go` | Pre-repair backup with rotation | Medic repair already uses a parallel implementation; recover should use the pkg version |
-| pkg/colony.ColonyState | `pkg/colony/colony.go` | Core state type | All state loading returns this type |
-| pkg/codex.DispatchBatch | `pkg/codex/dispatch.go` | Worker batch execution (if recover redispatches) | Only needed if recover triggers targeted redispatch |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `pkg/storage.Store` | existing | File-locked JSON reads/writes for all 7 domain ledger files | Already provides `SaveJSON`, `LoadJSON`, `UpdateJSONAtomically`, and `AtomicWrite` with cross-process file locking via `FileLocker`. Each domain ledger at `.aether/data/reviews/{domain}/ledger.json` is a standard `store.LoadJSON` / `store.SaveJSON` cycle. No new locking infrastructure needed. Verified in `pkg/storage/storage.go` lines 140-147 (`SaveJSON`) and lines 150-165 (`LoadJSON`). |
+| `encoding/json` | stdlib | Marshal/unmarshal for `ReviewLedgerFile`, `ReviewLedgerEntry` types | Direct use of struct tags, same as every other JSON type in `pkg/colony/` and `cmd/`. `json.RawMessage` for flexible report payloads if agents return structured findings. |
+| `os` / `path/filepath` | stdlib | Directory creation for `reviews/{domain}/` subdirectories | `os.MkdirAll` before first write to each domain ledger. Same pattern as `hive-init` in `cmd/hive.go` lines 45-46 where `os.MkdirAll(hiveDir, 0755)` creates the hive directory before writing. |
+| `crypto/sha256` + `encoding/hex` | stdlib | Content-hash deduplication for ledger entries | Same pattern as `pheromone_write.go` line 314 (`sha256Sum`) and `hive.go` line 99. Hash the agent+phase+category+description+file tuple to prevent duplicate entries when a phase is re-run. |
+| `fmt` + `strconv` | stdlib | Deterministic entry IDs like `sec-2-001` | `fmt.Sprintf` with domain prefix, phase number, and zero-padded sequence counter. Same ID generation philosophy as `pheromone_write.go` line 79 and `midden_cmds.go` line 434, but domain-scoped for human readability. |
+| `time` | stdlib | RFC3339 timestamps, entry age calculations for pruning | `time.Now().UTC().Format(time.RFC3339)` is the universal timestamp pattern across every Aether command. `time.Parse` for resolution age checks in `review-ledger-resolve`. |
+| `sort` | stdlib | Sort entries by severity, timestamp for summary output | Same pattern as `midden_cmds.go` line 38 and `codex_build_finalize.go` line 408. |
+| `strings` | stdlib | Agent-to-domain mapping, content sanitization, case-insensitive matching | Same usage across every command file. `strings.EqualFold` for case-insensitive caste/status matching (see `codex_build_finalize.go` line 449). |
 
-### Rendering (all existing)
+### CLI Command Framework
 
-| Technology | Location | Purpose | Why reuse |
-|------------|----------|---------|-----------|
-| renderBanner() | `cmd/codex_visuals.go` | ANSI banner with emoji | Consistent visual identity |
-| renderStageMarker() | `cmd/codex_visuals.go` | Section separators | Clean output structure |
-| renderNextUp() | `cmd/codex_visuals.go` | Next-step suggestion box | Recovery needs clear next-action guidance |
-| severityColor() | `cmd/medic_cmd.go` | ANSI color for critical/warning/info | Already defined for medic, reuse for recover |
-| shouldUseANSIColors() | `cmd/codex_visuals.go` | Terminal capability check | Automatic color handling |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `github.com/spf13/cobra` | v1.10.2 (existing) | CLI subcommand registration, flag parsing for 4 new ledger commands | `review-ledger-write`, `review-ledger-read`, `review-ledger-summary`, `review-ledger-resolve` register via `rootCmd.AddCommand()` in `init()`. Exact same pattern as `cmd/midden_cmds.go` lines 485-509 where 10 subcommands are registered in one `init()` block. |
+| `cmd/helpers.go` output helpers | existing | `outputOK`, `outputError` for structured JSON output | All four ledger subcommands return results through `outputOK()` with `map[string]interface{}` payloads, matching `midden_cmds.go`, `hive.go`, and `pheromone_write.go`. Verified in `cmd/helpers.go` line 18. |
 
-### Existing Detection Infrastructure (reuse as-is)
+### Colony-Prime Context Injection
 
-| Detector | Location | What it finds | How recover uses it |
-|----------|----------|---------------|---------------------|
-| performHealthScan() | `cmd/medic_scanner.go` | 20+ issue types across state, session, pheromones, data files, JSONL, integrity | Call directly for comprehensive scan |
-| scanColonyState() | `cmd/medic_scanner.go` | Invalid state, missing goal, EXECUTING with no phase, orphaned worktrees, deprecated signals, bad plan structure | Reuse as primary state detector |
-| detectAbandonedBuild() | `cmd/codex_continue.go` | All dispatches stuck at "spawned" past 10-minute threshold | Call to detect stuck builds |
-| loadCodexContinueManifest() | `cmd/codex_continue.go` | Loads build manifest for a phase | Use to check if build packet exists |
-| reportOrphanBranches() | `cmd/worktree.go` | Git branches matching phase-N/name with no worktree | Call for branch cleanup detection |
-| isWorktreeOrphaned() | `cmd/worktree.go` | Checks last commit time against threshold | Reuse for worktree staleness |
-| getGitWorktreePaths() | `cmd/medic_repair.go` | Lists actual git worktree paths via porcelain | Reuse for state-vs-disk consistency |
-| repairMissingPlanFromArtifacts() | `cmd/state_repair.go` | Recovers plan from planning/phase-plan.json when state loses it | Reuse for plan recovery |
-| loadActiveRecoveryGuidance() | `cmd/recovery_snapshot.go` | Loads continue.json for current phase recovery context | Reuse to detect partial-phase state |
-| loadActiveColonyState() | `cmd/state_load.go` | Loads colony state with compatibility repair, legacy normalization, and plan artifact recovery | Reuse as the primary state loader |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `cmd/colony_prime_context.go` section system | existing | New `prior-reviews` section injected into worker prompts | The `colonyPrimeSection` struct (line 53) and `buildColonyPrimeOutput()` function (line 123) already support arbitrary sections with priority ordering. Adding a new section at priority 8 (between pheromones at 9 and instincts at 6) follows the exact same pattern as the `medic_health` section added at lines 452-485. Each section becomes a `rankingCandidate()` (line 85) that flows through `colony.RankContextCandidates`. |
+| `pkg/colony.ContextCandidate` | existing | Trust scoring and ranking for the new section | The new section gets `freshnessScore`, `confirmationScore`, and `relevanceScore` computed from ledger entry timestamps and counts. No new ranking logic needed -- the existing `RankContextCandidates` budget allocator handles trim ordering. |
+| `pkg/cache.SessionCache` | existing | Cached loading of ledger summaries for performance | Same pattern as pheromone loading at line 191 and instinct loading at line 238. Avoids re-reading 7 ledger files on every colony-prime call. |
 
-### Existing Repair Infrastructure (reuse as-is)
+### Continue-Review Outcome Reports
 
-| Repair | Location | What it fixes | How recover uses it |
-|--------|----------|---------------|---------------------|
-| performRepairs() | `cmd/medic_repair.go` | Orchestrated repair cycle with backup, sort by severity, dedup | Core repair engine -- call directly |
-| repairStateIssues() | `cmd/medic_repair.go` | Orphaned worktrees, deprecated signals, EXECUTING with no phase | Reuse for state-level fixes |
-| repairPheromoneIssues() | `cmd/medic_repair.go` | Expired signals, missing IDs, invalid types | Reuse for pheromone fixes |
-| repairSessionIssues() | `cmd/medic_repair.go` | Phase mismatch, goal mismatch between session and state | Reuse for session fixes |
-| repairDataIssues() | `cmd/medic_repair.go` | Corrupted JSON, ghost constraints, stale cache, stale spawn state | Reuse for data-level fixes |
-| autofix-checkpoint | `cmd/autofix.go` | Creates timestamped checkpoint before repair | Reuse for pre-recover checkpoint |
-| autofix-rollback | `cmd/autofix.go` | Restores from checkpoint on failure | Reuse for recover rollback |
-| atomicWriteFile() | `cmd/medic_repair.go` | Atomic file write via temp+rename | Already used by repair pipeline |
-| syncSessionFromState() | `cmd/recovery_snapshot.go` | Syncs session.json with colony state | Reuse to align session after repair |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `store.AtomicWrite` | existing | Write per-worker `.md` report files for continue-review workers | Same as `writeCodexBuildOutcomeReports` in `codex_build.go` line 1131 which uses `store.AtomicWrite(reportRel, []byte(content))`. New function `writeCodexContinueOutcomeReports` mirrors this pattern, writing to `build/phase-{N}/worker-reports/{name}.md`. |
+| `strings.Builder` | stdlib | Render markdown report content | Same as `renderCodexBuildWorkerOutcomeReport` in `codex_build.go` line 1165 which builds the report using `strings.Builder`. New `renderCodexContinueWorkerOutcomeReport` uses identical approach. |
+| `strconv` | stdlib | Float formatting for duration display in worker reports | `strconv.FormatFloat` or `fmt.Sprintf("%.1f", duration)` for duration field rendering. Already imported in `codex_build.go` line 10. |
 
-## What Needs To Be Built
+### Struct Extensions (No New Types Package Needed for Part A)
 
-### 1. New command file: cmd/recover.go
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `cmd/codex_continue.go` struct extensions | existing | Add `Blockers []string`, `Duration float64`, `Report string` to `codexContinueWorkerFlowStep` | The struct at line 241 gets three new `json`-tagged fields. Non-breaking since JSON deserialization ignores unknown fields and `omitempty` tags handle zero values. |
+| `cmd/codex_continue_plan.go` struct extensions | existing | Add `Report string` to `codexContinueExternalDispatch` | The struct at line 12 gets one new field. Same non-breaking reasoning. |
 
-One new file registering the `recover` cobra command. This is orchestration-only: it calls existing scanners and repairers in a specific order and renders unified output.
+### New Type Definitions (Part B -- Domain Ledger)
 
-**Why a new file:** The existing `medic_cmd.go` owns the `aether medic` command. `recover` is a different user intent (emergency rescue vs routine health check) with different output format (single-answer diagnosis vs detailed report). Keeping them separate avoids bloating medic and allows recover-specific flags (`--apply`, `--dry-run`).
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| New file: `pkg/colony/review_ledger.go` | new | `ReviewLedgerEntry`, `ReviewLedgerFile`, `ReviewLedgerSummary` types + agent-to-domain mapping constants | Follows exact pattern of `pkg/colony/midden.go` which defines `MiddenEntry`, `MiddenFile` in ~55 lines. The types file is separate from the commands file so `pkg/colony` types are importable without pulling in cobra dependencies. |
+| New file: `cmd/review_ledger.go` | new | Four cobra subcommands for CRUD operations | Follows exact pattern of `cmd/midden_cmds.go` (511 lines, 10 subcommands). Estimated ~350 lines for 4 subcommands with flag registration. |
 
-### 2. Recover-specific detectors
+### Agent Definitions and Mirrors
 
-These detect stuck-state scenarios that medic does not currently cover:
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Markdown agent files in `.claude/agents/ant/` | existing | Add Write tool to 7 review agent specs + findings instructions section | The 7 review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) get `Write` added to their YAML frontmatter tools list, plus a `## Review Findings Output` section describing write-scope guardrails and the structured JSON format for findings. Parsed by existing `ParseAgentSpec()`. |
+| `gopkg.in/yaml.v3` | v3.0.1 (existing) | Agent frontmatter parsing (no changes to parser) | Already used for agent spec parsing. Only the agent markdown content changes. |
+| Mirror sync via `aether publish` | existing | Sync to `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` | The existing YAML source chain documented in CLAUDE.md handles mirror synchronization. Agent changes flow through `.claude/agents/ant/` -> `.aether/agents-claude/` -> `.opencode/agents/` -> `.codex/agents/`. |
 
-| Detector | What it checks | Why medic does not cover this |
-|----------|---------------|-------------------------------|
-| Stuck EXECUTING state | State=EXECUTING but no build manifest for current phase | Medic checks state validity but not "is there a build packet on disk" |
-| Stale spawned workers | spawn-runs.json has runs with status=running/active older than 1 hour | Medic scanner checks spawn-runs JSON validity but not runtime staleness |
-| Partial phase completion | Phase has mix of completed and pending tasks with no active build | Medic validates task statuses but not stuck-in-middle |
-| Dirty worktree | State=EXECUTING with worktree mode but worktree has uncommitted changes | Medic checks orphaned worktrees but not dirty working trees |
-| Missing agent files | Agent TOML/MD files referenced by dispatches do not exist on disk | Medic does not check agent file existence |
-| Broken survey | territory_surveyed set but survey data missing | Not a medic concern |
+### Lifecycle Integration
 
-### 3. Recover-specific output renderer
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `cmd/seal.go` | existing | Archive ledger data at seal time | Ledger files are colony-scoped and get archived with the colony. The seal process already handles `.aether/data/` file archival. |
+| `cmd/status.go` | existing | Display ledger summary in status output | Add a `Ledger Summary` row showing open findings count per domain. Same pattern as existing memory health display. |
+| `cmd/entomb.go` | existing | Preserve ledger files in entomb archives | Entomb already archives the full `.aether/data/` directory tree including subdirectories. The `reviews/` directory is automatically included. |
 
-A renderer that produces the "single-answer" output the project spec calls for:
-- One-line diagnosis summary
-- Actionable fix list
-- No wall of debug logs
+## New Files to Create
 
-This is a thin wrapper over existing `renderBanner()`, `renderStageMarker()`, `renderNextUp()`.
+| File | Purpose | Estimated Size | Pattern Source |
+|------|---------|----------------|----------------|
+| `pkg/colony/review_ledger.go` | `ReviewLedgerEntry`, `ReviewLedgerFile`, `ReviewLedgerSummary` types + `AgentDomainMap` constants + helper functions | ~80 lines | `pkg/colony/midden.go` (55 lines, same struct+file pattern) |
+| `cmd/review_ledger.go` | Four cobra subcommands: `review-ledger-write`, `review-ledger-read`, `review-ledger-summary`, `review-ledger-resolve` with flag registration and JSON output | ~350 lines | `cmd/midden_cmds.go` (511 lines for 10 commands, proportional) |
 
-### 4. Recover-specific repair: state reset
+## Files to Modify
 
-The one truly new repair action: resetting colony state from EXECUTING back to READY when the build is abandoned and the user wants to restart. This is NOT the same as medic's `reset_executing_no_phase` (which only handles the edge case of EXECUTING with phase=0). The recover version needs to:
-1. Reset state from EXECUTING to READY
-2. Clear BuildStartedAt
-3. Reset the current phase's tasks to pending
-4. Log a recovery event
-
-**Estimated size:** ~40 lines of Go.
+| File | Change | Risk |
+|------|--------|------|
+| `cmd/codex_continue.go` | Add `Blockers []string`, `Duration float64`, `Report string` fields to `codexContinueWorkerFlowStep` (line 241) | Low -- adding optional struct fields is backward compatible |
+| `cmd/codex_continue_plan.go` | Add `Report string` to `codexContinueExternalDispatch` (line 12) | Low -- same reasoning |
+| `cmd/codex_continue_finalize.go` | Add `writeCodexContinueOutcomeReports()` and `renderCodexContinueWorkerOutcomeReport()` functions; call report writer after `review.json` write (after line 168); preserve new fields in `mergeExternalContinueResults()` (line 217); add `strconv` import | Medium -- modifies the continue finalize hot path with new function call; needs targeted test coverage for the new report writer |
+| `cmd/colony_prime_context.go` | Add `prior-reviews` section with priority 8; reads from `.aether/data/reviews/*/ledger.json` and renders summary of open findings per domain | Low -- additive section in the existing section assembly; budget system handles trimming automatically |
+| 7 agent files in `.claude/agents/ant/` | Add `Write` to tools list in frontmatter; add `## Review Findings Output` section | Low -- additive frontmatter and documentation |
+| Agent mirror directories | Sync changes to `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` | Low -- mechanical sync via publish pipeline |
+| `.claude/commands/ant/continue.md` | Add `report` field to completion packet instructions | Low -- documentation change |
+| `.opencode/commands/ant/continue.md` | Same as above | Low -- documentation change |
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Command structure | New cmd/recover.go | Extend cmd/medic_cmd.go | Different user intent, different output format, avoid feature creep |
-| Detection engine | Reuse medic scanner + add recover-specific checks | Build all detectors from scratch | Medic already has 20+ checks; recover just needs 6 more |
-| Repair engine | Reuse performRepairs() + add state reset | Rewrite repair pipeline | Existing pipeline handles backup, severity sorting, dedup, tracing |
-| State loading | Reuse loadActiveColonyState() | Direct file reads | Already handles compatibility repair, legacy normalization, plan recovery |
-| Backup | Reuse medic's createBackup() | Use pkg/storage.CreateBackup() | Medic backup copies entire .aether/data/ which is the right scope for recovery |
-| File writing | Reuse atomicWriteFile() | Use store.AtomicWrite() | Both work; recover should prefer store.AtomicWrite() since it validates JSON |
+| Data store | `pkg/storage.Store` with JSON files | SQLite via `modernc.org/sqlite` | No query complexity warrants a database. The 7 domain ledgers are append-mostly files with at most hundreds of entries per colony lifetime. JSON files are inspectable with `cat`, debuggable with `jq`, and already understood by every existing Aether tool. Adding SQLite would introduce a CGO dependency, complicate the build, and break the "inspect with `cat`" debugging story that every other data file maintains. |
+| Data store | `pkg/storage.Store` with JSON files | BadgerDB / BoltDB embedded KV stores | Same reasoning as SQLite. The ledger access pattern is sequential scan by domain (for colony-prime injection) and point lookup by ID (for resolve). No performance bottleneck exists at colony-scoped review data scale. |
+| ID generation | Deterministic `sec-2-001` format | UUID v4 via `github.com/google/uuid` | Deterministic IDs encode domain and phase information, making debugging and log tracing trivial. `sec-2-001` immediately tells you it is a security finding from phase 2 entry 1. UUID adds an external dependency and produces opaque identifiers. Every existing ID pattern in Aether (`sig_*`, `midden_*`, `flag_*`) is deterministic and human-readable. |
+| Schema validation | Struct tags + manual validation in command handlers | `github.com/go-playground/validator` | Manual validation is the existing pattern (see `pheromone_write.go` lines 38-49, `midden_cmds.go` lines 94-98). Adding a validation library for 4 commands with ~5 fields each is over-engineering that breaks consistency with the rest of the codebase. |
+| Agent findings format | Write tool + structured JSON to `.aether/data/reviews/` | Custom gRPC or IPC protocol | Agents are LLM subprocesses that communicate through file I/O and markdown. The Write tool approach matches how build outcome reports work (`writeCodexBuildOutcomeReports`). No inter-process communication channel exists, and building one would be a major architectural departure for zero benefit. |
+| Colony-prime injection | String-builder markdown section | Protocol buffer or custom binary format | Colony-prime produces markdown text injected into LLM prompts. A structured binary format would need a serialization/deserialization step for no benefit since the consumer is an LLM reading markdown. |
+| Ledger types location | New file `pkg/colony/review_ledger.go` | Inline types in `cmd/review_ledger.go` | Separating types from commands allows the types to be imported by both `cmd/review_ledger.go` (commands) and `cmd/colony_prime_context.go` (injection) without creating import cycles. This matches the pattern where `pkg/colony/midden.go` defines types used by `cmd/midden_cmds.go` and `cmd/medic_scanner.go`. |
 
-## Dependency Graph
+## What NOT to Add
 
-```
-cmd/recover.go
-  -> cmd/medic_scanner.go  (performHealthScan)
-  -> cmd/medic_repair.go   (performRepairs, createBackup)
-  -> cmd/state_repair.go   (repairMissingPlanFromArtifacts)
-  -> cmd/codex_continue.go (detectAbandonedBuild, loadCodexContinueManifest)
-  -> cmd/worktree.go       (reportOrphanBranches, isWorktreeOrphaned)
-  -> cmd/recovery_snapshot.go (loadActiveRecoveryGuidance, syncSessionFromState)
-  -> cmd/codex_visuals.go  (renderBanner, renderStageMarker, renderNextUp)
-  -> pkg/storage/           (Store.AtomicWrite, Store.LoadJSON, Store.SaveJSON)
-  -> pkg/colony/            (ColonyState, State constants)
-```
-
-No new pkg/ dependencies. Everything stays within cmd/ and existing packages.
+| Technology | Why Avoid |
+|------------|-----------|
+| Any new `go.mod` dependency | The four required capabilities (JSON persistence with locking, CLI commands, context injection, worker reports) are fully covered by existing packages. Adding dependencies increases binary size, supply chain attack surface, and maintenance burden for zero functional gain. `go mod tidy` should produce no changes. |
+| Database of any kind | Colony-scoped review data will never exceed hundreds of entries per domain across a full project lifecycle. JSON files are sufficient, debuggable, and consistent with every other data file in `.aether/data/`. The pheromone system handles similar volume with the same approach. |
+| Message queue or event streaming | Review findings are written once per continue cycle and read for colony-prime injection. The existing `pkg/events` event bus can emit optional ceremony events for audit logging, but the ledger itself does not need pub/sub semantics. |
+| Custom marshaling or serialization | `encoding/json` with struct tags handles all required formats. Ledger entries are flat records with no circular references, polymorphism, or custom encoding needs. |
+| Testing framework beyond `testing` + `testify` | Existing test patterns in `cmd/*_test.go` use standard `testing.T` with `stretchr/testify` assertions. No new assertion or mocking libraries needed. |
+| ORM or query builder | Direct struct iteration and `sort.Slice` cover all query patterns needed (filter by status, group by domain, count by severity). The data volume is trivially small. |
 
 ## Installation
 
-No new packages required. All dependencies are already in go.mod.
+No installation needed. All dependencies already exist in `go.mod`.
+
+```bash
+# Verify existing dependencies are sufficient
+go mod tidy  # should show no changes
+go build ./cmd/aether  # should compile cleanly
+
+# Run existing tests to establish baseline before starting
+go test ./... -race
+```
+
+## Confidence Assessment
+
+| Area | Confidence | Reason |
+|------|------------|--------|
+| Zero new dependencies | HIGH | Reviewed every existing pattern in `pkg/storage`, `pkg/colony`, and `cmd/`. All required capabilities (atomic JSON write, file locking, dedup, CLI registration, section injection, report rendering) are present and proven by 2900+ passing tests. |
+| Ledger file structure | HIGH | Direct structural analog of `midden.json` pattern (`pkg/colony/midden.go`) with domain-scoped subdirectories instead of a single flat file. The `MiddenFile` / `MiddenEntry` types are the template. |
+| Colony-prime integration | HIGH | The `colonyPrimeSection` system at `cmd/colony_prime_context.go` is explicitly designed for additive sections with priority-based trimming. The `medic_health` section added at lines 452-485 proves the pattern works for exactly this kind of addition. |
+| Continue-review reports | HIGH | Structural mirror of `writeCodexBuildOutcomeReports` at `cmd/codex_build.go` lines 1125-1185 with adapted field names and report content. |
+| Agent mirror sync | HIGH | Existing publish pipeline handles mirror synchronization mechanically. |
+| Part A struct extensions | HIGH | Adding optional fields to existing structs is the most common backward-compatible change in Go JSON APIs. The `omitempty` tag pattern prevents zero-value pollution. |
 
 ## Sources
 
-- Direct source code review of all files listed above (HIGH confidence -- read every line)
-- pkg/storage/storage.go: atomic write, locking, backup APIs
-- cmd/medic_scanner.go: 700+ lines of health scanning infrastructure
-- cmd/medic_repair.go: 800+ lines of repair infrastructure with backup, tracing
-- cmd/state_repair.go: plan recovery from artifacts, phase progress inference
-- cmd/codex_continue.go: abandoned build detection, continue manifest loading
-- cmd/worktree.go: worktree allocation, orphan scanning, branch detection
-- cmd/recovery_snapshot.go: session sync, context/handoff documents, recovery guidance
-- cmd/state_load.go: colony state loading with compatibility repair
-- pkg/colony/colony.go: ColonyState type, all state/phase/task constants
-- cmd/codex_visuals.go: ANSI rendering functions
+- `/Users/callumcowie/repos/Aether/pkg/storage/storage.go` -- Store API: `AtomicWrite` (line 48), `SaveJSON` (line 140), `LoadJSON` (line 150), `UpdateJSONAtomically` (line 121)
+- `/Users/callumcowie/repos/Aether/cmd/pheromone_write.go` -- Append-with-dedup pattern using `sha256Sum` content hashing (lines 86-89, 150-169)
+- `/Users/callumcowie/repos/Aether/cmd/hive.go` -- LRU eviction and cross-entry deduplication (lines 98-118), directory creation pattern (lines 45-46)
+- `/Users/callumcowie/repos/Aether/cmd/midden_cmds.go` -- CRUD subcommand registration pattern (lines 485-509), JSON payload structure
+- `/Users/callumcowie/repos/Aether/pkg/colony/midden.go` -- Struct type definition pattern for `MiddenEntry` / `MiddenFile`
+- `/Users/callumcowie/repos/Aether/cmd/codex_build.go` lines 1125-1185 -- `writeCodexBuildOutcomeReports` and `renderCodexBuildWorkerOutcomeReport` pattern
+- `/Users/callumcowie/repos/Aether/cmd/codex_continue_finalize.go` -- Continue finalize hot path, `runCodexContinueFinalize` function
+- `/Users/callumcowie/repos/Aether/cmd/codex_continue.go` -- `codexContinueWorkerFlowStep` struct (line 241), `codexContinueReviewReport` (line 250)
+- `/Users/callumcowie/repos/Aether/cmd/codex_continue_plan.go` -- `codexContinueExternalDispatch` struct (line 12), `continuePlanArtifactsPath` (line 225)
+- `/Users/callumcowie/repos/Aether/cmd/colony_prime_context.go` -- Section assembly with priority ordering (lines 123-527), `colonyPrimeSection` struct (line 53)
+- `/Users/callumcowie/repos/Aether/go.mod` -- Existing dependency inventory (cobra v1.10.2, yaml.v3 v3.0.1, no database drivers)

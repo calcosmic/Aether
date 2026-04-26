@@ -1,353 +1,187 @@
-# Feature Landscape: `aether recover` Stuck-State Detection and Fix
+# Feature Research: Review Findings Persistence and Domain-Ledger System
 
-**Domain:** Colony lifecycle recovery for Aether Go CLI
-**Researched:** 2026-04-25
-**Confidence:** HIGH (all findings verified against source code)
+**Domain:** Review persistence for Aether colony framework (v1.9 milestone)
+**Researched:** 2026-04-26
+**Confidence:** HIGH (all findings verified against source code in `cmd/`, `.claude/agents/ant/`, `.opencode/commands/ant/`)
 
-## Table Stakes
+## Feature Landscape
 
-Features users expect from a "colony got stuck, fix it" command. Missing = the command feels incomplete or dangerous.
+### Table Stakes (Users Expect These)
+
+Features users assume exist when told "review findings survive `/clear` and accumulate across phases." Missing = the system feels broken or incomplete.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Detect all 7 stuck classes | User ran the command to find out what is wrong | Medium | Each class has distinct disk markers |
-| Explain in plain English | Non-technical users need to understand what broke | Low | Status command pattern already exists |
-| Safe auto-fix with `--apply` | User expects one button to fix everything | Medium | Backup-first pattern from medic repair |
-| Dry-run by default | User needs to see what would change before committing | Low | Medic already runs read-only by default |
-| Non-destructive guarantees | User must not lose data | Medium | Backup before any write, like medic |
-| Clear next-step output | User needs to know what to do after recovery | Low | `renderNextUp` pattern exists |
+| Continue-review worker outcome reports | Build workers already get per-worker `.md` files at `build/phase-N/worker-reports/`. Review workers returning rich JSON findings with no file output is an asymmetric gap. Users who inspect build artifacts will expect review artifacts too. | LOW | Directly mirrors `writeCodexBuildOutcomeReports()` / `renderCodexBuildWorkerOutcomeReport()`. Same `store.AtomicWrite` pattern, same `build/phase-N/worker-reports/{name}.md` path. The `codexContinueExternalDispatch` struct needs a `Report` field, and `mergeExternalContinueResults()` needs to preserve it. |
+| Structured domain ledger files | If findings "accumulate across phases," users expect to find them in a predictable location with predictable structure. Seven domains (security, quality, performance, resilience, testing, history, bugs) with agent-to-domain mapping is clear and discoverable. | MEDIUM | New file `cmd/review_ledger.go` with four subcommands. Each domain gets `reviews/{domain}/ledger.json`. Entries have deterministic IDs like `sec-2-001`. Needs the existing `pkg/storage/` atomic write and file locking. |
+| Colony-prime injection of prior reviews | The whole point of persistence is downstream consumption. If builders cannot see prior review findings in their prompt context, persistence is pointless. This is the primary user-facing value. | MEDIUM | New `prior-reviews` section in `colony_prime_context.go`, priority 8 (between pheromones at 9 and user preferences at 7). Reads open findings from all 7 domain ledgers, formats as markdown section. Must respect the character budget and be trimmable. |
+| Review agent Write tool access | Review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) currently have `tools: Read, Grep, Glob`. They produce structured JSON findings in their `return_format` but those findings only survive as a summary string. The agents themselves cannot persist findings. | LOW | Add `Write` tool to each of the 7 agent frontmatter fields. Add write-scope guardrails restricting writes to `.aether/data/reviews/` paths only. Mirror changes to all 4 agent surfaces (`.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/`). |
+| Ledger subcommands (write, read, summary, resolve) | Users and colony-prime need programmatic access to ledger data. Without CLI subcommands, the data is inaccessible outside the Go runtime. | MEDIUM | `review-ledger-write` appends entries with domain validation, `review-ledger-read` reads with optional domain filter, `review-ledger-summary` returns aggregate counts by severity and status, `review-ledger-resolve` marks entries as resolved. All use existing `pkg/storage/` patterns. |
+| Seal/entomb ledger lifecycle | Ledgers are colony-scoped data. Seal should include ledger summary in the CROWNED-ANTHILL report. Entomb should archive ledgers into chambers. Users who inspect chambers expect to see review findings alongside colony state. | LOW | `copyEntombArtifacts` already copies data files and directories. Add `reviews/` directory copy. `buildSealSummary` gets a review findings summary line. `clearActiveColonyRuntimeFiles` cleans up ledgers on entomb. |
 
-## The 7 Stuck States: Detection and Fix
+### Differentiators (Competitive Advantage)
 
-### 1. Missing Build Packet
+Features that elevate the review persistence system beyond basic file output. These make the system feel intelligent rather than merely archival.
 
-**What it looks like on disk:**
-- `COLONY_STATE.json` has `state: "EXECUTING"` or `state: "BUILT"` and `current_phase > 0`
-- `build_started_at` is non-nil and points to a real timestamp
-- The build directory `.aether/data/build/phase-{N}/manifest.json` does not exist
-- OR `manifest.json` exists but has `dispatches: []` (empty dispatches)
-- OR `manifest.json` has `"plan_only": true` (never actually executed)
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Deterministic finding IDs | IDs like `sec-2-001` (domain-phase-sequence) are human-readable, searchable, and stable across re-runs. Users can reference findings by ID in pheromones, discussions, and commit messages. | LOW | Generated by the `review-ledger-write` subcommand using domain prefix + phase + incrementing counter. Must be unique within a domain. |
+| Domain-scoped agent mapping | Each agent maps to specific domains (Gatekeeper to security, Auditor to quality/security/performance, etc.). This prevents findings from piling up in a single undifferentiated bucket and makes the colony-prime injection domain-aware. | LOW | Static mapping defined once in `review_ledger.go`. Multi-domain agents (Auditor maps to 3 domains) write entries to multiple ledgers in a single `review-ledger-write` call. |
+| Accumulating severity summaries | Each ledger maintains a computed summary with counts by severity (CRITICAL, HIGH, MEDIUM, LOW, INFO). Colony-prime can show "3 HIGH open in security, 1 CRITICAL in bugs" without loading every entry. | LOW | Summary is computed on write and stored as a field in the ledger JSON. `review-ledger-summary` aggregates across all domains. Colony-prime reads summary, not individual entries. |
+| Prior-reviews priority 8 in colony-prime | Placing prior reviews at priority 8 (above instincts at 6, below pheromones at 9) means review findings are retained even when the context budget is tight. This is the correct weighting: unresolved security or quality findings from prior phases should outweigh phase learnings. | LOW | One new `colonyPrimeSection` in `buildColonyPrimeOutput()` with `priority: 8`. Uses `review-ledger-summary` output to construct a compact markdown section. |
+| Status integration with open finding counts | `aether status` already shows memory health and pheromone tables. A review findings summary ("2 open security, 1 open quality") makes the health picture complete. Without it, status shows a colony that looks healthy while harboring unresolved findings. | LOW | Add a "Review Findings" section after "Memory Health" in `status.go` and `codex_visuals.go`. Read from `review-ledger-summary`. |
+| Resolved finding tracking | Users need to see which findings were addressed. A `review-ledger-resolve` command that marks entries as resolved (keeping the record for audit) is more valuable than deleting entries. | LOW | Entries get a `status` field (`open`/`resolved`). Resolved entries have a `resolved_at` timestamp. Colony-prime only injects `open` entries. |
 
-**Detection criteria:**
-```
-state.State == EXECUTING || state.State == BUILT
-state.CurrentPhase > 0
-manifest at .aether/data/build/phase-{currentPhase}/manifest.json is missing or has no real dispatches
-```
+### Anti-Features (Commonly Requested, Often Problematic)
 
-**Fix behavior (`--apply`):**
-- Safe auto-fix: YES
-- Action: Reset state to READY, keep `current_phase` pointing at the stuck phase
-- Reset `build_started_at` to nil
-- Set `state.State = READY`
-- Set the stuck phase status to `"ready"` (so build can re-dispatch)
-- Emit event: `build_packet_missing|recover|Reset to READY for phase N`
-- The user then runs `aether build N` to re-dispatch
+Features that seem natural for "review persistence" but would create problems in this system.
 
-**User confirmation needed:** NO -- this is purely a state reset with no data loss
-
----
-
-### 2. Stale Spawned Workers
-
-**What it looks like on disk:**
-- `spawn-runs.json` has a run with `status: "active"` and `started_at` older than 1 hour
-- OR `spawn-tree.txt` has entries with `status: "spawned"` or `status: "active"` that belong to the current run but have no matching completion line
-- The colony state is EXECUTING or BUILT (implying workers should have finished)
-- `spawn-track.json` exists and references an agent no longer running
-
-**Detection criteria:**
-```
-spawn-runs.json: current_run_id points to a run with status "active" and started_at > 1 hour ago
-spawn-tree.txt: entries with IsLiveSpawnStatus() in the current run window
-COLONY_STATE.json: state is EXECUTING or BUILT AND build_started_at is > 1 hour ago
-```
-
-**Fix behavior (`--apply`):**
-- Safe auto-fix: YES
-- Action: Mark stale runs as "failed" in `spawn-runs.json`
-- Mark stale spawn entries as "timeout" in `spawn-tree.txt`
-- Clear `spawn-track.json` if present
-- Reset `current_run_id` to empty
-- Do NOT reset colony state here (that is the missing-build-packet fix's job)
-- Emit event: `stale_workers_cleaned|recover|Marked N stale workers as timeout`
-
-**User confirmation needed:** NO -- these workers are clearly dead
-
-**Existing similar code:** `repairDataIssues` in `medic_repair.go` already handles `"reset_stale_spawn_state"` but only resets runs older than 1 hour. The recover command should use the same threshold.
-
----
-
-### 3. Partial Phase
-
-**What it looks like on disk:**
-- `COLONY_STATE.json` has `state: "EXECUTING"` and `current_phase: N`
-- The phase N has `status: "in_progress"`
-- Build directory `build/phase-N/manifest.json` exists with real dispatches
-- But all dispatches are either `"completed"` or `"failed"` (nothing active)
-- AND no `continue.json` exists at `build/phase-N/continue.json`
-- This means the build finished but continue was never run
-
-**Alternative scenario:**
-- `COLONY_STATE.json` has `state: "EXECUTING"` but `build_started_at` is nil
-- Phase is `"in_progress"` but no build artifacts exist at all
-- The phase was marked in_progress during init or plan but never actually built
-
-**Detection criteria:**
-```
-state.State == EXECUTING
-state.CurrentPhase > 0
-Phase has status "in_progress"
-manifest exists and all dispatches are terminal (no "spawned"/"active")
-No continue.json exists for this phase
-```
-
-**Fix behavior (`--apply`):**
-- Safe auto-fix: YES (with nuance)
-- Action for "build finished but no continue":
-  - Set `state.State = BUILT` (so the user can run `aether continue`)
-  - Emit event: `partial_phase_recovered|recover|Phase N build completed but never continued`
-- Action for "phase marked but never built":
-  - Reset phase status to `"ready"`
-  - Reset `state.State = READY`
-  - Clear `build_started_at`
-  - Emit event: `partial_phase_reset|recover|Phase N was never actually built`
-
-**User confirmation needed:** NO for the first case. YES for the second if any tasks show `TaskInProgress` (means something may have partially run).
-
----
-
-### 4. Bad Manifest
-
-**What it looks like on disk:**
-- `.aether/data/build/phase-N/manifest.json` exists but fails JSON parsing
-- OR `manifest.json` parses but has `phase: 0` when `current_phase` says N
-- OR `manifest.json` has `state: ""` or `generated_at: ""`
-- OR `manifest.json` dispatches reference tasks that do not exist in the phase plan
-- OR `manifest.json` has duplicate worker names in dispatches
-
-**Detection criteria:**
-```
-manifest.json at build/phase-{currentPhase}/ is:
-  - Not valid JSON
-  - Has phase field mismatching current_phase
-  - Has empty generated_at
-  - Has dispatches referencing non-existent task IDs
-```
-
-**Fix behavior (`--apply`):**
-- Safe auto-fix: PARTIAL
-- Action for corrupted JSON:
-  - Requires `--force` flag (destructive repair)
-  - Remove the bad manifest
-  - Fall through to "missing build packet" fix
-- Action for mismatched/empty fields:
-  - Regenerate manifest from current state + dispatch records in spawn-tree
-  - If spawn-tree is also empty, fall through to "missing build packet"
-- Action for phantom task references:
-  - Remove dispatches with unknown task IDs
-  - This is safe because those tasks do not exist in the plan
-
-**User confirmation needed:** YES for corrupted JSON (data loss possible). NO for field mismatches (regeneration is safe).
-
-**Existing similar code:** `findLastValidJSON` in `medic_repair.go` attempts JSON recovery. `repairDataIssues` handles corrupted JSON with `--force`.
-
----
-
-### 5. Dirty Worktree
-
-**What it looks like on disk:**
-- `COLONY_STATE.json` has worktree entries with `status: "allocated"` or `status: "in-progress"`
-- The worktree path `.aether/worktrees/{branch}` exists on disk
-- `git status --porcelain` in the worktree shows uncommitted changes
-- OR the worktree entry exists in state but the git worktree has been removed externally
-- OR orphaned branches matching `phase-N/name` pattern exist with no worktree
-
-**Detection criteria:**
-```
-COLONY_STATE.json worktrees[] with status != "merged" and status != "orphaned"
-For each: check if worktree path exists on disk
-For each on-disk worktree: check git status --porcelain for uncommitted changes
-For each: check if git worktree list includes the path
-Cross-reference: find git branches matching agentBranchRe that have no worktree and no state entry
-```
-
-**Fix behavior (`--apply`):**
-- Safe auto-fix: NO (requires user confirmation)
-- Action for worktree with uncommitted changes:
-  - **Prompt user**: "Worktree at {path} has uncommitted changes. Stash and clean, or keep?"
-  - If user says clean: `git stash` in the worktree, then remove worktree
-  - If user says keep: skip this worktree, mark as manual-reconciliation needed
-- Action for worktree entry with no backing git worktree:
-  - Mark entry as `orphaned` in COLONY_STATE.json (safe, already handled by medic)
-  - This is safe auto-fix
-- Action for orphaned branches:
-  - List them in output but do NOT auto-delete
-  - User runs `git branch -D phase-N/name` manually
-
-**User confirmation needed:** YES for anything with uncommitted changes. NO for stale state entries.
-
-**Existing similar code:** `worktreeOrphanScanCmd` in `worktree.go` already does orphan detection. `repairStateIssues` in `medic_repair.go` removes orphaned entries. `reportOrphanBranches` detects agent-track branches with no worktree.
-
----
-
-### 6. Broken Survey
-
-**What it looks like on disk:**
-- `.aether/data/survey/` directory exists (colony was colonized)
-- One or more expected survey files are missing:
-  - `blueprint.json`, `chambers.json`, `disciplines.json`, `provisions.json`, `pathogens.json`
-- OR a survey file exists but contains invalid JSON
-- OR a survey file is `{}` or `null` (empty, never populated)
-
-**Detection criteria:**
-```
-survey/ directory exists
-For each of the 5 expected files:
-  - File missing
-  - File is not valid JSON
-  - File is empty ({}, null, [])
-```
-
-**Fix behavior (`--apply`):**
-- Safe auto-fix: PARTIAL
-- Action for missing or empty files:
-  - Cannot regenerate survey data (it came from the colonize command)
-  - Remove the broken file
-  - Create a blocker flag: "Survey data incomplete for {name}. Re-run aether colonize."
-  - This is informational: the colony can still function without survey data
-- Action for corrupted JSON:
-  - Requires `--force`
-  - Attempt JSON recovery with `findLastValidJSON`
-  - If recovery fails, remove the file and create blocker flag
-- This is a LOW severity stuck state -- survey data is advisory, not blocking
-
-**User confirmation needed:** NO for informational flagging. YES for destructive file removal.
-
-**Existing similar code:** `surveyVerifyCmd` in `survey.go` checks all 5 files for existence and valid JSON. The `surveyFiles` list is already defined.
-
----
-
-### 7. Missing Agent Files
-
-**What it looks like on disk:**
-- `.claude/agents/ant/aether-{caste}.md` is missing for one or more of the 25 castes
-- OR `.opencode/agents/aether-{caste}.md` is missing
-- OR `.codex/agents/aether-{caste}.toml` is missing
-- Hub source files at `~/.aether/system/` are also checked -- if hub has the files, this is fixable by re-sync
-
-**Detection criteria:**
-```
-For each of the 25 expected agent names:
-  Check .claude/agents/ant/aether-{name}.md exists
-  Check .opencode/agents/aether-{name}.md exists
-  Check .codex/agents/aether-{name}.toml exists
-Report missing files per platform
-Cross-check hub at ~/.aether/system/claude/agents/, ~/.aether/system/opencode/agents/, ~/.aether/system/codex/
-If hub has the file but local does not: fixable
-If hub also missing: needs aether publish from source repo
-```
-
-**Fix behavior (`--apply`):**
-- Safe auto-fix: YES (if hub has the source files)
-- Action for fixable missing files:
-  - Copy from hub to local directories
-  - This is exactly what `aether update` does
-  - Report which files were restored
-- Action for hub-missing files:
-  - Create blocker flag: "Agent files missing from hub. Run aether publish from the Aether source repo."
-  - Cannot auto-fix without the source files
-
-**User confirmation needed:** NO -- this is a file sync operation with no data loss risk.
-
-**Existing similar code:** `aether update` in `update_cmd.go` handles the sync pairs. `scanWrapperParity` in `medic_scanner.go` (deep scan) checks wrapper parity. The install command `install_cmd.go` copies agent files during initial setup.
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| Cross-colony ledger sharing | "If security findings from Repo A could inform Repo B..." | Ledger entries contain repo-specific file paths and line numbers that go stale outside the originating repo. A `sec-2-001` finding pointing to `cmd/auth.go:42` is meaningless in another codebase. This is already noted in PROJECT.md: "Not cross-colony -- findings contain code-specific file paths that go stale." | Promote high-value patterns to Hive Brain via the existing instinct pipeline at seal time. Hive entries are generalized wisdom, not code-specific findings. |
+| Auto-block on critical findings | "If a security finding is CRITICAL, the build should stop." | This couples review persistence to the build/continue flow in a dangerous way. The current continue-review flow (Gatekeeper, Auditor, Probe) already handles blocking. Adding a second blocking mechanism from accumulated ledger data would create conflicting signals and unclear failure modes. | Let colony-prime injection surface prior findings as context for workers. Workers and review agents decide whether to block based on the full picture, not a rigid severity threshold. |
+| Finding deduplication across phases | "Don't show me the same security issue from Phase 2 and Phase 3." | Determining whether two findings about the same file are "the same issue" or "the same file, new issue" requires semantic understanding that structured JSON cannot provide. False deduplication hides real regressions. | Use deterministic IDs and let users resolve findings they have addressed. If a finding persists across phases, it stays open -- that is correct behavior. |
+| Rich query/filter API for ledgers | "Let me query findings by file, severity range, date, agent..." | This turns the ledger into a database, which is not the system's purpose. Aether's data layer is JSON files with atomic writes, not a query engine. Adding query complexity fights the architecture. | `review-ledger-read` with domain filter and `review-ledger-summary` for aggregate counts. For detailed analysis, the per-worker `.md` reports and the ledger JSON files are directly readable. |
+| Automatic finding promotion to pheromones | "Turn security findings into REDIRECT signals automatically." | Findings are observations, not instructions. A Gatekeeper finding of "unpinned dependency" should not automatically become a REDIRECT (hard constraint) that blocks future builds. The mapping between "finding" and "action" requires judgment. | Keep findings and pheromones as separate systems. Colony-prime injects both into worker context. Workers see the finding AND any related pheromone signal and exercise judgment. |
 
 ## Feature Dependencies
 
 ```
-Stale Spawned Workers (2) must be fixed BEFORE Missing Build Packet (1)
-  -- stale workers would confuse the build re-dispatch
-
-Missing Build Packet (1) and Partial Phase (3) are mutually exclusive
-  -- check for manifest first; if present, it's partial phase; if absent, missing packet
-
-Dirty Worktree (5) is independent but should be fixed BEFORE re-running build
-  -- dirty worktrees can block new worktree allocation
-
-Bad Manifest (4) should be checked before Partial Phase (3)
-  -- a corrupted manifest means the "partial phase" check is unreliable
-
-Missing Agent Files (7) should be checked early
-  -- missing agents would cause build to fail again immediately
-
-Broken Survey (6) is lowest priority and fully independent
+Continue-review worker outcome reports (Part A)
+    |
+    v
+codexContinueExternalDispatch.Report field
+    |
+    v
+writeCodexContinueOutcomeReports() function
+    |
+    v
+Domain-ledger write subcommand (Part B)
+    |
+    +---> Colony-prime prior-reviews section
+    |         |
+    |         v
+    |     Status command integration
+    |
+    +---> Agent Write tool additions
+    |         |
+    |         v
+    |     Agent mirror sync (4 surfaces)
+    |
+    +---> Seal/entomb lifecycle integration
+              |
+              v
+          Ledger cleanup on entomb
+          Ledger summary in seal
 ```
 
-## Anti-Features
+### Dependency Notes
 
-Features to explicitly NOT build.
+- **Continue-review outcome reports require `Report` field addition first:** The `codexContinueExternalDispatch` struct (line 12 of `codex_continue_plan.go`) currently has no `Report` field. The `codexContinueWorkerFlowStep` struct (line 241 of `codex_continue.go`) also lacks `Report`, `Blockers []string`, and `Duration float64`. These must be added before `writeCodexContinueOutcomeReports()` can access the data.
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Auto-continue after recovery | Colony may be in a state where continuing is wrong | Stop after fix, tell user what to run next |
-| Modifying source code | Recovery should not touch user code | Only fix state files, manifests, and agent definitions |
-| Deleting COLONY_STATE.json | Nuclear option that loses all colony progress | Reset specific fields, always backup first |
-| Running git operations beyond stash/remove | Git merges and rebases can cause data loss | Only stash, remove worktrees, delete orphan branches |
-| Silent fixes | User needs to know what changed | Print every action with file paths |
-| Interactive prompts (except dirty worktree) | `aether recover --apply` should be runnable without interaction | Use `--force` for destructive operations |
+- **Domain-ledger write subcommand is the foundation for everything else in Part B:** Colony-prime injection, status integration, seal/entomb lifecycle, and the resolve subcommand all depend on ledgers existing with data. The write subcommand must be built first.
 
-## MVP Recommendation
+- **Agent Write tool additions are independent of the Go runtime changes:** Agent definition files (`.claude/agents/ant/*.md`, mirrors) can be updated in parallel with Go runtime work. They are text files with frontmatter changes and instruction additions.
 
-Prioritize:
-1. Missing build packet detection and fix (most common stuck state)
-2. Stale spawned workers cleanup (prerequisite for clean re-dispatch)
-3. Partial phase recovery (common when build finishes but continue is not run)
-4. Safe reporting for all 7 classes (even if --apply is not implemented for all)
+- **Colony-prime prior-reviews section depends on ledger read subcommand:** The injection reads from ledgers via `review-ledger-read`/`review-ledger-summary`. Without those subcommands, there is nothing to inject.
 
-Defer:
-- Dirty worktree auto-stash: needs user confirmation flow, complex interaction
-- Survey regeneration: not possible from recovery alone
+- **Seal/entomb integration depends on ledgers existing:** `copyEntombArtifacts` needs the `reviews/` directory to exist before it can copy it. `clearActiveColonyRuntimeFiles` needs to know about ledger files to clean them. These are small changes but must come after ledger creation works.
 
-## Detection Summary Table
+- **Wrapper completion packet enhancement conflicts with nothing but requires coordination:** The continue wrapper (`.claude/commands/ant/continue.md` and `.opencode/commands/ant/continue.md`) completion packet must add a `report` field to the dispatch JSON shape. This is a documentation change in markdown, but it must match the new `Report` field in the Go struct exactly. Out-of-sync wrappers produce silent data loss (the report field gets dropped during `mergeExternalContinueResults`).
 
-| # | Stuck State | Files Checked | State Fields Checked | Safe Auto-Fix |
-|---|-------------|---------------|---------------------|---------------|
-| 1 | Missing build packet | `build/phase-N/manifest.json` | `state`, `current_phase`, `build_started_at` | YES |
-| 2 | Stale spawned workers | `spawn-runs.json`, `spawn-tree.txt`, `spawn-track.json` | `state`, `build_started_at` | YES |
-| 3 | Partial phase | `build/phase-N/manifest.json`, `build/phase-N/continue.json` | `state`, `current_phase`, phase status | YES |
-| 4 | Bad manifest | `build/phase-N/manifest.json` | (cross-reference with state) | PARTIAL |
-| 5 | Dirty worktree | `.aether/worktrees/`, git worktree list | `worktrees[]` status | NO (needs confirm) |
-| 6 | Broken survey | `.aether/data/survey/{5 files}` | `territory_surveyed` | PARTIAL |
-| 7 | Missing agent files | `.claude/agents/ant/`, `.opencode/agents/`, `.codex/agents/` | (none -- filesystem only) | YES (if hub has files) |
+## MVP Definition
 
-## Output Format
+### Launch With (v1.9 Minimum)
 
-The command should produce structured output matching the medic pattern:
+The minimum viable review persistence system: findings survive `/clear`, accumulate, and inform downstream workers.
 
-```
-── Colony Recovery ──
+- [ ] `Report` field on `codexContinueExternalDispatch` and `codexContinueWorkerFlowStep` -- without this, no report data flows from wrapper to runtime
+- [ ] `writeCodexContinueOutcomeReports()` in `codex_continue_finalize.go` -- mirrors the build report writer, writes `build/phase-N/worker-reports/{name}.md` for review workers
+- [ ] `review-ledger-write` subcommand -- accepts domain, phase, agent, structured finding data; writes to `reviews/{domain}/ledger.json` with deterministic IDs
+- [ ] `review-ledger-read` subcommand -- reads entries with domain filter
+- [ ] `review-ledger-summary` subcommand -- aggregate counts by domain, severity, status
+- [ ] Colony-prime `prior-reviews` section -- priority 8, reads summaries, injects into worker context
+- [ ] Wrapper completion packet `report` field -- continue.md and its OpenCode mirror updated to include report in dispatch JSON
+- [ ] Agent Write tool for 7 review agents -- frontmatter + write-scope guardrails + findings instructions
+- [ ] Agent mirror sync -- Claude, OpenCode, Codex surfaces all updated
 
-Diagnosis
-  [1] Missing build packet    Phase 3 manifest not found
-  [2] Stale spawned workers   4 workers timed out (>1h)
-  [7] Missing agent files     2 Claude agents not installed
+### Add After Validation (v1.9.x)
 
-Apply (--apply to fix):
-  [1] Reset state to READY for phase 3
-  [2] Mark 4 workers as timeout
-  [7] Copy 2 agents from hub
+Features that complete the lifecycle but are not needed for the core value proposition.
 
-── Next Steps ──
-Run `aether build 3` to re-dispatch phase 3.
-```
+- [ ] `review-ledger-resolve` subcommand -- marking entries as resolved is valuable but not needed for findings to persist and inform
+- [ ] Status command review findings section -- "2 open security, 1 open quality" in status output
+- [ ] Seal summary ledger integration -- review findings count in CROWNED-ANTHILL.md
+- [ ] Entomb ledger archival and cleanup -- `reviews/` directory copied to chambers and cleaned from active state
+
+### Future Consideration (v2+)
+
+Features that depend on the review persistence system being established and proven in production use.
+
+- [ ] High-value finding patterns promoting to Hive Brain at seal -- generalized findings that lose file-path specificity
+- [ ] Pheromone integration -- FOCUS signals auto-created from accumulated CRITICAL findings in a domain
+- [ ] Review trend across colonies -- if Hive Brain stores generalized finding patterns, cross-colony trend analysis becomes possible
+- [ ] Finding deduplication heuristics -- only after real usage data shows whether same-file same-category findings are genuinely redundant
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Continue-review worker outcome reports | HIGH | LOW | P1 |
+| `Report` field on continue structs | HIGH (enabler) | LOW | P1 |
+| `review-ledger-write` subcommand | HIGH | MEDIUM | P1 |
+| `review-ledger-read` subcommand | MEDIUM | LOW | P1 |
+| `review-ledger-summary` subcommand | HIGH (enabler for colony-prime) | LOW | P1 |
+| Colony-prime prior-reviews section | HIGH (primary value) | MEDIUM | P1 |
+| Wrapper completion packet `report` field | HIGH (enabler) | LOW | P1 |
+| Agent Write tool (7 agents + mirrors) | HIGH | LOW | P1 |
+| `review-ledger-resolve` subcommand | MEDIUM | LOW | P2 |
+| Status command review findings section | MEDIUM | LOW | P2 |
+| Seal summary ledger integration | LOW | LOW | P2 |
+| Entomb ledger archival/cleanup | MEDIUM | LOW | P2 |
+| Deterministic finding IDs | MEDIUM | LOW | P1 (part of ledger write) |
+| Domain-scoped agent mapping | MEDIUM | LOW | P1 (part of ledger write) |
+
+**Priority key:**
+- P1: Must have for the milestone -- findings persist, accumulate, and inform
+- P2: Should have -- completes the lifecycle, but the system works without it
+- P3: Nice to have -- future enhancement after validation
+
+## Existing System Integration Points
+
+These are the concrete code locations where the new features plug in.
+
+| Feature | Integration Point | File | What Changes |
+|---------|-------------------|------|-------------|
+| `Report` field | `codexContinueExternalDispatch` struct | `cmd/codex_continue_plan.go:12` | Add `Report string` field |
+| `Report` field | `codexContinueWorkerFlowStep` struct | `cmd/codex_continue.go:241` | Add `Report`, `Blockers`, `Duration` fields |
+| Report preservation | `mergeExternalContinueResults()` | `cmd/codex_continue_finalize.go:217` | Copy new fields from external dispatch to flow step |
+| Report writer | `runCodexContinueFinalize()` | `cmd/codex_continue_finalize.go:100` | Call `writeCodexContinueOutcomeReports()` after `review.json` |
+| Report writer function | New file | `cmd/codex_continue_finalize.go` (append) | `writeCodexContinueOutcomeReports()` + `renderCodexContinueWorkerOutcomeReport()` |
+| Colony-prime section | `buildColonyPrimeOutput()` | `cmd/colony_prime_context.go:123` | New section after blockers, priority 8 |
+| Ledger subcommands | New file | `cmd/review_ledger.go` | Four subcommands, ledger types, ID generation |
+| Agent Write tool | 7 agent frontmatters | `.claude/agents/ant/aether-{gatekeeper,auditor,chaos,watcher,archaeologist,measurer,tracker}.md` | `tools:` line adds `Write` |
+| Agent findings instructions | 7 agent bodies | Same files | Add `<write_scope>` and `<findings_output>` sections |
+| Agent mirrors | 4 surfaces | `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` | Byte-identical / structural sync |
+| Wrapper packet | Continue wrappers | `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md` | Add `report` to dispatch JSON shape |
+| Status display | `status.go`, `codex_visuals.go` | `cmd/status.go`, `cmd/codex_visuals.go` | Add review findings table after memory health |
+| Seal summary | `buildSealSummary()` | `cmd/codex_workflow_cmds.go:573` | Add review findings count line |
+| Entomb archive | `copyEntombArtifacts()` | `cmd/entomb_cmd.go:249` | Add `reviews/` directory copy |
+| Entomb cleanup | `clearActiveColonyRuntimeFiles()` | `cmd/entomb_cmd.go:423` | Add `reviews/` removal |
 
 ## Sources
 
-- `cmd/medic_cmd.go`, `cmd/medic_scanner.go`, `cmd/medic_repair.go` -- existing health check and repair infrastructure
-- `cmd/codex_build.go` -- build dispatch, manifest creation, state transitions
-- `cmd/state_repair.go` -- plan recovery from artifacts, phase progress inference
-- `cmd/worktree.go` -- worktree allocation, orphan scanning, merge-back
-- `cmd/spawn_track.go`, `pkg/agent/spawn_tree.go` -- spawn tracking and run state
-- `cmd/survey.go` -- survey file validation
-- `pkg/colony/colony.go` -- all state types and constants
-- `cmd/recovery_snapshot.go` -- recovery guidance, next-command resolution
+- `cmd/codex_continue_finalize.go` -- continue-finalize flow, `mergeExternalContinueResults()`, `externalContinueReviewReport()`
+- `cmd/codex_continue_plan.go` -- `codexContinueExternalDispatch` struct, `plannedExternalContinueDispatches()`
+- `cmd/codex_continue.go` -- `codexContinueWorkerFlowStep` struct, `codexContinueReviewSpecs`, `cleanupStaleContinueReports()`
+- `cmd/codex_build.go` -- `writeCodexBuildOutcomeReports()`, `renderCodexBuildWorkerOutcomeReport()` (direct template)
+- `cmd/colony_prime_context.go` -- `buildColonyPrimeOutput()`, section priority system, character budget
+- `cmd/codex_workflow_cmds.go` -- seal command, `buildSealSummary()`
+- `cmd/entomb_cmd.go` -- entomb command, `copyEntombArtifacts()`, `clearActiveColonyRuntimeFiles()`
+- `.claude/agents/ant/aether-gatekeeper.md` -- current agent definition structure, tools line, return format
+- `.claude/commands/ant/continue.md` -- wrapper completion packet JSON shape
+- `pkg/storage/` -- atomic write, file locking (existing infrastructure for ledger writes)
+
+---
+*Feature research for: Aether v1.9 Review Persistence*
+*Researched: 2026-04-26*
