@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -31,6 +32,7 @@ type codexExternalBuildWorkerResult struct {
 	ExecutionWave int      `json:"execution_wave,omitempty"`
 	Caste         string   `json:"caste,omitempty"`
 	Name          string   `json:"name"`
+	AntName       string   `json:"ant_name,omitempty"`
 	Task          string   `json:"task,omitempty"`
 	Status        string   `json:"status"`
 	Summary       string   `json:"summary,omitempty"`
@@ -44,6 +46,14 @@ type codexExternalBuildWorkerResult struct {
 	FilesCreated  []string `json:"files_created,omitempty"`
 	FilesModified []string `json:"files_modified,omitempty"`
 	TestsWritten  []string `json:"tests_written,omitempty"`
+}
+
+// effectiveName returns the worker name, falling back to AntName when Name is empty.
+func (r codexExternalBuildWorkerResult) effectiveName() string {
+	if n := strings.TrimSpace(r.Name); n != "" {
+		return n
+	}
+	return strings.TrimSpace(r.AntName)
 }
 
 var buildFinalizeCmd = &cobra.Command{
@@ -241,7 +251,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExternalBuildWorkerResult) ([]codexBuildDispatch, error) {
 	resultByName := make(map[string]codexExternalBuildWorkerResult, len(results))
 	for _, result := range results {
-		name := strings.TrimSpace(result.Name)
+		name := result.effectiveName()
 		if name == "" {
 			return nil, fmt.Errorf("external worker result missing name")
 		}
@@ -298,7 +308,7 @@ func validateExternalResultIdentity(dispatch codexBuildDispatch, result codexExt
 func normalizeExternalBuildStatus(status string) string {
 	status = strings.ToLower(strings.TrimSpace(status))
 	switch status {
-	case "complete", "done", "success", "succeeded", "passed":
+	case "complete", "done", "success", "succeeded", "passed", "code_written":
 		return "completed"
 	case "fail", "error":
 		return "failed"
@@ -342,7 +352,10 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(phaseNum int, startedAt 
 
 	byName := map[string]codexExternalBuildWorkerResult{}
 	for _, result := range c.workerResults() {
-		byName[result.Name] = result
+		name := result.effectiveName()
+		if name != "" {
+			byName[name] = result
+		}
 	}
 	claims := codexBuildClaims{BuildPhase: phaseNum, Timestamp: startedAt.Format(time.RFC3339)}
 	taskClaims := map[string]*codexBuildTaskClaim{}
@@ -373,6 +386,14 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(phaseNum int, startedAt 
 	claims.FilesCreated = uniqueSortedStrings(claims.FilesCreated)
 	claims.FilesModified = uniqueSortedStrings(claims.FilesModified)
 	claims.TestsWritten = uniqueSortedStrings(claims.TestsWritten)
+
+	// Filesystem fallback: if claims are empty but builders completed, discover files via git.
+	if len(claims.FilesCreated) == 0 && len(claims.FilesModified) == 0 && hasCompletedBuilders(dispatches) {
+		created, modified := discoverChangedFilesFromGit()
+		claims.FilesCreated = created
+		claims.FilesModified = modified
+	}
+
 	if len(taskClaims) > 0 {
 		taskIDs := make([]string, 0, len(taskClaims))
 		for taskID := range taskClaims {
@@ -412,4 +433,35 @@ func recordExternalBuildSpawnTree(dispatches []codexBuildDispatch) error {
 		}
 	}
 	return nil
+}
+
+func hasCompletedBuilders(dispatches []codexBuildDispatch) bool {
+	for _, d := range dispatches {
+		if strings.EqualFold(d.Caste, "builder") && d.Status == "completed" {
+			return true
+		}
+	}
+	return false
+}
+
+func discoverChangedFilesFromGit() (created, modified []string) {
+	if out, err := exec.Command("git", "diff", "--name-only", "--diff-filter=A", "HEAD").Output(); err == nil {
+		created = parseGitNameOutput(out)
+	}
+	if out, err := exec.Command("git", "diff", "--name-only", "--diff-filter=M", "HEAD").Output(); err == nil {
+		modified = parseGitNameOutput(out)
+	}
+	return created, modified
+}
+
+func parseGitNameOutput(out []byte) []string {
+	var result []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		result = append(result, line)
+	}
+	return uniqueSortedStrings(result)
 }

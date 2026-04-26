@@ -86,9 +86,11 @@ func TestCharterWriteLegacyFlags(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(hubDir, "QUEEN.md"))
+	// charter-write now targets local repo QUEEN.md, not the global hub
+	localQueenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(localQueenPath)
 	if err != nil {
-		t.Fatalf("read QUEEN.md: %v", err)
+		t.Fatalf("read local QUEEN.md: %v", err)
 	}
 	text := string(data)
 	for _, want := range []string{
@@ -99,7 +101,7 @@ func TestCharterWriteLegacyFlags(t *testing.T) {
 		"- **Goals:** parity, resilience",
 	} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("QUEEN.md missing %q:\n%s", want, text)
+			t.Fatalf("local QUEEN.md missing %q:\n%s", want, text)
 		}
 	}
 }

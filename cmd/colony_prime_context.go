@@ -347,6 +347,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 
 	queenPath := filepath.Join(hubDir, "QUEEN.md")
 	userPrefs := readUserPreferences(queenPath)
+	// Also read local repo QUEEN.md user preferences
+	localQueenPath := filepath.Join(filepath.Dir(store.BasePath()), "QUEEN.md")
+	userPrefs = append(userPrefs, readUserPreferences(localQueenPath)...)
 	if len(userPrefs) > 0 {
 		var prefsSB strings.Builder
 		prefsSB.WriteString("## USER PREFERENCES\n\n")
@@ -365,6 +368,26 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			relevanceScore:    sectionRelevanceScore("user_preferences"),
 			protected:         prefsProtected,
 			preserveReason:    prefsPreserveReason,
+		})
+	}
+
+	// Local QUEEN.md wisdom (repo-specific)
+	localWisdom := readQUEENMd(localQueenPath)
+	if len(localWisdom) > 0 {
+		var lwSB strings.Builder
+		lwSB.WriteString("## LOCAL QUEEN WISDOM (Repo-Specific)\n\n")
+		for _, v := range localWisdom {
+			lwSB.WriteString(fmt.Sprintf("- %s\n", v))
+		}
+		sections = append(sections, colonyPrimeSection{
+			name:              "local_queen_wisdom",
+			title:             "Local Queen Wisdom",
+			source:            localQueenPath,
+			content:           lwSB.String(),
+			priority:          5,
+			freshnessScore:    0.80,
+			confirmationScore: 0.85,
+			relevanceScore:    sectionRelevanceScore("local_queen_wisdom"),
 		})
 	}
 

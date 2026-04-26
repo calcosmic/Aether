@@ -1968,6 +1968,14 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 				Checked: 0,
 			}
 		}
+		if manifestUsesExternalTask(manifest) {
+			return codexClaimVerification{
+				Present: true,
+				Passed:  true,
+				Summary: "builder claims file is empty (external-task mode); verification-led truth applies",
+				Checked: 0,
+			}
+		}
 		return codexClaimVerification{
 			Present: true,
 			Passed:  false,
@@ -2520,6 +2528,13 @@ func manifestUsesSyntheticDispatch(manifest codexContinueManifest) bool {
 	}
 	mode := strings.ToLower(strings.TrimSpace(manifest.Data.DispatchMode))
 	return mode == "simulated" || mode == "synthetic"
+}
+
+func manifestUsesExternalTask(manifest codexContinueManifest) bool {
+	if !manifest.Present {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(manifest.Data.DispatchMode), "external-task")
 }
 
 func missingClaimsSummary(manifest codexContinueManifest) string {

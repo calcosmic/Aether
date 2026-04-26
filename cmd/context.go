@@ -1498,6 +1498,15 @@ func readQUEENMd(filePath string) map[string]string {
 			if key != "" && val != "" {
 				result[key] = val
 			}
+			continue
+		}
+
+		// Parse "- bullet text" lines (format written by queen-promote)
+		if strings.HasPrefix(trimmed, "- ") {
+			entry := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+			if entry != "" {
+				result[entry] = entry
+			}
 		}
 	}
 

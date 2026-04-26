@@ -49,21 +49,36 @@ var queenInitCmd = &cobra.Command{
 			return nil
 		}
 		queenPath := filepath.Join(resolveHubPath(), "QUEEN.md")
+		globalCreated := false
 
 		if _, err := os.Stat(queenPath); err == nil {
 			outputOK(map[string]interface{}{"created": false, "reason": "already exists", "path": queenPath})
-			return nil
+		} else {
+			if err := s.AtomicWrite("QUEEN.md", []byte(queenDefaultContent)); err != nil {
+				outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
+				return nil
+			}
+			globalCreated = true
 		}
 
-		if err := s.AtomicWrite("QUEEN.md", []byte(queenDefaultContent)); err != nil {
-			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
-			return nil
+		// Also create local QUEEN.md if it does not exist
+		localCreated := false
+		localPath := localQueenPath()
+		if localPath != "" {
+			if _, err := os.Stat(localPath); err != nil {
+				if err := writeLocalQueenText(queenDefaultContent); err != nil {
+					outputError(2, fmt.Sprintf("failed to write local QUEEN.md: %v", err), nil)
+					return nil
+				}
+				localCreated = true
+			}
 		}
 
-		outputOK(map[string]interface{}{"created": true, "path": queenPath})
+		outputOK(map[string]interface{}{"created": globalCreated, "path": queenPath, "local_created": localCreated, "local_path": localPath})
 		return nil
-	},
-}
+		},
+	}
+
 
 // --- queen-read ---
 
@@ -175,13 +190,9 @@ var queenWriteLearningsCmd = &cobra.Command{
 			return nil
 		}
 
-		s := hubStore()
-		if s == nil {
-			return nil
-		}
-		text, _, err := loadQueenText(s)
+		text, err := loadLocalQueenText()
 		if err != nil {
-			outputError(1, fmt.Sprintf("failed to load QUEEN.md: %v", err), nil)
+			outputError(1, fmt.Sprintf("failed to load local QUEEN.md: %v", err), nil)
 			return nil
 		}
 
@@ -200,12 +211,12 @@ var queenWriteLearningsCmd = &cobra.Command{
 
 		text = appendEntriesToQueenSection(text, "Wisdom", entries)
 
-		if err := writeQueenText(s, text); err != nil {
-			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
+		if err := writeLocalQueenText(text); err != nil {
+			outputError(2, fmt.Sprintf("failed to write local QUEEN.md: %v", err), nil)
 			return nil
 		}
 
-		outputOK(map[string]interface{}{"written": len(entries)})
+		outputOK(map[string]interface{}{"written": len(entries), "target": "local"})
 		return nil
 	},
 }
@@ -255,21 +266,18 @@ var queenPromoteInstinctCmd = &cobra.Command{
 		}
 
 		// Write to QUEEN.md Wisdom section
-		s := hubStore()
-		if s == nil {
-			return nil
-		}
-		text, _, err := loadQueenText(s)
+		// Write to local QUEEN.md Wisdom section
+		text, err := loadLocalQueenText()
 		if err != nil {
-			outputError(1, fmt.Sprintf("failed to load QUEEN.md: %v", err), nil)
+			outputError(1, fmt.Sprintf("failed to load local QUEEN.md: %v", err), nil)
 			return nil
 		}
 
 		entry := fmt.Sprintf("- %s (instinct %s, %s)", sanitizeQueenInline(action), instinctID, time.Now().UTC().Format("2006-01-02"))
 		text = appendEntryToQueenSection(text, "Wisdom", entry)
 
-		if err := writeQueenText(s, text); err != nil {
-			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
+		if err := writeLocalQueenText(text); err != nil {
+			outputError(2, fmt.Sprintf("failed to write local QUEEN.md: %v", err), nil)
 			return nil
 		}
 
@@ -396,25 +404,21 @@ var charterWriteCmd = &cobra.Command{
 		}
 		domains, _ := cmd.Flags().GetString("domains")
 
-		s := hubStore()
-		if s == nil {
-			return nil
-		}
-		text, _, err := loadQueenText(s)
+		text, err := loadLocalQueenText()
 		if err != nil {
-			outputError(1, fmt.Sprintf("failed to load QUEEN.md: %v", err), nil)
+			outputError(1, fmt.Sprintf("failed to load local QUEEN.md: %v", err), nil)
 			return nil
 		}
 
 		charterLines := buildCharterLines(name, goal, domains, intent, vision, governance, goals)
 		text = replaceQueenSection(text, "Colony Charter", strings.Join(charterLines, "\n"))
 
-		if err := writeQueenText(s, text); err != nil {
-			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
+		if err := writeLocalQueenText(text); err != nil {
+			outputError(2, fmt.Sprintf("failed to write local QUEEN.md: %v", err), nil)
 			return nil
 		}
 
-		outputOK(map[string]interface{}{"written": true, "name": name})
+		outputOK(map[string]interface{}{"written": true, "name": name, "target": "local"})
 		return nil
 	},
 }
@@ -458,6 +462,41 @@ func writeQueenText(s *storage.Store, text string) error {
 		text += "\n"
 	}
 	return s.AtomicWrite("QUEEN.md", []byte(text))
+}
+
+// localQueenPath returns the path to the repo-local QUEEN.md.
+// Returns "" if the global store is not initialized.
+func localQueenPath() string {
+	if store == nil {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(store.BasePath()), "QUEEN.md")
+}
+
+func loadLocalQueenText() (string, error) {
+	p := localQueenPath()
+	if p == "" {
+		return "", fmt.Errorf("no local store")
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return queenDefaultContent, nil
+	}
+	return string(data), nil
+}
+
+func writeLocalQueenText(text string) error {
+	p := localQueenPath()
+	if p == "" {
+		return fmt.Errorf("no local store")
+	}
+	if strings.TrimSpace(text) == "" {
+		return fmt.Errorf("refusing empty write to local QUEEN.md")
+	}
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return os.WriteFile(p, []byte(text), 0644)
 }
 
 func sanitizeQueenInline(value string) string {
