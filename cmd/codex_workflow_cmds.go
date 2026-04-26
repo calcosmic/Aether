@@ -104,7 +104,11 @@ var buildCmd = &cobra.Command{
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches))
+			reviewDepthPlan := ReviewDepthLight
+			if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
+				reviewDepthPlan = ReviewDepthHeavy
+			}
+			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan))
 			return nil
 		}
 
@@ -136,7 +140,11 @@ var buildCmd = &cobra.Command{
 				dispatches = manifest.Dispatches
 			}
 		}
-		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches))
+		reviewDepthBuild := ReviewDepthLight
+		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
+			reviewDepthBuild = ReviewDepthHeavy
+		}
+		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild))
 		return nil
 	},
 }
@@ -185,7 +193,11 @@ var continueCmd = &cobra.Command{
 			return nil
 		}
 
-		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result))
+		reviewDepthContinue := ReviewDepthLight
+		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
+			reviewDepthContinue = ReviewDepthHeavy
+		}
+		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue))
 		return nil
 	},
 }

@@ -397,6 +397,26 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		preserveReason:    statePreserveReason,
 	})
 
+	// Review depth section (D-13, D-14)
+	if state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
+		reviewPhase := state.Plan.Phases[state.CurrentPhase-1]
+		reviewDepth := resolveReviewDepth(reviewPhase, len(state.Plan.Phases), false, false)
+		var depthText string
+		if reviewDepth == ReviewDepthLight {
+			depthText = "Light review -- core verification only"
+		} else {
+			depthText = "Heavy review -- full quality gauntlet"
+		}
+		sections = append(sections, colonyPrimeSection{
+			name:           "review_depth",
+			title:          "Review Depth",
+			source:         statePath,
+			content:        fmt.Sprintf("## Review Depth\n\n%s\n", depthText),
+			priority:       6,
+			freshnessScore: 1.0,
+		})
+	}
+
 	now := time.Now().UTC()
 	pf, phErr := loadPheromonesOnce(store, sc)
 	if phErr == nil && len(pf.Signals) > 0 {

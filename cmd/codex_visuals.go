@@ -896,11 +896,22 @@ func renderPlanDispatchPreview(goal string, dispatches []codexPlanningDispatch) 
 	return b.String()
 }
 
-func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
-	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth))
+func renderReviewDepthLine(depth ReviewDepth, phaseNum, totalPhases int) string {
+	if depth == ReviewDepthHeavy {
+		if phaseNum == totalPhases {
+			return "Review depth: heavy (final phase)"
+		}
+		return fmt.Sprintf("Review depth: heavy (Phase %d of %d)", phaseNum, totalPhases)
+	}
+	return fmt.Sprintf("Review depth: light (Phase %d of %d -- final phase gets full review)", phaseNum, totalPhases)
 }
 
-func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
+func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
+	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), false, false)
+	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
+}
+
+func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth ReviewDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
 	b.WriteString(visualDivider)
@@ -908,6 +919,8 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	b.WriteString("\n")
 	b.WriteString("Phase: ")
 	b.WriteString(phase.Name)
+	b.WriteString("\n")
+	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("Objective: ")
@@ -951,7 +964,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	return b.String()
 }
 
-func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
+func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth ReviewDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Plan %d", phase.ID)))
 	b.WriteString(visualDivider)
@@ -960,6 +973,8 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 	b.WriteString("\n")
 	b.WriteString("Phase: ")
 	b.WriteString(phase.Name)
+	b.WriteString("\n")
+	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("Objective: ")
@@ -1018,10 +1033,12 @@ func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, di
 	return b.String()
 }
 
-func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}) string {
+func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}, reviewDepth ReviewDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue"))
 	b.WriteString(visualDivider)
+	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
+	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Verification"))
 	if partial, _ := result["partial_success"].(bool); partial {
 		b.WriteString("Verification passed with partial operational success.\n")

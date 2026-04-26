@@ -43,7 +43,11 @@ var continueFinalizeCmd = &cobra.Command{
 			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result))
 			return nil
 		}
-		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result))
+		reviewDepthFinalize := ReviewDepthLight
+		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
+			reviewDepthFinalize = ReviewDepthHeavy
+		}
+		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthFinalize))
 		return nil
 	},
 }
