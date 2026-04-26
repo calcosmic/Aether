@@ -213,6 +213,12 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	b.WriteString("Memory Health\n")
 	renderMemoryHealthTable(&b, s)
 
+	// Review Findings (only if data exists)
+	if hasReviewFindings(s) {
+		b.WriteString("\nReview Findings\n")
+		renderReviewFindingsTable(&b, s)
+	}
+
 	// Pheromone Summary
 	b.WriteString("\nActive Pheromones\n")
 	renderPheromoneSummary(&b, s)
@@ -590,6 +596,42 @@ func renderMemoryHealthTable(b *strings.Builder, s *storage.Store) {
 	t.AppendRow(table.Row{"Applied Instincts", summary.AppliedInstincts, formatTimestamp(summary.LastInstinctTouched)})
 	t.AppendRow(table.Row{"Needs Review", summary.ReviewCandidates + summary.RereadCandidates, formatTimestamp(summary.LastInstinctTouched)})
 	t.AppendRow(table.Row{"Recent Failures", summary.RecentFailures, formatTimestamp(summary.LastFailure)})
+	t.SetStyle(table.StyleRounded)
+	b.WriteString(t.Render() + "\n")
+}
+
+// hasReviewFindings checks whether any review domain has non-zero findings.
+func hasReviewFindings(s *storage.Store) bool {
+	for _, d := range colony.DomainOrder {
+		ledgerPath := fmt.Sprintf("reviews/%s/ledger.json", d)
+		var lf colony.ReviewLedgerFile
+		if err := s.LoadJSON(ledgerPath, &lf); err != nil {
+			continue
+		}
+		if lf.Summary.Total > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// renderReviewFindingsTable writes a table of review findings per domain.
+func renderReviewFindingsTable(b *strings.Builder, s *storage.Store) {
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Domain", "Total", "Open", "Resolved"})
+
+	for _, d := range colony.DomainOrder {
+		ledgerPath := fmt.Sprintf("reviews/%s/ledger.json", d)
+		var lf colony.ReviewLedgerFile
+		if err := s.LoadJSON(ledgerPath, &lf); err != nil {
+			continue
+		}
+		if lf.Summary.Total == 0 {
+			continue
+		}
+		t.AppendRow(table.Row{d, lf.Summary.Total, lf.Summary.Open, lf.Summary.Resolved})
+	}
+
 	t.SetStyle(table.StyleRounded)
 	b.WriteString(t.Render() + "\n")
 }

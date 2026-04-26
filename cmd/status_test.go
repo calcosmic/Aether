@@ -1058,10 +1058,23 @@ func TestStatus_ReviewFindings_PartialData(t *testing.T) {
 	if !strings.Contains(output, "quality") {
 		t.Fatalf("expected 'quality' domain in output, got:\n%s", output)
 	}
-	// Verify other domains do NOT appear
+	// Extract the Review Findings table section and verify other domains don't appear there
+	rfIdx := strings.Index(output, "Review Findings")
+	if rfIdx < 0 {
+		t.Fatal("Review Findings section not found")
+	}
+	// Find the end of the Review Findings section (next section header)
+	afterRF := output[rfIdx:]
+	nextSection := len(afterRF)
+	for _, section := range []string{"Active Pheromones", "Spawn Activity", "State:", "Recent Instincts", "Recovery"} {
+		if idx := strings.Index(afterRF, "\n"+section); idx >= 0 && idx < nextSection {
+			nextSection = idx
+		}
+	}
+	reviewSection := afterRF[:nextSection]
 	for _, unwanted := range []string{"security", "performance", "resilience", "testing", "history", "bugs"} {
-		if strings.Contains(output, unwanted) {
-			t.Errorf("output should not contain domain %q with no data\n%s", unwanted, output)
+		if strings.Contains(reviewSection, unwanted) {
+			t.Errorf("Review Findings section should not contain domain %q with no data\nSection:\n%s", unwanted, reviewSection)
 		}
 	}
 }
