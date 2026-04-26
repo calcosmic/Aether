@@ -7,12 +7,12 @@
 
 ### Continue-Review Reports
 
-- [ ] **CONT-01**: Continue-review workers produce per-worker `.md` outcome reports at `build/phase-N/worker-reports/{name}.md`, mirroring the existing build worker report pattern
-- [ ] **CONT-02**: `codexContinueWorkerFlowStep` struct includes `Blockers []string`, `Duration float64`, and `Report string` fields for carrying detailed data through the continue flow
-- [ ] **CONT-03**: `codexContinueExternalDispatch` struct includes `Report string` field so the wrapper can pass each worker's full markdown findings through the completion packet
-- [ ] **CONT-04**: `mergeExternalContinueResults()` preserves all three new fields (`Blockers`, `Duration`, `Report`) when merging external worker results into the flow
-- [ ] **CONT-05**: Wrapper completion packet instructions in `.claude/commands/ant/continue.md` and `.opencode/commands/ant/continue.md` document the `report` field with guidance to include full structured findings as markdown
-- [ ] **CONT-06**: Old completion packets without `report`/`blockers`/`duration` fields still work (backward compatible via `omitempty`)
+- [x] **CONT-01**: Continue-review workers produce per-worker `.md` outcome reports at `build/phase-N/worker-reports/{name}.md`, mirroring the existing build worker report pattern
+- [x] **CONT-02**: `codexContinueWorkerFlowStep` struct includes `Blockers []string`, `Duration float64`, and `Report string` fields for carrying detailed data through the continue flow
+- [x] **CONT-03**: `codexContinueExternalDispatch` struct includes `Report string` field so the wrapper can pass each worker's full markdown findings through the completion packet
+- [x] **CONT-04**: `mergeExternalContinueResults()` preserves all three new fields (`Blockers`, `Duration`, `Report`) when merging external worker results into the flow
+- [x] **CONT-05**: Wrapper completion packet instructions in `.claude/commands/ant/continue.md` and `.opencode/commands/ant/continue.md` document the `report` field with guidance to include full structured findings as markdown
+- [x] **CONT-06**: Old completion packets without `report`/`blockers`/`duration` fields still work (backward compatible via `omitempty`)
 
 ### Domain Ledger
 
@@ -29,11 +29,11 @@
 
 ### Colony-Prime Integration
 
-- [ ] **PRIME-01**: Colony-prime assembles a `prior-reviews` section at priority 8 (between user_preferences at 7 and pheromones at 9)
-- [ ] **PRIME-02**: Prior-reviews section shows open findings per domain with severity and file/location summary (e.g., "Security (5 open): HIGH — bcrypt... ")
-- [ ] **PRIME-03**: Prior-reviews section is capped at 800 chars (normal mode) / 400 chars (compact mode) to prevent token budget blowout
-- [ ] **PRIME-04**: Prior-reviews section gracefully degrades when no review ledgers exist (omitted entirely, not empty)
-- [ ] **PRIME-05**: Section reads from cached summary file for performance (not 7 direct ledger reads on every colony-prime call)
+- [x] **PRIME-01**: Colony-prime assembles a `prior-reviews` section at priority 8 (between user_preferences at 7 and pheromones at 9)
+- [x] **PRIME-02**: Prior-reviews section shows open findings per domain with severity and file/location summary (e.g., "Security (5 open): HIGH — bcrypt... ")
+- [x] **PRIME-03**: Prior-reviews section is capped at 800 chars (normal mode) / 400 chars (compact mode) to prevent token budget blowout
+- [x] **PRIME-04**: Prior-reviews section gracefully degrades when no review ledgers exist (omitted entirely, not empty)
+- [x] **PRIME-05**: Section reads from cached summary file for performance (not 7 direct ledger reads on every colony-prime call)
 
 ### Agent Definitions
 

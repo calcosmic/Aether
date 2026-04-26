@@ -110,7 +110,7 @@
 - [x] **Phase 52: Continue-Review Worker Outcome Reports** - Per-worker .md reports for review workers, mirroring build report pattern (completed 2026-04-26)
 - [x] **Phase 53: Domain-Ledger CRUD Subcommands** - Four CLI subcommands for structured review finding persistence across 7 domains (completed 2026-04-26)
 - [x] **Phase 54: Colony-Prime Prior-Reviews Section** - Open review findings injected into downstream worker context (completed 2026-04-26)
-- [x] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails (plan 1 of 2 completed 2026-04-26)
+- [x] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails (completed 2026-04-26)
 - [ ] **Phase 56: Lifecycle Integration** - Seal, entomb, status, and init updated for review ledger lifecycle
 
 ## Phase Details
@@ -189,7 +189,7 @@ Plans:
 
 Plans:
 - [x] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync
-- [ ] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
+- [x] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
 
 ## Progress
 
