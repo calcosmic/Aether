@@ -174,6 +174,45 @@ func TestPhaseHasHeavyKeywords_NoMatch(t *testing.T) {
 	}
 }
 
+func TestReviewDepthFlags(t *testing.T) {
+	t.Run("build has light flag", func(t *testing.T) {
+		f := buildCmd.Flags().Lookup("light")
+		if f == nil {
+			t.Fatal("buildCmd has no --light flag")
+		}
+		if f.DefValue != "false" {
+			t.Errorf("buildCmd --light default = %q, want false", f.DefValue)
+		}
+	})
+	t.Run("build has heavy flag", func(t *testing.T) {
+		f := buildCmd.Flags().Lookup("heavy")
+		if f == nil {
+			t.Fatal("buildCmd has no --heavy flag")
+		}
+		if f.DefValue != "false" {
+			t.Errorf("buildCmd --heavy default = %q, want false", f.DefValue)
+		}
+	})
+	t.Run("continue has light flag", func(t *testing.T) {
+		f := continueCmd.Flags().Lookup("light")
+		if f == nil {
+			t.Fatal("continueCmd has no --light flag")
+		}
+		if f.DefValue != "false" {
+			t.Errorf("continueCmd --light default = %q, want false", f.DefValue)
+		}
+	})
+	t.Run("continue has heavy flag", func(t *testing.T) {
+		f := continueCmd.Flags().Lookup("heavy")
+		if f == nil {
+			t.Fatal("continueCmd has no --heavy flag")
+		}
+		if f.DefValue != "false" {
+			t.Errorf("continueCmd --heavy default = %q, want false", f.DefValue)
+		}
+	})
+}
+
 func TestChaosShouldRunInLightMode_Deterministic(t *testing.T) {
 	tests := []struct {
 		phaseID int
