@@ -113,6 +113,7 @@ aether flag-add --severity "critical" --type "blocker" --title "{issue_title}" -
 - **Do not write to `COLONY_STATE.json` directly** - only create flags via `aether flag-add`
 - **Do not delete any files**
 - **Do not modify test files** - only run them and report results
+- **Write is restricted to persisting findings to domain review ledgers (testing, quality) via `aether review-ledger-write`** - this is your ONLY write operation. You MUST NOT write to source code, colony state, or any file outside `.aether/data/reviews/`.
 
 ### Watcher IS Permitted To
 - Create flags via `aether flag-add` for genuine verification failures

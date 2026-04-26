@@ -90,4 +90,5 @@ If 3 attempted fixes fail:
 - **Do not delete files** - create and modify only
 - **Do not modify other agents' output files**
 - **Do not modify colony state files** - unless the bug is specifically in state management
+- **Write is restricted to persisting bug investigation findings to the bugs domain review ledger via `aether review-ledger-write`** - this is your ONLY write operation. You MUST NOT write to source code, colony state, or any file outside `.aether/data/reviews/bugs/`. You still do not fix, modify, or apply changes to source code.
 '''
