@@ -346,17 +346,13 @@ aether review-ledger-write \
 | A2 | Tracker's swarm invocation context provides sufficient information for findings-path -- no separate dispatch injection needed | Dispatch Injection Points | If swarm invocation doesn't provide domain/phase context, Tracker won't know where to write |
 | A3 | The `expectedDispatchOutcome` function at line ~1485 does NOT need updating for this phase | Dispatch Injection Points | If it does need updating, the planner should add a task for it |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should the `<return_format>` section of each agent include a findings-write example?**
-   - What we know: CONTEXT.md lists this as Claude's discretion. The review-ledger-write command format is well-documented.
-   - What's unclear: Whether adding a findings example in return_format adds value or just bloats the agent body.
-   - Recommendation: Add a brief `findings_persistence` note to the return format showing the CLI command, rather than a full JSON example. The dispatch injection provides the concrete path at task time.
+1. **Should the `<return_format>` section of each agent include a findings-write example?** — RESOLVED
+   - Decision: Add a brief `findings_persistence` note to the return format showing the CLI command, rather than a full JSON example. The dispatch injection provides the concrete path at task time. Implemented in Plan 01 Task 1 step 5.
 
-2. **How should Tracker receive findings-path instructions without dispatch injection?**
-   - What we know: Tracker is invoked via `/ant-swarm`, not through build/continue dispatch. D-04 says findings-path is injected at dispatch time. D-06 does not list Tracker in either dispatch path.
-   - What's unclear: Whether swarm invocation should also inject findings-path, or if Tracker's agent body should include generic findings instructions.
-   - Recommendation: Include generic findings instructions in Tracker's agent body (since it has no dispatch injection point), referencing "your domain (bugs)" rather than a concrete path. The agent already knows its domain from its role description.
+2. **How should Tracker receive findings-path instructions without dispatch injection?** — RESOLVED
+   - Decision: Include generic findings instructions in Tracker's agent body (since it has no dispatch injection point), referencing "your domain (bugs)" rather than a concrete path. Implemented in Plan 01 Task 1 steps 7-8 (Tracker special case).
 
 ## Environment Availability
 

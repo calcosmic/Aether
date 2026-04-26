@@ -171,7 +171,11 @@ Plans:
   3. Write-scope guardrails explicitly restrict agents to ONLY write to their designated review ledger files under `.aether/data/reviews/`, never source code, tests, or colony state
   4. All 7 agents are synced across all 4 surfaces: `.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` (28 files verified in sync)
   5. Build and continue dispatch flows inject findings-path instructions into review agent task prompts so agents know where to write
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync
+- [ ] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
 
 ### Phase 56: Lifecycle Integration
 **Goal**: Review ledgers integrate with colony lifecycle -- archived at seal, included in entomb chambers, visible in status, and cleaned at init
@@ -183,7 +187,11 @@ Plans:
   3. `/ant-entomb` includes the reviews directory in the chamber archive
   4. `/ant-status` displays review ledger counts per domain (total and open entries)
   5. `/ant-init` clears stale reviews from any prior colony to prevent cross-colony contamination
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync
+- [ ] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
 
 ## Progress
 
@@ -195,5 +203,5 @@ Phases execute in numeric order: 52 -> 53 -> 54 -> 55 -> 56
 | 52. Continue-Review Worker Outcome Reports | 2/2 | Complete | 2026-04-26 |
 | 53. Domain-Ledger CRUD Subcommands | 2/2 | Complete    | 2026-04-26 |
 | 54. Colony-Prime Prior-Reviews Section | 0/1 | Not started | - |
-| 55. Agent Definition Updates | 0/? | Not started | - |
+| 55. Agent Definition Updates | 0/2 | Planned | - |
 | 56. Lifecycle Integration | 0/? | Not started | - |
