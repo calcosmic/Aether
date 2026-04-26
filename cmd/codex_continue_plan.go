@@ -22,6 +22,7 @@ type codexContinueExternalDispatch struct {
 	Summary       string   `json:"summary,omitempty"`
 	Blockers      []string `json:"blockers,omitempty"`
 	Duration      float64  `json:"duration,omitempty"`
+	Report        string   `json:"report,omitempty"`
 	Brief         string   `json:"brief,omitempty"`
 	SkillSection  string   `json:"skill_section,omitempty"`
 	SkillCount    int      `json:"skill_count,omitempty"`

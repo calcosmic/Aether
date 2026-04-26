@@ -246,12 +246,15 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 			summary = strings.Join(blockers, "; ")
 		}
 		flow = append(flow, codexContinueWorkerFlowStep{
-			Stage:   dispatch.Stage,
-			Caste:   dispatch.Caste,
-			Name:    dispatch.Name,
-			Task:    dispatch.Task,
-			Status:  status,
-			Summary: summary,
+			Stage:    dispatch.Stage,
+			Caste:    dispatch.Caste,
+			Name:     dispatch.Name,
+			Task:     dispatch.Task,
+			Status:   status,
+			Summary:  summary,
+			Blockers: blockers,
+			Duration: result.Duration,
+			Report:   strings.TrimSpace(result.Report),
 		})
 	}
 	return flow, nil
