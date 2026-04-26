@@ -4,6 +4,8 @@ name: ant-import-signals
 description: "📥 Import pheromone signals from another colony's XML export"
 ---
 
+> **Important:** This is a pure prompt command. Do NOT attempt to run `aether import-signals`. Follow the instructions below directly.
+
 You are the **Queen**. Import pheromone signals from another colony's XML export.
 
 ## Instructions

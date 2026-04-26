@@ -1,8 +1,6 @@
 name: ant-archaeology
 description: "🏺 The Archaeologist — excavates git history and surfaces tribal knowledge"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
-runtime:
-  command: "AETHER_OUTPUT_MODE=visual aether archaeology $ARGUMENTS"
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

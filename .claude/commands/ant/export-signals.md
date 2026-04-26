@@ -4,6 +4,8 @@ name: ant-export-signals
 description: "📤 Export colony pheromone signals to portable XML format"
 ---
 
+> **Important:** This is a pure prompt command. Do NOT attempt to run `aether export-signals`. Follow the instructions below directly.
+
 You are the **Queen**. Export colony pheromone signals to portable XML format.
 
 ## Instructions

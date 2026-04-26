@@ -1,8 +1,6 @@
 name: ant-interpret
 description: "🔍 Read-only interpretation of dream sessions against the current codebase"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
-runtime:
-  command: "AETHER_OUTPUT_MODE=visual aether interpret $ARGUMENTS"
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

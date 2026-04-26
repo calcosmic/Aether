@@ -1369,8 +1369,8 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Assets: %d copied, %d unchanged\n\n", totalCopied, totalSkipped))
 	b.WriteString(renderSyncSummary(results))
-	if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
-		b.WriteString("\nCodex Refresh\n")
+	if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
+		b.WriteString("\nSession Refresh\n")
 		b.WriteString("  ")
 		b.WriteString(restartNote)
 		b.WriteString("\n")
@@ -1378,8 +1378,8 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 	primaryNext := `Run ` + "`aether init \"your goal\"`" + ` to start a colony.`
 	secondaryNext := `Run ` + "`aether colonize`" + ` after init if you want a quick territory scan before planning.`
 	if len(restartTargets) > 0 {
-		primaryNext = `Close this Codex chat, start a new Codex session in this repo, then run ` + "`aether init \"your goal\"`" + `.`
-		secondaryNext = `After reopening Codex, run ` + "`aether colonize`" + ` if you want a quick territory scan before planning.`
+		primaryNext = `Restart your session in this repo (Codex or OpenCode), then run ` + "`aether init \"your goal\"`" + `.`
+		secondaryNext = `After restarting, run ` + "`aether colonize`" + ` if you want a quick territory scan before planning.`
 	}
 	b.WriteString(renderNextUp(
 		primaryNext,
@@ -1442,8 +1442,8 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 		b.WriteString(renderNextUp(next, alt, runtimeAlt))
 		return b.String()
 	}
-	if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
-		b.WriteString("\nCodex Refresh\n")
+	if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
+		b.WriteString("\nSession Refresh\n")
 		b.WriteString("  ")
 		b.WriteString(restartNote)
 		b.WriteString("\n")
@@ -1460,8 +1460,8 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 	secondaryNext := `Run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
 	runtimeNext := `Run ` + "`aether update --download-binary`" + ` if you also need a published runtime update.`
 	if len(restartTargets) > 0 {
-		primaryNext = `Close this Codex chat, start a new Codex session in this repo, then run ` + "`aether status`" + `.`
-		secondaryNext = `After reopening Codex, run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
+		primaryNext = `Restart your session in this repo (Codex or OpenCode), then run ` + "`aether status`" + `.`
+		secondaryNext = `After restarting, run ` + "`aether init \"next goal\"`" + ` if this repo does not have an active colony yet.`
 	}
 	b.WriteString(renderNextUp(
 		primaryNext,

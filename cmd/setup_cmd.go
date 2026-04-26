@@ -163,7 +163,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	docResults, docCopied, docSkipped, docErrors := syncCodexProjectDocs(hubSystem, repoDir)
+	docResults, docCopied, docSkipped, docErrors := syncProjectDocs(hubSystem, repoDir)
 	results = append(results, docResults...)
 	totalCopied += docCopied
 	totalSkipped += docSkipped
@@ -176,14 +176,16 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	restartTargets := codexRestartTargets(results)
+	restartTargets := platformRestartTargets(results)
 	message := fmt.Sprintf("Setup complete: %d files copied, %d unchanged", totalCopied, totalSkipped)
-	if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
+	if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
 		message += ". " + restartNote
 	}
 	result := map[string]interface{}{
 		"message":                message,
 		"details":                results,
+		"restart_required":       len(restartTargets) > 0,
+		"restart_targets":        restartTargets,
 		"codex_restart_required": len(restartTargets) > 0,
 		"codex_restart_targets":  restartTargets,
 	}

@@ -4,6 +4,8 @@ name: ant-interpret
 description: "🔍 Read-only interpretation of dream sessions against the current codebase"
 ---
 
+> **Important:** This is a pure prompt command. Do NOT attempt to run `aether interpret`. Follow the instructions below directly.
+
 This command is read-only.
 
 - Review the selected dream session from `.aether/dreams/` and investigate its claims against the current codebase with concrete file and line evidence.

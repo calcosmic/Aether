@@ -345,17 +345,13 @@ _ = os.RemoveAll(filepath.Join(dataDir, "reviews"))
 
 **If this table is empty:** All claims in this research were verified or cited -- no user confirmation needed.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should seal archive reviews to a separate location, or just ensure they persist until entomb?**
-   - What we know: Seal writes CROWNED-ANTHILL.md. Entomb copies data to chamber. Currently no directory archival happens at seal.
-   - What's unclear: Whether LIFE-01 wants a separate archive copy at seal time, or just wants seal to "protect" reviews from being lost.
-   - Recommendation: The simplest interpretation is that seal should copy the reviews directory alongside CROWNED-ANTHILL.md (i.e., into `.aether/` root or a seal-specific subdirectory). But since entomb already handles full archival, the most practical approach is: (a) seal checks for HIGH findings and includes warnings in the report, and (b) seal does NOT delete or move reviews, leaving them for entomb to archive. If a separate copy is desired, mirror the entomb pattern and copy to a seal-specific location.
+1. **Should seal archive reviews to a separate location, or just ensure they persist until entomb?** (RESOLVED)
+   - **Resolution:** Seal copies the reviews directory to `reviews-archive/` alongside CROWNED-ANTHILL.md. This satisfies LIFE-01's "archives" requirement while keeping entomb as the full archival path. Seal does NOT delete or move the original reviews directory, leaving it for entomb to archive into the chamber.
 
-2. **Should the status Review Findings section show severity breakdowns or just total/open?**
-   - What we know: LIFE-04 says "total and open entries."
-   - What's unclear: Whether showing severity breakdowns is welcome extra detail or unwanted noise.
-   - Recommendation: Show Domain, Total, Open, Resolved in a table. The summary struct already has BySeverity counts. Optionally add a "HIGH" column. Keep it simple -- the full severity breakdown is available via `review-ledger-summary`.
+2. **Should the status Review Findings section show severity breakdowns or just total/open?** (RESOLVED)
+   - **Resolution:** Show Domain, Total, Open, Resolved columns. No severity breakdown column. The full severity breakdown is available via `review-ledger-summary` for users who need it. Keeping the status table simple with four columns avoids cluttering the dashboard.
 
 ## Validation Architecture
 

@@ -93,7 +93,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
 			"actions": []string{
 				"Sync .aether/ system files (commands, agents, skills, templates, docs)",
-				"Refresh repo-level Codex guidance (AGENTS.md, .codex/CODEX.md) when managed by Aether",
+				"Refresh repo-level platform guidance (AGENTS.md, .codex/CODEX.md, .opencode/OPENCODE.md) when managed by Aether",
 				"Sync .claude/commands/ant-*.md",
 				"Sync .claude/settings.json",
 				"Sync .claude/agents/ant/",
@@ -136,7 +136,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			})
 			return nil
 		}
-		docResults, docCopied, docSkipped, docErrors := syncCodexProjectDocs(filepath.Join(hubDir, "system"), repoDir)
+		docResults, docCopied, docSkipped, docErrors := syncProjectDocs(filepath.Join(hubDir, "system"), repoDir)
 		syncResult.details = append(syncResult.details, docResults...)
 		syncResult.copied += docCopied
 		syncResult.skipped += docSkipped
@@ -156,9 +156,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if restored, err := ensureLegacySessionMirror(store); err == nil {
 			mirrorRestored = restored
 		}
-		restartTargets := codexRestartTargets(syncResult.details)
+		restartTargets := platformRestartTargets(syncResult.details)
 		message := fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped)
-		if restartNote := codexRestartMessage(restartTargets); restartNote != "" {
+		if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
 			message += ". " + restartNote
 		}
 		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, syncResult.details)
@@ -171,6 +171,8 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"binary_refresh_mode":     binaryMode,
 			"binary_refresh_note":     updateBinaryRefreshNote(binaryMode, channel),
 			"legacy_session_restored": mirrorRestored,
+			"restart_required":        len(restartTargets) > 0,
+			"restart_targets":         restartTargets,
 			"codex_restart_required":  len(restartTargets) > 0,
 			"codex_restart_targets":   restartTargets,
 			"stale_publish":           staleResultToMap(staleResult),
