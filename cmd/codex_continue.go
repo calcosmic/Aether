@@ -791,9 +791,20 @@ type codexContinueReviewSpec struct {
 }
 
 var codexContinueReviewSpecs = []codexContinueReviewSpec{
-	{Caste: "gatekeeper", Task: "Review the phase for security, release, and integrity blockers before advancement. Return blocked if it is unsafe to advance."},
-	{Caste: "auditor", Task: "Audit whether the completed work actually satisfies the phase tasks rather than just producing superficial artifacts. Return blocked if the evidence looks partial, generic, or docs-only."},
-	{Caste: "probe", Task: "Probe the verification evidence for missing edge cases, weak tests, or unexercised behavior. Return blocked if test evidence is too weak to trust advancement."},
+	{
+		Caste: "gatekeeper",
+		Task: "Review the phase for security, release, and integrity blockers before advancement. Return blocked if it is unsafe to advance." +
+			"\n\nPersist your security findings to the domain review ledger using: aether review-ledger-write --domain security --phase <N> --findings '<json>' --agent gatekeeper",
+	},
+	{
+		Caste: "auditor",
+		Task: "Audit whether the completed work actually satisfies the phase tasks rather than just producing superficial artifacts. Return blocked if the evidence looks partial, generic, or docs-only." +
+			"\n\nPersist your quality, security, and performance findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent auditor",
+	},
+	{
+		Caste: "probe",
+		Task: "Probe the verification evidence for missing edge cases, weak tests, or unexercised behavior. Return blocked if test evidence is too weak to trust advancement.",
+	},
 }
 
 func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration) codexContinueReviewReport {
@@ -916,7 +927,11 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	b.WriteString("\n\n")
 	b.WriteString(spec.Task)
 	b.WriteString("\n\n")
-	b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
+	if spec.Caste == "gatekeeper" || spec.Caste == "auditor" {
+		b.WriteString("This is a review task. You may persist findings to your domain review ledger using `aether review-ledger-write`, but do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
+	} else {
+		b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
+	}
 	b.WriteString("Evidence to inspect:\n")
 	if manifest.Present {
 		b.WriteString("- Build manifest: ")
