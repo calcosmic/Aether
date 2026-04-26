@@ -16,6 +16,7 @@ type colonyPrimeOutput struct {
 	PromptSection string            `json:"prompt_section"`
 	SignalCount   int               `json:"signal_count"`
 	InstinctCount int               `json:"instinct_count"`
+	ReviewCount   int               `json:"review_count"`
 	LogLine       string            `json:"log_line"`
 	Budget        int               `json:"budget"`
 	Used          int               `json:"used"`
@@ -522,7 +523,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	result.Context = context
 	result.PromptSection = context
 	result.Used = ranking.Used
-	result.LogLine = fmt.Sprintf("colony-prime loaded %d signal(s), %d instinct(s), used %d/%d chars", result.SignalCount, result.InstinctCount, ranking.Used, budget)
+	result.LogLine = fmt.Sprintf("colony-prime loaded %d signal(s), %d instinct(s), %d review(s), used %d/%d chars", result.SignalCount, result.InstinctCount, result.ReviewCount, ranking.Used, budget)
 	return result
 }
 

@@ -122,6 +122,8 @@ func sectionRelevanceScore(name string) float64 {
 		return 0.25
 	case "recent_narrative":
 		return 0.10
+	case "prior_reviews":
+		return 0.70
 	default:
 		return 0.25
 	}

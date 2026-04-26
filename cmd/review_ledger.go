@@ -32,9 +32,6 @@ var agentAllowedDomains = map[string][]string{
 	"tracker":       {"bugs"},
 }
 
-// Deterministic domain order for summary iteration.
-var domainOrder = []string{"security", "quality", "performance", "resilience", "testing", "history", "bugs"}
-
 const maxFindingsPerWrite = 50
 
 // --- review-ledger-write ---
@@ -71,7 +68,7 @@ var reviewLedgerWriteCmd = &cobra.Command{
 
 		// Validate domain
 		if !validDomains[domain] {
-			outputError(1, fmt.Sprintf("invalid domain %q: must be one of %s", domain, strings.Join(domainOrder, ", ")), nil)
+			outputError(1, fmt.Sprintf("invalid domain %q: must be one of %s", domain, strings.Join(colony.DomainOrder, ", ")), nil)
 			return nil
 		}
 
@@ -182,7 +179,7 @@ var reviewLedgerReadCmd = &cobra.Command{
 		}
 
 		if !validDomains[domain] {
-			outputError(1, fmt.Sprintf("invalid domain %q: must be one of %s", domain, strings.Join(domainOrder, ", ")), nil)
+			outputError(1, fmt.Sprintf("invalid domain %q: must be one of %s", domain, strings.Join(colony.DomainOrder, ", ")), nil)
 			return nil
 		}
 
@@ -244,7 +241,7 @@ var reviewLedgerSummaryCmd = &cobra.Command{
 		}
 
 		var domains []map[string]interface{}
-		for _, d := range domainOrder {
+		for _, d := range colony.DomainOrder {
 			ledgerPath := fmt.Sprintf("reviews/%s/ledger.json", d)
 			var lf colony.ReviewLedgerFile
 			if err := store.LoadJSON(ledgerPath, &lf); err != nil {
@@ -289,7 +286,7 @@ var reviewLedgerResolveCmd = &cobra.Command{
 		}
 
 		if !validDomains[domain] {
-			outputError(1, fmt.Sprintf("invalid domain %q: must be one of %s", domain, strings.Join(domainOrder, ", ")), nil)
+			outputError(1, fmt.Sprintf("invalid domain %q: must be one of %s", domain, strings.Join(colony.DomainOrder, ", ")), nil)
 			return nil
 		}
 

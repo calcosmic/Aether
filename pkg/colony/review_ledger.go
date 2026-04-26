@@ -27,6 +27,10 @@ var ValidReviewDomains = map[string]string{
 	"bugs":        "bug",
 }
 
+// DomainOrder defines the deterministic iteration order for review domains.
+// Used by both CLI commands and colony-prime section assembly.
+var DomainOrder = []string{"security", "quality", "performance", "resilience", "testing", "history", "bugs"}
+
 // ReviewLedgerEntry represents a single finding in a domain review ledger.
 type ReviewLedgerEntry struct {
 	ID          string         `json:"id"`
