@@ -10,6 +10,8 @@ Aether is a biomimetic AI colony framework: a Go runtime in `cmd/` and `pkg/` th
 
 `v1.8` added the colony recovery system: `aether recover` detects 7 stuck-state classes, auto-fixes safe issues, prompts for destructive ones, and proves correctness through 10 E2E tests.
 
+`v1.9` added the review persistence system: 7-domain review ledgers accumulate findings across phases, agents persist findings via CLI, colony-prime injects prior reviews into worker context, and full lifecycle integration (seal/entomb/status/init).
+
 ## Core Value
 
 **Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.**
@@ -22,15 +24,17 @@ That means:
 - verification must lead advancement decisions
 - partial success and recovery must be first-class
 - stuck colonies must be recoverable with a single command
+- review findings must survive `/clear` and accumulate across phases
 
 ## Current State
 
 - Go runtime is healthy, v1.0.24 shipped
-- All 9 milestones complete (51 phases, 119 plans)
+- All 10 milestones complete (56 phases, 128 plans)
 - 2910+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
 - Plan recovery pipeline hardened (`--force` always recovers)
 - Colony recovery system shipped: `aether recover` + `--apply` for stuck-state rescue
+- Review persistence system shipped: 7-domain ledger CRUD, colony-prime injection, agent Write tools, lifecycle integration
 - All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
 
 <details>
@@ -57,88 +61,68 @@ That means:
 - **Runtime proof beats wrapper theater**
 - **Shared lifecycle truth matters**; `build`, `plan`, `colonize`, `watch`, `status`, and `continue` should agree on what a worker is doing
 - **Recovery is first-class**; stuck colonies get a rescue button, not manual file surgery
+- **Review persistence is first-class**; findings accumulate across phases and survive session resets
 
 ## Milestone Sequence
 
-- [x] v1.0 MVP — Phases 1-6
-- [x] v1.1 Trusted Context — Phases 7-11
-- [x] v1.2 Live Dispatch Truth and Recovery — Phases 12-16
-- [x] v1.3 Visual Truth and Core Hardening — Phases 17-24 (shipped 2026-04-21)
-- [x] v1.4 Self-Healing Colony — Phases 25-30 (completed 2026-04-21)
-- [x] v1.5 Runtime Truth Recovery — Phases 31-38 (completed 2026-04-23, product v1.0.20)
-- [x] v1.6 Release Pipeline Integrity — Phases 39-46 (completed 2026-04-24)
-- [x] v1.7 Planning Pipeline Recovery — Phases 47-48 (completed 2026-04-24)
-- [x] v1.8 Colony Recovery — Phases 49-51 (completed 2026-04-25)
-- [ ] v1.9 Review Persistence — Phases 52+
+- [x] v1.0 MVP -- Phases 1-6
+- [x] v1.1 Trusted Context -- Phases 7-11
+- [x] v1.2 Live Dispatch Truth and Recovery -- Phases 12-16
+- [x] v1.3 Visual Truth and Core Hardening -- Phases 17-24 (shipped 2026-04-21)
+- [x] v1.4 Self-Healing Colony -- Phases 25-30 (completed 2026-04-21)
+- [x] v1.5 Runtime Truth Recovery -- Phases 31-38 (completed 2026-04-23, product v1.0.20)
+- [x] v1.6 Release Pipeline Integrity -- Phases 39-46 (completed 2026-04-24)
+- [x] v1.7 Planning Pipeline Recovery -- Phases 47-48 (completed 2026-04-24)
+- [x] v1.8 Colony Recovery -- Phases 49-51 (completed 2026-04-25)
+- [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
 
-## Current Milestone: v1.9 Review Persistence
+## Requirements
 
-**Goal:** Review agent findings survive `/clear` and accumulate across phases so downstream workers can learn from prior reviews.
+### Validated
 
-**Target features:**
-- Continue-review worker outcome reports (per-worker `.md` files, mirroring build worker reports)
-- Domain-ledger system (`reviews/{domain}/ledger.json`) — 7 domains, structured entries, accumulate across phases
-- Colony-prime injection of prior review summaries into worker context
-- Review agent definitions updated with Write tool + findings instructions
-- Agent mirrors synced (Claude, OpenCode, Codex)
-- Status/seal/entomb integration for ledger lifecycle
+- Colony ceremony and runtime visibility -- v1.0
+- Context proof and skill routing -- v1.1
+- Worker dispatch honesty -- v1.2
+- Caste identity, stage separators, trace logging -- v1.3
+- Medic ant, ceremony integrity -- v1.4
+- Continue unblock, release pipeline -- v1.5
+- Publish hardening, E2E regression -- v1.6
+- Plan recovery, E2E recovery test -- v1.7
+- Stuck-state detection, auto-repair, E2E verification -- v1.8
+- 7-domain review ledger CRUD with colony-prime injection -- v1.9
+- Review agent Write tools with scoped guardrails (28 files, 4 surfaces) -- v1.9
+- Full review lifecycle (seal/entomb/status/init) -- v1.9
 
-### Design Context
+### Active
 
-#### Part A: Persist Continue-Review Worker Findings to Disk
+(Next milestone requirements to be defined)
 
-When `/ant-continue` runs, it spawns 4 review workers (Watcher, Gatekeeper, Auditor, Probe) that produce detailed findings — security scores, quality ratings, coverage gaps, weak spots, architectural mismatches. These are returned as structured JSON from the agents but are never written to individual files on disk. Only a one-line summary per worker survives in `review.json`. When the user `/clear`s context and starts the next build, Phase N+1 builders have no access to the review findings from Phase N's continue pass.
+### Out of Scope
 
-Build workers don't have this problem — they get per-worker `.md` files written to `worker-reports/{name}.md` via `writeCodexBuildOutcomeReports()`. Continue-review workers have no equivalent.
+| Feature | Reason |
+|---------|--------|
+| Cross-colony ledger sharing | Findings contain code-specific file paths and line numbers that go stale across repos |
+| Auto-block on critical findings | Would create conflicting signals with existing continue-review blocking |
+| Auto finding-to-pheromone promotion | Mapping between "finding" and "action" requires judgment, not automation |
+| Real-time ledger sync across agents | YAGNI -- agents write during build/continue, not concurrently |
+| Ledger web UI | CLI-only for now; web dashboard is a future consideration |
 
-**Changes required:**
-1. Extend `codexContinueWorkerFlowStep` struct with `Blockers []string`, `Duration float64`, `Report string` fields
-2. Add `Report` field to `codexContinueExternalDispatch` struct
-3. Preserve new fields in `mergeExternalContinueResults()`
-4. Add `writeCodexContinueOutcomeReports()` and `renderCodexContinueWorkerOutcomeReport()` functions in `codex_continue_finalize.go`
-5. Call report writer in `runCodexContinueFinalize()` after `review.json` is written
-6. Update wrapper completion packet instructions in `.claude/commands/ant/continue.md` and `.opencode/commands/ant/continue.md` to include `report` field
-7. Add `strconv` import to `codex_continue_finalize.go`
+## Key Decisions
 
-**Key files:** `cmd/codex_continue.go`, `cmd/codex_continue_plan.go`, `cmd/codex_continue_finalize.go`, `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md`
+| Decision | Outcome | Status |
+|----------|---------|--------|
+| Review findings are colony-scoped (not cross-colony) | Code-specific paths go stale across repos | Good |
+| Domain ledger uses append pattern with computed summaries | No separate phase snapshots needed (YAGNI) | Good |
+| All new struct fields use `omitempty` | Backward compatibility with old JSON | Good |
+| Zero new dependencies | Uses existing pkg/storage/, cobra, Go stdlib | Good |
+| Tracker gets bugs domain carve-out | Write for findings only, never for applying fixes | Good |
+| Colony-prime reads from cached summary | Performance over 7 direct ledger reads | Good |
 
-#### Part B: Review Findings Domain-Ledger
+## Context
 
-Seven read-only review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) return rich structured JSON findings during builds and continue flows, but only a summary string gets captured in `review.json`. The detailed findings — specific files, line numbers, severity ratings, categories, suggestions — are lost when the session ends.
-
-**Domain-ledger structure:**
-```
-.aether/data/reviews/
-  security/ledger.json    # Gatekeeper, Auditor
-  quality/ledger.json     # Auditor, Watcher
-  performance/ledger.json # Measurer, Auditor
-  resilience/ledger.json  # Chaos
-  testing/ledger.json     # Watcher, Probe
-  history/ledger.json     # Archaeologist
-  bugs/ledger.json        # Tracker
-```
-
-**Agent-to-domain mapping:** Gatekeeper→security, Auditor→quality/security/performance, Chaos→resilience, Watcher→testing/quality, Archaeologist→history, Measurer→performance, Tracker→bugs
-
-**Ledger entry format:** `{id, phase, phase_name, agent, agent_name, generated_at, status, severity, file, line, category, description, suggestion}` with deterministic IDs like `sec-2-001`, computed summary with counts by severity.
-
-**Go runtime subcommands:** `review-ledger-write`, `review-ledger-read`, `review-ledger-summary`, `review-ledger-resolve` in new `cmd/review_ledger.go`
-
-**Colony-prime integration:** New `prior-reviews` section injected into worker prompts showing open findings per domain (priority 8, between pheromones and instincts).
-
-**Agent changes:** 7 agent files get Write tool + findings instructions + write-scope guardrails. Mirrors synced to `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/`.
-
-**Lifecycle:** Colony-scoped (accumulates across phases, archived at seal). High-value patterns promote to Hive Brain via existing instinct pipeline. Not cross-colony — findings contain code-specific file paths that go stale.
-
-## Next Move
-
-Plan next milestone with `/gsd-new-milestone`.
-
-## Evolution
-
-This document evolves at phase transitions and milestone boundaries.
-
-*Last updated: 2026-04-26 after starting v1.9 milestone*
+Shipped v1.9 with 104 files changed, +9,713 / -300 lines of Go.
+Tech stack: Go 1.24, Cobra CLI, pkg/storage file locking.
+58+ tests added across milestone. All passing.
 
 ## Explicit Deferrals
 
@@ -148,3 +132,13 @@ These remain promising but are not the next best move:
 - swarm memory beyond the current hive/wisdom path
 - federation / inter-colony coordination
 - self-mutating agents / evolution engine
+
+## Next Move
+
+Plan next milestone with `/gsd-new-milestone`.
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+*Last updated: 2026-04-26 after v1.9 milestone completion*

@@ -3,15 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Review Persistence
 status: milestone_complete
-stopped_at: Completed 55-01 agent definition updates
-last_updated: "2026-04-26T17:43:07.821Z"
-last_activity: 2026-04-26 -- Phase --phase execution started
+last_updated: "2026-04-26T22:00:00.000Z"
+last_activity: 2026-04-26 -- Milestone v1.9 archived
 progress:
-  total_phases: 6
-  completed_phases: 5
-  total_plans: 9
-  completed_plans: 7
-  percent: 83
+  total_phases: 56
+  completed_phases: 56
+  total_plans: 128
+  completed_plans: 128
+  percent: 100
 ---
 
 # Project State
@@ -21,22 +20,21 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase --phase — 56
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 56
-Plan: Not started
-Status: Milestone complete
+Phase: All v1.9 phases complete (52-56)
+Status: Milestone v1.9 archived
 Last activity: 2026-04-26
 
-Progress: [========  ] 86%
+Progress: [==========] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 130 (across 10 phases, 9 milestones)
+- Total plans completed: 128 (across 56 phases, 10 milestones)
 - All tests green (2910+ passing)
 
 ## Accumulated Context
@@ -48,12 +46,7 @@ Progress: [========  ] 86%
 - Continue-review worker reports mirror existing build worker report pattern
 - All new struct fields use `omitempty` for backward compatibility with old JSON
 - Zero new dependencies -- everything uses existing pkg/storage/, cobra, Go stdlib
-- Used mustGetStringCompatOptional for optional flags to avoid mustGetString's exit-on-empty behavior
-- Empty agent string skips agent-domain validation entirely, allowing CLI manual use without specifying an agent
-- Read command returns the full ledger summary (not a recomputed summary of filtered entries)
-- Summary command uses deterministic domain order array rather than map iteration
 - Tracker gets bugs domain carve-out: Write for findings persistence only, never for applying fixes
-- 6 standard agents already had Write tool changes in working tree; only Tracker needed fresh edits
 
 ### Pending Todos
 
@@ -65,14 +58,7 @@ None.
 
 ## Session Continuity
 
-Last session: Completed 55-01 agent definition updates
-Stopped at: Completed 55-01 agent definition updates
-Resume file: None
+Last session: Milestone v1.9 Review Persistence completed and archived
+Stopped at: Milestone complete, ready for next milestone
 
-**Completed Phase:** 52 (Continue-Review Worker Outcome Reports) -- 2 plans -- verified 2026-04-26
-**Completed Plan:** 53-01 (Review Ledger Data Types) -- types, functions, tests -- 2026-04-26
-**Completed Plan:** 53-02 (Review Ledger CRUD Subcommands) -- 4 commands, 17 tests -- 2026-04-26
-**Completed Plan:** 54-01 (Colony-Prime Prior-Reviews Section) -- buildPriorReviewsSection, cache, 14 tests -- 2026-04-26
-**Completed Plan:** 55-01 (Agent Definition Updates) -- 28 files, 7 agents, 4 surfaces -- 2026-04-26
-
-**Planned Phase:** 55 (Agent Definition Updates) -- plan 01 of 1 complete
+**Completed Milestones:** v1.0 through v1.9 (all 10 milestones complete)
