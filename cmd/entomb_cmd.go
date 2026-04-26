@@ -282,6 +282,9 @@ func copyEntombArtifacts(aetherRoot, dataDir, chamberDir string) error {
 	if err := copyDirIfExists(filepath.Join(dataDir, "colonies"), filepath.Join(chamberDir, "colonies")); err != nil {
 		return err
 	}
+	if err := copyDirIfExists(filepath.Join(dataDir, "reviews"), filepath.Join(chamberDir, "reviews")); err != nil {
+		return err
+	}
 
 	xmlMatches, _ := filepath.Glob(filepath.Join(aetherRoot, ".aether", "exchange", "*.xml"))
 	for _, src := range xmlMatches {
@@ -448,6 +451,9 @@ func clearActiveColonyRuntimeFiles(aetherRoot, dataDir string) error {
 		}
 	}
 	if err := os.RemoveAll(filepath.Join(dataDir, "colonies")); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(dataDir, "reviews")); err != nil {
 		return err
 	}
 	// Clean up worktrees directory and any tracked worktree entries
