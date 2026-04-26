@@ -114,6 +114,9 @@ var initCmd = &cobra.Command{
 		// Also remove the worktrees directory entirely to ensure a clean slate
 		_ = os.RemoveAll(filepath.Join(aetherDir, "worktrees"))
 
+		// Clean up reviews from any prior colony
+		_ = os.RemoveAll(filepath.Join(dataDir, "reviews"))
+
 		// Create COLONY_STATE.json v3.0
 		state := colony.ColonyState{
 			Version:       "3.0",
