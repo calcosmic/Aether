@@ -16,16 +16,16 @@
 
 ### Domain Ledger
 
-- [ ] **LEDG-01**: `review-ledger-write --domain <d> --phase <N> --findings <json>` creates domain ledger if missing, assigns deterministic IDs, appends entries, recomputes summary
-- [ ] **LEDG-02**: `review-ledger-read --domain <d> [--phase <N>] [--status open]` reads ledger entries with optional phase and status filters
-- [ ] **LEDG-03**: `review-ledger-summary` returns one-line summary per domain showing total, open, and by-severity counts (for colony-prime injection)
-- [ ] **LEDG-04**: `review-ledger-resolve --domain <d> --id <id>` marks an entry as resolved with timestamp
-- [ ] **LEDG-05**: Seven domain ledgers exist under `.aether/data/reviews/`: security, quality, performance, resilience, testing, history, bugs
+- [x] **LEDG-01**: `review-ledger-write --domain <d> --phase <N> --findings <json>` creates domain ledger if missing, assigns deterministic IDs, appends entries, recomputes summary
+- [x] **LEDG-02**: `review-ledger-read --domain <d> [--phase <N>] [--status open]` reads ledger entries with optional phase and status filters
+- [x] **LEDG-03**: `review-ledger-summary` returns one-line summary per domain showing total, open, and by-severity counts (for colony-prime injection)
+- [x] **LEDG-04**: `review-ledger-resolve --domain <d> --id <id>` marks an entry as resolved with timestamp
+- [x] **LEDG-05**: Seven domain ledgers exist under `.aether/data/reviews/`: security, quality, performance, resilience, testing, history, bugs
 - [ ] **LEDG-06**: Ledger entries include: id, phase, phase_name, agent, agent_name, generated_at, status, severity, file, line, category, description, suggestion
 - [ ] **LEDG-07**: Deterministic IDs use format `{domain-prefix}-{phase}-{index}` (e.g., `sec-2-001`, `qlt-5-003`)
 - [ ] **LEDG-08**: Each ledger includes a computed summary with total count, open/resolved counts, and by-severity breakdown
-- [ ] **LEDG-09**: All ledger writes use file-locking atomic writes via `pkg/storage/` (follow pheromone pattern, not hive pattern)
-- [ ] **LEDG-10**: Agent-to-domain mapping is enforced: Gatekeeper→security, Auditor→quality/security/performance, Chaos→resilience, Watcher→testing/quality, Archaeologist→history, Measurer→performance, Tracker→bugs
+- [x] **LEDG-09**: All ledger writes use file-locking atomic writes via `pkg/storage/` (follow pheromone pattern, not hive pattern)
+- [x] **LEDG-10**: Agent-to-domain mapping is enforced: Gatekeeper→security, Auditor→quality/security/performance, Chaos→resilience, Watcher→testing/quality, Archaeologist→history, Measurer→performance, Tracker→bugs
 
 ### Colony-Prime Integration
 
@@ -94,16 +94,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONT-04 | 52 | Pending |
 | CONT-05 | 52 | Pending |
 | CONT-06 | 52 | Pending |
-| LEDG-01 | 53 | Pending |
-| LEDG-02 | 53 | Pending |
-| LEDG-03 | 53 | Pending |
-| LEDG-04 | 53 | Pending |
-| LEDG-05 | 53 | Pending |
+| LEDG-01 | 53 | Done |
+| LEDG-02 | 53 | Done |
+| LEDG-03 | 53 | Done |
+| LEDG-04 | 53 | Done |
+| LEDG-05 | 53 | Done |
 | LEDG-06 | 53 | Pending |
 | LEDG-07 | 53 | Pending |
 | LEDG-08 | 53 | Pending |
-| LEDG-09 | 53 | Pending |
-| LEDG-10 | 53 | Pending |
+| LEDG-09 | 53 | Done |
+| LEDG-10 | 53 | Done |
 | PRIME-01 | 54 | Pending |
 | PRIME-02 | 54 | Pending |
 | PRIME-03 | 54 | Pending |
