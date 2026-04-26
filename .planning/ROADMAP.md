@@ -110,7 +110,7 @@
 - [x] **Phase 52: Continue-Review Worker Outcome Reports** - Per-worker .md reports for review workers, mirroring build report pattern (completed 2026-04-26)
 - [x] **Phase 53: Domain-Ledger CRUD Subcommands** - Four CLI subcommands for structured review finding persistence across 7 domains (completed 2026-04-26)
 - [x] **Phase 54: Colony-Prime Prior-Reviews Section** - Open review findings injected into downstream worker context (completed 2026-04-26)
-- [ ] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails
+- [x] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails (plan 1 of 2 completed 2026-04-26)
 - [ ] **Phase 56: Lifecycle Integration** - Seal, entomb, status, and init updated for review ledger lifecycle
 
 ## Phase Details
@@ -174,10 +174,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync
-- [ ] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
-
-### Phase 56: Lifecycle Integration
+- [x] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync (completed 2026-04-26)
+- [x] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
 **Goal**: Review ledgers integrate with colony lifecycle -- archived at seal, included in entomb chambers, visible in status, and cleaned at init
 **Depends on**: Phase 53 (ledgers must exist), Phase 54 (colony-prime reads ledgers)
 **Requirements**: LIFE-01, LIFE-02, LIFE-03, LIFE-04, LIFE-05
@@ -190,7 +188,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync
+- [x] 55-01-PLAN.md -- Agent definition updates across 4 surfaces (28 files): Write tool, guardrails, mirror sync
 - [ ] 55-02-PLAN.md -- Go dispatch injection: findings-path in build and continue flows with tests
 
 ## Progress
@@ -202,6 +200,6 @@ Phases execute in numeric order: 52 -> 53 -> 54 -> 55 -> 56
 |-------|----------------|--------|-----------|
 | 52. Continue-Review Worker Outcome Reports | 2/2 | Complete | 2026-04-26 |
 | 53. Domain-Ledger CRUD Subcommands | 2/2 | Complete    | 2026-04-26 |
-| 54. Colony-Prime Prior-Reviews Section | 0/1 | Not started | - |
-| 55. Agent Definition Updates | 0/2 | Planned | - |
+| 54. Colony-Prime Prior-Reviews Section | 1/1 | Complete | 2026-04-26 |
+| 55. Agent Definition Updates | 2/2 | Complete    | 2026-04-26 |
 | 56. Lifecycle Integration | 0/? | Not started | - |

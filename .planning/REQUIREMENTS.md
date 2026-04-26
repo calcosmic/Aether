@@ -21,9 +21,9 @@
 - [x] **LEDG-03**: `review-ledger-summary` returns one-line summary per domain showing total, open, and by-severity counts (for colony-prime injection)
 - [x] **LEDG-04**: `review-ledger-resolve --domain <d> --id <id>` marks an entry as resolved with timestamp
 - [x] **LEDG-05**: Seven domain ledgers exist under `.aether/data/reviews/`: security, quality, performance, resilience, testing, history, bugs
-- [ ] **LEDG-06**: Ledger entries include: id, phase, phase_name, agent, agent_name, generated_at, status, severity, file, line, category, description, suggestion
-- [ ] **LEDG-07**: Deterministic IDs use format `{domain-prefix}-{phase}-{index}` (e.g., `sec-2-001`, `qlt-5-003`)
-- [ ] **LEDG-08**: Each ledger includes a computed summary with total count, open/resolved counts, and by-severity breakdown
+- [x] **LEDG-06**: Ledger entries include: id, phase, phase_name, agent, agent_name, generated_at, status, severity, file, line, category, description, suggestion
+- [x] **LEDG-07**: Deterministic IDs use format `{domain-prefix}-{phase}-{index}` (e.g., `sec-2-001`, `qlt-5-003`)
+- [x] **LEDG-08**: Each ledger includes a computed summary with total count, open/resolved counts, and by-severity breakdown
 - [x] **LEDG-09**: All ledger writes use file-locking atomic writes via `pkg/storage/` (follow pheromone pattern, not hive pattern)
 - [x] **LEDG-10**: Agent-to-domain mapping is enforced: Gatekeeper→security, Auditor→quality/security/performance, Chaos→resilience, Watcher→testing/quality, Archaeologist→history, Measurer→performance, Tracker→bugs
 
@@ -37,16 +37,16 @@
 
 ### Agent Definitions
 
-- [ ] **AGENT-01**: Gatekeeper agent definition includes Write tool in `tools:` frontmatter, findings write instructions for security domain, and write-scope guardrails
-- [ ] **AGENT-02**: Auditor agent definition includes Write tool, findings write instructions for quality/security/performance domains, and write-scope guardrails
-- [ ] **AGENT-03**: Chaos agent definition includes Write tool, findings write instructions for resilience domain, and write-scope guardrails
-- [ ] **AGENT-04**: Watcher agent definition includes Write tool, findings write instructions for testing/quality domains, and write-scope guardrails
-- [ ] **AGENT-05**: Archaeologist agent definition includes Write tool, findings write instructions for history domain, and write-scope guardrails
-- [ ] **AGENT-06**: Measurer agent definition includes Write tool, findings write instructions for performance domain, and write-scope guardrails
-- [ ] **AGENT-07**: Tracker agent definition includes Write tool, findings write instructions for bugs domain, and write-scope guardrails
-- [ ] **AGENT-08**: All 7 agent definitions are synced across 4 surfaces: `.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` (28 file edits total)
-- [ ] **AGENT-09**: Write-scope guardrails explicitly restrict agents to ONLY write to their designated review ledger files, never source code, tests, or colony state
-- [ ] **AGENT-10**: Build and continue dispatch flows inject findings-path instructions into review agent task prompts (e.g., "Write findings to `.aether/data/reviews/security/` using `review-ledger-write`")
+- [x] **AGENT-01**: Gatekeeper agent definition includes Write tool in `tools:` frontmatter, findings write instructions for security domain, and write-scope guardrails
+- [x] **AGENT-02**: Auditor agent definition includes Write tool, findings write instructions for quality/security/performance domains, and write-scope guardrails
+- [x] **AGENT-03**: Chaos agent definition includes Write tool, findings write instructions for resilience domain, and write-scope guardrails
+- [x] **AGENT-04**: Watcher agent definition includes Write tool, findings write instructions for testing/quality domains, and write-scope guardrails
+- [x] **AGENT-05**: Archaeologist agent definition includes Write tool, findings write instructions for history domain, and write-scope guardrails
+- [x] **AGENT-06**: Measurer agent definition includes Write tool, findings write instructions for performance domain, and write-scope guardrails
+- [x] **AGENT-07**: Tracker agent definition includes Write tool, findings write instructions for bugs domain, and write-scope guardrails
+- [x] **AGENT-08**: All 7 agent definitions are synced across 4 surfaces: `.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` (28 file edits total)
+- [x] **AGENT-09**: Write-scope guardrails explicitly restrict agents to ONLY write to their designated review ledger files, never source code, tests, or colony state
+- [x] **AGENT-10**: Build and continue dispatch flows inject findings-path instructions into review agent task prompts (e.g., "Write findings to `.aether/data/reviews/security/` using `review-ledger-write`")
 
 ### Lifecycle
 
@@ -99,9 +99,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LEDG-03 | 53 | Done |
 | LEDG-04 | 53 | Done |
 | LEDG-05 | 53 | Done |
-| LEDG-06 | 53 | Pending |
-| LEDG-07 | 53 | Pending |
-| LEDG-08 | 53 | Pending |
+| LEDG-06 | 53 | Complete |
+| LEDG-07 | 53 | Complete |
+| LEDG-08 | 53 | Complete |
 | LEDG-09 | 53 | Done |
 | LEDG-10 | 53 | Done |
 | PRIME-01 | 54 | Pending |
@@ -109,16 +109,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRIME-03 | 54 | Pending |
 | PRIME-04 | 54 | Pending |
 | PRIME-05 | 54 | Pending |
-| AGENT-01 | 55 | Pending |
-| AGENT-02 | 55 | Pending |
-| AGENT-03 | 55 | Pending |
-| AGENT-04 | 55 | Pending |
-| AGENT-05 | 55 | Pending |
-| AGENT-06 | 55 | Pending |
-| AGENT-07 | 55 | Pending |
-| AGENT-08 | 55 | Pending |
-| AGENT-09 | 55 | Pending |
-| AGENT-10 | 55 | Pending |
+| AGENT-01 | 55 | Done |
+| AGENT-02 | 55 | Done |
+| AGENT-03 | 55 | Done |
+| AGENT-04 | 55 | Done |
+| AGENT-05 | 55 | Done |
+| AGENT-06 | 55 | Done |
+| AGENT-07 | 55 | Done |
+| AGENT-08 | 55 | Done |
+| AGENT-09 | 55 | Done |
+| AGENT-10 | 55 | Complete |
 | LIFE-01 | 56 | Pending |
 | LIFE-02 | 56 | Pending |
 | LIFE-03 | 56 | Pending |
