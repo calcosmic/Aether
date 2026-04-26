@@ -1945,7 +1945,11 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 			continue
 		}
 		checked++
-		if !fileExists(filepath.Join(root, rel)) {
+		fullPath := filepath.Join(root, filepath.FromSlash(rel))
+		if !fileExists(fullPath) {
+			if resolved := findRepoRelativePath(root, rel); resolved != "" && fileExists(filepath.Join(root, filepath.FromSlash(resolved))) {
+				continue // defense-in-depth for pre-fix claims
+			}
 			mismatches = append(mismatches, fmt.Sprintf("%s does not exist", rel))
 		}
 	}

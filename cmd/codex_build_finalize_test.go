@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -203,7 +206,7 @@ func TestClaimsOrAggregateWithAntName(t *testing.T) {
 		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
 	}
 
-	claims := completion.claimsOrAggregate(1, time.Now().UTC(), dispatches)
+	claims := completion.claimsOrAggregate(t.TempDir(), 1, time.Now().UTC(), dispatches)
 
 	if len(claims.FilesCreated) == 0 {
 		t.Error("expected FilesCreated to be populated from ant_name worker")
@@ -272,5 +275,142 @@ func TestParseGitNameOutput(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNormalizeClaimPathsToRoot_SubdirectoryRelative(t *testing.T) {
+	tmp := t.TempDir()
+	nestedDir := filepath.Join(tmp, "app", "public", "wp-content", "themes", "mytheme", "resources", "js")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existingFile := filepath.Join(nestedDir, "animations.js")
+	if err := os.WriteFile(existingFile, []byte("// test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Claim uses subdirectory-relative path
+	claimed := "resources/js/animations.js"
+	result := normalizeClaimPathsToRoot(tmp, []string{claimed})
+	if len(result) != 1 {
+		t.Fatalf("got %d results, want 1", len(result))
+	}
+	// Should be normalized to root-relative
+	expected := "app/public/wp-content/themes/mytheme/resources/js/animations.js"
+	if result[0] != expected {
+		t.Errorf("got %q, want %q", result[0], expected)
+	}
+}
+
+func TestNormalizeClaimPathsToRoot_AlreadyValid(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "src", "main.go"), []byte("package main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Path already resolves from root
+	result := normalizeClaimPathsToRoot(tmp, []string{"src/main.go"})
+	if result[0] != "src/main.go" {
+		t.Errorf("got %q, want %q", result[0], "src/main.go")
+	}
+}
+
+func TestNormalizeClaimPathsToRoot_EmptyRoot(t *testing.T) {
+	paths := []string{"foo/bar.go"}
+	result := normalizeClaimPathsToRoot("", paths)
+	if len(result) != 1 || result[0] != "foo/bar.go" {
+		t.Errorf("empty root should return paths unchanged, got %v", result)
+	}
+}
+
+func TestBestMatchForClaimedPath(t *testing.T) {
+	tests := []struct {
+		name       string
+		claimed    string
+		candidates []string
+		want       string
+	}{
+		{
+			name:    "single candidate",
+			claimed: "resources/js/Foo.js",
+			candidates: []string{
+				"app/public/wp-content/themes/theme/resources/js/Foo.js",
+			},
+			want: "app/public/wp-content/themes/theme/resources/js/Foo.js",
+		},
+		{
+			name:    "multiple candidates — best trailing match",
+			claimed: "resources/js/animations.js",
+			candidates: []string{
+				"src/animations.js",
+				"app/public/wp-content/themes/mytheme/resources/js/animations.js",
+			},
+			want: "app/public/wp-content/themes/mytheme/resources/js/animations.js",
+		},
+		{
+			name:    "tiebreak by shortest path",
+			claimed: "utils/helper.go",
+			candidates: []string{
+				"a/b/c/utils/helper.go",
+				"pkg/utils/helper.go",
+			},
+			want: "pkg/utils/helper.go",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := bestMatchForClaimedPath(tc.claimed, tc.candidates)
+			if got != tc.want {
+				t.Errorf("bestMatchForClaimedPath(%q, %v) = %q, want %q", tc.claimed, tc.candidates, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFindRepoRelativePath(t *testing.T) {
+	tmp := t.TempDir()
+	// Initialize git repo so git ls-files works
+	if err := os.MkdirAll(filepath.Join(tmp, "deep", "nested", "dir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testFile := filepath.Join(tmp, "deep", "nested", "dir", "target.go")
+	if err := os.WriteFile(testFile, []byte("package dir"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run tests in a subprocess that initializes git
+	// Since findRepoRelativePath uses git, we need a git repo
+	t.Run("with git repo", func(t *testing.T) {
+		// git init + add so ls-files tracks it
+		gitInitForTest(t, tmp)
+		gitAddForTest(t, tmp)
+
+		claimed := "nested/dir/target.go"
+		got := findRepoRelativePath(tmp, claimed)
+		if got != "deep/nested/dir/target.go" {
+			t.Errorf("findRepoRelativePath(%q, %q) = %q, want %q", tmp, claimed, got, "deep/nested/dir/target.go")
+		}
+	})
+}
+
+func gitInitForTest(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Skipf("git init failed: %v", err)
+	}
+}
+
+func gitAddForTest(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("git", "add", ".")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Skipf("git add failed: %v", err)
 	}
 }

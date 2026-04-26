@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -3859,5 +3860,73 @@ func TestContinueEndToEndAfterAbandonedRecovery(t *testing.T) {
 	}
 	if advanced, _ := result["advanced"].(bool); !advanced {
 		t.Fatalf("expected advanced=true after re-dispatch, got result: %+v", result)
+	}
+}
+
+func TestVerifyCodexBuildClaims_SubdirectoryRelativePaths(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Create a nested file in the repo
+	nestedDir := filepath.Join(tmpDir, "app", "public", "themes", "mytheme", "js")
+	if err := os.MkdirAll(nestedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nestedDir, "app.js"), []byte("// test"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize git so findRepoRelativePath can use git ls-files
+	cmd := exec.Command("git", "init")
+	cmd.Dir = tmpDir
+	if err := cmd.Run(); err != nil {
+		t.Skipf("git init failed: %v", err)
+	}
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = tmpDir
+	if err := cmd.Run(); err != nil {
+		t.Skipf("git add failed: %v", err)
+	}
+
+	// Write claims with subdirectory-relative path (the bug scenario)
+	claims := codexBuildClaims{
+		BuildPhase:   1,
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		FilesCreated: []string{"js/app.js"}, // subdirectory-relative, not root-relative
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("failed to write claims: %v", err)
+	}
+
+	manifest := codexContinueManifest{
+		Present: true,
+		Path:    "build/phase-1/manifest.json",
+		Data: codexBuildManifest{
+			Phase:        1,
+			DispatchMode: "external-task",
+			ClaimsPath:   displayDataPath("last-build-claims.json"),
+			Dispatches: []codexBuildDispatch{
+				{Stage: "wave", Caste: "builder", Name: "Forge-1", Task: "Build it", Status: "completed"},
+			},
+		},
+	}
+
+	result := verifyCodexBuildClaims(tmpDir, manifest)
+	if !result.Passed {
+		t.Errorf("expected Passed=true (fallback should resolve subdirectory-relative path), got Passed=false: %s", result.Summary)
+		if len(result.Mismatches) > 0 {
+			for _, m := range result.Mismatches {
+				t.Logf("mismatch: %s", m)
+			}
+		}
 	}
 }

@@ -206,7 +206,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", completedAt.Format(time.RFC3339), phaseNum),
 	)
 
-	claims := completion.claimsOrAggregate(phaseNum, startedAt, dispatches)
+	claims := completion.claimsOrAggregate(root, phaseNum, startedAt, dispatches)
 	if err := store.SaveJSON(claimsRel, claims); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build claims: %w", err)
 	}
@@ -337,7 +337,7 @@ func parseManifestGeneratedAt(manifest codexBuildManifest) time.Time {
 	return time.Now().UTC()
 }
 
-func (c codexExternalBuildCompletion) claimsOrAggregate(phaseNum int, startedAt time.Time, dispatches []codexBuildDispatch) codexBuildClaims {
+func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum int, startedAt time.Time, dispatches []codexBuildDispatch) codexBuildClaims {
 	if c.Claims != nil {
 		claims := *c.Claims
 		claims.BuildPhase = phaseNum
@@ -347,6 +347,9 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(phaseNum int, startedAt 
 		claims.FilesCreated = uniqueSortedStrings(claims.FilesCreated)
 		claims.FilesModified = uniqueSortedStrings(claims.FilesModified)
 		claims.TestsWritten = uniqueSortedStrings(claims.TestsWritten)
+		claims.FilesCreated = normalizeClaimPathsToRoot(root, claims.FilesCreated)
+		claims.FilesModified = normalizeClaimPathsToRoot(root, claims.FilesModified)
+		claims.TestsWritten = normalizeClaimPathsToRoot(root, claims.TestsWritten)
 		return claims
 	}
 
@@ -386,6 +389,9 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(phaseNum int, startedAt 
 	claims.FilesCreated = uniqueSortedStrings(claims.FilesCreated)
 	claims.FilesModified = uniqueSortedStrings(claims.FilesModified)
 	claims.TestsWritten = uniqueSortedStrings(claims.TestsWritten)
+	claims.FilesCreated = normalizeClaimPathsToRoot(root, claims.FilesCreated)
+	claims.FilesModified = normalizeClaimPathsToRoot(root, claims.FilesModified)
+	claims.TestsWritten = normalizeClaimPathsToRoot(root, claims.TestsWritten)
 
 	// Filesystem fallback: if claims are empty but builders completed, discover files via git.
 	if len(claims.FilesCreated) == 0 && len(claims.FilesModified) == 0 && hasCompletedBuilders(dispatches) {
@@ -405,6 +411,9 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(phaseNum int, startedAt 
 			entry.FilesCreated = uniqueSortedStrings(entry.FilesCreated)
 			entry.FilesModified = uniqueSortedStrings(entry.FilesModified)
 			entry.TestsWritten = uniqueSortedStrings(entry.TestsWritten)
+			entry.FilesCreated = normalizeClaimPathsToRoot(root, entry.FilesCreated)
+			entry.FilesModified = normalizeClaimPathsToRoot(root, entry.FilesModified)
+			entry.TestsWritten = normalizeClaimPathsToRoot(root, entry.TestsWritten)
 			claims.TaskClaims = append(claims.TaskClaims, *entry)
 		}
 	}
@@ -464,4 +473,105 @@ func parseGitNameOutput(out []byte) []string {
 		result = append(result, line)
 	}
 	return uniqueSortedStrings(result)
+}
+
+// normalizeClaimPathsToRoot resolves subdirectory-relative paths to repo-root-relative paths.
+// If a path already resolves from root (file exists), it is kept as-is.
+// If not found, it searches the repo for a matching file and replaces with the resolved path.
+func normalizeClaimPathsToRoot(root string, paths []string) []string {
+	if root == "" {
+		return paths
+	}
+	result := make([]string, len(paths))
+	for i, p := range paths {
+		if p == "" {
+			continue
+		}
+		if fileExists(filepath.Join(root, filepath.FromSlash(p))) {
+			result[i] = p
+			continue
+		}
+		if resolved := findRepoRelativePath(root, p); resolved != "" {
+			result[i] = resolved
+			continue
+		}
+		// Keep original — verification will flag it as missing
+		result[i] = p
+	}
+	return result
+}
+
+// findRepoRelativePath searches for a file in the repo that matches the claimed path.
+// Uses git ls-files for fast lookup, falls back to filepath.Glob if git unavailable.
+func findRepoRelativePath(root, claimed string) string {
+	base := filepath.Base(claimed)
+	if base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+
+	// Try git ls-files with basename pattern for fast lookup
+	out, err := exec.Command("git", "-C", root, "ls-files", "--", "*"+base).Output()
+	if err == nil {
+		candidates := parseGitNameOutput(out)
+		if len(candidates) == 1 {
+			return candidates[0]
+		}
+		if len(candidates) > 1 {
+			if best := bestMatchForClaimedPath(claimed, candidates); best != "" {
+				return best
+			}
+		}
+	}
+
+	// Fallback: recursive walk to find files matching the basename
+	var candidates []string
+	filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if d.Name() == base {
+			if rel, err := filepath.Rel(root, path); err == nil {
+				candidates = append(candidates, filepath.ToSlash(rel))
+			}
+		}
+		return nil
+	})
+	if len(candidates) == 0 {
+		return ""
+	}
+	if len(candidates) == 1 {
+		return candidates[0]
+	}
+	return bestMatchForClaimedPath(claimed, candidates)
+}
+
+// bestMatchForClaimedPath scores candidates by counting matching trailing path segments.
+// Tiebreaks by shortest total path length.
+func bestMatchForClaimedPath(claimed string, candidates []string) string {
+	claimedParts := strings.Split(filepath.ToSlash(claimed), "/")
+	best := ""
+	bestScore := 0
+	bestLen := 0
+	for _, c := range candidates {
+		cParts := strings.Split(filepath.ToSlash(c), "/")
+		score := 0
+		minLen := len(claimedParts)
+		if len(cParts) < minLen {
+			minLen = len(cParts)
+		}
+		for i := 1; i <= minLen; i++ {
+			if claimedParts[len(claimedParts)-i] == cParts[len(cParts)-i] {
+				score++
+			} else {
+				break
+			}
+		}
+		cLen := len(cParts)
+		if best == "" || score > bestScore || (score == bestScore && cLen < bestLen) {
+			best = c
+			bestScore = score
+			bestLen = cLen
+		}
+	}
+	return best
 }
