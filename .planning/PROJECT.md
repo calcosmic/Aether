@@ -69,6 +69,66 @@ That means:
 - [x] v1.6 Release Pipeline Integrity — Phases 39-46 (completed 2026-04-24)
 - [x] v1.7 Planning Pipeline Recovery — Phases 47-48 (completed 2026-04-24)
 - [x] v1.8 Colony Recovery — Phases 49-51 (completed 2026-04-25)
+- [ ] v1.9 Review Persistence — Phases 52+
+
+## Current Milestone: v1.9 Review Persistence
+
+**Goal:** Review agent findings survive `/clear` and accumulate across phases so downstream workers can learn from prior reviews.
+
+**Target features:**
+- Continue-review worker outcome reports (per-worker `.md` files, mirroring build worker reports)
+- Domain-ledger system (`reviews/{domain}/ledger.json`) — 7 domains, structured entries, accumulate across phases
+- Colony-prime injection of prior review summaries into worker context
+- Review agent definitions updated with Write tool + findings instructions
+- Agent mirrors synced (Claude, OpenCode, Codex)
+- Status/seal/entomb integration for ledger lifecycle
+
+### Design Context
+
+#### Part A: Persist Continue-Review Worker Findings to Disk
+
+When `/ant-continue` runs, it spawns 4 review workers (Watcher, Gatekeeper, Auditor, Probe) that produce detailed findings — security scores, quality ratings, coverage gaps, weak spots, architectural mismatches. These are returned as structured JSON from the agents but are never written to individual files on disk. Only a one-line summary per worker survives in `review.json`. When the user `/clear`s context and starts the next build, Phase N+1 builders have no access to the review findings from Phase N's continue pass.
+
+Build workers don't have this problem — they get per-worker `.md` files written to `worker-reports/{name}.md` via `writeCodexBuildOutcomeReports()`. Continue-review workers have no equivalent.
+
+**Changes required:**
+1. Extend `codexContinueWorkerFlowStep` struct with `Blockers []string`, `Duration float64`, `Report string` fields
+2. Add `Report` field to `codexContinueExternalDispatch` struct
+3. Preserve new fields in `mergeExternalContinueResults()`
+4. Add `writeCodexContinueOutcomeReports()` and `renderCodexContinueWorkerOutcomeReport()` functions in `codex_continue_finalize.go`
+5. Call report writer in `runCodexContinueFinalize()` after `review.json` is written
+6. Update wrapper completion packet instructions in `.claude/commands/ant/continue.md` and `.opencode/commands/ant/continue.md` to include `report` field
+7. Add `strconv` import to `codex_continue_finalize.go`
+
+**Key files:** `cmd/codex_continue.go`, `cmd/codex_continue_plan.go`, `cmd/codex_continue_finalize.go`, `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md`
+
+#### Part B: Review Findings Domain-Ledger
+
+Seven read-only review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) return rich structured JSON findings during builds and continue flows, but only a summary string gets captured in `review.json`. The detailed findings — specific files, line numbers, severity ratings, categories, suggestions — are lost when the session ends.
+
+**Domain-ledger structure:**
+```
+.aether/data/reviews/
+  security/ledger.json    # Gatekeeper, Auditor
+  quality/ledger.json     # Auditor, Watcher
+  performance/ledger.json # Measurer, Auditor
+  resilience/ledger.json  # Chaos
+  testing/ledger.json     # Watcher, Probe
+  history/ledger.json     # Archaeologist
+  bugs/ledger.json        # Tracker
+```
+
+**Agent-to-domain mapping:** Gatekeeper→security, Auditor→quality/security/performance, Chaos→resilience, Watcher→testing/quality, Archaeologist→history, Measurer→performance, Tracker→bugs
+
+**Ledger entry format:** `{id, phase, phase_name, agent, agent_name, generated_at, status, severity, file, line, category, description, suggestion}` with deterministic IDs like `sec-2-001`, computed summary with counts by severity.
+
+**Go runtime subcommands:** `review-ledger-write`, `review-ledger-read`, `review-ledger-summary`, `review-ledger-resolve` in new `cmd/review_ledger.go`
+
+**Colony-prime integration:** New `prior-reviews` section injected into worker prompts showing open findings per domain (priority 8, between pheromones and instincts).
+
+**Agent changes:** 7 agent files get Write tool + findings instructions + write-scope guardrails. Mirrors synced to `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/`.
+
+**Lifecycle:** Colony-scoped (accumulates across phases, archived at seal). High-value patterns promote to Hive Brain via existing instinct pipeline. Not cross-colony — findings contain code-specific file paths that go stale.
 
 ## Next Move
 
@@ -78,7 +138,7 @@ Plan next milestone with `/gsd-new-milestone`.
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-26 after v1.8 milestone*
+*Last updated: 2026-04-26 after starting v1.9 milestone*
 
 ## Explicit Deferrals
 

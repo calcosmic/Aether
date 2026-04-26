@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.8
-milestone_name: Colony Recovery
-status: complete
-stopped_at: v1.8 milestone archived
+milestone: v1.9
+milestone_name: Review Persistence
+status: defining-requirements
+stopped_at: Requirements definition
 last_updated: "2026-04-26T00:00:00Z"
 last_activity: 2026-04-26
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v1.9
 
 ## Current Position
 
-Phase: 51 (complete — last in v1.8)
-Plan: All complete
-Status: Milestone v1.8 archived
-Last activity: 2026-04-26
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-26 — Milestone v1.9 started
 
-Progress: [##########] 100%
+Progress: [          ] 0%
 
 ## Performance Metrics
 
@@ -43,10 +43,10 @@ Progress: [##########] 100%
 
 ### Decisions
 
-- Recovery reuses medic infrastructure rather than building parallel systems
-- Detection order matters: stale workers before missing packet, bad manifest before partial phase
-- 5 safe auto-fixes, 2 requiring user confirmation (dirty worktree, bad manifest)
-- Atomic rollback: any failure undoes all repairs (data safety over partial success)
+- Review findings are colony-scoped (not cross-colony) — code-specific paths go stale
+- Domain ledger uses append pattern with computed summaries (no separate phase snapshots — YAGNI)
+- Continue-review worker reports mirror existing build worker report pattern
+- All new struct fields use `omitempty` for backward compatibility with old JSON
 
 ### Pending Todos
 
@@ -59,7 +59,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-04-26
-Stopped at: v1.8 milestone archived
+Stopped at: Defining requirements for v1.9
 Resume file: None
-
-**Next step:** Run `/gsd-new-milestone` to start planning next milestone
