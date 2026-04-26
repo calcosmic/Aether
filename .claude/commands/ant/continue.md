@@ -56,7 +56,7 @@ For each dispatch in `continue_manifest.dispatches`, execute the planned workers
 2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
 3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the phase name, manifest verification snapshot, assessment data, dispatch `brief`, active signals, dispatch `skill_section` when present, and the worker's exact task metadata.
-5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
+5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, `duration`, and `report`.
 6. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
 
@@ -81,11 +81,14 @@ After all workers have terminal results, write a temporary completion JSON file 
       "status": "completed",
       "summary": "Verified the phase can advance.",
       "blockers": [],
-      "duration": 0
+      "duration": 0,
+      "report": "## Findings\n\nAll tests pass. No issues found in phase 1 implementation."
     }
   ]
 }
 ```
+
+The `report` field is optional but strongly recommended for review workers (Watcher, Gatekeeper, Auditor, Probe). Include the worker's full structured findings as markdown -- this content is persisted as a per-worker `.md` report on disk. When omitted, the report file still renders with assignment metadata but shows "No detailed report provided."
 
 Then finalize the external worker packet through the runtime:
 
