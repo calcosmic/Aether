@@ -151,7 +151,11 @@ Plans:
   3. Phases with security or release keywords in their name automatically get heavy review
   4. User sees a review depth message like "Review depth: light (Phase 3 of 7)" in wrapper output
   5. `--light` flag is accepted by build and continue commands but cannot override final-phase heavy review
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 58-01-PLAN.md -- Depth resolution logic, tests, and CLI flags (DEPTH-01, DEPTH-02, DEPTH-03, DEPTH-04)
+- [ ] 58-02-PLAN.md -- Build/continue dispatch filtering, visual display, colony-prime injection (DEPTH-02, DEPTH-05, DEPTH-06)
 
 ### Phase 59: Gate Failure Recovery
 **Goal**: When verification gates fail, the user gets clear recovery instructions and can fix and re-check only what failed -- no more starting from scratch
@@ -236,7 +240,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 57. QUEEN.md Pipeline Fix | v1.10 | 3/3 | Complete    | 2026-04-26 |
-| 58. Smart Review Depth | v1.10 | 0/? | Not started | - |
+| 58. Smart Review Depth | v1.10 | 0/2 | Planned | - |
 | 59. Gate Failure Recovery | v1.10 | 0/? | Not started | - |
 | 60. Oracle Loop Fix | v1.10 | 0/? | Not started | - |
 | 61. Porter Ant | v1.10 | 0/? | Not started | - |
