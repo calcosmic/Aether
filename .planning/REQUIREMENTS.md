@@ -60,13 +60,13 @@
 
 ### QUEEN.md Fix
 
-- [ ] **QUEE-01**: Remove test junk data from `~/.aether/hive/wisdom.json` (domain: "test", text: "<repo> wisdom") and clean ~270 duplicate `<repo> wisdom` lines from `~/.aether/QUEEN.md`
-- [ ] **QUEE-02**: `appendEntriesToQueenSection()` in cmd/queen.go has dedup — checks if each entry already exists as a line in the target section before appending
-- [ ] **QUEE-03**: `queen-seed-from-hive` filters entries already present in QUEEN.md and reports count of new vs skipped entries
-- [ ] **QUEE-04**: colony-prime injects global QUEEN.md wisdom (`~/.aether/QUEEN.md`) alongside local wisdom — global wisdom currently not reaching workers
-- [ ] **QUEE-05**: colony-prime injects Philosophies and Anti-Patterns sections from QUEEN.md into worker context — currently only Wisdom and Patterns are extracted
-- [ ] **QUEE-06**: `queen-promote-instinct` writes to global `~/.aether/QUEEN.md` (not just local repo QUEEN.md) so promoted instincts reach all colonies
-- [ ] **QUEE-07**: High-confidence instincts (>= 0.8 confidence) auto-promoted to QUEEN.md at `/ant-seal` via queen-promote — currently requires explicit manual command
+- [x] **QUEE-01**: Remove test junk data from `~/.aether/hive/wisdom.json` (domain: "test", text: "<repo> wisdom") and clean ~270 duplicate `<repo> wisdom` lines from `~/.aether/QUEEN.md`
+- [x] **QUEE-02**: `appendEntriesToQueenSection()` in cmd/queen.go has dedup — checks if each entry already exists as a line in the target section before appending
+- [x] **QUEE-03**: `queen-seed-from-hive` filters entries already present in QUEEN.md and reports count of new vs skipped entries
+- [x] **QUEE-04**: colony-prime injects global QUEEN.md wisdom (`~/.aether/QUEEN.md`) alongside local wisdom — global wisdom currently not reaching workers
+- [x] **QUEE-05**: colony-prime injects Philosophies and Anti-Patterns sections from QUEEN.md into worker context — currently only Wisdom and Patterns are extracted
+- [x] **QUEE-06**: `queen-promote-instinct` writes to global `~/.aether/QUEEN.md` (not just local repo QUEEN.md) so promoted instincts reach all colonies
+- [x] **QUEE-07**: High-confidence instincts (>= 0.8 confidence) auto-promoted to QUEEN.md at `/ant-seal` via queen-promote — currently requires explicit manual command
 
 ## v1.11 Requirements
 
@@ -134,13 +134,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SHELF-03 | Phase 65 | Pending |
 | SHELF-04 | Phase 65 | Pending |
 | SHELF-05 | Phase 65 | Pending |
-| QUEE-01 | Phase 57 | Pending |
-| QUEE-02 | Phase 57 | Pending |
-| QUEE-03 | Phase 57 | Pending |
-| QUEE-04 | Phase 57 | Pending |
-| QUEE-05 | Phase 57 | Pending |
-| QUEE-06 | Phase 57 | Pending |
-| QUEE-07 | Phase 57 | Pending |
+| QUEE-01 | Phase 57 | Complete |
+| QUEE-02 | Phase 57 | Complete |
+| QUEE-03 | Phase 57 | Complete |
+| QUEE-04 | Phase 57 | Complete |
+| QUEE-05 | Phase 57 | Complete |
+| QUEE-06 | Phase 57 | Complete |
+| QUEE-07 | Phase 57 | Complete |
 
 **Coverage:**
 - v1.10 requirements: 37 total

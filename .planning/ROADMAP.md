@@ -112,7 +112,7 @@
 
 ### v1.10 Colony Polish (Phases 57-65) -- IN PROGRESS
 
-- [ ] **Phase 57: QUEEN.md Pipeline Fix** - Data cleanup, dedup, colony-prime wiring, auto-promotion
+- [x] **Phase 57: QUEEN.md Pipeline Fix** - Data cleanup, dedup, colony-prime wiring, auto-promotion (completed 2026-04-26)
 - [ ] **Phase 58: Smart Review Depth** - Auto/light/heavy review modes, --light flag, final-phase override
 - [ ] **Phase 59: Gate Failure Recovery** - Actionable recovery instructions, incremental gate checking, veto confirmation
 - [ ] **Phase 60: Oracle Loop Fix** - Callback fix, research formulation, depth selection, state management
@@ -137,9 +137,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 57-01-PLAN.md -- Dedup foundation and readQUEENMd section extension (QUEE-02, QUEE-05)
-- [ ] 57-02-PLAN.md -- Seed-from-hive filtering and promote-instinct global write (QUEE-03, QUEE-06)
-- [ ] 57-03-PLAN.md -- Colony-prime global QUEEN.md injection and seal auto-promotion (QUEE-01, QUEE-04, QUEE-07)
+- [x] 57-01-PLAN.md -- Dedup foundation and readQUEENMd section extension (QUEE-02, QUEE-05)
+- [x] 57-02-PLAN.md -- Seed-from-hive filtering and promote-instinct global write (QUEE-03, QUEE-06)
+- [x] 57-03-PLAN.md -- Colony-prime global QUEEN.md injection and seal auto-promotion (QUEE-01, QUEE-04, QUEE-07)
 
 ### Phase 58: Smart Review Depth
 **Goal**: Intermediate phases get fast, light review while final phases and security-sensitive phases always get full review -- saving time without sacrificing safety
@@ -235,7 +235,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 57. QUEEN.md Pipeline Fix | v1.10 | 0/3 | Not started | - |
+| 57. QUEEN.md Pipeline Fix | v1.10 | 3/3 | Complete    | 2026-04-26 |
 | 58. Smart Review Depth | v1.10 | 0/? | Not started | - |
 | 59. Gate Failure Recovery | v1.10 | 0/? | Not started | - |
 | 60. Oracle Loop Fix | v1.10 | 0/? | Not started | - |
