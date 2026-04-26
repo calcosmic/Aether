@@ -140,7 +140,11 @@ Plans:
   3. `aether review-ledger-summary` prints one line per domain showing total, open, and severity breakdowns
   4. `aether review-ledger-resolve --domain security --id sec-2-001` marks the entry resolved with a timestamp
   5. All 7 domain directories exist under `.aether/data/reviews/` and writes use file-locking atomic writes from `pkg/storage/`
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 53-01-PLAN.md -- Data types: ReviewLedgerEntry, ReviewLedgerFile, ReviewLedgerSummary in pkg/colony/ with unit tests
+- [ ] 53-02-PLAN.md -- CLI commands: four cobra subcommands (write, read, summary, resolve) with integration tests
 
 ### Phase 54: Colony-Prime Prior-Reviews Section
 **Goal**: Downstream workers see open review findings from prior phases in their context, so review knowledge survives `/clear`
@@ -186,7 +190,7 @@ Phases execute in numeric order: 52 -> 53 -> 54 -> 55 -> 56
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 52. Continue-Review Worker Outcome Reports | 0/2 | Planning complete | - |
-| 53. Domain-Ledger CRUD Subcommands | 0/? | Not started | - |
+| 53. Domain-Ledger CRUD Subcommands | 0/2 | Planning complete | - |
 | 54. Colony-Prime Prior-Reviews Section | 0/? | Not started | - |
 | 55. Agent Definition Updates | 0/? | Not started | - |
 | 56. Lifecycle Integration | 0/? | Not started | - |
