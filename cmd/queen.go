@@ -339,14 +339,28 @@ var queenSeedFromHiveCmd = &cobra.Command{
 			}
 		}
 
-		text = appendEntriesToQueenSection(text, "Wisdom", entries)
+		// Filter entries already present in QUEEN.md (per D-02)
+		var newEntries []string
+		for _, entry := range entries {
+			if !isEntryInText(text, entry) {
+				newEntries = append(newEntries, entry)
+			}
+		}
+
+		skippedCount := len(entries) - len(newEntries)
+
+		text = appendEntriesToQueenSection(text, "Wisdom", newEntries)
 
 		if err := writeQueenText(s, text); err != nil {
 			outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
 			return nil
 		}
 
-		outputOK(map[string]interface{}{"seeded": len(entries)})
+		outputOK(map[string]interface{}{
+			"seeded":  len(newEntries),
+			"skipped": skippedCount,
+			"total":   len(entries),
+		})
 		return nil
 	},
 }
@@ -508,6 +522,17 @@ var queenDatePattern = regexp.MustCompile(`\s*\(.*?\)\s*$`)
 func normalizeQueenEntry(line string) string {
 	normalized := queenDatePattern.ReplaceAllString(line, "")
 	return strings.TrimSpace(strings.Join(strings.Fields(normalized), " "))
+}
+
+// isEntryInText checks whether a normalized form of entry already exists in text.
+func isEntryInText(text, entry string) bool {
+	normalized := normalizeQueenEntry(entry)
+	for _, line := range strings.Split(text, "\n") {
+		if normalizeQueenEntry(strings.TrimSpace(line)) == normalized {
+			return true
+		}
+	}
+	return false
 }
 
 func sanitizeQueenInline(value string) string {
