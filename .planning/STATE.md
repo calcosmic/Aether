@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Review Persistence
-status: planning
-stopped_at: Phase 54 context gathered
-last_updated: "2026-04-26T14:01:21.037Z"
+status: executing
+stopped_at: Phase 54 complete
+last_updated: "2026-04-26T16:30:00.000Z"
 last_activity: 2026-04-26
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -21,11 +21,11 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 53 — domain-ledger-crud-subcommands
+**Current focus:** Phase 55 — Agent Definition Updates
 
 ## Current Position
 
-Phase: 54
+Phase: 55
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-04-26
@@ -71,4 +71,6 @@ Resume file: --resume-file
 **Completed Plan:** 53-01 (Review Ledger Data Types) — types, functions, tests — 2026-04-26
 **Completed Plan:** 53-02 (Review Ledger CRUD Subcommands) — 4 commands, 17 tests — 2026-04-26
 
-**Planned Phase:** 54 (Colony-Prime Prior-Reviews Section) — 1 plans — 2026-04-26T14:01:20.979Z
+**Completed Plan:** 54-01 (Colony-Prime Prior-Reviews Section) — buildPriorReviewsSection, cache, 14 tests — 2026-04-26
+
+**Planned Phase:** 55 (Agent Definition Updates) — TBD plans
