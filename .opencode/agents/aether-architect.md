@@ -1,7 +1,7 @@
 ---
+name: aether-architect
 description: "Use this agent when designing system architecture, creating design documents, breaking goals into implementation approaches, or evaluating structural tradeoffs. Spawned by Queen during builds after Oracle research to translate findings into actionable design. Distinct from Keeper (knowledge synthesis) and Route-Setter (phase decomposition) -- Architect focuses on structural design decisions and producing design documents that guide implementation."
 mode: subagent
-model: anthropic/claude-opus-4-20250514
 tools:
   write: true
   edit: true

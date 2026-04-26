@@ -191,14 +191,15 @@ func validateCodexAgentFile(srcPath, relPath string, data []byte) error {
 }
 
 // openCodeAgentFrontmatter defines the expected YAML fields for an OpenCode
-// agent file. The `name` field must NOT be present — filename is the agent name.
+// agent file. The `name` field is required — it identifies the agent to the
+// OpenCode runtime.
 type openCodeAgentFrontmatter struct {
+	Name        string                 `yaml:"name"`
 	Description string                 `yaml:"description"`
 	Mode        string                 `yaml:"mode"`
 	Tools       map[string]interface{} `yaml:"tools"`
 	Color       string                 `yaml:"color"`
 	Model       string                 `yaml:"model"`
-	Name        string                 `yaml:"name"` // Must NOT be present
 }
 
 var openCodeThemeColors = map[string]bool{
@@ -210,7 +211,7 @@ var openCodeHexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 // validateOpenCodeAgentFile validates an OpenCode agent markdown file.
 // It checks that the YAML frontmatter conforms to the OpenCode agent schema:
-// description (20+ chars), tools (object/map), color (hex or theme), no name field,
+// name (required), description (20+ chars), tools (object/map), color (hex or theme),
 // and model (provider/model-id format).
 func validateOpenCodeAgentFile(srcPath, relPath string, data []byte) error {
 	// Rule 1: must have .md extension
@@ -289,19 +290,12 @@ func validateOpenCodeAgentFile(srcPath, relPath string, data []byte) error {
 		return fmt.Errorf("%s color %q must be a hex color (#rrggbb) or a theme color (primary, secondary, accent, success, warning, error, info)", relPath, color)
 	}
 
-	// Rule 8: name field must NOT be present
-	if _, hasName := rawFM["name"]; hasName {
-		return fmt.Errorf("%s must not have a name field in frontmatter — filename is the agent name", relPath)
+	// Rule 8: name field is required
+	if strings.TrimSpace(fm.Name) == "" {
+		return fmt.Errorf("%s is missing name in frontmatter", relPath)
 	}
 
-	// Rule 9: model must contain a / (provider/model-id format)
-	model := strings.TrimSpace(fm.Model)
-	if model == "" {
-		return fmt.Errorf("%s is missing model in frontmatter", relPath)
-	}
-	if !strings.Contains(model, "/") {
-		return fmt.Errorf("%s model %q must use provider/model-id format (e.g. anthropic/claude-sonnet-4-20250514)", relPath, model)
-	}
+	// Rule 9: model is optional — when absent, OpenCode uses its global default
 
 	// Reject binary-like content masquerading as text
 	if info, err := os.Stat(srcPath); err == nil && !info.Mode().IsRegular() {

@@ -1,7 +1,7 @@
 ---
+name: aether-archaeologist
 description: "Use this agent before modifying code in an area with complex or uncertain history — its primary job is regression prevention. Excavates git history to surface past bugs that were fixed, deliberate architectural choices that look like oddities, and areas that have been unstable. Returns a stability map and tribal knowledge report so you do not undo previous work. Do NOT use for implementation (use aether-builder) or refactoring (use aether-weaver)."
 mode: subagent
-model: anthropic/claude-opus-4-20250514
 tools:
   write: false
   edit: false

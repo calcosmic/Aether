@@ -1,7 +1,7 @@
 ---
+name: aether-weaver
 description: "Use this agent to refactor code without changing behavior. Weaver runs tests before and after every refactoring step — if tests break, it reverts immediately. Do NOT use for new features (use aether-builder) or bug fixes (use aether-tracker + aether-builder)."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: true
   edit: true

@@ -1,7 +1,7 @@
 ---
+name: aether-chronicler
 description: "Use this agent when documentation is missing, outdated, or needs to be generated from code — READMEs, API docs, JSDoc/TSDoc inline comments, architecture diagrams in text, and changelogs. Invoke after a feature is complete and needs documentation, or when documentation gaps are identified in an audit. Does not modify source logic — documentation only. Reports gaps it cannot fill for Builder or Keeper to address."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: true
   edit: true

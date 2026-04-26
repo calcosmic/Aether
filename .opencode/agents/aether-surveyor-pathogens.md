@@ -1,7 +1,7 @@
 ---
+name: aether-surveyor-pathogens
 description: "Use this agent to identify technical debt, bugs, security concerns, and fragile areas in the codebase. Writes PATHOGENS.md to .aether/data/survey/. Spawned by /ant-colonize to detect what needs fixing before colony work begins."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: true
   edit: false

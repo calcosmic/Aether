@@ -1,7 +1,7 @@
 ---
+name: aether-oracle
 description: "Use this agent for deep research, technology evaluation, and producing actionable recommendations. Spawned by Queen during builds as a research step and by /ant-oracle for dedicated RALF-loop research. Differs from Scout in depth and write capability: Oracle produces structured research output files for downstream workers, while Scout returns transient findings."
 mode: subagent
-model: anthropic/claude-opus-4-20250514
 tools:
   write: true
   edit: true

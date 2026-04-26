@@ -1,7 +1,7 @@
 ---
+name: aether-probe
 description: "Use this agent to generate tests, analyze coverage gaps, and discover edge cases. Probe writes test files and runs them to verify they pass — never modifies source code. Invoked by Queen and Builder when coverage is insufficient or test-first development is needed."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: true
   edit: true

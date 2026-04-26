@@ -31,9 +31,9 @@ func writeTempRawFile(t *testing.T, dir, name, content string) string {
 func TestValidateOpenCodeAgent(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	validFrontmatter := `description: "This is a valid agent description for OpenCode"
+	validFrontmatter := `name: aether-test-agent
+description: "This is a valid agent description for OpenCode"
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 color: "#ff0000"
 tools:
   write: true
@@ -60,7 +60,6 @@ tools:
 
 	t.Run("missing description", func(t *testing.T) {
 		fm := `mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 color: "#ff0000"
 tools:
   write: true`
@@ -74,7 +73,6 @@ tools:
 	t.Run("short description under 20 chars", func(t *testing.T) {
 		fm := `description: "Too short"
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 color: "#ff0000"
 tools:
   write: true`
@@ -88,7 +86,6 @@ tools:
 	t.Run("tools as string instead of map", func(t *testing.T) {
 		fm := `description: "This is a valid agent description for OpenCode"
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 color: "#ff0000"
 tools: "Read, Write, Edit, Bash"`
 		path, data := writeTempAgentFile(t, tmpDir, fm)
@@ -103,7 +100,6 @@ tools: "Read, Write, Edit, Bash"`
 	t.Run("missing tools field entirely", func(t *testing.T) {
 		fm := `description: "This is a valid agent description for OpenCode"
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 color: "#ff0000"`
 		path, data := writeTempAgentFile(t, tmpDir, fm)
 		err := validateOpenCodeAgentFile(path, "aether-test-agent.md", data)
@@ -131,31 +127,7 @@ color: "#ff0000"`
 		}
 	})
 
-	t.Run("name field present must fail", func(t *testing.T) {
-		fm := `name: aether-test-agent
-description: "This is a valid agent description for OpenCode"
-mode: subagent
-model: anthropic/claude-sonnet-4-20250514
-color: "#ff0000"
-tools:
-  write: true`
-		path, data := writeTempAgentFile(t, tmpDir, fm)
-		err := validateOpenCodeAgentFile(path, "aether-test-agent.md", data)
-		if err == nil || (!strings.Contains(err.Error(), "name") && !strings.Contains(err.Error(), "filename")) {
-			t.Fatalf("expected name-field error, got: %v", err)
-		}
-	})
-
-	t.Run("model without slash must fail", func(t *testing.T) {
-		fm := strings.Replace(validFrontmatter, "anthropic/claude-sonnet-4-20250514", "opus", 1)
-		path, data := writeTempAgentFile(t, tmpDir, fm)
-		err := validateOpenCodeAgentFile(path, "aether-test-agent.md", data)
-		if err == nil || !strings.Contains(err.Error(), "provider/model") {
-			t.Fatalf("expected provider/model error, got: %v", err)
-		}
-	})
-
-	t.Run("missing model must fail", func(t *testing.T) {
+	t.Run("name field missing must fail", func(t *testing.T) {
 		fm := `description: "This is a valid agent description for OpenCode"
 mode: subagent
 color: "#ff0000"
@@ -163,8 +135,21 @@ tools:
   write: true`
 		path, data := writeTempAgentFile(t, tmpDir, fm)
 		err := validateOpenCodeAgentFile(path, "aether-test-agent.md", data)
-		if err == nil || !strings.Contains(err.Error(), "model") {
-			t.Fatalf("expected model error, got: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "name") {
+			t.Fatalf("expected missing name error, got: %v", err)
+		}
+	})
+
+	t.Run("missing model should pass (model is optional)", func(t *testing.T) {
+		fm := `name: aether-test-agent
+description: "This is a valid agent description for OpenCode"
+mode: subagent
+color: "#ff0000"
+tools:
+  write: true`
+		path, data := writeTempAgentFile(t, tmpDir, fm)
+		if err := validateOpenCodeAgentFile(path, "aether-test-agent.md", data); err != nil {
+			t.Fatalf("model is optional, should pass without it, got: %v", err)
 		}
 	})
 

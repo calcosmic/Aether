@@ -1,7 +1,7 @@
 ---
+name: aether-sage
 description: "Use this agent to extract patterns and trends from project history — development velocity, bug density, knowledge concentration, churn hotspots, and quality trajectories over time. Invoke when retrospective analysis is needed, when decisions require data support, or when the colony needs to understand its own health. Returns findings, trends, and prioritized recommendations. Strategic decisions go to Queen; knowledge preservation goes to aether-keeper."
 mode: subagent
-model: anthropic/claude-opus-4-20250514
 tools:
   write: false
   edit: false

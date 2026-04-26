@@ -1,7 +1,7 @@
 ---
+name: aether-tracker
 description: "Use this agent to investigate bugs systematically and identify root causes. Returns root cause analysis AND a suggested fix — Builder applies the fix. Tracker does not modify files. Do NOT use for implementation (use aether-builder) or refactoring (use aether-weaver)."
 mode: subagent
-model: anthropic/claude-opus-4-20250514
 tools:
   write: false
   edit: false

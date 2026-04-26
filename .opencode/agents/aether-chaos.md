@@ -1,7 +1,7 @@
 ---
+name: aether-chaos
 description: "Use this agent to stress-test code before or after changes — probing edge cases, boundary conditions, and error handling gaps that normal testing misses. Invoke when a feature is built and needs adversarial review, or when a bug appears that \"shouldn't be possible.\" Returns findings with severity ratings and reproduction steps. Fix implementation goes to aether-builder; missing test coverage goes to aether-probe."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: false
   edit: false

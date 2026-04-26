@@ -929,8 +929,8 @@ func slicesEqual(a, b []string) bool {
 
 // TestClaudeOpenCodeAgentContentParity verifies structural parity between
 // Claude and OpenCode agent files. Because the two platforms use different
-// frontmatter schemas (OpenCode uses tools-as-object, hex colors, provider/
-// model format, no name field), only the body content (after the second ---
+// frontmatter schemas (OpenCode uses tools-as-object, hex colors, name field,
+// optional model), only the body content (after the second ---
 // delimiter) is compared. Frontmatter differences are expected and allowed.
 func TestClaudeOpenCodeAgentContentParity(t *testing.T) {
 	repoRoot, err := findRepoRoot()
@@ -1115,16 +1115,13 @@ func TestE2EOpenCodeAgentLoad(t *testing.T) {
 				t.Errorf("invalid color %q (must be hex #rrggbb or theme color) — would cause 'Invalid hex color format' error in OpenCode", color)
 			}
 
-			// Validate: no name field
-			if _, hasName := fm["name"]; hasName {
-				t.Error("name field must not exist (filename IS the name)")
+			// Validate: name field is required
+			name, ok := fm["name"].(string)
+			if !ok || strings.TrimSpace(name) == "" {
+				t.Error("missing or empty name field")
 			}
 
-			// Validate: model has provider/ format
-			model, ok := fm["model"].(string)
-			if !ok || !strings.Contains(model, "/") {
-				t.Errorf("model %q missing provider/ format", model)
-			}
+			// Validate: model is optional — OpenCode uses its global default when absent
 		})
 	}
 }

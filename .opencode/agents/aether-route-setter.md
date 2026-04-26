@@ -1,7 +1,7 @@
 ---
+name: aether-route-setter
 description: "Use this agent when decomposing a goal into phases, analyzing task dependencies, creating structured build plans, or verifying a plan's feasibility. Spawned by /ant-plan and Queen when a project needs phase decomposition and task ordering before implementation begins."
 mode: subagent
-model: anthropic/claude-opus-4-20250514
 tools:
   write: true
   edit: false

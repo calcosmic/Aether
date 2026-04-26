@@ -1,7 +1,7 @@
 ---
+name: aether-builder
 description: "Use this agent when implementing code from a plan, creating files to spec, executing builds, running commands, or applying TDD cycles. Spawned by /ant-build and /ant-continue when the colony needs hands-on implementation. Also use when debugging requires the 3-Fix Rule or when systematic file creation and modification is needed."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: true
   edit: true

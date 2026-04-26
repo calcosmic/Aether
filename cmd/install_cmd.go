@@ -654,9 +654,10 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 	// `aether update` reads from. The `.aether/commands/*.yaml` specs remain in
 	// system/commands/, while the generated wrapper surfaces live in subdirs.
 	for _, pair := range []struct {
-		srcDir  string
-		destDir string
-		include syncFilter
+		srcDir   string
+		destDir  string
+		include  syncFilter
+		validate syncValidator
 	}{
 		{
 			srcDir:  filepath.Join(packageDir, ".claude", "commands", "ant"),
@@ -672,11 +673,12 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 			destDir: filepath.Join(systemDir, "commands", "opencode"),
 		},
 		{
-			srcDir:  filepath.Join(packageDir, ".opencode", "agents"),
-			destDir: filepath.Join(systemDir, "agents"),
+			srcDir:   filepath.Join(packageDir, ".opencode", "agents"),
+			destDir:  filepath.Join(systemDir, "agents"),
+			validate: validateOpenCodeAgentFile,
 		},
 	} {
-		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, nil, pair.include)
+		syncRes := syncDirToHubWithExclusion(pair.srcDir, pair.destDir, nil, pair.validate, pair.include)
 		hubSyncResult.copied += syncRes.copied
 		hubSyncResult.skipped += syncRes.skipped
 		hubSyncResult.removed = append(hubSyncResult.removed, syncRes.removed...)

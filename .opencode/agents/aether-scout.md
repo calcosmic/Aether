@@ -1,7 +1,7 @@
 ---
+name: aether-scout
 description: "Use this agent for research, documentation exploration, codebase analysis, and gathering information before implementation. Spawned by /ant-build and /ant-oracle for quick research tasks. Use when the colony needs to understand an API, library, pattern, or codebase area before building. For deep iterative research with source evaluation, use /ant-oracle directly instead."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: false
   edit: false

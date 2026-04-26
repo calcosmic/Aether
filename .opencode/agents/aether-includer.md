@@ -1,7 +1,7 @@
 ---
+name: aether-includer
 description: "Use this agent when an interface needs accessibility review — performs static analysis of HTML structure, ARIA attributes, semantic markup, color contrast declarations in CSS and design tokens, and keyboard navigation patterns against WCAG 2.1 AA criteria. Invoke before merge when accessibility is a requirement, or when users report accessibility issues. Returns violations with WCAG criterion references and fix suggestions for Builder. Analysis is manual and static — no automated scanner."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: false
   edit: false

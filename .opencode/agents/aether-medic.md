@@ -1,7 +1,7 @@
 ---
+name: aether-medic
 description: "Use this agent when diagnosing and repairing colony health issues. Spawned by `aether medic` or when colony data corruption, stale state, or configuration problems need investigation and repair. 🩹"
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: true
   edit: true

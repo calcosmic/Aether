@@ -1,7 +1,7 @@
 ---
+name: aether-keeper
 description: "Use this agent to maintain project knowledge, extract architectural patterns, and manage institutional wisdom. Invoked during Documentation Sprint and Deep Research patterns when the colony needs knowledge synthesis. Do NOT use for implementation (use aether-builder) or code review (use aether-auditor)."
 mode: subagent
-model: anthropic/claude-sonnet-4-20250514
 tools:
   write: true
   edit: true
