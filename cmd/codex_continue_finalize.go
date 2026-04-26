@@ -40,7 +40,7 @@ var continueFinalizeCmd = &cobra.Command{
 			return nil
 		}
 		if blocked, _ := result["blocked"].(bool); blocked {
-			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result))
+			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))
 			return nil
 		}
 		reviewDepthFinalize := ReviewDepthLight

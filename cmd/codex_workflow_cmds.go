@@ -173,7 +173,7 @@ var continueCmd = &cobra.Command{
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			outputWorkflow(result, renderContinuePlanOnlyVisual(state, phase, dispatches))
+			outputWorkflow(result, renderContinuePlanOnlyVisual(state, phase, dispatches, reviewDepthFromResult(result)))
 			return nil
 		}
 
@@ -189,7 +189,7 @@ var continueCmd = &cobra.Command{
 		}
 
 		if blocked, _ := result["blocked"].(bool); blocked {
-			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result))
+			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))
 			return nil
 		}
 

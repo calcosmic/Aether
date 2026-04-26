@@ -142,6 +142,7 @@ func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 }
 
 func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phase, options codexContinueOptions) map[string]interface{} {
+	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
 	now := time.Now().UTC()
 	runHandle, _ := beginRuntimeSpawnRun("continue", now)
 	recovery := codexContinueRecoveryPlan{
@@ -177,6 +178,7 @@ func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phas
 		"recovery":        recovery,
 		"next":            recovery.RedispatchCommand,
 		"continue_report": displayDataPath(continueReportRel),
+			"review_depth":    string(reviewDepth),
 		"blocking_issues": []string{summary},
 	}
 	if options.WorkerTimeout > 0 {
@@ -467,6 +469,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"recovery":            assessment.Recovery,
 			"reconciled_tasks":    assessment.ReconciledTasks,
 			"blocking_issues":     blockers,
+			"review_depth":        string(reviewDepth),
 		}
 		runStatus = "blocked"
 		return result, blockedState, phase, nil, nil, false, nil
@@ -534,6 +537,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"recovery":            assessment.Recovery,
 			"reconciled_tasks":    assessment.ReconciledTasks,
 			"blocking_issues":     append([]string{}, review.BlockingIssues...),
+			"review_depth":        string(reviewDepth),
 		}
 		runStatus = "blocked"
 		return result, blockedState, phase, nil, nil, false, nil
@@ -672,6 +676,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		"recovery":            assessment.Recovery,
 		"reconciled_tasks":    assessment.ReconciledTasks,
 		"signal_housekeeping": housekeeping,
+		"review_depth":        string(reviewDepth),
 	}
 	if nextPhase != nil {
 		result["next_phase"] = nextPhase.ID

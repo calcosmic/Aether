@@ -140,7 +140,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	}
 
 	// Blocked case must NOT contain guidance
-	blockedOutput := renderContinueBlockedVisual(state, phase, nil)
+	blockedOutput := renderContinueBlockedVisual(state, phase, nil, ReviewDepthLight)
 	if strings.Contains(blockedOutput, "It's safe to clear your context now.") {
 		t.Errorf("renderContinueBlockedVisual() should not contain context-clear guidance\n%s", blockedOutput)
 	}

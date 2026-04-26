@@ -86,7 +86,8 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout)
+	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth)
 	plan := codexContinuePlanManifest{
 		Phase:             phase.ID,
 		PhaseName:         phase.Name,
@@ -99,7 +100,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		WorkerTimeout:     int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
 		Dispatches:        dispatches,
 		DispatchMode:      "plan-only",
-		FinalizeSurface:   "pending",
+		FinalizeSurface:   "awaiting_wrapper_completion",
 		RequiresFinalizer: true,
 	}
 
@@ -116,12 +117,13 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		"wave_count":        countContinueExternalWaves(dispatches),
 		"dispatch_mode":     "plan-only",
 		"next":              "spawn wrapper continue agents, then record completion",
+"review_depth":     string(reviewDepth),
 		"wrapper_contract": map[string]interface{}{
 			"source_command":            "AETHER_OUTPUT_MODE=json aether continue --plan-only",
 			"spawn_log_required":        true,
 			"spawn_complete_required":   true,
 			"worker_timeout_seconds":    int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
-			"finalize_surface":          "pending",
+			"finalize_surface":          "awaiting_wrapper_completion",
 			"runtime_verification_only": true,
 		},
 	}
@@ -168,7 +170,7 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 	}
 }
 
-func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration) []codexContinueExternalDispatch {
+func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth ReviewDepth) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
 	dispatches := []codexContinueExternalDispatch{
@@ -182,7 +184,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			TaskID:        fmt.Sprintf("continue-verification-%d", phase.ID),
 			Timeout:       timeoutSeconds,
 			Status:        "planned",
-			Brief:         renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher),
+			Brief:         renderCodexContinueWatcherBrief(root, phase, manifest, verification.Steps, verification.Claims, verification.Watcher, workerTimeout),
 			SkillSection:  watcherSkillAssignment.Section,
 			SkillCount:    watcherSkillAssignment.SkillCount,
 			ColonySkills:  watcherSkillAssignment.ColonyCount,
@@ -190,7 +192,11 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
 		},
 	}
-	for _, spec := range codexContinueReviewSpecs {
+reviewSpecs := codexContinueReviewSpecs
+	if reviewDepth == ReviewDepthLight {
+		reviewSpecs = []codexContinueReviewSpec{}
+	}
+	for _, spec := range reviewSpecs {
 		assignment := resolveWorkerSkillAssignmentForWorkflow("continue", spec.Caste, spec.Task)
 		dispatches = append(dispatches, codexContinueExternalDispatch{
 			Stage:         "review",

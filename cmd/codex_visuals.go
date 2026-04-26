@@ -896,6 +896,13 @@ func renderPlanDispatchPreview(goal string, dispatches []codexPlanningDispatch) 
 	return b.String()
 }
 
+func reviewDepthFromResult(result map[string]interface{}) ReviewDepth {
+	if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
+		return ReviewDepthHeavy
+	}
+	return ReviewDepthLight
+}
+
 func renderReviewDepthLine(depth ReviewDepth, phaseNum, totalPhases int) string {
 	if depth == ReviewDepthHeavy {
 		if phaseNum == totalPhases {
@@ -1101,12 +1108,14 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	return b.String()
 }
 
-func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch) string {
+func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch, reviewDepth ReviewDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue Plan"))
 	b.WriteString(visualDivider)
 	b.WriteString("Verification snapshot and review manifest only. No state was changed and no review workers were spawned.\n")
 	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
+	b.WriteString("\n")
+	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	b.WriteString("Phase: ")
 	b.WriteString(phase.Name)
@@ -1139,10 +1148,12 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 	return b.String()
 }
 
-func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}) string {
+func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}, reviewDepth ReviewDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue-blocked"), "Continue Blocked"))
 	b.WriteString(visualDivider)
+	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
+	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Phase %d remains active: %s\n", phase.ID, phase.Name))
 	renderContinueVerificationSummaryMap(&b, mapValue(result["verification"]))
 	renderContinueGateSummaryMap(&b, mapValue(result["gates"]))
