@@ -108,7 +108,7 @@
 **Milestone Goal:** Review agent findings survive `/clear` and accumulate across phases so downstream workers can learn from prior reviews.
 
 - [x] **Phase 52: Continue-Review Worker Outcome Reports** - Per-worker .md reports for review workers, mirroring build report pattern (completed 2026-04-26)
-- [ ] **Phase 53: Domain-Ledger CRUD Subcommands** - Four CLI subcommands for structured review finding persistence across 7 domains
+- [x] **Phase 53: Domain-Ledger CRUD Subcommands** - Four CLI subcommands for structured review finding persistence across 7 domains (completed 2026-04-26)
 - [ ] **Phase 54: Colony-Prime Prior-Reviews Section** - Open review findings injected into downstream worker context
 - [ ] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails
 - [ ] **Phase 56: Lifecycle Integration** - Seal, entomb, status, and init updated for review ledger lifecycle
@@ -190,7 +190,7 @@ Phases execute in numeric order: 52 -> 53 -> 54 -> 55 -> 56
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 52. Continue-Review Worker Outcome Reports | 2/2 | Complete | 2026-04-26 |
-| 53. Domain-Ledger CRUD Subcommands | 2/2 | Complete | 2026-04-26 |
+| 53. Domain-Ledger CRUD Subcommands | 2/2 | Complete    | 2026-04-26 |
 | 54. Colony-Prime Prior-Reviews Section | 0/? | Not started | - |
 | 55. Agent Definition Updates | 0/? | Not started | - |
 | 56. Lifecycle Integration | 0/? | Not started | - |

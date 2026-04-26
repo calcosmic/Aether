@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Review Persistence
-status: executing
+status: ready_to_plan
 stopped_at: Completed 53-02 (Review Ledger CRUD Subcommands)
 last_updated: "2026-04-26T12:56:47Z"
 last_activity: 2026-04-26 -- Phase 53 Plan 02 completed
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
   completed_plans: 3
-  percent: 75
+  percent: 40
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md
 
 ## Current Position
 
-Phase: 53 (domain-ledger-crud-subcommands) — EXECUTING
-Plan: 3 of 4
-Status: Completed Plan 02, ready for Plan 03
-Last activity: 2026-04-26 -- Phase 53 Plan 02 completed
+Phase: 54
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-04-26
 
 Progress: [=======   ] 75%
 
@@ -36,7 +36,7 @@ Progress: [=======   ] 75%
 
 **Velocity:**
 
-- Total plans completed: 125 (across 10 phases, 9 milestones)
+- Total plans completed: 127 (across 10 phases, 9 milestones)
 - All tests green (2910+ passing)
 
 ## Accumulated Context
