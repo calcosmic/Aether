@@ -888,3 +888,113 @@ func writeActiveState(t *testing.T, dataDir, goal string) {
 		t.Fatalf("write state: %v", err)
 	}
 }
+
+func TestInitCmd_ClearsReviews(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+
+	// Init a git repo
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	// Create a sealed colony state so init allows re-init
+	writeSealedState(t, dataDir, "Old goal")
+
+	// Create reviews directory with a ledger file
+	reviewsDir := filepath.Join(dataDir, "reviews", "security")
+	if err := os.MkdirAll(reviewsDir, 0755); err != nil {
+		t.Fatalf("mkdir reviews: %v", err)
+	}
+	ledger := colony.ReviewLedgerFile{
+		Entries: []colony.ReviewLedgerEntry{
+			{
+				ID:          "sec-1-001",
+				Phase:       1,
+				Agent:       "gatekeeper",
+				GeneratedAt: "2026-04-26T00:00:00Z",
+				Status:      "open",
+				Severity:    colony.ReviewSeverityHigh,
+				Description: "Test finding",
+			},
+		},
+		Summary: colony.ReviewLedgerSummary{Total: 1, Open: 1},
+	}
+	ledgerData, _ := json.MarshalIndent(ledger, "", "  ")
+	if err := os.WriteFile(filepath.Join(reviewsDir, "ledger.json"), ledgerData, 0644); err != nil {
+		t.Fatalf("write ledger: %v", err)
+	}
+
+	// Verify reviews dir exists before init
+	if _, err := os.Stat(filepath.Join(dataDir, "reviews")); err != nil {
+		t.Fatalf("reviews dir should exist before init: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+
+	// Verify new state was written (init succeeded)
+	var newState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &newState); err != nil {
+		t.Fatalf("load new state: %v", err)
+	}
+	if newState.Goal == nil || *newState.Goal != "New colony goal" {
+		t.Errorf("goal should be 'New colony goal', got %v", newState.Goal)
+	}
+
+	// Verify reviews directory was removed
+	if _, err := os.Stat(filepath.Join(dataDir, "reviews")); err == nil {
+		t.Error("reviews directory should have been removed after init")
+	}
+}
+
+func TestInitCmd_ClearsReviews_NoReviewsDir(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+
+	// Init a git repo
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	runGit(t, root, "add", ".")
+	runGit(t, root, "commit", "-m", "initial")
+
+	// Create a sealed colony state so init allows re-init
+	writeSealedState(t, dataDir, "Old goal")
+
+	// Do NOT create any reviews directory
+
+	rootCmd.SetArgs([]string{"init", "New colony goal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error when no reviews dir exists: %v", err)
+	}
+
+	// Verify new state was written (init succeeded)
+	var newState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &newState); err != nil {
+		t.Fatalf("load new state: %v", err)
+	}
+	if newState.Goal == nil || *newState.Goal != "New colony goal" {
+		t.Errorf("goal should be 'New colony goal', got %v", newState.Goal)
+	}
+}
