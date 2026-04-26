@@ -107,7 +107,7 @@
 
 **Milestone Goal:** Review agent findings survive `/clear` and accumulate across phases so downstream workers can learn from prior reviews.
 
-- [ ] **Phase 52: Continue-Review Worker Outcome Reports** - Per-worker .md reports for review workers, mirroring build report pattern
+- [x] **Phase 52: Continue-Review Worker Outcome Reports** - Per-worker .md reports for review workers, mirroring build report pattern (completed 2026-04-26)
 - [ ] **Phase 53: Domain-Ledger CRUD Subcommands** - Four CLI subcommands for structured review finding persistence across 7 domains
 - [ ] **Phase 54: Colony-Prime Prior-Reviews Section** - Open review findings injected into downstream worker context
 - [ ] **Phase 55: Agent Definition Updates** - Seven review agents gain Write tool, findings instructions, and guardrails

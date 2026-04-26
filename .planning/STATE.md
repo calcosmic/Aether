@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.9
 milestone_name: Review Persistence
-status: planning
-stopped_at: Roadmap created, ready to plan Phase 52
-last_updated: "2026-04-26T10:40:41.078Z"
-last_activity: 2026-04-26 -- Roadmap created for v1.9
+status: executing
+stopped_at: Phase 52 complete, ready to plan Phase 53
+last_updated: "2026-04-26T11:10:00.000Z"
+last_activity: 2026-04-26 -- Phase 52 executed and verified
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 2
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 4
+  percent: 20
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md:1)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 52 -- Continue-Review Worker Outcome Reports
+**Current focus:** Phase 53 -- Domain-Ledger CRUD Subcommands
 
 ## Current Position
 
-Phase: 52 of 56 (Continue-Review Worker Outcome Reports)
+Phase: 53 of 56 (Domain-Ledger CRUD Subcommands)
 Plan: 0 of ? in current phase
 Status: Ready to plan
-Last activity: 2026-04-26 -- Roadmap created for v1.9
+Last activity: 2026-04-26 -- Phase 52 executed and verified
 
-Progress: [          ] 0%
+Progress: [==        ] 20%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 119 (across 9 milestones)
+- Total plans completed: 123 (across 10 phases, 9 milestones)
 - All tests green (2910+ passing)
 
 ## Accumulated Context
@@ -60,7 +60,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-04-26
-Stopped at: Roadmap created, ready to plan Phase 52
+Stopped at: Phase 52 complete, ready to plan Phase 53
 Resume file: None
 
-**Planned Phase:** 52 (Continue-Review Worker Outcome Reports) — 2 plans — 2026-04-26T10:40:41.054Z
+**Completed Phase:** 52 (Continue-Review Worker Outcome Reports) — 2 plans — verified 2026-04-26
