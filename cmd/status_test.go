@@ -917,6 +917,155 @@ func TestStatusShowsProofSummaryAndRoute(t *testing.T) {
 	}
 }
 
+func TestStatus_ReviewFindings(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+
+	// Create review ledger data in two domains
+	securityLedger := colony.ReviewLedgerFile{
+		Entries: []colony.ReviewLedgerEntry{
+			{ID: "sec-2-001", Phase: 2, Agent: "gatekeeper", Status: "open", Severity: colony.ReviewSeverityHigh, Description: "Exposed API key"},
+			{ID: "sec-2-002", Phase: 2, Agent: "gatekeeper", Status: "open", Severity: colony.ReviewSeverityMedium, Description: "Missing auth check"},
+			{ID: "sec-2-003", Phase: 2, Agent: "gatekeeper", Status: "resolved", Severity: colony.ReviewSeverityLow, Description: "Weak password hashing"},
+		},
+		Summary: colony.ComputeSummary([]colony.ReviewLedgerEntry{
+			{ID: "sec-2-001", Phase: 2, Agent: "gatekeeper", Status: "open", Severity: colony.ReviewSeverityHigh, Description: "Exposed API key"},
+			{ID: "sec-2-002", Phase: 2, Agent: "gatekeeper", Status: "open", Severity: colony.ReviewSeverityMedium, Description: "Missing auth check"},
+			{ID: "sec-2-003", Phase: 2, Agent: "gatekeeper", Status: "resolved", Severity: colony.ReviewSeverityLow, Description: "Weak password hashing"},
+		}),
+	}
+	if err := s.SaveJSON("reviews/security/ledger.json", securityLedger); err != nil {
+		t.Fatalf("save security ledger: %v", err)
+	}
+
+	testingLedger := colony.ReviewLedgerFile{
+		Entries: []colony.ReviewLedgerEntry{
+			{ID: "tst-2-001", Phase: 2, Agent: "watcher", Status: "open", Severity: colony.ReviewSeverityMedium, Description: "Missing edge case test"},
+		},
+		Summary: colony.ComputeSummary([]colony.ReviewLedgerEntry{
+			{ID: "tst-2-001", Phase: 2, Agent: "watcher", Status: "open", Severity: colony.ReviewSeverityMedium, Description: "Missing edge case test"},
+		}),
+	}
+	if err := s.SaveJSON("reviews/testing/ledger.json", testingLedger); err != nil {
+		t.Fatalf("save testing ledger: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify Review Findings section appears
+	if !strings.Contains(output, "Review Findings") {
+		t.Fatalf("expected 'Review Findings' section in output, got:\n%s", output)
+	}
+	// Verify domain names appear
+	for _, want := range []string{"security", "testing"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("output missing domain %q\n%s", want, output)
+		}
+	}
+	// Verify counts appear (security: 3 total, 2 open, 1 resolved; testing: 1 total, 1 open)
+	for _, want := range []string{"3", "2", "1"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("output missing count %q\n%s", want, output)
+		}
+	}
+}
+
+func TestStatus_ReviewFindings_NoData(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify Review Findings section is entirely omitted
+	if strings.Contains(output, "Review Findings") {
+		t.Fatalf("expected no 'Review Findings' section when no data exists, got:\n%s", output)
+	}
+}
+
+func TestStatus_ReviewFindings_PartialData(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+
+	// Create review data in only one domain
+	qualityLedger := colony.ReviewLedgerFile{
+		Entries: []colony.ReviewLedgerEntry{
+			{ID: "qlt-2-001", Phase: 2, Agent: "auditor", Status: "open", Severity: colony.ReviewSeverityHigh, Description: "Code duplication"},
+		},
+		Summary: colony.ComputeSummary([]colony.ReviewLedgerEntry{
+			{ID: "qlt-2-001", Phase: 2, Agent: "auditor", Status: "open", Severity: colony.ReviewSeverityHigh, Description: "Code duplication"},
+		}),
+	}
+	if err := s.SaveJSON("reviews/quality/ledger.json", qualityLedger); err != nil {
+		t.Fatalf("save quality ledger: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+
+	if !strings.Contains(output, "Review Findings") {
+		t.Fatalf("expected 'Review Findings' section with partial data, got:\n%s", output)
+	}
+	if !strings.Contains(output, "quality") {
+		t.Fatalf("expected 'quality' domain in output, got:\n%s", output)
+	}
+	// Verify other domains do NOT appear
+	for _, unwanted := range []string{"security", "performance", "resilience", "testing", "history", "bugs"} {
+		if strings.Contains(output, unwanted) {
+			t.Errorf("output should not contain domain %q with no data\n%s", unwanted, output)
+		}
+	}
+}
+
 func TestStatusShowsRecoveryDoorway(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
