@@ -204,7 +204,10 @@ var hiveReadCmd = &cobra.Command{
 		}
 
 		// Persist access updates
-		writeWisdom(wisdomPath, wf)
+		if err := writeWisdom(wisdomPath, wf); err != nil {
+			outputError(2, fmt.Sprintf("failed to persist access updates: %v", err), nil)
+			return nil
+		}
 
 		outputOK(map[string]interface{}{"entries": results, "total": len(results)})
 		return nil
