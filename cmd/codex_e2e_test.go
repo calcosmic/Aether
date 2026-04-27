@@ -1062,8 +1062,8 @@ func TestE2EOpenCodeAgentLoad(t *testing.T) {
 	if len(agentFiles) == 0 {
 		t.Fatal("no aether-*.md files found to copy")
 	}
-	if len(agentFiles) != 25 {
-		t.Errorf("expected 25 agent files, found %d", len(agentFiles))
+	if len(agentFiles) != 26 {
+		t.Errorf("expected 26 agent files, found %d", len(agentFiles))
 	}
 
 	// 3-4. Parse and validate each file
