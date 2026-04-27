@@ -309,6 +309,31 @@ The `{current_phase_number}` comes from the colony state loaded in Step 1 (`.aet
 
 **Skip this step if there are no critical or high findings.**
 
+### Step 6.6: Midden Recurrence Check
+
+After flagging individual findings, check for recurring failure patterns across the colony's history.
+
+Run using the Bash tool with description "Checking midden for recurring failures...":
+```bash
+aether midden-recent-failures --limit 20
+```
+
+Analyze the returned entries:
+1. Group entries by the `category` field
+2. If any single category appears 3 or more times, this indicates a recurring failure pattern
+3. For each recurring category, suggest a REDIRECT pheromone to the user:
+   ```
+   ⚠️ Recurring failure pattern detected: "{category}" ({count} occurrences)
+   Suggesting REDIRECT to prevent recurrence.
+
+   Run: aether pheromone-write --type "REDIRECT" --content '{"text":"Avoid {category} pattern: {summary of recurring descriptions}"}' --priority "high" --source "chaos-recurrence" --reason "Recurring midden category detected {count} times"
+   ```
+
+4. Do NOT automatically create the REDIRECT -- present the suggestion to the user and let them approve
+
+**Skip this step if there are fewer than 3 entries total or no category appears 3+ times.**
+
+
 ### Step 7: Log Activity
 
 Run using the Bash tool with description "Logging chaos activity...":

@@ -4,3 +4,5 @@ source_of_truth: "Use the Go `aether` CLI as the source of truth."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."
+follow_up:
+  midden_recurrence: "After flagging, run `aether midden-recent-failures --limit 20` and check for categories appearing 3+ times. Suggest REDIRECT pheromone for recurring patterns."
