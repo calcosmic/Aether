@@ -528,6 +528,18 @@ func writeLocalQueenText(text string) error {
 	return os.WriteFile(p, []byte(text), 0644)
 }
 
+// promoteInstinctLocal promotes a single instinct to the local repo QUEEN.md only.
+// Per D-08, this does NOT write to the global hub QUEEN.md.
+func promoteInstinctLocal(s *storage.Store, instinctID, action string) error {
+	text, err := loadLocalQueenText()
+	if err != nil {
+		return err
+	}
+	entry := fmt.Sprintf("- %s (instinct %s, %s)", sanitizeQueenInline(action), instinctID, time.Now().UTC().Format("2006-01-02"))
+	text = appendEntryToQueenSection(text, "Wisdom", entry)
+	return writeLocalQueenText(text)
+}
+
 // normalizeQueenEntry strips date/timestamp patterns and normalizes whitespace
 // for dedup comparison. This catches semantic duplicates where the same wisdom
 // gets promoted multiple times with different dates attached.

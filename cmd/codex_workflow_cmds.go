@@ -280,6 +280,30 @@ var sealCmd = &cobra.Command{
 			fmt.Fprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
+		// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md only (D-08)
+		var promotedInstinctNames []string
+		var hiveEligibleCount int
+		if entries, err := loadActiveInstinctEntriesFromStore(store); err == nil {
+			for _, entry := range entries {
+				if entry.Confidence >= 0.8 && entry.Action != "" {
+					if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
+						promotedInstinctNames = append(promotedInstinctNames, entry.ID)
+					}
+				}
+				if entry.Confidence >= 0.8 {
+					hiveEligibleCount++
+				}
+			}
+		}
+
+		// Ceremony Step 2: Log hive-eligible count as suggestion (D-09)
+		if hiveEligibleCount > 0 {
+			fmt.Fprintln(stdout, fmt.Sprintf("SUGGESTION: %d instinct(s) eligible for global promotion. Run 'aether queen-promote-instinct <id>' or 'aether hive-promote' to promote.", hiveEligibleCount))
+		}
+
+		// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
+		expiredFOCUSCount := expireSignalsByType(store, "FOCUS")
+
 		now := time.Now().UTC().Format(time.RFC3339)
 		state.State = colony.StateCOMPLETED
 		state.Milestone = "Crowned Anthill"
@@ -298,8 +322,17 @@ var sealCmd = &cobra.Command{
 		aetherDir := filepath.Dir(store.BasePath())
 		_ = copyDirIfExists(filepath.Join(filepath.Dir(store.BasePath()), "data", "reviews"), filepath.Join(aetherDir, "reviews-archive"))
 
+		// Build enrichment data for CROWNED-ANTHILL.md
+		enrichment := sealEnrichment{
+			LearningsCount:    len(state.Memory.PhaseLearnings),
+			InstinctsPromoted: promotedInstinctNames,
+			HiveEligible:      hiveEligibleCount,
+			SignalsExpired:    expiredFOCUSCount,
+			FlagsResolved:     countResolvedFlags(store),
+		}
+
 		summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
-		summary := buildSealSummary(state, now, warnings)
+		summary := buildSealSummary(state, now, warnings, enrichment)
 		if err := os.WriteFile(summaryPath, []byte(summary), 0644); err != nil {
 			outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
 			return nil
@@ -715,7 +748,16 @@ func countResolvedFlags(s *storage.Store) int {
 	return count
 }
 
-func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string) string {
+// sealEnrichment holds data for enriching the CROWNED-ANTHILL.md summary.
+type sealEnrichment struct {
+	LearningsCount    int
+	InstinctsPromoted []string
+	HiveEligible      int
+	SignalsExpired    int
+	FlagsResolved     int
+}
+
+func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
 	goal := ""
 	if state.Goal != nil {
 		goal = *state.Goal
@@ -740,6 +782,25 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	for _, phase := range state.Plan.Phases {
 		b.WriteString(fmt.Sprintf("- Phase %d: %s [%s]\n", phase.ID, phase.Name, phase.Status))
 	}
+
+	// Colony Statistics enrichment
+	b.WriteString("\n## Colony Statistics\n")
+	b.WriteString("| Metric | Count |\n|--------|-------|\n")
+	b.WriteString(fmt.Sprintf("| Learnings captured | %d |\n", enrichment.LearningsCount))
+	b.WriteString(fmt.Sprintf("| Instincts promoted | %d |\n", len(enrichment.InstinctsPromoted)))
+	b.WriteString(fmt.Sprintf("| Hive-eligible instincts | %d |\n", enrichment.HiveEligible))
+	b.WriteString(fmt.Sprintf("| FOCUS signals expired | %d |\n", enrichment.SignalsExpired))
+	b.WriteString(fmt.Sprintf("| Flags resolved | %d |\n", enrichment.FlagsResolved))
+
+	if len(enrichment.InstinctsPromoted) > 0 {
+		b.WriteString("\n### Promoted Instincts\n")
+		for _, id := range enrichment.InstinctsPromoted {
+			b.WriteString(fmt.Sprintf("- %s\n", id))
+		}
+	}
+
+	b.WriteString(fmt.Sprintf("\n### Signal Cleanup\n- FOCUS signals expired: %d\n- REDIRECT signals preserved\n", enrichment.SignalsExpired))
+
 	return b.String()
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
+	"time"
 )
 
 // setupSealTestStore creates a fresh temp store with a minimal colony state
@@ -327,5 +328,317 @@ func TestSealBlockerSummaryJSON(t *testing.T) {
 	}
 	if state.State == colony.StateCOMPLETED {
 		t.Error("seal should not have completed when blockers exist")
+	}
+}
+
+// TestSealPromoteInstincts verifies that seal promotes high-confidence instincts
+// to local QUEEN.md only (not global).
+func TestSealPromoteInstincts(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// Add instincts with confidence >= 0.8
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst-001",
+				Trigger:    "test pattern",
+				Action:     "Always write tests first",
+				Domain:     "testing",
+				Confidence: 0.9,
+				Archived:   false,
+			},
+			{
+				ID:         "inst-002",
+				Trigger:    "low confidence pattern",
+				Action:     "Maybe do something",
+				Domain:     "general",
+				Confidence: 0.5,
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	// Should contain SUGGESTION for hive promotion (1 instinct >= 0.8)
+	if !strings.Contains(out, "SUGGESTION:") {
+		t.Errorf("expected SUGGESTION line, got: %s", out)
+	}
+
+	// Verify local QUEEN.md has the promoted instinct
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	queenData, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queenText := string(queenData)
+	if !strings.Contains(queenText, "inst-001") {
+		t.Error("local QUEEN.md should contain promoted instinct inst-001")
+	}
+	if !strings.Contains(queenText, "Always write tests first") {
+		t.Error("local QUEEN.md should contain the instinct action text")
+	}
+	// Low-confidence instinct should NOT be promoted
+	if strings.Contains(queenText, "inst-002") {
+		t.Error("local QUEEN.md should NOT contain low-confidence instinct inst-002")
+	}
+}
+
+// TestSealHiveEligibleLog verifies that seal outputs a SUGGESTION line for hive-eligible instincts.
+func TestSealHiveEligibleLog(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// Add instincts with confidence >= 0.8
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{ID: "hive-1", Trigger: "t1", Action: "a1", Domain: "d1", Confidence: 0.85, Archived: false},
+			{ID: "hive-2", Trigger: "t2", Action: "a2", Domain: "d2", Confidence: 0.95, Archived: false},
+		},
+	}
+	_ = s.SaveJSON("instincts.json", instincts)
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	if !strings.Contains(out, "SUGGESTION:") {
+		t.Error("expected SUGGESTION line for hive-eligible instincts")
+	}
+	if !strings.Contains(out, "2 instinct(s) eligible") {
+		t.Errorf("expected 2 hive-eligible instincts, got: %s", out)
+	}
+}
+
+// TestSealExpireFocus verifies that seal expires all FOCUS pheromones
+// while preserving REDIRECT pheromones.
+func TestSealExpireFocus(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	pheromones := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "focus-1", Type: "FOCUS", Content: json.RawMessage(`"pay attention here"`), Active: true, CreatedAt: now},
+			{ID: "focus-2", Type: "FOCUS", Content: json.RawMessage(`"another focus"`), Active: true, CreatedAt: now},
+			{ID: "redirect-1", Type: "REDIRECT", Content: json.RawMessage(`"never do this"`), Active: true, CreatedAt: now},
+			{ID: "feedback-1", Type: "FEEDBACK", Content: json.RawMessage(`"adjust this"`), Active: true, CreatedAt: now},
+			{ID: "focus-3", Type: "FOCUS", Content: json.RawMessage(`"expired focus"`), Active: false, CreatedAt: now, ExpiresAt: &now},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pheromones); err != nil {
+		t.Fatal(err)
+	}
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	// Verify FOCUS signals are expired
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		t.Fatal(err)
+	}
+	for _, sig := range pf.Signals {
+		switch sig.ID {
+		case "focus-1", "focus-2":
+			if sig.Active {
+				t.Errorf("FOCUS signal %s should be expired after seal", sig.ID)
+			}
+		case "focus-3":
+			if sig.Active {
+				t.Error("already-expired FOCUS signal should remain expired")
+			}
+		case "redirect-1":
+			if !sig.Active {
+				t.Error("REDIRECT signal should be preserved after seal")
+			}
+		case "feedback-1":
+			if !sig.Active {
+				t.Error("FEEDBACK signal should be preserved after seal")
+			}
+		}
+	}
+}
+
+// TestCrownedAnthillEnrichment verifies that CROWNED-ANTHILL.md contains
+// the Colony Statistics table with all 5 metrics.
+func TestCrownedAnthillEnrichment(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// Add some learnings
+	state := colony.ColonyState{}
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	state.Memory.PhaseLearnings = []colony.PhaseLearning{
+		{Phase: 1, Learnings: []colony.Learning{{Claim: "Learned something useful"}}},
+		{Phase: 1, Learnings: []colony.Learning{{Claim: "Another learning"}}},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add resolved flags
+	flags := colony.FlagsFile{
+		Version: "1",
+		Decisions: []colony.FlagEntry{
+			{ID: "r1", Resolved: true},
+			{ID: "r2", Resolved: true},
+			{ID: "r3", Resolved: false},
+		},
+	}
+	_ = s.SaveJSON("pending-decisions.json", flags)
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	// Read CROWNED-ANTHILL.md
+	anthillPath := filepath.Join(tmpDir, ".aether", "CROWNED-ANTHILL.md")
+	data, err := os.ReadFile(anthillPath)
+	if err != nil {
+		t.Fatalf("CROWNED-ANTHILL.md not found: %v", err)
+	}
+	content := string(data)
+
+	// Verify Colony Statistics table
+	if !strings.Contains(content, "## Colony Statistics") {
+		t.Error("CROWNED-ANTHILL.md should contain '## Colony Statistics' section")
+	}
+	if !strings.Contains(content, "| Learnings captured | 2 |") {
+		t.Error("CROWNED-ANTHILL.md should show 2 learnings captured")
+	}
+	if !strings.Contains(content, "| Flags resolved | 2 |") {
+		t.Error("CROWNED-ANTHILL.md should show 2 flags resolved")
+	}
+	if !strings.Contains(content, "| FOCUS signals expired | 0 |") {
+		t.Error("CROWNED-ANTHILL.md should show FOCUS signals expired metric")
+	}
+	if !strings.Contains(content, "| Hive-eligible instincts | 0 |") {
+		t.Error("CROWNED-ANTHILL.md should show hive-eligible instincts metric")
+	}
+	if !strings.Contains(content, "| Instincts promoted | 0 |") {
+		t.Error("CROWNED-ANTHILL.md should show instincts promoted metric")
+	}
+
+	// Verify Signal Cleanup section
+	if !strings.Contains(content, "### Signal Cleanup") {
+		t.Error("CROWNED-ANTHILL.md should contain '### Signal Cleanup' section")
+	}
+	if !strings.Contains(content, "REDIRECT signals preserved") {
+		t.Error("CROWNED-ANTHILL.md should mention REDIRECT signals preserved")
+	}
+}
+
+// TestExpireSignalsByType unit tests the expireSignalsByType helper.
+func TestExpireSignalsByType(t *testing.T) {
+	s, _ := setupSealTestStore(t)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "f1", Type: "FOCUS", Active: true, CreatedAt: now},
+			{ID: "f2", Type: "FOCUS", Active: true, CreatedAt: now},
+			{ID: "r1", Type: "REDIRECT", Active: true, CreatedAt: now},
+			{ID: "f3", Type: "FOCUS", Active: false, CreatedAt: now, ExpiresAt: &now},
+		},
+	}
+	_ = s.SaveJSON("pheromones.json", pf)
+
+	// Expire FOCUS signals
+	count := expireSignalsByType(s, "FOCUS")
+	if count != 2 {
+		t.Errorf("expected 2 FOCUS signals expired, got %d", count)
+	}
+
+	// Verify REDIRECT still active
+	var loaded colony.PheromoneFile
+	_ = s.LoadJSON("pheromones.json", &loaded)
+	for _, sig := range loaded.Signals {
+		if sig.ID == "r1" && !sig.Active {
+			t.Error("REDIRECT signal should still be active")
+		}
+	}
+
+	// Expiring again should return 0
+	count2 := expireSignalsByType(s, "FOCUS")
+	if count2 != 0 {
+		t.Errorf("expected 0 on second expire, got %d", count2)
+	}
+}
+
+// TestPromoteInstinctLocal unit tests the promoteInstinctLocal helper.
+func TestPromoteInstinctLocal(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+	saveGlobals(t)
+	store = s
+	t.Setenv("COLONY_DATA_DIR", s.BasePath())
+
+	err := promoteInstinctLocal(s, "test-inst-1", "Write tests before code")
+	if err != nil {
+		t.Fatalf("promoteInstinctLocal failed: %v", err)
+	}
+
+	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(queenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "test-inst-1") {
+		t.Error("QUEEN.md should contain instinct ID")
+	}
+	if !strings.Contains(content, "Write tests before code") {
+		t.Error("QUEEN.md should contain instinct action")
+	}
+	if !strings.Contains(content, "## Wisdom") {
+		t.Error("Entry should be in Wisdom section")
+	}
+}
+
+// TestBuildSealSummaryEnrichment unit tests the enriched buildSealSummary.
+func TestBuildSealSummaryEnrichment(t *testing.T) {
+	goal := "Test goal"
+	state := colony.ColonyState{
+		Goal:         &goal,
+		CurrentPhase: 3,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "P1", Status: colony.PhaseCompleted},
+				{ID: 2, Name: "P2", Status: colony.PhaseCompleted},
+				{ID: 3, Name: "P3", Status: colony.PhaseCompleted},
+			},
+		},
+	}
+
+	enrichment := sealEnrichment{
+		LearningsCount:    5,
+		InstinctsPromoted: []string{"inst-1", "inst-2"},
+		HiveEligible:      3,
+		SignalsExpired:    4,
+		FlagsResolved:     2,
+	}
+
+	summary := buildSealSummary(state, "2026-04-27T12:00:00Z", nil, enrichment)
+
+	if !strings.Contains(summary, "## Colony Statistics") {
+		t.Error("summary should contain Colony Statistics section")
+	}
+	if !strings.Contains(summary, "| Learnings captured | 5 |") {
+		t.Error("summary should show 5 learnings")
+	}
+	if !strings.Contains(summary, "| Instincts promoted | 2 |") {
+		t.Error("summary should show 2 promoted instincts")
+	}
+	if !strings.Contains(summary, "### Promoted Instincts") {
+		t.Error("summary should contain Promoted Instincts section")
+	}
+	if !strings.Contains(summary, "- inst-1") {
+		t.Error("summary should list inst-1 in promoted instincts")
+	}
+	if !strings.Contains(summary, "### Signal Cleanup") {
+		t.Error("summary should contain Signal Cleanup section")
+	}
+	if !strings.Contains(summary, "FOCUS signals expired: 4") {
+		t.Error("summary should show 4 expired FOCUS signals")
 	}
 }
