@@ -465,6 +465,121 @@ func checkPhaseBuilt(phaseNum int) gateCheck {
 	}
 }
 
+// gateRecoveryTemplates maps gate names to recovery instructions.
+// Each template has 3 numbered steps. Use {phase} as a placeholder for the current phase number.
+var gateRecoveryTemplates = map[string]string{
+	"verification_loop": "Verification commands failed.\n" +
+		"1. Check the failed step output above for specific errors\n" +
+		"2. Fix the build, type, lint, or test failures\n" +
+		"3. Re-run `/ant-continue` to re-verify",
+	"spawn_gate": "Spawn gate failed: Prime Worker completed without specialists.\n" +
+		"1. Run `/ant-build {phase}` again\n" +
+		"2. Prime Worker must spawn at least 1 specialist (Builder or Watcher)\n" +
+		"3. Re-run `/ant-continue` after spawns complete",
+	"anti_pattern": "Anti-pattern gate failed: Critical patterns detected.\n" +
+		"1. Review the critical anti-patterns listed above\n" +
+		"2. Fix each critical finding (exposed secrets, SQL injection, crash patterns)\n" +
+		"3. Re-run `/ant-continue` to re-scan",
+	"complexity": "Complexity gate failed: Code exceeds maintainability thresholds.\n" +
+		"1. Review files exceeding 300 lines or 50-line functions\n" +
+		"2. Refactor to reduce complexity\n" +
+		"3. Re-run `/ant-continue` to re-check",
+	"gatekeeper": "Gatekeeper gate failed: Critical CVEs detected.\n" +
+		"1. Run `npm audit` (or equivalent) to see full details\n" +
+		"2. Fix or update vulnerable dependencies\n" +
+		"3. Re-run `/ant-continue` after resolving",
+	"auditor": "Auditor gate failed: Critical quality issues or score below 60.\n" +
+		"1. Review the critical findings listed above\n" +
+		"2. Fix each critical finding first, then address high-severity items\n" +
+		"3. Re-run `/ant-continue` to re-audit",
+	"tdd_evidence": "TDD gate failed: Claimed tests not found in codebase.\n" +
+		"1. Run `/ant-build {phase}` again\n" +
+		"2. Actually write test files (not just claim them)\n" +
+		"3. Tests must exist and be runnable",
+	"runtime": "Runtime gate failed: User reported application issues.\n" +
+		"1. Fix the reported runtime issues\n" +
+		"2. Test the application manually\n" +
+		"3. Re-run `/ant-continue` and confirm the app works",
+	"flags": "Flags gate failed: Unresolved blocker flags.\n" +
+		"1. Review each blocker flag listed above\n" +
+		"2. Fix the issues and resolve flags: `/ant-flags --resolve {id} \"resolution\"`\n" +
+		"3. Re-run `/ant-continue` after resolving all blockers",
+	"watcher_veto": "Watcher VETO: Quality score below 7 or critical issues found.\n" +
+		"1. Review the critical issues and quality score\n" +
+		"2. Fix issues, then run `/ant-build {phase}` again\n" +
+		"3. Watcher must re-verify with score >= 7 and no CRITICAL issues",
+	"medic": "Medic gate failed: Critical colony health issues.\n" +
+		"1. Review the critical health issues listed above\n" +
+		"2. Run `aether medic --fix` to attempt repairs\n" +
+		"3. Re-run `/ant-continue` after repairs",
+	"tests_pass": "Tests failed.\n" +
+		"1. Run `go test ./...` (or project test command) to see failures\n" +
+		"2. Fix the failing tests\n" +
+		"3. Re-run `/ant-continue` to re-verify",
+}
+
+// gateRecoveryTemplate returns the recovery instructions for a gate name.
+// Returns a fallback message if the gate name is not found.
+func gateRecoveryTemplate(name string) string {
+	if tmpl, ok := gateRecoveryTemplates[name]; ok {
+		return tmpl
+	}
+	return "No specific recovery instructions available for this gate."
+}
+
+// shouldSkipGate determines whether a gate should be skipped based on prior results.
+// Per D-10: tests_pass is never skipped regardless of prior results.
+// Per D-11: other passed gates are skipped on re-run.
+func shouldSkipGate(priorResults []colony.GateResultEntry, gateName string) bool {
+	if gateName == "tests_pass" {
+		return false
+	}
+	for _, r := range priorResults {
+		if r.Name == gateName && r.Passed {
+			return true
+		}
+	}
+	return false
+}
+
+// gateResultsWrite persists gate results to COLONY_STATE.json using atomic write.
+func gateResultsWrite(entries []colony.GateResultEntry) error {
+	var updated colony.ColonyState
+	return store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		updated.GateResults = entries
+		return nil
+	})
+}
+
+// gateResultsRead returns gate results from COLONY_STATE.json.
+// Returns nil if the file does not exist or cannot be read.
+func gateResultsRead() []colony.GateResultEntry {
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return nil
+	}
+	return state.GateResults
+}
+
+// formatSkipSummary produces a human-readable summary of prior gate results.
+// Returns a string like "Skipping 8 passed gates -- re-checking 3 failures".
+// Returns empty string if no prior results exist.
+func formatSkipSummary(priorResults []colony.GateResultEntry) string {
+	if len(priorResults) == 0 {
+		return ""
+	}
+	passed := 0
+	failed := 0
+	for _, r := range priorResults {
+		if r.Passed {
+			passed++
+		} else {
+			failed++
+		}
+	}
+	return fmt.Sprintf("Skipping %d passed gates -- re-checking %d failures", passed, failed)
+}
+
 func init() {
 	gateCheckCmd.Flags().String("action", "", "Action to check: task-complete or phase-advance (required)")
 	gateCheckCmd.Flags().String("task", "", "Task ID for task-complete action (e.g., 1.1)")

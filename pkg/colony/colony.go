@@ -143,6 +143,14 @@ type WorktreeEntry struct {
 	LastCommitAt string         `json:"last_commit_at,omitempty"`
 }
 
+// GateResultEntry records the outcome of a single gate check in a continue run.
+type GateResultEntry struct {
+	Name      string `json:"name"`
+	Passed    bool   `json:"passed"`
+	Timestamp string `json:"timestamp"`
+	Detail    string `json:"detail,omitempty"`
+}
+
 // ---------------------------------------------------------------------------
 // Top-level state
 // ---------------------------------------------------------------------------
@@ -174,7 +182,8 @@ type ColonyState struct {
 	Paused             bool            `json:"paused,omitempty"`
 	PausedAt           *string         `json:"paused_at,omitempty"`
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
-	RunID              *string         `json:"run_id,omitempty"`
+	RunID              *string            `json:"run_id,omitempty"`
+	GateResults        []GateResultEntry  `json:"gate_results,omitempty"`
 }
 
 // EffectiveScope returns the compatibility-safe colony scope.
