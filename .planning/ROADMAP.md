@@ -214,7 +214,7 @@ Plans:
   3. Seal expires all FOCUS pheromones while preserving REDIRECT pheromones (hard constraints survive)
   4. CROWNED-ANTHILL.md includes learnings count, promoted instincts count, expired signals, and flags resolved
   5. Running `/ant-init` provides deeper codebase analysis -- reads README, scans directory structure, detects test frameworks, checks CI configs, reads key source files
-**Plans**: TBD
+**Plans**: 3 plans
 
 ### Phase 63: Lifecycle Ceremony -- Status, Entomb, Resume
 **Goal**: Status shows runtime context, entomb extracts near-miss wisdom and cleans up properly, and resume detects stale state that could mislead
@@ -242,7 +242,13 @@ Plans:
   2. Running `/ant-chaos` auto-flags HIGH severity findings and suggests REDIRECT for recurring midden patterns
   3. Running `/ant-oracle` suggests persisting high-value research findings as pheromone signals or hive wisdom entries
   4. Running `/ant-patrol` detects stale pheromones, verifies data file integrity (valid JSON), and checks for interrupted builds
-**Plans**: TBD
+**Plans**: 3 plans
+  - **Wave 1** (Plans 01, 02, 03): All parallel -- discuss-analyze Go subcommand + wrappers (01) | chaos + oracle wrapper enhancements (02) | patrol-check Go subcommand + wrapper (03)
+
+Plans:
+- [ ] 64-01-PLAN.md -- discuss-analyze subcommand and discuss/council wrapper wiring (CERE-09)
+- [ ] 64-02-PLAN.md -- Chaos midden recurrence + oracle persistence wrapper enhancements (CERE-10, CERE-11)
+- [ ] 64-03-PLAN.md -- patrol-check subcommand with JSON validity, stale detection, interrupted builds (CERE-12)
 
 ### Phase 65: Idea Shelving
 **Goal**: Colonies have continuity -- promising ideas get shelved at seal, surface at init, recurring REDIRECTs become permanent guidance, and shelved ideas survive entomb
@@ -267,5 +273,5 @@ Plans:
 | 61. Porter Ant | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 62. Lifecycle Ceremony -- Seal and Init | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 63. Lifecycle Ceremony -- Status, Entomb, Resume | v1.10 | 3/3 | Complete    | 2026-04-27 |
-| 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 0/? | Not started | - |
+| 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 0/3 | Planned | - |
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |
