@@ -40,7 +40,8 @@ After the blocker check and before archive creation, the runtime automatically d
 After seal succeeds, report what the runtime did:
 
 - "Instincts promoted to local QUEEN.md: {count from output}"
-- If the runtime printed a SUGGESTION about hive-eligible instincts, relay that to the user: "Consider promoting eligible instincts globally with `aether queen-promote-instinct <id>`"
+- "Hive Brain promotions: {count promoted} instinct(s) promoted to Hive Brain"
+- If any hive promotions failed, relay the warning: "N hive promotion(s) failed (see log)"
 - "FOCUS signals expired: {count}"
 - If shelf candidates were detected: "Shelf candidates: {N} (X instincts, Y pheromones, Z flags, W redirects)"
 

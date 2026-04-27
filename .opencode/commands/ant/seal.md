@@ -20,13 +20,30 @@ If `aether seal` exits with an error (non-zero exit code), check whether the out
 - Suggest the user either resolves blockers first or re-runs with the --force flag: `/ant-seal --force`
 - The `--force` flag passes through to the runtime via `$ARGUMENTS`
 
+## Shelf Candidate Detection
+
+After the blocker check and before archive creation, the runtime automatically detects shelf candidates:
+
+1. Run `aether shelf-detect` to get candidate JSON
+2. If candidates exist, present them in a tick-to-approve checkbox list:
+   ```
+   [ ] {category}: {text} (auto-detected)
+   [ ] {category}: {text} (auto-detected)
+   ```
+3. Include a "Permanent guidance candidates" section for recurring REDIRECTs
+4. User ticks which ones to shelf; unticked items are discarded
+5. If any approved: run `aether shelf-add --text "..." --category ...` for each
+6. If no candidates exist, skip silently
+
 ## Post-Seal Report
 
 After seal succeeds, report what the runtime did:
 
 - "Instincts promoted to local QUEEN.md: {count from output}"
-- If the runtime printed a SUGGESTION about hive-eligible instincts, relay that to the user: "Consider promoting eligible instincts globally with `aether queen-promote-instinct <id>`"
+- "Hive Brain promotions: {count promoted} instinct(s) promoted to Hive Brain"
+- If any hive promotions failed, relay the warning: "N hive promotion(s) failed (see log)"
 - "FOCUS signals expired: {count}"
+- If shelf candidates were detected: "Shelf candidates: {N} (X instincts, Y pheromones, Z flags, W redirects)"
 
 ## Post-Seal: Porter Delivery
 
