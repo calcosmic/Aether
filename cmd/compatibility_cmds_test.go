@@ -1682,3 +1682,184 @@ func TestOracleDepthFlagSetsMaxIterations(t *testing.T) {
 		t.Errorf("Depth = %q, want %q", state.Depth, "Deep")
 	}
 }
+
+func TestExtractKeywords(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want int // expected keyword count (all unique, 3+ chars)
+	}{
+		{"empty", "", 0},
+		{"short words only", "an it is", 0},
+		{"mixed", "the authentication flow for the REST API", 3},
+		{"punctuation", "What is the best caching strategy?", 2},
+		{"duplicates", "database database database connection", 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractKeywords(tt.text)
+			if len(got) != tt.want {
+				t.Errorf("extractKeywords(%q) got %d keywords %v, want %d", tt.text, len(got), got, tt.want)
+			}
+		})
+	}
+	// Verify specific content for the mixed case
+	kw := extractKeywords("the authentication flow for the REST API")
+	kwSet := make(map[string]bool)
+	for _, k := range kw {
+		kwSet[k] = true
+	}
+	for _, expected := range []string{"the", "authentication", "flow", "for", "rest", "api"} {
+		if len(expected) >= 3 && !kwSet[expected] {
+			t.Errorf("extractKeywords missing expected keyword %q from set %v", expected, kwSet)
+		}
+	}
+}
+
+func TestScoreQuestionImpact(t *testing.T) {
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{
+			{ID: "Q1", Text: "authentication security best practices", Status: "open", Confidence: 30},
+			{ID: "Q2", Text: "database caching strategies", Status: "open", Confidence: 50},
+			{ID: "Q3", Text: "api rate limiting approaches", Status: "open", Confidence: 40},
+		},
+	}
+	state := oracleStateFile{
+		OpenGaps:       []string{"authentication token validation is unclear", "rate limiting needs investigation"},
+		Contradictions: []string{"conflicting information about database indexing"},
+		TargetConfidence: 85,
+		Iteration:       2,
+	}
+
+	// Q1 should score higher than Q2 because it has more gap overlap
+	scoreQ1 := scoreQuestionImpact(plan.Questions[0], plan, state)
+	scoreQ2 := scoreQuestionImpact(plan.Questions[1], plan, state)
+
+	if scoreQ1 <= scoreQ2 {
+		t.Errorf("Q1 (gap overlap) score %f should be > Q2 (no gap overlap) score %f", scoreQ1, scoreQ2)
+	}
+
+	// Q3 should score higher than Q2 because it has contradiction overlap ("rate limiting" matches)
+	scoreQ3 := scoreQuestionImpact(plan.Questions[2], plan, state)
+	if scoreQ3 <= scoreQ2 {
+		t.Errorf("Q3 (contradiction overlap) score %f should be > Q2 (no overlap) score %f", scoreQ3, scoreQ2)
+	}
+
+	// Q1 should score higher than Q3 because Q1 has both gap overlap AND lower confidence
+	if scoreQ1 <= scoreQ3 {
+		t.Errorf("Q1 (gap + confidence deficit) score %f should be > Q3 (contradiction only) score %f", scoreQ1, scoreQ3)
+	}
+
+	// Scores should be in [0, 1] range
+	if scoreQ1 < 0 || scoreQ1 > 1.1 { // allow slight over 1 for untouched boost
+		t.Errorf("scoreQ1 %f out of expected range [0, 1.1]", scoreQ1)
+	}
+}
+
+func TestSelectOracleQuestionSmartAllAnswered(t *testing.T) {
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{
+			{ID: "Q1", Text: "question one", Status: "answered", Confidence: 90},
+			{ID: "Q2", Text: "question two", Status: "answered", Confidence: 80},
+		},
+	}
+	state := oracleStateFile{Iteration: 3, TargetConfidence: 85}
+
+	result := selectOracleQuestionSmart(plan, state)
+	if !strings.Contains(result.Text, "All oracle questions have been answered") {
+		t.Errorf("all-answered fallback got Text=%q, want all-answered indicator", result.Text)
+	}
+}
+
+func TestSelectOracleQuestionSmartUntouchedFirst(t *testing.T) {
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{
+			{ID: "Q1", Text: "authentication security design", Status: "open", Confidence: 30, IterationsTouched: []int{1}},
+			{ID: "Q2", Text: "database connection pooling", Status: "open", Confidence: 30, IterationsTouched: []int{}},
+		},
+	}
+	state := oracleStateFile{Iteration: 2, TargetConfidence: 85}
+
+	result := selectOracleQuestionSmart(plan, state)
+	if result.ID != "Q2" {
+		t.Errorf("untouched question Q2 should be selected, got %q", result.ID)
+	}
+}
+
+func TestSelectOracleQuestionSmartGapOverlap(t *testing.T) {
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{
+			{ID: "Q1", Text: "authentication token validation flow", Status: "open", Confidence: 50},
+			{ID: "Q2", Text: "unrelated question about something else", Status: "open", Confidence: 50},
+		},
+	}
+	state := oracleStateFile{
+		OpenGaps:        []string{"authentication token validation is unclear", "auth token expiry needs research"},
+		TargetConfidence: 85,
+		Iteration:       1,
+	}
+
+	result := selectOracleQuestionSmart(plan, state)
+	if result.ID != "Q1" {
+		t.Errorf("question with more gap overlap Q1 should be selected, got %q", result.ID)
+	}
+}
+
+func TestSelectOracleQuestionSmartContradictionOverlap(t *testing.T) {
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{
+			{ID: "Q1", Text: "database indexing performance", Status: "open", Confidence: 50},
+			{ID: "Q2", Text: "caching strategies for apis", Status: "open", Confidence: 50},
+		},
+	}
+	state := oracleStateFile{
+		Contradictions:   []string{"conflicting database indexing advice found"},
+		TargetConfidence: 85,
+		Iteration:        1,
+	}
+
+	result := selectOracleQuestionSmart(plan, state)
+	if result.ID != "Q1" {
+		t.Errorf("question matching contradiction Q1 should be selected, got %q", result.ID)
+	}
+}
+
+func TestSelectOracleQuestionSmartSkipsAnswered(t *testing.T) {
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{
+			{ID: "Q1", Text: "already answered question", Status: "answered", Confidence: 95},
+			{ID: "Q2", Text: "still open question", Status: "open", Confidence: 20},
+		},
+	}
+	state := oracleStateFile{Iteration: 1, TargetConfidence: 85}
+
+	result := selectOracleQuestionSmart(plan, state)
+	if result.ID != "Q2" {
+		t.Errorf("answered question Q1 should be skipped, got %q", result.ID)
+	}
+}
+
+func TestSelectOracleQuestionSmartConfidenceDeficit(t *testing.T) {
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{
+			{ID: "Q1", Text: "high confidence question", Status: "open", Confidence: 80},
+			{ID: "Q2", Text: "low confidence question", Status: "open", Confidence: 20},
+		},
+	}
+	state := oracleStateFile{TargetConfidence: 85, Iteration: 1}
+
+	result := selectOracleQuestionSmart(plan, state)
+	if result.ID != "Q2" {
+		t.Errorf("low confidence Q2 (deficit=65) should beat high confidence Q1 (deficit=5), got %q", result.ID)
+	}
+}
+
+func TestSelectOracleQuestionSmartEmptyPlan(t *testing.T) {
+	plan := oraclePlanFile{Questions: []oracleQuestion{}}
+	state := oracleStateFile{Iteration: 1}
+
+	result := selectOracleQuestionSmart(plan, state)
+	if result.ID != "iteration-1" {
+		t.Errorf("empty plan should return fallback question, got ID=%q", result.ID)
+	}
+}
