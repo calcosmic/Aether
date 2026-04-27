@@ -22,3 +22,17 @@ After `aether seal` succeeds, promote high-confidence instincts to the local QUE
    - Run `aether queen-promote-instinct --id <instinct_id>` to write it to the local QUEEN.md.
 3. If no instincts meet the threshold, skip silently -- this step is non-blocking.
 4. Report how many instincts were promoted in the final seal summary.
+
+## Post-Seal: Porter Delivery
+
+The colony is sealed. Now deliver the work to the outside world.
+
+1. Run `AETHER_OUTPUT_MODE=visual aether porter check` to validate pipeline readiness.
+2. Review the check results. If all checks pass, proceed to step 3.
+3. Ask the user which delivery actions to perform:
+   - **Publish to hub**: `aether publish` (builds binary, syncs companion files, verifies version)
+   - **Push to git remote**: `git push origin HEAD` (push current branch to remote)
+   - **Create GitHub release**: `goreleaser release --clean` (creates release with binary artifacts)
+   - **Skip for now**: No delivery actions, exit gracefully
+4. Execute each selected action sequentially (stops on first failure, user decides retry/skip/abort).
+5. Report clear success/failure for each completed action.

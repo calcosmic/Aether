@@ -309,3 +309,51 @@ func checkChangelogCompleteness() integrityCheck {
 		RecoveryCommand: "Add changelog entry for current version",
 	}
 }
+
+// buildPorterReadinessSummary creates a short post-seal readiness summary
+// showing version alignment and git status for all platforms including Codex.
+func buildPorterReadinessSummary() string {
+	sourceVersion := resolveSourceVersion()
+	binaryVersion := resolveVersion()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	channel := resolveRuntimeChannel()
+	hubDir := resolveHubPathForHome(homeDir, channel)
+	hubVersion := readHubVersionAtPath(hubDir)
+
+	// Return empty if not in a source repo context
+	if sourceVersion == "unknown" && binaryVersion == "unknown" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("  Source version: %s\n", formatVersionStatus(sourceVersion, binaryVersion)))
+	b.WriteString(fmt.Sprintf("  Binary version: %s\n", formatVersionStatus(binaryVersion, sourceVersion)))
+	b.WriteString(fmt.Sprintf("  Hub version:   %s\n", formatVersionStatus(hubVersion, sourceVersion)))
+
+	gitCheck := checkGitStatus()
+	if gitCheck.Status == "pass" {
+		b.WriteString("  Git status:    clean\n")
+	} else if gitCheck.Status == "fail" {
+		b.WriteString(fmt.Sprintf("  Git status:    %s\n", gitCheck.Message))
+	}
+
+	return b.String()
+}
+
+// formatVersionStatus returns the version with a colored indicator:
+// green checkmark if it matches the reference, red X if not.
+func formatVersionStatus(version, reference string) string {
+	if version == "" || version == "unknown" {
+		return "unknown"
+	}
+	if reference != "" && reference != "unknown" && version == reference {
+		if shouldUseANSIColors() {
+			return "\x1b[32m" + version + " \u2713\x1b[0m"
+		}
+		return version + " \u2713"
+	}
+	return version
+}
