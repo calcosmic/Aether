@@ -33,6 +33,7 @@ type PheromoneSignal struct {
 	ArchivedAt         *string         `json:"archived_at,omitempty"`
 	Tags               []PheromoneTag  `json:"tags,omitempty"`
 	Scope              *PheromoneScope `json:"scope,omitempty"`
+	SourcePhase        *int            `json:"source_phase,omitempty"` // Phase when signal was created
 }
 
 // PheromoneFile represents the top-level pheromones.json file.

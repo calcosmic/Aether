@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -582,6 +583,94 @@ func TestPheromoneWrite_TTLInvalidFormat(t *testing.T) {
 	output := strings.TrimSpace(buf.String())
 	if !strings.Contains(output, `"ok":false`) {
 		t.Errorf("expected ok:false for invalid TTL format, got: %s", output)
+	}
+}
+
+func TestPheromoneWriteSourcePhase(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	// Create colony state at phase 5
+	goal := "Test source phase"
+	phase := 5
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: phase,
+		Plan:         colony.Plan{},
+	}
+	stateData, _ := json.MarshalIndent(state, "", "  ")
+	os.WriteFile(dataDir+"/COLONY_STATE.json", stateData, 0644)
+
+	rootCmd.SetArgs([]string{"pheromone-write", "--type", "FOCUS", "--content", "focus on tests"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("pheromone-write returned error: %v", err)
+	}
+
+	// Load saved pheromones and check SourcePhase
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		t.Fatalf("failed to load pheromones: %v", err)
+	}
+	if len(pf.Signals) != 1 {
+		t.Fatalf("expected 1 signal, got %d", len(pf.Signals))
+	}
+	sig := pf.Signals[0]
+	if sig.SourcePhase == nil {
+		t.Fatalf("expected SourcePhase to be set, got nil")
+	}
+	if *sig.SourcePhase != 5 {
+		t.Errorf("expected SourcePhase=5, got %d", *sig.SourcePhase)
+	}
+}
+
+func TestPheromoneWriteSourcePhaseNilWhenNoColony(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+	s, _ := storage.NewStore(dataDir)
+	store = s
+
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+
+	rootCmd.SetArgs([]string{"pheromone-write", "--type", "FOCUS", "--content", "focus on tests"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("pheromone-write returned error: %v", err)
+	}
+
+	// Load saved pheromones and check SourcePhase is nil (no colony state)
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		t.Fatalf("failed to load pheromones: %v", err)
+	}
+	if len(pf.Signals) != 1 {
+		t.Fatalf("expected 1 signal, got %d", len(pf.Signals))
+	}
+	sig := pf.Signals[0]
+	if sig.SourcePhase != nil {
+		t.Errorf("expected SourcePhase to be nil when no colony state, got %d", *sig.SourcePhase)
 	}
 }
 

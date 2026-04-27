@@ -67,6 +67,12 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 	fmt.Fprintf(&b, "Goal: %s\n\n", goal)
 
+	// Version line
+	renderVersionLine(&b)
+
+	// Signal summary
+	renderSignalSummaryLine(&b, s)
+
 	// Progress
 	totalPhases := len(state.Plan.Phases)
 	completedPhases := 0
@@ -711,6 +717,58 @@ func renderRecentInstincts(b *strings.Builder, instincts []colony.Instinct) {
 		}
 		fmt.Fprintf(b, "   [%.2f] %s: %s\n", inst.Confidence, domain, inst.Action)
 	}
+}
+
+// renderVersionLine writes the runtime version line to the dashboard.
+func renderVersionLine(b *strings.Builder) {
+	binaryVersion := resolveVersion()
+	hubVersion := readInstalledHubVersion()
+	if hubVersion != "" {
+		if binaryVersion != hubVersion {
+			fmt.Fprintf(b, "Runtime: %s | Hub: %s  MISMATCH\n\n", binaryVersion, hubVersion)
+		} else {
+			fmt.Fprintf(b, "Runtime: %s | Hub: %s\n\n", binaryVersion, hubVersion)
+		}
+	} else {
+		fmt.Fprintf(b, "Runtime: %s\n\n", binaryVersion)
+	}
+}
+
+// renderSignalSummaryLine writes a one-line signal summary with expiry awareness.
+func renderSignalSummaryLine(b *strings.Builder, s *storage.Store) {
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		return // no pheromones -- skip silently
+	}
+	focusCount, redirectCount, feedbackCount := 0, 0, 0
+	for _, sig := range pf.Signals {
+		if !sig.Active {
+			continue
+		}
+		switch sig.Type {
+		case "FOCUS":
+			focusCount++
+		case "REDIRECT":
+			redirectCount++
+		case "FEEDBACK":
+			feedbackCount++
+		}
+	}
+	total := focusCount + redirectCount + feedbackCount
+	if total == 0 {
+		return
+	}
+	var parts []string
+	if focusCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d FOCUS expire at seal", focusCount))
+	}
+	if redirectCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d REDIRECT persists", redirectCount))
+	}
+	if feedbackCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d FEEDBACK", feedbackCount))
+	}
+	fmt.Fprintf(b, "Signals: %d active (%s)\n", total, strings.Join(parts, ", "))
 }
 
 // extractContentText extracts the text field from a json.RawMessage content.
