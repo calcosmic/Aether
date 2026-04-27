@@ -105,19 +105,19 @@ var governanceDetectors = []struct {
 
 // extendedSkipDirs lists directories to skip during recursive walk.
 var extendedSkipDirs = map[string]bool{
-	".git":       true,
+	".git":        true,
 	"node_modules": true,
-	".next":      true,
-	"dist":       true,
-	"build":      true,
-	"vendor":     true,
-	".venv":      true,
-	"venv":       true,
-	"coverage":   true,
-	".aether":    true,
-	".claude":    true,
-	".opencode":  true,
-	".codex":     true,
+	".next":       true,
+	"dist":        true,
+	"build":       true,
+	"vendor":      true,
+	".venv":       true,
+	"venv":        true,
+	"coverage":    true,
+	".aether":     true,
+	".claude":     true,
+	".opencode":   true,
+	".codex":      true,
 	"__pycache__": true,
 }
 
@@ -227,6 +227,197 @@ func detectPriorColonies(target string) map[string]interface{} {
 		"count": len(names),
 		"names": names,
 	}
+}
+
+// hasFile checks whether a file exists at target/name.
+func hasFile(target, name string) bool {
+	_, err := os.Stat(filepath.Join(target, name))
+	return err == nil
+}
+
+// fileContains checks whether a file at target/name contains the given substring.
+func fileContains(target, name, substr string) bool {
+	data, err := os.ReadFile(filepath.Join(target, name))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), substr)
+}
+
+// generatePheromoneSuggestions applies 10 deterministic patterns to produce pheromone suggestions.
+func generatePheromoneSuggestions(target string, governance governanceInfo) []pheromoneSuggestion {
+	var suggestions []pheromoneSuggestion
+
+	// 1. .env or .env.local exists -> REDIRECT about secrets
+	if hasFile(target, ".env") || hasFile(target, ".env.local") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "REDIRECT",
+			Content: "never commit secrets or .env files to version control",
+			Reason:  ".env file detected in project root",
+		})
+	}
+
+	// 2. .env exists but .gitignore doesn't mention .env -> REDIRECT about .gitignore
+	if hasFile(target, ".env") && !fileContains(target, ".gitignore", ".env") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "REDIRECT",
+			Content: "add .env to .gitignore to prevent secret leaks",
+			Reason:  ".env exists without .gitignore entry",
+		})
+	}
+
+	// 3. No CI config -> FOCUS about CI/CD
+	hasCI := len(governance.CIConfigs) > 0
+	if !hasCI {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "consider adding CI/CD pipeline for automated testing",
+			Reason:  "no CI configuration detected",
+		})
+	}
+
+	// 4. No LICENSE file -> FEEDBACK
+	if !hasFile(target, "LICENSE") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "consider adding a LICENSE file",
+			Reason:  "no LICENSE file detected",
+		})
+	}
+
+	// 5. No README.md -> FEEDBACK
+	if !hasFile(target, "README.md") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "consider adding a README.md for project documentation",
+			Reason:  "no README.md detected",
+		})
+	}
+
+	// 6. package.json without lockfile -> FEEDBACK
+	if hasFile(target, "package.json") && !hasFile(target, "package-lock.json") && !hasFile(target, "yarn.lock") && !hasFile(target, "pnpm-lock.yaml") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "consider locking dependency versions with a lockfile",
+			Reason:  "package.json exists without lockfile",
+		})
+	}
+
+	// 7. go.mod without go.sum -> REDIRECT
+	if hasFile(target, "go.mod") && !hasFile(target, "go.sum") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "REDIRECT",
+			Content: "go.sum is required for reproducible Go builds",
+			Reason:  "go.mod exists without go.sum",
+		})
+	}
+
+	// 8. Dockerfile without .dockerignore -> FOCUS
+	if hasFile(target, "Dockerfile") && !hasFile(target, ".dockerignore") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "add .dockerignore to reduce Docker build context size",
+			Reason:  "Dockerfile exists without .dockerignore",
+		})
+	}
+
+	// 9. Test files detected -> FOCUS about CI testing
+	hasTests := len(governance.TestFrameworks) > 0 || hasFile(target, "test") || hasFile(target, "tests") || hasFile(target, "__tests__")
+	if !hasTests {
+		// Check for Go test files
+		entries, err := os.ReadDir(target)
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), "_test.go") {
+					hasTests = true
+					break
+				}
+			}
+		}
+	}
+	if hasTests {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "test directory detected -- ensure tests are part of CI pipeline",
+			Reason:  "test infrastructure detected in project",
+		})
+	}
+
+	// 10. No formatter config -> FEEDBACK
+	hasFormatter := len(governance.Formatters) > 0 || hasFile(target, ".editorconfig")
+	if !hasFormatter {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "consider adding code formatting configuration for consistency",
+			Reason:  "no formatter or editorconfig detected",
+		})
+	}
+
+	return suggestions
+}
+
+// generateCharter produces charter data from scan results.
+func generateCharter(goal, detected string, governance governanceInfo, readmeSummary string, gitHistory gitHistoryInfo) charterData {
+	ch := charterData{}
+
+	// Intent: use the goal string directly
+	ch.Intent = goal
+	if ch.Intent == "" {
+		ch.Intent = "Build and ship quality software"
+	}
+
+	// Vision: combine detected type with governance tools
+	var govTools []string
+	govTools = append(govTools, governance.Linters...)
+	govTools = append(govTools, governance.Formatters...)
+	govTools = append(govTools, governance.CIConfigs...)
+	if len(govTools) > 0 {
+		ch.Vision = "A " + detected + " project with " + joinWithCommaAnd(govTools)
+	} else {
+		ch.Vision = "A " + detected + " project"
+	}
+
+	// Governance: list all detected categories
+	var govParts []string
+	if len(governance.Linters) > 0 {
+		govParts = append(govParts, "Linting: "+strings.Join(governance.Linters, ", "))
+	}
+	if len(governance.CIConfigs) > 0 {
+		govParts = append(govParts, "CI: "+strings.Join(governance.CIConfigs, ", "))
+	}
+	if len(governance.TestFrameworks) > 0 {
+		govParts = append(govParts, "Testing: "+strings.Join(governance.TestFrameworks, ", "))
+	}
+	if len(governance.Formatters) > 0 {
+		govParts = append(govParts, "Formatting: "+strings.Join(governance.Formatters, ", "))
+	}
+	if len(governance.BuildTools) > 0 {
+		govParts = append(govParts, "Build: "+strings.Join(governance.BuildTools, ", "))
+	}
+	if len(govParts) > 0 {
+		ch.Governance = strings.Join(govParts, ". ")
+	} else {
+		ch.Governance = "No formal governance detected -- colony should establish conventions"
+	}
+
+	// Goals
+	ch.Goals = "Goal: " + goal + ". Focus on quality, maintainability, and shipping working software."
+
+	return ch
+}
+
+// joinWithCommaAnd joins items with ", " and " and " before the last.
+func joinWithCommaAnd(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	if len(items) == 1 {
+		return items[0]
+	}
+	if len(items) == 2 {
+		return items[0] + " and " + items[1]
+	}
+	return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
 }
 
 var initResearchCmd = &cobra.Command{
@@ -350,6 +541,8 @@ var initResearchCmd = &cobra.Command{
 		governance := detectGovernance(target)
 		gitHistory := analyzeGitHistory(target)
 		priorColonies := detectPriorColonies(target)
+		pheromoneSuggestions := generatePheromoneSuggestions(target, governance)
+		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory)
 
 		complexity := complexityMetrics{
 			TotalFiles:   fileCount,
@@ -358,18 +551,20 @@ var initResearchCmd = &cobra.Command{
 		}
 
 		outputOK(map[string]interface{}{
-			"detected_type":  detected,
-			"languages":      languages,
-			"frameworks":     frameworks,
-			"goal":           goal,
-			"top_level_dirs": topLevelDirs,
-			"file_count":     fileCount,
-			"is_git_repo":    isGitRepo,
-			"readme_summary": readmeSummary,
-			"git_history":    gitHistory,
-			"governance":     governance,
-			"complexity":     complexity,
-			"prior_colonies": priorColonies,
+			"detected_type":         detected,
+			"languages":             languages,
+			"frameworks":            frameworks,
+			"goal":                  goal,
+			"top_level_dirs":        topLevelDirs,
+			"file_count":            fileCount,
+			"is_git_repo":           isGitRepo,
+			"readme_summary":        readmeSummary,
+			"git_history":           gitHistory,
+			"governance":            governance,
+			"complexity":            complexity,
+			"prior_colonies":        priorColonies,
+			"pheromone_suggestions": pheromoneSuggestions,
+			"charter":               charter,
 		})
 		return nil
 	},
