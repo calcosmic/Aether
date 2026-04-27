@@ -296,7 +296,7 @@ var sealCmd = &cobra.Command{
 						promotedInstinctNames = append(promotedInstinctNames, entry.ID)
 					}
 				}
-				if entry.Confidence >= 0.8 {
+				if entry.Confidence >= 0.8 && entry.Action != "" {
 					hiveEligibleCount++
 					// Hive Brain promotion (non-blocking per CERE-02)
 					domain := entry.Domain
