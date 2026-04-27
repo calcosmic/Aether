@@ -318,6 +318,12 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
+		// Shelf candidate detection (before archiving)
+		candidates, _ := detectShelfCandidates(state, store)
+		if len(candidates) > 0 {
+			fmt.Fprintln(stdout, shelfCandidateSummary(candidates))
+		}
+
 		// Scan for high-severity open findings before building summary
 		warnings := scanHighSeverityOpen(store)
 
@@ -332,6 +338,7 @@ var sealCmd = &cobra.Command{
 			HiveEligible:      hiveEligibleCount,
 			SignalsExpired:    expiredFOCUSCount,
 			FlagsResolved:     countResolvedFlags(store),
+			ShelfCandidates:   candidates,
 		}
 
 		summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -758,6 +765,7 @@ type sealEnrichment struct {
 	HiveEligible      int
 	SignalsExpired    int
 	FlagsResolved     int
+	ShelfCandidates   []colony.ShelfEntry
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -799,6 +807,18 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 		b.WriteString("\n### Promoted Instincts\n")
 		for _, id := range enrichment.InstinctsPromoted {
 			b.WriteString(fmt.Sprintf("- %s\n", id))
+		}
+	}
+
+	// Shelf candidates section
+	if len(enrichment.ShelfCandidates) > 0 {
+		b.WriteString(fmt.Sprintf("\n## Shelf Candidates\n%d shelf candidate(s) detected:\n", len(enrichment.ShelfCandidates)))
+		for _, c := range enrichment.ShelfCandidates {
+			auto := ""
+			if c.AutoDetected {
+				auto = " (auto-detected)"
+			}
+			b.WriteString(fmt.Sprintf("- [%s] %s%s\n", c.Category, c.Text, auto))
 		}
 	}
 
