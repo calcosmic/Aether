@@ -125,7 +125,7 @@
 ### Gap Closure Phases (from v1.10 audit)
 
 - [x] **Phase 66: Continue Flow Fix** - Watcher timeout loops, token burn, stuck-in-continue bug (HIGHEST PRIORITY) (completed 2026-04-27)
-- [ ] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal, fix CERE-01 through CERE-05, OpenCode parity
+- [ ] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal (CERE-02, CERE-04), OpenCode parity, close Phase 62 verification gaps
 - [ ] **Phase 68: Gate Recovery Verification** - Verify Plan 01 subcommands, create Phase 59 VERIFICATION.md, runtime-playbook integration
 - [ ] **Phase 69: Idea Shelving Verification** - Verify SHELF-01 through SHELF-05, create Phase 65 VERIFICATION.md, execute validation wave 0
 
@@ -302,18 +302,17 @@ Plans:
 ### Phase 67: Seal Hive Brain Wiring
 **Goal**: Seal ceremony fully wires into Hive Brain — high-confidence instincts promote automatically, not just to local QUEEN.md
 **Depends on**: Phase 57 (QUEE-06/07 auto-promotion wiring), Phase 65 (shelf detection integration)
-**Requirements**: CERE-01, CERE-02, CERE-03, CERE-04, CERE-05
+**Requirements**: CERE-02, CERE-04 (CERE-01, CERE-03, CERE-05 already delivered in Phase 62)
 **Success Criteria** (what must be TRUE):
   1. Running `/ant-seal` calls hive-promote for instincts with confidence >= 0.8 (non-blocking — failures logged)
-  2. Seal blocks on active blocker-severity flags before running any shelf or promotion logic
-  3. OpenCode seal.md matches Claude seal.md — no parity drift
-  4. Porter readiness summary only prints after seal actually completes, not when blocked
-  5. Phase 62 VERIFICATION.md updated to reflect all gaps closed
+  2. OpenCode seal.md matches Claude seal.md — no parity drift
+  3. CROWNED-ANTHILL.md Colony Statistics table includes Hive-promoted count (building on Phase 62 metrics)
+  4. Phase 62 VERIFICATION.md updated to reflect all gaps closed
 **Plans**: 2 plans
 
 Plans:
-- [ ] 67-01-PLAN.md -- Extract promoteToHive, wire into sealCmd, update enrichment (CERE-01, CERE-02, CERE-04)
-- [ ] 67-02-PLAN.md -- Fix wrapper parity, update Phase 62 VERIFICATION.md (CERE-03, CERE-05)
+- [ ] 67-01-PLAN.md -- Extract promoteToHive, wire into sealCmd, update enrichment (CERE-02, CERE-04)
+- [ ] 67-02-PLAN.md -- Fix wrapper parity, update Phase 62 VERIFICATION.md (CERE-04 verification closure)
 
 
 ### Phase 68: Gate Recovery Verification
