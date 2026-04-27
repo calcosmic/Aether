@@ -2,6 +2,15 @@
 
 **The Iron Law:** No phase advancement without worker spawning for non-trivial phases.
 
+**Skip check:** Run using the Bash tool with description "Checking if spawn gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "spawn_gate" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Spawn Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.7.
+
 Read `.aether/data/spawn-tree.txt` to count spawns for this phase.
 
 Run using the Bash tool with description "Verifying spawn requirements...": `spawn_count=$(grep -c "spawned" .aether/data/spawn-tree.txt 2>/dev/null || echo "0") && watcher_count=$(grep -c "watcher" .aether/data/spawn-tree.txt 2>/dev/null || echo "0") && echo "{\"spawn_count\": $spawn_count, \"watcher_count\": $watcher_count}"`
@@ -34,6 +43,7 @@ Log the violation:
 ```bash
 aether activity-log --command "BLOCKED" --details "colony: Spawn gate failed: {task_count} tasks, 0 spawns"
 aether error-flag-pattern --name "no-spawn-violation" --description "Prime Worker completed phase without spawning specialists" --severity "critical"
+aether gate-results-write --name "spawn_gate" --passed false --detail "No workers spawned for {task_count} tasks"
 ```
 
 **HARD REJECTION - If watcher_count == 0 (no testing separation):**
@@ -67,9 +77,23 @@ The phase will NOT advance until a Watcher validates.
 ✅🐜 SPAWN GATE PASSED — {spawn_count} workers | {watcher_count} watchers
 ```
 
+Write gate result:
+```bash
+aether gate-results-write --name "spawn_gate" --passed true --detail "{spawn_count} workers, {watcher_count} watchers"
+```
+
 Continue to Step 1.7.
 
 ### Step 1.7: Anti-Pattern Gate
+
+**Skip check:** Run using the Bash tool with description "Checking if anti-pattern gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "anti_pattern" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Anti-Pattern Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.7.1.
 
 Scan all modified/created files for known anti-patterns. This catches recurring bugs before they reach production.
 
@@ -116,11 +140,30 @@ Critical anti-patterns detected:
 Run /ant-build {phase} again after fixing.
 ```
 
+Write gate result:
+```bash
+aether gate-results-write --name "anti_pattern" --passed false --detail "Critical anti-patterns detected: {count}"
+```
+
 Do NOT proceed to Step 2.
 
-If no CRITICAL issues, continue to Step 1.7.1.
+If no CRITICAL issues, write gate result:
+```bash
+aether gate-results-write --name "anti_pattern" --passed true --detail "No critical anti-patterns"
+```
+
+Continue to Step 1.7.1.
 
 ### Step 1.7.1: Proactive Refactoring Gate (Conditional)
+
+**Skip check:** Run using the Bash tool with description "Checking if complexity gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "complexity" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Complexity Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.8.
 
 **Complexity-based refactoring — runs when code exceeds maintainability thresholds.**
 
@@ -175,6 +218,10 @@ If no CRITICAL issues, continue to Step 1.7.1.
 3. **If complexity thresholds NOT exceeded:**
    ```
    🔄🐜 Weaver: Complexity thresholds not exceeded — skipping proactive refactoring
+   ```
+   Write gate result:
+   ```bash
+   aether gate-results-write --name "complexity" --passed true --detail "Complexity thresholds not exceeded"
    ```
    Continue to Step 1.8.
 
@@ -283,9 +330,23 @@ If no CRITICAL issues, continue to Step 1.7.1.
 6. **NON-BLOCKING continuation:**
    The Weaver step is NON-BLOCKING — continue to Step 1.8 regardless of refactoring results.
 
+   Write gate result:
+   ```bash
+   aether gate-results-write --name "complexity" --passed true --detail "Weaver {weaver_status}: {files_refactored} files refactored"
+   ```
+
 Continue to Step 1.8.
 
 ### Step 1.8: Gatekeeper Security Gate (Conditional)
+
+**Skip check:** Run using the Bash tool with description "Checking if gatekeeper gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "gatekeeper" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Gatekeeper Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.9.
 
 **Supply chain security audit — runs only when package.json exists.**
 
@@ -371,6 +432,10 @@ Critical security vulnerabilities detected: {critical_count}
 
 The phase will NOT advance with critical CVEs.
 ```
+Write gate result:
+```bash
+aether gate-results-write --name "gatekeeper" --passed false --detail "{critical_count} critical CVEs detected"
+```
 **CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
 
 - **If `security.high > 0`:**
@@ -381,15 +446,32 @@ Security warnings logged to midden for later review.
 Proceeding with caution...
 ```
 Run using the Bash tool with description "Logging high-severity warnings...": `aether midden-write --category "security" --message "High CVEs found: $high_count" --source "gatekeeper"`
+Write gate result:
+```bash
+aether gate-results-write --name "gatekeeper" --passed true --detail "No critical CVEs, {high_count} high-severity warnings"
+```
 Continue to Step 1.9.
 
 - **If clean (no critical or high):**
 ```
 ✅📦🐜 Gatekeeper: No critical security issues found
 ```
+Write gate result:
+```bash
+aether gate-results-write --name "gatekeeper" --passed true --detail "No critical or high security issues"
+```
 Continue to Step 1.9.
 
 ### Step 1.9: Auditor Quality Gate (MANDATORY)
+
+**Skip check:** Run using the Bash tool with description "Checking if auditor gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "auditor" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Auditor Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.10.
 
 **Code quality audit — runs on every `/ant-continue` for consistent coverage.**
 
@@ -480,6 +562,10 @@ Critical Findings:
 The phase will NOT advance with critical quality issues.
 ```
 Run using the Bash tool with description "Logging critical quality block...": `aether error-flag-pattern --name "auditor-critical-findings" --description "$critical_count critical quality issues found" --severity "critical"`
+Write gate result:
+```bash
+aether gate-results-write --name "auditor" --passed false --detail "{critical_count} critical quality issues, score {overall_score}/100"
+```
 **CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `overall_score < 60`:**
@@ -501,6 +587,10 @@ Code quality score below threshold: {overall_score}/100 (threshold: 60)
 The phase will NOT advance with quality score below 60.
 ```
 Run using the Bash tool with description "Logging quality score block...": `aether error-flag-pattern --name "auditor-quality-score" --description "Score $overall_score below threshold 60" --severity "critical"`
+Write gate result:
+```bash
+aether gate-results-write --name "auditor" --passed false --detail "Quality score {overall_score}/100 below threshold 60"
+```
 **CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
 
 - **Else if `findings.high > 0`:**
@@ -514,15 +604,32 @@ Quality warnings logged to midden for later review.
 Proceeding with caution...
 ```
 Run using the Bash tool with description "Logging high-quality warnings...": `aether midden-write --category "quality" --message "High severity issues: $high_count (score: $overall_score)" --source "auditor"`
+Write gate result:
+```bash
+aether gate-results-write --name "auditor" --passed true --detail "Score {overall_score}/100, {high_count} high-severity warnings"
+```
 Continue to Step 1.10.
 
 - **If clean (score >= 60, no critical):**
 ```
 ✅👥🐜 Auditor: Quality score {overall_score}/100 — PASSED
 ```
+Write gate result:
+```bash
+aether gate-results-write --name "auditor" --passed true --detail "Score {overall_score}/100, no critical issues"
+```
 Continue to Step 1.10.
 
 ### Step 1.10: TDD Evidence Gate (MANDATORY)
+
+**Skip check:** Run using the Bash tool with description "Checking if TDD gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "tdd_evidence" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ TDD Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.11.
 
 **The Iron Law:** No TDD claims without actual test files.
 
@@ -557,13 +664,28 @@ The phase will NOT advance with fabricated metrics.
 **CRITICAL:** Do NOT proceed. Log the violation:
 ```bash
 aether error-flag-pattern --name "fabricated-tdd" --description "Prime Worker reported TDD metrics without creating test files" --severity "critical"
+aether gate-results-write --name "tdd_evidence" --passed false --detail "Claimed {claimed_count} tests but no test files found"
 ```
 
 **If tests_added == 0 or test files exist matching claims:**
 
+Write gate result:
+```bash
+aether gate-results-write --name "tdd_evidence" --passed true --detail "TDD evidence verified"
+```
+
 Continue to Step 1.11.
 
 ### Step 1.11: Runtime Verification Gate (MANDATORY)
+
+**Skip check:** Run using the Bash tool with description "Checking if runtime gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "runtime" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Runtime Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.12.
 
 **The Iron Law:** Build passing ≠ App working.
 
@@ -591,6 +713,10 @@ Options:
 ```
 ✅🐜 RUNTIME VERIFIED — User confirmed app works.
 ```
+Write gate result:
+```bash
+aether gate-results-write --name "runtime" --passed true --detail "User confirmed app works at runtime"
+```
 Continue to Step 1.12.
 
 **If "Yes, tested but has issues":**
@@ -603,6 +729,7 @@ Please describe the issues so they can be addressed:
 Use AskUserQuestion to get issue details. Log to errors.records:
 ```bash
 aether error-add --category "runtime" --severity "critical" --description "{user_description}" --phase {phase}
+aether gate-results-write --name "runtime" --passed false --detail "User reported runtime issues: {user_description}"
 ```
 
 Do NOT proceed to Step 2.
@@ -630,9 +757,23 @@ User indicated no runnable app for this phase.
 Proceeding to phase advancement.
 ```
 
+Write gate result:
+```bash
+aether gate-results-write --name "runtime" --passed true --detail "Skipped -- no runnable app in this phase"
+```
+
 Continue to Step 1.12.
 
 ### Step 1.12: Flags Gate (MANDATORY)
+
+**Skip check:** Run using the Bash tool with description "Checking if flags gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "flags" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Flags Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.13.
 
 **The Iron Law:** No phase advancement with unresolved blockers.
 
@@ -664,6 +805,11 @@ Parse result for `blockers`, `issues`, and `notes` counts.
 
 **CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
 
+Write gate result:
+```bash
+aether gate-results-write --name "flags" --passed false --detail "{blockers} unresolved blocker flags"
+```
+
 **If blockers == 0 but issues > 0:**
 
 ```
@@ -682,13 +828,25 @@ Continue to Step 2.
 ✅🐜 FLAGS GATE PASSED — No blockers.
 ```
 
+Write gate result:
+```bash
+aether gate-results-write --name "flags" --passed true --detail "No blocker flags"
+```
+
 Continue to Step 1.13.
 
 ### Step 1.13: Watcher Veto Gate (MANDATORY)
 
-**The Iron Law:** Watcher has final say. If Watcher scores below 7 or reports any CRITICAL findings, all changes are rolled back and phase advancement is blocked.
+**The Iron Law:** Watcher has final say. If Watcher scores below 7 or reports any CRITICAL findings, the user chooses how to proceed.
 
-This gate enforces the Watcher's quality authority by stashing uncommitted work and creating a blocker flag when the Watcher's assessment is negative.
+**Skip check:** Run using the Bash tool with description "Checking if watcher veto gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "watcher_veto" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Watcher Veto Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
 
 1. **Retrieve Watcher results** from the most recent build:
    Run using the Bash tool with description "Retrieving Watcher results...":
@@ -703,12 +861,17 @@ This gate enforces the Watcher's quality authority by stashing uncommitted work 
    ```
    ⏭️👁️🐜 Watcher Veto: No Watcher results found — skipping veto check
    ```
-   Continue to Step 2.
+   Write gate result:
+   ```bash
+   aether gate-results-write --name "watcher_veto" --passed true --detail "No Watcher results found -- skipped"
+   ```
+   Continue to Step 1.14.
 
 2. **Evaluate veto conditions:**
 
    **If `quality_score < 7` OR `critical_count > 0`:**
 
+   a. **Show veto reason FIRST:**
    ```
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    👁️🐜 W A T C H E R   V E T O
@@ -718,38 +881,76 @@ This gate enforces the Watcher's quality authority by stashing uncommitted work 
 
    Quality Score: {quality_score}/10 (minimum: 7)
    Critical Issues: {critical_count}
+
+   Critical Issues:
+   {list each critical issue with description}
    ```
 
-   a. **Stash all uncommitted changes:**
-   Run using the Bash tool with description "Stashing changes due to Watcher veto...":
-   ```bash
-   git stash push -m "watcher-veto-phase-$current_phase" 2>&1
-   ```
+   b. **Present three choices via AskUserQuestion:**
 
-   b. **Create ROLLBACK_VETO blocker flag:**
-   Run using the Bash tool with description "Creating ROLLBACK_VETO blocker flag...":
-   ```bash
-   aether flag-create "WATCHER VETO: Quality score $quality_score (minimum 7), $critical_count critical issue(s). Changes stashed." --type blocker --phase "$current_phase"
-   ```
+   Use AskUserQuestion:
 
-   c. **Log the veto to midden:**
-   Run using the Bash tool with description "Logging Watcher veto to midden...": `aether midden-write --category "watcher-veto" --message "Watcher vetoed phase $current_phase: score $quality_score, $critical_count critical issues" --source "watcher"`
+   "Watcher has vetoed this phase. Choose how to proceed:"
 
-   d. **Display required actions:**
-   ```
-   Changes from this phase have been stashed (git stash).
-   A ROLLBACK_VETO blocker flag has been created.
+   Options:
+   1. "Stash changes and retry" -- Runs git stash push, creates blocker flag, phase stays blocked. You can restore with git stash pop and fix issues.
+   2. "Keep working (stay blocked)" -- Does nothing. Phase stays blocked. You fix issues manually and re-run /ant-continue.
+   3. "Force advance (accept risk)" -- Creates a FEEDBACK pheromone noting the override. Proceeds to Step 1.14 despite the veto. Use only if you disagree with the Watcher's assessment.
 
-   Required Actions:
-     1. Review and fix all CRITICAL and HIGH issues identified by Watcher
-     2. Restore changes: git stash pop
-     3. Re-run /ant-build {current_phase} after fixes
-     4. Watcher must re-verify with quality_score >= 7 and no CRITICAL issues
+   c. **Handle each choice:**
 
-   Phase advancement is BLOCKED until Watcher approves.
-   ```
+   - **Choice 1 ("Stash changes and retry"):**
+     Run using the Bash tool with description "Stashing changes due to Watcher veto...":
+     ```bash
+     git stash push -m "watcher-veto-phase-$current_phase" 2>&1
+     ```
+     Run using the Bash tool with description "Creating watcher veto blocker flag...":
+     ```bash
+     aether flag-create "WATCHER VETO: Quality score $quality_score (minimum 7), $critical_count critical issue(s). Changes stashed by user choice." --type blocker --phase "$current_phase"
+     ```
+     Run using the Bash tool with description "Logging Watcher veto to midden...":
+     ```bash
+     aether midden-write --category "watcher-veto" --message "User chose to stash: phase $current_phase, score $quality_score, $critical_count critical issues" --source "watcher"
+     ```
+     Run using the Bash tool with description "Writing watcher veto gate result...":
+     ```bash
+     aether gate-results-write --name "watcher_veto" --passed false --detail "User stashed changes: score $quality_score, $critical_count critical issues"
+     ```
+     Display:
+     ```
+     Changes stashed. Use git stash pop to restore, fix issues, then re-run /ant-continue.
+     ```
+     **CRITICAL:** Do NOT proceed to Step 1.14. Do NOT advance the phase. Stop here.
 
-   **CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase. Stop here.
+   - **Choice 2 ("Keep working (stay blocked)"):**
+     Run using the Bash tool with description "Writing watcher veto gate result...":
+     ```bash
+     aether gate-results-write --name "watcher_veto" --passed false --detail "User chose to keep working: score $quality_score, $critical_count critical issues"
+     ```
+     Display:
+     ```
+     Phase stays blocked. Fix the critical issues listed above, then re-run /ant-continue.
+     ```
+     **CRITICAL:** Do NOT proceed to Step 1.14. Do NOT advance the phase. Stop here.
+
+   - **Choice 3 ("Force advance (accept risk)"):**
+     Run using the Bash tool with description "Creating FEEDBACK pheromone for veto override...":
+     ```bash
+     aether pheromone-write --type FEEDBACK --content "User force-advanced past Watcher veto: quality score $quality_score, $critical_count critical issues in phase $current_phase" --source "watcher-veto-override"
+     ```
+     Run using the Bash tool with description "Logging veto override to midden...":
+     ```bash
+     aether midden-write --category "watcher-veto-override" --message "User force-advanced: score $quality_score, $critical_count critical issues" --source "watcher"
+     ```
+     Run using the Bash tool with description "Writing watcher veto gate result (override)..." :
+     ```bash
+     aether gate-results-write --name "watcher_veto" --passed true --detail "User force-advanced: score $quality_score, $critical_count critical issues"
+     ```
+     Display:
+     ```
+     Override recorded. Proceeding to next step despite veto.
+     ```
+     Continue to Step 1.14.
 
    **If `quality_score >= 7` AND `critical_count == 0`:**
 
@@ -757,10 +958,24 @@ This gate enforces the Watcher's quality authority by stashing uncommitted work 
    ✅👁️🐜 WATCHER VETO GATE PASSED — Score {quality_score}/10, no critical issues
    ```
 
-   Continue to Step 2.
+   Write gate result:
+   ```bash
+   aether gate-results-write --name "watcher_veto" --passed true --detail "Score $quality_score, no critical issues"
+   ```
+
+   Continue to Step 1.14.
 
 
 ### Step 1.14: Medic Health Gate (Conditional Auto-Spawn)
+
+**Skip check:** Run using the Bash tool with description "Checking if medic gate already passed...":
+```bash
+skip_check=$(aether should-skip-gate --name "medic" 2>/dev/null || echo "false")
+if [[ "$skip_check" == "true" ]]; then
+  echo "⏭️ Medic Gate: Previously passed -- skipping"
+fi
+```
+If `skip_check` is `"true"`, skip this entire step and continue to Step 2.
 
 **Colony health check — auto-spawns Medic when critical issues detected.**
 
@@ -770,6 +985,10 @@ Run using the Bash tool with description "Checking colony health for Medic auto-
 2. Parse result. If `should_spawn` is `false`:
 ```
 🩹🐜 Medic: Colony healthy — no auto-spawn needed
+```
+Write gate result:
+```bash
+aether gate-results-write --name "medic" --passed true --detail "Colony healthy -- no auto-spawn needed"
 ```
 Continue to Step 2.
 
@@ -847,16 +1066,25 @@ Recommended Actions:
 Log the block:
 ```bash
 aether activity-log --command "BLOCKED" --details "medic: {critical_count} critical health issues detected"
+aether gate-results-write --name "medic" --passed false --detail "{critical_count} critical health issues detected"
 ```
 
 - **If `critical_count == 0` but `warning_count > 0`:**
 ```
 🩹🐜 Medic Gate: Warnings detected ({warning_count}) — phase advancement allowed with caution
 ```
+Write gate result:
+```bash
+aether gate-results-write --name "medic" --passed true --detail "Warnings detected: {warning_count}"
+```
 Continue to Step 2.
 
 - **If no issues found:**
 ```
 ✅🩹🐜 MEDIC GATE PASSED — Colony is healthy
+```
+Write gate result:
+```bash
+aether gate-results-write --name "medic" --passed true --detail "Colony is healthy"
 ```
 Continue to Step 2.
