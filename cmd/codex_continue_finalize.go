@@ -29,12 +29,13 @@ var continueFinalizeCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		completionPath, _ := cmd.Flags().GetString("completion-file")
+		skipMissing, _ := cmd.Flags().GetBool("skip-missing")
 		completion, err := loadExternalContinueCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
 		}
-		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion)
+		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -103,7 +104,7 @@ func (c codexExternalContinueCompletion) workerResults() []codexContinueExternal
 	return results
 }
 
-func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
@@ -172,7 +173,11 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	review := externalContinueReviewReport(phase.ID, workerFlow, now, false)
+	finalizeReviewDepth := ReviewDepthLight
+	if plan.ReviewDepth == string(ReviewDepthHeavy) {
+		finalizeReviewDepth = ReviewDepthHeavy
+	}
+	review := externalContinueReviewReport(phase.ID, workerFlow, now, skipMissing, finalizeReviewDepth)
 	reviewReportRel := continuePlanArtifactsPath(phase.ID, "review.json")
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
@@ -242,7 +247,15 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 	for _, dispatch := range plan.Dispatches {
 		result, ok := resultByName[dispatch.Name]
 		if !ok {
-			return nil, fmt.Errorf("missing external continue result for %s", dispatch.Name)
+			result = codexContinueExternalDispatch{
+				Stage:   dispatch.Stage,
+				Caste:   dispatch.Caste,
+				Name:    dispatch.Name,
+				Task:    dispatch.Task,
+				TaskID:  dispatch.TaskID,
+				Status:  "timeout",
+				Summary: "worker result was not provided; treated as timed out",
+			}
 		}
 		if err := validateExternalContinueIdentity(dispatch, result); err != nil {
 			return nil, err
@@ -306,10 +319,17 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 		}
 		verification.Watcher = watcher
 		if !watcher.Passed {
-			verification.BlockingIssues = uniqueSortedStrings(append(verification.BlockingIssues, summary))
-			if status != "timeout" {
+			if watcher.Status == "timeout" && verification.ChecksPassed {
+				// Watcher timed out but runtime verification (build, types, lint, tests)
+				// passed independently. Treat as advisory, not a hard block.
+				verification.BlockingIssues = uniqueSortedStrings(append(
+					verification.BlockingIssues,
+					fmt.Sprintf("watcher %s timed out; runtime verification passed independently", watcher.Worker),
+				))
+			} else {
 				verification.ChecksPassed = false
 				verification.Passed = false
+				verification.BlockingIssues = uniqueSortedStrings(append(verification.BlockingIssues, summary))
 			}
 		}
 		watcherFlow := step
@@ -322,7 +342,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 	return verification, nil
 }
 
-func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, _ bool) codexContinueReviewReport {
+func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth ReviewDepth) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phaseID,
 		GeneratedAt: now.Format(time.RFC3339),
@@ -330,26 +350,40 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 		Passed:      true,
 	}
 	blockers := []string{}
+	warnings := []string{}
 	for _, step := range workerFlow {
 		if strings.TrimSpace(step.Stage) != "review" {
 			continue
 		}
-		report.Workers = append(report.Workers, step)
 		status := continueWorkerFlowStatus(step.Status)
-		if status != "completed" && status != "manually-reconciled" {
-			report.Passed = false
-			blockers = append(blockers, fmt.Sprintf("%s review did not complete cleanly: %s", step.Name, status))
+		if skipMissing && status == "timeout" {
+			continue
 		}
-		if summary := strings.TrimSpace(step.Summary); summary != "" && status != "completed" {
+		report.Workers = append(report.Workers, step)
+		if status == "completed" || status == "manually-reconciled" {
+			continue
+		}
+		if status == "timeout" {
+			warnings = append(warnings, fmt.Sprintf("%s review timed out; review was not completed", step.Name))
+			continue
+		}
+		report.Passed = false
+		blockers = append(blockers, fmt.Sprintf("%s review did not complete cleanly: %s", step.Name, status))
+		if summary := strings.TrimSpace(step.Summary); summary != "" {
 			blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", step.Name, summary))
 		}
 	}
-	if len(report.Workers) != len(codexContinueReviewSpecs) {
+	if !skipMissing && reviewDepth != ReviewDepthLight && len(report.Workers) != len(codexContinueReviewSpecs) {
 		report.Passed = false
 		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", len(codexContinueReviewSpecs), len(report.Workers)))
 	}
 	report.BlockingIssues = uniqueSortedStrings(blockers)
 	report.Passed = report.Passed && len(report.BlockingIssues) == 0
+	// Timed-out review agents produce warnings, not blocks, when no
+	// completing agent reported a hard blocker.
+	if report.Passed && len(warnings) > 0 {
+		report.BlockingIssues = uniqueSortedStrings(warnings)
+	}
 	return report
 }
 

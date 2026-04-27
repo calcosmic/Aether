@@ -45,6 +45,7 @@ type codexContinuePlanManifest struct {
 	DispatchMode      string                          `json:"dispatch_mode"`
 	FinalizeSurface   string                          `json:"finalize_surface"`
 	RequiresFinalizer bool                            `json:"requires_finalizer"`
+	ReviewDepth       string                          `json:"review_depth,omitempty"`
 }
 
 func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexContinueExternalDispatch, error) {
@@ -102,6 +103,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		DispatchMode:      "plan-only",
 		FinalizeSurface:   "awaiting_wrapper_completion",
 		RequiresFinalizer: true,
+		ReviewDepth:       string(reviewDepth),
 	}
 
 	result := map[string]interface{}{
