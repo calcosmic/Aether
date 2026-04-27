@@ -13,6 +13,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -263,6 +264,20 @@ var sealCmd = &cobra.Command{
 				outputError(1, "all phases must be completed before sealing the colony", nil)
 				return nil
 			}
+		}
+
+		// Check for blocker-severity flags
+		blockers, issues := checkSealBlockers(store)
+		if len(blockers) > 0 {
+			forceFlag, _ := cmd.Flags().GetBool("force")
+			if !forceFlag {
+				outputError(1, renderBlockerSummary(blockers, issues), nil)
+				return nil
+			}
+			// --force: warn but continue
+			fmt.Fprintln(stdout, fmt.Sprintf("WARNING: Overriding %d blocker(s) with --force", len(blockers)))
+		} else if len(issues) > 0 {
+			fmt.Fprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
@@ -636,6 +651,70 @@ func scanHighSeverityOpen(s *storage.Store) []string {
 	return warnings
 }
 
+// checkSealBlockers loads flags from pending-decisions.json (fallback flags.json),
+// splits unresolved entries into blockers and issues.
+func checkSealBlockers(s *storage.Store) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		if err2 := s.LoadJSON("flags.json", &ff); err2 != nil {
+			return nil, nil
+		}
+	}
+	for _, f := range ff.Decisions {
+		if f.Resolved {
+			continue
+		}
+		switch f.Type {
+		case "blocker":
+			blockers = append(blockers, f)
+		case "issue":
+			issues = append(issues, f)
+		}
+	}
+	return blockers, issues
+}
+
+// renderBlockerSummary formats blocker and issue flags as a table with resolution hints.
+func renderBlockerSummary(blockers []colony.FlagEntry, issues []colony.FlagEntry) string {
+	var b strings.Builder
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"ID", "Description", "Type", "Created"})
+	for _, entry := range blockers {
+		desc := entry.Description
+		if len(desc) > 40 {
+			desc = desc[:37] + "..."
+		}
+		t.AppendRow(table.Row{entry.ID, desc, entry.Type, entry.CreatedAt})
+	}
+	t.SetStyle(table.StyleRounded)
+	b.WriteString(t.Render())
+	b.WriteString("\n\nBLOCKED: Resolve blockers above or use --force to override.\n")
+	for _, bl := range blockers {
+		b.WriteString(fmt.Sprintf("  aether flag %s --resolve\n", bl.ID))
+	}
+	if len(issues) > 0 {
+		b.WriteString(fmt.Sprintf("\nNOTE: %d issue-severity flag(s) also unresolved.\n", len(issues)))
+	}
+	return b.String()
+}
+
+// countResolvedFlags loads the flags file and counts resolved entries.
+func countResolvedFlags(s *storage.Store) int {
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		if err2 := s.LoadJSON("flags.json", &ff); err2 != nil {
+			return 0
+		}
+	}
+	count := 0
+	for _, f := range ff.Decisions {
+		if f.Resolved {
+			count++
+		}
+	}
+	return count
+}
+
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string) string {
 	goal := ""
 	if state.Goal != nil {
@@ -726,6 +805,7 @@ func init() {
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
+	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
 	rootCmd.AddCommand(layEggsCmd)
