@@ -109,9 +109,16 @@ EOF
 	}
 	envText := string(envData)
 
-	// Verify AETHER_OPENCODE_AGENT_URL is NOT in the subprocess env
-	if strings.Contains(envText, "AETHER_OPENCODE_AGENT_URL") {
-		t.Fatalf("expected subprocess NOT to receive AETHER_OPENCODE_AGENT_URL when not set in parent, got:\n%s", envText)
+	// Verify AETHER_OPENCODE_AGENT_URL is empty (not overridden) in the subprocess env.
+	// When t.Setenv sets it to "", the var name still appears in env but with no value.
+	// The important check: it should NOT have a non-empty URL value.
+	for _, line := range strings.Split(envText, "\n") {
+		if strings.HasPrefix(line, "AETHER_OPENCODE_AGENT_URL=") {
+			val := strings.TrimPrefix(line, "AETHER_OPENCODE_AGENT_URL=")
+			if val != "" {
+				t.Fatalf("expected AETHER_OPENCODE_AGENT_URL to be empty in subprocess, got value: %q", val)
+			}
+		}
 	}
 }
 

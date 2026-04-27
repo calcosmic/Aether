@@ -16,12 +16,13 @@ import (
 )
 
 const (
-	envActivePlatform  = "AETHER_ACTIVE_PLATFORM"
-	envWorkerPlatform  = "AETHER_WORKER_PLATFORM"
-	envClaudePath      = "AETHER_CLAUDE_PATH"
-	envOpenCodePath    = "AETHER_OPENCODE_PATH"
-	envOpenCodePrimary = "AETHER_OPENCODE_PRIMARY_AGENT"
-	defaultProbeTimout = 3 * time.Second
+	envActivePlatform   = "AETHER_ACTIVE_PLATFORM"
+	envWorkerPlatform   = "AETHER_WORKER_PLATFORM"
+	envClaudePath       = "AETHER_CLAUDE_PATH"
+	envOpenCodePath     = "AETHER_OPENCODE_PATH"
+	envOpenCodePrimary  = "AETHER_OPENCODE_PRIMARY_AGENT"
+	envOpenCodeAgentURL = "AETHER_OPENCODE_AGENT_URL"
+	defaultProbeTimout  = 3 * time.Second
 )
 
 const defaultOpenCodePrimaryAgent = "build"
@@ -515,6 +516,10 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 	cmd := exec.CommandContext(ctx, binary, args...)
 	if strings.TrimSpace(config.Root) != "" {
 		cmd.Dir = config.Root
+	}
+
+	if agentURL := os.Getenv(envOpenCodeAgentURL); agentURL != "" {
+		cmd.Env = append(os.Environ(), envOpenCodeAgentURL+"="+agentURL)
 	}
 
 	var stdout, stderr bytes.Buffer
