@@ -8,6 +8,8 @@ guardrails:
   - "If the runtime returns clarification questions, present them honestly instead of inventing answers on the user's behalf."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
+  analyze: "aether discuss-analyze --target ."
+  analyze_purpose: "Run before discussion to get codebase-aware suggested questions covering architecture, dependencies, testing, deployment, and performance."
   persist_answer: "AETHER_OUTPUT_MODE=visual aether discuss --resolve <id> --answer \"<choice>\""
   settled: "If the runtime reports discussion_status: settled, route wrapper users back to `/ant-plan`; direct CLI users can run `aether plan`."
   council: "Use `/ant-council` only when the user wants multi-position deliberation; `/ant-discuss` is the lightweight pre-plan clarification gate."

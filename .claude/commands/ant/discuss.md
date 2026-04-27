@@ -7,6 +7,7 @@ description: "💬 Capture clarifications before planning through the Aether CLI
 Use the Go `aether` CLI as the source of truth.
 
 - Execute `AETHER_OUTPUT_MODE=visual aether discuss $ARGUMENTS` directly.
+- For codebase-aware questioning, run `aether discuss-analyze --target .` first. Use the structured output (scan data + suggested questions) to formulate comprehensive multiple-choice questions covering features, priorities, scope, trade-offs, and architecture. Present the discuss-analyze questions as a 'Codebase Analysis' section before the standard discuss questions. The wrapper still owns question presentation and freeform handling.
 - Do not write `pending-decisions.json`, `pheromones.json`, or `COLONY_STATE.json` by hand from this command spec.
 - If the runtime returns clarification questions, present them honestly instead of inventing answers on the user's behalf.
 - To persist an answer, execute `AETHER_OUTPUT_MODE=visual aether discuss --resolve <id> --answer "<choice>"`.
