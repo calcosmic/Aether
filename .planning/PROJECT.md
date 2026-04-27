@@ -35,6 +35,7 @@ That means:
 - Plan recovery pipeline hardened (`--force` always recovers)
 - Colony recovery system shipped: `aether recover` + `--apply` for stuck-state rescue
 - Review persistence system shipped: 7-domain ledger CRUD, colony-prime injection, agent Write tools, lifecycle integration
+- Phase 66 complete: internal watcher advisory timeout fix, gate skip hardening, stale FOCUS detection tests
 - All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
 
 <details>
