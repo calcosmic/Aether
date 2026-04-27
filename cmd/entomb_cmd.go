@@ -92,6 +92,27 @@ var entombCmd = &cobra.Command{
 			}
 		}
 
+		// Copy shelf archive to chamber
+		if err := copyShelfToChamber(store, chamberDir); err != nil {
+			_ = os.RemoveAll(chamberDir)
+			outputError(2, fmt.Sprintf("failed to copy shelf to chamber: %v", err), nil)
+			return nil
+		}
+		// Update manifest with shelf summary
+		shelfSummary := shelfChamberSummary(store)
+		if shelfSummary != "Shelved ideas: 0" {
+			manifestPath := filepath.Join(chamberDir, "manifest.json")
+			if raw, err := os.ReadFile(manifestPath); err == nil {
+				var manifest map[string]interface{}
+				if json.Unmarshal(raw, &manifest) == nil {
+					manifest["shelf_archive"] = shelfSummary
+					if data, err := json.MarshalIndent(manifest, "", "  "); err == nil {
+						_ = os.WriteFile(manifestPath, append(data, '\n'), 0644)
+					}
+				}
+			}
+		}
+
 		// Run temp sweep (before reset, after artifacts are copied to chamber)
 		tempSwept := entombTempSweep(store.BasePath(), store)
 
