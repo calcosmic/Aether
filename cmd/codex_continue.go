@@ -1034,12 +1034,19 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 		}
 	}
 	if watcher.Present && !watcher.Passed && watcher.Status != "skipped" {
-		checksPassed = false
 		summary := strings.TrimSpace(watcher.Summary)
 		if summary == "" {
 			summary = "watcher verification did not complete cleanly"
 		}
-		blockers = append(blockers, summary)
+		if watcher.Status == "timeout" && checksPassed {
+			// Advisory: watcher timed out but runtime verification (build, types, lint, tests)
+			// passed independently. Treat as warning, not a hard block.
+			blockers = append(blockers, fmt.Sprintf(
+				"watcher %s timed out; runtime verification passed independently", watcher.Worker))
+		} else {
+			checksPassed = false
+			blockers = append(blockers, summary)
+		}
 	}
 
 	return codexContinueVerificationReport{
@@ -1094,10 +1101,14 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 		if summary == "" {
 			summary = "continue watcher verification dispatch failed"
 		}
+		status := "failed"
+		if errors.Is(err, context.DeadlineExceeded) {
+			status = "timeout"
+		}
 		return codexWatcherVerification{
 				Present: true,
 				Passed:  false,
-				Status:  "failed",
+				Status:  status,
 				Worker:  dispatch.WorkerName,
 				Summary: summary,
 			}, &codexContinueWorkerFlowStep{
@@ -1105,8 +1116,8 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 				Caste:   "watcher",
 				Name:    dispatch.WorkerName,
 				Task:    "Independent verification before advancement",
-				Status:  "failed",
-				Summary: continueWatcherFlowSummary(dispatch.WorkerName, "failed", summary),
+				Status:  status,
+				Summary: continueWatcherFlowSummary(dispatch.WorkerName, status, summary),
 			}
 	}
 
@@ -1130,6 +1141,9 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 
 	result := results[0]
 	status := normalizeRuntimeDispatchStatus(result.Status)
+	if status == "failed" && result.Error != nil && errors.Is(result.Error, context.DeadlineExceeded) {
+		status = "timeout"
+	}
 	if status == "" {
 		status = "failed"
 	}
