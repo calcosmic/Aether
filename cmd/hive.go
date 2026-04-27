@@ -92,7 +92,10 @@ var hiveStoreCmd = &cobra.Command{
 
 		var wf hiveWisdomData
 		if raw, err := os.ReadFile(wisdomPath); err == nil {
-			json.Unmarshal(raw, &wf)
+			if err := json.Unmarshal(raw, &wf); err != nil {
+				outputError(2, fmt.Sprintf("corrupted wisdom.json: %v", err), nil)
+				return nil
+			}
 		}
 
 		// Dedup: check if same text+domain already exists
@@ -177,7 +180,10 @@ var hiveReadCmd = &cobra.Command{
 			outputOK(map[string]interface{}{"entries": []hiveWisdomEntry{}, "total": 0})
 			return nil
 		} else {
-			json.Unmarshal(raw, &wf)
+			if err := json.Unmarshal(raw, &wf); err != nil {
+				outputError(2, fmt.Sprintf("corrupted wisdom.json: %v", err), nil)
+				return nil
+			}
 		}
 
 		// Update access times
@@ -268,7 +274,9 @@ func promoteToHive(text, domain, sourceRepo string, confidence float64) error {
 
 	var wf hiveWisdomData
 	if raw, err := os.ReadFile(wisdomPath); err == nil {
-		json.Unmarshal(raw, &wf)
+		if err := json.Unmarshal(raw, &wf); err != nil {
+			return fmt.Errorf("corrupted wisdom.json: %w", err)
+		}
 	}
 
 	textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(abstracted)))
