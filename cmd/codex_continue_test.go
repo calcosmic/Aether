@@ -1367,7 +1367,7 @@ func TestContinueBlocksWhenContinueWatcherRejectsPhase(t *testing.T) {
 	}
 }
 
-func TestContinueBlocksWhenWatcherTimesOut(t *testing.T) {
+func TestContinueAdvisoryWhenWatcherTimesOutButVerificationPasses(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1377,7 +1377,7 @@ func TestContinueBlocksWhenWatcherTimesOut(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Block advancement when continue watcher times out"
+	goal := "Advance when continue watcher times out but verification passes"
 	now := time.Now().UTC()
 	taskID := "1.1"
 	nextTaskID := "2.1"
@@ -1397,9 +1397,9 @@ func TestContinueBlocksWhenWatcherTimesOut(t *testing.T) {
 				},
 				{
 					ID:     2,
-					Name:   "Still blocked",
+					Name:   "Should advance",
 					Status: colony.PhasePending,
-					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Wait for non-timed-out watcher", Status: colony.TaskPending}},
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Next phase work", Status: colony.TaskPending}},
 				},
 			},
 		},
@@ -1425,16 +1425,18 @@ func TestContinueBlocksWhenWatcherTimesOut(t *testing.T) {
 
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if blocked, _ := result["blocked"].(bool); !blocked {
-		t.Fatalf("expected blocked:true when watcher times out, got %v", result)
+
+	// Advisory: watcher timed out but verification passed independently.
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false (advisory) when watcher times out but verification passed, got %v", result)
 	}
-	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false when watcher times out, got %v", result)
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true when watcher timeout is advisory, got %v", result)
 	}
 
 	verification := result["verification"].(map[string]interface{})
-	if passed, _ := verification["checks_passed"].(bool); passed {
-		t.Fatalf("expected checks_passed:false when watcher times out, got %v", verification)
+	if passed, _ := verification["checks_passed"].(bool); !passed {
+		t.Fatalf("expected checks_passed:true (advisory timeout), got %v", verification)
 	}
 	watcher := verification["watcher"].(map[string]interface{})
 	if passed, _ := watcher["passed"].(bool); passed {
@@ -1444,15 +1446,13 @@ func TestContinueBlocksWhenWatcherTimesOut(t *testing.T) {
 		t.Fatalf("watcher status = %q, want timeout", status)
 	}
 
+	// State should advance to READY with next phase.
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		t.Fatalf("reload state: %v", err)
 	}
-	if state.State != colony.StateBUILT {
-		t.Fatalf("state = %s, want BUILT", state.State)
-	}
-	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
-		t.Fatalf("phase 1 status = %s, want in_progress", state.Plan.Phases[0].Status)
+	if state.State != colony.StateREADY {
+		t.Fatalf("state = %s, want READY", state.State)
 	}
 }
 
@@ -3048,7 +3048,7 @@ func TestContinue_BlocksOnVerifiedPartial(t *testing.T) {
 
 // TestContinue_BlocksOnWatcherTimeout proves that a watcher timeout
 // prevents phase advancement and sets checksPassed to false.
-func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
+func TestContinue_AdvisoryOnWatcherTimeout(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -3058,7 +3058,7 @@ func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Block advancement when continue watcher verification times out"
+	goal := "Advance when continue watcher verification times out but verification passes"
 	now := time.Now().UTC()
 	taskID := "1.1"
 	nextTaskID := "2.1"
@@ -3078,9 +3078,9 @@ func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
 				},
 				{
 					ID:     2,
-					Name:   "Remains blocked",
+					Name:   "Should advance",
 					Status: colony.PhasePending,
-					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Await watcher success", Status: colony.TaskPending}},
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Next phase work", Status: colony.TaskPending}},
 				},
 			},
 		},
@@ -3106,23 +3106,25 @@ func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
 
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if blocked, _ := result["blocked"].(bool); !blocked {
-		t.Fatalf("expected blocked:true on watcher timeout, got %v", result)
+
+	// Advisory: watcher timed out but verification passed independently.
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false (advisory) on watcher timeout with passing verification, got %v", result)
 	}
-	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false on watcher timeout, got %v", result)
-	}
-	if next := result["next"].(string); next != "aether continue --worker-timeout 1h" {
-		t.Fatalf("next = %q, want timeout recovery command", next)
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true on watcher timeout with passing verification, got %v", result)
 	}
 
 	verification := result["verification"].(map[string]interface{})
-	if passed, _ := verification["checks_passed"].(bool); passed {
-		t.Fatalf("expected checks_passed:false on watcher timeout, got %v", verification)
+	if passed, _ := verification["checks_passed"].(bool); !passed {
+		t.Fatalf("expected checks_passed:true (advisory timeout), got %v", verification)
 	}
 	watcher := verification["watcher"].(map[string]interface{})
 	if passed, _ := watcher["passed"].(bool); passed {
 		t.Fatalf("expected watcher.passed:false on timeout, got %v", watcher)
+	}
+	if status := watcher["status"].(string); status != "timeout" {
+		t.Fatalf("watcher status = %q, want timeout", status)
 	}
 }
 
@@ -4582,3 +4584,301 @@ func TestContinue_SkipWatchersStillBlocksWhenVerificationFails(t *testing.T) {
 		t.Fatalf("expected advanced:false when verification fails, got %v", result)
 	}
 }
+
+// --- Internal watcher advisory timeout tests (66-01) ---
+
+func TestInternalWatcherTimeoutAdvisoryWhenVerificationPassed(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Internal watcher timeout should be advisory when verification passes"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Advisory timeout phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build with passing verification", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Should advance", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Advisory timeout phase", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-adv-1", Task: "Build with passing verification", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-adv-2", Task: "Build-time verification", Status: "completed"},
+	})
+
+	invoker := &continueWatcherTestInvoker{
+		watcherStatus:  "timeout",
+		watcherSummary: "Internal watcher timed out",
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	// Advisory: watcher timed out but verification passed -- should NOT block.
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false (advisory) when watcher times out but verification passed, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true when watcher timeout is advisory, got %v", result)
+	}
+
+	verification := result["verification"].(map[string]interface{})
+	if passed, _ := verification["checks_passed"].(bool); !passed {
+		t.Fatalf("expected checks_passed:true (advisory timeout), got %v", verification)
+	}
+
+	// Blockers should contain the advisory message.
+	blockers := stringSliceValue(verification["blocking_issues"])
+	found := false
+	for _, b := range blockers {
+		if strings.Contains(b, "runtime verification passed independently") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected advisory message in blocking_issues, got %v", blockers)
+	}
+}
+
+func TestInternalWatcherTimeoutBlocksWhenVerificationFailed(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Internal watcher timeout should still block when verification failed"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Verification failure with watcher timeout",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Broken build", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Verification failure phase", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-fail-1", Task: "Broken build", Status: "completed", TaskID: taskID},
+	})
+
+	// No verification commands manifest -- verification will fail.
+	store.SaveJSON("last-build-claims.json", codexBuildManifest{})
+
+	invoker := &continueWatcherTestInvoker{
+		watcherStatus:  "timeout",
+		watcherSummary: "Internal watcher timed out",
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	// Should still block: verification failed AND watcher timed out.
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true when verification failed even with watcher timeout, got %v", result)
+	}
+
+	verification := result["verification"].(map[string]interface{})
+	if passed, _ := verification["checks_passed"].(bool); passed {
+		t.Fatalf("expected checks_passed:false when verification failed, got %v", verification)
+	}
+}
+
+func TestInternalWatcherGenuineFailureBlocks(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Internal watcher genuine failure should block even when verification passed"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Genuine failure phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build with passing verification", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Still blocked",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Should not advance", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Genuine failure phase", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-gen-1", Task: "Build with passing verification", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-gen-2", Task: "Build-time verification", Status: "completed"},
+	})
+
+	invoker := &continueWatcherTestInvoker{
+		watcherStatus:  "failed",
+		watcherSummary: "Watcher found critical issues",
+	}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	// Genuine failure (not timeout) should still block even when verification passed.
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true for genuine watcher failure, got %v", result)
+	}
+
+	verification := result["verification"].(map[string]interface{})
+	if passed, _ := verification["checks_passed"].(bool); passed {
+		t.Fatalf("expected checks_passed:false for genuine watcher failure, got %v", verification)
+	}
+}
+
+func TestRunCodexContinueWatcherVerification_ContextDeadlineProducesTimeoutStatus(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Context deadline should produce timeout status via dispatch result"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Context deadline phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Test deadline", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Context deadline phase", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-dl-1", Task: "Test deadline", Status: "completed", TaskID: taskID},
+	})
+
+	// This invoker blocks until context is cancelled, simulating a real timeout.
+	// invokeDispatch catches ctx.Err() before calling Invoke, so the result
+	// path (not error path) handles the timeout with Status: "timeout".
+	invoker := &contextDeadlineTestInvoker{}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	rootCmd.SetArgs([]string{"continue", "--worker-timeout", "1ms"})
+	rootCmd.Execute()
+
+	// Verify the watcher status is "timeout" (not "failed") in the output.
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	verification, ok := result["verification"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected verification key in result")
+	}
+	watcher, ok := verification["watcher"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected watcher key in verification")
+	}
+	status, _ := watcher["status"].(string)
+	if status != "timeout" {
+		t.Fatalf("expected watcher status 'timeout' when context deadline exceeded, got status=%q", status)
+	}
+}
+
+// contextDeadlineTestInvoker blocks Invoke until the context is cancelled,
+// simulating a worker that doesn't respond within the timeout.
+type contextDeadlineTestInvoker struct{}
+
+func (i *contextDeadlineTestInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	<-ctx.Done()
+	return codex.WorkerResult{}, ctx.Err()
+}
+
+func (i *contextDeadlineTestInvoker) IsAvailable(ctx context.Context) bool { return true }
+
+func (i *contextDeadlineTestInvoker) ValidateAgent(path string) error { return nil }

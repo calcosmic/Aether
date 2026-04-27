@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
@@ -927,5 +928,118 @@ func TestResumeVisualNoWarningWhenNoStale(t *testing.T) {
 	output := renderResumeVisual(result, "", true)
 	if strings.Contains(output, "stale FOCUS") {
 		t.Errorf("expected no stale FOCUS warning when no stale signals\n%s", output)
+	}
+}
+
+// --- Direct unit tests for detectStaleFocusSignals (Phase 66, Plan 02) ---
+
+func TestDetectStaleFocusSignals_EqualPhaseNotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	origStore := store
+	store = s
+	defer func() { store = origStore }()
+
+	sourcePhase := 3
+	contentJSON, _ := json.Marshal(map[string]string{"text": "current phase focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-equal-phase",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	stale := detectStaleFocusSignals(store, 3)
+	if len(stale) != 0 {
+		t.Errorf("expected 0 stale signals when SourcePhase == currentPhase, got %d: %+v", len(stale), stale)
+	}
+}
+
+func TestDetectStaleFocusSignals_FuturePhaseNotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	origStore := store
+	store = s
+	defer func() { store = origStore }()
+
+	sourcePhase := 5
+	contentJSON, _ := json.Marshal(map[string]string{"text": "future phase focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-future-phase",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	stale := detectStaleFocusSignals(store, 3)
+	if len(stale) != 0 {
+		t.Errorf("expected 0 stale signals when SourcePhase > currentPhase, got %d: %+v", len(stale), stale)
+	}
+}
+
+func TestDetectStaleFocusSignals_PastPhaseFlagged(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	origStore := store
+	store = s
+	defer func() { store = origStore }()
+
+	sourcePhase := 1
+	contentJSON, _ := json.Marshal(map[string]string{"text": "old focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-past-phase",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	stale := detectStaleFocusSignals(store, 3)
+	if len(stale) != 1 {
+		t.Fatalf("expected 1 stale signal when SourcePhase < currentPhase, got %d", len(stale))
+	}
+	if stale[0].ID != "sig-past-phase" {
+		t.Errorf("expected stale signal ID 'sig-past-phase', got '%s'", stale[0].ID)
+	}
+	if stale[0].SourcePhase != 1 {
+		t.Errorf("expected SourcePhase 1, got %d", stale[0].SourcePhase)
+	}
+	if stale[0].CurrentPhase != 3 {
+		t.Errorf("expected CurrentPhase 3, got %d", stale[0].CurrentPhase)
 	}
 }

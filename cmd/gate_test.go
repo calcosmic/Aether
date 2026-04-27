@@ -684,3 +684,39 @@ func TestGateRecoveryTemplateCmd_UnknownGate(t *testing.T) {
 		t.Errorf("expected fallback message, got %q", output)
 	}
 }
+
+// TestIncrementalGateChecking_SkipsPriorPassed verifies the full incremental
+// gate checking flow: passed non-test gates are skipped, failed gates are
+// re-checked, and tests_pass is never skipped regardless of prior results.
+func TestIncrementalGateChecking_SkipsPriorPassed(t *testing.T) {
+	ts := time.Now().UTC().Format(time.RFC3339)
+	prior := []colony.GateResultEntry{
+		{Name: "spawn_gate", Passed: true, Timestamp: ts},
+		{Name: "state_gate", Passed: true, Timestamp: ts},
+		{Name: "build_gate", Passed: false, Timestamp: ts},
+		{Name: "tests_pass", Passed: true, Timestamp: ts},
+	}
+
+	// Passed non-test gates should be skipped
+	if !shouldSkipGate(prior, "spawn_gate") {
+		t.Error("expected spawn_gate (passed) to be skipped")
+	}
+	if !shouldSkipGate(prior, "state_gate") {
+		t.Error("expected state_gate (passed) to be skipped")
+	}
+
+	// Failed gate should NOT be skipped (must re-check)
+	if shouldSkipGate(prior, "build_gate") {
+		t.Error("expected build_gate (failed) to NOT be skipped")
+	}
+
+	// tests_pass is NEVER skipped even when previously passed
+	if shouldSkipGate(prior, "tests_pass") {
+		t.Error("expected tests_pass to never be skipped even when previously passed")
+	}
+
+	// Unknown gate (not in prior results) should NOT be skipped
+	if shouldSkipGate(prior, "unknown_gate") {
+		t.Error("expected unknown_gate to NOT be skipped")
+	}
+}
