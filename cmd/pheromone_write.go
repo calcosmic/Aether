@@ -13,6 +13,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -266,6 +267,29 @@ var pheromoneValidateXMLCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+// expireSignalsByType deactivates all active signals of the given type.
+// Returns the count of signals expired. Uses deactivateSignal for consistency.
+// This is an internal helper, not a CLI command.
+func expireSignalsByType(s *storage.Store, sigType string) int {
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		return 0
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	count := 0
+	for i := range pf.Signals {
+		sig := &pf.Signals[i]
+		if sig.Active && sig.Type == sigType {
+			deactivateSignal(sig, now)
+			count++
+		}
+	}
+	if count > 0 {
+		_ = s.SaveJSON("pheromones.json", pf)
+	}
+	return count
 }
 
 func init() {
