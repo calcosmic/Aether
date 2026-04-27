@@ -309,7 +309,11 @@ Plans:
   3. OpenCode seal.md matches Claude seal.md — no parity drift
   4. Porter readiness summary only prints after seal actually completes, not when blocked
   5. Phase 62 VERIFICATION.md updated to reflect all gaps closed
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 67-01-PLAN.md -- Extract promoteToHive, wire into sealCmd, update enrichment (CERE-01, CERE-02, CERE-04)
+- [ ] 67-02-PLAN.md -- Fix wrapper parity, update Phase 62 VERIFICATION.md (CERE-03, CERE-05)
 
 
 ### Phase 68: Gate Recovery Verification
@@ -350,6 +354,6 @@ Plans:
 | 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |
 | 66. Continue Flow Fix | v1.10 | 2/2 | Complete    | 2026-04-27 |
-| 67. Seal Hive Brain Wiring | v1.10 | 0/? | Not started | - |
+| 67. Seal Hive Brain Wiring | v1.10 | 0/2 | Planned | - |
 | 68. Gate Recovery Verification | v1.10 | 0/? | Not started | - |
 | 69. Idea Shelving Verification | v1.10 | 0/? | Not started | - |
