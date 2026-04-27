@@ -256,7 +256,7 @@ Plans:
 **Goal:** External continue watcher timeout is treated as advisory (warning) rather than blocking when runtime verification steps passed; actual watcher failures still block
 **Requirements**: FIX-01, FIX-02, FIX-03
 **Depends on:** Phase 64
-**Plans:** 1 plan
+**Plans:** 0/1 plans complete
 
 Plans:
 - [ ] 64.1-01-PLAN.md -- Fix attachExternalContinueWatcher timeout advisory behavior (FIX-01, FIX-02, FIX-03)
