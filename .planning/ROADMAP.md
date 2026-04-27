@@ -250,6 +250,18 @@ Plans:
 - [x] 64-02-PLAN.md -- Chaos midden recurrence + oracle persistence wrapper enhancements (CERE-10, CERE-11)
 - [x] 64-03-PLAN.md -- patrol-check subcommand with JSON validity, stale detection, interrupted builds (CERE-12)
 
+
+### Phase 64.1: Fix continue watcher timeout blocking advancement (INSERTED)
+
+**Goal:** External continue watcher timeout is treated as advisory (warning) rather than blocking when runtime verification steps passed; actual watcher failures still block
+**Requirements**: FIX-01, FIX-02, FIX-03
+**Depends on:** Phase 64
+**Plans:** 1 plan
+
+Plans:
+- [ ] 64.1-01-PLAN.md -- Fix attachExternalContinueWatcher timeout advisory behavior (FIX-01, FIX-02, FIX-03)
+
+
 ### Phase 65: Idea Shelving
 **Goal**: Colonies have continuity -- promising ideas get shelved at seal, surface at init, recurring REDIRECTs become permanent guidance, and shelved ideas survive entomb
 **Depends on**: Phase 62 (seal ceremony integration), Phase 63 (entomb preservation)
