@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -283,9 +284,11 @@ var sealCmd = &cobra.Command{
 			fmt.Fprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
-		// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md only (D-08)
+		// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md and Hive Brain (D-08, CERE-02)
 		var promotedInstinctNames []string
 		var hiveEligibleCount int
+		var hivePromotedCount int
+		var hivePromotionFailures int
 		if entries, err := loadActiveInstinctEntriesFromStore(store); err == nil {
 			for _, entry := range entries {
 				if entry.Confidence >= 0.8 && entry.Action != "" {
@@ -295,13 +298,27 @@ var sealCmd = &cobra.Command{
 				}
 				if entry.Confidence >= 0.8 {
 					hiveEligibleCount++
+					// Hive Brain promotion (non-blocking per CERE-02)
+					domain := entry.Domain
+					if domain == "" {
+						domain = "general"
+					}
+					if err := promoteToHive(entry.Action, domain, "", entry.Confidence); err != nil {
+						log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
+						hivePromotionFailures++
+					} else {
+						hivePromotedCount++
+					}
 				}
 			}
 		}
 
-		// Ceremony Step 2: Log hive-eligible count as suggestion (D-09)
-		if hiveEligibleCount > 0 {
-			fmt.Fprintln(stdout, fmt.Sprintf("SUGGESTION: %d instinct(s) eligible for global promotion. Run 'aether queen-promote-instinct <id>' or 'aether hive-promote' to promote.", hiveEligibleCount))
+		// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
+		if hivePromotedCount > 0 {
+			fmt.Fprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
+		}
+		if hivePromotionFailures > 0 {
+			fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
 		}
 
 		// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
@@ -333,12 +350,14 @@ var sealCmd = &cobra.Command{
 
 		// Build enrichment data for CROWNED-ANTHILL.md
 		enrichment := sealEnrichment{
-			LearningsCount:    len(state.Memory.PhaseLearnings),
-			InstinctsPromoted: promotedInstinctNames,
-			HiveEligible:      hiveEligibleCount,
-			SignalsExpired:    expiredFOCUSCount,
-			FlagsResolved:     countResolvedFlags(store),
-			ShelfCandidates:   candidates,
+			LearningsCount:        len(state.Memory.PhaseLearnings),
+			InstinctsPromoted:     promotedInstinctNames,
+			HiveEligible:          hiveEligibleCount,
+			HivePromoted:          hivePromotedCount,
+			HivePromotionFailures: hivePromotionFailures,
+			SignalsExpired:        expiredFOCUSCount,
+			FlagsResolved:         countResolvedFlags(store),
+			ShelfCandidates:       candidates,
 		}
 
 		summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -760,12 +779,14 @@ func countResolvedFlags(s *storage.Store) int {
 
 // sealEnrichment holds data for enriching the CROWNED-ANTHILL.md summary.
 type sealEnrichment struct {
-	LearningsCount    int
-	InstinctsPromoted []string
-	HiveEligible      int
-	SignalsExpired    int
-	FlagsResolved     int
-	ShelfCandidates   []colony.ShelfEntry
+	LearningsCount        int
+	InstinctsPromoted     []string
+	HiveEligible          int
+	HivePromoted          int
+	HivePromotionFailures int
+	SignalsExpired        int
+	FlagsResolved         int
+	ShelfCandidates       []colony.ShelfEntry
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -800,6 +821,10 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	b.WriteString(fmt.Sprintf("| Learnings captured | %d |\n", enrichment.LearningsCount))
 	b.WriteString(fmt.Sprintf("| Instincts promoted | %d |\n", len(enrichment.InstinctsPromoted)))
 	b.WriteString(fmt.Sprintf("| Hive-eligible instincts | %d |\n", enrichment.HiveEligible))
+	b.WriteString(fmt.Sprintf("| Hive-promoted instincts | %d |\n", enrichment.HivePromoted))
+	if enrichment.HivePromotionFailures > 0 {
+		b.WriteString(fmt.Sprintf("| Hive promotion failures | %d |\n", enrichment.HivePromotionFailures))
+	}
 	b.WriteString(fmt.Sprintf("| FOCUS signals expired | %d |\n", enrichment.SignalsExpired))
 	b.WriteString(fmt.Sprintf("| Flags resolved | %d |\n", enrichment.FlagsResolved))
 
