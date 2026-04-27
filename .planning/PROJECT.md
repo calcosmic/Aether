@@ -29,7 +29,7 @@ That means:
 ## Current State
 
 - Go runtime is healthy, v1.0.24 shipped
-- All 10 milestones complete (56 phases, 128 plans)
+- Milestone v1.10 Colony Polish in progress (Phase 67 complete — hive-promote wired into seal ceremony, wrapper parity fixed)
 - 2910+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
 - Plan recovery pipeline hardened (`--force` always recovers)
@@ -164,4 +164,4 @@ Plan next milestone with `/gsd-new-milestone`.
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-26 after starting v1.10 milestone*
+*Last updated: 2026-04-28 after Phase 67 completion*
