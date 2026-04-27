@@ -125,7 +125,7 @@
 ### Gap Closure Phases (from v1.10 audit)
 
 - [x] **Phase 66: Continue Flow Fix** - Watcher timeout loops, token burn, stuck-in-continue bug (HIGHEST PRIORITY) (completed 2026-04-27)
-- [ ] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal (CERE-02, CERE-04), OpenCode parity, close Phase 62 verification gaps
+- [x] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal (CERE-02, CERE-04), OpenCode parity, close Phase 62 verification gaps (completed 2026-04-27)
 - [ ] **Phase 68: Gate Recovery Verification** - Verify Plan 01 subcommands, create Phase 59 VERIFICATION.md, runtime-playbook integration
 - [ ] **Phase 69: Idea Shelving Verification** - Verify SHELF-01 through SHELF-05, create Phase 65 VERIFICATION.md, execute validation wave 0
 
@@ -311,8 +311,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 67-01-PLAN.md -- Extract promoteToHive, wire into sealCmd, update enrichment (CERE-02, CERE-04)
-- [ ] 67-02-PLAN.md -- Fix wrapper parity, update Phase 62 VERIFICATION.md (CERE-04 verification closure)
+- [x] 67-01-PLAN.md -- Extract promoteToHive, wire into sealCmd, update enrichment (CERE-02, CERE-04)
+- [x] 67-02-PLAN.md -- Fix wrapper parity, update Phase 62 VERIFICATION.md (CERE-04 verification closure)
 
 
 ### Phase 68: Gate Recovery Verification
@@ -353,6 +353,6 @@ Plans:
 | 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |
 | 66. Continue Flow Fix | v1.10 | 2/2 | Complete    | 2026-04-27 |
-| 67. Seal Hive Brain Wiring | v1.10 | 0/2 | Planned | - |
+| 67. Seal Hive Brain Wiring | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 68. Gate Recovery Verification | v1.10 | 0/? | Not started | - |
 | 69. Idea Shelving Verification | v1.10 | 0/? | Not started | - |
