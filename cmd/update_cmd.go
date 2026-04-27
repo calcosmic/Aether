@@ -347,8 +347,8 @@ const (
 const (
 	expectedClaudeCommandCount   = 50
 	expectedOpenCodeCommandCount = 50
-	expectedOpenCodeAgentCount   = 25
-	expectedCodexAgentCount      = 25
+	expectedOpenCodeAgentCount   = 26
+	expectedCodexAgentCount      = 26
 	expectedCodexSkillCount      = 83
 )
 

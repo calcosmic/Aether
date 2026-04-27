@@ -1,0 +1,10 @@
+name: ant-porter
+description: "📦 Deliver colony work -- publish, push, and deploy after seal"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether porter $ARGUMENTS"
+guardrails:
+  - "Do not modify colony state files."
+  - "If docs and runtime disagree, runtime wins."
+  - "Stops on first failure -- user decides retry, skip, or abort."
+  - "Never use --force flags on git push or goreleaser unless user explicitly requests."

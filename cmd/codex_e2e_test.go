@@ -862,7 +862,7 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 	agentsCodexNames := listShippedAetherCodexAgentBaseNames(t, agentsCodexMirrorDir)
 
 	// Verify each directory has exactly 25 entries.
-	const expectedCount = 25
+	const expectedCount = 26
 	if len(claudeNames) != expectedCount {
 		t.Errorf("Claude agents: expected %d, got %d", expectedCount, len(claudeNames))
 	}
