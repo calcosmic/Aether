@@ -34,6 +34,7 @@ var castePrefixes = map[string][]string{
 	"tracker":       {"Track", "Trace", "Debug", "Hunt", "Follow", "Trail", "Find", "Seek"},
 	"weaver":        {"Weave", "Knit", "Spin", "Twine", "Transform", "Mend", "Thread", "Stitch"},
 	"medic":         {"Heal", "Mend", "Cure", "Suture", "Salve", "Remedy", "Treat", "Patch"},
+	"porter":        {"Carry", "Haul", "Ferry", "Freight", "Cart", "Lift", "Shift", "Convey"},
 }
 
 // defaultPrefixes is used when no caste matches.

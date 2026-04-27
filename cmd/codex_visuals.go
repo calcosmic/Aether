@@ -40,7 +40,8 @@ var casteEmojiMap = map[string]string{
 	"ambassador":    "🔌",
 	"auditor":       "👥",
 	"chronicler":    "📝",
-	"gatekeeper":    "📦",
+	"gatekeeper":    "⚔️",
+	"porter":        "📦",
 	"guardian":      "🛡️",
 	"includer":      "♿",
 	"keeper":        "📚",
@@ -77,6 +78,7 @@ var casteColorMap = map[string]string{
 	"weaver":        "95",
 	"dreamer":       "90",
 	"medic":         "96",
+	"porter":        "96",
 }
 
 var casteLabelMap = map[string]string{
@@ -104,6 +106,7 @@ var casteLabelMap = map[string]string{
 	"weaver":        "Weaver",
 	"dreamer":       "Dreamer",
 	"medic":         "Medic",
+	"porter":        "Porter",
 }
 
 var commandEmojiMap = map[string]string{
