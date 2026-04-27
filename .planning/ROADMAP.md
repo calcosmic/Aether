@@ -115,7 +115,7 @@
 - [x] **Phase 57: QUEEN.md Pipeline Fix** - Data cleanup, dedup, colony-prime wiring, auto-promotion (completed 2026-04-26)
 - [ ] **Phase 58: Smart Review Depth** - Auto/light/heavy review modes, --light flag, final-phase override
 - [x] **Phase 59: Gate Failure Recovery** - Actionable recovery instructions, incremental gate checking, veto confirmation (completed 2026-04-27)
-- [ ] **Phase 60: Oracle Loop Fix** - Callback fix, research formulation, depth selection, state management
+- [x] **Phase 60: Oracle Loop Fix** - Callback fix, research formulation, depth selection, state management (completed 2026-04-27)
 - [ ] **Phase 61: Porter Ant** - 26th caste registration, agent definitions across 4 surfaces, seal lifecycle wiring
 - [ ] **Phase 62: Lifecycle Ceremony -- Seal and Init** - Flag blocking, wisdom promotion, pheromone cleanup, rich init research
 - [ ] **Phase 63: Lifecycle Ceremony -- Status, Entomb, Resume** - Version display, wisdom extraction, staleness checks
@@ -183,9 +183,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 60-01-PLAN.md -- OpenCode callback URL env var override (ORCL-01)
-- [ ] 60-02-PLAN.md -- Research brief formulation and depth selection (ORCL-02, ORCL-03)
-- [ ] 60-03-PLAN.md -- Smart question formulation replacing lowest-confidence heuristic (ORCL-04)
+- [x] 60-01-PLAN.md -- OpenCode callback URL env var override (ORCL-01)
+- [x] 60-02-PLAN.md -- Research brief formulation and depth selection (ORCL-02, ORCL-03)
+- [x] 60-03-PLAN.md -- Smart question formulation replacing lowest-confidence heuristic (ORCL-04)
 
 ### Phase 61: Porter Ant
 **Goal**: Aether has a Porter ant (26th caste) that surfaces interactive publish/push/deploy options after seal -- delivery is part of the lifecycle, not a separate manual step
@@ -251,7 +251,7 @@ Plans:
 | 57. QUEEN.md Pipeline Fix | v1.10 | 3/3 | Complete    | 2026-04-26 |
 | 58. Smart Review Depth | v1.10 | 0/2 | Planned | - |
 | 59. Gate Failure Recovery | v1.10 | 1/2 | Complete    | 2026-04-27 |
-| 60. Oracle Loop Fix | v1.10 | 0/3 | Planned | - |
+| 60. Oracle Loop Fix | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 61. Porter Ant | v1.10 | 0/? | Not started | - |
 | 62. Lifecycle Ceremony -- Seal and Init | v1.10 | 0/? | Not started | - |
 | 63. Lifecycle Ceremony -- Status, Entomb, Resume | v1.10 | 0/? | Not started | - |

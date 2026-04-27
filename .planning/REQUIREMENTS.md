@@ -16,9 +16,9 @@
 
 ### Gate Failure Recovery
 
-- [ ] **GATE-01**: Verification gate failures show clear, actionable recovery instructions instead of just "FAILED" banner
-- [ ] **GATE-02**: Watcher Veto does not auto-stash work without explicit user confirmation
-- [ ] **GATE-03**: Re-running `/ant-continue` only re-checks previously failed gates, not all gates from scratch (incremental gate checking)
+- [x] **GATE-01**: Verification gate failures show clear, actionable recovery instructions instead of just "FAILED" banner
+- [x] **GATE-02**: Watcher Veto does not auto-stash work without explicit user confirmation
+- [x] **GATE-03**: Re-running `/ant-continue` only re-checks previously failed gates, not all gates from scratch (incremental gate checking)
 
 ### Porter Ant
 
@@ -45,10 +45,10 @@
 
 ### Oracle Loop Fix
 
-- [ ] **ORCL-01**: Fix OpenCode worker callback URL — binary must not conflate LiteLLM proxy URL with agent messaging URL (separate config or auto-detect ACP server)
-- [ ] **ORCL-02**: Oracle has research brief formulation step that constructs a detailed research context before starting the iterative loop (like init-research formulates context for init)
-- [ ] **ORCL-03**: Oracle offers depth selection: quick (1-2 iterations), balanced (3-5), exhaustive (until convergence) — user picks before research starts
-- [ ] **ORCL-04**: Oracle research state managed properly: configuration, research gaps, synthesis, and progress tracking persist across iterations
+- [x] **ORCL-01**: Fix OpenCode worker callback URL — binary must not conflate LiteLLM proxy URL with agent messaging URL (separate config or auto-detect ACP server)
+- [x] **ORCL-02**: Oracle has research brief formulation step that constructs a detailed research context before starting the iterative loop (like init-research formulates context for init)
+- [x] **ORCL-03**: Oracle offers depth selection: quick (2 iterations, 60% confidence), balanced (4 iterations, 85%), deep (6 iterations, 95%), exhaustive (10 iterations, 99%) — user picks before research starts, defaults to balanced
+- [x] **ORCL-04**: Oracle research state managed properly: configuration, research gaps, synthesis, and progress tracking persist across iterations
 
 ### Idea Shelving
 
@@ -105,9 +105,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPTH-04 | Phase 58 | Pending |
 | DEPTH-05 | Phase 58 | Pending |
 | DEPTH-06 | Phase 58 | Pending |
-| GATE-01 | Phase 59 | Pending |
-| GATE-02 | Phase 59 | Pending |
-| GATE-03 | Phase 59 | Pending |
+| GATE-01 | Phase 59 | Complete |
+| GATE-02 | Phase 59 | Complete |
+| GATE-03 | Phase 59 | Complete |
 | PORT-01 | Phase 61 | Pending |
 | PORT-02 | Phase 61 | Pending |
 | PORT-03 | Phase 61 | Pending |
@@ -125,10 +125,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CERE-10 | Phase 64 | Pending |
 | CERE-11 | Phase 64 | Pending |
 | CERE-12 | Phase 64 | Pending |
-| ORCL-01 | Phase 60 | Pending |
-| ORCL-02 | Phase 60 | Pending |
-| ORCL-03 | Phase 60 | Pending |
-| ORCL-04 | Phase 60 | Pending |
+| ORCL-01 | Phase 60 | Complete |
+| ORCL-02 | Phase 60 | Complete |
+| ORCL-03 | Phase 60 | Complete |
+| ORCL-04 | Phase 60 | Complete |
 | SHELF-01 | Phase 65 | Pending |
 | SHELF-02 | Phase 65 | Pending |
 | SHELF-03 | Phase 65 | Pending |
