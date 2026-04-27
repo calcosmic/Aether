@@ -4356,7 +4356,7 @@ func TestExternalContinueReviewReportTimeoutNotBlocking(t *testing.T) {
 		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
 	}
 
-	report := externalContinueReviewReport(1, workerFlow, now, false)
+	report := externalContinueReviewReport(1, workerFlow, now, false, ReviewDepthHeavy)
 
 	if !report.Passed {
 		t.Errorf("report.Passed = false, want true (timeouts should not block)")
@@ -4440,7 +4440,7 @@ func TestExternalContinueReviewReportSkipMissing(t *testing.T) {
 		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
 	}
 
-	report := externalContinueReviewReport(1, workerFlow, now, true)
+	report := externalContinueReviewReport(1, workerFlow, now, true, ReviewDepthHeavy)
 
 	if !report.Passed {
 		t.Errorf("report.Passed = false, want true")
@@ -4450,6 +4450,22 @@ func TestExternalContinueReviewReportSkipMissing(t *testing.T) {
 	}
 	if len(report.Workers) > 0 && report.Workers[0].Name != "Guard-43" {
 		t.Errorf("report.Workers[0].Name = %q, want Guard-43", report.Workers[0].Name)
+	}
+}
+
+func TestExternalContinueReviewReportLightSkipsCountCheck(t *testing.T) {
+	now := time.Now().UTC()
+	workerFlow := []codexContinueWorkerFlowStep{
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green"},
+	}
+
+	report := externalContinueReviewReport(1, workerFlow, now, false, ReviewDepthLight)
+
+	if !report.Passed {
+		t.Errorf("report.Passed = false, want true (light mode should not enforce review count)")
+	}
+	if len(report.Workers) != 0 {
+		t.Errorf("report.Workers len = %d, want 0 (no review-stage entries)", len(report.Workers))
 	}
 }
 
