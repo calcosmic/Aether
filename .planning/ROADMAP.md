@@ -197,7 +197,12 @@ Plans:
   3. After seal completes, Porter prompts the user interactively with publish/push/deploy options
   4. `/ant-porter` command exists in YAML source and all platform wrappers
   5. `porter check` subcommand reports pipeline alignment and readiness
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 61-01-PLAN.md -- Caste registration, Gatekeeper emoji swap, count bumps (PORT-01)
+- [ ] 61-02-PLAN.md -- Agent definitions 4 surfaces, /ant-porter command (PORT-02, PORT-04)
+- [ ] 61-03-PLAN.md -- Porter check subcommand, seal lifecycle wiring (PORT-03, PORT-05)
 
 ### Phase 62: Lifecycle Ceremony -- Seal and Init
 **Goal**: Seal and init have real ceremony -- seal blocks on active blockers, promotes wisdom, cleans pheromones, and enriches the archive; init researches the codebase deeply before planning started
@@ -252,7 +257,7 @@ Plans:
 | 58. Smart Review Depth | v1.10 | 0/2 | Planned | - |
 | 59. Gate Failure Recovery | v1.10 | 1/2 | Complete    | 2026-04-27 |
 | 60. Oracle Loop Fix | v1.10 | 3/3 | Complete    | 2026-04-27 |
-| 61. Porter Ant | v1.10 | 0/? | Not started | - |
+| 61. Porter Ant | v1.10 | 0/3 | Planned | - |
 | 62. Lifecycle Ceremony -- Seal and Init | v1.10 | 0/? | Not started | - |
 | 63. Lifecycle Ceremony -- Status, Entomb, Resume | v1.10 | 0/? | Not started | - |
 | 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 0/? | Not started | - |
