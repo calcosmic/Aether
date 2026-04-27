@@ -30,11 +30,11 @@
 
 ### Lifecycle Ceremony
 
-- [ ] **CERE-01**: seal blocks on active blockers (flags with blocker severity), warns on issues with `--force` override
-- [ ] **CERE-02**: seal promotes instincts with confidence >= 0.8 to Hive Brain via hive-promote (non-blocking — log failures but don't stop)
-- [ ] **CERE-03**: seal expires all FOCUS pheromones (phase-scoped) and preserves REDIRECT pheromones (hard constraints carry over)
-- [ ] **CERE-04**: seal enriches CROWNED-ANTHILL.md with learnings count, promoted instincts count, expired signals, flags resolved
-- [ ] **CERE-05**: init-research provides deeper codebase analysis: reads README.md, scans directory structure beyond top level, detects test frameworks, checks CI configs, reads key source files
+- [x] **CERE-01**: seal blocks on active blockers (flags with blocker severity), warns on issues with `--force` override
+- [x] **CERE-02**: seal promotes instincts with confidence >= 0.8 to Hive Brain via hive-promote (non-blocking — log failures but don't stop)
+- [x] **CERE-03**: seal expires all FOCUS pheromones (phase-scoped) and preserves REDIRECT pheromones (hard constraints carry over)
+- [x] **CERE-04**: seal enriches CROWNED-ANTHILL.md with learnings count, promoted instincts count, expired signals, flags resolved
+- [x] **CERE-05**: init-research provides deeper codebase analysis: reads README.md, scans directory structure beyond top level, detects test frameworks, checks CI configs, reads key source files
 - [ ] **CERE-06**: status dashboard shows runtime version line (e.g., "Runtime: v1.0.24") and one-line signal summary
 - [ ] **CERE-07**: entomb extracts near-miss wisdom (confidence < 0.8 but >= 0.5), cleans temp files (spawn-tree, manifests, review artifacts), updates registry to inactive with final stats
 - [ ] **CERE-08**: resume checks for stale FOCUS pheromones referencing completed phases and suggests review
@@ -113,11 +113,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PORT-03 | Phase 61 | Pending |
 | PORT-04 | Phase 61 | Pending |
 | PORT-05 | Phase 61 | Pending |
-| CERE-01 | Phase 62 | Pending |
-| CERE-02 | Phase 62 | Pending |
-| CERE-03 | Phase 62 | Pending |
-| CERE-04 | Phase 62 | Pending |
-| CERE-05 | Phase 62 | Pending |
+| CERE-01 | Phase 62 | Complete |
+| CERE-02 | Phase 62 | Complete |
+| CERE-03 | Phase 62 | Complete |
+| CERE-04 | Phase 62 | Complete |
+| CERE-05 | Phase 62 | Complete |
 | CERE-06 | Phase 63 | Pending |
 | CERE-07 | Phase 63 | Pending |
 | CERE-08 | Phase 63 | Pending |
