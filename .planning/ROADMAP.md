@@ -119,7 +119,7 @@
 - [x] **Phase 61: Porter Ant** - 26th caste registration, agent definitions across 4 surfaces, seal lifecycle wiring (completed 2026-04-27)
 - [x] **Phase 62: Lifecycle Ceremony -- Seal and Init** - Flag blocking, wisdom promotion, pheromone cleanup, rich init research (completed 2026-04-27)
 - [x] **Phase 63: Lifecycle Ceremony -- Status, Entomb, Resume** - Version display, wisdom extraction, staleness checks (completed 2026-04-27)
-- [ ] **Phase 64: Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol** - Codebase-aware questioning, auto-flagging, persistence suggestions, health checks
+- [x] **Phase 64: Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol** - Codebase-aware questioning, auto-flagging, persistence suggestions, health checks (completed 2026-04-27)
 - [ ] **Phase 65: Idea Shelving** - Persistent shelf, auto-shelve at seal, surface at init, entomb preservation
 
 ## Phase Details
@@ -246,9 +246,9 @@ Plans:
   - **Wave 1** (Plans 01, 02, 03): All parallel -- discuss-analyze Go subcommand + wrappers (01) | chaos + oracle wrapper enhancements (02) | patrol-check Go subcommand + wrapper (03)
 
 Plans:
-- [ ] 64-01-PLAN.md -- discuss-analyze subcommand and discuss/council wrapper wiring (CERE-09)
-- [ ] 64-02-PLAN.md -- Chaos midden recurrence + oracle persistence wrapper enhancements (CERE-10, CERE-11)
-- [ ] 64-03-PLAN.md -- patrol-check subcommand with JSON validity, stale detection, interrupted builds (CERE-12)
+- [x] 64-01-PLAN.md -- discuss-analyze subcommand and discuss/council wrapper wiring (CERE-09)
+- [x] 64-02-PLAN.md -- Chaos midden recurrence + oracle persistence wrapper enhancements (CERE-10, CERE-11)
+- [x] 64-03-PLAN.md -- patrol-check subcommand with JSON validity, stale detection, interrupted builds (CERE-12)
 
 ### Phase 65: Idea Shelving
 **Goal**: Colonies have continuity -- promising ideas get shelved at seal, surface at init, recurring REDIRECTs become permanent guidance, and shelved ideas survive entomb
@@ -273,5 +273,5 @@ Plans:
 | 61. Porter Ant | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 62. Lifecycle Ceremony -- Seal and Init | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 63. Lifecycle Ceremony -- Status, Entomb, Resume | v1.10 | 3/3 | Complete    | 2026-04-27 |
-| 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 0/3 | Planned | - |
+| 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |

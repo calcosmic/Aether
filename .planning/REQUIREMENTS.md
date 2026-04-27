@@ -38,10 +38,10 @@
 - [x] **CERE-06**: status dashboard shows runtime version line (e.g., "Runtime: v1.0.24") and one-line signal summary
 - [x] **CERE-07**: entomb extracts near-miss wisdom (confidence < 0.8 but >= 0.5), cleans temp files (spawn-tree, manifests, review artifacts), updates registry to inactive with final stats
 - [x] **CERE-08**: resume checks for stale FOCUS pheromones referencing completed phases and suggests review
-- [ ] **CERE-09**: discuss/council analyzes codebase first, then asks comprehensive multiple-choice questions covering all angles (features, priorities, scope, trade-offs, architecture) — like GSD questioning pattern with 2-4 options per question and freeform allowed
-- [ ] **CERE-10**: chaos auto-flags HIGH severity findings (suggests `aether flag "<finding>"`) and suggests REDIRECT for recurring midden patterns
-- [ ] **CERE-11**: oracle suggests persisting high-value research findings as pheromone signals or hive wisdom entries
-- [ ] **CERE-12**: patrol detects stale pheromones, verifies data file integrity (COLONY_STATE.json, pheromones.json, session.json are valid JSON), checks for interrupted builds (uncommitted manifests/spawn trees)
+- [x] **CERE-09**: discuss/council analyzes codebase first, then asks comprehensive multiple-choice questions covering all angles (features, priorities, scope, trade-offs, architecture) — like GSD questioning pattern with 2-4 options per question and freeform allowed
+- [x] **CERE-10**: chaos auto-flags HIGH severity findings (suggests `aether flag "<finding>"`) and suggests REDIRECT for recurring midden patterns
+- [x] **CERE-11**: oracle suggests persisting high-value research findings as pheromone signals or hive wisdom entries
+- [x] **CERE-12**: patrol detects stale pheromones, verifies data file integrity (COLONY_STATE.json, pheromones.json, session.json are valid JSON), checks for interrupted builds (uncommitted manifests/spawn trees)
 
 ### Oracle Loop Fix
 
@@ -121,10 +121,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CERE-06 | Phase 63 | Complete |
 | CERE-07 | Phase 63 | Complete |
 | CERE-08 | Phase 63 | Complete |
-| CERE-09 | Phase 64 | Pending |
-| CERE-10 | Phase 64 | Pending |
-| CERE-11 | Phase 64 | Pending |
-| CERE-12 | Phase 64 | Pending |
+| CERE-09 | Phase 64 | Complete |
+| CERE-10 | Phase 64 | Complete |
+| CERE-11 | Phase 64 | Complete |
+| CERE-12 | Phase 64 | Complete |
 | ORCL-01 | Phase 60 | Complete |
 | ORCL-02 | Phase 60 | Complete |
 | ORCL-03 | Phase 60 | Complete |
