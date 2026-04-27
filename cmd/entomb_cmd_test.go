@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -362,6 +363,518 @@ func TestEntomb_NoReviewsArchive(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(chamberDir, required)); err != nil {
 			t.Fatalf("expected archived file %s: %v", required, err)
 		}
+	}
+}
+
+func TestEntombNearMissExtraction(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Near miss colony"
+	taskID := "task-1"
+	instinctLow := colony.Instinct{ID: "inst-1", Trigger: "low", Action: "skip", Confidence: 0.4, Status: "active"}
+	instinctMid := colony.Instinct{ID: "inst-2", Trigger: "mid", Action: "maybe", Confidence: 0.6, Status: "active"}
+	instinctHigh := colony.Instinct{ID: "inst-3", Trigger: "high", Action: "definitely", Confidence: 0.9, Status: "active"}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeProject,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Memory: colony.Memory{
+			Instincts: []colony.Instinct{instinctLow, instinctMid, instinctHigh},
+		},
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Release", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskCompleted}}},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"entombed":true`) {
+		t.Fatalf("expected entomb success JSON, got: %s", output)
+	}
+
+	// Verify near-miss file exists in chamber
+	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 chamber, got %d", len(entries))
+	}
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+
+	nmData, err := os.ReadFile(filepath.Join(chamberDir, "near-miss-instincts.json"))
+	if err != nil {
+		t.Fatalf("expected near-miss-instincts.json in chamber: %v", err)
+	}
+
+	var nearMiss []colony.Instinct
+	if err := json.Unmarshal(nmData, &nearMiss); err != nil {
+		t.Fatalf("unmarshal near-miss instincts: %v", err)
+	}
+	if len(nearMiss) != 1 {
+		t.Fatalf("expected 1 near-miss instinct, got %d", len(nearMiss))
+	}
+	if nearMiss[0].ID != "inst-2" {
+		t.Fatalf("expected near-miss to be inst-2 (confidence 0.6), got %s", nearMiss[0].ID)
+	}
+
+	// Verify manifest has near_miss_instincts count
+	manifestData, err := os.ReadFile(filepath.Join(chamberDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	var manifest map[string]interface{}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+	if manifest["near_miss_instincts"] != float64(1) {
+		t.Fatalf("manifest near_miss_instincts = %v, want 1", manifest["near_miss_instincts"])
+	}
+}
+
+func TestEntombTempSweepMidden(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Temp sweep colony"
+	taskID := "task-1"
+	oldTime := time.Now().UTC().Add(-40 * 24 * time.Hour).Format(time.RFC3339)
+	recentTime := time.Now().UTC().Add(-5 * 24 * time.Hour).Format(time.RFC3339)
+
+	// Create midden with old and recent entries
+	midden := colony.MiddenFile{
+		Entries: []colony.MiddenEntry{
+			{ID: "old-1", Timestamp: oldTime, Category: "build", Message: "old failure"},
+			{ID: "recent-1", Timestamp: recentTime, Category: "build", Message: "recent failure"},
+		},
+	}
+	middenData, _ := json.MarshalIndent(midden, "", "  ")
+	if err := os.WriteFile(filepath.Join(dataDir, "midden.json"), append(middenData, '\n'), 0644); err != nil {
+		t.Fatalf("write midden: %v", err)
+	}
+
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeProject,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Release", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskCompleted}}},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	// Verify archived midden in chamber contains only the recent entry
+	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 chamber, got %d", len(entries))
+	}
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+
+	var archivedMidden colony.MiddenFile
+	archivedData, err := os.ReadFile(filepath.Join(chamberDir, "midden.json"))
+	if err != nil {
+		t.Fatalf("read archived midden: %v", err)
+	}
+	if err := json.Unmarshal(archivedData, &archivedMidden); err != nil {
+		t.Fatalf("unmarshal archived midden: %v", err)
+	}
+	// The temp sweep runs after copy, so the archived copy should have both entries
+	// (temp sweep cleans the active data, not the chamber copy)
+	if len(archivedMidden.Entries) != 2 {
+		t.Fatalf("expected 2 entries in archived midden (both preserved before sweep), got %d", len(archivedMidden.Entries))
+	}
+}
+
+func TestEntombTempSweepExpiredPheromones(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Pheromone sweep colony"
+	taskID := "task-1"
+
+	strengthZero := 0.0
+	strengthHigh := 0.8
+	// Create pheromones with expired and active signals
+	pheromones := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "expired-1", Type: "FOCUS", Active: false, Strength: &strengthZero, CreatedAt: "2026-01-01T00:00:00Z"},
+			{ID: "active-1", Type: "REDIRECT", Active: true, Strength: &strengthHigh, CreatedAt: "2026-04-01T00:00:00Z"},
+		},
+	}
+	phData, _ := json.MarshalIndent(pheromones, "", "  ")
+	if err := os.WriteFile(filepath.Join(dataDir, "pheromones.json"), append(phData, '\n'), 0644); err != nil {
+		t.Fatalf("write pheromones: %v", err)
+	}
+
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeProject,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Release", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskCompleted}}},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	// Verify archived pheromones in chamber contain both signals (copied before sweep)
+	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 chamber, got %d", len(entries))
+	}
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+
+	var archivedPh colony.PheromoneFile
+	archivedData, err := os.ReadFile(filepath.Join(chamberDir, "pheromones.json"))
+	if err != nil {
+		t.Fatalf("read archived pheromones: %v", err)
+	}
+	if err := json.Unmarshal(archivedData, &archivedPh); err != nil {
+		t.Fatalf("unmarshal archived pheromones: %v", err)
+	}
+	if len(archivedPh.Signals) != 2 {
+		t.Fatalf("expected 2 signals in archived pheromones (both preserved before sweep), got %d", len(archivedPh.Signals))
+	}
+}
+
+func TestEntombRegistryFinalStats(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Registry stats colony"
+	taskID := "task-1"
+
+	// Set up registry in the hub path
+	hub := resolveHubPath()
+	registryDir := filepath.Join(hub, "registry")
+	if err := os.MkdirAll(registryDir, 0755); err != nil {
+		t.Fatalf("create registry dir: %v", err)
+	}
+
+	repoPath, _ := os.Getwd()
+	rd := registryData{
+		Colonies: []registryEntry{
+			{RepoPath: repoPath, Domains: []string{"test"}, Active: true, RegisteredAt: "2026-04-01T00:00:00Z", LastGoal: goal},
+		},
+	}
+	regData, _ := json.MarshalIndent(rd, "", "  ")
+	if err := os.WriteFile(filepath.Join(registryDir, "registry.json"), append(regData, '\n'), 0644); err != nil {
+		t.Fatalf("write registry: %v", err)
+	}
+
+	initTime := "2026-04-01T00:00:00Z"
+	parsedTime, _ := time.Parse(time.RFC3339, initTime)
+
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeProject,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		InitializedAt: &parsedTime,
+		Memory: colony.Memory{
+			PhaseLearnings: []colony.PhaseLearning{
+				{Phase: 1, Learnings: []colony.Learning{{Claim: "learned something"}}},
+			},
+			Instincts: []colony.Instinct{
+				{ID: "inst-1", Confidence: 0.8, Status: "active"},
+			},
+		},
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Release", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskCompleted}}},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	// Verify registry entry was updated
+	regResult, err := os.ReadFile(filepath.Join(registryDir, "registry.json"))
+	if err != nil {
+		t.Fatalf("read registry: %v", err)
+	}
+	var updatedRD registryData
+	if err := json.Unmarshal(regResult, &updatedRD); err != nil {
+		t.Fatalf("unmarshal registry: %v", err)
+	}
+	if len(updatedRD.Colonies) != 1 {
+		t.Fatalf("expected 1 colony in registry, got %d", len(updatedRD.Colonies))
+	}
+	entry := updatedRD.Colonies[0]
+	if entry.Active {
+		t.Fatalf("expected Active=false after entomb, got true")
+	}
+	if entry.FinalStats == nil {
+		t.Fatal("expected FinalStats to be set after entomb")
+	}
+	if entry.FinalStats.PhaseCount != 1 {
+		t.Fatalf("FinalStats.PhaseCount = %d, want 1", entry.FinalStats.PhaseCount)
+	}
+	if entry.FinalStats.LearningCount != 1 {
+		t.Fatalf("FinalStats.LearningCount = %d, want 1", entry.FinalStats.LearningCount)
+	}
+	if entry.FinalStats.InstinctCount != 1 {
+		t.Fatalf("FinalStats.InstinctCount = %d, want 1", entry.FinalStats.InstinctCount)
+	}
+	if entry.FinalStats.SealDate == "" {
+		t.Fatal("FinalStats.SealDate should not be empty")
+	}
+	if entry.FinalStats.Duration == "" {
+		t.Fatal("FinalStats.Duration should not be empty")
+	}
+}
+
+func TestEntombRegistryNoEntry(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "No registry colony"
+	taskID := "task-1"
+
+	// Ensure no registry file exists
+	hub := resolveHubPath()
+	registryPath := filepath.Join(hub, "registry", "registry.json")
+	os.Remove(registryPath)
+
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeProject,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Release", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskCompleted}}},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb should succeed even without registry entry, got error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"entombed":true`) {
+		t.Fatalf("expected entomb success JSON, got: %s", output)
+	}
+}
+
+func TestNearMissSuggestionOutput(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Suggestion colony"
+	taskID := "task-1"
+	instinctMid := colony.Instinct{ID: "inst-1", Trigger: "mid", Action: "maybe", Confidence: 0.6, Status: "active"}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeProject,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Memory: colony.Memory{
+			Instincts: []colony.Instinct{instinctMid},
+		},
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Release", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskCompleted}}},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Old context\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"entomb"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "eligible for hive promotion") {
+		t.Fatalf("expected suggestion about hive promotion in output, got: %s", output)
+	}
+	if !strings.Contains(output, "1 instincts eligible") {
+		t.Fatalf("expected '1 instincts eligible' in output, got: %s", output)
 	}
 }
 
