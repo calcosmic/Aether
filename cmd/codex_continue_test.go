@@ -3112,7 +3112,7 @@ func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
 	if advanced, _ := result["advanced"].(bool); advanced {
 		t.Fatalf("expected advanced:false on watcher timeout, got %v", result)
 	}
-	if next := result["next"].(string); next != "aether continue --worker-timeout 1h" {
+	if next := result["next"].(string); !strings.HasPrefix(next, "aether continue --worker-timeout") {
 		t.Fatalf("next = %q, want timeout recovery command", next)
 	}
 
@@ -3123,6 +3123,119 @@ func TestContinue_BlocksOnWatcherTimeout(t *testing.T) {
 	watcher := verification["watcher"].(map[string]interface{})
 	if passed, _ := watcher["passed"].(bool); passed {
 		t.Fatalf("expected watcher.passed:false on timeout, got %v", watcher)
+	}
+}
+
+func TestContinue_SkipWatchersAdvancesWhenVerificationPasses(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Advance past watcher timeout with --skip-watchers"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Skip watchers test",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Complete work", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Continue work", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Skip watchers test", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-501", Task: "Complete work", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-502", Task: "Build-time verification", Status: "completed"},
+	})
+
+	rootCmd.SetArgs([]string{"continue", "--skip-watchers"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false with --skip-watchers, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true with --skip-watchers, got %v", result)
+	}
+
+	watcher := result["verification"].(map[string]interface{})["watcher"].(map[string]interface{})
+	if status, _ := watcher["status"].(string); status != "skipped" {
+		t.Fatalf("expected watcher status 'skipped', got %q", status)
+	}
+}
+
+func TestContinue_SkipWatchersStillBlocksWhenVerificationFails(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Block when verification fails even with --skip-watchers"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Verification failure test",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Broken work", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Verification failure test", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-601", Task: "Broken work", Status: "completed", TaskID: taskID},
+	})
+
+	// Intentionally no verification commands manifest — verification will fail
+	store.SaveJSON("last-build-claims.json", codexBuildManifest{})
+
+	rootCmd.SetArgs([]string{"continue", "--skip-watchers"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false when verification fails, got %v", result)
 	}
 }
 

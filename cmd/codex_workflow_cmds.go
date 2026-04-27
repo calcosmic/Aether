@@ -163,12 +163,14 @@ var continueCmd = &cobra.Command{
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
+		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
 				WorkerTimeout:    workerTimeout,
 				LightFlag:        lightFlag,
 				HeavyFlag:        heavyFlag,
+				SkipWatchers:     skipWatchers,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -183,6 +185,7 @@ var continueCmd = &cobra.Command{
 			WorkerTimeout:    workerTimeout,
 			LightFlag:        lightFlag,
 			HeavyFlag:        heavyFlag,
+			SkipWatchers:     skipWatchers,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -863,6 +866,7 @@ func init() {
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
 	continueCmd.Flags().Bool("heavy", false, "Force heavy review (full review gauntlet)")
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
+	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")

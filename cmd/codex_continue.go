@@ -99,6 +99,7 @@ type codexContinueOptions struct {
 	WorkerTimeout    time.Duration
 	LightFlag        bool
 	HeavyFlag        bool
+	SkipWatchers     bool
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
@@ -376,7 +377,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout)
+	verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults := gateResultsRead()
@@ -1001,7 +1002,7 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	return b.String()
 }
 
-func runCodexContinueVerification(root string, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
+func runCodexContinueVerification(root string, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
 	now := time.Now().UTC()
 	commands := resolveCodexVerificationCommands(root)
 	steps := []codexVerificationStep{
@@ -1012,7 +1013,13 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
-	continueWatcher, watcherFlow := runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+	var continueWatcher codexWatcherVerification
+	var watcherFlow *codexContinueWorkerFlowStep
+	if skipWatchers {
+		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
+	} else {
+		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+	}
 	watcher := continueWatcher
 	if !watcher.Present {
 		watcher = buildWatcher
@@ -1026,7 +1033,7 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 			blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
 		}
 	}
-	if watcher.Present && !watcher.Passed {
+	if watcher.Present && !watcher.Passed && watcher.Status != "skipped" {
 		checksPassed = false
 		summary := strings.TrimSpace(watcher.Summary)
 		if summary == "" {
