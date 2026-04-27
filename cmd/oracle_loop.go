@@ -25,6 +25,27 @@ const (
 	defaultOracleHeartbeat        = 15 * time.Second
 )
 
+type oracleDepthConfig struct {
+	MaxIterations    int
+	TargetConfidence int
+	Label            string
+	Description      string
+}
+
+var oracleDepthLevels = map[string]oracleDepthConfig{
+	"quick":      {2, 60, "Quick", "Fast overview, 1-2 questions"},
+	"balanced":   {4, 85, "Balanced", "Thorough investigation, 3-4 questions"},
+	"deep":       {6, 95, "Deep", "Comprehensive analysis, 5-6 questions"},
+	"exhaustive": {10, 99, "Exhaustive", "Full convergence, up to 10 iterations"},
+}
+
+func resolveOracleDepth(depth string) oracleDepthConfig {
+	if cfg, ok := oracleDepthLevels[strings.ToLower(strings.TrimSpace(depth))]; ok {
+		return cfg
+	}
+	return oracleDepthLevels["balanced"]
+}
+
 var newOracleWorkerInvoker = codex.NewWorkerInvoker
 var oracleAttemptPolicyForPhase = defaultOracleAttemptPolicy
 
@@ -59,6 +80,7 @@ type oracleStateFile struct {
 	Contradictions     []string `json:"contradictions,omitempty"`
 	Recommendation     string   `json:"recommendation,omitempty"`
 	ControllerPID      int      `json:"controller_pid,omitempty"`
+	Depth              string   `json:"depth,omitempty"`
 }
 
 type oraclePlanFile struct {
@@ -159,7 +181,7 @@ type oracleWorkerEvidence struct {
 	Type     string `json:"type"`
 }
 
-func runOracleCompatibility(root string, args []string) (map[string]interface{}, error) {
+func runOracleCompatibility(root string, args []string, depth string) (map[string]interface{}, error) {
 	mode := "status"
 	if len(args) > 0 {
 		mode = strings.ToLower(strings.TrimSpace(args[0]))
@@ -171,7 +193,7 @@ func runOracleCompatibility(root string, args []string) (map[string]interface{},
 	case "stop":
 		return stopOracleCompatibility(root)
 	default:
-		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")))
+		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth)
 	}
 }
 
@@ -273,7 +295,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func startOracleCompatibility(root, topic string) (map[string]interface{}, error) {
+func startOracleCompatibility(root, topic, depth string) (map[string]interface{}, error) {
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
@@ -297,6 +319,8 @@ func startOracleCompatibility(root, topic string) (map[string]interface{}, error
 	_ = os.Remove(paths.LoopPath)
 
 	detectedType, languages, frameworks := detectOracleProjectProfile(root)
+	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks)
+	depthCfg := resolveOracleDepth(depth)
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := oracleStateFile{
 		Version:           "1.1",
@@ -305,8 +329,8 @@ func startOracleCompatibility(root, topic string) (map[string]interface{}, error
 		Template:          defaultOracleTemplate,
 		Phase:             "survey",
 		Iteration:         0,
-		MaxIterations:     defaultOracleMaxIterations,
-		TargetConfidence:  defaultOracleTargetConfidence,
+		MaxIterations:     depthCfg.MaxIterations,
+		TargetConfidence:  depthCfg.TargetConfidence,
 		OverallConfidence: 0,
 		StartedAt:         now,
 		LastUpdated:       now,
@@ -315,11 +339,12 @@ func startOracleCompatibility(root, topic string) (map[string]interface{}, error
 		FocusAreas:        currentOracleFocusAreas(),
 		Platform:          "codex",
 		ControllerPID:     os.Getpid(),
+		Depth:             depthCfg.Label,
 	}
 	plan := oraclePlanFile{
 		Version:     "1.1",
 		Sources:     map[string]oracleSource{},
-		Questions:   buildOracleQuestions(topic, detectedType),
+		Questions:   buildBriefInformedQuestions(topic, brief, detectedType),
 		CreatedAt:   now,
 		LastUpdated: now,
 	}
@@ -1019,6 +1044,308 @@ func currentOracleFocusAreas() []string {
 	}
 	sort.Strings(focus)
 	return focus
+}
+
+func currentOracleRedirectAreas() []string {
+	pf := loadPheromones()
+	if pf == nil {
+		return nil
+	}
+	now := time.Now()
+	seen := map[string]bool{}
+	var redirects []string
+	for _, sig := range pf.Signals {
+		if sig.Type != "REDIRECT" || !signalActiveForPrompt(sig, now) {
+			continue
+		}
+		text := extractSignalText(sig.Content)
+		if text == "" || seen[text] {
+			continue
+		}
+		seen[text] = true
+		redirects = append(redirects, text)
+	}
+	sort.Strings(redirects)
+	return redirects
+}
+
+func loadColonyLearnings(root string) []string {
+	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		return nil
+	}
+	var state struct {
+		Memory struct {
+			Instincts []struct {
+				Trigger string `json:"trigger"`
+				Action  string `json:"action"`
+			} `json:"instincts"`
+		} `json:"memory"`
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil
+	}
+	instincts := state.Memory.Instincts
+	if len(instincts) == 0 {
+		return nil
+	}
+	// Take last 5 (most recent), reversed so most recent is first
+	start := len(instincts) - 5
+	if start < 0 {
+		start = 0
+	}
+	recent := instincts[start:]
+	learnings := make([]string, 0, len(recent))
+	for i := len(recent) - 1; i >= 0; i-- {
+		inst := recent[i]
+		text := inst.Trigger
+		if inst.Action != "" {
+			text = inst.Trigger + " -> " + inst.Action
+		}
+		learnings = append(learnings, text)
+	}
+	return learnings
+}
+
+func formulateOracleBrief(root, topic, detectedType string, languages, frameworks []string) string {
+	var b strings.Builder
+
+	b.WriteString("# Oracle Research Brief\n\n")
+
+	// Topic section
+	fmt.Fprintf(&b, "## Topic\n%s\n\n", topic)
+
+	// Project Profile section
+	b.WriteString("## Project Profile\n")
+	fmt.Fprintf(&b, "- Type: %s\n", detectedType)
+	fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "none detected"))
+	fmt.Fprintf(&b, "- Frameworks: %s\n", renderCSV(frameworks, "none detected"))
+	b.WriteString("\n")
+
+	// Colony Goal section
+	b.WriteString("## Colony Goal\n")
+	colonyGoal := loadColonyGoal(root)
+	if colonyGoal != "" {
+		fmt.Fprintf(&b, "%s\n", colonyGoal)
+	} else {
+		b.WriteString("(no colony goal set)\n")
+	}
+	b.WriteString("\n")
+
+	// Codebase Structure section
+	b.WriteString("## Codebase Structure\n")
+	structure := scanCodebaseStructure(root)
+	if structure != "" {
+		fmt.Fprintf(&b, "%s\n", structure)
+	} else {
+		b.WriteString("(unable to scan)\n")
+	}
+	b.WriteString("\n")
+
+	// Active Signals section
+	b.WriteString("## Active Signals\n")
+	focusAreas := currentOracleFocusAreas()
+	redirectAreas := currentOracleRedirectAreas()
+	if len(focusAreas) == 0 && len(redirectAreas) == 0 {
+		b.WriteString("(none)\n")
+	} else {
+		for _, f := range focusAreas {
+			fmt.Fprintf(&b, "- FOCUS: %s\n", f)
+		}
+		for _, r := range redirectAreas {
+			fmt.Fprintf(&b, "- REDIRECT: %s\n", r)
+		}
+	}
+	b.WriteString("\n")
+
+	// Recent Learnings section
+	b.WriteString("## Recent Learnings\n")
+	learnings := loadColonyLearnings(root)
+	if len(learnings) == 0 {
+		b.WriteString("(none)\n")
+	} else {
+		for _, l := range learnings {
+			fmt.Fprintf(&b, "- %s\n", l)
+		}
+	}
+
+	brief := strings.TrimSpace(b.String())
+
+	// Write brief.md to oracle workspace
+	paths := oracleWorkspacePaths(root)
+	if err := os.MkdirAll(paths.Dir, 0755); err == nil {
+		_ = os.WriteFile(filepath.Join(paths.Dir, "brief.md"), []byte(brief+"\n"), 0644)
+	}
+
+	return brief
+}
+
+func loadColonyGoal(root string) string {
+	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		return ""
+	}
+	var state struct {
+		Goal *string `json:"goal"`
+	}
+	if err := json.Unmarshal(data, &state); err != nil || state.Goal == nil {
+		return ""
+	}
+	return strings.TrimSpace(*state.Goal)
+}
+
+func scanCodebaseStructure(root string) string {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return ""
+	}
+	var dirs []string
+	var files []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+			continue
+		}
+		if entry.IsDir() {
+			dirs = append(dirs, name+"/")
+		} else {
+			files = append(files, name)
+		}
+	}
+	sort.Strings(dirs)
+	sort.Strings(files)
+
+	var b strings.Builder
+	// Show top-level dirs
+	for _, d := range dirs {
+		fmt.Fprintf(&b, "- %s\n", d)
+		// One level deeper for key directories
+		subEntries, err := os.ReadDir(filepath.Join(root, d))
+		if err != nil {
+			continue
+		}
+		subDirs := 0
+		for _, sub := range subEntries {
+			if sub.IsDir() && subDirs < 5 {
+				fmt.Fprintf(&b, "  - %s/\n", sub.Name())
+				subDirs++
+			}
+		}
+	}
+	// Show top-level files (limit to 5)
+	count := 0
+	for _, f := range files {
+		if count >= 5 {
+			break
+		}
+		fmt.Fprintf(&b, "- %s\n", f)
+		count++
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func buildBriefInformedQuestions(topic string, brief string, detectedType string) []oracleQuestion {
+	var questions []oracleQuestion
+	qID := 0
+
+	nextQ := func(text string) {
+		qID++
+		questions = append(questions, oracleQuestion{
+			ID:                fmt.Sprintf("q%d", qID),
+			Text:              text,
+			Status:            "open",
+			Confidence:        0,
+			KeyFindings:       []oracleFinding{},
+			IterationsTouched: []int{},
+		})
+	}
+
+	// Always include 2 context-establishing questions
+	nextQ(fmt.Sprintf("What is the actual problem boundary for %s in the context of %s?", topic, detectedType))
+
+	// Extract key directories from brief for file relevance question
+	keyDirs := extractBriefSection(brief, "Codebase Structure")
+	if keyDirs != "" {
+		nextQ(fmt.Sprintf("Which specific files and modules in the following structure are most relevant to %s?\n%s", topic, keyDirs))
+	} else {
+		nextQ(fmt.Sprintf("Which files, commands, or runtime surfaces matter most to investigating %s?", topic))
+	}
+
+	// If signals exist, add a constraints question
+	signals := extractBriefSection(brief, "Active Signals")
+	if signals != "" && !strings.Contains(signals, "(none)") {
+		nextQ(fmt.Sprintf("How do the following constraints affect the approach to %s?\n%s", topic, signals))
+	}
+
+	// If learnings exist, add a learning-relevance question
+	learnings := extractBriefSection(brief, "Recent Learnings")
+	if learnings != "" && !strings.Contains(learnings, "(none)") {
+		// Take first learning for question text
+		lines := strings.Split(learnings, "\n")
+		learningSummary := ""
+		if len(lines) > 0 {
+			learningSummary = strings.TrimPrefix(lines[0], "- ")
+		}
+		if learningSummary != "" {
+			nextQ(fmt.Sprintf("Given that %s was previously observed, how does %s relate?", learningSummary, topic))
+		}
+	}
+
+	// If frameworks detected, add a framework-specific question
+	frameworks := extractBriefField(brief, "Frameworks")
+	if frameworks != "" && frameworks != "none detected" {
+		nextQ(fmt.Sprintf("What %s-specific patterns or pitfalls apply to %s?", frameworks, topic))
+	}
+
+	// Colony goal relevance question
+	goal := extractBriefSection(brief, "Colony Goal")
+	if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
+		nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topic, goal))
+	}
+
+  // Always include evidence and improvement questions
+  nextQ(fmt.Sprintf("What evidence currently supports or contradicts the expected behavior of %s?", topic))
+  nextQ(fmt.Sprintf("What changes would materially improve reliability or clarity for %s?", topic))
+
+  // Ensure minimum of 5 questions by adding recommendation if needed
+  if len(questions) < 5 {
+    nextQ(fmt.Sprintf("What concrete, actionable recommendation follows from investigating %s?", topic))
+  }
+
+	return questions
+}
+
+// extractBriefSection returns the content after a "## Section Name" header until the next "## " or end of string.
+func extractBriefSection(brief, sectionName string) string {
+	header := "## " + sectionName
+	idx := strings.Index(brief, header)
+	if idx == -1 {
+		return ""
+	}
+	content := brief[idx+len(header):]
+	// Find next section header
+	nextSection := strings.Index(content, "\n## ")
+	if nextSection != -1 {
+		content = content[:nextSection]
+	}
+	return strings.TrimSpace(content)
+}
+
+// extractBriefField returns the value after "- Field: " in a brief section.
+func extractBriefField(brief, fieldName string) string {
+	pattern := "- " + fieldName + ": "
+	idx := strings.Index(brief, pattern)
+	if idx == -1 {
+		return ""
+	}
+	content := brief[idx+len(pattern):]
+	// Take until end of line
+	if nl := strings.Index(content, "\n"); nl != -1 {
+		content = content[:nl]
+	}
+	return strings.TrimSpace(content)
 }
 
 func oracleResponsePath(paths oraclePaths, iteration, attempt int) string {
