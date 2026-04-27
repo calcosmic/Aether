@@ -95,6 +95,24 @@ Interpretation:
 
 Use this survey status as advisory context for the verification report only.
 
+### Step 1.5.1.5: Read Prior Gate Results (Gate Recovery)
+
+Before running verification, check if there are prior gate results from a previous continue attempt.
+
+Run using the Bash tool with description "Reading prior gate results...":
+```bash
+prior_gates=$(aether gate-results-read 2>/dev/null || echo "[]")
+prior_count=$(echo "$prior_gates" | jq 'length')
+passed_count=$(echo "$prior_gates" | jq '[.[] | select(.passed == true)] | length')
+failed_count=$(echo "$prior_gates" | jq '[.[] | select(.passed == false)] | length')
+echo "{\"prior_count\": $prior_count, \"passed_count\": $passed_count, \"failed_count\": $failed_count}"
+```
+
+**If `prior_count > 0`, display the skip summary:**
+```
+Gate Recovery: Skipping {passed_count} passed gates -- re-checking {failed_count} failures
+```
+
 ### Step 1.5: Verification Loop Gate (MANDATORY)
 
 **The Iron Law:** No phase advancement without fresh verification evidence.
@@ -139,19 +157,39 @@ Phase {id} — Checking colony work...
 Run using the Bash tool with description "Running build check...": `{build_command} 2>&1 | tail -30`
 Record: exit code, any errors. **STOP if fails.**
 
+After build check completes, write gate result:
+```bash
+aether gate-results-write --name "build_check" --passed {true/false} --detail "{summary}"
+```
+
 **Phase 2: Type Check** (if command exists):
 Run using the Bash tool with description "Running type check...": `{type_command} 2>&1 | head -30`
 Record: error count. Report all type errors.
 
+After type check completes, write gate result:
+```bash
+aether gate-results-write --name "type_check" --passed {true/false} --detail "{summary}"
+```
+
 **Phase 3: Lint Check** (if command exists):
 Run using the Bash tool with description "Running lint check...": `{lint_command} 2>&1 | head -30`
 Record: warning count, error count.
+
+After lint check completes, write gate result:
+```bash
+aether gate-results-write --name "lint_check" --passed {true/false} --detail "{summary}"
+```
 
 **Phase 4: Test Check** (if command exists):
 Run using the Bash tool with description "Running test suite...": `{test_command} 2>&1 | tail -50`
 Record: pass count, fail count, exit code. **STOP if fails.**
 
 **IMPORTANT:** Store the test command exit code in a variable (e.g., `test_exit_code`) for use in Step 1.5.3 verify-claims.
+
+After test check completes, write gate result:
+```bash
+aether gate-results-write --name "tests_pass" --passed {true/false} --detail "{summary of pass/fail counts}"
+```
 
 **Coverage Check** (if coverage command exists):
 Run using the Bash tool with description "Checking test coverage...": `{coverage_command}  # e.g., npm run test:coverage`
@@ -268,9 +306,19 @@ Record: potential secrets (critical), debug artifacts (warning).
 
 Note: Professional security scanning happens in Step 1.8 (Gatekeeper for CVEs) and Step 1.9 (Auditor for code quality).
 
+After secrets scan completes, write gate result:
+```bash
+aether gate-results-write --name "secrets_check" --passed {true/false} --detail "{summary of secrets found or clean}"
+```
+
 **Phase 6: Diff Review**:
 Run using the Bash tool with description "Reviewing file changes...": `git diff --stat`
 Review changed files for unintended modifications.
+
+After diff review completes, write gate result:
+```bash
+aether gate-results-write --name "diff_review" --passed {true/false} --detail "{summary of files changed or issues found}"
+```
 
 **Success Criteria Check:**
 Read phase success criteria from `plan.phases[current].success_criteria`.
@@ -312,6 +360,18 @@ Overall: READY / NOT READY
 
 **If NOT READY (any of: build fails, tests fail, critical security issues, success criteria unmet):**
 
+Collect ALL failures before displaying. For each failed verification phase, retrieve its recovery template:
+
+Run using the Bash tool with description "Getting recovery templates for failed gates...":
+```bash
+# For each failed gate, retrieve its recovery template
+for gate_name in {list_of_failed_gate_names}; do
+  template=$(aether gate-recovery-template --name "$gate_name" 2>/dev/null || echo "No specific recovery instructions available for this gate.")
+  echo "=== $gate_name ==="
+  echo "$template"
+done
+```
+
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⛔🐜 V E R I F I C A T I O N   F A I L E D
@@ -319,14 +379,19 @@ Overall: READY / NOT READY
 
 Phase {id} cannot advance until issues are resolved.
 
-🚨 Issues Found:
-{list each failure with specific evidence}
+🚨 Failed Gates ({failed_count}):
 
-🔧 Required Actions:
-  1. Fix the issues listed above
-  2. Run /ant-continue again to re-verify
+{For each failed gate:}
+── {gate_name} ──
+{failure_detail}
 
-The phase will NOT advance until verification passes.
+Recovery:
+{recovery_template from aether gate-recovery-template --name "{gate_name}"}
+
+{End for each}
+
+🔧 Fix the issues above, then run /ant-continue again.
+Only previously failed gates will be re-checked.
 ```
 
 **CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
@@ -345,6 +410,11 @@ All checks completed with evidence:
 {list each check and its evidence}
 
 Proceeding to gate checks...
+```
+
+Write gate results for all verification phases as passed (ensures gate results reflect the successful run):
+```bash
+aether gate-results-write --name "verification_loop" --passed true --detail "All verification phases passed"
 ```
 
 Continue to Step 1.5.3.
