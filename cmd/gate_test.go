@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -302,5 +303,153 @@ func TestPreContinueGates(t *testing.T) {
 	}
 	if err := runPreContinueGates(dataDir, 1); err == nil {
 		t.Error("pre-continue gates should fail with critical flags")
+	}
+}
+
+// --- Gate Recovery Template Tests (Phase 59, Plan 01) ---
+
+func TestGateRecoveryTemplates_HasAllGateNames(t *testing.T) {
+	expectedGates := []string{
+		"verification_loop", "spawn_gate", "anti_pattern", "complexity",
+		"gatekeeper", "auditor", "tdd_evidence", "runtime",
+		"flags", "watcher_veto", "medic", "tests_pass",
+	}
+	for _, name := range expectedGates {
+		if _, ok := gateRecoveryTemplates[name]; !ok {
+			t.Errorf("gateRecoveryTemplates missing entry for %q", name)
+		}
+	}
+}
+
+func TestGateRecoveryTemplate_KnownGate(t *testing.T) {
+	result := gateRecoveryTemplate("spawn_gate")
+	if !strings.Contains(result, "ant-build") {
+		t.Errorf("spawn_gate template should contain 'ant-build', got: %s", result)
+	}
+	if !strings.Contains(result, "ant-continue") {
+		t.Errorf("spawn_gate template should contain 'ant-continue', got: %s", result)
+	}
+}
+
+func TestGateRecoveryTemplate_UnknownGate(t *testing.T) {
+	result := gateRecoveryTemplate("nonexistent_gate")
+	if !strings.Contains(result, "No specific recovery instructions") {
+		t.Errorf("unknown gate should return fallback message, got: %s", result)
+	}
+}
+
+func TestShouldSkipGate_PassedGateSkipped(t *testing.T) {
+	prior := []colony.GateResultEntry{
+		{Name: "spawn_gate", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	result := shouldSkipGate(prior, "spawn_gate")
+	if !result {
+		t.Error("should skip spawn_gate when it previously passed")
+	}
+}
+
+func TestShouldSkipGate_TestsNeverSkipped(t *testing.T) {
+	prior := []colony.GateResultEntry{
+		{Name: "tests_pass", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	result := shouldSkipGate(prior, "tests_pass")
+	if result {
+		t.Error("tests_pass should never be skipped, even when previously passed")
+	}
+}
+
+func TestShouldSkipGate_FailedGateNotSkipped(t *testing.T) {
+	prior := []colony.GateResultEntry{
+		{Name: "spawn_gate", Passed: false, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	result := shouldSkipGate(prior, "spawn_gate")
+	if result {
+		t.Error("should not skip spawn_gate when it previously failed")
+	}
+}
+
+func TestShouldSkipGate_NoPriorResults(t *testing.T) {
+	result := shouldSkipGate(nil, "spawn_gate")
+	if result {
+		t.Error("should not skip any gate when no prior results exist")
+	}
+}
+
+func TestGateResultsWriteAndRead(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Create a minimal COLONY_STATE.json
+	state := map[string]interface{}{
+		"version": "3.0",
+		"goal":    "test gate results",
+		"state":   "READY",
+	}
+	stateData, _ := json.Marshal(state)
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	entries := []colony.GateResultEntry{
+		{Name: "spawn_gate", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "tests_pass", Passed: false, Timestamp: time.Now().UTC().Format(time.RFC3339), Detail: "2 tests failed"},
+	}
+
+	if err := gateResultsWrite(entries); err != nil {
+		t.Fatalf("gateResultsWrite failed: %v", err)
+	}
+
+	readBack := gateResultsRead()
+	if len(readBack) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(readBack))
+	}
+	if readBack[0].Name != "spawn_gate" || !readBack[0].Passed {
+		t.Errorf("first entry mismatch: %+v", readBack[0])
+	}
+	if readBack[1].Name != "tests_pass" || readBack[1].Passed {
+		t.Errorf("second entry mismatch: %+v", readBack[1])
+	}
+	if readBack[1].Detail != "2 tests failed" {
+		t.Errorf("detail mismatch: got %q", readBack[1].Detail)
+	}
+}
+
+func TestGateResultsRead_NoFile(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	result := gateResultsRead()
+	if result != nil {
+		t.Errorf("expected nil when no state file, got %v", result)
+	}
+}
+
+func TestFormatSkipSummary_MixedResults(t *testing.T) {
+	prior := []colony.GateResultEntry{
+		{Name: "spawn_gate", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "anti_pattern", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "tests_pass", Passed: false, Timestamp: time.Now().UTC().Format(time.RFC3339), Detail: "failed"},
+		{Name: "gatekeeper", Passed: false, Timestamp: time.Now().UTC().Format(time.RFC3339), Detail: "CVE found"},
+		{Name: "auditor", Passed: false, Timestamp: time.Now().UTC().Format(time.RFC3339), Detail: "low score"},
+	}
+	summary := formatSkipSummary(prior)
+	if !strings.Contains(summary, "Skipping 2 passed gates") {
+		t.Errorf("summary should mention 2 passed gates, got: %s", summary)
+	}
+	if !strings.Contains(summary, "re-checking 3 failures") {
+		t.Errorf("summary should mention 3 failures, got: %s", summary)
+	}
+}
+
+func TestFormatSkipSummary_NoPriorResults(t *testing.T) {
+	summary := formatSkipSummary(nil)
+	if summary != "" {
+		t.Errorf("expected empty string for nil results, got: %s", summary)
 	}
 }
