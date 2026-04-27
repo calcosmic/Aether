@@ -47,7 +47,7 @@ Show each suggestion and let the user approve or skip individually.
 
 ## Approval
 
-- Use AskUserQuestion with 3 options: **Approve and create colony**, **Revise goal**, **Cancel**.
+- Use AskUserQuestion with 3 options: proceed, revise goal, cancel.
 - After approval, for each approved pheromone suggestion, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-research"`.
 - Then run `AETHER_OUTPUT_MODE=visual aether init "$ARGUMENTS"`.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
