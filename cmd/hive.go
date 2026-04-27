@@ -99,7 +99,6 @@ var hiveStoreCmd = &cobra.Command{
 		}
 
 		// Dedup: check if same text+domain already exists
-		textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
 		for i, e := range wf.Entries {
 			if e.Text == text && e.Domain == domain {
 				// Reinforce
@@ -133,6 +132,7 @@ var hiveStoreCmd = &cobra.Command{
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
+		textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
 		entry := hiveWisdomEntry{
 			ID:          fmt.Sprintf("%s_%s", domain, textHash[:12]),
 			Text:        text,
