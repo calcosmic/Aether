@@ -165,7 +165,11 @@ Plans:
   1. When a verification gate fails, the output shows specific recovery instructions (not just "FAILED")
   2. Watcher Veto asks for explicit user confirmation before stashing work -- no silent auto-stash
   3. Re-running `/ant-continue` after a gate failure only re-checks the previously failed gates, not all gates
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 59-01-PLAN.md -- Gate result types, recovery templates, skip logic in Go runtime (GATE-01, GATE-03)
+- [ ] 59-02-PLAN.md -- Playbook recovery templates, incremental gate checking, veto confirmation (GATE-01, GATE-02, GATE-03)
 
 ### Phase 60: Oracle Loop Fix
 **Goal**: The Oracle has a working research formulation step, depth selection, and proper state management -- it produces deep research, not shallow one-shots
@@ -241,7 +245,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 57. QUEEN.md Pipeline Fix | v1.10 | 3/3 | Complete    | 2026-04-26 |
 | 58. Smart Review Depth | v1.10 | 0/2 | Planned | - |
-| 59. Gate Failure Recovery | v1.10 | 0/? | Not started | - |
+| 59. Gate Failure Recovery | v1.10 | 0/2 | Planned | - |
 | 60. Oracle Loop Fix | v1.10 | 0/? | Not started | - |
 | 61. Porter Ant | v1.10 | 0/? | Not started | - |
 | 62. Lifecycle Ceremony -- Seal and Init | v1.10 | 0/? | Not started | - |
