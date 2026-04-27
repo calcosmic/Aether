@@ -11,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
+	"github.com/spf13/cobra"
 )
 
 func TestGateCheck_TaskComplete_AllPass(t *testing.T) {
@@ -457,9 +458,22 @@ func TestFormatSkipSummary_NoPriorResults(t *testing.T) {
 
 // --- CLI Subcommand Tests (Phase 59, Plan 01, Task 3) ---
 
-func TestGateResultsReadCmd_EmptyState(t *testing.T) {
+// gateCmdTestSetup prepares a test environment for gate CLI subcommands.
+// It disables rootCmd's PersistentPreRunE (which would overwrite the test store)
+// and restores it on cleanup.
+func gateCmdTestSetup(t *testing.T) {
+	t.Helper()
 	saveGlobals(t)
 	resetRootCmd(t)
+	origPreRun := rootCmd.PersistentPreRunE
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error { return nil }
+	t.Cleanup(func() {
+		rootCmd.PersistentPreRunE = origPreRun
+	})
+}
+
+func TestGateResultsReadCmd_EmptyState(t *testing.T) {
+	gateCmdTestSetup(t)
 	dir := t.TempDir()
 	s, err := storage.NewStore(dir)
 	if err != nil {
@@ -469,7 +483,7 @@ func TestGateResultsReadCmd_EmptyState(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"gate-results-read"})
-	rootCmd.SetOut(&buf)
+	stdout = &buf
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -481,8 +495,7 @@ func TestGateResultsReadCmd_EmptyState(t *testing.T) {
 }
 
 func TestGateResultsWriteCmd_WithNamePassed(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	gateCmdTestSetup(t)
 	dir := t.TempDir()
 	s, err := storage.NewStore(dir)
 	if err != nil {
@@ -499,7 +512,7 @@ func TestGateResultsWriteCmd_WithNamePassed(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"gate-results-write", "--name", "spawn_gate", "--passed"})
-	rootCmd.SetOut(&buf)
+	stdout = &buf
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -523,8 +536,7 @@ func TestGateResultsWriteCmd_WithNamePassed(t *testing.T) {
 }
 
 func TestGateResultsWriteCmd_WithDetail(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	gateCmdTestSetup(t)
 	dir := t.TempDir()
 	s, err := storage.NewStore(dir)
 	if err != nil {
@@ -540,7 +552,7 @@ func TestGateResultsWriteCmd_WithDetail(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"gate-results-write", "--name", "spawn_gate", "--passed=false", "--detail", "missing files"})
-	rootCmd.SetOut(&buf)
+	stdout = &buf
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -556,8 +568,7 @@ func TestGateResultsWriteCmd_WithDetail(t *testing.T) {
 }
 
 func TestGateResultsWriteCmd_MissingName(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	gateCmdTestSetup(t)
 	dir := t.TempDir()
 	s, err := storage.NewStore(dir)
 	if err != nil {
@@ -567,8 +578,8 @@ func TestGateResultsWriteCmd_MissingName(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"gate-results-write", "--passed"})
-	rootCmd.SetOut(&buf)
-	rootCmd.SetErr(&buf)
+	stdout = &buf
+	stderr = &buf
 	// Should output error about --name being required, not crash
 	_ = rootCmd.Execute()
 
@@ -579,8 +590,7 @@ func TestGateResultsWriteCmd_MissingName(t *testing.T) {
 }
 
 func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	gateCmdTestSetup(t)
 	dir := t.TempDir()
 	s, err := storage.NewStore(dir)
 	if err != nil {
@@ -600,7 +610,7 @@ func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate"})
-	rootCmd.SetOut(&buf)
+	stdout = &buf
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -612,8 +622,7 @@ func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
 }
 
 func TestShouldSkipGateCmd_TestsNeverSkipped(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	gateCmdTestSetup(t)
 	dir := t.TempDir()
 	s, err := storage.NewStore(dir)
 	if err != nil {
@@ -633,7 +642,7 @@ func TestShouldSkipGateCmd_TestsNeverSkipped(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "tests_pass"})
-	rootCmd.SetOut(&buf)
+	stdout = &buf
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -645,12 +654,11 @@ func TestShouldSkipGateCmd_TestsNeverSkipped(t *testing.T) {
 }
 
 func TestGateRecoveryTemplateCmd_KnownGate(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	gateCmdTestSetup(t)
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"gate-recovery-template", "--name", "spawn_gate"})
-	rootCmd.SetOut(&buf)
+	stdout = &buf
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -662,12 +670,11 @@ func TestGateRecoveryTemplateCmd_KnownGate(t *testing.T) {
 }
 
 func TestGateRecoveryTemplateCmd_UnknownGate(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	gateCmdTestSetup(t)
 
 	var buf bytes.Buffer
 	rootCmd.SetArgs([]string{"gate-recovery-template", "--name", "nonexistent"})
-	rootCmd.SetOut(&buf)
+	stdout = &buf
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}

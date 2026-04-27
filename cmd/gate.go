@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -580,9 +583,105 @@ func formatSkipSummary(priorResults []colony.GateResultEntry) string {
 	return fmt.Sprintf("Skipping %d passed gates -- re-checking %d failures", passed, failed)
 }
 
+// --- Cobra CLI subcommands for gate results ---
+
+var gateResultsReadCmd = &cobra.Command{
+	Use:          "gate-results-read",
+	Short:        "Read gate results from COLONY_STATE.json",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		results := gateResultsRead()
+		if results == nil {
+			results = []colony.GateResultEntry{}
+		}
+		data, _ := json.Marshal(results)
+		fmt.Fprintln(stdout, string(data))
+		return nil
+	},
+}
+
+var gateResultsWriteCmd = &cobra.Command{
+	Use:          "gate-results-write",
+	Short:        "Write a gate result entry to COLONY_STATE.json",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := mustGetString(cmd, "name")
+		if name == "" {
+			outputErrorMessage("--name is required")
+			return nil
+		}
+		passed, _ := cmd.Flags().GetBool("passed")
+		detail, _ := cmd.Flags().GetString("detail")
+
+		entry := colony.GateResultEntry{
+			Name:      name,
+			Passed:    passed,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Detail:    detail,
+		}
+		if err := gateResultsWrite([]colony.GateResultEntry{entry}); err != nil {
+			outputError(1, "failed to write gate result", err)
+			return nil
+		}
+		data, _ := json.Marshal(map[string]interface{}{"ok": true, "entry": entry})
+		fmt.Fprintln(stdout, string(data))
+		return nil
+	},
+}
+
+var shouldSkipGateCmd = &cobra.Command{
+	Use:          "should-skip-gate",
+	Short:        "Check whether a gate should be skipped based on prior results",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := mustGetString(cmd, "name")
+		if name == "" {
+			outputErrorMessage("--name is required")
+			return nil
+		}
+		prior := gateResultsRead()
+		result := shouldSkipGate(prior, name)
+		fmt.Fprintln(stdout, strconv.FormatBool(result))
+		return nil
+	},
+}
+
+var gateRecoveryTemplateCmd = &cobra.Command{
+	Use:          "gate-recovery-template",
+	Short:        "Get the recovery template for a gate type",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := mustGetString(cmd, "name")
+		if name == "" {
+			outputErrorMessage("--name is required")
+			return nil
+		}
+		template := gateRecoveryTemplate(name)
+		fmt.Fprintln(stdout, template)
+		return nil
+	},
+}
+
 func init() {
 	gateCheckCmd.Flags().String("action", "", "Action to check: task-complete or phase-advance (required)")
 	gateCheckCmd.Flags().String("task", "", "Task ID for task-complete action (e.g., 1.1)")
 	gateCheckCmd.Flags().Int("phase", 0, "Phase number for phase-advance action")
 	rootCmd.AddCommand(gateCheckCmd)
+
+	// Gate results CLI subcommands
+	gateResultsWriteCmd.Flags().String("name", "", "Gate name (required)")
+	gateResultsWriteCmd.Flags().Bool("passed", false, "Whether gate passed")
+	gateResultsWriteCmd.Flags().String("detail", "", "Optional detail about the result")
+	rootCmd.AddCommand(gateResultsReadCmd)
+	rootCmd.AddCommand(gateResultsWriteCmd)
+
+	shouldSkipGateCmd.Flags().String("name", "", "Gate name to check (required)")
+	rootCmd.AddCommand(shouldSkipGateCmd)
+
+	gateRecoveryTemplateCmd.Flags().String("name", "", "Gate name (required)")
+	rootCmd.AddCommand(gateRecoveryTemplateCmd)
 }
