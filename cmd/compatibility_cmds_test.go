@@ -1425,18 +1425,34 @@ func TestFormulateOracleBriefContainsRequiredSections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("brief.md not written: %v", err)
 	}
-	if string(data) != brief {
+	if strings.TrimSpace(string(data)) != brief {
 		t.Error("brief.md content does not match returned brief")
 	}
 }
 
 func TestBuildBriefInformedQuestionsReferencesBriefContent(t *testing.T) {
-	brief := `Topic: release parity analysis
-Project Profile: go / cobra / gin
-Colony Goal: Ship cross-platform parity
-Codebase Structure: cmd/ pkg/ .aether/
-Active Signals: FOCUS: cross-platform testing, REDIRECT: no breaking changes
-Recent Learnings: Always test with go vet`
+	brief := `## Topic
+release parity analysis
+
+## Project Profile
+- Type: go
+- Languages: go
+- Frameworks: cobra, gin
+
+## Colony Goal
+Ship cross-platform parity
+
+## Codebase Structure
+- cmd/
+- pkg/
+- .aether/
+
+## Active Signals
+- FOCUS: cross-platform testing
+- REDIRECT: no breaking changes
+
+## Recent Learnings
+- Always test with go vet`
 
 	questions := buildBriefInformedQuestions("release parity analysis", brief, "go")
 
@@ -1478,12 +1494,25 @@ Recent Learnings: Always test with go vet`
 }
 
 func TestBuildBriefInformedQuestionsWorksWithMinimalBrief(t *testing.T) {
-	brief := `Topic: simple bug fix
-Project Profile: unknown
-Colony Goal:
-Codebase Structure: main.go
-Active Signals: (none)
-Recent Learnings: (none)`
+	brief := `## Topic
+simple bug fix
+
+## Project Profile
+- Type: unknown
+- Languages: none detected
+- Frameworks: none detected
+
+## Colony Goal
+(no colony goal set)
+
+## Codebase Structure
+- main.go
+
+## Active Signals
+(none)
+
+## Recent Learnings
+(none)`
 
 	questions := buildBriefInformedQuestions("simple bug fix", brief, "unknown")
 
