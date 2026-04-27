@@ -59,7 +59,8 @@ var oracleCmd = &cobra.Command{
 			return nil
 		}
 
-		result, err := runOracleCompatibility(skillWorkspaceRoot(), args)
+		depth, _ := cmd.Flags().GetString("depth")
+			result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -120,6 +121,8 @@ func init() {
 	runCompatibilityCmd.Flags().Bool("headless", false, "Record headless mode in autopilot state")
 	runCompatibilityCmd.Flags().BoolP("verbose", "v", false, "Include extra execution detail in the result")
 	runCompatibilityCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build and continue dispatches (e.g. 15m)")
+
+	oracleCmd.Flags().String("depth", "", "Research depth: quick, balanced, deep, exhaustive (default: balanced)")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)

@@ -505,7 +505,7 @@ func TestOracleCompatibilityRunsAutonomousLoop(t *testing.T) {
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"oracle", "release parity"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestOracleCompatibilityStopKillsControllerProcessTree(t *testing.T) {
 		t.Fatalf("write loop marker: %v", err)
 	}
 
-	result, err := runOracleCompatibility(root, []string{"stop"})
+	result, err := runOracleCompatibility(root, []string{"stop"}, "")
 	if err != nil {
 		t.Fatalf("oracle stop returned error: %v", err)
 	}
@@ -770,7 +770,7 @@ func TestOracleCompatibilityRetriesRecoverableWorkerFailure(t *testing.T) {
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return retrying }
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"oracle", "retryable oracle topic"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "retryable oracle topic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -817,7 +817,7 @@ func TestOracleCompatibilityAppliesSurveyAttemptPolicy(t *testing.T) {
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return capturing }
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"oracle", "release parity"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -875,7 +875,7 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := runOracleCompatibility(root, []string{"heartbeat test"})
+		_, err := runOracleCompatibility(root, []string{"heartbeat test"}, "")
 		done <- err
 	}()
 
@@ -936,7 +936,7 @@ func TestOracleCompatibilityShortCircuitsOnValidResponseFile(t *testing.T) {
 	}
 	defer func() { oracleAttemptPolicyForPhase = originalPolicy }()
 
-	rootCmd.SetArgs([]string{"oracle", "release parity"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -974,7 +974,7 @@ func TestOracleCompatibilityRejectsDuplicateActiveLoop(t *testing.T) {
 		t.Fatalf("write oracle state: %v", err)
 	}
 
-	_, err := runOracleCompatibility(root, []string{"new topic"})
+	_, err := runOracleCompatibility(root, []string{"new topic"}, "")
 	if err == nil {
 		t.Fatal("expected duplicate active loop error, got nil")
 	}

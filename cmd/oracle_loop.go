@@ -25,6 +25,27 @@ const (
 	defaultOracleHeartbeat        = 15 * time.Second
 )
 
+type oracleDepthConfig struct {
+	MaxIterations    int
+	TargetConfidence int
+	Label            string
+	Description      string
+}
+
+var oracleDepthLevels = map[string]oracleDepthConfig{
+	"quick":      {2, 60, "Quick", "Fast overview, 1-2 questions"},
+	"balanced":   {4, 85, "Balanced", "Thorough investigation, 3-4 questions"},
+	"deep":       {6, 95, "Deep", "Comprehensive analysis, 5-6 questions"},
+	"exhaustive": {10, 99, "Exhaustive", "Full convergence, up to 10 iterations"},
+}
+
+func resolveOracleDepth(depth string) oracleDepthConfig {
+	if cfg, ok := oracleDepthLevels[strings.ToLower(strings.TrimSpace(depth))]; ok {
+		return cfg
+	}
+	return oracleDepthLevels["balanced"]
+}
+
 var newOracleWorkerInvoker = codex.NewWorkerInvoker
 var oracleAttemptPolicyForPhase = defaultOracleAttemptPolicy
 
@@ -59,6 +80,7 @@ type oracleStateFile struct {
 	Contradictions     []string `json:"contradictions,omitempty"`
 	Recommendation     string   `json:"recommendation,omitempty"`
 	ControllerPID      int      `json:"controller_pid,omitempty"`
+	Depth              string   `json:"depth,omitempty"`
 }
 
 type oraclePlanFile struct {
@@ -159,7 +181,7 @@ type oracleWorkerEvidence struct {
 	Type     string `json:"type"`
 }
 
-func runOracleCompatibility(root string, args []string) (map[string]interface{}, error) {
+func runOracleCompatibility(root string, args []string, depth string) (map[string]interface{}, error) {
 	mode := "status"
 	if len(args) > 0 {
 		mode = strings.ToLower(strings.TrimSpace(args[0]))
@@ -171,7 +193,7 @@ func runOracleCompatibility(root string, args []string) (map[string]interface{},
 	case "stop":
 		return stopOracleCompatibility(root)
 	default:
-		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")))
+		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth)
 	}
 }
 
@@ -273,7 +295,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func startOracleCompatibility(root, topic string) (map[string]interface{}, error) {
+func startOracleCompatibility(root, topic, depth string) (map[string]interface{}, error) {
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
@@ -298,6 +320,7 @@ func startOracleCompatibility(root, topic string) (map[string]interface{}, error
 
 	detectedType, languages, frameworks := detectOracleProjectProfile(root)
 	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks)
+	depthCfg := resolveOracleDepth(depth)
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := oracleStateFile{
 		Version:           "1.1",
@@ -306,8 +329,8 @@ func startOracleCompatibility(root, topic string) (map[string]interface{}, error
 		Template:          defaultOracleTemplate,
 		Phase:             "survey",
 		Iteration:         0,
-		MaxIterations:     defaultOracleMaxIterations,
-		TargetConfidence:  defaultOracleTargetConfidence,
+		MaxIterations:     depthCfg.MaxIterations,
+		TargetConfidence:  depthCfg.TargetConfidence,
 		OverallConfidence: 0,
 		StartedAt:         now,
 		LastUpdated:       now,
@@ -316,6 +339,7 @@ func startOracleCompatibility(root, topic string) (map[string]interface{}, error
 		FocusAreas:        currentOracleFocusAreas(),
 		Platform:          "codex",
 		ControllerPID:     os.Getpid(),
+		Depth:             depthCfg.Label,
 	}
 	plan := oraclePlanFile{
 		Version:     "1.1",
