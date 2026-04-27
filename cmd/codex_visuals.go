@@ -1709,6 +1709,18 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 	}
 
+	// Stale FOCUS pheromone warning (Codex gets runtime-native warning only)
+	if staleRaw, ok := result["stale_signals"]; ok {
+		if staleList, ok := staleRaw.([]map[string]interface{}); ok && len(staleList) > 0 {
+			b.WriteString(fmt.Sprintf("Warning: %d stale FOCUS signal(s) detected from previous phases\n", len(staleList)))
+			for _, sig := range staleList {
+				content, _ := sig["content"].(string)
+				srcPhase, _ := sig["source_phase"].(int)
+				b.WriteString(fmt.Sprintf("  - Phase %d: %s\n", srcPhase, content))
+			}
+		}
+	}
+
 	current, _ := result["current"].(map[string]interface{})
 	goal := strings.TrimSpace(stringValue(current["goal"]))
 	state := strings.TrimSpace(stringValue(current["state"]))
