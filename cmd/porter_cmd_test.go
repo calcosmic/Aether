@@ -39,7 +39,7 @@ func TestPorterCheckIncludesIntegrityChecks(t *testing.T) {
 	// Verify porter check composes integrity check functions
 	// by checking that the result structure includes expected check names
 	// when run in a test environment (may have skip/fail status)
-	checks := buildPorterChecks("stable")
+	checks := buildPorterChecks("stable", true)
 	expectedNames := map[string]bool{
 		"Source version":        false,
 		"Binary version":        false,
@@ -63,7 +63,7 @@ func TestPorterCheckIncludesIntegrityChecks(t *testing.T) {
 }
 
 func TestPorterCheckResultStructure(t *testing.T) {
-	checks := buildPorterChecks("stable")
+	checks := buildPorterChecks("stable", true)
 	data, err := json.Marshal(checks)
 	if err != nil {
 		t.Fatalf("failed to marshal checks to JSON: %v", err)
@@ -92,7 +92,7 @@ func TestPorterCheckResultStructure(t *testing.T) {
 }
 
 func TestPorterCheckHasCorrectCount(t *testing.T) {
-	checks := buildPorterChecks("stable")
+	checks := buildPorterChecks("stable", true)
 	if len(checks) != 8 {
 		t.Errorf("expected 8 porter checks, got %d", len(checks))
 	}
