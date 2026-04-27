@@ -1392,3 +1392,183 @@ func TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue(t *testing.T) {
 		t.Fatalf("expected continue watcher timeout to be 23m, got %+v", recorder.calls)
 	}
 }
+
+func TestFormulateOracleBriefContainsRequiredSections(t *testing.T) {
+	root := t.TempDir()
+	oracleDir := filepath.Join(root, ".aether", "oracle")
+	if err := os.MkdirAll(oracleDir, 0755); err != nil {
+		t.Fatalf("mkdir oracle dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	brief := formulateOracleBrief(root, "release parity analysis", "go", []string{"go"}, []string{"cobra"})
+
+	if !strings.Contains(brief, "release parity analysis") {
+		t.Error("brief missing topic")
+	}
+	if !strings.Contains(brief, "go") {
+		t.Error("brief missing project type/language")
+	}
+	if !strings.Contains(brief, "cobra") {
+		t.Error("brief missing framework")
+	}
+	if !strings.Contains(brief, "go.mod") {
+		t.Error("brief missing codebase structure")
+	}
+	if !strings.Contains(brief, "Topic") || !strings.Contains(brief, "Project Profile") || !strings.Contains(brief, "Codebase Structure") {
+		t.Error("brief missing required section headers")
+	}
+
+	data, err := os.ReadFile(filepath.Join(oracleDir, "brief.md"))
+	if err != nil {
+		t.Fatalf("brief.md not written: %v", err)
+	}
+	if string(data) != brief {
+		t.Error("brief.md content does not match returned brief")
+	}
+}
+
+func TestBuildBriefInformedQuestionsReferencesBriefContent(t *testing.T) {
+	brief := `Topic: release parity analysis
+Project Profile: go / cobra / gin
+Colony Goal: Ship cross-platform parity
+Codebase Structure: cmd/ pkg/ .aether/
+Active Signals: FOCUS: cross-platform testing, REDIRECT: no breaking changes
+Recent Learnings: Always test with go vet`
+
+	questions := buildBriefInformedQuestions("release parity analysis", brief, "go")
+
+	if len(questions) < 5 {
+		t.Fatalf("expected at least 5 questions, got %d", len(questions))
+	}
+	if len(questions) > 8 {
+		t.Fatalf("expected at most 8 questions, got %d", len(questions))
+	}
+
+	allText := ""
+	for _, q := range questions {
+		allText += q.Text + "\n"
+		if q.Status != "open" {
+			t.Errorf("question %s status = %q, want open", q.ID, q.Status)
+		}
+		if q.Confidence != 0 {
+			t.Errorf("question %s confidence = %d, want 0", q.ID, q.Confidence)
+		}
+	}
+
+	hasProjectType := strings.Contains(allText, "go")
+	hasFramework := strings.Contains(allText, "cobra") || strings.Contains(allText, "gin")
+	hasDirectory := strings.Contains(allText, "cmd/") || strings.Contains(allText, "pkg/")
+	hasSignal := strings.Contains(allText, "cross-platform testing") || strings.Contains(allText, "breaking changes")
+
+	if !hasProjectType {
+		t.Error("questions do not reference project type from brief")
+	}
+	if !hasFramework {
+		t.Error("questions do not reference frameworks from brief")
+	}
+	if !hasDirectory {
+		t.Error("questions do not reference directories from brief")
+	}
+	if !hasSignal {
+		t.Error("questions do not reference signals from brief")
+	}
+}
+
+func TestBuildBriefInformedQuestionsWorksWithMinimalBrief(t *testing.T) {
+	brief := `Topic: simple bug fix
+Project Profile: unknown
+Colony Goal:
+Codebase Structure: main.go
+Active Signals: (none)
+Recent Learnings: (none)`
+
+	questions := buildBriefInformedQuestions("simple bug fix", brief, "unknown")
+
+	if len(questions) < 5 {
+		t.Fatalf("expected at least 5 questions even with minimal brief, got %d", len(questions))
+	}
+
+	allText := ""
+	for _, q := range questions {
+		allText += q.Text + "\n"
+	}
+	if !strings.Contains(allText, "simple bug fix") {
+		t.Error("questions do not reference topic in minimal brief")
+	}
+}
+
+func TestCurrentOracleRedirectAreasReturnsRedirectSignals(t *testing.T) {
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "1", Type: "FOCUS", Active: true, Content: json.RawMessage(`"test this"`), CreatedAt: now},
+			{ID: "2", Type: "REDIRECT", Active: true, Content: json.RawMessage(`"avoid that"`), CreatedAt: now},
+			{ID: "3", Type: "REDIRECT", Active: false, Content: json.RawMessage(`"inactive redirect"`), CreatedAt: now},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	redirects := currentOracleRedirectAreas()
+
+	if len(redirects) != 1 {
+		t.Fatalf("expected 1 active redirect, got %d: %v", len(redirects), redirects)
+	}
+	if redirects[0] != "avoid that" {
+		t.Errorf("expected 'avoid that', got %q", redirects[0])
+	}
+}
+
+func TestLoadColonyLearningsReturnsRecentInstincts(t *testing.T) {
+	root := t.TempDir()
+	aetherDir := filepath.Join(root, ".aether", "data")
+	if err := os.MkdirAll(aetherDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	state := colony.ColonyState{
+		Version:    "3.0",
+		Goal:       ptrString("Build greatness"),
+		Memory: colony.Memory{
+			Instincts: []colony.Instinct{
+				{ID: "i1", Trigger: "old trigger", Action: "old action", CreatedAt: "2020-01-01T00:00:00Z"},
+				{ID: "i2", Trigger: "recent trigger 1", Action: "recent action 1", CreatedAt: now},
+				{ID: "i3", Trigger: "recent trigger 2", Action: "recent action 2", CreatedAt: now},
+				{ID: "i4", Trigger: "recent trigger 3", Action: "recent action 3", CreatedAt: now},
+				{ID: "i5", Trigger: "recent trigger 4", Action: "recent action 4", CreatedAt: now},
+				{ID: "i6", Trigger: "recent trigger 5", Action: "recent action 5", CreatedAt: now},
+				{ID: "i7", Trigger: "recent trigger 6", Action: "recent action 6", CreatedAt: now},
+			},
+		},
+	}
+	data, _ := json.Marshal(state)
+	if err := os.WriteFile(filepath.Join(aetherDir, "COLONY_STATE.json"), data, 0644); err != nil {
+		t.Fatalf("write colony state: %v", err)
+	}
+
+	learnings := loadColonyLearnings(root)
+
+	if len(learnings) != 5 {
+		t.Fatalf("expected 5 learnings, got %d: %v", len(learnings), learnings)
+	}
+	if !strings.Contains(learnings[0], "recent trigger 6") {
+		t.Errorf("expected most recent instinct first, got: %q", learnings[0])
+	}
+}
+
+func TestLoadColonyLearningsReturnsEmptyWhenMissing(t *testing.T) {
+	root := t.TempDir()
+	learnings := loadColonyLearnings(root)
+	if len(learnings) != 0 {
+		t.Fatalf("expected empty learnings for missing file, got %d", len(learnings))
+	}
+}
