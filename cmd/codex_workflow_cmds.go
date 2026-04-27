@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -243,6 +244,27 @@ func resolveWorkerTimeoutFlag(cmd *cobra.Command) (time.Duration, error) {
 	return timeout, nil
 }
 
+// detectGitRepoName returns the repository name from git remote origin URL,
+// falling back to the working directory basename if unavailable.
+func detectGitRepoName() string {
+	if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+		remote := strings.TrimSpace(string(out))
+		// Extract last path component, strip .git suffix
+		if idx := strings.LastIndex(remote, "/"); idx >= 0 {
+			name := remote[idx+1:]
+			name = strings.TrimSuffix(name, ".git")
+			if name != "" {
+				return name
+			}
+		}
+	}
+	// Fallback: use working directory basename
+	if wd, err := os.Getwd(); err == nil {
+		return filepath.Base(wd)
+	}
+	return ""
+}
+
 var sealCmd = &cobra.Command{
 	Use:   "seal",
 	Short: "Seal a completed colony and write a summary artifact",
@@ -285,6 +307,20 @@ var sealCmd = &cobra.Command{
 		}
 
 		// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md and Hive Brain (D-08, CERE-02)
+		var repoName string
+		if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+			remote := strings.TrimSpace(string(out))
+			// Extract repo name from remote URL (handles both https and ssh)
+			parts := strings.Split(remote, "/")
+			if len(parts) > 0 {
+				repoName = strings.TrimSuffix(parts[len(parts)-1], ".git")
+			}
+		}
+		if repoName == "" {
+			if cwd, err := os.Getwd(); err == nil {
+				repoName = filepath.Base(cwd)
+			}
+		}
 		var promotedInstinctNames []string
 		var hiveEligibleCount int
 		var hivePromotedCount int
@@ -303,7 +339,7 @@ var sealCmd = &cobra.Command{
 					if domain == "" {
 						domain = "general"
 					}
-					if err := promoteToHive(entry.Action, domain, "", entry.Confidence); err != nil {
+					if err := promoteToHive(entry.Action, domain, repoName, entry.Confidence); err != nil {
 						log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
 						hivePromotionFailures++
 					} else {
