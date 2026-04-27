@@ -172,7 +172,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	review := externalContinueReviewReport(phase.ID, workerFlow, now)
+	review := externalContinueReviewReport(phase.ID, workerFlow, now, false)
 	reviewReportRel := continuePlanArtifactsPath(phase.ID, "review.json")
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
@@ -320,7 +320,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 	return verification, nil
 }
 
-func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time) codexContinueReviewReport {
+func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, _ bool) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phaseID,
 		GeneratedAt: now.Format(time.RFC3339),

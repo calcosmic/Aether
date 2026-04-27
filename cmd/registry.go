@@ -13,12 +13,23 @@ import (
 
 // Registry types.
 
+// registryFinalStats holds colony lifecycle statistics recorded at entomb time.
+type registryFinalStats struct {
+	PhaseCount    int    `json:"phase_count,omitempty"`
+	PlanCount     int    `json:"plan_count,omitempty"`
+	LearningCount int    `json:"learning_count,omitempty"`
+	InstinctCount int    `json:"instinct_count,omitempty"`
+	SealDate      string `json:"seal_date,omitempty"`
+	Duration      string `json:"duration,omitempty"`
+}
+
 type registryEntry struct {
-	RepoPath     string   `json:"repo_path"`
-	Domains      []string `json:"domains"`
-	Active       bool     `json:"active"`
-	RegisteredAt string   `json:"registered_at"`
-	LastGoal     string   `json:"last_goal,omitempty"`
+	RepoPath   string              `json:"repo_path"`
+	Domains    []string            `json:"domains"`
+	Active     bool                `json:"active"`
+	RegisteredAt string            `json:"registered_at"`
+	LastGoal   string              `json:"last_goal,omitempty"`
+	FinalStats *registryFinalStats `json:"final_stats,omitempty"`
 }
 
 type registryData struct {
@@ -139,6 +150,32 @@ func writeRegistry(path string, rd registryData) error {
 		return fmt.Errorf("marshal: %w", err)
 	}
 	return os.WriteFile(path, append(encoded, '\n'), 0644)
+}
+
+// updateRegistryFinalStats updates a colony's registry entry with final lifecycle
+// stats and marks it inactive. Best-effort: returns silently if no registry or no
+// matching entry (colony may not have been registered).
+func updateRegistryFinalStats(repoPath string, stats registryFinalStats) {
+	hub := resolveHubPath()
+	registryPath := filepath.Join(hub, "registry", "registry.json")
+
+	var rd registryData
+	raw, err := os.ReadFile(registryPath)
+	if err != nil {
+		return // no registry file -- best effort
+	}
+	if err := json.Unmarshal(raw, &rd); err != nil {
+		return
+	}
+	for i, c := range rd.Colonies {
+		if c.RepoPath == repoPath {
+			rd.Colonies[i].Active = false
+			rd.Colonies[i].FinalStats = &stats
+			_ = writeRegistry(registryPath, rd)
+			return
+		}
+	}
+	// No matching entry -- best effort, don't error
 }
 
 func init() {
