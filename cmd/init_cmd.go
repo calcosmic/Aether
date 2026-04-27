@@ -189,14 +189,18 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
+		// Load active shelf for wrapper consumption
+		shelfEntries, _ := loadActiveShelf(store)
 		result := map[string]interface{}{
-			"state":    string(colony.StateREADY),
-			"goal":     goal,
-			"scope":    string(scope),
-			"version":  "3.0",
-			"phase":    0,
-			"session":  sessionID,
-			"data_dir": dataDir,
+			"state":             string(colony.StateREADY),
+			"goal":              goal,
+			"scope":             string(scope),
+			"version":           "3.0",
+			"phase":             0,
+			"session":           sessionID,
+			"data_dir":          dataDir,
+			"shelf_backlog":     shelfEntries,
+			"shelf_backlog_count": len(shelfEntries),
 		}
 		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir))
 		return nil

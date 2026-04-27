@@ -45,6 +45,28 @@ The scan detected {N} patterns. Review and approve:
 
 Show each suggestion and let the user approve or skip individually.
 
+## Shelf Backlog
+
+After the colony goal is established and BEFORE colony state creation:
+
+1. Run `AETHER_OUTPUT_MODE=json aether init "$ARGUMENTS"` and parse the JSON output.
+2. Check `result.shelf_backlog_count`.
+3. If `shelf_backlog_count > 0`:
+   - Display: `## Shelf Backlog — {N} ideas from prior colonies`
+   - Show numbered list using the `formatShelfForInit` output from `result.shelf_backlog`
+   - For each item, present options:
+     ```
+     1. Promote to this colony
+     2. Keep on shelf
+     3. Delete permanently
+     ```
+   - Collect user choices
+   - If any promoted: run `aether shelf-promote-batch --ids "id1,id2" --colony "{goal}"`
+   - If any dismissed: run `aether shelf-dismiss-batch --ids "id1,id2"`
+   - Promoted items become todos: append `[shelf:{category}] {text}` to `active_todos` in the session file or colony state
+4. If `shelf_backlog_count == 0`:
+   - Skip silently (no prompt)
+
 ## Approval
 
 - Use AskUserQuestion with 3 options: proceed, revise goal, cancel.
