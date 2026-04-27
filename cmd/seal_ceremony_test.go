@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
-	"time"
 )
 
 // setupSealTestStore creates a fresh temp store with a minimal colony state
@@ -364,9 +364,9 @@ func TestSealPromoteInstincts(t *testing.T) {
 
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
-	// Should contain SUGGESTION for hive promotion (1 instinct >= 0.8)
-	if !strings.Contains(out, "SUGGESTION:") {
-		t.Errorf("expected SUGGESTION line, got: %s", out)
+	// Should NOT contain SUGGESTION (replaced with hive promotion confirmation/warning)
+	if strings.Contains(out, "SUGGESTION:") {
+		t.Errorf("stdout should NOT contain 'SUGGESTION:' after hive wiring, got: %s", out)
 	}
 
 	// Verify local QUEEN.md has the promoted instinct
@@ -388,9 +388,21 @@ func TestSealPromoteInstincts(t *testing.T) {
 	}
 }
 
-// TestSealHiveEligibleLog verifies that seal outputs a SUGGESTION line for hive-eligible instincts.
+// TestSealHiveEligibleLog verifies that seal attempts hive promotion for eligible instincts.
 func TestSealHiveEligibleLog(t *testing.T) {
 	s, tmpDir := setupSealTestStore(t)
+
+	// Set up temp hive directory so promotion succeeds
+	hubDir := t.TempDir()
+	hiveDir := filepath.Join(hubDir, "hive")
+	if err := os.MkdirAll(hiveDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	wisdomPath := filepath.Join(hiveDir, "wisdom.json")
+	if err := os.WriteFile(wisdomPath, []byte(`{"entries":[]}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Add instincts with confidence >= 0.8
 	instincts := colony.InstinctsFile{
@@ -402,13 +414,18 @@ func TestSealHiveEligibleLog(t *testing.T) {
 	}
 	_ = s.SaveJSON("instincts.json", instincts)
 
+	origHub := os.Getenv("AETHER_HUB_DIR")
+	os.Setenv("AETHER_HUB_DIR", hubDir)
+	defer os.Setenv("AETHER_HUB_DIR", origHub)
+
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
-	if !strings.Contains(out, "SUGGESTION:") {
-		t.Error("expected SUGGESTION line for hive-eligible instincts")
+	// Should NOT contain SUGGESTION (replaced with actual promotion)
+	if strings.Contains(out, "SUGGESTION:") {
+		t.Error("stdout should NOT contain 'SUGGESTION:' after hive wiring")
 	}
-	if !strings.Contains(out, "2 instinct(s) eligible") {
-		t.Errorf("expected 2 hive-eligible instincts, got: %s", out)
+	if !strings.Contains(out, "Promoted") || !strings.Contains(out, "Hive Brain") {
+		t.Errorf("expected confirmation about Hive Brain promotion, got: %s", out)
 	}
 }
 
@@ -640,5 +657,191 @@ func TestBuildSealSummaryEnrichment(t *testing.T) {
 	}
 	if !strings.Contains(summary, "FOCUS signals expired: 4") {
 		t.Error("summary should show 4 expired FOCUS signals")
+	}
+}
+
+// TestSealHivePromote verifies that seal promotes high-confidence instincts to Hive Brain
+// and does NOT promote low-confidence instincts. Verifies the SUGGESTION message is replaced
+// with a confirmation message.
+func TestSealHivePromote(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// Set up temp hive directory
+	hubDir := t.TempDir()
+	hiveDir := filepath.Join(hubDir, "hive")
+	if err := os.MkdirAll(hiveDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	wisdomPath := filepath.Join(hiveDir, "wisdom.json")
+	if err := os.WriteFile(wisdomPath, []byte(`{"entries":[]}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add instincts with mixed confidence
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "hive-high",
+				Trigger:    "test pattern",
+				Action:     "Always write tests first",
+				Domain:     "testing",
+				Confidence: 0.9,
+				Archived:   false,
+			},
+			{
+				ID:         "hive-low",
+				Trigger:    "low pattern",
+				Action:     "Maybe do something",
+				Domain:     "general",
+				Confidence: 0.5,
+				Archived:   false,
+			},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	origHub := os.Getenv("AETHER_HUB_DIR")
+	os.Setenv("AETHER_HUB_DIR", hubDir)
+	defer os.Setenv("AETHER_HUB_DIR", origHub)
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	// Should contain confirmation (not SUGGESTION)
+	if strings.Contains(out, "SUGGESTION:") {
+		t.Errorf("stdout should NOT contain 'SUGGESTION:' after hive wiring, got: %s", out)
+	}
+	if !strings.Contains(out, "Promoted") || !strings.Contains(out, "to Hive Brain") {
+		t.Errorf("expected confirmation about Hive Brain promotion, got: %s", out)
+	}
+
+	// Verify hive wisdom file contains the high-confidence instinct
+	wisdomData, err := os.ReadFile(wisdomPath)
+	if err != nil {
+		t.Fatalf("failed to read wisdom.json: %v", err)
+	}
+	var wf hiveWisdomData
+	if err := json.Unmarshal(wisdomData, &wf); err != nil {
+		t.Fatalf("failed to parse wisdom.json: %v", err)
+	}
+
+	found := false
+	for _, e := range wf.Entries {
+		if strings.Contains(e.Text, "Always write tests first") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("hive wisdom should contain the high-confidence instinct, entries: %v", wf.Entries)
+	}
+
+	// Verify low-confidence instinct was NOT promoted to hive
+	for _, e := range wf.Entries {
+		if strings.Contains(e.Text, "Maybe do something") {
+			t.Error("low-confidence instinct should NOT be promoted to hive")
+		}
+	}
+}
+
+// TestSealHivePromoteNonBlocking verifies that seal completes successfully
+// even when hive promotion fails (e.g., read-only directory).
+func TestSealHivePromoteNonBlocking(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// Create a read-only parent directory to force hive write failure
+	roDir := filepath.Join(t.TempDir(), "readonly")
+	if err := os.MkdirAll(roDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Make the directory read-only (no write permission)
+	if err := os.Chmod(roDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(roDir, 0755) })
+
+	// Add a high-confidence instinct
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{ID: "hive-fail", Trigger: "t", Action: "This should fail to promote", Domain: "testing", Confidence: 0.9, Archived: false},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	origHub := os.Getenv("AETHER_HUB_DIR")
+	os.Setenv("AETHER_HUB_DIR", roDir)
+	defer os.Setenv("AETHER_HUB_DIR", origHub)
+
+	out, _ := runSealCmd(t, s, tmpDir, nil)
+
+	// Seal should still complete
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.State != colony.StateCOMPLETED {
+		t.Errorf("expected state COMPLETED despite hive failure, got: %s", state.State)
+	}
+
+	// Should contain warning about hive failure (not BLOCKED)
+	if strings.Contains(out, "BLOCKED") {
+		t.Errorf("seal should not be BLOCKED by hive failure, got: %s", out)
+	}
+	if !strings.Contains(out, "WARNING:") || !strings.Contains(out, "hive") {
+		t.Errorf("expected warning about hive promotion failure, got: %s", out)
+	}
+}
+
+// TestSealHivePromotedCount verifies that CROWNED-ANTHILL.md contains
+// the hive-promoted instincts count in the Colony Statistics table.
+func TestSealHivePromotedCount(t *testing.T) {
+	s, tmpDir := setupSealTestStore(t)
+
+	// Set up temp hive directory
+	hubDir := t.TempDir()
+	hiveDir := filepath.Join(hubDir, "hive")
+	if err := os.MkdirAll(hiveDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	wisdomPath := filepath.Join(hiveDir, "wisdom.json")
+	if err := os.WriteFile(wisdomPath, []byte(`{"entries":[]}
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add 2 high-confidence instincts
+	instincts := colony.InstinctsFile{
+		Version: "1",
+		Instincts: []colony.InstinctEntry{
+			{ID: "hp1", Trigger: "t1", Action: "High confidence action one", Domain: "d1", Confidence: 0.85, Archived: false},
+			{ID: "hp2", Trigger: "t2", Action: "High confidence action two", Domain: "d2", Confidence: 0.95, Archived: false},
+		},
+	}
+	if err := s.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatal(err)
+	}
+
+	origHub := os.Getenv("AETHER_HUB_DIR")
+	os.Setenv("AETHER_HUB_DIR", hubDir)
+	defer os.Setenv("AETHER_HUB_DIR", origHub)
+
+	runSealCmd(t, s, tmpDir, nil)
+
+	// Read CROWNED-ANTHILL.md
+	anthillPath := filepath.Join(tmpDir, ".aether", "CROWNED-ANTHILL.md")
+	data, err := os.ReadFile(anthillPath)
+	if err != nil {
+		t.Fatalf("CROWNED-ANTHILL.md not found: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "| Hive-promoted instincts | 2 |") {
+		t.Errorf("CROWNED-ANTHILL.md should show 2 hive-promoted instincts, got: %s", content)
 	}
 }
