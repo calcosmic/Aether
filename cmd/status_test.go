@@ -1079,6 +1079,179 @@ func TestStatus_ReviewFindings_PartialData(t *testing.T) {
 	}
 }
 
+func TestStatusVersionLine(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Version line in dashboard"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Phase 1",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build version line", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Runtime:") {
+		t.Errorf("expected 'Runtime:' in version line, got:\n%s", output)
+	}
+}
+
+func TestStatusVersionLineMismatch(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Mismatch version test"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Phase 1",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build mismatch", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	// Write a hub version.json that differs from binary version
+	hubDir := resolveHubPath()
+	if hubDir != "" {
+		hubVersionPath := hubDir + "/version.json"
+		if err := os.MkdirAll(hubDir, 0755); err == nil {
+			os.WriteFile(hubVersionPath, []byte(`{"version": "99.99.99"}`), 0644)
+			defer os.Remove(hubVersionPath)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "MISMATCH") {
+		t.Errorf("expected 'MISMATCH' warning when versions differ, got:\n%s", output)
+	}
+}
+
+func TestStatusSignalSummaryLine(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	// Create pheromones with mixed signal types
+	now := time.Now().UTC()
+	redirectExpires := now.Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	feedbackExpires := now.Add(7 * 24 * time.Hour).Format(time.RFC3339)
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "sig_focus_1", Type: "FOCUS", Priority: "normal", Source: "test", CreatedAt: now.Format(time.RFC3339), Active: true, Strength: ptrFloat64(0.9), Content: []byte(`{"text":"Focus on tests"}`)},
+			{ID: "sig_focus_2", Type: "FOCUS", Priority: "normal", Source: "test", CreatedAt: now.Format(time.RFC3339), Active: true, Strength: ptrFloat64(0.8), Content: []byte(`{"text":"Focus on errors"}`)},
+			{ID: "sig_redirect_1", Type: "REDIRECT", Priority: "high", Source: "test", CreatedAt: now.Format(time.RFC3339), ExpiresAt: &redirectExpires, Active: true, Strength: ptrFloat64(1.0), Content: []byte(`{"text":"Avoid globals"}`)},
+			{ID: "sig_feedback_1", Type: "FEEDBACK", Priority: "low", Source: "test", CreatedAt: now.Format(time.RFC3339), ExpiresAt: &feedbackExpires, Active: true, Strength: ptrFloat64(0.5), Content: []byte(`{"text":"Good progress"}`)},
+			{ID: "sig_inactive", Type: "FOCUS", Priority: "normal", Source: "test", CreatedAt: now.Format(time.RFC3339), Active: false, Strength: ptrFloat64(0.3), Content: []byte(`{"text":"Inactive signal"}`)},
+		},
+	}
+	if err := s.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("failed to save pheromones: %v", err)
+	}
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	// 2 FOCUS + 1 REDIRECT + 1 FEEDBACK = 4 active (inactive excluded)
+	if !strings.Contains(output, "Signals: 4 active") {
+		t.Errorf("expected 'Signals: 4 active', got:\n%s", output)
+	}
+	if !strings.Contains(output, "2 FOCUS expire at seal") {
+		t.Errorf("expected '2 FOCUS expire at seal', got:\n%s", output)
+	}
+	if !strings.Contains(output, "1 REDIRECT persists") {
+		t.Errorf("expected '1 REDIRECT persists', got:\n%s", output)
+	}
+	if !strings.Contains(output, "1 FEEDBACK") {
+		t.Errorf("expected '1 FEEDBACK', got:\n%s", output)
+	}
+}
+
+func TestStatusSignalSummaryEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "Signals:") {
+		t.Errorf("expected no 'Signals:' line when no pheromones exist, got:\n%s", output)
+	}
+}
+
+func ptrFloat64(f float64) *float64 {
+	return &f
+}
+
 func TestStatusShowsRecoveryDoorway(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
