@@ -147,7 +147,8 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	verification, watcherFlow := attachExternalContinueWatcher(verification, workerFlow)
 	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	gates := runCodexContinueGates(phase, manifest, verification, assessment, now)
+	priorGateResults := gateResultsRead()
+		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
 	gateReportRel := continuePlanArtifactsPath(phase.ID, "gates.json")

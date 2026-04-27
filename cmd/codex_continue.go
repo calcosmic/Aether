@@ -379,7 +379,20 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	gates := runCodexContinueGates(phase, manifest, verification, assessment, now)
+	priorGateResults := gateResultsRead()
+		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+
+		// Persist gate results after each gate run
+		var gateResultEntries []colony.GateResultEntry
+		for _, c := range gates.Checks {
+			gateResultEntries = append(gateResultEntries, colony.GateResultEntry{
+				Name:      c.Name,
+				Passed:    c.Passed,
+				Timestamp: now.Format(time.RFC3339),
+				Detail:    c.Detail,
+			})
+		}
+		_ = gateResultsWrite(gateResultEntries)
 
 	if tracer != nil && state.RunID != nil {
 		_ = tracer.LogArtifact(*state.RunID, "continue.verification", map[string]interface{}{
@@ -569,6 +582,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
 		}
 		updated.BuildStartedAt = nil
+			updated.GateResults = nil
 
 		final = currentIdx == len(updated.Plan.Phases)-1
 		nextCommand = "aether seal"
@@ -832,8 +846,10 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 
 	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth)
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	reviewCtx, reviewCancel := context.WithTimeout(context.Background(), effectiveContinueReviewTimeout(workerTimeout))
+	defer reviewCancel()
 	results, err := dispatchBatchByWaveWithVisuals(
-		context.Background(),
+		reviewCtx,
 		invoker,
 		dispatches,
 		colony.ModeInRepo,
@@ -1053,8 +1069,10 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 	}
 
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	watcherCtx, watcherCancel := context.WithTimeout(context.Background(), effectiveContinueReviewTimeout(workerTimeout))
+	defer watcherCancel()
 	results, err := dispatchBatchByWaveWithVisuals(
-		context.Background(),
+		watcherCtx,
 		invoker,
 		[]codex.WorkerDispatch{dispatch},
 		colony.ModeInRepo,
@@ -1164,6 +1182,7 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 	b.WriteString("\n")
 	b.WriteString("Confirm whether this phase is safe to advance right now.\n")
 	b.WriteString("This is a read-only verification pass. Do not modify repo files. Return status `completed` only if the current workspace and recorded artifacts justify advancement. Return status `blocked` if anything is missing, stale, or misleading.\n\n")
+	b.WriteString("The Fresh Evidence rule from your agent definition is SUSPENDED for this task — the verification commands below were executed by the runtime moments ago. Trust their output. Do NOT re-run the test suite or build commands.\n\n")
 	b.WriteString("Evidence to inspect:\n")
 	if manifest.Present {
 		b.WriteString("- Build manifest: ")
@@ -2035,39 +2054,61 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 	}
 }
 
-func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time) codexContinueGateReport {
+func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []colony.GateResultEntry) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
 
-	manifestCheck := gateCheck{Name: "manifest_present", Passed: manifest.Present, Detail: "build manifest present"}
-	if !manifest.Present {
-		manifestCheck.Detail = fmt.Sprintf("build manifest is missing for phase %d", phase.ID)
-		blockers = append(blockers, manifestCheck.Detail)
-	}
-	checks = append(checks, manifestCheck)
-
-	checks = append(checks, gateCheck{
-		Name:   "verification_steps_passed",
-		Passed: verification.ChecksPassed,
-		Detail: continueVerificationDetail(verification),
-	})
-	if !verification.ChecksPassed {
-		blockers = append(blockers, verification.BlockingIssues...)
+	// manifest_present gate
+	if shouldSkipGate(priorGateResults, "manifest_present") {
+		checks = append(checks, gateCheck{Name: "manifest_present", Passed: true, Detail: "skipped: previously passed"})
+	} else {
+		manifestCheck := gateCheck{Name: "manifest_present", Passed: manifest.Present, Detail: "build manifest present"}
+		if !manifest.Present {
+			manifestCheck.Detail = fmt.Sprintf("build manifest is missing for phase %d", phase.ID)
+			blockers = append(blockers, manifestCheck.Detail)
+		}
+		checks = append(checks, manifestCheck)
 	}
 
-	evidenceCheck := gateCheck{Name: "implementation_evidence", Passed: assessment.PositiveEvidence, Detail: "task or claim evidence recorded for the verified phase"}
-	if !assessment.PositiveEvidence {
-		evidenceCheck.Detail = "verification passed but no implementation evidence or reconciliation was recorded"
-		blockers = append(blockers, assessment.BlockingIssues...)
+	// verification_steps_passed gate
+	if shouldSkipGate(priorGateResults, "verification_steps_passed") {
+		checks = append(checks, gateCheck{Name: "verification_steps_passed", Passed: true, Detail: "skipped: previously passed"})
+	} else {
+		verifCheck := gateCheck{
+			Name:   "verification_steps_passed",
+			Passed: verification.ChecksPassed,
+			Detail: continueVerificationDetail(verification),
+		}
+		if !verification.ChecksPassed {
+			blockers = append(blockers, verification.BlockingIssues...)
+		}
+		checks = append(checks, verifCheck)
 	}
-	checks = append(checks, evidenceCheck)
 
-	operationalCheck := gateCheck{Name: "operational_evidence", Passed: true, Detail: "no operational worker issues were recorded"}
-	if len(assessment.OperationalIssues) > 0 {
-		operationalCheck.Detail = fmt.Sprintf("%d operational worker issues recorded; continue is using verification-led truth instead", len(assessment.OperationalIssues))
+	// implementation_evidence gate
+	if shouldSkipGate(priorGateResults, "implementation_evidence") {
+		checks = append(checks, gateCheck{Name: "implementation_evidence", Passed: true, Detail: "skipped: previously passed"})
+	} else {
+		evidenceCheck := gateCheck{Name: "implementation_evidence", Passed: assessment.PositiveEvidence, Detail: "task or claim evidence recorded for the verified phase"}
+		if !assessment.PositiveEvidence {
+			evidenceCheck.Detail = "verification passed but no implementation evidence or reconciliation was recorded"
+			blockers = append(blockers, assessment.BlockingIssues...)
+		}
+		checks = append(checks, evidenceCheck)
 	}
-	checks = append(checks, operationalCheck)
 
+	// operational_evidence gate
+	if shouldSkipGate(priorGateResults, "operational_evidence") {
+		checks = append(checks, gateCheck{Name: "operational_evidence", Passed: true, Detail: "skipped: previously passed"})
+	} else {
+		operationalCheck := gateCheck{Name: "operational_evidence", Passed: true, Detail: "no operational worker issues were recorded"}
+		if len(assessment.OperationalIssues) > 0 {
+			operationalCheck.Detail = fmt.Sprintf("%d operational worker issues recorded; continue is using verification-led truth instead", len(assessment.OperationalIssues))
+		}
+		checks = append(checks, operationalCheck)
+	}
+
+	// flags gate (no_critical_flags) — runs every time for safety
 	flagCheck := checkNoCriticalFlags()
 	checks = append(checks, flagCheck)
 	if !flagCheck.Passed {

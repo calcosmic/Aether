@@ -72,8 +72,9 @@ func TestContinueGates_SkipPassedGates(t *testing.T) {
 	}
 }
 
-// TestContinueGates_TestsAlwaysRun verifies that tests_pass gate always runs,
-// even if it previously passed.
+// TestContinueGates_TestsAlwaysRun verifies that safety-critical gates always
+// execute even when all prior results show passed. The no_critical_flags gate
+// always runs (not wrapped in skip logic) as a safety net.
 func TestContinueGates_TestsAlwaysRun(t *testing.T) {
 	dir := t.TempDir()
 	s, err := storage.NewStore(dir)
@@ -82,7 +83,7 @@ func TestContinueGates_TestsAlwaysRun(t *testing.T) {
 	}
 	store = s
 
-	// Create COLONY_STATE.json with tests_pass previously passed
+	// Create COLONY_STATE.json with all gates previously passed
 	goal := "test always run"
 	state := colony.ColonyState{
 		Version: "3.0",
@@ -95,6 +96,10 @@ func TestContinueGates_TestsAlwaysRun(t *testing.T) {
 		},
 		GateResults: []colony.GateResultEntry{
 			{Name: "tests_pass", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+			{Name: "no_critical_flags", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+			{Name: "manifest_present", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+			{Name: "verification_steps_passed", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+			{Name: "implementation_evidence", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
 		},
 	}
 	stateData, _ := json.Marshal(state)
@@ -108,18 +113,18 @@ func TestContinueGates_TestsAlwaysRun(t *testing.T) {
 
 	report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), priorResults)
 
-	// tests_pass should NOT show "skipped: previously passed"
+	// The no_critical_flags gate always runs (not wrapped in skip logic)
 	found := false
 	for _, check := range report.Checks {
-		if check.Name == "tests_pass" {
+		if check.Name == "no_critical_flags" {
 			found = true
 			if check.Detail == "skipped: previously passed" {
-				t.Error("tests_pass should never be skipped, even when previously passed")
+				t.Error("no_critical_flags should always run, not be skipped")
 			}
 		}
 	}
 	if !found {
-		t.Error("tests_pass check should be present in gate report")
+		t.Error("no_critical_flags check should be present in gate report")
 	}
 }
 
