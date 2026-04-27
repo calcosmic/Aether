@@ -11,17 +11,22 @@ Use the Go `aether` CLI as the source of truth.
 - Execute `AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS` directly.
 - Do not write ceremony files, milestone state, or archive data by hand from this command spec.
 - Do not ask for separate confirmation unless the CLI itself does.
-- Report the CLI seal result and next-step routing directly.
 
-## Auto-Promotion: High-Confidence Instincts to QUEEN.md
+## Blocker Handling
 
-After `aether seal` succeeds, promote high-confidence instincts to the local QUEEN.md Wisdom section so colony learnings persist in the sealed artifact.
+If `aether seal` exits with an error (non-zero exit code), check whether the output contains a blocker table:
 
-1. Read `.aether/data/instincts.json` from the colony data directory.
-2. For each instinct entry where `confidence >= 0.8` and `action` is non-empty:
-   - Run `aether queen-promote-instinct --id <instinct_id>` to write it to the local QUEEN.md.
-3. If no instincts meet the threshold, skip silently -- this step is non-blocking.
-4. Report how many instincts were promoted in the final seal summary.
+- If blockers are listed, relay the blocker table to the user showing each blocker ID, description, and resolution command: `aether flag <id> --resolve`
+- Suggest the user either resolves blockers first or re-runs with the --force flag: `/ant-seal --force`
+- The `--force` flag passes through to the runtime via `$ARGUMENTS`
+
+## Post-Seal Report
+
+After seal succeeds, report what the runtime did:
+
+- "Instincts promoted to local QUEEN.md: {count from output}"
+- If the runtime printed a SUGGESTION about hive-eligible instincts, relay that to the user: "Consider promoting eligible instincts globally with `aether queen-promote-instinct <id>`"
+- "FOCUS signals expired: {count}"
 
 ## Post-Seal: Porter Delivery
 

@@ -9,11 +9,47 @@ foundation pass.
 
 - If `$ARGUMENTS` is empty, show `Usage: /ant-init "<your goal here>"`.
 - First run `AETHER_OUTPUT_MODE=json aether init-research --goal "$ARGUMENTS" --target .`.
-- Read at most a few top-level manifests or README files only if needed to ground the approval prompt.
-- If the repo is non-trivial and the platform can spawn helpers, use Scout + Architect in read-only mode for a short foundation pass. Keep it bounded.
-- Present an approval summary covering: goal, detected stack, likely impact areas, and key risks.
+- Parse the JSON output for the `charter` object and `pheromone_suggestions` array.
+
+## Codebase Summary
+
+Display a brief summary from the scan:
+- Languages and frameworks (from `languages` and `frameworks` fields)
+- README summary (if `readme_summary` is non-empty, show first 200 chars)
+- Git: `{git_history.commits}` commits, `{git_history.contributors}` contributors on `{git_history.branch}`
+- Governance: list detected linters, CI, test frameworks from `governance` object
+- Prior colonies: `{prior_colonies.count}` archived colonies (if > 0)
+
+## Colony Charter
+
+Present the charter for user review:
+
+```
+**Intent:** {charter.intent}
+**Vision:** {charter.vision}
+**Governance:** {charter.governance}
+**Goals:** {charter.goals}
+```
+
+## Pheromone Suggestions
+
+If `pheromone_suggestions` is non-empty, present as tick-to-approve:
+
+```
+The scan detected {N} patterns. Review and approve:
+
+1. [{type}] {content}
+   Reason: {reason}
+   [ ] Approve / [ ] Skip
+```
+
+Show each suggestion and let the user approve or skip individually.
+
+## Approval
+
 - Ask with 3 options: proceed, revise goal, cancel.
-- Only after approval execute `AETHER_OUTPUT_MODE=visual aether init "$ARGUMENTS"`.
+- After approval, for each approved pheromone suggestion, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-research"`.
+- Then run `AETHER_OUTPUT_MODE=visual aether init "$ARGUMENTS"`.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
 - If setup is missing, relay the runtime guidance exactly.
 - If docs and runtime disagree, runtime wins.
