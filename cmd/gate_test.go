@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -451,5 +452,228 @@ func TestFormatSkipSummary_NoPriorResults(t *testing.T) {
 	summary := formatSkipSummary(nil)
 	if summary != "" {
 		t.Errorf("expected empty string for nil results, got: %s", summary)
+	}
+}
+
+// --- CLI Subcommand Tests (Phase 59, Plan 01, Task 3) ---
+
+func TestGateResultsReadCmd_EmptyState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-results-read"})
+	rootCmd.SetOut(&buf)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	if output != "[]" {
+		t.Errorf("expected '[]', got %q", output)
+	}
+}
+
+func TestGateResultsWriteCmd_WithNamePassed(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Create minimal state
+	stateData, _ := json.Marshal(map[string]interface{}{
+		"version": "3.0",
+		"state":   "READY",
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-results-write", "--name", "spawn_gate", "--passed"})
+	rootCmd.SetOut(&buf)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"ok":true`) {
+		t.Errorf("expected ok:true in output, got %q", output)
+	}
+
+	// Verify entry was persisted
+	var readState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &readState); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(readState.GateResults) != 1 {
+		t.Fatalf("expected 1 gate result, got %d", len(readState.GateResults))
+	}
+	if readState.GateResults[0].Name != "spawn_gate" || !readState.GateResults[0].Passed {
+		t.Errorf("unexpected gate result: %+v", readState.GateResults[0])
+	}
+}
+
+func TestGateResultsWriteCmd_WithDetail(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	stateData, _ := json.Marshal(map[string]interface{}{
+		"version": "3.0",
+		"state":   "READY",
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-results-write", "--name", "spawn_gate", "--passed=false", "--detail", "missing files"})
+	rootCmd.SetOut(&buf)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	// Verify detail preserved
+	var readState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &readState); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if readState.GateResults[0].Detail != "missing files" {
+		t.Errorf("expected detail 'missing files', got %q", readState.GateResults[0].Detail)
+	}
+}
+
+func TestGateResultsWriteCmd_MissingName(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-results-write", "--passed"})
+	rootCmd.SetOut(&buf)
+	rootCmd.SetErr(&buf)
+	// Should output error about --name being required, not crash
+	_ = rootCmd.Execute()
+
+	output := buf.String()
+	if !strings.Contains(output, "--name is required") {
+		t.Errorf("expected --name required error, got %q", output)
+	}
+}
+
+func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Create state with passed spawn_gate
+	stateData, _ := json.Marshal(colony.ColonyState{
+		Version: "3.0",
+		State:   colony.StateREADY,
+		GateResults: []colony.GateResultEntry{
+			{Name: "spawn_gate", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		},
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate"})
+	rootCmd.SetOut(&buf)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	if output != "true" {
+		t.Errorf("expected 'true', got %q", output)
+	}
+}
+
+func TestShouldSkipGateCmd_TestsNeverSkipped(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Create state with tests_pass passed
+	stateData, _ := json.Marshal(colony.ColonyState{
+		Version: "3.0",
+		State:   colony.StateREADY,
+		GateResults: []colony.GateResultEntry{
+			{Name: "tests_pass", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		},
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "tests_pass"})
+	rootCmd.SetOut(&buf)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	if output != "false" {
+		t.Errorf("expected 'false' (tests never skipped), got %q", output)
+	}
+}
+
+func TestGateRecoveryTemplateCmd_KnownGate(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-recovery-template", "--name", "spawn_gate"})
+	rootCmd.SetOut(&buf)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "ant-build") {
+		t.Errorf("expected recovery template containing 'ant-build', got %q", output)
+	}
+}
+
+func TestGateRecoveryTemplateCmd_UnknownGate(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-recovery-template", "--name", "nonexistent"})
+	rootCmd.SetOut(&buf)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	if !strings.Contains(output, "No specific recovery instructions") {
+		t.Errorf("expected fallback message, got %q", output)
 	}
 }
