@@ -4356,7 +4356,7 @@ func TestExternalContinueReviewReportTimeoutNotBlocking(t *testing.T) {
 		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
 	}
 
-	report := externalContinueReviewReport(1, workerFlow, now, false)
+	report := externalContinueReviewReport(1, workerFlow, now)
 
 	if !report.Passed {
 		t.Errorf("report.Passed = false, want true (timeouts should not block)")
@@ -4440,7 +4440,7 @@ func TestExternalContinueReviewReportSkipMissing(t *testing.T) {
 		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
 	}
 
-	report := externalContinueReviewReport(1, workerFlow, now, true)
+	report := externalContinueReviewReport(1, workerFlow, now)
 
 	if !report.Passed {
 		t.Errorf("report.Passed = false, want true")

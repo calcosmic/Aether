@@ -1230,6 +1230,9 @@ func TestStatusSignalSummaryEmpty(t *testing.T) {
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
 
+	// Remove pheromones fixture so the store has no signals
+	os.Remove(tmpDir + "/.aether/data/pheromones.json")
+
 	origRoot := os.Getenv("AETHER_ROOT")
 	os.Setenv("AETHER_ROOT", tmpDir)
 	defer os.Setenv("AETHER_ROOT", origRoot)
