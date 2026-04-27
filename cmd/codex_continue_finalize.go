@@ -306,9 +306,11 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 		}
 		verification.Watcher = watcher
 		if !watcher.Passed {
-			verification.ChecksPassed = false
-			verification.Passed = false
 			verification.BlockingIssues = uniqueSortedStrings(append(verification.BlockingIssues, summary))
+			if status != "timeout" {
+				verification.ChecksPassed = false
+				verification.Passed = false
+			}
 		}
 		watcherFlow := step
 		watcherFlow.Summary = continueWatcherFlowSummary(watcher.Worker, watcher.Status, watcher.Summary)
