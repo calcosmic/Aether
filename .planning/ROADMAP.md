@@ -122,6 +122,13 @@
 - [x] **Phase 64: Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol** - Codebase-aware questioning, auto-flagging, persistence suggestions, health checks (completed 2026-04-27)
 - [ ] **Phase 65: Idea Shelving** - Persistent shelf, auto-shelve at seal, surface at init, entomb preservation
 
+### Gap Closure Phases (from v1.10 audit)
+
+- [ ] **Phase 66: Continue Flow Fix** - Watcher timeout loops, token burn, stuck-in-continue bug (HIGHEST PRIORITY)
+- [ ] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal, fix CERE-01 through CERE-05, OpenCode parity
+- [ ] **Phase 68: Gate Recovery Verification** - Verify Plan 01 subcommands, create Phase 59 VERIFICATION.md, runtime-playbook integration
+- [ ] **Phase 69: Idea Shelving Verification** - Verify SHELF-01 through SHELF-05, create Phase 65 VERIFICATION.md, execute validation wave 0
+
 ## Phase Details
 
 ### Phase 57: QUEEN.md Pipeline Fix
@@ -178,7 +185,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Oracle research begins with a formulated research brief that provides context before iterative research starts
   2. User can choose research depth (quick, balanced, deep, exhaustive) before the Oracle starts working
-  3. Research state (configuration, gaps, synthesis, progress) persists across Oracle iterations
+  3. Research state (configuration, research gaps, synthesis, progress tracking) persists across Oracle iterations
   4. OpenCode worker callback uses the correct messaging endpoint (not LiteLLM proxy)
 **Plans**: 3 plans
 
@@ -274,6 +281,61 @@ Plans:
   5. Shelved ideas survive `/ant-entomb` -- archived to chambers, not lost
 **Plans**: TBD
 
+
+### Phase 66: Continue Flow Fix
+**Goal**: The continue command stops getting stuck in watcher timeout loops and burning tokens — it advances cleanly when runtime verification passes, only blocking on genuine failures
+**Depends on**: Nothing (standalone fix, highest priority)
+**Requirements**: FIX-01, FIX-02, FIX-03
+**Success Criteria** (what must be TRUE):
+  1. External watcher timeout is treated as advisory (warning, not blocker) when runtime verification steps all passed
+  2. Continue does not re-run already-passed gates from scratch on retry
+  3. No infinite retry loops — the command terminates with a clear result (pass, fail, or partial) within bounded time
+  4. Resume stale FOCUS detection does not incorrectly flag signals from partial continues
+**Plans**: 2 plans
+  - **Wave 1** (Plans 01, 02): Parallel -- internal watcher advisory fix + context deadline detection (FIX-01) | stale FOCUS guard + incremental gate verification (FIX-02, FIX-03)
+
+Plans:
+- [ ] 66-01-PLAN.md -- Fix internal watcher timeout advisory and context deadline detection (FIX-01)
+- [ ] 66-02-PLAN.md -- Verify incremental gate checking and harden stale FOCUS detection (FIX-02, FIX-03)
+
+
+### Phase 67: Seal Hive Brain Wiring
+**Goal**: Seal ceremony fully wires into Hive Brain — high-confidence instincts promote automatically, not just to local QUEEN.md
+**Depends on**: Phase 57 (QUEE-06/07 auto-promotion wiring), Phase 65 (shelf detection integration)
+**Requirements**: CERE-01, CERE-02, CERE-03, CERE-04, CERE-05
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-seal` calls hive-promote for instincts with confidence >= 0.8 (non-blocking — failures logged)
+  2. Seal blocks on active blocker-severity flags before running any shelf or promotion logic
+  3. OpenCode seal.md matches Claude seal.md — no parity drift
+  4. Porter readiness summary only prints after seal actually completes, not when blocked
+  5. Phase 62 VERIFICATION.md updated to reflect all gaps closed
+**Plans**: TBD
+
+
+### Phase 68: Gate Recovery Verification
+**Goal**: Phase 59 gate recovery subcommands are verified as implemented and playbooks integrate correctly with the Go runtime
+**Depends on**: Nothing (verification-only phase)
+**Requirements**: GATE-01, GATE-02, GATE-03
+**Success Criteria** (what must be TRUE):
+  1. gate-results-read, gate-results-write, should-skip-gate, gate-recovery-template subcommands exist in the binary
+  2. Continue playbooks (continue-verify.md, continue-gates.md) correctly call runtime subcommands
+  3. Phase 59 VERIFICATION.md exists and all GATE requirements verified
+**Plans**: TBD
+
+
+### Phase 69: Idea Shelving Verification
+**Goal**: Phase 65 shelf system verified end-to-end — shelf CRUD, seal auto-detection, init surfacing, entomb preservation all work
+**Depends on**: Phase 66 (seal blocked-state fix may affect shelf detection during seal)
+**Requirements**: SHELF-01, SHELF-02, SHELF-03, SHELF-04, SHELF-05
+**Success Criteria** (what must be TRUE):
+  1. Shelf CRUD operations (create, read, promote, archive) work correctly
+  2. Seal auto-detects shelf candidates from instincts, pheromones, and user ideas
+  3. Init surfaces relevant shelved ideas and offers promotion
+  4. Recurring REDIRECT pheromones auto-shelved as permanent guidance
+  5. Shelved ideas survive entomb — archived to chambers
+  6. Phase 65 VERIFICATION.md exists and VALIDATION.md wave 0 executed
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -287,3 +349,7 @@ Plans:
 | 63. Lifecycle Ceremony -- Status, Entomb, Resume | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |
+| 66. Continue Flow Fix | v1.10 | 0/2 | Planned | - |
+| 67. Seal Hive Brain Wiring | v1.10 | 0/? | Not started | - |
+| 68. Gate Recovery Verification | v1.10 | 0/? | Not started | - |
+| 69. Idea Shelving Verification | v1.10 | 0/? | Not started | - |
