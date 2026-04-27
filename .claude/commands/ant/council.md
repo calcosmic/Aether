@@ -17,4 +17,5 @@ Use the Go `aether` CLI as the source of truth.
   - `aether council-history`
 - Do not write `constraints.json`, `pheromones.json`, or `COLONY_STATE.json` by hand from this command spec.
 - If the user wants a deliberation, drive it through the runtime subcommands and report the resulting positions honestly.
+- For codebase-aware deliberation context, run `aether discuss-analyze --target .` first. Use the scan data to inform multi-position framing. The discuss-analyze output provides the same codebase inventory for council as for discuss -- no separate council-specific analysis is needed (per the discuss-analyze sharing contract).
 - If this platform cannot provide the interactive question flow that older docs described, say so plainly and prefer the CLI subcommands instead.
