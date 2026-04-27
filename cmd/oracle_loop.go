@@ -401,7 +401,7 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 		state.Iteration++
 		state.Phase = nextOraclePhase(plan, state)
-		target := selectOracleQuestion(plan, state)
+		target := selectOracleQuestionSmart(plan, state)
 		state.Status = "active"
 		state.StopReason = ""
 		state.ActiveQuestionID = strings.TrimSpace(target.ID)
@@ -2039,6 +2039,164 @@ func renderOracleRetryPreview(state oracleStateFile) string {
 	fmt.Fprintf(&b, "Target: %s\n", oracleQuestionLabel(oracleQuestion{ID: state.ActiveQuestionID, Text: state.ActiveQuestionText}))
 	fmt.Fprintf(&b, "Reason: %s\n", emptyFallback(strings.TrimSpace(state.Summary), "Retrying after worker failure"))
 	return strings.TrimSpace(b.String())
+}
+
+// extractKeywords splits text into unique lowercase words of 3+ characters.
+// Used for keyword-overlap scoring in smart question selection.
+func extractKeywords(text string) []string {
+	words := strings.Fields(text)
+	seen := make(map[string]bool, len(words))
+	var result []string
+	for _, w := range words {
+		lower := strings.ToLower(w)
+		// Strip common punctuation from edges
+		lower = strings.Trim(lower, ".,;:!?\"'()[]{}")
+		if len(lower) < 3 {
+			continue
+		}
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		result = append(result, lower)
+	}
+	return result
+}
+
+// countKeywordOverlap returns how many keywords in set B appear in set A.
+func countKeywordOverlap(a, b []string) int {
+	bSet := make(map[string]bool, len(b))
+	for _, kw := range b {
+		bSet[kw] = true
+	}
+	count := 0
+	for _, kw := range a {
+		if bSet[kw] {
+			count++
+		}
+	}
+	return count
+}
+
+// scoreQuestionImpact computes a weighted impact score for a question.
+// Higher score = more impactful to research next.
+// Weights: gap overlap (0.35), contradiction overlap (0.25), cross-question benefit (0.20), confidence deficit (0.20).
+// Returns value in [0, 1].
+func scoreQuestionImpact(q oracleQuestion, plan oraclePlanFile, state oracleStateFile) float64 {
+	qKeywords := extractKeywords(q.Text)
+
+	// Factor 1: Gap overlap (0.35) -- how many open gaps share keywords with this question
+	gapScore := 0.0
+	if len(state.OpenGaps) > 0 {
+		gapCount := 0
+		for _, gap := range state.OpenGaps {
+			gapCount += countKeywordOverlap(extractKeywords(gap), qKeywords)
+		}
+		// Normalize by total possible overlap (all gap keywords)
+		totalGapKeywords := 0
+		for _, gap := range state.OpenGaps {
+			totalGapKeywords += len(extractKeywords(gap))
+		}
+		if totalGapKeywords > 0 {
+			gapScore = float64(gapCount) / float64(totalGapKeywords)
+		}
+	}
+
+	// Factor 2: Contradiction overlap (0.25)
+	contradictionScore := 0.0
+	if len(state.Contradictions) > 0 {
+		conCount := 0
+		for _, con := range state.Contradictions {
+			conCount += countKeywordOverlap(extractKeywords(con), qKeywords)
+		}
+		totalConKeywords := 0
+		for _, con := range state.Contradictions {
+			totalConKeywords += len(extractKeywords(con))
+		}
+		if totalConKeywords > 0 {
+			contradictionScore = float64(conCount) / float64(totalConKeywords)
+		}
+	}
+
+	// Factor 3: Cross-question benefit (0.20) -- how many other unanswered questions share keywords
+	crossScore := 0.0
+	otherCount := 0
+	for _, other := range plan.Questions {
+		if other.ID == q.ID {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(other.Status), "answered") {
+			continue
+		}
+		otherCount++
+	}
+	if otherCount > 0 {
+		overlapCount := 0
+		for _, other := range plan.Questions {
+			if other.ID == q.ID {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(other.Status), "answered") {
+				continue
+			}
+			if countKeywordOverlap(extractKeywords(other.Text), qKeywords) > 0 {
+				overlapCount++
+			}
+		}
+		crossScore = float64(overlapCount) / float64(otherCount)
+	}
+
+	// Factor 4: Confidence deficit (0.20)
+	deficit := float64(state.TargetConfidence - q.Confidence)
+	if deficit < 0 {
+		deficit = 0
+	}
+	confidenceScore := deficit / 100.0
+	if confidenceScore > 1.0 {
+		confidenceScore = 1.0
+	}
+
+	score := 0.35*gapScore + 0.25*contradictionScore + 0.20*crossScore + 0.20*confidenceScore
+	if score > 1.0 {
+		score = 1.0
+	}
+	return score
+}
+
+// selectOracleQuestionSmart picks the most impactful next question using multi-factor scoring.
+// It replaces the naive lowest-confidence selection with gap/contradiction/benefit/confidence analysis.
+func selectOracleQuestionSmart(plan oraclePlanFile, state oracleStateFile) oracleQuestion {
+	// Edge case: no questions
+	if len(plan.Questions) == 0 {
+		return oracleQuestion{ID: fmt.Sprintf("iteration-%d", state.Iteration), Text: "No oracle questions are currently available."}
+	}
+
+	var best oracleQuestion
+	bestScore := -1.0
+	anyUnanswered := false
+	for _, q := range plan.Questions {
+		if strings.EqualFold(strings.TrimSpace(q.Status), "answered") {
+			continue
+		}
+		anyUnanswered = true
+		score := scoreQuestionImpact(q, plan, state)
+		// Priority boost for untouched questions
+		if len(q.IterationsTouched) == 0 {
+			score += 0.1
+		}
+		if score > bestScore {
+			bestScore = score
+			best = q
+		}
+	}
+	if anyUnanswered {
+		return best
+	}
+	// All answered -- return indicator
+	return oracleQuestion{
+		ID:   fmt.Sprintf("iteration-%d", state.Iteration),
+		Text: "All oracle questions have been answered.",
+	}
 }
 
 func selectOracleQuestion(plan oraclePlanFile, state oracleStateFile) oracleQuestion {
