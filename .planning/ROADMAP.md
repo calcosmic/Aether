@@ -124,7 +124,7 @@
 
 ### Gap Closure Phases (from v1.10 audit)
 
-- [ ] **Phase 66: Continue Flow Fix** - Watcher timeout loops, token burn, stuck-in-continue bug (HIGHEST PRIORITY)
+- [x] **Phase 66: Continue Flow Fix** - Watcher timeout loops, token burn, stuck-in-continue bug (HIGHEST PRIORITY) (completed 2026-04-27)
 - [ ] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal, fix CERE-01 through CERE-05, OpenCode parity
 - [ ] **Phase 68: Gate Recovery Verification** - Verify Plan 01 subcommands, create Phase 59 VERIFICATION.md, runtime-playbook integration
 - [ ] **Phase 69: Idea Shelving Verification** - Verify SHELF-01 through SHELF-05, create Phase 65 VERIFICATION.md, execute validation wave 0
@@ -295,8 +295,8 @@ Plans:
   - **Wave 1** (Plans 01, 02): Parallel -- internal watcher advisory fix + context deadline detection (FIX-01) | stale FOCUS guard + incremental gate verification (FIX-02, FIX-03)
 
 Plans:
-- [ ] 66-01-PLAN.md -- Fix internal watcher timeout advisory and context deadline detection (FIX-01)
-- [ ] 66-02-PLAN.md -- Verify incremental gate checking and harden stale FOCUS detection (FIX-02, FIX-03)
+- [x] 66-01-PLAN.md -- Fix internal watcher timeout advisory and context deadline detection (FIX-01)
+- [x] 66-02-PLAN.md -- Verify incremental gate checking and harden stale FOCUS detection (FIX-02, FIX-03)
 
 
 ### Phase 67: Seal Hive Brain Wiring
@@ -349,7 +349,7 @@ Plans:
 | 63. Lifecycle Ceremony -- Status, Entomb, Resume | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 64. Lifecycle Ceremony -- Discuss, Chaos, Oracle, Patrol | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |
-| 66. Continue Flow Fix | v1.10 | 0/2 | Planned | - |
+| 66. Continue Flow Fix | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 67. Seal Hive Brain Wiring | v1.10 | 0/? | Not started | - |
 | 68. Gate Recovery Verification | v1.10 | 0/? | Not started | - |
 | 69. Idea Shelving Verification | v1.10 | 0/? | Not started | - |
