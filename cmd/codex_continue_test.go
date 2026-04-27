@@ -297,7 +297,7 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 	}
 	seedContinueBuildPacket(t, dataDir, 1, "Wrapper continue finalize", goal, buildDispatches)
 
-	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{})
+	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{HeavyFlag: true})
 	if err != nil {
 		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
 	}
@@ -1105,7 +1105,7 @@ func TestContinueBlocksWhenWatcherUsesFakeInvoker(t *testing.T) {
 	}
 }
 
-func TestContinueBlocksWhenWorkerTimesOut(t *testing.T) {
+func TestContinueAdvancesWhenWorkerTimesOutButVerificationPasses(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1115,7 +1115,7 @@ func TestContinueBlocksWhenWorkerTimesOut(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Block advancement when a worker timed out"
+	goal := "Advance when a worker timed out but verification passed"
 	now := time.Now().UTC()
 	taskOneID := "1.1"
 	taskTwoID := "1.2"
@@ -1139,9 +1139,9 @@ func TestContinueBlocksWhenWorkerTimesOut(t *testing.T) {
 				},
 				{
 					ID:     2,
-					Name:   "Next phase should not unlock",
+					Name:   "Next phase should unlock",
 					Status: colony.PhasePending,
-					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Wait for redispatch", Status: colony.TaskPending}},
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Continue work", Status: colony.TaskPending}},
 				},
 			},
 		},
@@ -1161,32 +1161,28 @@ func TestContinueBlocksWhenWorkerTimesOut(t *testing.T) {
 
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if blocked, _ := result["blocked"].(bool); !blocked {
-		t.Fatalf("expected blocked:true when a worker timed out, got %v", result)
+
+	// Timeout with passing verification should advance, not block.
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false when verification passed despite worker timeout, got %v", result)
 	}
-	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false when a worker timed out, got %v", result)
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true when verification passed despite worker timeout, got %v", result)
 	}
 
-	recovery := result["recovery"].(map[string]interface{})
-	if got := recovery["redispatch_command"].(string); got != "aether build 1 --task 1.2" {
-		t.Fatalf("redispatch command = %q, want %q", got, "aether build 1 --task 1.2")
-	}
-
+	// Timeout should still be reported as an operational issue.
 	issues := stringSliceValue(result["operational_issues"])
 	if len(issues) == 0 {
-		t.Fatalf("expected operational issues in blocked result, got %v", result)
+		t.Fatalf("expected operational issues noting the timeout, got %v", result)
 	}
 
+	// State should advance to READY with next phase.
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		t.Fatalf("failed to reload state: %v", err)
 	}
-	if state.State != colony.StateBUILT {
-		t.Fatalf("state = %s, want BUILT", state.State)
-	}
-	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
-		t.Fatalf("phase 1 status = %s, want in_progress", state.Plan.Phases[0].Status)
+	if state.State != colony.StateREADY {
+		t.Fatalf("state = %s, want READY", state.State)
 	}
 }
 
@@ -1631,6 +1627,44 @@ func TestContinueWorkerFlowUsesContinueWatcherInsteadOfBuildManifestWatcher(t *t
 	}
 	if strings.Contains(string(flowText), buildWatcherName) {
 		t.Fatalf("expected continue worker flow to avoid build manifest watcher %q, got %s", buildWatcherName, string(flowText))
+	}
+}
+
+func TestClassifyTaskVerifiedWhenVerificationPassesAndWorkersTimedOut(t *testing.T) {
+	outcome, detail, recovery := classifyContinueTaskAssessment(
+		"task-1", []string{"timeout"}, true, false, true, false,
+	)
+	if outcome != "verified" {
+		t.Fatalf("expected outcome %q, got %q (detail: %s)", "verified", outcome, detail)
+	}
+	if recovery != "" {
+		t.Fatalf("expected empty recovery action, got %q", recovery)
+	}
+}
+
+func TestClassifyTaskStillBlocksWhenWorkerFailed(t *testing.T) {
+	outcome, _, recovery := classifyContinueTaskAssessment(
+		"task-1", []string{"failed"}, true, false, true, false,
+	)
+	// "failed" hits !artifactEvidenceTrusted before reaching the new branch;
+	// "implemented_unverified" is in the continueTasksSupportAdvancement blocklist so it still blocks.
+	if outcome != "implemented_unverified" {
+		t.Fatalf("expected outcome %q, got %q", "implemented_unverified", outcome)
+	}
+	if recovery != "redispatch" {
+		t.Fatalf("expected recovery %q, got %q", "redispatch", recovery)
+	}
+}
+
+func TestClassifyTaskStillMissingWhenNoStatuses(t *testing.T) {
+	outcome, _, recovery := classifyContinueTaskAssessment(
+		"task-1", []string{}, true, false, true, false,
+	)
+	if outcome != "missing" {
+		t.Fatalf("expected outcome %q, got %q", "missing", outcome)
+	}
+	if recovery != "redispatch" {
+		t.Fatalf("expected recovery %q, got %q", "redispatch", recovery)
 	}
 }
 
@@ -4269,6 +4303,153 @@ func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
 	firstReportData, _ := os.ReadFile(firstReportRel)
 	if firstReportData != nil && !strings.Contains(string(firstReportData), "Duration seconds: 10.000") {
 		t.Errorf("first worker report missing or wrong duration")
+	}
+}
+
+func TestMergeExternalContinueResultsToleratesMissing(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Stage: "verification", Wave: 1, Caste: "watcher", Name: "Keen-42", Task: "Verify", TaskID: "c-v-1", Status: "planned"},
+			{Stage: "review", Wave: 2, Caste: "gatekeeper", Name: "Guard-43", Task: "Security", TaskID: "c-r-gk", Status: "planned"},
+			{Stage: "review", Wave: 2, Caste: "auditor", Name: "Audit-44", Task: "Quality", TaskID: "c-r-aud", Status: "planned"},
+			{Stage: "review", Wave: 2, Caste: "probe", Name: "Probe-45", Task: "Coverage", TaskID: "c-r-pr", Status: "planned"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green"},
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues"},
+	}
+
+	flow, err := mergeExternalContinueResults(plan, results)
+	if err != nil {
+		t.Fatalf("mergeExternalContinueResults with missing results: %v", err)
+	}
+	if len(flow) != 4 {
+		t.Fatalf("flow len = %d, want 4", len(flow))
+	}
+	if flow[0].Status != "completed" {
+		t.Errorf("flow[0].Status = %q, want completed", flow[0].Status)
+	}
+	if flow[1].Status != "completed" {
+		t.Errorf("flow[1].Status = %q, want completed", flow[1].Status)
+	}
+	if flow[2].Status != "timeout" {
+		t.Errorf("flow[2].Status = %q, want timeout", flow[2].Status)
+	}
+	if flow[2].Name != "Audit-44" {
+		t.Errorf("flow[2].Name = %q, want Audit-44", flow[2].Name)
+	}
+	if flow[3].Status != "timeout" {
+		t.Errorf("flow[3].Status = %q, want timeout", flow[3].Status)
+	}
+	if flow[3].Name != "Probe-45" {
+		t.Errorf("flow[3].Name = %q, want Probe-45", flow[3].Name)
+	}
+}
+
+func TestExternalContinueReviewReportTimeoutNotBlocking(t *testing.T) {
+	now := time.Now().UTC()
+	workerFlow := []codexContinueWorkerFlowStep{
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green"},
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues"},
+		{Stage: "review", Caste: "auditor", Name: "Audit-44", Status: "timeout", Summary: "timed out"},
+		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
+	}
+
+	report := externalContinueReviewReport(1, workerFlow, now, false)
+
+	if !report.Passed {
+		t.Errorf("report.Passed = false, want true (timeouts should not block)")
+	}
+	for _, issue := range report.BlockingIssues {
+		if !strings.Contains(issue, "timed out") {
+			t.Errorf("unexpected hard blocker in review: %s", issue)
+		}
+	}
+	if len(report.Workers) != 3 {
+		t.Errorf("report.Workers len = %d, want 3", len(report.Workers))
+	}
+}
+
+func TestAttachExternalContinueWatcherTimeoutAdvisory(t *testing.T) {
+	verification := codexContinueVerificationReport{
+		Phase:        1,
+		ChecksPassed: true,
+		Passed:       true,
+		Steps: []codexVerificationStep{
+			{Name: "build", Passed: true},
+			{Name: "tests", Passed: true},
+		},
+	}
+	workerFlow := []codexContinueWorkerFlowStep{
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "timeout", Summary: "timed out"},
+	}
+
+	result, watcherFlow := attachExternalContinueWatcher(verification, workerFlow)
+
+	if !result.Passed {
+		t.Errorf("result.Passed = false, want true (runtime verification passed)")
+	}
+	if !result.ChecksPassed {
+		t.Errorf("result.ChecksPassed = false, want true")
+	}
+	found := false
+	for _, issue := range result.BlockingIssues {
+		if strings.Contains(issue, "timed out") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected timeout warning in BlockingIssues, got %v", result.BlockingIssues)
+	}
+	if watcherFlow == nil {
+		t.Error("watcherFlow should not be nil")
+	}
+}
+
+func TestAttachExternalContinueWatcherFailedStillBlocks(t *testing.T) {
+	verification := codexContinueVerificationReport{
+		Phase:        1,
+		ChecksPassed: true,
+		Passed:       true,
+		Steps: []codexVerificationStep{
+			{Name: "build", Passed: true},
+			{Name: "tests", Passed: true},
+		},
+	}
+	workerFlow := []codexContinueWorkerFlowStep{
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "failed", Summary: "critical issues found"},
+	}
+
+	result, _ := attachExternalContinueWatcher(verification, workerFlow)
+
+	if result.Passed {
+		t.Errorf("result.Passed = true, want false (watcher failed, not timed out)")
+	}
+	if result.ChecksPassed {
+		t.Errorf("result.ChecksPassed = true, want false (watcher failed)")
+	}
+}
+
+func TestExternalContinueReviewReportSkipMissing(t *testing.T) {
+	now := time.Now().UTC()
+	workerFlow := []codexContinueWorkerFlowStep{
+		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green"},
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues"},
+		{Stage: "review", Caste: "auditor", Name: "Audit-44", Status: "timeout", Summary: "timed out"},
+		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
+	}
+
+	report := externalContinueReviewReport(1, workerFlow, now, true)
+
+	if !report.Passed {
+		t.Errorf("report.Passed = false, want true")
+	}
+	if len(report.Workers) != 1 {
+		t.Errorf("report.Workers len = %d, want 1 (only gatekeeper)", len(report.Workers))
+	}
+	if len(report.Workers) > 0 && report.Workers[0].Name != "Guard-43" {
+		t.Errorf("report.Workers[0].Name = %q, want Guard-43", report.Workers[0].Name)
 	}
 }
 

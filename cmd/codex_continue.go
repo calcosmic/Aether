@@ -1442,6 +1442,9 @@ func classifyContinueTaskAssessment(taskID string, statuses []string, verificati
 		if len(statuses) == 0 {
 			return "missing", "No dispatch or reconciliation evidence was recorded for this task.", "redispatch"
 		}
+		if !containsString(statuses, "failed") {
+			return "verified", "Phase verification passed; no worker reported completion but all checks passed.", ""
+		}
 		if !dispatchEvidenceTrusted {
 			return "simulated", fmt.Sprintf("Worker evidence is simulated and cannot satisfy continue advancement: %s.", strings.Join(statuses, ", ")), "redispatch"
 		}
