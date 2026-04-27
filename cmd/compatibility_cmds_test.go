@@ -1601,3 +1601,84 @@ func TestLoadColonyLearningsReturnsEmptyWhenMissing(t *testing.T) {
 		t.Fatalf("expected empty learnings for missing file, got %d", len(learnings))
 	}
 }
+
+func TestResolveOracleDepth(t *testing.T) {
+	tests := []struct {
+		name     string
+		depth    string
+		wantMax  int
+		wantConf int
+	}{
+		{"quick", "quick", 2, 60},
+		{"balanced", "balanced", 4, 85},
+		{"deep", "deep", 6, 95},
+		{"exhaustive", "exhaustive", 10, 99},
+		{"empty defaults to balanced", "", 4, 85},
+		{"invalid defaults to balanced", "invalid", 4, 85},
+		{"case insensitive", "QUICK", 2, 60},
+		{"whitespace trimmed", "  deep  ", 6, 95},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := resolveOracleDepth(tt.depth)
+			if cfg.MaxIterations != tt.wantMax {
+				t.Errorf("MaxIterations = %d, want %d", cfg.MaxIterations, tt.wantMax)
+			}
+			if cfg.TargetConfidence != tt.wantConf {
+				t.Errorf("TargetConfidence = %d, want %d", cfg.TargetConfidence, tt.wantConf)
+			}
+		})
+	}
+}
+
+func TestOracleDepthFlagSetsMaxIterations(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	withWorkingDir(t, root)
+
+	agentsDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/oracle-depth-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
+		t.Fatalf("write oracle agent: %v", err)
+	}
+
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
+
+	rootCmd.SetArgs([]string{"oracle", "--depth", "deep", "release parity"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("oracle with --depth deep returned error: %v", err)
+	}
+
+	// Verify state has MaxIterations=6
+	statePath := filepath.Join(root, ".aether", "oracle", "state.json")
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read oracle state: %v", err)
+	}
+	var state oracleStateFile
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("parse oracle state: %v", err)
+	}
+	if state.MaxIterations != 6 {
+		t.Errorf("MaxIterations = %d, want 6 (deep)", state.MaxIterations)
+	}
+	if state.TargetConfidence != 95 {
+		t.Errorf("TargetConfidence = %d, want 95 (deep)", state.TargetConfidence)
+	}
+	if state.Depth != "Deep" {
+		t.Errorf("Depth = %q, want %q", state.Depth, "Deep")
+	}
+}
