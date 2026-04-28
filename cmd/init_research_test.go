@@ -457,3 +457,552 @@ func TestInitResearchPriorColonies(t *testing.T) {
 	}
 }
 
+
+// --- Task 1: Dependency parser tests ---
+
+func TestParsePackageJsonDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "package.json"), []byte(`{
+		"dependencies": {
+			"express": "^4.18.0",
+			"lodash": "4.17.21"
+		},
+		"devDependencies": {
+			"jest": "^29.0.0"
+		}
+	}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pkg json test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "node" {
+		t.Errorf("language = %v, want node", entry["language"])
+	}
+	if entry["source_file"] != "package.json" {
+		t.Errorf("source_file = %v, want package.json", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 1 {
+		t.Fatalf("dependencies empty, want at least 1")
+	}
+	foundExpress := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "express" {
+			foundExpress = true
+		}
+	}
+	if !foundExpress {
+		t.Errorf("dependencies = %v, want to contain express", deps)
+	}
+	devDeps := entry["dev_dependencies"].([]interface{})
+	if len(devDeps) < 1 {
+		t.Fatalf("dev_dependencies empty, want at least 1")
+	}
+	foundJest := false
+	for _, d := range devDeps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "jest" {
+			foundJest = true
+		}
+	}
+	if !foundJest {
+		t.Errorf("dev_dependencies = %v, want to contain jest", devDeps)
+	}
+}
+
+func TestParseGoModDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module example.com/myapp\n\ngo 1.21\n\nrequire (\n\tgithub.com/spf13/cobra v1.8.0\n\tgithub.com/tidwall/gjson v1.17.0 // indirect\n)\n\nrequire github.com/BurntSushi/toml v1.3.2\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "go mod test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "go" {
+		t.Errorf("language = %v, want go", entry["language"])
+	}
+	direct := entry["dependencies"].([]interface{})
+	if len(direct) < 1 {
+		t.Fatalf("dependencies empty, want at least 1 direct dep")
+	}
+	indirect := entry["indirect"].([]interface{})
+	if len(indirect) < 1 {
+		t.Fatalf("indirect empty, want at least 1 indirect dep")
+	}
+}
+
+func TestParseCargoTomlDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "Cargo.toml"), []byte("[package]\nname = \"myapp\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = { version = \"1.0\", features = [\"derive\"] }\ntokio = \"1.35\"\nclap = \"4.4\"\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "cargo test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "rust" {
+		t.Errorf("language = %v, want rust", entry["language"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 3 {
+		t.Errorf("dependencies count = %d, want at least 3", len(deps))
+	}
+}
+
+func TestParsePyprojectDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "pyproject.toml"), []byte("[project]\nname = \"myapp\"\nversion = \"0.1.0\"\ndependencies = [\"requests>=2.0\", \"flask==2.1.0\", \"click\"]\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pyproject test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "python" {
+		t.Errorf("language = %v, want python", entry["language"])
+	}
+	if entry["source_file"] != "pyproject.toml" {
+		t.Errorf("source_file = %v, want pyproject.toml", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 2 {
+		t.Errorf("dependencies count = %d, want at least 2", len(deps))
+	}
+	foundRequests := false
+	foundFlask := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "requests" {
+			foundRequests = true
+		}
+		if dep["name"] == "flask" {
+			foundFlask = true
+		}
+	}
+	if !foundRequests {
+		t.Errorf("dependencies = %v, want to contain requests", deps)
+	}
+	if !foundFlask {
+		t.Errorf("dependencies = %v, want to contain flask", deps)
+	}
+}
+
+func TestParseComposerJsonDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "composer.json"), []byte("{\"require\":{\"laravel/framework\":\"^10.0\",\"php\":\"^8.1\"},\"require-dev\":{\"phpunit/phpunit\":\"^10.0\"}}\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "composer test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "php" {
+		t.Errorf("language = %v, want php", entry["language"])
+	}
+	if entry["source_file"] != "composer.json" {
+		t.Errorf("source_file = %v, want composer.json", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	foundLaravel := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "laravel/framework" {
+			foundLaravel = true
+		}
+	}
+	if !foundLaravel {
+		t.Errorf("dependencies = %v, want to contain laravel/framework", deps)
+	}
+	devDeps := entry["dev_dependencies"].([]interface{})
+	foundPhpunit := false
+	for _, d := range devDeps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "phpunit/phpunit" {
+			foundPhpunit = true
+		}
+	}
+	if !foundPhpunit {
+		t.Errorf("dev_dependencies = %v, want to contain phpunit/phpunit", devDeps)
+	}
+}
+
+// --- Task 2: Regex/XML/line parser tests ---
+
+func TestParseRequirementsTxt(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "requirements.txt"), []byte("django==4.2\n# comment\n-r other.txt\npytest>=7.0\nrequests\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "req txt test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundReqTxt := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "requirements.txt" {
+			foundReqTxt = true
+			if entry["language"] != "python" {
+				t.Errorf("language = %v, want python", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			foundDjango := false
+			foundPytest := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "django" {
+					foundDjango = true
+				}
+				if dep["name"] == "pytest" {
+					foundPytest = true
+				}
+			}
+			if !foundDjango {
+				t.Errorf("deps = %v, want to contain django", deps)
+			}
+			if !foundPytest {
+				t.Errorf("deps = %v, want to contain pytest", deps)
+			}
+		}
+	}
+	if !foundReqTxt {
+		t.Error("no requirements.txt entry found in tech_stack_detail")
+	}
+}
+
+func TestParseGemfileDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "Gemfile"), []byte("source \"https://rubygems.org\"\ngem \"rails\", \"~> 7.0\"\ngem \"pg\"\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "gemfile test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundGemfile := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "Gemfile" {
+			foundGemfile = true
+			if entry["language"] != "ruby" {
+				t.Errorf("language = %v, want ruby", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 2 {
+				t.Errorf("deps count = %d, want at least 2", len(deps))
+			}
+			foundRails := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "rails" {
+					foundRails = true
+				}
+			}
+			if !foundRails {
+				t.Errorf("deps = %v, want to contain rails", deps)
+			}
+		}
+	}
+	if !foundGemfile {
+		t.Error("no Gemfile entry found in tech_stack_detail")
+	}
+}
+
+func TestParsePomXmlDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "pom.xml"), []byte("<project><dependencies><dependency><groupId>org.springframework</groupId><artifactId>spring-core</artifactId><version>5.3.0</version></dependency></dependencies></project>\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pom xml test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundPom := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "pom.xml" {
+			foundPom = true
+			if entry["language"] != "java" {
+				t.Errorf("language = %v, want java", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 1 {
+				t.Errorf("deps count = %d, want at least 1", len(deps))
+			}
+			foundSpring := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if strings.Contains(dep["name"].(string), "spring-core") {
+					foundSpring = true
+				}
+			}
+			if !foundSpring {
+				t.Errorf("deps = %v, want to contain spring-core", deps)
+			}
+		}
+	}
+	if !foundPom {
+		t.Error("no pom.xml entry found in tech_stack_detail")
+	}
+}
+
+func TestParseMixExsDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "mix.exs"), []byte("defp deps do\n  [\n    {:phoenix, \"~> 1.7\"},\n    {:ecto_sql, \"~> 3.10\"}\n  ]\nend\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "mix.exs test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundMix := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "mix.exs" {
+			foundMix = true
+			if entry["language"] != "elixir" {
+				t.Errorf("language = %v, want elixir", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 2 {
+				t.Errorf("deps count = %d, want at least 2", len(deps))
+			}
+			foundPhoenix := false
+			foundEcto := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "phoenix" {
+					foundPhoenix = true
+				}
+				if dep["name"] == "ecto_sql" {
+					foundEcto = true
+				}
+			}
+			if !foundPhoenix {
+				t.Errorf("deps = %v, want to contain phoenix", deps)
+			}
+			if !foundEcto {
+				t.Errorf("deps = %v, want to contain ecto_sql", deps)
+			}
+		}
+	}
+	if !foundMix {
+		t.Error("no mix.exs entry found in tech_stack_detail")
+	}
+}
+
+func TestInitResearchTechStackDetailIntegration(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "package.json"), []byte(`{"dependencies":{"express":"^4.0"}}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "integration test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	if result["detected_type"] != "node" {
+		t.Errorf("detected_type = %v, want node", result["detected_type"])
+	}
+}
+
+func TestInitResearchBackwardCompat(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module test\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "backward compat test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	requiredFields := []string{
+		"detected_type", "languages", "frameworks", "goal",
+		"top_level_dirs", "file_count", "is_git_repo",
+		"governance", "complexity", "prior_colonies",
+		"pheromone_suggestions", "charter", "tech_stack_detail",
+	}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("missing required field: %s", field)
+		}
+	}
+}
