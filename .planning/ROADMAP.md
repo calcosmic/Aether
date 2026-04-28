@@ -191,7 +191,10 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
   2. No chamber files are tracked in git (241 files removed, chambers/ gitignored)
   3. Runtime state files (CONTEXT.md, CROWNED-ANTHILL.md) are no longer tracked in git
   4. `agents-claude/` is verified byte-identical to `.claude/agents/ant/`
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 70-01-PLAN.md -- Remove 296 self-hosting artifacts, harden gitignore, verify integrity
 
 ### Phase 71: Platform Hardening
 **Goal**: All three platforms (Claude Code, OpenCode, Codex CLI) produce consistent, correct output for every command
@@ -262,7 +265,7 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 70. Self-Hosting Cleanup | v1.11 | 0/? | Not started | - |
+| 70. Self-Hosting Cleanup | v1.11 | 0/1 | Planning complete | - |
 | 71. Platform Hardening | v1.11 | 0/? | Not started | - |
 | 72. Smart Init Charter | v1.11 | 0/? | Not started | - |
 | 73. Rich Init Research | v1.11 | 0/? | Not started | - |
