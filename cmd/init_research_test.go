@@ -457,3 +457,265 @@ func TestInitResearchPriorColonies(t *testing.T) {
 	}
 }
 
+
+// --- Task 1: Dependency parser tests ---
+
+func TestParsePackageJsonDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "package.json"), []byte(`{
+		"dependencies": {
+			"express": "^4.18.0",
+			"lodash": "4.17.21"
+		},
+		"devDependencies": {
+			"jest": "^29.0.0"
+		}
+	}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pkg json test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "node" {
+		t.Errorf("language = %v, want node", entry["language"])
+	}
+	if entry["source_file"] != "package.json" {
+		t.Errorf("source_file = %v, want package.json", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 1 {
+		t.Fatalf("dependencies empty, want at least 1")
+	}
+	foundExpress := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "express" {
+			foundExpress = true
+		}
+	}
+	if !foundExpress {
+		t.Errorf("dependencies = %v, want to contain express", deps)
+	}
+	devDeps := entry["dev_dependencies"].([]interface{})
+	if len(devDeps) < 1 {
+		t.Fatalf("dev_dependencies empty, want at least 1")
+	}
+	foundJest := false
+	for _, d := range devDeps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "jest" {
+			foundJest = true
+		}
+	}
+	if !foundJest {
+		t.Errorf("dev_dependencies = %v, want to contain jest", devDeps)
+	}
+}
+
+func TestParseGoModDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module example.com/myapp\n\ngo 1.21\n\nrequire (\n\tgithub.com/spf13/cobra v1.8.0\n\tgithub.com/tidwall/gjson v1.17.0 // indirect\n)\n\nrequire github.com/BurntSushi/toml v1.3.2\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "go mod test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "go" {
+		t.Errorf("language = %v, want go", entry["language"])
+	}
+	direct := entry["dependencies"].([]interface{})
+	if len(direct) < 1 {
+		t.Fatalf("dependencies empty, want at least 1 direct dep")
+	}
+	indirect := entry["indirect"].([]interface{})
+	if len(indirect) < 1 {
+		t.Fatalf("indirect empty, want at least 1 indirect dep")
+	}
+}
+
+func TestParseCargoTomlDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "Cargo.toml"), []byte("[package]\nname = \"myapp\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = { version = \"1.0\", features = [\"derive\"] }\ntokio = \"1.35\"\nclap = \"4.4\"\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "cargo test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "rust" {
+		t.Errorf("language = %v, want rust", entry["language"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 3 {
+		t.Errorf("dependencies count = %d, want at least 3", len(deps))
+	}
+}
+
+func TestParsePyprojectDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "pyproject.toml"), []byte("[project]\nname = \"myapp\"\nversion = \"0.1.0\"\ndependencies = [\"requests>=2.0\", \"flask==2.1.0\", \"click\"]\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pyproject test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "python" {
+		t.Errorf("language = %v, want python", entry["language"])
+	}
+	if entry["source_file"] != "pyproject.toml" {
+		t.Errorf("source_file = %v, want pyproject.toml", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 2 {
+		t.Errorf("dependencies count = %d, want at least 2", len(deps))
+	}
+	foundRequests := false
+	foundFlask := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "requests" {
+			foundRequests = true
+		}
+		if dep["name"] == "flask" {
+			foundFlask = true
+		}
+	}
+	if !foundRequests {
+		t.Errorf("dependencies = %v, want to contain requests", deps)
+	}
+	if !foundFlask {
+		t.Errorf("dependencies = %v, want to contain flask", deps)
+	}
+}
+
+func TestParseComposerJsonDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "composer.json"), []byte("{\"require\":{\"laravel/framework\":\"^10.0\",\"php\":\"^8.1\"},\"require-dev\":{\"phpunit/phpunit\":\"^10.0\"}}\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "composer test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "php" {
+		t.Errorf("language = %v, want php", entry["language"])
+	}
+	if entry["source_file"] != "composer.json" {
+		t.Errorf("source_file = %v, want composer.json", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	foundLaravel := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "laravel/framework" {
+			foundLaravel = true
+		}
+	}
+	if !foundLaravel {
+		t.Errorf("dependencies = %v, want to contain laravel/framework", deps)
+	}
+	devDeps := entry["dev_dependencies"].([]interface{})
+	foundPhpunit := false
+	for _, d := range devDeps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "phpunit/phpunit" {
+			foundPhpunit = true
+		}
+	}
+	if !foundPhpunit {
+		t.Errorf("dev_dependencies = %v, want to contain phpunit/phpunit", devDeps)
+	}
+}

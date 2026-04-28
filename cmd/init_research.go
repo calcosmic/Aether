@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
+	"github.com/tidwall/gjson"
 )
 
 // --- Struct types for deep scan data ---
@@ -44,6 +46,21 @@ type pheromoneSuggestion struct {
 	Type    string `json:"type"`
 	Content string `json:"content"`
 	Reason  string `json:"reason"`
+}
+
+// depEntry represents a single parsed dependency.
+type depEntry struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// techStackDetail holds parsed dependency data for a single language ecosystem.
+type techStackDetail struct {
+	Language   string     `json:"language"`
+	SourceFile string     `json:"source_file"`
+	Deps       []depEntry `json:"dependencies"`
+	DevDeps    []depEntry `json:"dev_dependencies,omitempty"`
+	Indirect   []depEntry `json:"indirect,omitempty"`
 }
 
 // projectDetectors maps a marker file to a project type description.
@@ -236,6 +253,249 @@ func fileContains(target, name, substr string) bool {
 		return false
 	}
 	return strings.Contains(string(data), substr)
+}
+
+// --- Dependency file parsers ---
+
+// maxDepFileSize caps file reads for dependency files to prevent OOM on giant files.
+const maxDepFileSize = 1 << 20 // 1 MB
+
+// parsePackageJsonDeps parses package.json for production and dev dependencies.
+func parsePackageJsonDeps(target string) ([]depEntry, []depEntry) {
+	data, err := os.ReadFile(filepath.Join(target, "package.json"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil, nil
+	}
+
+	var prodDeps, devDeps []depEntry
+
+	prodResult := gjson.GetBytes(data, "dependencies")
+	if prodResult.IsObject() {
+		prodResult.ForEach(func(key, val gjson.Result) bool {
+			prodDeps = append(prodDeps, depEntry{Name: key.String(), Version: val.String()})
+			return true
+		})
+	}
+
+	devResult := gjson.GetBytes(data, "devDependencies")
+	if devResult.IsObject() {
+		devResult.ForEach(func(key, val gjson.Result) bool {
+			devDeps = append(devDeps, depEntry{Name: key.String(), Version: val.String()})
+			return true
+		})
+	}
+
+	return prodDeps, devDeps
+}
+
+// parseGoModDeps parses go.mod for direct and indirect dependencies.
+func parseGoModDeps(target string) ([]depEntry, []depEntry) {
+	data, err := os.ReadFile(filepath.Join(target, "go.mod"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil, nil
+	}
+
+	var direct, indirect []depEntry
+	lines := strings.Split(string(data), "\n")
+	inRequireBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "require (" {
+			inRequireBlock = true
+			continue
+		}
+		if inRequireBlock && trimmed == ")" {
+			inRequireBlock = false
+			continue
+		}
+		if strings.HasPrefix(trimmed, "require ") || inRequireBlock {
+			content := trimmed
+			if strings.HasPrefix(content, "require ") {
+				content = strings.TrimSpace(content[len("require "):])
+			}
+			parts := strings.Fields(content)
+			if len(parts) >= 1 && !strings.HasPrefix(parts[0], "//") {
+				name := parts[0]
+				version := ""
+				isIndirect := strings.Contains(content, "// indirect")
+				if len(parts) >= 2 && !strings.HasPrefix(parts[1], "//") {
+					version = parts[1]
+				}
+				entry := depEntry{Name: name, Version: version}
+				if isIndirect {
+					indirect = append(indirect, entry)
+				} else {
+					direct = append(direct, entry)
+				}
+			}
+		}
+	}
+	return direct, indirect
+}
+
+// parseCargoTomlDeps parses Cargo.toml [dependencies] section.
+func parseCargoTomlDeps(target string) []depEntry {
+	data, err := os.ReadFile(filepath.Join(target, "Cargo.toml"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	var raw map[string]interface{}
+	if _, err := toml.Decode(string(data), &raw); err != nil {
+		return nil
+	}
+
+	depsMap, ok := raw["dependencies"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	var deps []depEntry
+	for name, val := range depsMap {
+		switch v := val.(type) {
+		case string:
+			deps = append(deps, depEntry{Name: name, Version: v})
+		case map[string]interface{}:
+			if ver, ok := v["version"].(string); ok {
+				deps = append(deps, depEntry{Name: name, Version: ver})
+			} else {
+				deps = append(deps, depEntry{Name: name})
+			}
+		default:
+			deps = append(deps, depEntry{Name: name})
+		}
+	}
+	return deps
+}
+
+// parsePyprojectDeps parses pyproject.toml for project dependencies (PEP 621 and Poetry).
+func parsePyprojectDeps(target string) []depEntry {
+	data, err := os.ReadFile(filepath.Join(target, "pyproject.toml"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	var raw map[string]interface{}
+	if _, err := toml.Decode(string(data), &raw); err != nil {
+		return nil
+	}
+
+	var deps []depEntry
+
+	// PEP 621: [project.dependencies]
+	if project, ok := raw["project"].(map[string]interface{}); ok {
+		if depList, ok := project["dependencies"].([]interface{}); ok {
+			for _, item := range depList {
+				s, ok := item.(string)
+				if !ok {
+					continue
+				}
+				name, version := splitPepDep(s)
+				deps = append(deps, depEntry{Name: name, Version: version})
+			}
+		}
+	}
+
+	// Poetry fallback: [tool.poetry.dependencies]
+	if tool, ok := raw["tool"].(map[string]interface{}); ok {
+		if poetry, ok := tool["poetry"].(map[string]interface{}); ok {
+			if depMap, ok := poetry["dependencies"].(map[string]interface{}); ok {
+				for name, val := range depMap {
+					switch v := val.(type) {
+					case string:
+						deps = append(deps, depEntry{Name: name, Version: v})
+					default:
+						deps = append(deps, depEntry{Name: name})
+					}
+				}
+			}
+		}
+	}
+
+	return deps
+}
+
+// splitPepDep splits a PEP 508 dependency string like "requests>=2.0" into name and version.
+func splitPepDep(s string) (string, string) {
+	// Find the first version operator
+	for i, r := range s {
+		if r == '=' || r == '>' || r == '<' || r == '~' || r == '!' || r == ';' || r == ' ' {
+			return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i:])
+		}
+	}
+	return strings.TrimSpace(s), ""
+}
+
+// parseComposerJsonDeps parses composer.json for production and dev dependencies.
+func parseComposerJsonDeps(target string) ([]depEntry, []depEntry) {
+	data, err := os.ReadFile(filepath.Join(target, "composer.json"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil, nil
+	}
+
+	var prodDeps, devDeps []depEntry
+
+	prodResult := gjson.GetBytes(data, "require")
+	if prodResult.IsObject() {
+		prodResult.ForEach(func(key, val gjson.Result) bool {
+			prodDeps = append(prodDeps, depEntry{Name: key.String(), Version: val.String()})
+			return true
+		})
+	}
+
+	devResult := gjson.GetBytes(data, "require-dev")
+	if devResult.IsObject() {
+		devResult.ForEach(func(key, val gjson.Result) bool {
+			devDeps = append(devDeps, depEntry{Name: key.String(), Version: val.String()})
+			return true
+		})
+	}
+
+	return prodDeps, devDeps
+}
+
+// parseDependencyFiles orchestrates all dependency file parsers and returns structured results.
+func parseDependencyFiles(target string) []techStackDetail {
+	var details []techStackDetail
+
+	if hasFile(target, "package.json") {
+		prod, dev := parsePackageJsonDeps(target)
+		details = append(details, techStackDetail{
+			Language: "node", SourceFile: "package.json",
+			Deps: prod, DevDeps: dev,
+		})
+	}
+	if hasFile(target, "go.mod") {
+		direct, indirect := parseGoModDeps(target)
+		details = append(details, techStackDetail{
+			Language: "go", SourceFile: "go.mod",
+			Deps: direct, Indirect: indirect,
+		})
+	}
+	if hasFile(target, "Cargo.toml") {
+		deps := parseCargoTomlDeps(target)
+		details = append(details, techStackDetail{
+			Language: "rust", SourceFile: "Cargo.toml",
+			Deps: deps,
+		})
+	}
+	if hasFile(target, "pyproject.toml") {
+		deps := parsePyprojectDeps(target)
+		details = append(details, techStackDetail{
+			Language: "python", SourceFile: "pyproject.toml",
+			Deps: deps,
+		})
+	}
+	if hasFile(target, "composer.json") {
+		prod, dev := parseComposerJsonDeps(target)
+		details = append(details, techStackDetail{
+			Language: "php", SourceFile: "composer.json",
+			Deps: prod, DevDeps: dev,
+		})
+	}
+
+	return details
 }
 
 // generatePheromoneSuggestions applies 10 deterministic patterns to produce pheromone suggestions.
@@ -636,6 +896,8 @@ var initResearchCmd = &cobra.Command{
 			LargestFiles: largestFiles,
 		}
 
+		techStackDetail := parseDependencyFiles(target)
+
 		outputOK(map[string]interface{}{
 			"detected_type":         detected,
 			"languages":             languages,
@@ -651,6 +913,7 @@ var initResearchCmd = &cobra.Command{
 			"prior_colonies":        priorColonies,
 			"pheromone_suggestions": pheromoneSuggestions,
 			"charter":               charter,
+			"tech_stack_detail":     techStackDetail,
 		})
 		return nil
 	},
