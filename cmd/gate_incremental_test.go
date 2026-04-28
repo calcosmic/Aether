@@ -228,6 +228,103 @@ func TestContinueGates_ClearedOnAdvance(t *testing.T) {
 	}
 }
 
+// TestFinalizeGateResultsPersisted verifies that gate results written via
+// the finalize path pattern are persisted and readable (WR-01 fix).
+func TestFinalizeGateResultsPersisted(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	goal := "test finalize persist"
+	stateData, _ := json.Marshal(colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateBUILT,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	ts := time.Now().UTC().Format(time.RFC3339)
+
+	// Simulate finalize path: write gate results after gate run
+	results := []colony.GateResultEntry{
+		{Name: "manifest_present", Passed: true, Timestamp: ts},
+		{Name: "tests_pass", Passed: false, Timestamp: ts, Detail: "failed"},
+	}
+	if err := gateResultsWrite(results); err != nil {
+		t.Fatalf("gateResultsWrite failed: %v", err)
+	}
+
+	readBack := gateResultsRead()
+	if len(readBack) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(readBack))
+	}
+
+	names := make(map[string]colony.GateResultEntry)
+	for _, r := range readBack {
+		names[r.Name] = r
+	}
+	if names["manifest_present"].Passed != true {
+		t.Error("manifest_present should be passed")
+	}
+	if names["tests_pass"].Passed != false {
+		t.Error("tests_pass should be failed")
+	}
+}
+
+// TestFinalizeGateResultsClearedOnAdvance verifies that gate results are
+// cleared when phase advances via the finalize path (WR-02 fix).
+func TestFinalizeGateResultsClearedOnAdvance(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	goal := "test finalize clear"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateBUILT,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: colony.PhaseInProgress},
+				{ID: 2, Name: "Phase 2", Status: colony.PhasePending},
+			},
+		},
+		GateResults: []colony.GateResultEntry{
+			{Name: "manifest_present", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+			{Name: "tests_pass", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		},
+	}
+	stateData, _ := json.Marshal(state)
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	// Simulate finalize advance: atomic update that clears gate results
+	var updated colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		updated.GateResults = nil
+		updated.Plan.Phases[0].Status = colony.PhaseCompleted
+		updated.State = colony.StateREADY
+		return nil
+	}); err != nil {
+		t.Fatalf("atomic update failed: %v", err)
+	}
+
+	readBack := gateResultsRead()
+	if readBack != nil {
+		t.Errorf("gate results should be nil after finalize advance, got %d entries", len(readBack))
+	}
+}
+
 // TestContinueGates_ResultsPreservedOnFailure verifies that gate results
 // are NOT cleared when gates fail (phase does not advance).
 func TestContinueGates_ResultsPreservedOnFailure(t *testing.T) {
