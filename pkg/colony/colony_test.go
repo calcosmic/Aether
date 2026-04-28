@@ -966,14 +966,28 @@ func TestCharterOmitEmpty(t *testing.T) {
 }
 
 func TestCharterBackwardCompat(t *testing.T) {
-	golden, err := os.ReadFile("testdata/COLONY_STATE.golden.json")
-	if err != nil {
-		t.Fatalf("read golden: %v", err)
-	}
+	// Old-style JSON without charter field -- should unmarshal to nil Charter
+	oldJSON := `{
+		"version": "3.0",
+		"goal": "Some old goal",
+		"colony_name": "Old Colony",
+		"colony_version": 1,
+		"state": "READY",
+		"current_phase": 2,
+		"plan": {
+			"generated_at": "2026-03-31T19:45:32Z",
+			"phases": []
+		},
+		"memory": {"phase_learnings": [], "decisions": [], "instincts": []},
+		"errors": {"records": [], "flagged_patterns": []},
+		"signals": [],
+		"graveyards": [],
+		"events": []
+	}`
 
 	var state ColonyState
-	if err := json.Unmarshal(golden, &state); err != nil {
-		t.Fatalf("unmarshal golden: %v", err)
+	if err := json.Unmarshal([]byte(oldJSON), &state); err != nil {
+		t.Fatalf("unmarshal old JSON: %v", err)
 	}
 
 	if state.Charter != nil {
@@ -984,7 +998,7 @@ func TestCharterBackwardCompat(t *testing.T) {
 	if state.Version != "3.0" {
 		t.Errorf("Version = %q, want '3.0'", state.Version)
 	}
-	if state.Goal == nil || *state.Goal == "" {
+	if state.Goal == nil || *state.Goal != "Some old goal" {
 		t.Error("expected non-nil Goal")
 	}
 	if state.Plan.GeneratedAt == nil {

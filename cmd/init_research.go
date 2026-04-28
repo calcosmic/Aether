@@ -46,10 +46,13 @@ type pheromoneSuggestion struct {
 }
 
 type charterData struct {
-	Intent     string `json:"intent"`
-	Vision     string `json:"vision"`
-	Governance string `json:"governance"`
-	Goals      string `json:"goals"`
+	Intent      string `json:"intent"`
+	Vision      string `json:"vision"`
+	Governance  string `json:"governance"`
+	Goals       string `json:"goals"`
+	TechStack   string `json:"tech_stack"`
+	KeyRisks    string `json:"key_risks"`
+	Constraints string `json:"constraints"`
 }
 
 // projectDetectors maps a marker file to a project type description.
@@ -357,7 +360,7 @@ func generatePheromoneSuggestions(target string, governance governanceInfo) []ph
 }
 
 // generateCharter produces charter data from scan results.
-func generateCharter(goal, detected string, governance governanceInfo, readmeSummary string, gitHistory gitHistoryInfo) charterData {
+func generateCharter(goal, detected string, governance governanceInfo, readmeSummary string, gitHistory gitHistoryInfo, languages []string, frameworks []string, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion) charterData {
 	ch := charterData{}
 
 	// Intent: use the goal string directly
@@ -403,7 +406,99 @@ func generateCharter(goal, detected string, governance governanceInfo, readmeSum
 	// Goals
 	ch.Goals = "Goal: " + goal + ". Focus on quality, maintainability, and shipping working software."
 
+	// TechStack
+	ch.TechStack = generateTechStack(languages, frameworks)
+
+	// KeyRisks
+	ch.KeyRisks = generateKeyRisks(governance, isGitRepo, pheromoneSuggestions)
+
+	// Constraints
+	ch.Constraints = generateConstraints(governance)
+
 	return ch
+}
+
+// generateTechStack builds a tech stack description from detected languages and frameworks.
+func generateTechStack(languages []string, frameworks []string) string {
+	// Deduplicate frameworks that overlap with languages
+	langSet := make(map[string]bool)
+	for _, l := range languages {
+		langSet[l] = true
+	}
+	var uniqueFrameworks []string
+	for _, fw := range frameworks {
+		if !langSet[fw] {
+			uniqueFrameworks = append(uniqueFrameworks, fw)
+		}
+	}
+
+	var parts []string
+	if len(languages) > 0 {
+		parts = append(parts, "Languages: "+strings.Join(languages, ", "))
+	}
+	if len(uniqueFrameworks) > 0 {
+		parts = append(parts, "Frameworks/Tools: "+strings.Join(uniqueFrameworks, ", "))
+	}
+
+	if len(parts) > 0 {
+		return strings.Join(parts, ". ")
+	}
+	return "No specific tech stack detected"
+}
+
+// generateKeyRisks produces risk heuristics from governance data and pheromone suggestions.
+func generateKeyRisks(governance governanceInfo, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion) string {
+	var risks []string
+
+	if len(governance.CIConfigs) == 0 {
+		risks = append(risks, "No CI/CD pipeline detected -- manual deployment risk")
+	}
+	if len(governance.TestFrameworks) == 0 {
+		risks = append(risks, "No test framework detected -- regression risk")
+	}
+	if len(governance.Linters) == 0 {
+		risks = append(risks, "No linter configured -- code quality may drift")
+	}
+
+	// Check pheromone suggestions for secret-related REDIRECT
+	for _, sug := range pheromoneSuggestions {
+		if sug.Type == "REDIRECT" && strings.Contains(sug.Content, "secrets") {
+			risks = append(risks, "Potential secret exposure -- .env files without .gitignore protection")
+			break
+		}
+	}
+
+	if !isGitRepo {
+		risks = append(risks, "Not a git repository -- no version control")
+	}
+
+	if len(risks) > 0 {
+		return strings.Join(risks, ". ")
+	}
+	return "No significant risks detected from initial scan"
+}
+
+// generateConstraints produces constraint descriptions from governance data.
+func generateConstraints(governance governanceInfo) string {
+	var parts []string
+
+	if len(governance.Linters) > 0 {
+		parts = append(parts, "Follow "+strings.Join(governance.Linters, "/")+" rules")
+	}
+	if len(governance.Formatters) > 0 {
+		parts = append(parts, "Use "+strings.Join(governance.Formatters, "/")+" for code formatting")
+	}
+	if len(governance.TestFrameworks) > 0 {
+		parts = append(parts, "Write tests using "+strings.Join(governance.TestFrameworks, "/"))
+	}
+	if len(governance.BuildTools) > 0 {
+		parts = append(parts, "Build with "+strings.Join(governance.BuildTools, "/"))
+	}
+
+	if len(parts) > 0 {
+		return strings.Join(parts, ". ")
+	}
+	return "No formal constraints detected -- colony should establish conventions"
 }
 
 // joinWithCommaAnd joins items with ", " and " and " before the last.
@@ -542,7 +637,7 @@ var initResearchCmd = &cobra.Command{
 		gitHistory := analyzeGitHistory(target)
 		priorColonies := detectPriorColonies(target)
 		pheromoneSuggestions := generatePheromoneSuggestions(target, governance)
-		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory)
+		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory, languages, frameworks, isGitRepo, pheromoneSuggestions)
 
 		complexity := complexityMetrics{
 			TotalFiles:   fileCount,

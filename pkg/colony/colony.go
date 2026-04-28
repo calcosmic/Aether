@@ -152,6 +152,22 @@ type GateResultEntry struct {
 }
 
 // ---------------------------------------------------------------------------
+// Charter
+// ---------------------------------------------------------------------------
+
+// Charter holds the approved charter data for a colony, including its intent,
+// vision, governance approach, goals, tech stack, key risks, and constraints.
+type Charter struct {
+	Intent      string `json:"intent"`
+	Vision      string `json:"vision"`
+	Governance  string `json:"governance"`
+	Goals       string `json:"goals"`
+	TechStack   string `json:"tech_stack"`
+	KeyRisks    string `json:"key_risks"`
+	Constraints string `json:"constraints"`
+}
+
+// ---------------------------------------------------------------------------
 // Top-level state
 // ---------------------------------------------------------------------------
 
@@ -184,6 +200,7 @@ type ColonyState struct {
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
 	RunID              *string            `json:"run_id,omitempty"`
 	GateResults        []GateResultEntry  `json:"gate_results,omitempty"`
+	Charter            *Charter           `json:"charter,omitempty"`
 }
 
 // EffectiveScope returns the compatibility-safe colony scope.
