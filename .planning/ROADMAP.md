@@ -326,8 +326,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 68-01-PLAN.md -- Fix CR-01/WR-01/WR-02 bugs and update ROADMAP
-- [ ] 68-02-PLAN.md -- Create Phase 59 VERIFICATION.md with evidence
+- [x] 68-01-PLAN.md -- Fix CR-01/WR-01/WR-02 bugs and update ROADMAP
+- [x] 68-02-PLAN.md -- Create Phase 59 VERIFICATION.md with evidence
 
 
 ### Phase 69: Idea Shelving Verification
@@ -358,5 +358,5 @@ Plans:
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |
 | 66. Continue Flow Fix | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 67. Seal Hive Brain Wiring | v1.10 | 2/2 | Complete    | 2026-04-27 |
-| 68. Gate Recovery Verification | v1.10 | 0/2 | Planned | - |
+| 68. Gate Recovery Verification | v1.10 | 2/2 | Complete    | 2026-04-28 |
 | 69. Idea Shelving Verification | v1.10 | 0/? | Not started | - |
