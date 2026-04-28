@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -15,6 +17,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/gjson"
+	"gopkg.in/yaml.v3"
 )
 
 // --- Struct types for deep scan data ---
@@ -63,6 +66,22 @@ type techStackDetail struct {
 	Deps       []depEntry `json:"dependencies"`
 	DevDeps    []depEntry `json:"dev_dependencies,omitempty"`
 	Indirect   []depEntry `json:"indirect,omitempty"`
+}
+
+// dirClassification represents the detected directory structure type and the signals that led to it.
+type dirClassification struct {
+	Type    string   `json:"type"`
+	Signals []string `json:"signals"`
+}
+
+// governanceDetail holds extracted rules/settings from a governance config file.
+type governanceDetail struct {
+	Tool     string                 `json:"tool"`
+	File     string                 `json:"file"`
+	Category string                 `json:"category"`
+	Rules    map[string]interface{} `json:"rules,omitempty"`
+	Extends  []string               `json:"extends,omitempty"`
+	Config   map[string]interface{} `json:"config,omitempty"`
 }
 
 // projectDetectors maps a marker file to a project type description.
@@ -248,6 +267,12 @@ func hasFile(target, name string) bool {
 	return err == nil
 }
 
+// hasDir checks whether a directory exists at target/name.
+func hasDir(target, name string) bool {
+	info, err := os.Stat(filepath.Join(target, name))
+	return err == nil && info.IsDir()
+}
+
 // fileContains checks whether a file at target/name contains the given substring.
 func fileContains(target, name, substr string) bool {
 	data, err := os.ReadFile(filepath.Join(target, name))
@@ -255,6 +280,632 @@ func fileContains(target, name, substr string) bool {
 		return false
 	}
 	return strings.Contains(string(data), substr)
+}
+
+// classifyDirectory determines the directory structure type of a project.
+// It checks monorepo, microservices, standard_app, library, and unknown patterns in order.
+func classifyDirectory(target string) dirClassification {
+	var signals []string
+
+	// Monorepo signals (check first -- most specific)
+	type monoSignal struct {
+		path, label string
+	}
+	monoSignals := []monoSignal{
+		{"packages", "packages/ directory found"},
+		{"apps", "apps/ directory found"},
+		{"pnpm-workspace.yaml", "pnpm-workspace.yaml detected"},
+		{"lerna.json", "lerna.json detected"},
+		{"nx.json", "nx.json detected"},
+		{"turbo.json", "turbo.json detected"},
+	}
+	monoCount := 0
+	for _, sig := range monoSignals {
+		if hasDir(target, sig.path) || hasFile(target, sig.path) {
+			signals = append(signals, sig.label)
+			monoCount++
+		}
+	}
+	if monoCount >= 1 {
+		return dirClassification{Type: "monorepo", Signals: signals}
+	}
+
+	// Microservices signals: 2+ Dockerfiles in immediate subdirectories or root
+	dockerfiles, _ := filepath.Glob(filepath.Join(target, "*", "Dockerfile*"))
+	rootDockerfiles, _ := filepath.Glob(filepath.Join(target, "Dockerfile*"))
+	dockerCount := len(dockerfiles) + len(rootDockerfiles)
+	if dockerCount >= 2 {
+		signals = append(signals, fmt.Sprintf("%d Dockerfiles detected", dockerCount))
+		return dirClassification{Type: "microservices", Signals: signals}
+	}
+
+	// Standard app signals
+	appDirs := []string{"src", "lib", "cmd", "app"}
+	for _, d := range appDirs {
+		if hasDir(target, d) {
+			signals = append(signals, d+"/ directory found")
+		}
+	}
+	if len(signals) >= 1 {
+		return dirClassification{Type: "standard_app", Signals: signals}
+	}
+
+	// Library signals: no src/ or cmd/ dir, but entry point in root
+	if !hasDir(target, "src") && !hasDir(target, "cmd") {
+		libEntries := []string{"index.js", "index.ts", "main.go", "lib.rs"}
+		for _, entry := range libEntries {
+			if hasFile(target, entry) {
+				signals = append(signals, "entry point in root, no src/ directory")
+				return dirClassification{Type: "library", Signals: signals}
+			}
+		}
+	}
+
+	return dirClassification{Type: "unknown", Signals: []string{"no strong structural signals detected"}}
+}
+
+// --- Deep governance parsers ---
+
+// parseEslintrcDeep parses ESLint config files for rules and extends.
+func parseEslintrcDeep(target string) *governanceDetail {
+	for _, name := range []string{".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		detail := &governanceDetail{Tool: "ESLint", File: name, Category: "linter"}
+
+		if strings.HasSuffix(name, ".json") || name == ".eslintrc" {
+			parsed := gjson.ParseBytes(data)
+			if rules := parsed.Get("rules"); rules.IsObject() {
+				detail.Rules = make(map[string]interface{})
+				rules.ForEach(func(k, v gjson.Result) bool {
+					detail.Rules[k.String()] = v.Value()
+					return true
+				})
+			}
+			if extends := parsed.Get("extends"); extends.IsArray() {
+				extends.ForEach(func(_, v gjson.Result) bool {
+					detail.Extends = append(detail.Extends, v.String())
+					return true
+				})
+			}
+			if plugins := parsed.Get("plugins"); plugins.IsArray() {
+				var pluginNames []string
+				plugins.ForEach(func(_, v gjson.Result) bool {
+					pluginNames = append(pluginNames, v.String())
+					return true
+				})
+				if len(pluginNames) > 0 {
+					if detail.Config == nil {
+						detail.Config = make(map[string]interface{})
+					}
+					detail.Config["plugins"] = pluginNames
+				}
+			}
+			return detail
+		}
+
+		if strings.HasSuffix(name, ".yml") {
+			var raw map[string]interface{}
+			if err := yaml.Unmarshal(data, &raw); err != nil {
+				continue
+			}
+			if rules, ok := raw["rules"].(map[string]interface{}); ok {
+				detail.Rules = rules
+			}
+			if extends, ok := raw["extends"].([]interface{}); ok {
+				for _, e := range extends {
+					if s, ok := e.(string); ok {
+						detail.Extends = append(detail.Extends, s)
+					}
+				}
+			}
+			return detail
+		}
+	}
+	return nil
+}
+
+// parseGolangciDeep parses golangci-lint config files for enabled linters and exclude rules.
+func parseGolangciDeep(target string) *governanceDetail {
+	for _, name := range []string{".golangci.yml", ".golangci.yaml", "golangci.yml"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			continue
+		}
+
+		detail := &governanceDetail{Tool: "golangci-lint", File: name, Category: "linter"}
+		if detail.Config == nil {
+			detail.Config = make(map[string]interface{})
+		}
+
+		// Extract enabled linters
+		linters, _ := raw["linters"].(map[string]interface{})
+		if enable, ok := linters["enable"].([]interface{}); ok {
+			var names []string
+			for _, e := range enable {
+				if s, ok := e.(string); ok {
+					names = append(names, s)
+				}
+			}
+			detail.Config["enabled_linters"] = names
+		}
+
+		// Extract exclude rules
+		issues, _ := raw["issues"].(map[string]interface{})
+		if excludeRules, ok := issues["exclude-rules"].([]interface{}); ok {
+			detail.Config["exclude_rules_count"] = len(excludeRules)
+		}
+
+		return detail
+	}
+	return nil
+}
+
+// parsePrettierDeep parses Prettier config files for formatting options.
+func parsePrettierDeep(target string) *governanceDetail {
+	for _, name := range []string{".prettierrc", ".prettierrc.json"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		parsed := gjson.ParseBytes(data)
+		detail := &governanceDetail{Tool: "Prettier", File: name, Category: "formatter"}
+		detail.Config = make(map[string]interface{})
+
+		// Extract known Prettier options
+		for _, key := range []string{"semi", "singleQuote", "tabWidth", "printWidth", "trailingComma", "useTabs", "bracketSpacing", "arrowParens", "endOfLine"} {
+			if val := parsed.Get(key); val.Exists() {
+				detail.Config[key] = val.Value()
+			}
+		}
+
+		return detail
+	}
+	return nil
+}
+
+// parseBiomeDeep parses biome.json for formatter and linter configuration.
+func parseBiomeDeep(target string) *governanceDetail {
+	path := filepath.Join(target, "biome.json")
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	parsed := gjson.ParseBytes(data)
+	detail := &governanceDetail{Tool: "Biome", File: "biome.json", Category: "formatter"}
+	detail.Config = make(map[string]interface{})
+
+	if formatter := parsed.Get("formatter"); formatter.Exists() {
+		var opts map[string]interface{}
+		if err := json.Unmarshal([]byte(formatter.Raw), &opts); err == nil {
+			detail.Config["formatter"] = opts
+		}
+	}
+
+	if linter := parsed.Get("linter"); linter.Exists() {
+		var opts map[string]interface{}
+		if err := json.Unmarshal([]byte(linter.Raw), &opts); err == nil {
+			detail.Config["linter"] = opts
+		}
+	}
+
+	return detail
+}
+
+// parseJestDeep parses jest.config.js/ts for test configuration.
+func parseJestDeep(target string) *governanceDetail {
+	for _, name := range []string{"jest.config.js", "jest.config.ts", "jest.config.mjs"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		detail := &governanceDetail{Tool: "Jest", File: name, Category: "test"}
+		detail.Config = make(map[string]interface{})
+
+		// Use regex to extract config values from JS/TS files
+		str := string(data)
+		for _, key := range []string{"testMatch", "preset", "testEnvironment", "transform", "roots", "moduleNameMapper"} {
+			re := regexp.MustCompile(key + `:\s*\[([^\]]+)\]`)
+			if m := re.FindStringSubmatch(str); len(m) > 1 {
+				values := strings.Split(strings.TrimSpace(m[1]), ",")
+				var cleaned []string
+				for _, v := range values {
+					cleaned = append(cleaned, strings.TrimSpace(strings.Trim(v, "\"'`")))
+				}
+				detail.Config[key] = cleaned
+			}
+			// Also check string values
+			reStr := regexp.MustCompile(key + `:\s*["']([^"']+)["']`)
+			if m := reStr.FindStringSubmatch(str); len(m) > 1 {
+				detail.Config[key] = m[1]
+			}
+		}
+
+		return detail
+	}
+	return nil
+}
+
+// parseVitestDeep parses vitest.config.ts/js for test configuration.
+func parseVitestDeep(target string) *governanceDetail {
+	for _, name := range []string{"vitest.config.ts", "vitest.config.js"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		detail := &governanceDetail{Tool: "Vitest", File: name, Category: "test"}
+		detail.Config = make(map[string]interface{})
+
+		str := string(data)
+		for _, key := range []string{"include", "exclude", "environment", "globals"} {
+			re := regexp.MustCompile(key + `:\s*\[([^\]]+)\]`)
+			if m := re.FindStringSubmatch(str); len(m) > 1 {
+				values := strings.Split(strings.TrimSpace(m[1]), ",")
+				var cleaned []string
+				for _, v := range values {
+					cleaned = append(cleaned, strings.TrimSpace(strings.Trim(v, "\"'`")))
+				}
+				detail.Config[key] = cleaned
+			}
+		}
+
+		return detail
+	}
+	return nil
+}
+
+// parsePytestDeep parses pytest.ini or setup.cfg for pytest configuration.
+func parsePytestDeep(target string) *governanceDetail {
+	for _, name := range []string{"pytest.ini", "setup.cfg"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		detail := &governanceDetail{Tool: "pytest", File: name, Category: "test"}
+		detail.Config = make(map[string]interface{})
+
+		lines := strings.Split(string(data), "\n")
+		inPytestSection := false
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "[tool:pytest]") || strings.HasPrefix(line, "[pytest]") {
+				inPytestSection = true
+				continue
+			}
+			if strings.HasPrefix(line, "[") && inPytestSection {
+				break
+			}
+			if inPytestSection && strings.Contains(line, "=") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					key := strings.TrimSpace(parts[0])
+					val := strings.TrimSpace(parts[1])
+					detail.Config[key] = val
+				}
+			}
+			// pytest.ini uses simple key = value format without sections
+			if name == "pytest.ini" && strings.Contains(line, "=") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					key := strings.TrimSpace(parts[0])
+					val := strings.TrimSpace(parts[1])
+					detail.Config[key] = val
+				}
+			}
+		}
+
+		if len(detail.Config) > 0 {
+			return detail
+		}
+	}
+	return nil
+}
+
+// parseGHActionsDeep parses .github/workflows/*.yml files for CI configuration.
+func parseGHActionsDeep(target string) []governanceDetail {
+	workflowsDir := filepath.Join(target, ".github", "workflows")
+	entries, err := os.ReadDir(workflowsDir)
+	if err != nil {
+		return nil
+	}
+
+	var details []governanceDetail
+	count := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+		count++
+		if count > 20 {
+			break // cap at 20 workflows per T-73-05
+		}
+
+		path := filepath.Join(workflowsDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			continue
+		}
+
+		detail := governanceDetail{
+			Tool:     "GitHub Actions",
+			File:     filepath.Join(".github/workflows", name),
+			Category: "ci",
+			Config:   make(map[string]interface{}),
+		}
+
+		if wfName, ok := raw["name"].(string); ok {
+			detail.Config["name"] = wfName
+		}
+		if on, ok := raw["on"]; ok {
+			detail.Config["triggers"] = on
+		}
+		if jobs, ok := raw["jobs"].(map[string]interface{}); ok {
+			detail.Config["job_count"] = len(jobs)
+			stepCount := 0
+			for _, job := range jobs {
+				if jobMap, ok := job.(map[string]interface{}); ok {
+					if steps, ok := jobMap["steps"].([]interface{}); ok {
+						stepCount += len(steps)
+					}
+				}
+			}
+			detail.Config["step_count"] = stepCount
+		}
+
+		details = append(details, detail)
+	}
+	return details
+}
+
+// parseGitlabCIDeep parses .gitlab-ci.yml for CI configuration.
+func parseGitlabCIDeep(target string) *governanceDetail {
+	path := filepath.Join(target, ".gitlab-ci.yml")
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+
+	detail := &governanceDetail{
+		Tool:     "GitLab CI",
+		File:     ".gitlab-ci.yml",
+		Category: "ci",
+		Config:   make(map[string]interface{}),
+	}
+
+	if stages, ok := raw["stages"].([]interface{}); ok {
+		detail.Config["stages"] = stages
+	}
+
+	// Count top-level job keys (exclude structural keys)
+	skipKeys := map[string]bool{"stages": true, "variables": true, "default": true, "include": true, "image": true, "before_script": true, "after_script": true, "services": true, "cache": true}
+	jobCount := 0
+	for key := range raw {
+		if !skipKeys[key] {
+			jobCount++
+		}
+	}
+	detail.Config["job_count"] = jobCount
+
+	return detail
+}
+
+// parseJenkinsfileDeep parses Jenkinsfile for CI configuration.
+func parseJenkinsfileDeep(target string) *governanceDetail {
+	path := filepath.Join(target, "Jenkinsfile")
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	detail := &governanceDetail{
+		Tool:     "Jenkins",
+		File:     "Jenkinsfile",
+		Category: "ci",
+		Config:   make(map[string]interface{}),
+	}
+
+	str := string(data)
+	// Extract stage names
+	stageRe := regexp.MustCompile(`stage\s*\(\s*['"]([^'"]+)['"]\s*\)`)
+	matches := stageRe.FindAllStringSubmatch(str, -1)
+	var stages []string
+	for _, m := range matches {
+		if len(m) > 1 {
+			stages = append(stages, m[1])
+		}
+	}
+	if len(stages) > 0 {
+		detail.Config["stages"] = stages
+	}
+
+	// Check for agent directive
+	agentRe := regexp.MustCompile(`agent\s+\{([^}]+)\}`)
+	if m := agentRe.FindStringSubmatch(str); len(m) > 1 {
+		detail.Config["agent"] = strings.TrimSpace(m[1])
+	}
+
+	return detail
+}
+
+// parseMakefileDeep parses Makefile for build targets.
+func parseMakefileDeep(target string) *governanceDetail {
+	path := filepath.Join(target, "Makefile")
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	detail := &governanceDetail{
+		Tool:     "Make",
+		File:     "Makefile",
+		Category: "build",
+		Config:   make(map[string]interface{}),
+	}
+
+	re := regexp.MustCompile(`(?m)^([a-zA-Z0-9][a-zA-Z0-9_-]*):`)
+	matches := re.FindAllStringSubmatch(string(data), -1)
+	var targets []string
+	for _, m := range matches {
+		if len(m) > 1 {
+			targets = append(targets, m[1])
+		}
+	}
+	if len(targets) > 0 {
+		detail.Config["targets"] = targets
+	}
+
+	return detail
+}
+
+// parseTaskfileDeep parses Taskfile.yml for task definitions.
+func parseTaskfileDeep(target string) *governanceDetail {
+	path := filepath.Join(target, "Taskfile.yml")
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+
+	detail := &governanceDetail{
+		Tool:     "Task",
+		File:     "Taskfile.yml",
+		Category: "build",
+		Config:   make(map[string]interface{}),
+	}
+
+	if tasks, ok := raw["tasks"].(map[string]interface{}); ok {
+		var names []string
+		for name := range tasks {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		detail.Config["tasks"] = names
+	}
+
+	return detail
+}
+
+// parseJustfileDeep parses justfile for recipe definitions.
+func parseJustfileDeep(target string) *governanceDetail {
+	path := filepath.Join(target, "justfile")
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	detail := &governanceDetail{
+		Tool:     "Just",
+		File:     "justfile",
+		Category: "build",
+		Config:   make(map[string]interface{}),
+	}
+
+	re := regexp.MustCompile(`(?m)^([a-zA-Z0-9][a-zA-Z0-9_-]*)\s*(?:\(|:)`)
+	matches := re.FindAllStringSubmatch(string(data), -1)
+	var recipes []string
+	for _, m := range matches {
+		if len(m) > 1 {
+			recipes = append(recipes, m[1])
+		}
+	}
+	if len(recipes) > 0 {
+		detail.Config["recipes"] = recipes
+	}
+
+	return detail
+}
+
+// deepParseGovernance orchestrates all deep governance parsers across all 5 categories.
+func deepParseGovernance(target string) []governanceDetail {
+	var details []governanceDetail
+
+	// Linter parsers
+	if d := parseEslintrcDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseGolangciDeep(target); d != nil {
+		details = append(details, *d)
+	}
+
+	// Formatter parsers
+	if d := parsePrettierDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseBiomeDeep(target); d != nil {
+		details = append(details, *d)
+	}
+
+	// Test framework parsers
+	if d := parseJestDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseVitestDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parsePytestDeep(target); d != nil {
+		details = append(details, *d)
+	}
+
+	// CI parsers
+	if ds := parseGHActionsDeep(target); len(ds) > 0 {
+		details = append(details, ds...)
+	}
+	if d := parseGitlabCIDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseJenkinsfileDeep(target); d != nil {
+		details = append(details, *d)
+	}
+
+	// Build tool parsers
+	if d := parseMakefileDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseTaskfileDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseJustfileDeep(target); d != nil {
+		details = append(details, *d)
+	}
+
+	return details
 }
 
 // --- Dependency file parsers ---
@@ -1043,6 +1694,8 @@ var initResearchCmd = &cobra.Command{
 		}
 
 		techStackDetail := parseDependencyFiles(target)
+		dirClass := classifyDirectory(target)
+		governanceDetails := deepParseGovernance(target)
 
 		outputOK(map[string]interface{}{
 			"detected_type":         detected,
@@ -1060,6 +1713,8 @@ var initResearchCmd = &cobra.Command{
 			"pheromone_suggestions": pheromoneSuggestions,
 			"charter":               charter,
 			"tech_stack_detail":     techStackDetail,
+			"dir_classification":    dirClass,
+			"governance_details":    governanceDetails,
 		})
 		return nil
 	},

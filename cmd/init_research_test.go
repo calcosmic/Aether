@@ -1006,3 +1006,517 @@ func TestInitResearchBackwardCompat(t *testing.T) {
 		}
 	}
 }
+
+// --- Plan 02 Task 1: Directory classification tests ---
+
+func TestClassifyDirMonorepo(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "packages"), 0755)
+	os.WriteFile(filepath.Join(target, "pnpm-workspace.yaml"), []byte("packages:\n  - 'packages/*'\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "monorepo test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "monorepo" {
+		t.Errorf("dir_classification.type = %v, want monorepo", dirClass["type"])
+	}
+	signals := dirClass["signals"].([]interface{})
+	if len(signals) < 2 {
+		t.Errorf("signals count = %d, want >= 2", len(signals))
+	}
+}
+
+func TestClassifyDirMicroservices(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "service-a"), 0755)
+	os.WriteFile(filepath.Join(target, "service-a", "Dockerfile"), []byte("FROM node:20\n"), 0644)
+	os.MkdirAll(filepath.Join(target, "service-b"), 0755)
+	os.WriteFile(filepath.Join(target, "service-b", "Dockerfile"), []byte("FROM python:3.11\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "microservices test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "microservices" {
+		t.Errorf("dir_classification.type = %v, want microservices", dirClass["type"])
+	}
+}
+
+func TestClassifyDirStandardApp(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "src"), 0755)
+	os.MkdirAll(filepath.Join(target, "cmd"), 0755)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "standard app test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "standard_app" {
+		t.Errorf("dir_classification.type = %v, want standard_app", dirClass["type"])
+	}
+	signals := dirClass["signals"].([]interface{})
+	foundSrc := false
+	for _, s := range signals {
+		if strings.Contains(s.(string), "src/") {
+			foundSrc = true
+		}
+	}
+	if !foundSrc {
+		t.Errorf("signals = %v, want to contain src/", signals)
+	}
+}
+
+func TestClassifyDirLibrary(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "main.go"), []byte("package main\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "library test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "library" {
+		t.Errorf("dir_classification.type = %v, want library", dirClass["type"])
+	}
+}
+
+func TestClassifyDirUnknown(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "unknown test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "unknown" {
+		t.Errorf("dir_classification.type = %v, want unknown", dirClass["type"])
+	}
+}
+
+// --- Plan 02 Task 2: Deep governance parsing tests ---
+
+func TestDeepParseEslintrc(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	eslintrc := `{"rules":{"no-unused-vars":"warn","semi":"error"},"extends":["next/core-web-vitals"]}`
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(eslintrc), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "eslint deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "ESLint" && d["category"] == "linter" {
+			found = true
+			rules := d["rules"].(map[string]interface{})
+			if _, ok := rules["no-unused-vars"]; !ok {
+				t.Error("expected rules to contain no-unused-vars")
+			}
+			extends := d["extends"].([]interface{})
+			foundExtends := false
+			for _, e := range extends {
+				if e == "next/core-web-vitals" {
+					foundExtends = true
+				}
+			}
+			if !foundExtends {
+				t.Errorf("extends = %v, want to contain next/core-web-vitals", extends)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want ESLint entry", govDetails)
+	}
+}
+
+func TestDeepParseGolangci(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	golangci := "linters:\n  enable:\n    - errcheck\n    - govet\nissues:\n  exclude-rules:\n    - linters:\n        - errcheck"
+	os.WriteFile(filepath.Join(target, ".golangci.yml"), []byte(golangci), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "golangci deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "golangci-lint" && d["category"] == "linter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			linters := config["enabled_linters"].([]interface{})
+			if len(linters) < 2 {
+				t.Errorf("enabled_linters = %v, want at least 2", linters)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want golangci-lint entry", govDetails)
+	}
+}
+
+func TestDeepParsePrettier(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	prettier := `{"semi":true,"singleQuote":true,"tabWidth":2}`
+	os.WriteFile(filepath.Join(target, ".prettierrc.json"), []byte(prettier), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "prettier deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Prettier" && d["category"] == "formatter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["semi"] != true {
+				t.Errorf("config.semi = %v, want true", config["semi"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Prettier entry", govDetails)
+	}
+}
+
+func TestDeepParseBiome(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	biome := `{"formatter":{"enabled":true,"indentStyle":"space"},"linter":{"enabled":true,"rules":{"recommended":true}}}`
+	os.WriteFile(filepath.Join(target, "biome.json"), []byte(biome), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "biome deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Biome" && d["category"] == "formatter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if _, ok := config["formatter"]; !ok {
+				t.Error("expected config to contain formatter")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Biome entry", govDetails)
+	}
+}
+
+
+func TestDeepParseGHActions(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, ".github", "workflows"), 0755)
+	workflow := "name: CI\n\non: [push, pull_request]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: go test\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo done\n"
+	os.WriteFile(filepath.Join(target, ".github", "workflows", "ci.yml"), []byte(workflow), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "gh actions test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "GitHub Actions" && d["category"] == "ci" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["name"] != "CI" {
+				t.Errorf("config.name = %v, want CI", config["name"])
+			}
+			if config["job_count"].(float64) < 1 {
+				t.Errorf("config.job_count = %v, want >= 1", config["job_count"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want GitHub Actions entry", govDetails)
+	}
+}
+
+func TestDeepParseMakefile(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	makefile := "build:\n\tgo build ./...\ntest:\n\tgo test ./...\nlint:\n\tgolangci-lint run\n"
+	os.WriteFile(filepath.Join(target, "Makefile"), []byte(makefile), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "makefile test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Make" && d["category"] == "build" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			targets := config["targets"].([]interface{})
+			if len(targets) < 3 {
+				t.Errorf("config.targets = %v, want at least 3", targets)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Make entry", govDetails)
+	}
+}
+
+func TestDeepParseJest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	jest := "module.exports = {\n  preset: 'ts-jest',\n  testEnvironment: 'node',\n  testMatch: ['**/*.test.ts'],\n};\n"
+	os.WriteFile(filepath.Join(target, "jest.config.js"), []byte(jest), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "jest test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Jest" && d["category"] == "test" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["preset"] != "ts-jest" {
+				t.Errorf("config.preset = %v, want ts-jest", config["preset"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Jest entry", govDetails)
+	}
+}
+
+func TestGovernanceBackwardCompat(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(`{"rules":{"no-unused-vars":"warn"}}`), 0644)
+	os.WriteFile(filepath.Join(target, "jest.config.js"), []byte("module.exports = {};"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "backward compat gov", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	// Old governance field must still exist and contain ESLint
+	governance := result["governance"].(map[string]interface{})
+	linters := governance["linters"].([]interface{})
+	foundESLint := false
+	for _, l := range linters {
+		if l == "ESLint" {
+			foundESLint = true
+		}
+	}
+	if !foundESLint {
+		t.Errorf("governance.linters = %v, want to contain ESLint", linters)
+	}
+
+	// Old governance field must still contain Jest
+	testFrameworks := governance["test_frameworks"].([]interface{})
+	foundJest := false
+	for _, tf := range testFrameworks {
+		if tf == "Jest" {
+			foundJest = true
+		}
+	}
+	if !foundJest {
+		t.Errorf("governance.test_frameworks = %v, want to contain Jest", testFrameworks)
+	}
+
+	// New governance_details field must also exist
+	govDetails := result["governance_details"].([]interface{})
+	if len(govDetails) == 0 {
+		t.Error("governance_details is empty, want at least 1 entry")
+	}
+}
