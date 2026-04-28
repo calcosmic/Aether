@@ -12,6 +12,8 @@ Aether is a biomimetic AI colony framework: a Go runtime in `cmd/` and `pkg/` th
 
 `v1.9` added the review persistence system: 7-domain review ledgers accumulate findings across phases, agents persist findings via CLI, colony-prime injects prior reviews into worker context, and full lifecycle integration (seal/entomb/status/init).
 
+`v1.10` completed the colony polish: smart review depth (light/heavy), gate failure recovery with skip logic, Porter ant (26th caste), full lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol), Oracle loop fix with research formulation, idea shelving system, QUEEN.md pipeline fix, and Hive Brain wiring into seal.
+
 ## Core Value
 
 **Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.**
@@ -29,13 +31,15 @@ That means:
 ## Current State
 
 - Go runtime is healthy, v1.0.24 shipped
-- Milestone v1.10 Colony Polish in progress (Phase 67 complete — hive-promote wired into seal ceremony, wrapper parity fixed)
+- Milestone v1.10 Colony Polish complete (shipped 2026-04-28)
 - 2910+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
-- Plan recovery pipeline hardened (`--force` always recovers)
-- Colony recovery system shipped: `aether recover` + `--apply` for stuck-state rescue
-- Review persistence system shipped: 7-domain ledger CRUD, colony-prime injection, agent Write tools, lifecycle integration
-- Phase 66 complete: internal watcher advisory timeout fix, gate skip hardening, stale FOCUS detection tests
+- Colony recovery system: `aether recover` + `--apply` for stuck-state rescue
+- Review persistence system: 7-domain ledger CRUD, colony-prime injection, lifecycle integration
+- Idea shelving: persistent colony backlog, auto-shelve at seal, surface at init, survive entomb
+- Hive Brain: seal auto-promotes high-confidence instincts to cross-colony wisdom
+- Smart review depth: light/heavy modes, final phase always heavy, `--light` flag
+- Porter ant: 26th caste, wired into seal lifecycle with interactive publishing
 - All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
 
 <details>
@@ -76,7 +80,7 @@ That means:
 - [x] v1.7 Planning Pipeline Recovery -- Phases 47-48 (completed 2026-04-24)
 - [x] v1.8 Colony Recovery -- Phases 49-51 (completed 2026-04-25)
 - [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
-- [ ] v1.10 Colony Polish -- Phases 57+
+- [x] v1.10 Colony Polish -- Phases 57-69 (shipped 2026-04-28)
 
 ## Requirements
 
@@ -94,16 +98,18 @@ That means:
 - 7-domain review ledger CRUD with colony-prime injection -- v1.9
 - Review agent Write tools with scoped guardrails (28 files, 4 surfaces) -- v1.9
 - Full review lifecycle (seal/entomb/status/init) -- v1.9
+- Smart review depth (auto/light/heavy, `--light` flag, final phase always heavy) -- v1.10
+- Gate failure recovery (recovery templates, per-gate skip, Watcher Veto) -- v1.10
+- Porter ant (26th caste, interactive delivery, wired into seal) -- v1.10
+- Lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol) -- v1.10
+- Oracle loop fix (research formulation, depth selection, state persistence) -- v1.10
+- Idea shelving (persistent backlog, auto-shelve, init surfacing, entomb survival) -- v1.10
+- QUEEN.md pipeline fix (dedup, global wisdom injection, auto-promotion) -- v1.10
+- Hive Brain wiring (seal auto-promotes high-confidence instincts) -- v1.10
 
 ### Active
 
-- Smart review depth (auto/light/heavy) -- v1.10
-- Gate failure recovery -- v1.10
-- Porter ant (26th caste, interactive delivery) -- v1.10
-- Lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol) -- v1.10
-- Oracle loop fix (research formulation + depth selection) -- v1.10
-- Idea shelving system (persistent colony backlog) -- v1.10
-- QUEEN.md pipeline fix (dedup, wiring, auto-promotion) -- v1.10
+(None — define next milestone goals with `/gsd-new-milestone`)
 
 ### Out of Scope
 
@@ -128,9 +134,9 @@ That means:
 
 ## Context
 
-Shipped v1.9 with 104 files changed, +9,713 / -300 lines of Go.
+Shipped v1.10 with 452 files changed, +53,409 / -562 lines across 204 commits.
 Tech stack: Go 1.24, Cobra CLI, pkg/storage file locking.
-58+ tests added across milestone. All passing.
+34 plans across 14 phases (57-69). All verified.
 
 ## Explicit Deferrals
 
@@ -141,21 +147,6 @@ These remain promising but are not the next best move:
 - federation / inter-colony coordination
 - self-mutating agents / evolution engine
 
-## Current Milestone: v1.10 Colony Polish
-
-**Goal:** Make every colony interaction feel complete and self-sustaining — review depth is smart, gate failures are recoverable, lifecycle commands have real ceremony, delivery has an interactive ant, the Oracle has proper research formulation, ideas get shelved for future colonies, and QUEEN.md is fully wired.
-
-**Target features:**
-- Smart review depth — auto/light/heavy modes, `--light` flag, final phase always heavy
-- Gate failure recovery — clear, actionable recovery paths when verification gates fail
-- Porter ant — 26th caste, wired into lifecycle (especially seal), interactive publishing prompts
-- Lifecycle ceremony — seal (flags, midden, wisdom, pheromone cleanup), init (deeper analysis), status (version info), entomb (wisdom extraction), resume (staleness), discuss/council (codebase-aware comprehensive questioning), chaos/oracle/patrol (signal integration)
-- Oracle loop fix — fix callback URL AND restore research formulation with depth selection
-- Idea shelving — persistent backlog, auto-shelve at seal, surface at init
-- QUEEN.md full fix — dedup explosion, pipeline wiring (global wisdom not injected, sections ignored, auto-promotion missing)
-
-**Design context:** Full plan detail preserved in `.planning/research/v1.10-PLANS-CONTEXT.md`
-
 ## Next Move
 
 Plan next milestone with `/gsd-new-milestone`.
@@ -164,4 +155,4 @@ Plan next milestone with `/gsd-new-milestone`.
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-28 after Phase 67 completion*
+*Last updated: 2026-04-28 after v1.10 milestone completion*
