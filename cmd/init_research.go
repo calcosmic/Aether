@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
 
@@ -43,16 +44,6 @@ type pheromoneSuggestion struct {
 	Type    string `json:"type"`
 	Content string `json:"content"`
 	Reason  string `json:"reason"`
-}
-
-type charterData struct {
-	Intent      string `json:"intent"`
-	Vision      string `json:"vision"`
-	Governance  string `json:"governance"`
-	Goals       string `json:"goals"`
-	TechStack   string `json:"tech_stack"`
-	KeyRisks    string `json:"key_risks"`
-	Constraints string `json:"constraints"`
 }
 
 // projectDetectors maps a marker file to a project type description.
@@ -360,8 +351,8 @@ func generatePheromoneSuggestions(target string, governance governanceInfo) []ph
 }
 
 // generateCharter produces charter data from scan results.
-func generateCharter(goal, detected string, governance governanceInfo, readmeSummary string, gitHistory gitHistoryInfo, languages []string, frameworks []string, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion) charterData {
-	ch := charterData{}
+func generateCharter(goal, detected string, governance governanceInfo, readmeSummary string, gitHistory gitHistoryInfo, languages []string, frameworks []string, isGitRepo bool, pheromoneSuggestions []pheromoneSuggestion) colony.Charter {
+	ch := colony.Charter{}
 
 	// Intent: use the goal string directly
 	ch.Intent = goal
