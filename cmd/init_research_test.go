@@ -1006,3 +1006,163 @@ func TestInitResearchBackwardCompat(t *testing.T) {
 		}
 	}
 }
+
+// --- Plan 02 Task 1: Directory classification tests ---
+
+func TestClassifyDirMonorepo(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "packages"), 0755)
+	os.WriteFile(filepath.Join(target, "pnpm-workspace.yaml"), []byte("packages:\n  - 'packages/*'\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "monorepo test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "monorepo" {
+		t.Errorf("dir_classification.type = %v, want monorepo", dirClass["type"])
+	}
+	signals := dirClass["signals"].([]interface{})
+	if len(signals) < 2 {
+		t.Errorf("signals count = %d, want >= 2", len(signals))
+	}
+}
+
+func TestClassifyDirMicroservices(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "service-a"), 0755)
+	os.WriteFile(filepath.Join(target, "service-a", "Dockerfile"), []byte("FROM node:20\n"), 0644)
+	os.MkdirAll(filepath.Join(target, "service-b"), 0755)
+	os.WriteFile(filepath.Join(target, "service-b", "Dockerfile"), []byte("FROM python:3.11\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "microservices test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "microservices" {
+		t.Errorf("dir_classification.type = %v, want microservices", dirClass["type"])
+	}
+}
+
+func TestClassifyDirStandardApp(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "src"), 0755)
+	os.MkdirAll(filepath.Join(target, "cmd"), 0755)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "standard app test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "standard_app" {
+		t.Errorf("dir_classification.type = %v, want standard_app", dirClass["type"])
+	}
+	signals := dirClass["signals"].([]interface{})
+	foundSrc := false
+	for _, s := range signals {
+		if strings.Contains(s.(string), "src/") {
+			foundSrc = true
+		}
+	}
+	if !foundSrc {
+		t.Errorf("signals = %v, want to contain src/", signals)
+	}
+}
+
+func TestClassifyDirLibrary(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "main.go"), []byte("package main\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "library test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "library" {
+		t.Errorf("dir_classification.type = %v, want library", dirClass["type"])
+	}
+}
+
+func TestClassifyDirUnknown(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "unknown test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "unknown" {
+		t.Errorf("dir_classification.type = %v, want unknown", dirClass["type"])
+	}
+}

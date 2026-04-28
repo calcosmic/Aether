@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -63,6 +64,12 @@ type techStackDetail struct {
 	Deps       []depEntry `json:"dependencies"`
 	DevDeps    []depEntry `json:"dev_dependencies,omitempty"`
 	Indirect   []depEntry `json:"indirect,omitempty"`
+}
+
+// dirClassification represents the detected directory structure type and the signals that led to it.
+type dirClassification struct {
+	Type    string   `json:"type"`
+	Signals []string `json:"signals"`
 }
 
 // projectDetectors maps a marker file to a project type description.
@@ -248,6 +255,12 @@ func hasFile(target, name string) bool {
 	return err == nil
 }
 
+// hasDir checks whether a directory exists at target/name.
+func hasDir(target, name string) bool {
+	info, err := os.Stat(filepath.Join(target, name))
+	return err == nil && info.IsDir()
+}
+
 // fileContains checks whether a file at target/name contains the given substring.
 func fileContains(target, name, substr string) bool {
 	data, err := os.ReadFile(filepath.Join(target, name))
@@ -255,6 +268,68 @@ func fileContains(target, name, substr string) bool {
 		return false
 	}
 	return strings.Contains(string(data), substr)
+}
+
+// classifyDirectory determines the directory structure type of a project.
+// It checks monorepo, microservices, standard_app, library, and unknown patterns in order.
+func classifyDirectory(target string) dirClassification {
+	var signals []string
+
+	// Monorepo signals (check first -- most specific)
+	type monoSignal struct {
+		path, label string
+	}
+	monoSignals := []monoSignal{
+		{"packages", "packages/ directory found"},
+		{"apps", "apps/ directory found"},
+		{"pnpm-workspace.yaml", "pnpm-workspace.yaml detected"},
+		{"lerna.json", "lerna.json detected"},
+		{"nx.json", "nx.json detected"},
+		{"turbo.json", "turbo.json detected"},
+	}
+	monoCount := 0
+	for _, sig := range monoSignals {
+		if hasDir(target, sig.path) || hasFile(target, sig.path) {
+			signals = append(signals, sig.label)
+			monoCount++
+		}
+	}
+	if monoCount >= 1 {
+		return dirClassification{Type: "monorepo", Signals: signals}
+	}
+
+	// Microservices signals: 2+ Dockerfiles in immediate subdirectories or root
+	dockerfiles, _ := filepath.Glob(filepath.Join(target, "*", "Dockerfile*"))
+	rootDockerfiles, _ := filepath.Glob(filepath.Join(target, "Dockerfile*"))
+	dockerCount := len(dockerfiles) + len(rootDockerfiles)
+	if dockerCount >= 2 {
+		signals = append(signals, fmt.Sprintf("%d Dockerfiles detected", dockerCount))
+		return dirClassification{Type: "microservices", Signals: signals}
+	}
+
+	// Standard app signals
+	appDirs := []string{"src", "lib", "cmd", "app"}
+	for _, d := range appDirs {
+		if hasDir(target, d) {
+			signals = append(signals, d+"/ directory found")
+		}
+	}
+	if len(signals) >= 1 {
+		return dirClassification{Type: "standard_app", Signals: signals}
+	}
+
+	// Library signals: no src/ or cmd/ dir, but entry point in root
+	if !hasDir(target, "src") && !hasDir(target, "cmd") {
+		libEntries := []string{"index.js", "index.ts", "main.go", "lib.rs"}
+		for _, entry := range libEntries {
+			if hasFile(target, entry) {
+				signals = append(signals, "entry point in root, no src/ directory")
+				return dirClassification{Type: "library", Signals: signals}
+			}
+		}
+	}
+
+	return dirClassification{Type: "unknown", Signals: []string{"no strong structural signals detected"}}
 }
 
 // --- Dependency file parsers ---
@@ -1043,6 +1118,7 @@ var initResearchCmd = &cobra.Command{
 		}
 
 		techStackDetail := parseDependencyFiles(target)
+		dirClass := classifyDirectory(target)
 
 		outputOK(map[string]interface{}{
 			"detected_type":         detected,
@@ -1060,6 +1136,7 @@ var initResearchCmd = &cobra.Command{
 			"pheromone_suggestions": pheromoneSuggestions,
 			"charter":               charter,
 			"tech_stack_detail":     techStackDetail,
+			"dir_classification":    dirClass,
 		})
 		return nil
 	},
