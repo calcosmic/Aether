@@ -178,14 +178,6 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 
 // runCeremonyResearch runs init-research internally and extracts charter + pheromone suggestions.
 func runCeremonyResearch(goal, target string) (*colony.Charter, []pheromoneSuggestion, error) {
-	// Build a temporary cobra command to run init-research's RunE
-	tmpCmd := &cobra.Command{
-		Use: "init-research",
-	}
-	tmpCmd.Flags().String("goal", "", "")
-	tmpCmd.Flags().String("target", "", "")
-	tmpCmd.SetArgs([]string{})
-
 	// Capture init-research output by running it directly
 	var researchResult map[string]interface{}
 
