@@ -318,6 +318,11 @@ createFreshColony:
 		}
 	}
 
+	// Validate charter field lengths before saving state
+	if err := validateCharterFieldLength(charter); err != nil {
+		return fmt.Errorf("charter validation failed: %w", err)
+	}
+
 	now := time.Now()
 	nowStr := now.Format(time.RFC3339)
 
