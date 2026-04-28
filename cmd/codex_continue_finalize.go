@@ -160,6 +160,18 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write gate report: %w", err)
 	}
 
+	// Persist gate results after gate run
+	var gateResultEntries []colony.GateResultEntry
+	for _, c := range gates.Checks {
+		gateResultEntries = append(gateResultEntries, colony.GateResultEntry{
+			Name:      c.Name,
+			Passed:    c.Passed,
+			Timestamp: now.Format(time.RFC3339),
+			Detail:    c.Detail,
+		})
+	}
+	_ = gateResultsWrite(gateResultEntries)
+
 	if err := writeCodexContinueWorkerOutcomeReports(root, phase, workerFlow, now); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
@@ -476,6 +488,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
 		}
 		updated.BuildStartedAt = nil
+		updated.GateResults = nil
 
 		final = currentIdx == len(updated.Plan.Phases)-1
 		nextCommand = "aether seal"
