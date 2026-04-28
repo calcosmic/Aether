@@ -1339,3 +1339,184 @@ func TestDeepParseBiome(t *testing.T) {
 		t.Errorf("governance_details = %v, want Biome entry", govDetails)
 	}
 }
+
+
+func TestDeepParseGHActions(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, ".github", "workflows"), 0755)
+	workflow := "name: CI\n\non: [push, pull_request]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: go test\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo done\n"
+	os.WriteFile(filepath.Join(target, ".github", "workflows", "ci.yml"), []byte(workflow), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "gh actions test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "GitHub Actions" && d["category"] == "ci" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["name"] != "CI" {
+				t.Errorf("config.name = %v, want CI", config["name"])
+			}
+			if config["job_count"].(float64) < 1 {
+				t.Errorf("config.job_count = %v, want >= 1", config["job_count"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want GitHub Actions entry", govDetails)
+	}
+}
+
+func TestDeepParseMakefile(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	makefile := "build:\n\tgo build ./...\ntest:\n\tgo test ./...\nlint:\n\tgolangci-lint run\n"
+	os.WriteFile(filepath.Join(target, "Makefile"), []byte(makefile), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "makefile test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Make" && d["category"] == "build" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			targets := config["targets"].([]interface{})
+			if len(targets) < 3 {
+				t.Errorf("config.targets = %v, want at least 3", targets)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Make entry", govDetails)
+	}
+}
+
+func TestDeepParseJest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	jest := "module.exports = {\n  preset: 'ts-jest',\n  testEnvironment: 'node',\n  testMatch: ['**/*.test.ts'],\n};\n"
+	os.WriteFile(filepath.Join(target, "jest.config.js"), []byte(jest), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "jest test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Jest" && d["category"] == "test" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["preset"] != "ts-jest" {
+				t.Errorf("config.preset = %v, want ts-jest", config["preset"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Jest entry", govDetails)
+	}
+}
+
+func TestGovernanceBackwardCompat(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(`{"rules":{"no-unused-vars":"warn"}}`), 0644)
+	os.WriteFile(filepath.Join(target, "jest.config.js"), []byte("module.exports = {};"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "backward compat gov", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	// Old governance field must still exist and contain ESLint
+	governance := result["governance"].(map[string]interface{})
+	linters := governance["linters"].([]interface{})
+	foundESLint := false
+	for _, l := range linters {
+		if l == "ESLint" {
+			foundESLint = true
+		}
+	}
+	if !foundESLint {
+		t.Errorf("governance.linters = %v, want to contain ESLint", linters)
+	}
+
+	// Old governance field must still contain Jest
+	testFrameworks := governance["test_frameworks"].([]interface{})
+	foundJest := false
+	for _, tf := range testFrameworks {
+		if tf == "Jest" {
+			foundJest = true
+		}
+	}
+	if !foundJest {
+		t.Errorf("governance.test_frameworks = %v, want to contain Jest", testFrameworks)
+	}
+
+	// New governance_details field must also exist
+	govDetails := result["governance_details"].([]interface{})
+	if len(govDetails) == 0 {
+		t.Error("governance_details is empty, want at least 1 entry")
+	}
+}
