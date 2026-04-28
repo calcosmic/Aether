@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io/fs"
@@ -16,6 +17,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/gjson"
+	"gopkg.in/yaml.v3"
 )
 
 // --- Struct types for deep scan data ---
@@ -70,6 +72,16 @@ type techStackDetail struct {
 type dirClassification struct {
 	Type    string   `json:"type"`
 	Signals []string `json:"signals"`
+}
+
+// governanceDetail holds extracted rules/settings from a governance config file.
+type governanceDetail struct {
+	Tool     string                 `json:"tool"`
+	File     string                 `json:"file"`
+	Category string                 `json:"category"`
+	Rules    map[string]interface{} `json:"rules,omitempty"`
+	Extends  []string               `json:"extends,omitempty"`
+	Config   map[string]interface{} `json:"config,omitempty"`
 }
 
 // projectDetectors maps a marker file to a project type description.
@@ -332,7 +344,192 @@ func classifyDirectory(target string) dirClassification {
 	return dirClassification{Type: "unknown", Signals: []string{"no strong structural signals detected"}}
 }
 
-// --- Dependency file parsers ---
+// --- Deep governance parsers ---
+
+// parseEslintrcDeep parses ESLint config files for rules and extends.
+func parseEslintrcDeep(target string) *governanceDetail {
+	for _, name := range []string{".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		detail := &governanceDetail{Tool: "ESLint", File: name, Category: "linter"}
+
+		if strings.HasSuffix(name, ".json") || name == ".eslintrc" {
+			parsed := gjson.ParseBytes(data)
+			if rules := parsed.Get("rules"); rules.IsObject() {
+				detail.Rules = make(map[string]interface{})
+				rules.ForEach(func(k, v gjson.Result) bool {
+					detail.Rules[k.String()] = v.Value()
+					return true
+				})
+			}
+			if extends := parsed.Get("extends"); extends.IsArray() {
+				extends.ForEach(func(_, v gjson.Result) bool {
+					detail.Extends = append(detail.Extends, v.String())
+					return true
+				})
+			}
+			if plugins := parsed.Get("plugins"); plugins.IsArray() {
+				var pluginNames []string
+				plugins.ForEach(func(_, v gjson.Result) bool {
+					pluginNames = append(pluginNames, v.String())
+					return true
+				})
+				if len(pluginNames) > 0 {
+					if detail.Config == nil {
+						detail.Config = make(map[string]interface{})
+					}
+					detail.Config["plugins"] = pluginNames
+				}
+			}
+			return detail
+		}
+
+		if strings.HasSuffix(name, ".yml") {
+			var raw map[string]interface{}
+			if err := yaml.Unmarshal(data, &raw); err != nil {
+				continue
+			}
+			if rules, ok := raw["rules"].(map[string]interface{}); ok {
+				detail.Rules = rules
+			}
+			if extends, ok := raw["extends"].([]interface{}); ok {
+				for _, e := range extends {
+					if s, ok := e.(string); ok {
+						detail.Extends = append(detail.Extends, s)
+					}
+				}
+			}
+			return detail
+		}
+	}
+	return nil
+}
+
+// parseGolangciDeep parses golangci-lint config files for enabled linters and exclude rules.
+func parseGolangciDeep(target string) *governanceDetail {
+	for _, name := range []string{".golangci.yml", ".golangci.yaml", "golangci.yml"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			continue
+		}
+
+		detail := &governanceDetail{Tool: "golangci-lint", File: name, Category: "linter"}
+		if detail.Config == nil {
+			detail.Config = make(map[string]interface{})
+		}
+
+		// Extract enabled linters
+		linters, _ := raw["linters"].(map[string]interface{})
+		if enable, ok := linters["enable"].([]interface{}); ok {
+			var names []string
+			for _, e := range enable {
+				if s, ok := e.(string); ok {
+					names = append(names, s)
+				}
+			}
+			detail.Config["enabled_linters"] = names
+		}
+
+		// Extract exclude rules
+		issues, _ := raw["issues"].(map[string]interface{})
+		if excludeRules, ok := issues["exclude-rules"].([]interface{}); ok {
+			detail.Config["exclude_rules_count"] = len(excludeRules)
+		}
+
+		return detail
+	}
+	return nil
+}
+
+// parsePrettierDeep parses Prettier config files for formatting options.
+func parsePrettierDeep(target string) *governanceDetail {
+	for _, name := range []string{".prettierrc", ".prettierrc.json"} {
+		path := filepath.Join(target, name)
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) > maxDepFileSize {
+			continue
+		}
+
+		parsed := gjson.ParseBytes(data)
+		detail := &governanceDetail{Tool: "Prettier", File: name, Category: "formatter"}
+		detail.Config = make(map[string]interface{})
+
+		// Extract known Prettier options
+		for _, key := range []string{"semi", "singleQuote", "tabWidth", "printWidth", "trailingComma", "useTabs", "bracketSpacing", "arrowParens", "endOfLine"} {
+			if val := parsed.Get(key); val.Exists() {
+				detail.Config[key] = val.Value()
+			}
+		}
+
+		return detail
+	}
+	return nil
+}
+
+// parseBiomeDeep parses biome.json for formatter and linter configuration.
+func parseBiomeDeep(target string) *governanceDetail {
+	path := filepath.Join(target, "biome.json")
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	parsed := gjson.ParseBytes(data)
+	detail := &governanceDetail{Tool: "Biome", File: "biome.json", Category: "formatter"}
+	detail.Config = make(map[string]interface{})
+
+	if formatter := parsed.Get("formatter"); formatter.Exists() {
+		var opts map[string]interface{}
+		if err := json.Unmarshal([]byte(formatter.Raw), &opts); err == nil {
+			detail.Config["formatter"] = opts
+		}
+	}
+
+	if linter := parsed.Get("linter"); linter.Exists() {
+		var opts map[string]interface{}
+		if err := json.Unmarshal([]byte(linter.Raw), &opts); err == nil {
+			detail.Config["linter"] = opts
+		}
+	}
+
+	return detail
+}
+
+// deepParseGovernance orchestrates all deep governance parsers.
+// Task 2a: linter + formatter parsers. Task 2b will add test, CI, build parsers.
+func deepParseGovernance(target string) []governanceDetail {
+	var details []governanceDetail
+
+	// Linter parsers
+	if d := parseEslintrcDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseGolangciDeep(target); d != nil {
+		details = append(details, *d)
+	}
+
+	// Formatter parsers
+	if d := parsePrettierDeep(target); d != nil {
+		details = append(details, *d)
+	}
+	if d := parseBiomeDeep(target); d != nil {
+		details = append(details, *d)
+	}
+
+	return details
+}
+
+// --- Dependency file parsers ---// --- Dependency file parsers ---
 
 // maxDepFileSize caps file reads for dependency files to prevent OOM on giant files.
 const maxDepFileSize = 1 << 20 // 1 MB
@@ -1119,6 +1316,7 @@ var initResearchCmd = &cobra.Command{
 
 		techStackDetail := parseDependencyFiles(target)
 		dirClass := classifyDirectory(target)
+		governanceDetails := deepParseGovernance(target)
 
 		outputOK(map[string]interface{}{
 			"detected_type":         detected,
@@ -1137,6 +1335,7 @@ var initResearchCmd = &cobra.Command{
 			"charter":               charter,
 			"tech_stack_detail":     techStackDetail,
 			"dir_classification":    dirClass,
+			"governance_details":    governanceDetails,
 		})
 		return nil
 	},

@@ -1166,3 +1166,176 @@ func TestClassifyDirUnknown(t *testing.T) {
 		t.Errorf("dir_classification.type = %v, want unknown", dirClass["type"])
 	}
 }
+
+// --- Plan 02 Task 2: Deep governance parsing tests ---
+
+func TestDeepParseEslintrc(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	eslintrc := `{"rules":{"no-unused-vars":"warn","semi":"error"},"extends":["next/core-web-vitals"]}`
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(eslintrc), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "eslint deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "ESLint" && d["category"] == "linter" {
+			found = true
+			rules := d["rules"].(map[string]interface{})
+			if _, ok := rules["no-unused-vars"]; !ok {
+				t.Error("expected rules to contain no-unused-vars")
+			}
+			extends := d["extends"].([]interface{})
+			foundExtends := false
+			for _, e := range extends {
+				if e == "next/core-web-vitals" {
+					foundExtends = true
+				}
+			}
+			if !foundExtends {
+				t.Errorf("extends = %v, want to contain next/core-web-vitals", extends)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want ESLint entry", govDetails)
+	}
+}
+
+func TestDeepParseGolangci(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	golangci := "linters:\n  enable:\n    - errcheck\n    - govet\nissues:\n  exclude-rules:\n    - linters:\n        - errcheck"
+	os.WriteFile(filepath.Join(target, ".golangci.yml"), []byte(golangci), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "golangci deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "golangci-lint" && d["category"] == "linter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			linters := config["enabled_linters"].([]interface{})
+			if len(linters) < 2 {
+				t.Errorf("enabled_linters = %v, want at least 2", linters)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want golangci-lint entry", govDetails)
+	}
+}
+
+func TestDeepParsePrettier(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	prettier := `{"semi":true,"singleQuote":true,"tabWidth":2}`
+	os.WriteFile(filepath.Join(target, ".prettierrc.json"), []byte(prettier), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "prettier deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Prettier" && d["category"] == "formatter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["semi"] != true {
+				t.Errorf("config.semi = %v, want true", config["semi"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Prettier entry", govDetails)
+	}
+}
+
+func TestDeepParseBiome(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	biome := `{"formatter":{"enabled":true,"indentStyle":"space"},"linter":{"enabled":true,"rules":{"recommended":true}}}`
+	os.WriteFile(filepath.Join(target, "biome.json"), []byte(biome), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "biome deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Biome" && d["category"] == "formatter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if _, ok := config["formatter"]; !ok {
+				t.Error("expected config to contain formatter")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Biome entry", govDetails)
+	}
+}
