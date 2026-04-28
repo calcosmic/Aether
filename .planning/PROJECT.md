@@ -113,7 +113,7 @@ That means:
 ### Active
 
 - Self-hosting cleanup (audit and remove stale artifacts from Aether-developing-Aether) -- v1.11
-- Smart Init ceremony restoration (charter approval, repo scan, governance detection) -- v1.11
+- Smart Init ceremony restoration (charter approval, repo scan, governance detection) -- v1.11 [Validated in Phase 72]
 - Rich init-research (colony context, pheromone suggestions, complexity metrics) -- v1.11
 - Suggest-analyze restoration (automatic pheromone suggestions during builds) -- v1.11
 - Platform hardening (OpenCode parity, error handling, cross-platform consistency) -- v1.11
