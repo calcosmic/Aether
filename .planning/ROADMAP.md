@@ -341,7 +341,10 @@ Plans:
   4. Recurring REDIRECT pheromones auto-shelved as permanent guidance
   5. Shelved ideas survive entomb — archived to chambers
   6. Phase 65 VERIFICATION.md exists and VALIDATION.md wave 0 executed
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 69-01-PLAN.md -- Collect test/grep evidence and write Phase 65 VERIFICATION.md (SHELF-01 to SHELF-05)
 
 ## Progress
 
@@ -359,4 +362,4 @@ Plans:
 | 66. Continue Flow Fix | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 67. Seal Hive Brain Wiring | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 68. Gate Recovery Verification | v1.10 | 2/2 | Complete    | 2026-04-28 |
-| 69. Idea Shelving Verification | v1.10 | 0/? | Not started | - |
+| 69. Idea Shelving Verification | v1.10 | 0/1 | Planned | - |
