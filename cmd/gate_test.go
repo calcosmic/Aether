@@ -407,14 +407,19 @@ func TestGateResultsWriteAndRead(t *testing.T) {
 	if len(readBack) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(readBack))
 	}
-	if readBack[0].Name != "spawn_gate" || !readBack[0].Passed {
-		t.Errorf("first entry mismatch: %+v", readBack[0])
+	// Build lookup by name (merge logic uses map, order not guaranteed)
+	byName := make(map[string]colony.GateResultEntry, len(readBack))
+	for _, e := range readBack {
+		byName[e.Name] = e
 	}
-	if readBack[1].Name != "tests_pass" || readBack[1].Passed {
-		t.Errorf("second entry mismatch: %+v", readBack[1])
+	if e, ok := byName["spawn_gate"]; !ok || !e.Passed {
+		t.Errorf("spawn_gate entry missing or not passed: %+v", e)
 	}
-	if readBack[1].Detail != "2 tests failed" {
-		t.Errorf("detail mismatch: got %q", readBack[1].Detail)
+	if e, ok := byName["tests_pass"]; !ok || e.Passed {
+		t.Errorf("tests_pass entry missing or passed: %+v", e)
+	}
+	if e, ok := byName["tests_pass"]; !ok || e.Detail != "2 tests failed" {
+		t.Errorf("detail mismatch: got %q", e.Detail)
 	}
 }
 
