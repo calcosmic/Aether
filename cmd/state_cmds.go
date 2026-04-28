@@ -378,6 +378,18 @@ func applyFieldSet(data []byte, path, valueExpr string, vars map[string]interfac
 		return nil, fmt.Errorf("undeclared variable %s", valueExpr)
 	}
 	path = normalizeBracketPath(path)
+
+	// Detect JSON-encoded strings vs raw JSON values.
+	// resolveValue returns json.Marshal'd strings (e.g. `"READY"`) for string
+	// inputs, but raw JSON for numbers, booleans, null, objects, arrays.
+	// Using SetRawBytes on a JSON-encoded string embeds the literal quote
+	// characters, producing corrupted values like "\"READY\"" in the file.
+	var raw interface{}
+	if json.Unmarshal([]byte(value), &raw) == nil {
+		if _, ok := raw.(string); ok {
+			return sjson.SetBytes(data, path, raw)
+		}
+	}
 	return sjson.SetRawBytes(data, path, []byte(value))
 }
 

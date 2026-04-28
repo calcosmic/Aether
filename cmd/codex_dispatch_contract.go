@@ -11,7 +11,7 @@ var (
 	planningScoutTimeout       = 15 * time.Minute
 	planningRouteSetterTimeout = 15 * time.Minute
 	surveyorDispatchTimeout    = 5 * time.Minute
-	continueReviewTimeout      = 15 * time.Minute
+	continueReviewTimeout      = 5 * time.Minute
 )
 
 func effectivePlanningDispatchTimeout(override time.Duration) time.Duration {

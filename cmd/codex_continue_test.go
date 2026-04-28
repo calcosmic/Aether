@@ -4882,3 +4882,82 @@ func (i *contextDeadlineTestInvoker) Invoke(ctx context.Context, config codex.Wo
 func (i *contextDeadlineTestInvoker) IsAvailable(ctx context.Context) bool { return true }
 
 func (i *contextDeadlineTestInvoker) ValidateAgent(path string) error { return nil }
+
+func TestContinue_AutoSkipWatchersWhenCLIUnavailable(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Auto-skip watcher when Codex CLI unavailable"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Auto-skip phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Complete work", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Continue work", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Auto-skip test", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-700", Task: "Complete work", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-701", Task: "Build-time verification", Status: "completed"},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &continueUnavailableInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	// Continue WITHOUT --skip-watchers; auto-skip should activate
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false with auto-skip, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true with auto-skip, got %v", result)
+	}
+
+	verification, ok := result["verification"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected verification object in result")
+	}
+	watcher, ok := verification["watcher"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected watcher object in verification")
+	}
+	if status, _ := watcher["status"].(string); status != "skipped" {
+		t.Fatalf("expected watcher status 'skipped', got %q", status)
+	}
+	if worker, _ := watcher["worker"].(string); worker != "auto-skip" {
+		t.Fatalf("expected watcher worker 'auto-skip', got %q", worker)
+	}
+}

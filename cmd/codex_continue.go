@@ -1002,6 +1002,16 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	return b.String()
 }
 
+// isCodexWorkerAvailable checks whether the Codex CLI worker invoker is
+// available for spawning watcher/review agents.
+func isCodexWorkerAvailable() bool {
+	invoker := newCodexWorkerInvoker()
+	if _, ok := invoker.(*codex.FakeInvoker); ok {
+		return true
+	}
+	return invoker.IsAvailable(context.Background())
+}
+
 func runCodexContinueVerification(root string, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
 	now := time.Now().UTC()
 	commands := resolveCodexVerificationCommands(root)
@@ -1013,10 +1023,23 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
+
+	// Compute shell verification pass/fail before deciding whether to spawn watcher.
+	shellChecksPassed := true
+	for _, step := range steps {
+		if !step.Passed && !step.Skipped {
+			shellChecksPassed = false
+		}
+	}
+
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
 	if skipWatchers {
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
+	} else if shellChecksPassed && !isCodexWorkerAvailable() {
+		// Auto-skip: shell verification passed but Codex CLI is unavailable.
+		// No point spawning a watcher that will immediately fail.
+		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; Codex CLI unavailable but runtime verification passed"}
 	} else {
 		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
 	}
@@ -1025,12 +1048,13 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 		watcher = buildWatcher
 	}
 
-	checksPassed := true
+	checksPassed := shellChecksPassed
 	blockers := []string{}
-	for _, step := range steps {
-		if !step.Passed && !step.Skipped {
-			checksPassed = false
-			blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
+	if !shellChecksPassed {
+		for _, step := range steps {
+			if !step.Passed && !step.Skipped {
+				blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
+			}
 		}
 	}
 	if watcher.Present && !watcher.Passed && watcher.Status != "skipped" {
