@@ -31,8 +31,8 @@ Fix cross-platform gaps and ensure consistent behavior across Claude Code, OpenC
 
 Re-port the colony charter ceremony and rich init-research from the deleted shell scripts to Go.
 
-- [ ] **INIT-01**: Colony charter ceremony runs during `/ant-init` — scans repo, writes charter, presents for approval
-- [ ] **INIT-02**: Charter approval flow with accept/revise/reject options
+- [x] **INIT-01**: Colony charter ceremony runs during `/ant-init` — scans repo, writes charter, presents for approval
+- [x] **INIT-02**: Charter approval flow with accept/revise/reject options
 - [ ] **INIT-03**: Rich init-research produces tech stack analysis (languages, frameworks, build tools)
 - [ ] **INIT-04**: Init-research detects directory structure patterns (monorepo, microservices, etc.)
 - [ ] **INIT-05**: Init-research identifies governance files (.eslintrc, pyproject.toml, Makefile, etc.)
@@ -95,8 +95,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAT-03 | Phase 71 | Complete |
 | PLAT-04 | Phase 71 | Complete |
 | PLAT-05 | Phase 71 | Complete |
-| INIT-01 | Phase 72 | Pending |
-| INIT-02 | Phase 72 | Pending |
+| INIT-01 | Phase 72 | Complete |
+| INIT-02 | Phase 72 | Complete |
 | INIT-03 | Phase 73 | Pending |
 | INIT-04 | Phase 73 | Pending |
 | INIT-05 | Phase 73 | Pending |

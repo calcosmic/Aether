@@ -221,8 +221,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 72-01-PLAN.md -- Expand charter to 7 sections, add Charter struct to colony package, wire --charter-json flag
-- [ ] 72-02-PLAN.md -- Go-native init ceremony for Codex/CLI, visual rendering, wrapper updates
+- [x] 72-01-PLAN.md -- Expand charter to 7 sections, add Charter struct to colony package, wire --charter-json flag
+- [x] 72-02-PLAN.md -- Go-native init ceremony for Codex/CLI, visual rendering, wrapper updates
 
 ### Phase 73: Rich Init Research
 **Goal**: The init ceremony produces deep codebase analysis -- tech stack, directory structure, governance patterns, and pheromone suggestions
@@ -275,7 +275,7 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 |-------|-----------|----------------|--------|-----------|
 | 70. Self-Hosting Cleanup | v1.11 | 1/1 | Complete    | 2026-04-28 |
 | 71. Platform Hardening | v1.11 | 2/2 | Complete    | 2026-04-28 |
-| 72. Smart Init Charter | v1.11 | 0/2 | Planning | - |
+| 72. Smart Init Charter | v1.11 | 2/2 | Complete    | 2026-04-28 |
 | 73. Rich Init Research | v1.11 | 0/? | Not started | - |
 | 74. Suggest-Analyze | v1.11 | 0/? | Not started | - |
 | 75. Intelligence Core | v1.11 | 0/? | Not started | - |
