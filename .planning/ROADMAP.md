@@ -127,7 +127,7 @@
 - [x] **Phase 66: Continue Flow Fix** - Watcher timeout loops, token burn, stuck-in-continue bug (HIGHEST PRIORITY) (completed 2026-04-27)
 - [x] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal (CERE-02, CERE-04), OpenCode parity, close Phase 62 verification gaps (completed 2026-04-27)
 - [x] **Phase 68: Gate Recovery Verification** - Fix CR-01/WR-01/WR-02 bugs, verify subcommands, create Phase 59 VERIFICATION.md (planned 2026-04-28)
-- [ ] **Phase 69: Idea Shelving Verification** - Verify SHELF-01 through SHELF-05, create Phase 65 VERIFICATION.md, execute validation wave 0
+- [x] **Phase 69: Idea Shelving Verification** - Verify SHELF-01 through SHELF-05, create Phase 65 VERIFICATION.md, execute validation wave 0 (completed 2026-04-28)
 
 ## Phase Details
 
@@ -344,7 +344,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 69-01-PLAN.md -- Collect test/grep evidence and write Phase 65 VERIFICATION.md (SHELF-01 to SHELF-05)
+- [x] 69-01-PLAN.md -- Collect test/grep evidence and write Phase 65 VERIFICATION.md (SHELF-01 to SHELF-05)
 
 ## Progress
 
@@ -362,4 +362,4 @@ Plans:
 | 66. Continue Flow Fix | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 67. Seal Hive Brain Wiring | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 68. Gate Recovery Verification | v1.10 | 2/2 | Complete    | 2026-04-28 |
-| 69. Idea Shelving Verification | v1.10 | 0/1 | Planned | - |
+| 69. Idea Shelving Verification | v1.10 | 1/1 | Complete    | 2026-04-28 |
