@@ -126,7 +126,7 @@
 
 - [x] **Phase 66: Continue Flow Fix** - Watcher timeout loops, token burn, stuck-in-continue bug (HIGHEST PRIORITY) (completed 2026-04-27)
 - [x] **Phase 67: Seal Hive Brain Wiring** - Wire hive-promote into seal (CERE-02, CERE-04), OpenCode parity, close Phase 62 verification gaps (completed 2026-04-27)
-- [ ] **Phase 68: Gate Recovery Verification** - Verify Plan 01 subcommands, create Phase 59 VERIFICATION.md, runtime-playbook integration
+- [x] **Phase 68: Gate Recovery Verification** - Fix CR-01/WR-01/WR-02 bugs, verify subcommands, create Phase 59 VERIFICATION.md (planned 2026-04-28)
 - [ ] **Phase 69: Idea Shelving Verification** - Verify SHELF-01 through SHELF-05, create Phase 65 VERIFICATION.md, execute validation wave 0
 
 ## Phase Details
