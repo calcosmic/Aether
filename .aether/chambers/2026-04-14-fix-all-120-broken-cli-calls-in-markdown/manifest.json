@@ -1,7 +1,0 @@
-{
-  "goal": "Fix all ~120 broken CLI calls in markdown — add missing flags and subcommands to Go CLI so pheromones, learning, midden, spawn tracking, activity log, flags, and registry actually work",
-  "milestone": "Crowned Anthill",
-  "name": "2026-04-14-fix-all-120-broken-cli-calls-in-markdown",
-  "phases_completed": 11,
-  "total_phases": 11
-}

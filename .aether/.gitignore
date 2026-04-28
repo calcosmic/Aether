@@ -3,3 +3,12 @@ data/
 dreams/
 checkpoints/
 locks/
+agents/
+chambers/
+midden/
+rules/
+settings/
+archive/
+backups/
+oracle/
+temp/

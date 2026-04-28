@@ -1,8 +1,0 @@
-AETHER COLONY :: READY
-=======================
-
-State: READY
-Plan: 4 phases generated
-Confidence: 80%
-
-Ready to build.
