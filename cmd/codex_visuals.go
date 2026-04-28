@@ -447,6 +447,37 @@ func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 	return b.String()
 }
 
+// renderCharterDisplay produces a visual rendering of the 7-section colony charter.
+func renderCharterDisplay(ch colony.Charter) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("init"), "Colony Charter"))
+	b.WriteString(visualDivider)
+	b.WriteString(renderStageMarker("Charter"))
+	b.WriteString("  Intent:      ")
+	b.WriteString(emptyFallback(ch.Intent, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Vision:      ")
+	b.WriteString(emptyFallback(ch.Vision, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Governance:  ")
+	b.WriteString(emptyFallback(ch.Governance, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Goals:       ")
+	b.WriteString(emptyFallback(ch.Goals, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Tech Stack:  ")
+	b.WriteString(emptyFallback(ch.TechStack, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Key Risks:   ")
+	b.WriteString(emptyFallback(ch.KeyRisks, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Constraints: ")
+	b.WriteString(emptyFallback(ch.Constraints, "(none)"))
+	b.WriteString("\n")
+	b.WriteString(visualDivider)
+	return b.String()
+}
+
 func renderColonizeVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("colonize"), "Colonize"))
