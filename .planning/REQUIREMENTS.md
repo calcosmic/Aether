@@ -21,11 +21,11 @@ Remove artifacts that exist because Aether was used to develop itself.
 
 Fix cross-platform gaps and ensure consistent behavior across Claude Code, OpenCode, and Codex CLI.
 
-- [ ] **PLAT-01**: OpenCode init.md includes shelf backlog section (v1.10 audit gap)
-- [ ] **PLAT-02**: OpenCode entomb.md includes shelf archive summary (v1.10 audit gap)
-- [ ] **PLAT-03**: Codex subagent dispatch works correctly across all agent types
-- [ ] **PLAT-04**: CLI flag mismatches between wrapper markdown and Go runtime are resolved
-- [ ] **PLAT-05**: All 50 commands produce correct output on all 3 platforms
+- [x] **PLAT-01**: OpenCode init.md includes shelf backlog section (v1.10 audit gap)
+- [x] **PLAT-02**: OpenCode entomb.md includes shelf archive summary (v1.10 audit gap)
+- [x] **PLAT-03**: Codex subagent dispatch works correctly across all agent types
+- [x] **PLAT-04**: CLI flag mismatches between wrapper markdown and Go runtime are resolved
+- [x] **PLAT-05**: All 50 commands produce correct output on all 3 platforms
 
 ### Smart Init Restoration
 
@@ -90,11 +90,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLEAN-03 | Phase 70 | Complete |
 | CLEAN-04 | Phase 70 | Complete |
 | CLEAN-05 | Phase 70 | Complete |
-| PLAT-01 | Phase 71 | Pending |
-| PLAT-02 | Phase 71 | Pending |
-| PLAT-03 | Phase 71 | Pending |
-| PLAT-04 | Phase 71 | Pending |
-| PLAT-05 | Phase 71 | Pending |
+| PLAT-01 | Phase 71 | Complete |
+| PLAT-02 | Phase 71 | Complete |
+| PLAT-03 | Phase 71 | Complete |
+| PLAT-04 | Phase 71 | Complete |
+| PLAT-05 | Phase 71 | Complete |
 | INIT-01 | Phase 72 | Pending |
 | INIT-02 | Phase 72 | Pending |
 | INIT-03 | Phase 73 | Pending |
