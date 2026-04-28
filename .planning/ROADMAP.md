@@ -175,7 +175,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 59-01-PLAN.md -- Gate result types, recovery templates, skip logic in Go runtime (GATE-01, GATE-03)
+- [x] 59-01-PLAN.md -- Gate result types, recovery templates, skip logic in Go runtime (GATE-01, GATE-03)
 - [x] 59-02-PLAN.md -- Playbook recovery templates, incremental gate checking, veto confirmation (GATE-01, GATE-02, GATE-03)
 
 ### Phase 60: Oracle Loop Fix
@@ -304,7 +304,7 @@ Plans:
 **Depends on**: Phase 57 (QUEE-06/07 auto-promotion wiring), Phase 65 (shelf detection integration)
 **Requirements**: CERE-02, CERE-04 (CERE-01, CERE-03, CERE-05 already delivered in Phase 62)
 **Success Criteria** (what must be TRUE):
-  1. Running `/ant-seal` calls hive-promote for instincts with confidence >= 0.8 (non-blocking — failures logged)
+  1. Running `/ant-seal` calls hive-promote for instincts with confidence >= 0.8 (non-blocking -- failures logged)
   2. OpenCode seal.md matches Claude seal.md — no parity drift
   3. CROWNED-ANTHILL.md Colony Statistics table includes Hive-promoted count (building on Phase 62 metrics)
   4. Phase 62 VERIFICATION.md updated to reflect all gaps closed
@@ -323,7 +323,11 @@ Plans:
   1. gate-results-read, gate-results-write, should-skip-gate, gate-recovery-template subcommands exist in the binary
   2. Continue playbooks (continue-verify.md, continue-gates.md) correctly call runtime subcommands
   3. Phase 59 VERIFICATION.md exists and all GATE requirements verified
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 68-01-PLAN.md -- Fix CR-01/WR-01/WR-02 bugs and update ROADMAP
+- [ ] 68-02-PLAN.md -- Create Phase 59 VERIFICATION.md with evidence
 
 
 ### Phase 69: Idea Shelving Verification
@@ -345,7 +349,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 57. QUEEN.md Pipeline Fix | v1.10 | 3/3 | Complete    | 2026-04-26 |
 | 58. Smart Review Depth | v1.10 | 0/2 | Planned | - |
-| 59. Gate Failure Recovery | v1.10 | 1/2 | Complete    | 2026-04-27 |
+| 59. Gate Failure Recovery | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 60. Oracle Loop Fix | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 61. Porter Ant | v1.10 | 3/3 | Complete    | 2026-04-27 |
 | 62. Lifecycle Ceremony -- Seal and Init | v1.10 | 3/3 | Complete    | 2026-04-27 |
@@ -354,5 +358,5 @@ Plans:
 | 65. Idea Shelving | v1.10 | 0/? | Not started | - |
 | 66. Continue Flow Fix | v1.10 | 2/2 | Complete    | 2026-04-27 |
 | 67. Seal Hive Brain Wiring | v1.10 | 2/2 | Complete    | 2026-04-27 |
-| 68. Gate Recovery Verification | v1.10 | 0/? | Not started | - |
+| 68. Gate Recovery Verification | v1.10 | 0/2 | Planned | - |
 | 69. Idea Shelving Verification | v1.10 | 0/? | Not started | - |
