@@ -29,6 +29,9 @@ Present the charter for user review:
 **Vision:** {charter.vision}
 **Governance:** {charter.governance}
 **Goals:** {charter.goals}
+**Tech Stack:** {charter.tech_stack}
+**Key Risks:** {charter.key_risks}
+**Constraints:** {charter.constraints}
 ```
 
 ## Pheromone Suggestions
@@ -71,7 +74,7 @@ After the colony goal is established and BEFORE colony state creation:
 
 - Use AskUserQuestion with 3 options: proceed, revise goal, cancel.
 - After approval, for each approved pheromone suggestion, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-research"`.
-- Then run `AETHER_OUTPUT_MODE=visual aether init "$ARGUMENTS"`.
+- Then run `AETHER_OUTPUT_MODE=visual aether init --charter-json '<charter JSON>' "$ARGUMENTS"`, where `<charter JSON>` is the JSON-serialized charter object from the init-research output.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
 - If setup is missing, relay the runtime guidance exactly.
 - If docs and runtime disagree, runtime wins.
