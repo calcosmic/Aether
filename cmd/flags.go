@@ -12,6 +12,7 @@ var (
 	flagTypeFilter   string
 	flagStatusFilter string
 	flagListJSON     bool
+	flagPhaseFilter  int
 )
 
 var flagsCmd = &cobra.Command{
@@ -68,6 +69,7 @@ func init() {
 	flagsCmd.Flags().StringVar(&flagTypeFilter, "type", "", "Filter by type (blocker, issue, note)")
 	flagsCmd.Flags().StringVar(&flagStatusFilter, "status", "", "Filter by status (active, resolved)")
 	flagsCmd.Flags().BoolVar(&flagListJSON, "json", false, "Output as JSON")
+	flagsCmd.Flags().IntVar(&flagPhaseFilter, "phase", 0, "Filter by phase number (0 means no filter)")
 }
 
 // filterFlags applies type and status filters to flag entries.
@@ -81,6 +83,9 @@ func filterFlags(entries []colony.FlagEntry) []colony.FlagEntry {
 			continue
 		}
 		if flagStatusFilter == "resolved" && !entry.Resolved {
+			continue
+		}
+		if flagPhaseFilter > 0 && (entry.Phase == nil || *entry.Phase != flagPhaseFilter) {
 			continue
 		}
 		result = append(result, entry)

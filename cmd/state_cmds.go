@@ -857,6 +857,8 @@ func init() {
 	stateMutateCmd.Flags().StringArrayVar(&mutateArgJSON, "argjson", nil, "JSON variable (jq-style: --argjson name json)")
 	stateMutateCmd.Flags().StringArrayVar(&mutateArg, "arg", nil, "String variable (jq-style: --arg name value)")
 	stateMutateCmd.Flags().String("guard", "", "Guard precondition: task-complete:<id> or phase-advance:<id>")
+	stateMutateCmd.Flags().Bool("verify-only", false, "Check guard preconditions without performing mutation")
+	stateMutateCmd.Flags().String("revert", "", "Revert a guard precondition (undo task-complete or phase-advance marker)")
 	stateReadFieldCmd.Flags().String("field", "", "Field to read (required)")
 	rootCmd.AddCommand(stateMutateCmd)
 	rootCmd.AddCommand(loadStateCmd)

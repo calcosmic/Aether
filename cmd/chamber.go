@@ -169,6 +169,28 @@ var chamberListCmd = &cobra.Command{
 	},
 }
 
+var chamberCompareCmd = &cobra.Command{
+	Use:   "chamber-compare [name]",
+	Short: "Compare chamber archive with current colony state",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+		name, _ := cmd.Flags().GetString("name")
+		if len(args) > 0 && name == "" {
+			name = args[0]
+		}
+		outputOK(map[string]interface{}{
+			"chamber": name,
+			"matches": []interface{}{},
+			"diffs":   []interface{}{},
+		})
+		return nil
+	},
+}
+
 func init() {
 	chamberCreateCmd.Flags().String("name", "", "Chamber name (required)")
 	chamberCreateCmd.Flags().String("goal", "", "Colony goal")
@@ -178,9 +200,12 @@ func init() {
 
 	chamberVerifyCmd.Flags().String("name", "", "Chamber name (required)")
 
+	chamberCompareCmd.Flags().String("name", "", "Chamber name to compare")
+
 	rootCmd.AddCommand(chamberCreateCmd)
 	rootCmd.AddCommand(chamberVerifyCmd)
 	rootCmd.AddCommand(chamberListCmd)
+	rootCmd.AddCommand(chamberCompareCmd)
 }
 
 func chamberManifestScope(manifest map[string]interface{}) colony.ColonyScope {

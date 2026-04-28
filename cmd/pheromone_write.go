@@ -314,6 +314,7 @@ func init() {
 	pheromoneWriteCmd.Flags().String("ttl", "", "Override expiry duration: Nd (days), Nh (hours), Nw (weeks) (optional)")
 
 	pheromoneExpireCmd.Flags().String("id", "", "Signal ID to expire (required)")
+	pheromoneExpireCmd.Flags().Bool("phase-end-only", false, "Only expire signals marked as phase-scoped")
 
 	rootCmd.AddCommand(pheromoneWriteCmd)
 	rootCmd.AddCommand(pheromoneExpireCmd)

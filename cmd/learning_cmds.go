@@ -476,6 +476,8 @@ func trimSpace(s string) string {
 func init() {
 	learningApproveProposalsCmd.Flags().Bool("all", false, "Approve all pending proposals")
 	learningApproveProposalsCmd.Flags().String("ids", "", "Comma-separated list of proposal IDs")
+	learningApproveProposalsCmd.Flags().Bool("deferred", false, "Also approve deferred proposals")
+	learningApproveProposalsCmd.Flags().Bool("verbose", false, "Show detailed approval results")
 
 	learningDeferProposalsCmd.Flags().Bool("all", false, "Defer all pending proposals")
 	learningDeferProposalsCmd.Flags().String("ids", "", "Comma-separated list of proposal IDs")

@@ -15,6 +15,7 @@ var flagAddCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(5),
 	Aliases: []string{
 		"flag",
+		"flag-create",
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {

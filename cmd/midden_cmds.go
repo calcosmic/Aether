@@ -504,6 +504,7 @@ func init() {
 	rootCmd.AddCommand(middenTagCmd)
 	rootCmd.AddCommand(middenCollectCmd)
 	rootCmd.AddCommand(middenHandleRevertCmd)
+	middenCrossPRAnalysisCmd.Flags().Int("window", 7, "Number of days to analyze (default: 7)")
 	rootCmd.AddCommand(middenCrossPRAnalysisCmd)
 	rootCmd.AddCommand(middenPruneCmd)
 	rootCmd.AddCommand(middenWriteCmd)

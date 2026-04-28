@@ -276,6 +276,14 @@ var councilBudgetCheckCmd = &cobra.Command{
 	},
 }
 
+// councilCmd is the parent command for council subcommands.
+// Subcommands are registered both under rootCmd (as council-deliberate etc.)
+// and under councilCmd (as council deliberate etc.) for flexible invocation.
+var councilCmd = &cobra.Command{
+	Use:   "council",
+	Short: "Multi-perspective deliberation system",
+}
+
 func init() {
 	councilDeliberateCmd.Flags().String("topic", "", "Deliberation topic (required)")
 	councilAdvocateCmd.Flags().String("topic", "", "Topic (required)")
@@ -286,10 +294,19 @@ func init() {
 	councilSageCmd.Flags().String("wisdom", "", "Sage wisdom (required)")
 	councilHistoryCmd.Flags().String("topic", "", "Filter by topic")
 
-	for _, c := range []*cobra.Command{
+	councilSubcommands := []*cobra.Command{
 		councilDeliberateCmd, councilAdvocateCmd, councilChallengerCmd,
 		councilSageCmd, councilHistoryCmd, councilBudgetCheckCmd,
-	} {
+	}
+
+	// Register as direct subcommands of rootCmd (e.g., aether council-deliberate)
+	for _, c := range councilSubcommands {
 		rootCmd.AddCommand(c)
 	}
+
+	// Also register under parent councilCmd (e.g., aether council deliberate)
+	for _, c := range councilSubcommands {
+		councilCmd.AddCommand(c)
+	}
+	rootCmd.AddCommand(councilCmd)
 }
