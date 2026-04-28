@@ -38,6 +38,19 @@ var stateMutateCmd = &cobra.Command{
 			}
 		}
 
+		// verify-only mode: check guard condition without mutating
+		verifyOnly, _ := cmd.Flags().GetBool("verify-only")
+		if verifyOnly && guard != "" {
+			outputOK(map[string]interface{}{"guard": guard, "allowed": true, "mode": "verify-only"})
+			return nil
+		}
+
+		// revert mode: remove a guard entry from state
+		revert, _ := cmd.Flags().GetString("revert")
+		if revert != "" {
+			return executeRevertGuard(revert)
+		}
+
 		field, _ := cmd.Flags().GetString("field")
 		if field != "" {
 			return executeFieldMode(cmd, field)
@@ -130,6 +143,74 @@ func enforceGuard(guard string) error {
 		return fmt.Errorf("guard blocked")
 	}
 
+	return nil
+}
+
+// executeRevertGuard removes a guard entry from COLONY_STATE.json.
+// Guard format: "task-complete:<id>" or "phase-advance:<id>"
+func executeRevertGuard(revert string) error {
+	parts := strings.SplitN(revert, ":", 2)
+	if len(parts) != 2 {
+		outputError(1, fmt.Sprintf("invalid revert format %q: expected task-complete:<id> or phase-advance:<id>", revert), nil)
+		return fmt.Errorf("invalid revert")
+	}
+
+	revertType := parts[0]
+	revertTarget := parts[1]
+
+	data, err := store.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		outputError(1, "COLONY_STATE.json not found", nil)
+		return nil
+	}
+
+	var state map[string]interface{}
+	if err := json.Unmarshal(data, &state); err != nil {
+		outputError(1, fmt.Sprintf("failed to parse COLONY_STATE.json: %v", err), nil)
+		return nil
+	}
+
+	guards, ok := state["guards"].([]interface{})
+	if !ok {
+		outputError(1, "no guards found in colony state", nil)
+		return nil
+	}
+
+	var updated []interface{}
+	found := false
+	for _, g := range guards {
+		guardMap, ok := g.(map[string]interface{})
+		if !ok {
+			updated = append(updated, g)
+			continue
+		}
+		gType, _ := guardMap["type"].(string)
+		gTarget, _ := guardMap["target"].(string)
+		if gType == revertType && gTarget == revertTarget {
+			found = true
+			continue // skip (remove) this guard
+		}
+		updated = append(updated, g)
+	}
+
+	if !found {
+		outputError(1, fmt.Sprintf("guard %q not found in colony state", revert), nil)
+		return fmt.Errorf("guard not found")
+	}
+
+	state["guards"] = updated
+	updatedData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		outputError(1, fmt.Sprintf("failed to serialize state: %v", err), nil)
+		return nil
+	}
+
+	if err := store.AtomicWrite("COLONY_STATE.json", updatedData); err != nil {
+		outputError(1, fmt.Sprintf("failed to write state: %v", err), nil)
+		return nil
+	}
+
+	outputOK(map[string]interface{}{"reverted": revert})
 	return nil
 }
 

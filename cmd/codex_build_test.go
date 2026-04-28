@@ -1607,3 +1607,51 @@ func (i *inRepoClaimsInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) 
 
 func (i *inRepoClaimsInvoker) IsAvailable(_ context.Context) bool { return true }
 func (i *inRepoClaimsInvoker) ValidateAgent(_ string) error       { return nil }
+
+func TestDispatchManifestAllCastes(t *testing.T) {
+	castes := []string{
+		"builder", "watcher", "scout", "oracle", "architect",
+		"route_setter", "queen", "colonizer",
+		"surveyor-nest", "surveyor-disciplines", "surveyor-pathogens", "surveyor-provisions",
+		"keeper", "tracker", "probe", "weaver", "auditor",
+		"chaos", "archaeologist", "gatekeeper", "includer", "measurer",
+		"sage", "ambassador", "chronicler", "medic",
+	}
+
+	seenFiles := make(map[string]string)
+	seenNames := make(map[string]string)
+
+	for _, caste := range castes {
+		t.Run(caste, func(t *testing.T) {
+			file := codexAgentFileForCaste(caste)
+			name := codexAgentNameForCaste(caste)
+
+			if file == "" {
+				t.Fatalf("empty file for caste %q", caste)
+			}
+			if name == "" {
+				t.Fatalf("empty name for caste %q", caste)
+			}
+			if !strings.HasSuffix(file, ".toml") {
+				t.Errorf("file %q for caste %q missing .toml suffix", file, caste)
+			}
+			if strings.Contains(name, ".toml") {
+				t.Errorf("name %q for caste %q should not contain .toml", name, caste)
+			}
+
+			// Check uniqueness
+			if prevCaste, exists := seenFiles[file]; exists {
+				t.Errorf("caste %q and %q both map to file %q", prevCaste, caste, file)
+			}
+			if prevCaste, exists := seenNames[name]; exists {
+				t.Errorf("caste %q and %q both map to name %q", prevCaste, caste, name)
+			}
+			seenFiles[file] = caste
+			seenNames[name] = caste
+		})
+	}
+
+	if len(seenFiles) != len(castes) {
+		t.Errorf("expected %d unique files, got %d", len(castes), len(seenFiles))
+	}
+}
