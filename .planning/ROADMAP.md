@@ -204,7 +204,11 @@ Plans:
   1. OpenCode init.md and entomb.md include shelf backlog/archive sections matching Claude Code
   2. Codex subagent dispatch correctly spawns all agent types without errors
   3. All 50 slash commands produce correct output when run on each of the 3 platforms
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 71-01-PLAN.md -- Commit uncommitted work, add state-mutate flags, verify dispatch manifests and shelf parity
+- [ ] 71-02-PLAN.md -- Register 5 missing subcommands, create CLI smoke test
 
 ### Phase 72: Smart Init Charter
 **Goal**: `/ant-init` runs a colony charter ceremony -- scanning the repo, presenting a charter, and requiring user approval before proceeding
@@ -266,7 +270,7 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 70. Self-Hosting Cleanup | v1.11 | 1/1 | Complete    | 2026-04-28 |
-| 71. Platform Hardening | v1.11 | 0/? | Not started | - |
+| 71. Platform Hardening | v1.11 | 0/2 | Not started | - |
 | 72. Smart Init Charter | v1.11 | 0/? | Not started | - |
 | 73. Rich Init Research | v1.11 | 0/? | Not started | - |
 | 74. Suggest-Analyze | v1.11 | 0/? | Not started | - |
