@@ -1,276 +1,333 @@
-# Pitfalls Research: v1.9 Review Persistence
+# Pitfalls Research: v1.11 Aether Unification
 
-**Domain:** Adding structured review findings persistence and domain-ledger system to an existing Go CLI framework with file-based state management
-**Researched:** 2026-04-26
-**Confidence:** HIGH (based on direct codebase analysis of storage layer, colony-prime injection, agent definitions, and existing patterns)
+**Domain:** Restoring deleted intelligence features, cleaning self-hosting artifacts, hardening multi-platform CLI
+**Researched:** 2026-04-28
+**Confidence:** HIGH (based on direct codebase analysis of git history, Go stubs, agent mirrors, and tracked artifacts)
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Token Budget Blowout From Prior-Review Injection
+### Pitfall 1: Restoring Shell Logic Without Adapting to Go Concurrency Model
 
 **What goes wrong:**
-The colony-prime context builder (`buildColonyPrimeOutput` in `cmd/colony_prime_context.go`) already assembles 9 sections within an 8,000 character budget (4,000 in compact mode). Adding a "prior-reviews" section with open findings per domain will compete with existing sections. If 7 domains each accumulate 5-10 open findings across phases, the prior-reviews section alone could consume 2,000-3,000 characters, crowding out pheromone signals (priority 9) and blockers (priority 10) that are critical for worker guidance.
+The 58 deleted shell scripts (31,411 lines, deleted in commits `92d6c8d6` and `0063be8b`) used sequential bash execution with global state, `source`-based dependency injection, and `jq` for JSON manipulation. The current Go runtime uses goroutines, structured error handling, and the `pkg/storage` locking layer. Porting shell logic line-by-line into Go produces code that works in tests but deadlocks under concurrent access or panics when file locks contend.
+
+The shell scripts relied on bash-level behaviors that have no Go equivalent:
+- `trap '' ERR` to disable error trapping in suggest.sh (line 26 of deleted file) -- Go has no equivalent of trap disabling
+- `source`-based function loading from `aether-utils.sh` -- Go requires explicit imports and dependency injection
+- `jq` streaming pipelines for JSON transforms -- Go needs manual struct unmarshaling
 
 **Why it happens:**
-The `RankContextCandidates` function in `pkg/colony/context_ranking.go` uses a greedy inclusion strategy sorted by composite score (0.40 relevance weight, 0.20 trust/freshness/confirmation). Prior-review content has high relevance (it is about the actual codebase) but is verbose by nature. Without strict character limits per domain or a summarization step, review findings will dominate the budget.
+The shell scripts were marked DEPRECATED but their logic was the most complete implementation. The current Go stubs (e.g., `init_research.go` at 597 lines vs `scan.sh` at 867 lines + `suggest.sh` at 618 lines) reimplemented the *surface* (same output JSON shape) but simplified the *behavior* (fewer edge cases, no error recovery, no retry logic). When restoring the full intelligence, developers naturally look at the shell version as the reference implementation and try to match it exactly, ignoring that Go's concurrency model requires fundamentally different control flow.
 
-**How to avoid:**
-- Set a hard cap on the prior-reviews section: no more than 800 characters in normal mode, 400 in compact
-- Summarize at the domain level, not the individual finding level: "security: 2 critical, 3 warning" not full descriptions
-- Only include unresolved findings with severity >= "warning" in the injection
-- Set priority to 8 (between pheromones at 9 and clarified-intent at 8) so review content trims before pheromones and blockers
-- Consider making the section eligible for trimming early by giving it a moderate freshness score that decays with phase age
+**Consequences:**
+- Deadlocks when suggest-analyze and colony-prime both read pheromones concurrently
+- Panic in file locking when the shell script's "retry with backoff" pattern is replaced by a single Go call without timeout
+- Subtle behavioral differences between restored Go code and the shell reference that only manifest under load
 
-**Warning signs:**
-- Colony-prime output shows "trimmed" list includes pheromones or blockers when prior-reviews is present
-- Workers ignore pheromone signals after review findings accumulate past phase 3
-- `colony-prime` log line shows used chars near 8000 with prior-reviews taking >30% of budget
+**Prevention:**
+- Treat the shell scripts as *specification documents*, not reference implementations. Extract the *what* (inputs, outputs, edge cases) and rewrite the *how* in Go idioms.
+- For each restored feature, write the Go implementation first, then diff the output JSON against what the shell version would have produced using a golden-file test.
+- Use `context.Context` with timeouts on all storage operations, especially suggest-analyze which reads pheromones, constraints, session state, and file patterns.
+- Never port bash `trap` logic -- use Go's `defer` and explicit error returns instead.
 
-**Phase to address:**
-Phase that implements colony-prime injection (the Part B integration phase). The ranking parameters must be tuned with a budget test before the feature ships.
+**Detection:**
+- `go test -race ./...` reveals data races during suggest-analyze
+- Colony-prime hangs when suggest-analyze holds a lock that colony-prime needs
+- Golden-file tests show output mismatch with shell reference
 
 ---
 
-### Pitfall 2: Agent Write-Scope Escape Via New Write Tool Access
+### Pitfall 2: Deleting Self-Hosting Artifacts That Downstream Repos Depend On
 
 **What goes wrong:**
-The v1.9 plan gives 7 review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) the Write tool so they can persist findings. Currently, 6 of these 7 agents are explicitly read-only by design. The agent definitions contain strong language like "Your constraint is absolute: you are read-only. No Write. No Edit. No Bash." (Auditor, line 12). Adding Write to these agents creates a trust boundary violation: a review agent that finds a security issue could theoretically "fix" it during a review pass, bypassing the Builder TDD workflow.
+Aether was used to develop itself, producing artifacts that exist in the repo but are also consumed by downstream repos via `aether update`. The most dangerous artifacts are:
+
+1. **`.aether/agents/`** -- A third copy of agent definitions (26 files) that differs from both `.claude/agents/ant/` and `.aether/agents-claude/`. Every single file differs (verified via `diff -rq`). The install command (`install_cmd.go` line 608) explicitly skips `.aether/agents/` with the comment "agents/ is opencode-only, agents-claude/ is the packaging mirror." But if any downstream repo was installed from a version that copied `.aether/agents/`, deleting it breaks that repo's `aether update`.
+
+2. **`.aether/chambers/`** -- 241 tracked files (54,832 lines) of entombed colony data from Aether developing itself. These are historical artifacts with no functional purpose, but the `.gitkeep` in chambers/ suggests the directory structure is intentional.
+
+3. **`.aether/CONTEXT.md`** -- A self-hosting colony context file (phase 1, "Assumptions and gap audit", First Mound milestone) tracked in git. This is runtime data that was committed accidentally.
+
+4. **`.aether/CROWNED-ANTHILL.md`** -- A seal output from a previous self-hosting colony, tracked in git.
+
+5. **`.aether/QUEEN.md`** -- Contains wisdom accumulated during self-hosting, including patterns specific to the Aether codebase that would be irrelevant or misleading for downstream repos.
+
+6. **`.aether/data/COLONY_STATE.json`** -- Explicitly tracked in git despite `.aether/data/` being gitignored (the gitignore has a negation exception for this one file). This is self-hosting state.
 
 **Why it happens:**
-The hook system (`protectedHookWriteReason` in `cmd/hook_cmds.go`) only protects `.aether/data/`, `.aether/dreams/`, `.env*`, `.codex/config.toml`, and `.github/workflows/`. It does not restrict writes to only approved ledger paths. A well-intentioned agent with Write access could modify source files or test files during a review pass.
+The `.aether/.gitignore` only excludes `data/`, `dreams/`, `checkpoints/`, and `locks/`. It does not exclude `CONTEXT.md`, `CROWNED-ANTHILL.md`, `chambers/`, or `QUEEN.md`. During self-hosting colonies, these files were created by the runtime and committed as part of normal development workflow. The install/publish system copies companion files to the hub, so self-hosting artifacts were published to `~/.aether/system/` and then distributed to downstream repos via `aether update`.
 
-**How to avoid:**
-- Extend the hook system (`protectedHookWriteReason` or a new function) to enforce a write-scope whitelist for review agents: they may ONLY write to `.aether/data/reviews/`
-- Add explicit write-scope instructions to each agent definition: "You may only write files under `.aether/data/reviews/`. Any write attempt outside this path will be blocked."
-- Keep the existing read-only language in agent definitions but scope the exception: "You are read-only for all source code, test files, and configuration. You have write access ONLY for `.aether/data/reviews/{domain}/ledger.json`."
-- Test the hook protection with a dedicated test case that attempts writes outside the reviews directory
+**Consequences:**
+- Downstream repos receive irrelevant Aether-specific wisdom, chamber archives, and colony state via `aether update`
+- Deleting artifacts from the repo without updating the hub leaves downstream repos with stale files
+- Deleting artifacts from the hub without updating the repo breaks the publish pipeline's integrity check
+- Removing `.aether/agents/` could break repos that were installed from an older version
 
-**Warning signs:**
-- Review agents modify source files during a continue pass
-- Medic health check detects changed files outside build artifacts
-- Audit findings reference code that was "fixed" during the audit itself
+**Prevention:**
+- Before deleting any tracked `.aether/` file, run `aether integrity` to understand the full publish chain
+- Check the hub (`~/.aether/system/`) for copies of the artifact before deleting from the repo
+- Delete in the correct order: (1) remove from git, (2) republish with `aether publish`, (3) verify downstream repos update cleanly
+- Add comprehensive `.gitignore` rules for all runtime-generated paths: `CONTEXT.md`, `CROWNED-ANTHILL.md`, `chambers/`, `QUEEN.md` (or make QUEEN.md a template that gets populated per-repo)
+- For `.aether/agents/` specifically: determine whether any downstream code references it. If not, delete it and update `.gitignore`. If yes, add migration logic to `aether update`.
 
-**Phase to address:**
-Phase that updates agent definitions (the agent changes phase). Write-scope guardrails must ship in the same phase as the Write tool addition, not as a follow-up.
+**Detection:**
+- `git ls-files .aether/ | grep -v agents-claude | grep -v agents-codex | grep -v skills | grep -v commands | grep -v docs | grep -v templates | grep -v utils | grep -v exchange | grep -v .gitignore | grep -v .npmignore` reveals all tracked non-distribution artifacts
+- `aether integrity` after any deletion catches publish chain breaks
 
 ---
 
-### Pitfall 3: JSON Backward Compatibility Break in codexContinueWorkerFlowStep
+### Pitfall 3: Charter Ceremony Breaking Non-Interactive / CI / Scripted Workflows
 
 **What goes wrong:**
-The v1.9 plan extends `codexContinueWorkerFlowStep` with new fields (`Blockers`, `Duration`, `Report`). The `mergeExternalContinueResults` function in `cmd/codex_continue_finalize.go` constructs flow steps by copying specific fields from the dispatch struct. If new fields are added to the struct but the merge function is not updated to copy them, the data is silently dropped. Additionally, if wrappers (`.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md`) submit completion files with the new fields but the Go binary is an older version, the old binary will silently ignore the unknown JSON fields (Go's default behavior with `json.Unmarshal`). This is benign for new fields but creates a confusing state where reports exist in the completion file but not in the flow step.
+The shell version of the charter ceremony (`scan.sh` -> `charter-write` -> approval flow) was interactive by design: it scanned the repo, generated a charter, and required user approval before proceeding. The current Go stub (`init_research.go`) generates charter data and pheromone suggestions (10 deterministic patterns, lines 247-357) but has **no approval flow** (verified: zero matches for "charter.*approv" or "confirm" in cmd/).
+
+Adding a rich init ceremony with approval gates to the existing `/ant-init` command creates a trap: users who currently run `/ant-init "Build feature X"` in automated scripts, CI pipelines, or non-interactive environments will suddenly hit an approval prompt that blocks execution.
 
 **Why it happens:**
-Go's `json.Unmarshal` silently ignores unknown fields by default. There is no schema version field on the completion structures. The `codexContinueExternalDispatch` struct already has `Blockers` and `Duration` fields, but `codexContinueWorkerFlowStep` does not. The merge function currently only copies `Stage`, `Caste`, `Name`, `Task`, `Status`, and `Summary` -- any new fields must be explicitly added.
+The original shell version was designed for interactive terminal use. The Go migration simplified it to non-interactive output. Restoring the full ceremony means re-adding interactivity, but the command's existing users (and all 50 slash commands that reference init behavior) expect it to work without prompts.
 
-**How to avoid:**
-- Add all new fields to both structs simultaneously: `codexContinueExternalDispatch` and `codexContinueWorkerFlowStep`
-- Update `mergeExternalContinueResults` to copy every new field from the dispatch result into the flow step
-- Add a test that round-trips a completion file through `mergeExternalContinueResults` and verifies all fields survive
-- Do NOT rely on JSON tag `omitempty` to mask missing fields in tests -- test with and without the new fields
-- Add a `Report` field to `codexContinueExternalDispatch` so the wrapper can pass the report content through the completion pipeline
+**Consequences:**
+- CI pipelines that run `/ant-init` as part of setup break
+- Users running `/ant-run` (autopilot) hit an unexpected approval prompt on the first build
+- Codex CLI (runtime-native, no wrapper) cannot display interactive prompts in the same way as Claude/OpenCode wrappers
 
-**Warning signs:**
-- Continue worker reports show `Blockers: null` or `Duration: 0` when the completion file contained values
-- `review.json` has summary strings but no structured blocker details
-- Tests pass but the `.md` outcome reports are missing report content
+**Prevention:**
+- Add a `--yes` / `--non-interactive` / `--skip-approval` flag to the charter ceremony
+- Make the approval step opt-in via a config option or pheromone signal, not the default
+- The ceremony should produce the charter data regardless of interactivity; the approval gate is a separate concern that only applies in interactive contexts
+- For Codex, the ceremony must work without terminal prompts -- output charter data to stdout and let the wrapper decide whether to present an approval step
+- Default behavior should match current behavior (no approval required) to avoid breaking existing workflows
 
-**Phase to address:**
-Phase that implements Part A (continue-review worker outcome reports). This is the first implementation phase and must get the struct extensions right.
+**Detection:**
+- `/ant-run` hangs after init phase when run in a non-interactive shell
+- Codex users report that init produces no output (because it's waiting for approval)
+- CI test suite fails when init is called programmatically
 
 ---
 
-### Pitfall 4: File Locking Contention Between Review Writes and Colony-Prime Reads
+### Pitfall 4: colony-prime_context.go Modifications Causing Cascade Test Failures
 
 **What goes wrong:**
-The domain-ledger system creates 7 JSON files under `.aether/data/reviews/{domain}/ledger.json`. During a continue pass, review agents write findings to these files via the `review-ledger-write` subcommand. Simultaneously, if colony-prime is called (e.g., for the next worker dispatch), it reads ledger files to build the prior-reviews section. The storage layer uses per-file locks (one lock file per data file in `.aether/locks/`). If a review agent holds a write lock on `reviews/security/ledger.json` while colony-prime tries to read it, colony-prime will block until the write completes. On slow file systems or with large ledgers, this could cause worker timeouts.
+`colony_prime_context.go` is 800 lines and is the single most complex function in the codebase. It assembles 9+ sections within an 8,000 character budget. The v1.11 changes touch at least three areas that feed into colony-prime:
+
+1. **Suggest-analyze restoration** adds pheromone suggestions that colony-prime injects into worker context
+2. **Rich init-research** produces colony context (tech stack, governance, complexity) that colony-prime uses for worker priming
+3. **Charter data** may need to be included in the colony-prime context for workers
+
+Each modification risks changing the character budget allocation, causing different sections to be trimmed. Since 15 test files reference `colony_prime_context` (verified via grep), any change can cascade into dozens of test failures with confusing error messages about "trimmed" sections.
 
 **Why it happens:**
-The `Store.LoadJSON` method acquires a shared (read) lock via `locker.RLock`, while `Store.SaveJSON` acquires an exclusive (write) lock via `locker.Lock`. The lock granularity is per-file, so concurrent access to different domain ledgers is fine. But the `review-ledger-summary` subcommand (used by colony-prime) may need to read all 7 domain files, holding 7 shared locks. If a review agent is writing to any of them at the same time, the summary call blocks.
+The function uses a greedy ranking algorithm (`RankContextCandidates`) with composite scores. Adding new section types changes the ranking pool, which changes which sections get included and which get trimmed. The existing tests have hardcoded expectations about which sections appear in the output.
 
-**How to avoid:**
-- Use `UpdateFile` (which holds an exclusive lock) for `review-ledger-write` to ensure atomic read-modify-write
-- For `review-ledger-summary`, read each domain file independently with `LoadRawJSON` and tolerate missing files (a domain may have no findings yet)
-- Never hold locks on multiple files simultaneously -- process domains sequentially in the summary reader
-- Consider caching the summary in a single `reviews/summary.json` file that is updated only when a write occurs, so colony-prime reads one file instead of seven
-- Add a timeout to the colony-prime prior-reviews section: if reading takes >2 seconds, skip the section and log a warning
+**Consequences:**
+- A change to suggest-analyze causes pheromone signals to be trimmed (they drop from priority 9 to outside the budget)
+- A change to init-research context causes queen wisdom to be trimmed
+- Tests that assert on specific section content fail with "expected section X, got section Y" errors
+- Debugging is painful because the failure is in the ranking algorithm, not in the feature code
 
-**Warning signs:**
-- Worker dispatch times increase after phase 3 when ledgers have accumulated entries
-- Colony-prime log shows "failed to read reviews" errors in stderr
-- Intermittent test failures in CI due to lock contention under parallel test execution
+**Prevention:**
+- Add new sections with explicit budget caps (e.g., suggest-analyze: max 400 chars, charter: max 300 chars)
+- Set new section priorities deliberately -- suggest-analyze should be priority 5-6 (below pheromones at 9, above rolling summary at 1)
+- Before modifying colony-prime, add a "budget snapshot" test that records the current section allocation and fails only if the total exceeds 8000 chars
+- Make new sections opt-in via a flag or config so the existing test suite passes unchanged
+- Consider splitting `buildColonyPrimeOutput` into smaller composable functions before adding new sections
 
-**Phase to address:**
-Phase that implements the domain-ledger Go subcommands (the ledger runtime phase). The locking strategy must be decided before writing the subcommands.
+**Detection:**
+- `go test ./cmd/ -run TestColonyPrime` fails after unrelated changes
+- Workers report missing pheromone signals or queen wisdom after a colony-prime change
+- Character budget utilization jumps from ~65% to >90% after adding new sections
 
 ---
 
-### Pitfall 5: Stale Review Data Accumulation Without Lifecycle Cleanup
+## Moderate Pitfalls
+
+### Pitfall 5: Mirror Divergence Between .aether/agents/ and .aether/agents-claude/
 
 **What goes wrong:**
-Review findings accumulate across phases but have no automatic cleanup. After a 15-phase colony, each domain ledger could contain 50-100 entries. When the colony is sealed and a new colony is initialized in the same repo, the old review files persist under `.aether/data/reviews/`. The new colony's workers will see findings from the previous colony that reference files and line numbers that no longer exist.
+Two directories contain agent definitions that should be identical but are not:
+- `.aether/agents/` (26 files) -- older format, missing structured metadata like `tools`, `color`, `model`
+- `.aether/agents-claude/` (26 files) -- newer format with structured frontmatter
+
+Every single file differs (verified via `diff -rq`). The `.aether/agents/` versions have simpler descriptions and lack the structured execution flow that `.aether/agents-claude/` has. During cleanup, if the wrong copy is kept, downstream repos get stale agent definitions.
 
 **Why it happens:**
-The v1.9 design says findings are "colony-scoped" and "archived at seal," but there is no existing mechanism for seal-phase cleanup of custom data directories. The seal command (`cmd/codex_workflow_cmds.go`) and entomb command (`cmd/entomb_cmd.go`) handle `COLONY_STATE.json`, `pheromones.json`, `instincts.json`, and session files, but there is no hook for custom data directories. The `cleanupStaleContinueReports` function only cleans `review.json` from build artifacts, not the domain-ledger files.
+`.aether/agents/` appears to be a legacy directory from before the packaging mirror system was established. The CLAUDE.md documents that `.aether/agents-claude/` is the "packaging mirror" and `.claude/agents/ant/` is canonical. But `.aether/agents/` is also tracked in git and may be referenced by older versions of the install command.
 
-**How to avoid:**
-- Add a cleanup step to the seal flow that archives `reviews/` to the chamber (alongside other colony data)
-- When a new colony is initialized (`/ant-init`), clear any existing `reviews/` directory
-- Add `reviews/` to the entomb chamber contents so review history is preserved in archives
-- In `review-ledger-read`, filter by colony goal or phase range to avoid cross-colony contamination
-- Consider adding a `review-ledger-purge` subcommand for manual cleanup
+**Prevention:**
+- Determine which directory the install/publish system actually copies from (check `install_cmd.go` sync pairs)
+- Delete the unused directory after confirming no code references it
+- Add a CI check that verifies `.aether/agents-claude/` is byte-identical to `.claude/agents/ant/` (the canonical source)
+- Add `.aether/agents/` to `.gitignore` after deletion
 
-**Warning signs:**
-- After sealing and reinitializing, workers reference findings from the old colony
-- `aether status` shows review counts that include findings from a completed colony
-- Ledger entries contain file paths that no longer exist in the codebase
-
-**Phase to address:**
-Phase that integrates ledger lifecycle with seal/entomb/status (the lifecycle integration phase). This must not be deferred to a later milestone.
+**Detection:**
+- `diff -rq .aether/agents/ .aether/agents-claude/` shows all files differ
+- `aether update` in a downstream repo installs agent definitions from the wrong directory
 
 ---
 
-### Pitfall 6: Mirror Sync Drift When Agent Definitions Change
+### Pitfall 6: Suggest-Analyze Pattern Drift Between Shell Reference and Go Implementation
 
 **What goes wrong:**
-The v1.9 plan updates 7 agent definitions to add Write tool and findings instructions. These changes must be reflected in 4 locations per agent: `.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`, and `.codex/agents/`. The CLAUDE.md documents that `.claude/agents/ant/*.md` is canonical and `.aether/agents-claude/*.md` is a byte-identical packaging mirror. If the Write tool addition is made to the Claude agent but the Codex TOML translation is forgotten, Codex workers will run without Write access and silently fail to persist findings. The Medic health check (`cmd/medic_wrapper.go`) validates mirror counts but not content parity.
+The shell `suggest.sh` (618 lines) implemented suggest-analyze with 10+ codebase analysis patterns that produced pheromone suggestions. The current Go stub in `init_research.go` implements 10 deterministic patterns (lines 247-357) but the patterns are **simpler** than the shell version. The shell version used `grep` with regex patterns to detect code smells, anti-patterns, and project-specific signals. The Go version uses simple file-existence checks (`hasFile`, `fileContains`).
+
+If the restoration targets the shell version's full pattern set, the Go implementation will need substantially more complex analysis logic (regex scanning, file content analysis, pattern matching). If it targets the current Go stub, the restoration is incomplete.
 
 **Why it happens:**
-There are 25 agents x 4 mirror locations = 100 files to keep in sync. The Codex TOML format is structurally different from the Markdown format, requiring manual translation. The Medic check counts files but does not diff content. No CI check enforces mirror parity.
+The Go migration simplified suggest-analyze from regex-based code analysis to file-presence heuristics. This was a deliberate simplification during the migration, not a bug. But the PROJECT.md lists "Suggest-analyze restoration (automatic pheromone suggestions during builds)" as a v1.11 requirement, implying the full shell functionality should be restored.
 
-**How to avoid:**
-- Update all 4 locations for each agent in a single commit
-- Add a test that verifies the Write tool is present in all 4 mirrors for review agents
-- Extend the Medic wrapper check to flag agents with different tool lists across mirrors
-- Include mirror sync verification in the phase acceptance criteria
+**Prevention:**
+- Before implementing, enumerate the exact patterns from the shell version and decide which ones to restore. Not all shell patterns are valuable -- some were bash-specific (e.g., checking for `source` statements).
+- For each restored pattern, write a Go implementation that produces equivalent output, not equivalent code. The Go version should use `filepath.Walk` and `regexp` instead of `find` and `grep`.
+- Add golden-file tests that compare Go output against shell reference output for the same input directory.
+- Consider whether the current 10 file-presence patterns are sufficient for v1.11 and defer the full regex-based analysis to a later milestone.
 
-**Warning signs:**
-- Codex continue passes show no review findings
-- Medic reports mirror count mismatch (currently checks 25 Claude + 25 Codex)
-- `aether update` does not propagate Write tool changes to downstream repos
-
-**Phase to address:**
-Phase that updates agent definitions. The sync must be verified as part of that phase's acceptance criteria, not deferred to a later integration phase.
+**Detection:**
+- Suggest-analyze produces fewer suggestions than the shell version for the same codebase
+- Suggestions are less specific (file-existence based vs code-pattern based)
+- Users who remember the shell version's suggestions notice missing patterns
 
 ---
 
-### Pitfall 7: Race Condition Between Review Writes and Continue-Finalize Reads
+### Pitfall 7: OpenCode Parity Gaps Hidden by Identical File Counts
 
 **What goes wrong:**
-In the external continue flow, the wrapper spawns review agents that run in parallel. Each agent is expected to write findings to the domain ledger via `review-ledger-write`. The `runCodexContinueFinalize` function then reads the worker results from the completion file. But the ledger writes happen inside the agent execution, not inside the finalize function. If an agent completes its task but the ledger write fails (disk full, permission error, lock timeout), the finalize function has no way to know. The `review.json` will show the worker "completed" but the ledger will be missing those findings.
+Claude and OpenCode command directories have identical file counts (51 each) and identical file sizes for matching commands (verified via diff). But "same number of files" does not mean "same behavior." The OpenCode commands may have different runtime command calls, different flag formats, or different error handling that only manifests at runtime.
+
+The v1.11 plan includes "Platform hardening -- fix OpenCode parity gaps." Without a systematic diff of the actual command content (not just file names), parity gaps will be missed.
 
 **Why it happens:**
-The current continue flow treats agent execution and data persistence as separate concerns. The `codexContinueWorkerFlowStep` captures status and summary from the completion file, but has no field to indicate whether findings were persisted. The ledger write is a side effect of agent execution, not a tracked outcome.
+OpenCode uses a different command surface than Claude Code. The wrapper markdown files may call the same Go subcommands but with different flags, different output formatting, or different error handling. The Medic health check validates mirror counts but not behavioral parity.
 
-**How to avoid:**
-- Make ledger writing the responsibility of the finalize function, not the agents. Agents return structured findings in their completion payload; finalize persists them to the ledger.
-- Alternatively, if agents write directly, add a verification step in finalize that reads the ledger after all agents complete and confirms the expected number of new entries.
-- Add a `findings_persisted` boolean to the worker flow step so the review report can flag incomplete persistence.
-- Test the scenario where an agent completes but its ledger write fails, and verify the system degrades gracefully.
+**Prevention:**
+- For each of the 51 commands, diff the actual content between `.claude/commands/ant/` and `.opencode/commands/ant/` and classify differences as: (a) platform-specific formatting (acceptable), (b) missing flags (bug), (c) different subcommand calls (bug), (d) different error handling (bug)
+- Focus especially on commands that were added or modified in v1.10 (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol) as these are most likely to have parity gaps
+- Add a test that extracts Go CLI calls from both platforms' wrapper markdown and verifies they use the same flags
+- For the 26 Codex TOML agents, verify each agent's `tools` list matches the corresponding Claude agent's tools
 
-**Warning signs:**
-- Ledger entry counts do not match the number of completed review workers
-- Workers show "completed" status but prior-reviews section shows fewer findings than expected
-- Intermittent missing findings in CI that correlate with parallel test execution
+**Detection:**
+- Running the same command on Claude and OpenCode produces different output
+- OpenCode commands fail with "unknown flag" errors that work on Claude
+- Codex agents lack tools that their Claude counterparts have
 
-**Phase to address:**
-Phase that implements the ledger write flow. The decision about who writes (agents vs finalize) must be made before implementation begins.
+---
 
-## Technical Debt Patterns
+### Pitfall 8: 54,832 Lines of Chamber Archives Bloating the Repo
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Letting agents write directly to ledger files instead of routing through finalize | Simpler implementation, fewer code changes to finalize pipeline | Race conditions, untracked persistence failures, no single source of truth for "what was written" | Never -- the finalize function must own persistence |
-| Using `json.Unmarshal` with silent unknown field skipping for ledger entries | No version field needed, backward compatible | Cannot detect schema mismatches, silent data loss when fields are renamed | Only if a schema version field is added simultaneously |
-| Reusing the `codexContinueWorkerFlowStep` struct for report content instead of a dedicated struct | Fewer type definitions | Struct becomes a grab-bag of optional fields, unclear which fields are populated in which context | Acceptable if fields are well-documented with comments indicating when they are populated |
-| Skipping mirror sync for Codex TOML in the initial phase | Faster initial delivery | Codex users get silent failures, discover the gap in production | Only if Codex is explicitly marked as "best-effort" and the phase plan documents the deferral |
+**What goes wrong:**
+`.aether/chambers/` contains 241 tracked files totaling 54,832 lines of entombed colony data from Aether developing itself. These include COLONY_STATE.json, CROWNED-ANTHILL.md, HANDOFF.md, colony-archive.xml, dreams/, and constraints.json for 15+ past colonies. This data is historical and serves no functional purpose for downstream repos, but it ships with every `aether update`.
 
-## Integration Gotchas
+**Why it happens:**
+The entomb command archives colony data to `.aether/chambers/` and commits it. When Aether was used to develop itself, every completed colony was entombed in the same repo. The `.gitignore` for `.aether/` does not exclude chambers.
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Colony-prime prior-reviews injection | Reading all 7 domain ledger files synchronously, blocking the context builder | Cache a summary file (`reviews/summary.json`) updated on write, read one file in colony-prime |
-| Hook system write-scope enforcement | Only protecting `.aether/data/` as a whole, not scoping review agents to `reviews/` subdirectory | Add a new write-scope check that validates the target path matches the agent's permitted write directory |
-| Seal lifecycle | Forgetting to archive `reviews/` directory, leaving stale findings for the next colony | Add `reviews/` to the seal archive list alongside `pheromones.json` and `instincts.json` |
-| Status command | Not showing review counts in `aether status`, making accumulation invisible to users | Add a "Reviews" row to the status output showing open findings per domain |
-| `review-ledger-write` concurrency | Using `SaveJSON` (which does a full file rewrite) when multiple agents may write to the same domain | Use `UpdateFile` or `UpdateJSONAtomically` to ensure atomic read-modify-write under exclusive lock |
-| Wrapper completion file | Adding `Report` field to wrapper output but not validating it in `loadExternalContinueCompletion` | Parse the `report` field in the completion loader and propagate it through `mergeExternalContinueResults` |
+**Consequences:**
+- Repo size grows unnecessarily (54K+ lines of historical data)
+- `aether update` transfers this data to every downstream repo
+- Chamber archives from the Aether repo's own colonies are irrelevant to users building their projects
+- New users see 15+ chamber directories and may be confused about what they are
 
-## Performance Traps
+**Prevention:**
+- Move historical chambers to a separate branch or archive (e.g., `git mv .aether/chambers/ chambers-archive/` then commit and delete)
+- Add `.aether/chambers/` to `.gitignore` (except `.gitkeep`) so future entombs are not tracked
+- Keep the `.gitkeep` so the directory structure exists for future entombs
+- Consider whether chambers should be stored in the hub (`~/.aether/chambers/`) rather than in the repo
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Unbounded ledger growth per domain | Colony-prime reads slow down after phase 5; `review-ledger-summary` takes >500ms | Cap entries per domain (e.g., 100), prune resolved entries older than the current colony, compact on resolve | Phase 5+ in a long colony (10+ phases) |
-| Colony-prime reading 7 domain files on every call | Worker dispatch latency increases by 200-500ms per worker | Cache summary in a single file; invalidate cache on write | When 4+ domains have entries |
-| Report content in completion file bloats the completion JSON | `loadExternalContinueCompletion` parses a large JSON blob; memory usage spikes | Strip report content to essentials in the completion file; write full report to a separate file referenced by path | When reports exceed 10KB per worker |
-| Ledger ID computation (e.g., `sec-2-001`) using sequential scanning | `review-ledger-write` reads the full ledger to find the next ID, O(n) per write | Track the next ID in a metadata field at the top of the ledger JSON, increment atomically | When a domain has 50+ entries |
+**Detection:**
+- `git ls-files .aether/chambers/ | wc -l` returns 241 (should be 1 for .gitkeep)
+- `aether update` in a fresh repo creates `.aether/chambers/` with historical data
 
-## Security Mistakes
+---
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Review agent findings contain file paths that could leak sensitive directory structures | LOW -- findings are colony-scoped, not shared cross-colony, but could appear in chamber archives | Sanitize absolute paths to relative paths before storing in ledger entries |
-| Prompt injection via malicious review finding descriptions injected into colony-prime | MEDIUM -- if an agent produces a finding with "ignore previous instructions" content, it gets injected into subsequent worker prompts | Apply the existing `SanitizeSignalContent` or `DetectPromptIntegrityFindings` to review finding descriptions before storage |
-| Write-scope bypass through path traversal in agent write targets | HIGH -- an agent could write `../../COLONY_STATE.json` if write targets are not canonicalized | Canonicalize all write targets using `filepath.Abs` and validate they are under `.aether/data/reviews/` before writing |
+## Minor Pitfalls
 
-## UX Pitfalls
+### Pitfall 9: Bayesian Trust Scoring Restoration Requiring Dependency Chain
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Workers produce different review persistence behavior across Claude, OpenCode, and Codex | User sees findings on Claude but not Codex, confusion about whether reviews are working | Test all 3 platforms in the same phase; use the runtime-ledger approach (Go binary writes) instead of relying on agent-side writes |
-| `aether status` shows stale review counts from a previous colony | User thinks there are unresolved issues when the colony is fresh | Clear reviews on `/ant-init`; show colony-scoped review counts only |
-| Review findings reference line numbers that shift between phases | Worker tries to fix an issue at line 42 but the code has moved to line 67 | Include a "file hash" or "context snippet" in findings instead of relying on exact line numbers; consider line numbers advisory, not authoritative |
+**What goes wrong:**
+The shell `trust-scoring.sh` (354 lines) implemented a 40/35/25 weighted scoring system with 60-day half-life decay and 7 trust tiers. This was part of the "Structural Learning Stack" that also included `learning.sh` (2,007 lines), `event-bus.sh` (308 lines), and `instinct-store.sh` (408 lines). Restoring trust scoring without its dependency chain (event bus for observations, instinct store for persistence, learning pipeline for promotion) produces an orphaned feature that calculates scores but has nowhere to store or use them.
+
+**Prevention:**
+- If restoring trust scoring, restore the full chain: observation capture -> trust calculation -> instinct creation -> queen promotion -> hive promotion
+- Alternatively, defer trust scoring and focus on the features that have clear standalone value (suggest-analyze, charter, init-research)
+
+---
+
+### Pitfall 10: Codex CLI Cannot Display Rich Init Ceremony Output
+
+**What goes wrong:**
+Codex is "runtime-native" with no markdown wrapper ceremony. The CLAUDE.md states: "Codex gets UX improvements through the runtime renderer only." If the rich init ceremony produces ANSI-formatted output, colored text, or multi-stage interactive prompts, these must be rendered by `cmd/codex_visuals.go` rather than by markdown wrappers. The current Codex visuals system (`casteColorMap`, `casteEmojiMap`, `stage markers`) supports banners and progress bars but may not support the full ceremony format.
+
+**Prevention:**
+- Design the ceremony output as structured JSON from the Go runtime, then render it differently per platform: markdown for Claude/OpenCode, ANSI for Codex
+- Keep ceremony state in COLONY_STATE.json so all platforms can read it regardless of rendering capability
+
+---
+
+### Pitfall 11: suggest-analyze Deduplication Against Existing Pheromones
+
+**What goes wrong:**
+The current suggest-analyze in `init_research.go` generates suggestions without checking whether equivalent pheromone signals already exist. The shell version (`suggest.sh`) had deduplication logic that compared suggestions against `pheromones.json` and session suggestions. Without dedup, running suggest-analyze multiple times (e.g., during build step 4.2) produces duplicate suggestions that pollute the pheromone signal space.
+
+**Prevention:**
+- Before generating suggestions, load existing pheromones and skip patterns that match existing active signals
+- Use the content hash deduplication from the pheromone system (SHA-256 of type + content)
+
+---
+
+## Phase-Specific Warnings
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Self-hosting cleanup | Deleting artifacts that break downstream repos | Run `aether integrity` before and after; test `aether update` in a fresh repo |
+| Self-hosting cleanup | Removing `.aether/agents/` when older install code references it | Check `install_cmd.go` sync pairs; add migration to `aether update` |
+| Charter ceremony | Adding interactivity that breaks non-interactive workflows | Add `--yes` flag; default to non-interactive |
+| Init-research | Restoring shell patterns that don't map cleanly to Go | Extract specs from shell, implement idiomatically in Go |
+| Suggest-analyze | Pattern drift between shell reference and Go stub | Write golden-file tests comparing outputs |
+| Colony-prime modifications | Budget blowout from new sections | Add budget caps per section; snapshot test before changes |
+| Platform hardening | Parity gaps hidden by identical file counts | Diff actual command content, not just file names |
+| Chamber cleanup | Accidentally deleting .gitkeep | Remove files, keep .gitkeep; gitignore chambers except .gitkeep |
+
+---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Agent Write tool added:** Often missing write-scope guardrails in agent definition body -- verify each agent has explicit "only write to reviews/" instructions AND hook enforcement
-- [ ] **Ledger subcommands working:** Often missing the `UpdateJSONAtomically` call for concurrent write safety -- verify write path uses exclusive lock
-- [ ] **Colony-prime injection:** Often missing budget test -- verify colony-prime output with populated reviews still fits within 8000 chars and does not trim pheromones
-- [ ] **Mirror sync:** Often missing Codex TOML mirrors -- verify all 7 agents have updated TOML files with Write tool listed
-- [ ] **Seal lifecycle:** Often missing reviews cleanup on seal -- verify `aether seal` archives the reviews directory
-- [ ] **Report content propagation:** Often missing the `Report` field in `mergeExternalContinueResults` -- verify the merge function copies the new field
-- [ ] **Deterministic IDs:** Often missing ID collision handling -- verify `sec-2-001` style IDs handle the case where the entry already exists
-- [ ] **Summary caching:** Often missing cache invalidation -- verify summary.json is regenerated when any ledger changes
+- [ ] **Shell reference fully audited:** Often only the main function is ported, not the error handling or edge cases -- verify all paths from the shell version are covered
+- [ ] **All 4 agent mirrors updated:** Often Claude is updated but Codex TOML is forgotten -- verify all 26 agents x 4 locations
+- [ ] **Downstream repos tested:** Often cleanup works in the Aether repo but breaks `aether update` in downstream repos -- test in a fresh clone
+- [ ] **Non-interactive mode works:** Often ceremony is tested interactively but not in CI/pipe mode -- test with `echo | aether init`
+- [ ] **Colony-prime budget still fits:** Often new sections push budget over 8000 chars -- run budget test after every colony-prime change
+- [ ] **Chamber archives not shipped:** Often chambers are gitignored but already exist in the hub -- clear hub too
+- [ ] **Codex renders ceremony output:** Often ceremony works on Claude/OpenCode but produces raw JSON on Codex -- test on all 3 platforms
+
+---
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Token budget blowout | LOW | Adjust priority score or add character cap in colony-prime section builder; no data migration needed |
-| Agent write-scope escape | MEDIUM | Revert Write tool from affected agents; add hook enforcement; audit any files modified outside reviews/ |
-| JSON backward compatibility break | MEDIUM | Add missing fields to merge function; no data migration needed since Go ignores unknown fields |
-| File locking contention | LOW | Add summary caching; no data format change needed |
-| Stale review data accumulation | MEDIUM | Add seal cleanup step; run `review-ledger-purge` or manually delete `reviews/` directory |
-| Mirror sync drift | LOW | Update missing mirror files; run Medic check to verify counts |
-| Race condition (write vs finalize) | HIGH | Refactor to make finalize own persistence; may require re-running continue passes for affected phases |
+| Shell-to-Go port deadlock | LOW | Add timeouts to all storage calls; no data migration needed |
+| Self-hosting artifact breakage | MEDIUM | Restore from git; republish hub; notify downstream repos to `aether update --force` |
+| Charter ceremony breaking CI | LOW | Add `--yes` flag; update CI scripts; no data migration |
+| Colony-prime budget blowout | LOW | Adjust section caps; revert to previous ranking weights |
+| Mirror sync drift | LOW | Re-sync from canonical source; run Medic check |
+| Chamber bloat | LOW | Move to archive branch; add gitignore; republish |
 
-## Pitfall-to-Phase Mapping
-
-How roadmap phases should address these pitfalls.
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Token budget blowout from prior-reviews | Colony-prime injection phase | Budget test: colony-prime with 50 findings across 7 domains stays under 8000 chars |
-| Agent write-scope escape | Agent definition update phase | Hook test: review agent attempting to write outside reviews/ is blocked |
-| JSON backward compatibility break | Part A implementation (continue-review reports) | Round-trip test: completion file with all new fields survives merge |
-| File locking contention | Ledger runtime subcommands phase | Concurrent write test: 3 goroutines writing to same domain simultaneously |
-| Stale review data accumulation | Lifecycle integration (seal/entomb) phase | Seal test: reviews/ directory is archived and cleared on new init |
-| Mirror sync drift | Agent definition update phase | Mirror parity test: all 4 locations have matching tool lists |
-| Race condition (review writes vs finalize reads) | Ledger write flow design phase | Failure injection test: agent completes but ledger write fails, system degrades gracefully |
+---
 
 ## Sources
 
-- Direct codebase analysis of `cmd/colony_prime_context.go` (sections, priority values, budget handling)
-- Direct codebase analysis of `pkg/colony/context_ranking.go` (ranking algorithm, budget enforcement)
-- Direct codebase analysis of `cmd/codex_continue_finalize.go` (merge function, review report generation)
-- Direct codebase analysis of `cmd/codex_continue_plan.go` (dispatch struct definitions)
-- Direct codebase analysis of `pkg/storage/storage.go` (locking strategy, atomic write, SaveJSON)
-- Direct codebase analysis of `pkg/storage/lock.go` (per-file locking, shared vs exclusive)
-- Direct codebase analysis of `cmd/hook_cmds.go` (write protection, path normalization)
-- Direct codebase analysis of `pkg/colony/sanitize.go` (content sanitization patterns)
-- Direct codebase analysis of `.claude/agents/ant/aether-auditor.md`, `aether-gatekeeper.md`, `aether-watcher.md` (current read-only constraints)
-- Direct codebase analysis of `cmd/codex_build.go` (existing worker report writing pattern)
+- Direct codebase analysis: git history of commits `92d6c8d6` and `0063be8b` (58 deleted shell scripts, 31,411 lines)
+- Direct codebase analysis: `cmd/init_research.go` (597 lines, current Go stub)
+- Direct codebase analysis: `cmd/colony_prime_context.go` (800 lines, 15 test files reference it)
+- Direct codebase analysis: `cmd/install_cmd.go` (sync pairs, `.aether/agents/` handling)
+- Direct codebase analysis: `.aether/agents/` vs `.aether/agents-claude/` (all 26 files differ)
+- Direct codebase analysis: `git ls-files .aether/` (241 chamber files tracked, CONTEXT.md and CROWNED-ANTHILL.md tracked)
+- Shell reference analysis: `suggest.sh` (618 lines), `scan.sh` (867 lines), `trust-scoring.sh` (354 lines), `council.sh` (432 lines), `consolidation.sh` (134 lines), `immune.sh` (515 lines)
+- Platform parity analysis: `.claude/commands/ant/` (51 files) vs `.opencode/commands/ant/` (51 files) -- identical file counts and sizes
+- [clig.dev](https://clig.dev/) -- CLI design guidelines for init ceremony and non-interactive modes
+- [ThoughtWorks CLI guidelines](https://www.thoughtworks.com/en-us/insights/blog/engineering-effectiveness/elevate-developer-experiences-cli-design-guidelines) -- init command overriding existing config pitfall
+- [GitHub copilot-cli #2699](https://github.com/github/copilot-cli/issues/2699) -- real-world example of cross-platform command divergence
 
 ---
-*Pitfalls research for: Aether v1.9 Review Persistence*
-*Researched: 2026-04-26*
+*Pitfalls research for: Aether v1.11 Aether Unification*
+*Researched: 2026-04-28*

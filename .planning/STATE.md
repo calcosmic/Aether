@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.11
 milestone_name: Aether Unification
-status: planning
+status: executing
 stopped_at: Phase 72 context gathered
-last_updated: "2026-04-28T17:46:13.431Z"
-last_activity: 2026-04-28
+last_updated: "2026-04-28T18:10:53.602Z"
+last_activity: 2026-04-28 -- Phase 72 execution started
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 3
+  total_plans: 5
   completed_plans: 3
-  percent: 100
+  percent: 60
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-28)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 71 — platform-hardening
+**Current focus:** Phase 72 — smart-init-charter
 
 ## Current Position
 
-Phase: 72
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-04-28
+Phase: 72 (smart-init-charter) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 72
+Last activity: 2026-04-28 -- Phase 72 execution started
 
 Progress: [░░░░░░░░░░] 0% (0/76 phases complete in this milestone)
 
@@ -93,4 +93,4 @@ Last session: --stopped-at
 Stopped at: Phase 72 context gathered
 Resume file: --resume-file
 
-**Planned Phase:** 71 (Platform Hardening) — 2 plans — 2026-04-28T16:26:44.533Z
+**Planned Phase:** 72 (Smart Init Charter) — 2 plans — 2026-04-28T18:09:44.624Z

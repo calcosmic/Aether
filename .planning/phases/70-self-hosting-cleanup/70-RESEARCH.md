@@ -284,7 +284,7 @@ go test ./...
 | A3 | `.aether/rules/aether-colony.md` is a stale installed copy, not a source file | Runtime State Inventory | Low risk -- `diff` shows it differs from canonical `.claude/rules/aether-colony.md` (line 50 differs: "Live tmux monitoring" vs "Colony watch dashboard / compatibility view"). The canonical source is `.claude/rules/aether-colony.md`. |
 | A4 | `.aether/QUEEN.md` is a generated/self-hosting artifact, not a template | Runtime State Inventory | Medium risk -- `.aether/templates/QUEEN.md.template` exists, suggesting QUEEN.md is generated from the template. If the tracked QUEEN.md contains wisdom that should be preserved, it should be backed up before `git rm --cached`. The npmignore explicitly excludes it with comment "Generated files (created from templates, never ship pre-populated)". |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should QUEEN.md content be preserved before untracking?**
    - What we know: `.aether/QUEEN.md` is tracked in git, contains colony wisdom (last evolved 2026-03-24). The `.npmignore` marks it as "Generated files (created from templates, never ship pre-populated)".

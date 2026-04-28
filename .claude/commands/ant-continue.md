@@ -47,6 +47,8 @@ AETHER_OUTPUT_MODE=json aether continue --plan-only $ARGUMENTS
 
 Parse `result.continue_manifest`. This manifest is the only source for worker names, castes, waves, task IDs, briefs, verification evidence, assessment data, and finalizer contract. Do not parse visual output.
 
+If `aether continue --plan-only` fails, times out, or emits no parseable JSON, stop. Do not run `/ant-continue` again and do not fall back to direct `aether continue`; run `AETHER_OUTPUT_MODE=visual aether status` only to diagnose and report the runtime failure.
+
 ## Wave Execution
 
 For each dispatch in `continue_manifest.dispatches`, execute the planned workers by wave:
@@ -57,14 +59,15 @@ For each dispatch in `continue_manifest.dispatches`, execute the planned workers
 3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the phase name, manifest verification snapshot, assessment data, dispatch `brief`, active signals, dispatch `skill_section` when present, and the worker's exact task metadata.
 5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, `duration`, and `report`.
-6. After each worker returns, run:
+6. Bound every worker by `continue_manifest.dispatches[*].timeout` seconds. If the worker does not return before its dispatch timeout, treat that timeout as a terminal result with `status: "timeout"`, a concise timeout summary, and no blockers.
+7. After each worker returns or times out, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
 
-Wave 1 must complete before wave 2. Multiple wave 2 agent calls issued in one assistant message may run in parallel when the platform supports it. Respect `continue_manifest.dispatches[*].wave`; do not invent extra workers.
+Wave 1 must reach terminal results before wave 2. A timeout is terminal for wave ordering. Multiple wave 2 agent calls issued in one assistant message may run in parallel when the platform supports it. Respect `continue_manifest.dispatches[*].wave`; do not invent extra workers.
 
 ## Completion Packet
 
-After all workers have terminal results, write a temporary completion JSON file outside `.aether/data/` with this shape:
+After every planned dispatch has completed or has been marked timed out, write a temporary completion JSON file outside `.aether/data/` with this shape:
 
 ```json
 {
@@ -87,6 +90,10 @@ After all workers have terminal results, write a temporary completion JSON file 
   ]
 }
 ```
+
+Do not rerun `/ant-continue` or `aether continue` because a watcher or review worker timed out. Finalize the completion packet and let the runtime decide from deterministic verification, gates, and the recorded timeout result.
+
+If deterministic shell verification times out (for example a large test suite exceeds the default runtime budget), use the runtime's `--verification-timeout <duration>` recovery command. Do not use `--worker-timeout` for shell verification; that flag only controls spawned agents.
 
 The `report` field is optional but strongly recommended for review workers (Watcher, Gatekeeper, Auditor, Probe). Include the worker's full structured findings as markdown -- this content is persisted as a per-worker `.md` report on disk. When omitted, the report file still renders with assignment metadata but shows "No detailed report provided."
 
@@ -122,7 +129,7 @@ Branch strictly on the `continue-finalize` result:
 1. Translate the blocker into plain language
 2. Keep the focus on what must be fixed before the colony can advance
 3. If the runtime surfaced a specific recovery command, route the user to that first
-4. Only fall back to `/ant-continue` when the runtime did not surface a more specific recovery step
+4. If the runtime did not surface a specific recovery command, route to `aether status` and require a fix, redispatch, reconcile, or explicit user decision before any later continue attempt
 5. Do not suggest clearing context here
 
 ### If the colony completed
@@ -136,6 +143,7 @@ Branch strictly on the `continue-finalize` result:
 
 - Do NOT run `aether continue` without `--plan-only` from this wrapper.
 - Do NOT run `aether continue --synthetic` after real agent workers complete.
+- Do NOT rerun `/ant-continue` or `aether continue` unchanged after a blocked, failed, timed-out, or non-JSON manifest/finalizer result.
 - Do NOT replay verification loops or reimplement runtime gate logic.
 - Do NOT read or write colony state files by hand.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, `HANDOFF.md`, or pheromone files.
