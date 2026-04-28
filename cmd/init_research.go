@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"encoding/xml"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -455,6 +457,122 @@ func parseComposerJsonDeps(target string) ([]depEntry, []depEntry) {
 	return prodDeps, devDeps
 }
 
+// parseRequirementsTxt parses requirements.txt for Python dependencies.
+func parseRequirementsTxt(target string) []depEntry {
+	data, err := os.ReadFile(filepath.Join(target, "requirements.txt"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	var deps []depEntry
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-r") || strings.HasPrefix(line, "-e") || strings.HasPrefix(line, "--") {
+			continue
+		}
+		name, version := splitPepDep(line)
+		if name != "" {
+			deps = append(deps, depEntry{Name: name, Version: version})
+		}
+	}
+	return deps
+}
+
+// parseGemfileDeps parses a Ruby Gemfile using regex matching.
+func parseGemfileDeps(target string) []depEntry {
+	data, err := os.ReadFile(filepath.Join(target, "Gemfile"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	var deps []depEntry
+	re := regexp.MustCompile(`gem\s+["']([^"']+)["']\s*(?:,\s*["']([^"']+)["'])?`)
+	matches := re.FindAllStringSubmatch(string(data), -1)
+	for _, m := range matches {
+		name := m[1]
+		version := ""
+		if len(m) > 2 {
+			version = m[2]
+		}
+		deps = append(deps, depEntry{Name: name, Version: version})
+	}
+	return deps
+}
+
+// mavenProject is a minimal XML struct for parsing pom.xml.
+type mavenProject struct {
+	XMLName     xml.Name   `xml:"project"`
+	Dependencies mavenDeps `xml:"dependencies"`
+}
+
+// mavenDeps holds Maven dependency entries.
+type mavenDeps struct {
+	Deps []mavenDep `xml:"dependency"`
+}
+
+// mavenDep represents a single Maven dependency.
+type mavenDep struct {
+	GroupID    string `xml:"groupId"`
+	ArtifactID string `xml:"artifactId"`
+	Version    string `xml:"version"`
+}
+
+// parsePomXmlDeps parses pom.xml for Java/Maven dependencies.
+func parsePomXmlDeps(target string) []depEntry {
+	data, err := os.ReadFile(filepath.Join(target, "pom.xml"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	var project mavenProject
+	if err := xml.Unmarshal(data, &project); err != nil {
+		return nil
+	}
+
+	var deps []depEntry
+	for _, d := range project.Dependencies.Deps {
+		name := d.ArtifactID
+		if d.GroupID != "" {
+			name = d.GroupID + ":" + d.ArtifactID
+		}
+		deps = append(deps, depEntry{Name: name, Version: d.Version})
+	}
+	return deps
+}
+
+// parseMixExsDeps parses mix.exs for Elixir dependencies.
+func parseMixExsDeps(target string) []depEntry {
+	data, err := os.ReadFile(filepath.Join(target, "mix.exs"))
+	if err != nil || len(data) > maxDepFileSize {
+		return nil
+	}
+
+	content := string(data)
+
+	// Find content between "defp deps do" and the matching "end"
+	start := strings.Index(content, "defp deps do")
+	if start == -1 {
+		return nil
+	}
+	rest := content[start+len("defp deps do"):]
+	end := strings.Index(rest, "end")
+	if end == -1 {
+		return nil
+	}
+	block := rest[:end]
+
+	var deps []depEntry
+	re := regexp.MustCompile(`\{:(\w+)`)
+	matches := re.FindAllStringSubmatch(block, -1)
+	for _, m := range matches {
+		if len(m) > 1 {
+			deps = append(deps, depEntry{Name: m[1]})
+		}
+	}
+	return deps
+}
+
 // parseDependencyFiles orchestrates all dependency file parsers and returns structured results.
 func parseDependencyFiles(target string) []techStackDetail {
 	var details []techStackDetail
@@ -492,6 +610,34 @@ func parseDependencyFiles(target string) []techStackDetail {
 		details = append(details, techStackDetail{
 			Language: "php", SourceFile: "composer.json",
 			Deps: prod, DevDeps: dev,
+		})
+	}
+	if hasFile(target, "requirements.txt") {
+		deps := parseRequirementsTxt(target)
+		details = append(details, techStackDetail{
+			Language: "python", SourceFile: "requirements.txt",
+			Deps: deps,
+		})
+	}
+	if hasFile(target, "Gemfile") {
+		deps := parseGemfileDeps(target)
+		details = append(details, techStackDetail{
+			Language: "ruby", SourceFile: "Gemfile",
+			Deps: deps,
+		})
+	}
+	if hasFile(target, "pom.xml") {
+		deps := parsePomXmlDeps(target)
+		details = append(details, techStackDetail{
+			Language: "java", SourceFile: "pom.xml",
+			Deps: deps,
+		})
+	}
+	if hasFile(target, "mix.exs") {
+		deps := parseMixExsDeps(target)
+		details = append(details, techStackDetail{
+			Language: "elixir", SourceFile: "mix.exs",
+			Deps: deps,
 		})
 	}
 

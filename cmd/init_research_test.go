@@ -719,3 +719,290 @@ func TestParseComposerJsonDeps(t *testing.T) {
 		t.Errorf("dev_dependencies = %v, want to contain phpunit/phpunit", devDeps)
 	}
 }
+
+// --- Task 2: Regex/XML/line parser tests ---
+
+func TestParseRequirementsTxt(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "requirements.txt"), []byte("django==4.2\n# comment\n-r other.txt\npytest>=7.0\nrequests\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "req txt test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundReqTxt := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "requirements.txt" {
+			foundReqTxt = true
+			if entry["language"] != "python" {
+				t.Errorf("language = %v, want python", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			foundDjango := false
+			foundPytest := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "django" {
+					foundDjango = true
+				}
+				if dep["name"] == "pytest" {
+					foundPytest = true
+				}
+			}
+			if !foundDjango {
+				t.Errorf("deps = %v, want to contain django", deps)
+			}
+			if !foundPytest {
+				t.Errorf("deps = %v, want to contain pytest", deps)
+			}
+		}
+	}
+	if !foundReqTxt {
+		t.Error("no requirements.txt entry found in tech_stack_detail")
+	}
+}
+
+func TestParseGemfileDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "Gemfile"), []byte("source \"https://rubygems.org\"\ngem \"rails\", \"~> 7.0\"\ngem \"pg\"\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "gemfile test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundGemfile := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "Gemfile" {
+			foundGemfile = true
+			if entry["language"] != "ruby" {
+				t.Errorf("language = %v, want ruby", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 2 {
+				t.Errorf("deps count = %d, want at least 2", len(deps))
+			}
+			foundRails := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "rails" {
+					foundRails = true
+				}
+			}
+			if !foundRails {
+				t.Errorf("deps = %v, want to contain rails", deps)
+			}
+		}
+	}
+	if !foundGemfile {
+		t.Error("no Gemfile entry found in tech_stack_detail")
+	}
+}
+
+func TestParsePomXmlDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "pom.xml"), []byte("<project><dependencies><dependency><groupId>org.springframework</groupId><artifactId>spring-core</artifactId><version>5.3.0</version></dependency></dependencies></project>\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pom xml test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundPom := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "pom.xml" {
+			foundPom = true
+			if entry["language"] != "java" {
+				t.Errorf("language = %v, want java", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 1 {
+				t.Errorf("deps count = %d, want at least 1", len(deps))
+			}
+			foundSpring := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if strings.Contains(dep["name"].(string), "spring-core") {
+					foundSpring = true
+				}
+			}
+			if !foundSpring {
+				t.Errorf("deps = %v, want to contain spring-core", deps)
+			}
+		}
+	}
+	if !foundPom {
+		t.Error("no pom.xml entry found in tech_stack_detail")
+	}
+}
+
+func TestParseMixExsDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "mix.exs"), []byte("defp deps do\n  [\n    {:phoenix, \"~> 1.7\"},\n    {:ecto_sql, \"~> 3.10\"}\n  ]\nend\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "mix.exs test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundMix := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "mix.exs" {
+			foundMix = true
+			if entry["language"] != "elixir" {
+				t.Errorf("language = %v, want elixir", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 2 {
+				t.Errorf("deps count = %d, want at least 2", len(deps))
+			}
+			foundPhoenix := false
+			foundEcto := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "phoenix" {
+					foundPhoenix = true
+				}
+				if dep["name"] == "ecto_sql" {
+					foundEcto = true
+				}
+			}
+			if !foundPhoenix {
+				t.Errorf("deps = %v, want to contain phoenix", deps)
+			}
+			if !foundEcto {
+				t.Errorf("deps = %v, want to contain ecto_sql", deps)
+			}
+		}
+	}
+	if !foundMix {
+		t.Error("no mix.exs entry found in tech_stack_detail")
+	}
+}
+
+func TestInitResearchTechStackDetailIntegration(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "package.json"), []byte(`{"dependencies":{"express":"^4.0"}}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "integration test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	if result["detected_type"] != "node" {
+		t.Errorf("detected_type = %v, want node", result["detected_type"])
+	}
+}
+
+func TestInitResearchBackwardCompat(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module test\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "backward compat test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	requiredFields := []string{
+		"detected_type", "languages", "frameworks", "goal",
+		"top_level_dirs", "file_count", "is_git_repo",
+		"governance", "complexity", "prior_colonies",
+		"pheromone_suggestions", "charter", "tech_stack_detail",
+	}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("missing required field: %s", field)
+		}
+	}
+}
