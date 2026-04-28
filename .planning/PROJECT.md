@@ -14,6 +14,8 @@ Aether is a biomimetic AI colony framework: a Go runtime in `cmd/` and `pkg/` th
 
 `v1.10` completed the colony polish: smart review depth (light/heavy), gate failure recovery with skip logic, Porter ant (26th caste), full lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol), Oracle loop fix with research formulation, idea shelving system, QUEEN.md pipeline fix, and Hive Brain wiring into seal.
 
+`v1.11` unified Aether: removed self-hosting artifacts (stale agents, duplicate commands, orphaned companion files), restored lost Smart Init intelligence (charter ceremony, rich init-research, suggest-analyze), hardened the 3-platform experience, and improved user-facing flows.
+
 ## Core Value
 
 **Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.**
@@ -81,6 +83,7 @@ That means:
 - [x] v1.8 Colony Recovery -- Phases 49-51 (completed 2026-04-25)
 - [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
 - [x] v1.10 Colony Polish -- Phases 57-69 (shipped 2026-04-28)
+- [ ] v1.11 Aether Unification -- Phases 70+
 
 ## Requirements
 
@@ -109,7 +112,12 @@ That means:
 
 ### Active
 
-(None — define next milestone goals with `/gsd-new-milestone`)
+- Self-hosting cleanup (audit and remove stale artifacts from Aether-developing-Aether) -- v1.11
+- Smart Init ceremony restoration (charter approval, repo scan, governance detection) -- v1.11
+- Rich init-research (colony context, pheromone suggestions, complexity metrics) -- v1.11
+- Suggest-analyze restoration (automatic pheromone suggestions during builds) -- v1.11
+- Platform hardening (OpenCode parity, error handling, cross-platform consistency) -- v1.11
+- User experience improvements (onboarding, clearer feedback, smoother flows) -- v1.11
 
 ### Out of Scope
 
@@ -149,10 +157,33 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Plan next milestone with `/gsd-new-milestone`.
+Execute v1.11 with `/gsd-discuss-phase 70`.
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-28 after v1.10 milestone completion*
+## Current Milestone: v1.11 Aether Unification
+
+**Goal:** Make Aether clean, canonical, and intelligent again — remove self-hosting artifacts, restore lost Smart Init intelligence, harden the 3-platform experience, and improve user-facing flows.
+
+**Target features:**
+- Self-hosting cleanup — audit and remove all artifacts that exist because Aether was used to develop itself
+- Smart Init ceremony — re-port charter approval flow, repo scanning, governance detection to Go
+- Rich init-research — port deep codebase analysis (colony context, governance, pheromone suggestions, complexity)
+- Suggest-analyze — restore automatic pheromone suggestions during builds
+- Platform hardening — fix OpenCode parity gaps, harden error handling, cross-platform consistency
+- User experience — better onboarding, clearer feedback, smoother flows
+
+**Known losses from shell-to-Go migration (April 2026):**
+- Colony charter ceremony (scan.sh → charter-write → approval flow)
+- Rich init-research (tech stack, directory analysis, colony context, governance detection, 10 pheromone patterns)
+- Suggest-analyze (618 lines of automatic pattern detection)
+- Bayesian confidence scoring (40/35/25 weighted, 60-day half-life decay, 7 trust tiers)
+- Circuit breaker (cascade failure protection)
+- State machine transitions (explicit validation, pheromone-triggered, checkpoints)
+- Council system (deliberation framework)
+- Curation ant pipeline (8-ant orchestrated pipeline)
+- Consolidation pipeline (phase-end knowledge compression)
+
+*Last updated: 2026-04-28 after v1.11 milestone started*
