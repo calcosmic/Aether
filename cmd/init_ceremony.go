@@ -98,11 +98,10 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	nonInteractive, _ := cmd.Flags().GetBool("non-interactive")
 	// In test mode (stdinReader is set), skip TTY check
 	isTestMode := stdinReader != nil
-	if !nonInteractive && !isTestMode && !isTerm(os.Stdin) {
-		outputError(1, "init-ceremony requires an interactive terminal. Use --non-interactive with --charter-json for non-TTY environments.", nil)
+	if !isTestMode && !isTerm(os.Stdin) {
+		outputError(1, "init-ceremony requires an interactive terminal", nil)
 		return nil
 	}
 
@@ -433,7 +432,5 @@ var initCeremonyCmd = &cobra.Command{
 func init() {
 	initCeremonyCmd.Flags().String("target", ".", "Directory to scan")
 	initCeremonyCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
-	initCeremonyCmd.Flags().Bool("non-interactive", false, "Skip terminal interaction (requires --charter-json)")
-	initCeremonyCmd.Flags().String("charter-json", "", "Charter data as JSON (for non-interactive mode)")
 	rootCmd.AddCommand(initCeremonyCmd)
 }
