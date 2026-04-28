@@ -291,6 +291,42 @@ func stringOrEmpty(v interface{}) string {
 // createCeremonyColony creates the colony state, session, and artifacts
 // with the approved charter.
 func createCeremonyColony(goal string, scope colony.ColonyScope, charter colony.Charter) error {
+	dataDir := store.BasePath()
+	statePath := filepath.Join(dataDir, "COLONY_STATE.json")
+
+	// Check idempotency: if COLONY_STATE.json exists, inspect it
+	if _, err := os.Stat(statePath); err == nil {
+		var existing colony.ColonyState
+		if loadErr := store.LoadJSON("COLONY_STATE.json", &existing); loadErr == nil {
+			// An entombed/reset colony clears the goal. Treat that as no active colony.
+			if existing.Goal == nil || strings.TrimSpace(ptrStr(existing.Goal)) == "" || existing.State == colony.StateIDLE {
+				goto createFreshColony
+			}
+			// If colony is sealed, check for in-progress seal (uncommitted changes)
+			if existing.Milestone == "Crowned Anthill" {
+				if sealInProgress(dataDir) {
+					return fmt.Errorf("a seal operation appears to be in progress")
+				}
+				// Sealed colony with committed state -- allow overwrite (fall through)
+			} else {
+				// Active (non-sealed) colony -- block
+				return fmt.Errorf("colony already initialized (state=%s, phase=%d)", existing.State, existing.CurrentPhase)
+			}
+		}
+	}
+
+createFreshColony:
+	// Backup existing state before overwriting (sealed colony fresh-init)
+	if _, err := os.Stat(statePath); err == nil {
+		backupDir := filepath.Join(dataDir, "backups")
+		if err := os.MkdirAll(backupDir, 0755); err == nil {
+			backupFile := filepath.Join(backupDir, fmt.Sprintf("COLONY_STATE.pre-init-ceremony.%s.bak", time.Now().Format("20060102-150405")))
+			if err := copyFile(statePath, backupFile); err == nil {
+				fmt.Fprintf(os.Stderr, "warning: backed up previous colony state to %s\n", backupFile)
+			}
+		}
+	}
+
 	now := time.Now()
 	nowStr := now.Format(time.RFC3339)
 
@@ -298,7 +334,6 @@ func createCeremonyColony(goal string, scope colony.ColonyScope, charter colony.
 	sessionID := fmt.Sprintf("%s_%d", sanitizedGoal, now.Unix())
 	runID := fmt.Sprintf("%s_%d_%s", sanitizedGoal, now.Unix(), randomHex(4))
 
-	dataDir := store.BasePath()
 	aetherDir := filepath.Dir(dataDir)
 
 	// Create directory structure
