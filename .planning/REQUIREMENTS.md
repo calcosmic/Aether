@@ -11,11 +11,11 @@ Requirements for the Aether Unification milestone. Each maps to roadmap phases.
 
 Remove artifacts that exist because Aether was used to develop itself.
 
-- [ ] **CLEAN-01**: Stale `.aether/agents/` directory removed (26 files that duplicate `agents-claude/`)
-- [ ] **CLEAN-02**: Tracked chamber files removed from git (241 files in `.aether/chambers/`)
-- [ ] **CLEAN-03**: Runtime state files removed from git tracking (CONTEXT.md, CROWNED-ANTHILL.md)
-- [ ] **CLEAN-04**: Chambers directory added to `.aether/.gitignore` to prevent future self-hosting leaks
-- [ ] **CLEAN-05**: Verify `agents-claude/` is byte-identical to `.claude/agents/ant/` after cleanup
+- [x] **CLEAN-01**: Stale `.aether/agents/` directory removed (26 files that duplicate `agents-claude/`)
+- [x] **CLEAN-02**: Tracked chamber files removed from git (241 files in `.aether/chambers/`)
+- [x] **CLEAN-03**: Runtime state files removed from git tracking (CONTEXT.md, CROWNED-ANTHILL.md)
+- [x] **CLEAN-04**: Chambers directory added to `.aether/.gitignore` to prevent future self-hosting leaks
+- [x] **CLEAN-05**: Verify `agents-claude/` is byte-identical to `.claude/agents/ant/` after cleanup
 
 ### Platform Hardening
 
@@ -85,11 +85,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLEAN-01 | Phase 70 | Pending |
-| CLEAN-02 | Phase 70 | Pending |
-| CLEAN-03 | Phase 70 | Pending |
-| CLEAN-04 | Phase 70 | Pending |
-| CLEAN-05 | Phase 70 | Pending |
+| CLEAN-01 | Phase 70 | Complete |
+| CLEAN-02 | Phase 70 | Complete |
+| CLEAN-03 | Phase 70 | Complete |
+| CLEAN-04 | Phase 70 | Complete |
+| CLEAN-05 | Phase 70 | Complete |
 | PLAT-01 | Phase 71 | Pending |
 | PLAT-02 | Phase 71 | Pending |
 | PLAT-03 | Phase 71 | Pending |
