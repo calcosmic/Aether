@@ -234,7 +234,12 @@ Plans:
   3. Init-research detects governance files (.eslintrc, pyproject.toml, Makefile, etc.) and explains their rules
   4. Init-research generates pheromone suggestions based on detected patterns
   5. The init ceremony outputs a formatted colony context summary incorporating all research
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [x] 73-01-PLAN.md -- Dependency file parsing for 8 formats, tech_stack_detail output field
+- [x] 73-02-PLAN.md -- Directory classification with signals, governance deep parsing with extracted rules
+- [x] 73-03-PLAN.md -- Pheromone expansion (10 to ~25), colony context summary integration
 
 ### Phase 74: Suggest-Analyze
 **Goal**: During builds (Step 4.2), Aether automatically detects codebase patterns and suggests them as pheromone signals for user review
@@ -244,7 +249,12 @@ Plans:
   1. Running `/ant-build` triggers automatic pattern detection against the codebase
   2. Suggested pheromones are deduplicated against existing active signals before being presented
   3. User can review suggestions via a tick-to-approve interface and accept or dismiss each one
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 73-01-PLAN.md -- Dependency file parsing for 8 formats, tech_stack_detail output field
+- [ ] 73-02-PLAN.md -- Directory classification with signals, governance deep parsing with extracted rules
+- [ ] 73-03-PLAN.md -- Pheromone expansion (10 to ~25), colony context summary integration
 
 ### Phase 75: Intelligence Core
 **Goal**: The wisdom pipeline uses Bayesian confidence scoring and parallel workers are protected from cascade failure
@@ -253,7 +263,12 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Wisdom observations receive a trust score using the 40/35/25 weighted formula with 60-day half-life decay
   2. When a parallel worker fails repeatedly, the circuit breaker halts further dispatch to that worker without affecting others
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 73-01-PLAN.md -- Dependency file parsing for 8 formats, tech_stack_detail output field
+- [ ] 73-02-PLAN.md -- Directory classification with signals, governance deep parsing with extracted rules
+- [ ] 73-03-PLAN.md -- Pheromone expansion (10 to ~25), colony context summary integration
 
 ### Phase 76: UX Improvements
 **Goal**: Aether provides clear guidance to new users, explains errors in plain language, and shows progress during long operations
@@ -264,7 +279,12 @@ Plans:
   2. When a command fails, the error message explains what went wrong in plain language and suggests what to try next
   3. Build and continue ceremonies show progress indicators during long-running steps
   4. `/ant-status` surfaces actionable information (what to do next) rather than just raw state dumps
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 73-01-PLAN.md -- Dependency file parsing for 8 formats, tech_stack_detail output field
+- [ ] 73-02-PLAN.md -- Directory classification with signals, governance deep parsing with extracted rules
+- [ ] 73-03-PLAN.md -- Pheromone expansion (10 to ~25), colony context summary integration
 
 ## Progress
 
@@ -276,7 +296,7 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 | 70. Self-Hosting Cleanup | v1.11 | 1/1 | Complete    | 2026-04-28 |
 | 71. Platform Hardening | v1.11 | 2/2 | Complete    | 2026-04-28 |
 | 72. Smart Init Charter | v1.11 | 2/2 | Complete    | 2026-04-28 |
-| 73. Rich Init Research | v1.11 | 0/? | Not started | - |
+| 73. Rich Init Research | v1.11 | 3/3 | Complete    | 2026-04-28 |
 | 74. Suggest-Analyze | v1.11 | 0/? | Not started | - |
 | 75. Intelligence Core | v1.11 | 0/? | Not started | - |
 | 76. UX Improvements | v1.11 | 0/? | Not started | - |

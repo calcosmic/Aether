@@ -33,11 +33,11 @@ Re-port the colony charter ceremony and rich init-research from the deleted shel
 
 - [x] **INIT-01**: Colony charter ceremony runs during `/ant-init` — scans repo, writes charter, presents for approval
 - [x] **INIT-02**: Charter approval flow with accept/revise/reject options
-- [ ] **INIT-03**: Rich init-research produces tech stack analysis (languages, frameworks, build tools)
-- [ ] **INIT-04**: Init-research detects directory structure patterns (monorepo, microservices, etc.)
-- [ ] **INIT-05**: Init-research identifies governance files (.eslintrc, pyproject.toml, Makefile, etc.)
-- [ ] **INIT-06**: Init-research generates pheromone suggestions based on detected patterns
-- [ ] **INIT-07**: Init ceremony outputs formatted colony context summary
+- [x] **INIT-03**: Rich init-research produces tech stack analysis (languages, frameworks, build tools)
+- [x] **INIT-04**: Init-research detects directory structure patterns (monorepo, microservices, etc.)
+- [x] **INIT-05**: Init-research identifies governance files (.eslintrc, pyproject.toml, Makefile, etc.)
+- [x] **INIT-06**: Init-research generates pheromone suggestions based on detected patterns
+- [x] **INIT-07**: Init ceremony outputs formatted colony context summary
 
 ### Intelligence Features
 
@@ -97,11 +97,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAT-05 | Phase 71 | Complete |
 | INIT-01 | Phase 72 | Complete |
 | INIT-02 | Phase 72 | Complete |
-| INIT-03 | Phase 73 | Pending |
-| INIT-04 | Phase 73 | Pending |
-| INIT-05 | Phase 73 | Pending |
-| INIT-06 | Phase 73 | Pending |
-| INIT-07 | Phase 73 | Pending |
+| INIT-03 | Phase 73 | Complete |
+| INIT-04 | Phase 73 | Complete |
+| INIT-05 | Phase 73 | Complete |
+| INIT-06 | Phase 73 | Complete |
+| INIT-07 | Phase 73 | Complete |
 | INTEL-01 | Phase 74 | Pending |
 | INTEL-02 | Phase 74 | Pending |
 | INTEL-03 | Phase 74 | Pending |
