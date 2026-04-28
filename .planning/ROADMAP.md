@@ -13,10 +13,7 @@
 - **v1.8 Colony Recovery** - Phases 49-51 (shipped 2026-04-25)
 - **v1.9 Review Persistence** - Phases 52-56 (shipped 2026-04-26)
 - **v1.10 Colony Polish** - Phases 57-69 (shipped 2026-04-28)
-
-## Next Milestone
-
-Plan with `/gsd-new-milestone`.
+- **v1.11 Aether Unification** - Phases 70-76 (in progress)
 
 ## Phases
 
@@ -164,6 +161,111 @@ Plan with `/gsd-new-milestone`.
 
 </details>
 
+### v1.11 Aether Unification (In Progress)
+
+**Milestone Goal:** Make Aether clean, canonical, and intelligent again -- remove self-hosting artifacts, restore lost Smart Init intelligence, harden the 3-platform experience, and improve user-facing flows.
+
+- [ ] **Phase 70: Self-Hosting Cleanup** - Remove stale artifacts from Aether-developing-Aether
+- [ ] **Phase 71: Platform Hardening** - Fix cross-platform gaps across Claude Code, OpenCode, and Codex
+- [ ] **Phase 72: Smart Init Charter** - Restore colony charter ceremony with approval flow
+- [ ] **Phase 73: Rich Init Research** - Port deep codebase analysis to Go (tech stack, governance, pheromone suggestions)
+- [ ] **Phase 74: Suggest-Analyze** - Restore automatic pheromone suggestions during builds
+- [ ] **Phase 75: Intelligence Core** - Restore Bayesian confidence scoring and circuit breaker
+- [ ] **Phase 76: UX Improvements** - Better onboarding, clearer feedback, smoother ceremony flows
+
+## Phase Details
+
+<details>
+<summary>v1.0 through v1.10 Phase Details (archived)</summary>
+
+All prior milestone phase details are archived. See MILESTONES.md for accomplishment summaries.
+
+</details>
+
+### Phase 70: Self-Hosting Cleanup
+**Goal**: Remove all stale artifacts that exist because Aether was used to develop itself, leaving a clean canonical repo
+**Depends on**: Nothing (first phase of v1.11)
+**Requirements**: CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04, CLEAN-05
+**Success Criteria** (what must be TRUE):
+  1. The stale `.aether/agents/` directory no longer exists (26 duplicate files removed)
+  2. No chamber files are tracked in git (241 files removed, chambers/ gitignored)
+  3. Runtime state files (CONTEXT.md, CROWNED-ANTHILL.md) are no longer tracked in git
+  4. `agents-claude/` is verified byte-identical to `.claude/agents/ant/`
+**Plans**: TBD
+
+### Phase 71: Platform Hardening
+**Goal**: All three platforms (Claude Code, OpenCode, Codex CLI) produce consistent, correct output for every command
+**Depends on**: Phase 70 (clean repo before fixing platform gaps)
+**Requirements**: PLAT-01, PLAT-02, PLAT-03, PLAT-04, PLAT-05
+**Success Criteria** (what must be TRUE):
+  1. OpenCode init.md and entomb.md include shelf backlog/archive sections matching Claude Code
+  2. Codex subagent dispatch correctly spawns all agent types without errors
+  3. All 50 slash commands produce correct output when run on each of the 3 platforms
+**Plans**: TBD
+
+### Phase 72: Smart Init Charter
+**Goal**: `/ant-init` runs a colony charter ceremony -- scanning the repo, presenting a charter, and requiring user approval before proceeding
+**Depends on**: Phase 71 (init uses platform commands that must work correctly)
+**Requirements**: INIT-01, INIT-02
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-init "goal"` scans the repo and generates a charter document
+  2. User sees the charter and can accept, revise, or reject it before the colony proceeds
+  3. Rejecting the charter stops init cleanly without leaving partial state
+**Plans**: TBD
+
+### Phase 73: Rich Init Research
+**Goal**: The init ceremony produces deep codebase analysis -- tech stack, directory structure, governance patterns, and pheromone suggestions
+**Depends on**: Phase 72 (charter ceremony is the entry point that triggers research)
+**Requirements**: INIT-03, INIT-04, INIT-05, INIT-06, INIT-07
+**Success Criteria** (what must be TRUE):
+  1. Init-research identifies the repo's languages, frameworks, and build tools
+  2. Init-research classifies the directory structure (monorepo, microservices, standard app, etc.)
+  3. Init-research detects governance files (.eslintrc, pyproject.toml, Makefile, etc.) and explains their rules
+  4. Init-research generates pheromone suggestions based on detected patterns
+  5. The init ceremony outputs a formatted colony context summary incorporating all research
+**Plans**: TBD
+
+### Phase 74: Suggest-Analyze
+**Goal**: During builds (Step 4.2), Aether automatically detects codebase patterns and suggests them as pheromone signals for user review
+**Depends on**: Phase 71 (build commands must work correctly across platforms)
+**Requirements**: INTEL-01, INTEL-02, INTEL-03
+**Success Criteria** (what must be TRUE):
+  1. Running `/ant-build` triggers automatic pattern detection against the codebase
+  2. Suggested pheromones are deduplicated against existing active signals before being presented
+  3. User can review suggestions via a tick-to-approve interface and accept or dismiss each one
+**Plans**: TBD
+
+### Phase 75: Intelligence Core
+**Goal**: The wisdom pipeline uses Bayesian confidence scoring and parallel workers are protected from cascade failure
+**Depends on**: Phase 74 (intelligence features share patterns with suggest-analyze)
+**Requirements**: INTEL-04, INTEL-05
+**Success Criteria** (what must be TRUE):
+  1. Wisdom observations receive a trust score using the 40/35/25 weighted formula with 60-day half-life decay
+  2. When a parallel worker fails repeatedly, the circuit breaker halts further dispatch to that worker without affecting others
+**Plans**: TBD
+
+### Phase 76: UX Improvements
+**Goal**: Aether provides clear guidance to new users, explains errors in plain language, and shows progress during long operations
+**Depends on**: Phase 71 (platform commands must work before polishing UX)
+**Requirements**: UX-01, UX-02, UX-03, UX-04
+**Success Criteria** (what must be TRUE):
+  1. A first-time user running any Aether command sees guidance on how to get started
+  2. When a command fails, the error message explains what went wrong in plain language and suggests what to try next
+  3. Build and continue ceremonies show progress indicators during long-running steps
+  4. `/ant-status` surfaces actionable information (what to do next) rather than just raw state dumps
+**Plans**: TBD
+
 ## Progress
 
-All 69 phases across 11 milestones complete. Next milestone TBD.
+**Execution Order:**
+Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 70. Self-Hosting Cleanup | v1.11 | 0/? | Not started | - |
+| 71. Platform Hardening | v1.11 | 0/? | Not started | - |
+| 72. Smart Init Charter | v1.11 | 0/? | Not started | - |
+| 73. Rich Init Research | v1.11 | 0/? | Not started | - |
+| 74. Suggest-Analyze | v1.11 | 0/? | Not started | - |
+| 75. Intelligence Core | v1.11 | 0/? | Not started | - |
+| 76. UX Improvements | v1.11 | 0/? | Not started | - |
