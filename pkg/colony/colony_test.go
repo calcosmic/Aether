@@ -878,6 +878,135 @@ func TestTransitionErrorIs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Charter struct tests (RED phase)
+// ---------------------------------------------------------------------------
+
+func TestCharterRoundTrip(t *testing.T) {
+	intent := "Build a CLI tool"
+	vision := "A go project with golangci-lint"
+	governance := "Linting: golangci-lint. CI: GitHub Actions"
+	goals := "Goal: Build a CLI tool. Focus on quality."
+	techStack := "Languages: go. Frameworks/Tools: cobra"
+	keyRisks := "No CI/CD pipeline detected -- manual deployment risk"
+	constraints := "Follow golangci-lint rules"
+
+	state := ColonyState{
+		Version: "3.0",
+		State:   StateREADY,
+		Charter: &Charter{
+			Intent:      intent,
+			Vision:      vision,
+			Governance:  governance,
+			Goals:       goals,
+			TechStack:   techStack,
+			KeyRisks:    keyRisks,
+			Constraints: constraints,
+		},
+	}
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded ColonyState
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if decoded.Charter == nil {
+		t.Fatal("expected non-nil Charter")
+	}
+	if decoded.Charter.Intent != intent {
+		t.Errorf("Intent = %q, want %q", decoded.Charter.Intent, intent)
+	}
+	if decoded.Charter.Vision != vision {
+		t.Errorf("Vision = %q, want %q", decoded.Charter.Vision, vision)
+	}
+	if decoded.Charter.Governance != governance {
+		t.Errorf("Governance = %q, want %q", decoded.Charter.Governance, governance)
+	}
+	if decoded.Charter.Goals != goals {
+		t.Errorf("Goals = %q, want %q", decoded.Charter.Goals, goals)
+	}
+	if decoded.Charter.TechStack != techStack {
+		t.Errorf("TechStack = %q, want %q", decoded.Charter.TechStack, techStack)
+	}
+	if decoded.Charter.KeyRisks != keyRisks {
+		t.Errorf("KeyRisks = %q, want %q", decoded.Charter.KeyRisks, keyRisks)
+	}
+	if decoded.Charter.Constraints != constraints {
+		t.Errorf("Constraints = %q, want %q", decoded.Charter.Constraints, constraints)
+	}
+}
+
+func TestCharterOmitEmpty(t *testing.T) {
+	state := ColonyState{
+		Version: "3.0",
+		State:   StateREADY,
+	}
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if bytes.Contains(data, []byte(`"charter"`)) {
+		t.Errorf("expected JSON to omit 'charter' key when Charter is nil, got: %s", string(data))
+	}
+
+	var decoded ColonyState
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if decoded.Charter != nil {
+		t.Error("expected nil Charter when omitted from JSON")
+	}
+}
+
+func TestCharterBackwardCompat(t *testing.T) {
+	// Old-style JSON without charter field -- should unmarshal to nil Charter
+	oldJSON := `{
+		"version": "3.0",
+		"goal": "Some old goal",
+		"colony_name": "Old Colony",
+		"colony_version": 1,
+		"state": "READY",
+		"current_phase": 2,
+		"plan": {
+			"generated_at": "2026-03-31T19:45:32Z",
+			"phases": []
+		},
+		"memory": {"phase_learnings": [], "decisions": [], "instincts": []},
+		"errors": {"records": [], "flagged_patterns": []},
+		"signals": [],
+		"graveyards": [],
+		"events": []
+	}`
+
+	var state ColonyState
+	if err := json.Unmarshal([]byte(oldJSON), &state); err != nil {
+		t.Fatalf("unmarshal old JSON: %v", err)
+	}
+
+	if state.Charter != nil {
+		t.Error("expected nil Charter when loading old JSON without charter field")
+	}
+
+	// Verify other fields still loaded correctly
+	if state.Version != "3.0" {
+		t.Errorf("Version = %q, want '3.0'", state.Version)
+	}
+	if state.Goal == nil || *state.Goal != "Some old goal" {
+		t.Error("expected non-nil Goal")
+	}
+	if state.Plan.GeneratedAt == nil {
+		t.Error("expected non-nil Plan.GeneratedAt")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

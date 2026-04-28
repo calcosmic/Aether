@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -144,6 +145,21 @@ var initCmd = &cobra.Command{
 			ParallelMode: colony.ModeInRepo,
 		}
 
+		// Parse --charter-json if provided
+		if charterJSON, _ := cmd.Flags().GetString("charter-json"); charterJSON != "" {
+			var ch colony.Charter
+			if err := json.Unmarshal([]byte(charterJSON), &ch); err != nil {
+				outputError(1, fmt.Sprintf("invalid charter JSON: %v", err), nil)
+				return nil
+			}
+			// Validate field lengths (T-72-01: reject values over 2000 chars)
+			if err := validateCharterFieldLength(ch); err != nil {
+				outputError(1, err.Error(), nil)
+				return nil
+			}
+			state.Charter = &ch
+		}
+
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			outputError(1, fmt.Sprintf("failed to create COLONY_STATE.json: %v", err), nil)
 			return nil
@@ -217,6 +233,7 @@ func ptrStr(s *string) string {
 
 func init() {
 	initCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
+	initCmd.Flags().String("charter-json", "", "Approved charter data as JSON string")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -274,4 +291,28 @@ func sealInProgress(dataDir string) bool {
 	}
 
 	return false
+}
+
+// validateCharterFieldLength checks that no charter field exceeds 2000 characters.
+// This prevents unreasonably large state files from user-controlled input (T-72-01).
+func validateCharterFieldLength(ch colony.Charter) error {
+	const maxLen = 2000
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"intent", ch.Intent},
+		{"vision", ch.Vision},
+		{"governance", ch.Governance},
+		{"goals", ch.Goals},
+		{"tech_stack", ch.TechStack},
+		{"key_risks", ch.KeyRisks},
+		{"constraints", ch.Constraints},
+	}
+	for _, f := range fields {
+		if len(f.value) > maxLen {
+			return fmt.Errorf("charter field %q exceeds %d characters (%d)", f.name, maxLen, len(f.value))
+		}
+	}
+	return nil
 }
