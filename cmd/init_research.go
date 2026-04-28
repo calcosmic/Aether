@@ -273,6 +273,16 @@ func hasDir(target, name string) bool {
 	return err == nil && info.IsDir()
 }
 
+// readFileContent reads a file and returns its content as a string.
+// Returns empty string on error or if file exceeds 1MB (DoS mitigation).
+func readFileContent(target, name string) string {
+	data, err := os.ReadFile(filepath.Join(target, name))
+	if err != nil || len(data) > maxDepFileSize {
+		return ""
+	}
+	return string(data)
+}
+
 // fileContains checks whether a file at target/name contains the given substring.
 func fileContains(target, name, substr string) bool {
 	data, err := os.ReadFile(filepath.Join(target, name))
@@ -1295,9 +1305,12 @@ func parseDependencyFiles(target string) []techStackDetail {
 	return details
 }
 
-// generatePheromoneSuggestions applies 10 deterministic patterns to produce pheromone suggestions.
-func generatePheromoneSuggestions(target string, governance governanceInfo) []pheromoneSuggestion {
+// generatePheromoneSuggestions applies deterministic patterns to produce pheromone suggestions.
+// It checks ~25 patterns covering security, governance, documentation, containers, and more.
+func generatePheromoneSuggestions(target string, governance governanceInfo, dirClass dirClassification, techStack []techStackDetail) []pheromoneSuggestion {
 	var suggestions []pheromoneSuggestion
+
+	// --- Original 10 patterns (preserved unchanged) ---
 
 	// 1. .env or .env.local exists -> REDIRECT about secrets
 	if hasFile(target, ".env") || hasFile(target, ".env.local") {
@@ -1401,6 +1414,181 @@ func generatePheromoneSuggestions(target string, governance governanceInfo) []ph
 			Type:    "FEEDBACK",
 			Content: "consider adding code formatting configuration for consistency",
 			Reason:  "no formatter or editorconfig detected",
+		})
+	}
+
+	// --- New patterns (D-07) ---
+
+	// --- Monorepo workspace patterns (D-07) ---
+	// 11. Monorepo without workspace tooling
+	if dirClass.Type == "monorepo" && !hasFile(target, "pnpm-workspace.yaml") && !hasFile(target, "lerna.json") && !hasFile(target, "turbo.json") && !hasFile(target, "nx.json") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "consider adopting a workspace management tool for monorepo consistency",
+			Reason:  "monorepo detected without pnpm workspaces, lerna, turbo, or nx",
+		})
+	}
+
+	// 12. Workspace config found
+	if hasFile(target, "pnpm-workspace.yaml") || hasFile(target, "turbo.json") || hasFile(target, "nx.json") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "workspace management detected -- maintain consistent dependency versions across packages",
+			Reason:  "workspace config detected in monorepo",
+		})
+	}
+
+	// --- API patterns (D-07) ---
+	// 13. OpenAPI/Swagger spec detected
+	if hasFile(target, "openapi.yaml") || hasFile(target, "openapi.yml") || hasFile(target, "swagger.yaml") || hasFile(target, "swagger.json") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "API specification detected -- ensure implementations stay aligned with spec",
+			Reason:  "OpenAPI or Swagger specification file found",
+		})
+	}
+
+	// 14. API route patterns without spec
+	if (hasDir(target, "routes") || hasDir(target, "api")) && !hasFile(target, "openapi.yaml") && !hasFile(target, "openapi.yml") && !hasFile(target, "swagger.yaml") && !hasFile(target, "swagger.json") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "API routes detected without an API specification -- consider adding OpenAPI docs",
+			Reason:  "routes/ or api/ directory found without API spec",
+		})
+	}
+
+	// --- Database presence (D-07) ---
+	// 15. Migration directory detected
+	if hasDir(target, "migrations") || hasDir(target, "db/migrations") || hasDir(target, "prisma/migrations") || hasDir(target, "alembic") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "database migrations detected -- ensure schema changes go through migration workflow",
+			Reason:  "migration directory found in project",
+		})
+	}
+
+	// 16. Schema file detected
+	if hasFile(target, "schema.prisma") || hasFile(target, "schema.rb") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "database schema definition detected -- treat schema as code, review changes carefully",
+			Reason:  "schema definition file found",
+		})
+	}
+
+	// --- Security patterns (D-07) ---
+	// 17. CORS config detected
+	if fileContains(target, ".env", "CORS") || fileContains(target, "next.config.js", "headers") || fileContains(target, "next.config.mjs", "headers") || hasFile(target, "cors.json") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "CORS configuration detected -- review allowed origins to prevent over-permissive access",
+			Reason:  "CORS-related configuration found",
+		})
+	}
+
+	// 18. .env.example exists but .env doesn't (setup guidance)
+	if hasFile(target, ".env.example") && !hasFile(target, ".env") && !hasFile(target, ".env.local") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: ".env.example found -- copy to .env and fill in values for local development",
+			Reason:  ".env.example exists without corresponding .env",
+		})
+	}
+
+	// --- Container patterns (D-07) ---
+	// 19. docker-compose detected
+	if hasFile(target, "docker-compose.yml") || hasFile(target, "docker-compose.yaml") || hasFile(target, "compose.yml") || hasFile(target, "compose.yaml") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "docker compose detected -- ensure services are reproducible and health-checked",
+			Reason:  "docker-compose file found",
+		})
+	}
+
+	// 20. Multi-stage Dockerfile
+	dockerfileContent := readFileContent(target, "Dockerfile")
+	if dockerfileContent != "" && strings.Count(dockerfileContent, "FROM") > 1 {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "multi-stage Docker build detected -- optimize layer caching for faster builds",
+			Reason:  "Dockerfile uses multiple FROM stages",
+		})
+	}
+
+	// --- Documentation patterns (D-07) ---
+	// 21. CHANGELOG.md detected
+	if hasFile(target, "CHANGELOG.md") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "CHANGELOG.md found -- keep it updated with each release for traceability",
+			Reason:  "changelog file detected",
+		})
+	}
+
+	// 22. No documentation at all
+	if !hasFile(target, "README.md") && !hasDir(target, "docs") && !hasDir(target, "doc") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "no documentation detected -- consider adding README.md or a docs/ directory",
+			Reason:  "no README, docs, or documentation directory found",
+		})
+	}
+
+	// --- Dependency health (D-07) ---
+	// 23. Go project without linter
+	hasGoLinter := false
+	for _, l := range governance.Linters {
+		if l == "golangci-lint" {
+			hasGoLinter = true
+		}
+	}
+	if hasFile(target, "go.mod") && !hasGoLinter {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "consider adding golangci-lint for Go code quality checks",
+			Reason:  "Go project without configured linter",
+		})
+	}
+
+	// 24. TypeScript detected without tsconfig.json
+	hasTS := false
+	for _, ts := range techStack {
+		if ts.Language == "node" {
+			for _, dep := range ts.DevDeps {
+				if strings.HasPrefix(dep.Name, "typescript") {
+					hasTS = true
+					break
+				}
+			}
+			if hasTS {
+				break
+			}
+			for _, dep := range ts.Deps {
+				if strings.HasPrefix(dep.Name, "typescript") {
+					hasTS = true
+					break
+				}
+			}
+		}
+	}
+	if hasTS && hasFile(target, "tsconfig.json") {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FEEDBACK",
+			Content: "TypeScript detected -- ensure strict mode is enabled in tsconfig.json",
+			Reason:  "tsconfig.json found in TypeScript project",
+		})
+	}
+
+	// 25. Large number of dependencies
+	totalDeps := 0
+	for _, ts := range techStack {
+		totalDeps += len(ts.Deps) + len(ts.DevDeps) + len(ts.Indirect)
+	}
+	if totalDeps > 100 {
+		suggestions = append(suggestions, pheromoneSuggestion{
+			Type:    "FOCUS",
+			Content: "high dependency count detected -- regularly audit for unused or vulnerable packages",
+			Reason:  fmt.Sprintf("%d total dependencies found", totalDeps),
 		})
 	}
 
@@ -1563,6 +1751,37 @@ func joinWithCommaAnd(items []string) string {
 	return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
 }
 
+// colonyContextSummary provides a formatted summary of all init-research sections.
+// It is included in the outputOK envelope and automatically available to the
+// init ceremony via the JSON envelope consumption pattern (PATTERNS.md).
+type colonyContextSummary struct {
+	DetectedType        string   `json:"detected_type"`
+	Languages           []string `json:"languages"`
+	DirType             string   `json:"dir_type"`
+	DirSignals          []string `json:"dir_signals"`
+	TechStackCount      int      `json:"tech_stack_count"`
+	GovernanceToolCount int      `json:"governance_tool_count"`
+	PheromoneCount      int      `json:"pheromone_count"`
+	IsGitRepo           bool     `json:"is_git_repo"`
+	FileCount           int      `json:"file_count"`
+}
+
+// generateColonyContextSummary builds a colony context summary from all scan results.
+func generateColonyContextSummary(detected string, languages []string, dirClass dirClassification, techStack []techStackDetail, governance governanceInfo, pheromoneSuggestions []pheromoneSuggestion, isGitRepo bool, fileCount int) colonyContextSummary {
+	govToolCount := len(governance.Linters) + len(governance.Formatters) + len(governance.TestFrameworks) + len(governance.CIConfigs) + len(governance.BuildTools)
+	return colonyContextSummary{
+		DetectedType:        detected,
+		Languages:           languages,
+		DirType:             dirClass.Type,
+		DirSignals:          dirClass.Signals,
+		TechStackCount:      len(techStack),
+		GovernanceToolCount: govToolCount,
+		PheromoneCount:      len(pheromoneSuggestions),
+		IsGitRepo:           isGitRepo,
+		FileCount:           fileCount,
+	}
+}
+
 var initResearchCmd = &cobra.Command{
 	Use:   "init-research",
 	Short: "Perform initial research for colony setup",
@@ -1684,8 +1903,6 @@ var initResearchCmd = &cobra.Command{
 		governance := detectGovernance(target)
 		gitHistory := analyzeGitHistory(target)
 		priorColonies := detectPriorColonies(target)
-		pheromoneSuggestions := generatePheromoneSuggestions(target, governance)
-		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory, languages, frameworks, isGitRepo, pheromoneSuggestions)
 
 		complexity := complexityMetrics{
 			TotalFiles:   fileCount,
@@ -1696,25 +1913,29 @@ var initResearchCmd = &cobra.Command{
 		techStackDetail := parseDependencyFiles(target)
 		dirClass := classifyDirectory(target)
 		governanceDetails := deepParseGovernance(target)
+		pheromoneSuggestions := generatePheromoneSuggestions(target, governance, dirClass, techStackDetail)
+		charter := generateCharter(goal, detected, governance, readmeSummary, gitHistory, languages, frameworks, isGitRepo, pheromoneSuggestions)
+		contextSummary := generateColonyContextSummary(detected, languages, dirClass, techStackDetail, governance, pheromoneSuggestions, isGitRepo, fileCount)
 
 		outputOK(map[string]interface{}{
-			"detected_type":         detected,
-			"languages":             languages,
-			"frameworks":            frameworks,
-			"goal":                  goal,
-			"top_level_dirs":        topLevelDirs,
-			"file_count":            fileCount,
-			"is_git_repo":           isGitRepo,
-			"readme_summary":        readmeSummary,
-			"git_history":           gitHistory,
-			"governance":            governance,
-			"complexity":            complexity,
-			"prior_colonies":        priorColonies,
-			"pheromone_suggestions": pheromoneSuggestions,
-			"charter":               charter,
-			"tech_stack_detail":     techStackDetail,
-			"dir_classification":    dirClass,
-			"governance_details":    governanceDetails,
+			"detected_type":          detected,
+			"languages":              languages,
+			"frameworks":             frameworks,
+			"goal":                   goal,
+			"top_level_dirs":         topLevelDirs,
+			"file_count":             fileCount,
+			"is_git_repo":            isGitRepo,
+			"readme_summary":         readmeSummary,
+			"git_history":            gitHistory,
+			"governance":             governance,
+			"complexity":             complexity,
+			"prior_colonies":         priorColonies,
+			"pheromone_suggestions":  pheromoneSuggestions,
+			"charter":                charter,
+			"tech_stack_detail":      techStackDetail,
+			"dir_classification":     dirClass,
+			"governance_details":     governanceDetails,
+			"colony_context_summary": contextSummary,
 		})
 		return nil
 	},

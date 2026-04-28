@@ -1520,3 +1520,281 @@ func TestGovernanceBackwardCompat(t *testing.T) {
 		t.Error("governance_details is empty, want at least 1 entry")
 	}
 }
+
+// --- Plan 03 Task 1: Expanded pheromone patterns and colony context summary tests ---
+
+func TestPheromonePatternsExpanded(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	// Create fixtures that trigger multiple new patterns
+	os.WriteFile(filepath.Join(target, ".env"), []byte("KEY=value\n"), 0644)
+	os.WriteFile(filepath.Join(target, "docker-compose.yml"), []byte("services:\n  app:\n    image: node:20\n"), 0644)
+	os.WriteFile(filepath.Join(target, "CHANGELOG.md"), []byte("# Changelog\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".env.example"), []byte("KEY=\n"), 0644)
+	// No .gitignore -- should trigger REDIRECT about secrets
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pheromone expanded test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	if len(suggestions) < 5 {
+		t.Fatalf("pheromone_suggestions count = %d, want >= 5", len(suggestions))
+	}
+
+	// Verify at least 1 FEEDBACK and 1 REDIRECT type exist
+	foundFeedback := false
+	foundRedirect := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		if sug["type"] == "FEEDBACK" {
+			foundFeedback = true
+		}
+		if sug["type"] == "REDIRECT" {
+			foundRedirect = true
+		}
+	}
+	if !foundFeedback {
+		t.Errorf("no FEEDBACK suggestions found in %d suggestions", len(suggestions))
+	}
+	if !foundRedirect {
+		t.Errorf("no REDIRECT suggestions found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestPheromoneMonorepoPatterns(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "packages"), 0755)
+	os.WriteFile(filepath.Join(target, "pnpm-workspace.yaml"), []byte("packages:\n  - 'packages/*'\n"), 0644)
+	os.WriteFile(filepath.Join(target, "docker-compose.yml"), []byte("services:\n  app:\n    image: node\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "monorepo pheromone test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	foundMonorepoFocus := false
+	foundContainerFocus := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		reason := sug["reason"].(string)
+		content := sug["content"].(string)
+		sugType := sug["type"].(string)
+		if (strings.Contains(reason, "workspace") || strings.Contains(content, "workspace")) && sugType == "FEEDBACK" {
+			foundMonorepoFocus = true
+		}
+		if strings.Contains(reason, "docker-compose") && sugType == "FOCUS" {
+			foundContainerFocus = true
+		}
+	}
+	if !foundMonorepoFocus {
+		t.Errorf("no monorepo-related FEEDBACK suggestion found in %d suggestions", len(suggestions))
+	}
+	if !foundContainerFocus {
+		t.Errorf("no container FOCUS suggestion found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestPheromoneDatabasePatterns(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "migrations"), 0755)
+	os.WriteFile(filepath.Join(target, "migrations", "001_create_users.sql"), []byte("CREATE TABLE users (id INT);"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "database pheromone test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	foundMigrationFocus := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		content := sug["content"].(string)
+		if strings.Contains(strings.ToLower(content), "migration") {
+			foundMigrationFocus = true
+		}
+	}
+	if !foundMigrationFocus {
+		t.Errorf("no migration-related FOCUS suggestion found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestPheromoneApiPatterns(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "api"), 0755)
+	os.WriteFile(filepath.Join(target, "api", "routes.go"), []byte("package api\n"), 0644)
+	os.WriteFile(filepath.Join(target, "swagger.yaml"), []byte("openapi: 3.0.0\ninfo:\n  title: Test API\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "api pheromone test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	foundApiSpecFocus := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		reason := sug["reason"].(string)
+		if strings.Contains(reason, "OpenAPI") || strings.Contains(reason, "Swagger") {
+			foundApiSpecFocus = true
+		}
+	}
+	if !foundApiSpecFocus {
+		t.Errorf("no API spec FOCUS suggestion found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestColonyContextSummary(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module test\n"), 0644)
+	os.MkdirAll(filepath.Join(target, "src"), 0755)
+	os.WriteFile(filepath.Join(target, "src", "main.go"), []byte("package main\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(`{"rules":{}}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "context summary test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	summary, ok := result["colony_context_summary"].(map[string]interface{})
+	if !ok {
+		t.Fatal("colony_context_summary missing or not a map")
+	}
+
+	// Verify all expected fields exist
+	expectedFields := []string{"detected_type", "dir_type", "tech_stack_count", "governance_tool_count", "pheromone_count", "is_git_repo", "file_count"}
+	for _, field := range expectedFields {
+		if _, ok := summary[field]; !ok {
+			t.Errorf("colony_context_summary missing field: %s", field)
+		}
+	}
+
+	// Verify non-zero values where expected
+	if summary["tech_stack_count"].(float64) < 1 {
+		t.Errorf("tech_stack_count = %v, want >= 1", summary["tech_stack_count"])
+	}
+	if summary["governance_tool_count"].(float64) < 1 {
+		t.Errorf("governance_tool_count = %v, want >= 1", summary["governance_tool_count"])
+	}
+	if summary["pheromone_count"].(float64) < 1 {
+		t.Errorf("pheromone_count = %v, want >= 1", summary["pheromone_count"])
+	}
+	if summary["file_count"].(float64) < 1 {
+		t.Errorf("file_count = %v, want >= 1", summary["file_count"])
+	}
+}
+
+func TestInitResearchFullOutputIntegration(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module test\n\ngo 1.21\n\nrequire (\n\tgithub.com/spf13/cobra v1.8.0\n)\n"), 0644)
+	os.MkdirAll(filepath.Join(target, "src"), 0755)
+	os.WriteFile(filepath.Join(target, "src", "main.go"), []byte("package main\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(`{"rules":{"semi":"error"}}`), 0644)
+	os.WriteFile(filepath.Join(target, "docker-compose.yml"), []byte("services:\n  app:\n    image: node:20\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".env"), []byte("KEY=value\n"), 0644)
+	os.WriteFile(filepath.Join(target, "CHANGELOG.md"), []byte("# Changelog\n"), 0644)
+	os.WriteFile(filepath.Join(target, "Makefile"), []byte("build:\n\tgo build\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "full output integration", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	// Master integration test: verify ALL 18 output fields exist
+	requiredFields := []string{
+		"detected_type", "languages", "frameworks", "goal",
+		"top_level_dirs", "file_count", "is_git_repo",
+		"readme_summary", "git_history", "governance", "complexity",
+		"prior_colonies", "pheromone_suggestions", "charter",
+		"tech_stack_detail", "dir_classification", "governance_details",
+		"colony_context_summary",
+	}
+	missing := []string{}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			missing = append(missing, field)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("missing output fields: %v", missing)
+	}
+}
