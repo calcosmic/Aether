@@ -182,11 +182,110 @@ var chamberCompareCmd = &cobra.Command{
 		if len(args) > 0 && name == "" {
 			name = args[0]
 		}
-		outputOK(map[string]interface{}{
-			"chamber": name,
-			"matches": []interface{}{},
-			"diffs":   []interface{}{},
-		})
+
+		aetherRoot := storage.ResolveAetherRoot(context.Background())
+		manifestPath := filepath.Join(aetherRoot, ".aether", "chambers", name, "manifest.json")
+
+		manifestData, err := os.ReadFile(manifestPath)
+		if err != nil {
+			outputOK(map[string]interface{}{
+				"chamber": name,
+				"error":   fmt.Sprintf("chamber '%s' not found", name),
+				"matches": []interface{}{},
+				"diffs":   []interface{}{},
+			})
+			return nil
+		}
+
+		var manifest map[string]interface{}
+		if err := json.Unmarshal(manifestData, &manifest); err != nil {
+			outputOK(map[string]interface{}{
+				"chamber": name,
+				"error":   fmt.Sprintf("invalid manifest: %v", err),
+				"matches": []interface{}{},
+				"diffs":   []interface{}{},
+			})
+			return nil
+		}
+
+		var matches []interface{}
+		var diffs []interface{}
+		totalCompared := 0
+
+		// Load colony state (graceful degradation if not available)
+		state, stateErr := loadActiveColonyState()
+
+		// Compare goal
+		totalCompared++
+		manifestGoal := stringValue(manifest["goal"])
+		var currentGoal string
+		if stateErr == nil && state.Goal != nil {
+			currentGoal = *state.Goal
+		}
+		if manifestGoal == currentGoal {
+			matches = append(matches, map[string]interface{}{"field": "goal", "chamber": manifestGoal, "current": currentGoal})
+		} else {
+			diffs = append(diffs, map[string]interface{}{"field": "goal", "chamber_value": manifestGoal, "current_value": currentGoal})
+		}
+
+		// Compare milestone (colony state has no milestone field, compare to "")
+		totalCompared++
+		manifestMilestone := stringValue(manifest["milestone"])
+		if manifestMilestone == "" {
+			matches = append(matches, map[string]interface{}{"field": "milestone", "chamber": manifestMilestone, "current": ""})
+		} else {
+			diffs = append(diffs, map[string]interface{}{"field": "milestone", "chamber_value": manifestMilestone, "current_value": ""})
+		}
+
+		// Compare phases_completed
+		totalCompared++
+		manifestPhases := toInt(manifest["phases_completed"])
+		currentPhases := 0
+		if stateErr == nil {
+			for _, p := range state.Plan.Phases {
+				if p.Status == colony.PhaseCompleted {
+					currentPhases++
+				}
+			}
+		}
+		if manifestPhases == currentPhases {
+			matches = append(matches, map[string]interface{}{"field": "phases_completed", "chamber": manifestPhases, "current": currentPhases})
+		} else {
+			diffs = append(diffs, map[string]interface{}{"field": "phases_completed", "chamber_value": manifestPhases, "current_value": currentPhases})
+		}
+
+		// Compare total_phases
+		totalCompared++
+		manifestTotal := toInt(manifest["total_phases"])
+		currentTotal := 0
+		if stateErr == nil {
+			currentTotal = len(state.Plan.Phases)
+		}
+		if manifestTotal == currentTotal {
+			matches = append(matches, map[string]interface{}{"field": "total_phases", "chamber": manifestTotal, "current": currentTotal})
+		} else {
+			diffs = append(diffs, map[string]interface{}{"field": "total_phases", "chamber_value": manifestTotal, "current_value": currentTotal})
+		}
+
+		if matches == nil {
+			matches = []interface{}{}
+		}
+		if diffs == nil {
+			diffs = []interface{}{}
+		}
+
+		result := map[string]interface{}{
+			"chamber":        name,
+			"matches":        matches,
+			"diffs":          diffs,
+			"total_compared": totalCompared,
+		}
+
+		if stateErr != nil {
+			result["error"] = "colony state not available"
+		}
+
+		outputOK(result)
 		return nil
 	},
 }
@@ -228,5 +327,22 @@ func emptyChamberScopeGroups() map[string][]interface{} {
 	return map[string][]interface{}{
 		string(colony.ScopeProject): {},
 		string(colony.ScopeMeta):    {},
+	}
+}
+
+// toInt converts an interface{} to int, handling float64 (JSON numbers) and int types.
+func toInt(v interface{}) int {
+	if v == nil {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	case int64:
+		return int(n)
+	default:
+		return 0
 	}
 }

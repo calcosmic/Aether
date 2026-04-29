@@ -305,11 +305,16 @@ Plans:
 **Goal**: All 25 agent castes have dispatch manifest test coverage, and platform audit data is available to the dashboard warnings system
 **Depends on**: Phase 71 (platform hardening complete), Phase 76 (dashboard warnings exist)
 **Requirements**: PLAT-03, PLAT-04, PLAT-05, UX-04
-**Gap Closure**: Closes gaps from v1.11 audit (dispatch test coverage, audit data not in dashboard)
+**Gap Closure**: Closes gaps from v1.11 audit (dispatch test coverage, audit data not in dashboard, chamber-compare stub, state-mutate flag tests)
 **Success Criteria** (what must be TRUE):
-  1. Dispatch manifest test iterates all 25 castes through codexAgentFileForCaste/codexAgentNameForCaste
+  1. Dispatch manifest test iterates all 25 castes through codexAgentFileForCaste/codexAgentNameForCaste (ALREADY EXISTS)
   2. Dashboard warnings can consume platform audit/smoke test results as runtime data
-**Plans**: TBD
+  3. chamber-compare produces real comparison data (not hardcoded empty)
+  4. state-mutate --verify-only and --revert flags have test coverage
+**Plans**: 1 plan
+
+Plans:
+- [ ] 78-01-PLAN.md -- Wire chamber-compare to real data, add platform health dashboard warnings, add state-mutate flag tests
 
 ### Phase 79: Documentation & Validation Hygiene
 **Goal**: All phase summaries are populated, VALIDATION.md files are Nyquist-compliant, and REQUIREMENTS.md reflects actual completion state
@@ -337,5 +342,5 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76 -> 77 ->
 | 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
 | 76. UX Improvements | v1.11 | 2/2 | Complete    | 2026-04-29 |
 | 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
-| 78. Platform Test Coverage | v1.11 | 0 | Planned | - |
+| 78. Platform Test Coverage | v1.11 | 0/1 | Planned | - |
 | 79. Documentation & Validation Hygiene | v1.11 | 0 | Planned | - |
