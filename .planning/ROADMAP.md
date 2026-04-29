@@ -265,8 +265,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 75-01-PLAN.md -- (To be planned)
-- [ ] 75-02-PLAN.md -- (To be planned)
+- [x] 75-01-PLAN.md -- (To be planned)
+- [x] 75-02-PLAN.md -- (To be planned)
 
 ### Phase 76: UX Improvements
 **Goal**: Aether provides clear guidance to new users, explains errors in plain language, and shows progress during long operations
@@ -295,5 +295,5 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 | 72. Smart Init Charter | v1.11 | 2/2 | Complete    | 2026-04-28 |
 | 73. Rich Init Research | v1.11 | 3/3 | Complete    | 2026-04-28 |
 | 74. Suggest-Analyze | v1.11 | 2/2 | Complete    | 2026-04-29 |
-| 75. Intelligence Core | v1.11 | 0/? | Not started | - |
+| 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
 | 76. UX Improvements | v1.11 | 0/? | Not started | - |
