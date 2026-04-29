@@ -198,15 +198,8 @@ func runCeremonyResearch(goal, target string) (*colony.Charter, []pheromoneSugge
 	// We need to call the initResearchCmd's RunE function, but we need to
 	// capture its output. We'll do this by temporarily redirecting stdout.
 	origStdout := stdout
-	var buf *bytes.Buffer
-	// If stdout is already a buffer, wrap it
-	if origStdout != nil {
-		buf = bytes.NewBuffer(nil)
-		stdout = buf
-	} else {
-		buf = bytes.NewBuffer(nil)
-		stdout = buf
-	}
+	buf := bytes.NewBuffer(nil)
+	stdout = buf
 
 	// Reset after function
 	defer func() { stdout = origStdout }()
