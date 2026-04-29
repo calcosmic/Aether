@@ -753,42 +753,43 @@ func applyRelativePathStatus(srcRoot, dstRoot, rel, status string) error {
 // It scans the colony state for worktree entries with Allocated or InProgress status,
 // attempts to remove them, and updates their status to Orphaned on failure.
 func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
+	if store == nil {
+		return 0, 0, fmt.Errorf("no store initialized")
+	}
 	var state colony.ColonyState
-	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
-		return 0, 0, loadErr
-	}
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+		root := storage.ResolveAetherRoot(context.Background())
+		var remaining []colony.WorktreeEntry
+		for _, entry := range state.Worktrees {
+			if entry.Phase != phaseID {
+				remaining = append(remaining, entry)
+				continue
+			}
+			if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress {
+				remaining = append(remaining, entry)
+				continue
+			}
 
-	root := storage.ResolveAetherRoot(context.Background())
-	var remaining []colony.WorktreeEntry
-	for _, entry := range state.Worktrees {
-		if entry.Phase != phaseID {
-			remaining = append(remaining, entry)
-			continue
-		}
-		if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress {
-			remaining = append(remaining, entry)
-			continue
+			absPath := filepath.Join(root, entry.Path)
+			// If the path doesn't exist on disk, just remove the stale entry
+			if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
+				cleaned++
+				continue
+			}
+			if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+				entry.Status = colony.WorktreeOrphaned
+				remaining = append(remaining, entry)
+				orphaned++
+			} else {
+				cleaned++
+				// Don't append — entry is removed
+			}
 		}
 
-		absPath := filepath.Join(root, entry.Path)
-		// If the path doesn't exist on disk, just remove the stale entry
-		if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
-			cleaned++
-			continue
-		}
-		if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
-			entry.Status = colony.WorktreeOrphaned
-			remaining = append(remaining, entry)
-			orphaned++
-		} else {
-			cleaned++
-			// Don't append — entry is removed
-		}
-	}
-
-	state.Worktrees = remaining
-	if saveErr := store.SaveJSON("COLONY_STATE.json", state); saveErr != nil {
-		return cleaned, orphaned, saveErr
+		state.Worktrees = remaining
+		return nil
+	}); err != nil {
+		return 0, 0, err
 	}
 	return cleaned, orphaned, nil
 }
@@ -798,38 +799,39 @@ func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
 // cleaned and orphaned worktrees. Unlike cleanupBuildWorktrees, it operates
 // across all phases and does not filter by phase ID.
 func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
+	if store == nil {
+		return 0, 0, fmt.Errorf("no store initialized")
+	}
 	var state colony.ColonyState
-	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
-		return 0, 0, loadErr
-	}
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+		root := storage.ResolveAetherRoot(context.Background())
+		var remaining []colony.WorktreeEntry
+		for _, entry := range state.Worktrees {
+			if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress && entry.Status != colony.WorktreeOrphaned {
+				remaining = append(remaining, entry)
+				continue
+			}
 
-	root := storage.ResolveAetherRoot(context.Background())
-	var remaining []colony.WorktreeEntry
-	for _, entry := range state.Worktrees {
-		if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress && entry.Status != colony.WorktreeOrphaned {
-			remaining = append(remaining, entry)
-			continue
+			absPath := filepath.Join(root, entry.Path)
+			// If the path doesn't exist on disk, just remove the stale entry
+			if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
+				cleaned++
+				continue
+			}
+			if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+				entry.Status = colony.WorktreeOrphaned
+				remaining = append(remaining, entry)
+				orphaned++
+			} else {
+				cleaned++
+				// Don't append — entry is removed
+			}
 		}
 
-		absPath := filepath.Join(root, entry.Path)
-		// If the path doesn't exist on disk, just remove the stale entry
-		if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
-			cleaned++
-			continue
-		}
-		if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
-			entry.Status = colony.WorktreeOrphaned
-			remaining = append(remaining, entry)
-			orphaned++
-		} else {
-			cleaned++
-			// Don't append — entry is removed
-		}
-	}
-
-	state.Worktrees = remaining
-	if saveErr := store.SaveJSON("COLONY_STATE.json", state); saveErr != nil {
-		return cleaned, orphaned, saveErr
+		state.Worktrees = remaining
+		return nil
+	}); err != nil {
+		return 0, 0, err
 	}
 	return cleaned, orphaned, nil
 }
