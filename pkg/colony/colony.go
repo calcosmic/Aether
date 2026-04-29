@@ -168,6 +168,21 @@ type Charter struct {
 }
 
 // ---------------------------------------------------------------------------
+// Pending suggestion (suggest-analyze)
+// ---------------------------------------------------------------------------
+
+// PendingSuggestion holds an unreviewed pheromone suggestion from suggest-analyze.
+type PendingSuggestion struct {
+	ID          string `json:"id"`
+	Type        string `json:"type"`        // FOCUS, REDIRECT, or FEEDBACK
+	Content     string `json:"content"`
+	Reason      string `json:"reason"`
+	ContentHash string `json:"content_hash"`
+	CreatedAt   string `json:"created_at"`
+	Dismissed   bool   `json:"dismissed"`
+}
+
+// ---------------------------------------------------------------------------
 // Top-level state
 // ---------------------------------------------------------------------------
 
@@ -200,7 +215,9 @@ type ColonyState struct {
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
 	RunID              *string            `json:"run_id,omitempty"`
 	GateResults        []GateResultEntry  `json:"gate_results,omitempty"`
-	Charter            *Charter           `json:"charter,omitempty"`
+	Charter            *Charter              `json:"charter,omitempty"`
+	PendingSuggestions *[]PendingSuggestion  `json:"pending_suggestions,omitempty"`
+	LastAnalyzeCommit  *string               `json:"last_analyze_commit,omitempty"`
 }
 
 // EffectiveScope returns the compatibility-safe colony scope.
