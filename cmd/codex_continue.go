@@ -377,11 +377,21 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
+	// Ceremony progress tracking (visual mode only)
+	var progress *ceremonyProgress
+	if shouldRenderVisualOutput(stdout) {
+		continueSteps := []string{"Verification", "Housekeeping", "Advance", "Complete"}
+		progress = NewCeremonyProgress(continueSteps, stdout)
+	}
+
 	verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults := gateResultsRead()
 		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+		if progress != nil {
+			progress.Advance("Verification")
+		}
 
 		// Persist gate results after each gate run
 		var gateResultEntries []colony.GateResultEntry
@@ -622,6 +632,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if housekeepingErr != nil {
 		return nil, state, phase, nil, nil, false, housekeepingErr
 	}
+	if progress != nil {
+		progress.Advance("Housekeeping")
+	}
 	if err := continueContextUpdater(phase, manifest, closedWorkerDetails, now); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
@@ -669,6 +682,10 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	}
 
 	updateSessionSummary("continue", nextCommand, summary)
+	if progress != nil {
+		progress.Advance("Advance")
+		progress.Finish()
+	}
 	result := map[string]interface{}{
 		"advanced":            true,
 		"completed":           final,

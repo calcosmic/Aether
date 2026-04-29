@@ -52,6 +52,82 @@ func renderNoColonyStatusVisual() string {
 	return b.String()
 }
 
+// computeWarnings inspects colony state and data files for actionable issues.
+// Returns a list of warning strings. Empty list means no warnings.
+func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
+	var warnings []string
+
+	// 1. Stale state warning
+	if state.InitializedAt != nil && time.Since(*state.InitializedAt) > 7*24*time.Hour {
+		warnings = append(warnings, "Stale: colony was last active more than 7 days ago. Recent work may not be reflected.")
+	}
+	if state.Plan.GeneratedAt != nil && time.Since(*state.Plan.GeneratedAt) > 7*24*time.Hour {
+		warnings = append(warnings, "Stale: colony plan was generated more than 7 days ago. Recent work may not be reflected.")
+	}
+
+	// 2. Failed phases warning
+	for _, phase := range state.Plan.Phases {
+		if phase.Status == "failed" {
+			warnings = append(warnings, fmt.Sprintf("Failed phase %d (%s). Run `aether build %d` to retry.", phase.ID, phase.Name, phase.ID))
+		}
+	}
+
+	// 3. Unacknowledged midden warning
+	if s != nil {
+		var mf colony.MiddenFile
+		if s.LoadJSON("midden.json", &mf) == nil {
+			unackCount := 0
+			for _, entry := range mf.Entries {
+				if entry.Acknowledged == nil || *entry.Acknowledged == false {
+					unackCount++
+				}
+			}
+			if unackCount > 0 {
+				warnings = append(warnings, fmt.Sprintf("%d unacknowledged failure(s). Run `aether midden-review` to inspect.", unackCount))
+			}
+		}
+
+		// 4. Pheromone expiry warning
+		var pf colony.PheromoneFile
+		if s.LoadJSON("pheromones.json", &pf) == nil {
+			for _, sig := range pf.Signals {
+				if !sig.Active || sig.ExpiresAt == nil {
+					continue
+				}
+				expiry, err := time.Parse(time.RFC3339, *sig.ExpiresAt)
+				if err != nil {
+					continue
+				}
+				if time.Until(expiry) < 3*24*time.Hour {
+					content := extractContentText(sig.Content)
+					if len(content) > 40 {
+						content = content[:37] + "..."
+					}
+					warnings = append(warnings, fmt.Sprintf("Expiring signal: %s -- %s (expires in less than 3 days)", sig.Type, content))
+				}
+			}
+		}
+	}
+
+	return warnings
+}
+
+// Warnings are visual-mode only. JSON output uses structured colony state data.
+func renderWarningsSection(warnings []string) string {
+	if len(warnings) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("\u26A0\uFE0F", "Warnings"))
+	b.WriteString(visualDivider)
+	for _, w := range warnings {
+		b.WriteString(w)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
 // renderDashboard produces the full colony status dashboard string.
 func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	var b strings.Builder
@@ -72,6 +148,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 
 	// Signal summary
 	renderSignalSummaryLine(&b, s)
+
+	// Warnings (visual-mode only)
+	warnings := computeWarnings(state, s)
+	b.WriteString(renderWarningsSection(warnings))
 
 	// Progress
 	totalPhases := len(state.Plan.Phases)

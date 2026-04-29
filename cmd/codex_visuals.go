@@ -393,6 +393,26 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 			}
 	}
 
+	// Check for failed phases -- suggest retry
+	for _, phase := range state.Plan.Phases {
+		if phase.Status == "failed" {
+			return fmt.Sprintf("Run `aether build %d` to retry failed phase %d (%s).", phase.ID, phase.ID, phase.Name), nil
+		}
+	}
+
+	// Check if all phases complete but colony not yet sealed
+	allComplete := len(state.Plan.Phases) > 0
+	for _, phase := range state.Plan.Phases {
+		if phase.Status != "completed" {
+			allComplete = false
+			break
+		}
+	}
+	if allComplete && state.State != colony.StateCOMPLETED {
+		return `Run ` + "`aether seal`" + ` to mark the colony as Crowned Anthill (all phases complete).`,
+			[]string{`Run ` + "`aether status`" + ` to review the full dashboard before sealing.`}
+	}
+
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
 		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {

@@ -261,6 +261,13 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	defer ceremony.Close()
 	emitBuildCeremonyPrewave(phase, dispatches, waveCount)
 
+	// Ceremony progress tracking (visual mode only)
+	var progress *ceremonyProgress
+	if shouldRenderVisualOutput(stdout) {
+		buildSteps := []string{"Prepare", "Context", "Dispatch", "Verify", "Complete"}
+		progress = NewCeremonyProgress(buildSteps, stdout)
+	}
+
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
@@ -276,6 +283,9 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
 	}
+	if progress != nil {
+		progress.Advance("Prepare")
+	}
 
 	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, "", selectedTaskIDs)
 	if err != nil {
@@ -287,10 +297,16 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, err
 	}
 	emitVisualProgress(renderBuildDispatchPreview(updatedState, updatedPhase, dispatches))
+	if progress != nil {
+		progress.Advance("Context")
+	}
 
 	buildInvoker := newCodexWorkerInvoker()
 	if synthetic {
 		buildInvoker = &codex.FakeInvoker{}
+	}
+	if progress != nil {
+		progress.Advance("Dispatch")
 	}
 	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold)
 	if err != nil {
@@ -323,6 +339,9 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	}
 	updatedState = committedState
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
+	if progress != nil {
+		progress.Advance("Verify")
+	}
 
 	if tracer != nil && updatedState.RunID != nil {
 		_ = tracer.LogPhaseChange(*updatedState.RunID, phaseNum, string(colony.PhaseCompleted), "codex-build-complete")
@@ -340,6 +359,10 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		}
 	}
 	updateSessionSummary("build", "aether continue", fmt.Sprintf("Phase %d dispatched to %d workers across %d waves", phaseNum, len(dispatches), max(waveCount, 1)))
+	if progress != nil {
+		progress.Advance("Complete")
+		progress.Finish()
+	}
 
 	dispatchMaps := codexBuildDispatchMaps(dispatches)
 
