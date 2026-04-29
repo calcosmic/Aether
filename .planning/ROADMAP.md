@@ -342,5 +342,5 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76 -> 77 ->
 | 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
 | 76. UX Improvements | v1.11 | 2/2 | Complete    | 2026-04-29 |
 | 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
-| 78. Platform Test Coverage | v1.11 | 0/1 | Planned | - |
+| 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 79. Documentation & Validation Hygiene | v1.11 | 0 | Planned | - |
