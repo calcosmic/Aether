@@ -295,7 +295,11 @@ Plans:
   1. Init ceremony displays tech_stack_detail, dir_classification, governance_details, and colony_context_summary
   2. Circuit breaker events are published to ceremony event bus (not just printf)
   3. `--no-suggest` flag on `aether build` conditionally skips suggest-analyze in Step 4.2
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 77-01-PLAN.md -- Display research data in init ceremony, wire circuit breaker events to ceremony bus, register --no-suggest flag
+
 
 ### Phase 78: Platform Test Coverage
 **Goal**: All 25 agent castes have dispatch manifest test coverage, and platform audit data is available to the dashboard warnings system
@@ -332,6 +336,6 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76 -> 77 ->
 | 74. Suggest-Analyze | v1.11 | 2/2 | Complete    | 2026-04-29 |
 | 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
 | 76. UX Improvements | v1.11 | 2/2 | Complete    | 2026-04-29 |
-| 77. Ceremony Data Surfacing | v1.11 | 0 | Planned | - |
+| 77. Ceremony Data Surfacing | v1.11 | 1 | Planned | - |
 | 78. Platform Test Coverage | v1.11 | 0 | Planned | - |
 | 79. Documentation & Validation Hygiene | v1.11 | 0 | Planned | - |
