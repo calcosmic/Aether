@@ -31,7 +31,10 @@ func TestChamberCompareWithRealData(t *testing.T) {
 		"phases_completed": 1,
 		"total_phases":     3,
 	}
-	manifestData, _ := json.MarshalIndent(manifest, "", "  ")
+	manifestData, marshalErr := json.MarshalIndent(manifest, "", "  ")
+		if marshalErr != nil {
+			t.Fatalf("failed to marshal manifest: %v", marshalErr)
+		}
 	os.WriteFile(filepath.Join(chamberDir, "manifest.json"), manifestData, 0644)
 
 	// Create a colony state with matching goal but different phases_completed (2 vs 1)
@@ -172,7 +175,10 @@ func TestChamberCompareMatchingState(t *testing.T) {
 		"phases_completed": 3,
 		"total_phases":     3,
 	}
-	manifestData, _ := json.MarshalIndent(manifest, "", "  ")
+	manifestData, marshalErr := json.MarshalIndent(manifest, "", "  ")
+		if marshalErr != nil {
+			t.Fatalf("failed to marshal manifest: %v", marshalErr)
+		}
 	os.WriteFile(filepath.Join(chamberDir, "manifest.json"), manifestData, 0644)
 
 	// Create a colony state with identical goal and phases_completed = 3, total_phases = 3
@@ -235,7 +241,10 @@ func TestChamberCompareNoColonyState(t *testing.T) {
 		"phases_completed": 0,
 		"total_phases":     0,
 	}
-	manifestData, _ := json.MarshalIndent(manifest, "", "  ")
+	manifestData, marshalErr := json.MarshalIndent(manifest, "", "  ")
+		if marshalErr != nil {
+			t.Fatalf("failed to marshal manifest: %v", marshalErr)
+		}
 	os.WriteFile(filepath.Join(chamberDir, "manifest.json"), manifestData, 0644)
 
 	rootCmd.SetArgs([]string{"chamber-compare", "--name", "no-state-chamber"})
@@ -248,7 +257,7 @@ func TestChamberCompareNoColonyState(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 
 	// Without colony state, current values default to "" or 0.
-	// Manifest has goal="" (not set), milestone="", phases=0, total=0 -- all match against defaults.
+	// Manifest has goal="orphan goal" which differs from current state, so goal goes to diffs. Milestone, phases_completed, and total_phases match against defaults., milestone="", phases=0, total=0 -- all match against defaults.
 	matches := result["matches"].([]interface{})
 	if len(matches) == 0 {
 		t.Errorf("expected matches from manifest even without colony state, got: %v", matches)

@@ -182,6 +182,10 @@ var chamberCompareCmd = &cobra.Command{
 		if len(args) > 0 && name == "" {
 			name = args[0]
 		}
+		if name == "" {
+			outputErrorMessage("chamber name is required (--name or positional arg)")
+			return nil
+		}
 
 		aetherRoot := storage.ResolveAetherRoot(context.Background())
 		manifestPath := filepath.Join(aetherRoot, ".aether", "chambers", name, "manifest.json")
@@ -228,13 +232,17 @@ var chamberCompareCmd = &cobra.Command{
 			diffs = append(diffs, map[string]interface{}{"field": "goal", "chamber_value": manifestGoal, "current_value": currentGoal})
 		}
 
-		// Compare milestone (colony state has no milestone field, compare to "")
+		// Compare milestone
 		totalCompared++
 		manifestMilestone := stringValue(manifest["milestone"])
-		if manifestMilestone == "" {
-			matches = append(matches, map[string]interface{}{"field": "milestone", "chamber": manifestMilestone, "current": ""})
+		var currentMilestone string
+		if stateErr == nil {
+			currentMilestone = state.Milestone
+		}
+		if manifestMilestone == currentMilestone {
+			matches = append(matches, map[string]interface{}{"field": "milestone", "chamber": manifestMilestone, "current": currentMilestone})
 		} else {
-			diffs = append(diffs, map[string]interface{}{"field": "milestone", "chamber_value": manifestMilestone, "current_value": ""})
+			diffs = append(diffs, map[string]interface{}{"field": "milestone", "chamber_value": manifestMilestone, "current_value": currentMilestone})
 		}
 
 		// Compare phases_completed

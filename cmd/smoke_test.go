@@ -18,8 +18,13 @@ func TestSmokeTestWritesPlatformHealth(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	store = s
 
 	// Run smoke test checks and collect results
@@ -134,8 +139,13 @@ func TestNewSubcommandFlags(t *testing.T) {
 
 			tmpDir := t.TempDir()
 			dataDir := tmpDir + "/.aether/data"
-			os.MkdirAll(dataDir, 0755)
-			s, _ := storage.NewStore(dataDir)
+			if err := os.MkdirAll(dataDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			s, storeErr := storage.NewStore(dataDir)
+			if storeErr != nil {
+				t.Fatal(storeErr)
+			}
 			store = s
 
 			rootCmd.SetArgs(tt.args)
