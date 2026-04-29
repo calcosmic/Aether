@@ -319,13 +319,16 @@ Plans:
 ### Phase 79: Documentation & Validation Hygiene
 **Goal**: All phase summaries are populated, VALIDATION.md files are Nyquist-compliant, and REQUIREMENTS.md reflects actual completion state
 **Depends on**: Phase 72 (empty summary), Phase 72 (non-compliant VALIDATION.md)
-**Requirements**: INIT-02 (summary), Phase 72 Nyquist, UX-01..04 (checkboxes)
-**Gap Closure**: Closes gaps from v1.11 audit (empty SUMMARY, Nyquist non-compliance, stale checkboxes)
+**Requirements**: Phase-72-Nyquist, Phase-72-Summary, Phase-77-Validation
+**Gap Closure**: Closes gaps from v1.11 audit (empty SUMMARY, Nyquist non-compliance, missing VALIDATION.md)
 **Success Criteria** (what must be TRUE):
   1. 72-02-SUMMARY.md contains accurate summary of ceremony implementation
   2. Phase 72 VALIDATION.md passes Nyquist validation
-  3. UX-01..04 show as Complete in REQUIREMENTS.md traceability table
-**Plans**: TBD
+  3. Phase 77 VALIDATION.md exists and passes Nyquist validation
+**Plans**: 1 plan
+
+Plans:
+- [ ] 79-01-PLAN.md -- Populate 72-02-SUMMARY.md, fix Phase 72 VALIDATION.md Nyquist compliance, create Phase 77 VALIDATION.md
 
 ## Progress
 
@@ -343,4 +346,4 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76 -> 77 ->
 | 76. UX Improvements | v1.11 | 2/2 | Complete    | 2026-04-29 |
 | 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
-| 79. Documentation & Validation Hygiene | v1.11 | 0 | Planned | - |
+| 79. Documentation & Validation Hygiene | v1.11 | 0/1 | Planned | - |
