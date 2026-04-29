@@ -435,7 +435,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			if dr.Status == "completed" {
 				cb.RecordSuccess(dispatch.WorkerName)
 			} else if cb.RecordFailure(dispatch.WorkerName) {
-					cb.emitCircuitBreakerTripped(phase, wave, dispatch.WorkerName)
+				cb.emitCircuitBreakerTripped(phase, wave, dispatch.WorkerName)
 			}
 			if statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); statusErr != nil {
 				dr.Status = "failed"
