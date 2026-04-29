@@ -144,12 +144,12 @@ func collectRepoTouchedPaths(root string, baseline map[string]string, result cod
 	return out, nil
 }
 
-func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode) ([]codex.DispatchResult, error) {
+func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
 	if parallelMode != colony.ModeWorktree {
-		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode)
+		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode, cb)
 	}
 	if _, ok := invoker.(*codex.FakeInvoker); ok {
-		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode)
+		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode, cb)
 	}
 	if err := ensureGitRepository(root); err != nil {
 		return nil, fmt.Errorf("worktree mode requires a git repository: %w", err)
@@ -169,6 +169,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
 		waveResults := make([]codex.DispatchResult, len(waveDispatches))
+		cb.Reset() // Per D-06: per-wave reset
 		var wg sync.WaitGroup
 		for idx, dispatch := range waveDispatches {
 			wg.Add(1)
@@ -183,6 +184,23 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 					}
 					emitBuildCeremonyWorkerTimeout(dispatch, wave, ctx.Err())
 					return
+				}
+
+				if !cb.Allow(dispatch.WorkerName) {
+					peer := findSameCastePeer(waveDispatches, dispatch, cb)
+					if peer != nil {
+						emitCircuitBreakerRedistributed(dispatch.WorkerName, peer.WorkerName)
+						dispatch = *peer
+					} else {
+						emitCircuitBreakerNoPeer(dispatch.WorkerName)
+						waveResults[i] = codex.DispatchResult{
+							WorkerName: dispatch.WorkerName,
+							Status:     "failed",
+							Error:      fmt.Errorf("circuit breaker tripped, no same-caste peer for redistribution"),
+						}
+						emitBuildCeremonyWorkerFailed(dispatch, wave, waveResults[i].Error)
+						return
+					}
 				}
 
 				var session *buildWorktreeSession
@@ -299,6 +317,13 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				if dr.Status == "" {
 					dr.Status = "failed"
 				}
+
+				// Record result with circuit breaker
+				if dr.Status == "completed" {
+					cb.RecordSuccess(dispatch.WorkerName)
+				} else {
+					cb.RecordFailure(dispatch.WorkerName)
+				}
 				statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr))
 				rootOpsMu.Unlock()
 				if statusErr != nil {
@@ -318,7 +343,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 	return results, nil
 }
 
-func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode) ([]codex.DispatchResult, error) {
+func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
 	waves := codex.GroupByWave(dispatches)
 	waveNumbers := make([]int, 0, len(waves))
 	for wave := range waves {
@@ -332,6 +357,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
 		waveResults := make([]codex.DispatchResult, 0, len(waveDispatches))
+		cb.Reset() // Per D-06: per-wave reset
 		for _, dispatch := range waveDispatches {
 			if ctx.Err() != nil {
 				dr := codex.DispatchResult{
@@ -343,6 +369,25 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 				waveResults = append(waveResults, dr)
 				results = append(results, dr)
 				continue
+			}
+
+			if !cb.Allow(dispatch.WorkerName) {
+				peer := findSameCastePeer(waveDispatches, dispatch, cb)
+				if peer != nil {
+					emitCircuitBreakerRedistributed(dispatch.WorkerName, peer.WorkerName)
+					dispatch = *peer
+				} else {
+					emitCircuitBreakerNoPeer(dispatch.WorkerName)
+					dr := codex.DispatchResult{
+						WorkerName: dispatch.WorkerName,
+						Status:     "failed",
+						Error:      fmt.Errorf("circuit breaker tripped, no same-caste peer for redistribution"),
+					}
+					emitBuildCeremonyWorkerFailed(dispatch, wave, dr.Error)
+					waveResults = append(waveResults, dr)
+					results = append(results, dr)
+					continue
+				}
 			}
 
 			baseline, baselineErr := snapshotGitStatus(dispatch.Root)
@@ -385,6 +430,12 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			}
 			if dr.Status == "" {
 				dr.Status = "failed"
+			}
+			// Record result with circuit breaker
+			if dr.Status == "completed" {
+				cb.RecordSuccess(dispatch.WorkerName)
+			} else {
+				cb.RecordFailure(dispatch.WorkerName)
 			}
 			if err := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); err != nil {
 				return nil, fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, err)

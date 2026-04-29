@@ -107,10 +107,11 @@ var newCodexWorkerInvoker = codex.NewWorkerInvoker
 var errRuntimeStateSuperseded = errors.New("runtime state superseded")
 
 type codexBuildOptions struct {
-	WorkerTimeout time.Duration
-	Force         bool
-	LightFlag     bool
-	HeavyFlag     bool
+	WorkerTimeout           time.Duration
+	Force                   bool
+	LightFlag               bool
+	HeavyFlag               bool
+	CircuitBreakerThreshold int
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -285,7 +286,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if synthetic {
 		buildInvoker = &codex.FakeInvoker{}
 	}
-	dispatches, claims, mode, err := executeCodexBuildDispatches(context.Background(), root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout)
+	dispatches, claims, mode, err := executeCodexBuildDispatches(context.Background(), root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -887,7 +888,7 @@ func buildTaskID(task colony.Task, idx int) string {
 	return fmt.Sprintf("task-%d", idx+1)
 }
 
-func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
+func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration, circuitBreakerThreshold int) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
 	}
@@ -919,7 +920,8 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		indexByName[dispatch.Name] = i
 	}
 
-	results, err := dispatchCodexBuildWorkers(ctx, root, phase, workerDispatches, invoker, startedAt, parallelMode)
+	cb := NewCircuitBreaker(circuitBreakerThreshold)
+	results, err := dispatchCodexBuildWorkers(ctx, root, phase, workerDispatches, invoker, startedAt, parallelMode, cb)
 	// Clean up any worktrees that weren't properly finalized during dispatch
 	cleaned, orphaned, _ := cleanupBuildWorktrees(phase.ID)
 	if cleaned > 0 || orphaned > 0 {

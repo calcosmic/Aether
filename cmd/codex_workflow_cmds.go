@@ -118,11 +118,13 @@ var buildCmd = &cobra.Command{
 		syntheticBuild, _ := cmd.Flags().GetBool("synthetic")
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
+		cbThreshold, _ := cmd.Flags().GetInt("circuit-breaker-threshold")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
 			WorkerTimeout: workerTimeout,
 			Force:         forceBuild,
 			LightFlag:     lightFlag,
-			HeavyFlag:     heavyFlag,
+			HeavyFlag:               heavyFlag,
+			CircuitBreakerThreshold: cbThreshold,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -941,6 +943,7 @@ func init() {
 	buildCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build dispatches (e.g. 15m)")
 	buildCmd.Flags().Bool("light", false, "Force light review (skip heavy agents on intermediate phases)")
 	buildCmd.Flags().Bool("heavy", false, "Force heavy review (full quality gauntlet on any phase)")
+	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
