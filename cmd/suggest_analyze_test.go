@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -416,9 +417,9 @@ func TestSuggestAnalyze_ReRunAboveThreshold(t *testing.T) {
 
 	// Create 6 new files (above threshold of 5) and commit them.
 	for i := 0; i < 6; i++ {
-		name := filepath.Join(tmpDir, "changed.go")
-		_ = os.WriteFile(name, []byte("package main\n"), 0644)
-		runGit(t, tmpDir, "add", "changed.go")
+		name := filepath.Join(tmpDir, fmt.Sprintf("changed_%d.go", i))
+		_ = os.WriteFile(name, []byte(fmt.Sprintf("package main\nfunc f%d(){}\n", i)), 0644)
+		runGit(t, tmpDir, "add", fmt.Sprintf("changed_%d.go", i))
 	}
 	runGit(t, tmpDir, "commit", "-m", "many changes")
 
