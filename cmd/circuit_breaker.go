@@ -125,3 +125,28 @@ func emitCircuitBreakerRedistributed(fromWorker, toWorker string) {
 func emitCircuitBreakerNoPeer(workerName string) {
 	fmt.Printf("  Circuit breaker: %s tripped, no same-caste peer available for redistribution\n", workerName)
 }
+
+// CircuitBreakerEvent describes a circuit breaker state change for ceremony output.
+type CircuitBreakerEvent struct {
+	WorkerName string
+	Event      string // "tripped", "skipped", "redistributed"
+	Reason     string
+	PeerName   string // set when Event == "redistributed"
+}
+
+// String returns a human-readable description of the circuit breaker event.
+func (e CircuitBreakerEvent) String() string {
+	switch e.Event {
+	case "tripped":
+		return fmt.Sprintf("Circuit breaker: %s tripped (%s)", e.WorkerName, e.Reason)
+	case "skipped":
+		if e.PeerName != "" {
+			return fmt.Sprintf("Circuit breaker: %s skipped -- redistributing to %s (%s)", e.WorkerName, e.PeerName, e.Reason)
+		}
+		return fmt.Sprintf("Circuit breaker: %s skipped -- no peer available (%s)", e.WorkerName, e.Reason)
+	case "redistributed":
+		return fmt.Sprintf("Circuit breaker: redistributed %s task to %s", e.WorkerName, e.PeerName)
+	default:
+		return fmt.Sprintf("Circuit breaker: %s %s", e.WorkerName, e.Event)
+	}
+}

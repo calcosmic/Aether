@@ -544,3 +544,14 @@ func trimCeremonyText(value string, limit int) string {
 	}
 	return strings.TrimSpace(value[:limit-3]) + "..."
 }
+
+func emitBuildCeremonyCircuitBreak(phase colony.Phase, wave int, evt CircuitBreakerEvent) {
+	emitBuildCeremony(events.CeremonyTopicBuildCircuitBreak, events.CeremonyPayload{
+		Phase:     phase.ID,
+		PhaseName: phase.Name,
+		Wave:      wave,
+		Name:      evt.WorkerName,
+		Status:    evt.Event,
+		Message:   evt.String(),
+	})
+}

@@ -8,6 +8,7 @@ const (
 	CeremonyTopicBuildSpawn        = "ceremony.build.spawn"
 	CeremonyTopicBuildToolUse      = "ceremony.build.tool_use"
 	CeremonyTopicBuildWaveEnd      = "ceremony.build.wave.end"
+	CeremonyTopicBuildCircuitBreak = "ceremony.build.circuit_break"
 	CeremonyTopicPlanWaveStart     = "ceremony.plan.wave.start"
 	CeremonyTopicPlanSpawn         = "ceremony.plan.spawn"
 	CeremonyTopicPlanWaveEnd       = "ceremony.plan.wave.end"
@@ -69,6 +70,7 @@ func CeremonyTopics() []string {
 		CeremonyTopicBuildSpawn,
 		CeremonyTopicBuildToolUse,
 		CeremonyTopicBuildWaveEnd,
+			CeremonyTopicBuildCircuitBreak,
 		CeremonyTopicPlanWaveStart,
 		CeremonyTopicPlanSpawn,
 		CeremonyTopicPlanWaveEnd,
