@@ -113,10 +113,15 @@ func findSameCastePeer(dispatches []codex.WorkerDispatch, current codex.WorkerDi
 
 // emitCircuitBreakerTripped publishes a circuit breaker trip event via the ceremony event bus.
 func (cb *CircuitBreaker) emitCircuitBreakerTripped(phase colony.Phase, wave int, workerName string) {
+	cb.mu.Lock()
+	count := cb.failures[workerName]
+	threshold := cb.threshold
+	cb.mu.Unlock()
+
 	emitBuildCeremonyCircuitBreak(phase, wave, CircuitBreakerEvent{
 		WorkerName: workerName,
 		Event:      "tripped",
-		Reason:     fmt.Sprintf("after %d consecutive failures (threshold: %d)", cb.failures[workerName], cb.threshold),
+		Reason:     fmt.Sprintf("after %d consecutive failures (threshold: %d)", count, threshold),
 	})
 }
 
