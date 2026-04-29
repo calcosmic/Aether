@@ -234,3 +234,123 @@ func createSeedStore(dataDir string, midden *colony.MiddenFile, pheromones *colo
 	}
 	return s, nil
 }
+
+func TestComputeWarningsPlatformHealth_FailedCommands(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "aether-platform-health-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := createSeedStore(dataDir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ph := map[string]interface{}{
+		"failed_commands": []interface{}{"cmd1", "cmd2"},
+		"flag_mismatches": []interface{}{},
+	}
+	s.SaveJSON("platform-health.json", ph)
+
+	goal := "Platform health test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, s)
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "2 command(s) failed smoke test") && strings.Contains(w, "smoke-test") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected failed commands warning, got: %v", warnings)
+	}
+}
+
+func TestComputeWarningsPlatformHealth_FlagMismatches(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "aether-platform-health-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := createSeedStore(dataDir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ph := map[string]interface{}{
+		"failed_commands": []interface{}{},
+		"flag_mismatches": []interface{}{"flag1"},
+	}
+	s.SaveJSON("platform-health.json", ph)
+
+	goal := "Platform health test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, s)
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "1 CLI flag mismatch") && strings.Contains(w, "cli-audit") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected flag mismatch warning, got: %v", warnings)
+	}
+}
+
+func TestComputeWarningsPlatformHealth_Clean(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "aether-platform-health-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := createSeedStore(dataDir, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ph := map[string]interface{}{
+		"failed_commands": []interface{}{},
+		"flag_mismatches": []interface{}{},
+	}
+	s.SaveJSON("platform-health.json", ph)
+
+	goal := "Platform health test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, s)
+
+	for _, w := range warnings {
+		if strings.Contains(w, "Platform health") {
+			t.Errorf("expected no platform health warning for clean data, got: %s", w)
+		}
+	}
+}
+
+func TestComputeWarningsPlatformHealth_NoFile(t *testing.T) {
+	goal := "Platform health test"
+	warnings := computeWarnings(colony.ColonyState{Goal: &goal}, nil)
+
+	for _, w := range warnings {
+		if strings.Contains(w, "Platform health") {
+			t.Errorf("expected no platform health warning without file, got: %s", w)
+		}
+	}
+}
