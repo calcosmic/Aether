@@ -110,28 +110,6 @@ var runCompatibilityCmd = &cobra.Command{
 	},
 }
 
-var suggestApproveCmd = &cobra.Command{
-	Use:   "suggest-approve",
-	Short: "Review and approve pheromone suggestions from suggest-analyze",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-		dryRun, _ := cmd.Flags().GetBool("dry-run")
-		_, err := loadActiveColonyState()
-		if err != nil {
-			outputError(1, fmt.Sprintf("failed to read colony state: %v", err), nil)
-			return nil
-		}
-		outputOK(map[string]interface{}{
-			"suggestions": []interface{}{},
-			"dry_run":     dryRun,
-		})
-		return nil
-	},
-}
-
 var versionsCmd = &cobra.Command{
 	Use:   "versions",
 	Short: "Show version information for binary, hub, and repo",
@@ -158,12 +136,9 @@ func init() {
 
 	oracleCmd.Flags().String("depth", "", "Research depth: quick, balanced, deep, exhaustive (default: balanced)")
 
-	suggestApproveCmd.Flags().Bool("dry-run", false, "Preview without persisting approvals")
-
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)
 	rootCmd.AddCommand(runCompatibilityCmd)
-	rootCmd.AddCommand(suggestApproveCmd)
 	rootCmd.AddCommand(versionsCmd)
 }
 

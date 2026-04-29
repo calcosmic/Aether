@@ -254,12 +254,20 @@ func TestSuggestApprove_DismissSuggestion(t *testing.T) {
 	resetRootCmd(t)
 
 	rootCmd.SetArgs([]string{"suggest-approve"})
-	_ = rootCmd.Execute()
+	err2 := rootCmd.Execute()
+	if err2 != nil {
+		t.Fatalf("unexpected error on second call: %v", err2)
+	}
 
 	env2 := parseEnvelope(t, buf2.String())
 	result2 := env2["result"].(map[string]interface{})
-	suggestions2 := result2["suggestions"].([]interface{})
-	if len(suggestions2) != 0 {
+	suggestions2, ok2 := result2["suggestions"].([]interface{})
+	if !ok2 || suggestions2 == nil {
+		// suggestions may be nil or empty -- both acceptable for "no visible suggestions"
+		if result2["suggestions"] != nil {
+			t.Fatalf("expected suggestions array, got %T", result2["suggestions"])
+		}
+	} else if len(suggestions2) != 0 {
 		t.Errorf("expected 0 visible suggestions after dismiss, got %d", len(suggestions2))
 	}
 }
