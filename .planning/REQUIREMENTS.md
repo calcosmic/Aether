@@ -53,10 +53,10 @@ Restore lost intelligence features from the shell-to-Go migration.
 
 Better onboarding, clearer feedback, smoother flows.
 
-- [ ] **UX-01**: First-run experience provides clear guidance for new users
-- [ ] **UX-02**: Error messages explain what happened in plain language and suggest next steps
-- [ ] **UX-03**: Build and continue ceremonies provide progress feedback during long operations
-- [ ] **UX-04**: Status command surfaces actionable information, not just raw state
+- [x] **UX-01**: First-run experience provides clear guidance for new users
+- [x] **UX-02**: Error messages explain what happened in plain language and suggest next steps
+- [x] **UX-03**: Build and continue ceremonies provide progress feedback during long operations
+- [x] **UX-04**: Status command surfaces actionable information, not just raw state
 
 ## v2 Requirements
 
@@ -107,10 +107,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTEL-03 | Phase 74 | Complete |
 | INTEL-04 | Phase 75 | Complete |
 | INTEL-05 | Phase 75 | Complete |
-| UX-01 | Phase 76 | Pending |
-| UX-02 | Phase 76 | Pending |
-| UX-03 | Phase 76 | Pending |
-| UX-04 | Phase 76 | Pending |
+| UX-01 | Phase 76 | Complete |
+| UX-02 | Phase 76 | Complete |
+| UX-03 | Phase 76 | Complete |
+| UX-04 | Phase 76 | Complete |
 
 **Coverage:**
 - v1 requirements: 26 total
@@ -119,4 +119,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-28*
-*Last updated: 2026-04-28 after roadmap creation*
+*Last updated: 2026-04-29 after Phase 76 completion and gap closure planning*

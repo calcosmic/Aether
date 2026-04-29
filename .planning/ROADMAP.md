@@ -172,6 +172,9 @@
 - [ ] **Phase 74: Suggest-Analyze** - Restore automatic pheromone suggestions during builds
 - [ ] **Phase 75: Intelligence Core** - Restore Bayesian confidence scoring and circuit breaker
 - [ ] **Phase 76: UX Improvements** - Better onboarding, clearer feedback, smoother ceremony flows
+- [ ] **Phase 77: Ceremony Data Surfacing** - Display rich research data in init ceremony, wire circuit breaker events, add --no-suggest flag
+- [ ] **Phase 78: Platform Test Coverage** - Expand dispatch test to 25 castes, add platform audit data to dashboard warnings
+- [ ] **Phase 79: Documentation & Validation Hygiene** - Populate empty summaries, fix Nyquist compliance, update requirement checkboxes
 
 ## Phase Details
 
@@ -283,10 +286,42 @@ Plans:
 - [ ] 76-01-PLAN.md -- First-run welcome banner, friendly error messages, ceremony progress bars
 - [ ] 76-02-PLAN.md -- Status dashboard redesign with warnings and next-step suggestions
 
+### Phase 77: Ceremony Data Surfacing
+**Goal**: Rich research data from init-research is displayed in the init ceremony, circuit breaker events flow through the ceremony event bus, and builds can opt out of suggest-analyze
+**Depends on**: Phase 73 (rich research data exists), Phase 75 (circuit breaker exists)
+**Requirements**: INIT-03, INIT-04, INIT-05, INIT-07, INTEL-05, INTEL-01
+**Gap Closure**: Closes gaps from v1.11 audit (research data not surfaced, orphaned event function, missing flag)
+**Success Criteria** (what must be TRUE):
+  1. Init ceremony displays tech_stack_detail, dir_classification, governance_details, and colony_context_summary
+  2. Circuit breaker events are published to ceremony event bus (not just printf)
+  3. `--no-suggest` flag on `aether build` conditionally skips suggest-analyze in Step 4.2
+**Plans**: TBD
+
+### Phase 78: Platform Test Coverage
+**Goal**: All 25 agent castes have dispatch manifest test coverage, and platform audit data is available to the dashboard warnings system
+**Depends on**: Phase 71 (platform hardening complete), Phase 76 (dashboard warnings exist)
+**Requirements**: PLAT-03, PLAT-04, PLAT-05, UX-04
+**Gap Closure**: Closes gaps from v1.11 audit (dispatch test coverage, audit data not in dashboard)
+**Success Criteria** (what must be TRUE):
+  1. Dispatch manifest test iterates all 25 castes through codexAgentFileForCaste/codexAgentNameForCaste
+  2. Dashboard warnings can consume platform audit/smoke test results as runtime data
+**Plans**: TBD
+
+### Phase 79: Documentation & Validation Hygiene
+**Goal**: All phase summaries are populated, VALIDATION.md files are Nyquist-compliant, and REQUIREMENTS.md reflects actual completion state
+**Depends on**: Phase 72 (empty summary), Phase 72 (non-compliant VALIDATION.md)
+**Requirements**: INIT-02 (summary), Phase 72 Nyquist, UX-01..04 (checkboxes)
+**Gap Closure**: Closes gaps from v1.11 audit (empty SUMMARY, Nyquist non-compliance, stale checkboxes)
+**Success Criteria** (what must be TRUE):
+  1. 72-02-SUMMARY.md contains accurate summary of ceremony implementation
+  2. Phase 72 VALIDATION.md passes Nyquist validation
+  3. UX-01..04 show as Complete in REQUIREMENTS.md traceability table
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
+Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76 -> 77 -> 78 -> 79
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -296,4 +331,7 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 | 73. Rich Init Research | v1.11 | 3/3 | Complete    | 2026-04-28 |
 | 74. Suggest-Analyze | v1.11 | 2/2 | Complete    | 2026-04-29 |
 | 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
-| 76. UX Improvements | v1.11 | 0/2 | Planned | - |
+| 76. UX Improvements | v1.11 | 2/2 | Complete    | 2026-04-29 |
+| 77. Ceremony Data Surfacing | v1.11 | 0 | Planned | - |
+| 78. Platform Test Coverage | v1.11 | 0 | Planned | - |
+| 79. Documentation & Validation Hygiene | v1.11 | 0 | Planned | - |
