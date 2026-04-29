@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
@@ -249,7 +252,10 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	waveCount := len(waveExecution)
 	parallelWaves := countParallelWaveExecutionPlans(waveExecution)
 
-	ceremony := newBuildCeremonyEmitter(context.Background(), root, phase)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	ceremony := newBuildCeremonyEmitter(ctx, root, phase)
 	restoreCeremony := setActiveBuildCeremony(ceremony)
 	defer restoreCeremony()
 	defer ceremony.Close()
@@ -286,7 +292,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if synthetic {
 		buildInvoker = &codex.FakeInvoker{}
 	}
-	dispatches, claims, mode, err := executeCodexBuildDispatches(context.Background(), root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold)
+	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
