@@ -189,10 +189,10 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				if !cb.Allow(dispatch.WorkerName) {
 					peer := findSameCastePeer(waveDispatches, dispatch, cb)
 					if peer != nil {
-						emitCircuitBreakerRedistributed(dispatch.WorkerName, peer.WorkerName)
+						emitCircuitBreakerRedistributed(phase, wave, dispatch.WorkerName, peer.WorkerName)
 						dispatch = *peer
 					} else {
-						emitCircuitBreakerNoPeer(dispatch.WorkerName)
+						emitCircuitBreakerNoPeer(phase, wave, dispatch.WorkerName)
 						waveResults[i] = codex.DispatchResult{
 							WorkerName: dispatch.WorkerName,
 							Status:     "failed",
@@ -321,9 +321,9 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				// Record result with circuit breaker
 				if dr.Status == "completed" {
 					cb.RecordSuccess(dispatch.WorkerName)
-				} else {
-					cb.RecordFailure(dispatch.WorkerName)
-				}
+				} else if cb.RecordFailure(dispatch.WorkerName) {
+					cb.emitCircuitBreakerTripped(phase, wave, dispatch.WorkerName)
+					}
 				statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr))
 				rootOpsMu.Unlock()
 				if statusErr != nil {
@@ -374,10 +374,10 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			if !cb.Allow(dispatch.WorkerName) {
 				peer := findSameCastePeer(waveDispatches, dispatch, cb)
 				if peer != nil {
-					emitCircuitBreakerRedistributed(dispatch.WorkerName, peer.WorkerName)
+					emitCircuitBreakerRedistributed(phase, wave, dispatch.WorkerName, peer.WorkerName)
 					dispatch = *peer
 				} else {
-					emitCircuitBreakerNoPeer(dispatch.WorkerName)
+					emitCircuitBreakerNoPeer(phase, wave, dispatch.WorkerName)
 					dr := codex.DispatchResult{
 						WorkerName: dispatch.WorkerName,
 						Status:     "failed",
@@ -434,8 +434,8 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			// Record result with circuit breaker
 			if dr.Status == "completed" {
 				cb.RecordSuccess(dispatch.WorkerName)
-			} else {
-				cb.RecordFailure(dispatch.WorkerName)
+			} else if cb.RecordFailure(dispatch.WorkerName) {
+					cb.emitCircuitBreakerTripped(phase, wave, dispatch.WorkerName)
 			}
 			if statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); statusErr != nil {
 				dr.Status = "failed"

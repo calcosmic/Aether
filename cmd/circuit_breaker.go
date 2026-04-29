@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // CircuitBreaker tracks consecutive failures per worker instance and prevents
@@ -110,20 +111,32 @@ func findSameCastePeer(dispatches []codex.WorkerDispatch, current codex.WorkerDi
 	return nil
 }
 
-// emitCircuitBreakerTripped logs a circuit breaker event for build output visibility.
-func emitCircuitBreakerTripped(workerName string, threshold int, failureCount int) {
-	fmt.Printf("  Circuit breaker: %s tripped after %d consecutive failures (threshold: %d)\n",
-		workerName, failureCount, threshold)
+// emitCircuitBreakerTripped publishes a circuit breaker trip event via the ceremony event bus.
+func (cb *CircuitBreaker) emitCircuitBreakerTripped(phase colony.Phase, wave int, workerName string) {
+	emitBuildCeremonyCircuitBreak(phase, wave, CircuitBreakerEvent{
+		WorkerName: workerName,
+		Event:      "tripped",
+		Reason:     fmt.Sprintf("after %d consecutive failures (threshold: %d)", cb.failures[workerName], cb.threshold),
+	})
 }
 
-// emitCircuitBreakerRedistributed logs when a task is redistributed.
-func emitCircuitBreakerRedistributed(fromWorker, toWorker string) {
-	fmt.Printf("  Circuit breaker: redistributing task from %s to %s\n", fromWorker, toWorker)
+// emitCircuitBreakerRedistributed publishes a circuit breaker redistribution event via the ceremony event bus.
+func emitCircuitBreakerRedistributed(phase colony.Phase, wave int, fromWorker, toWorker string) {
+	emitBuildCeremonyCircuitBreak(phase, wave, CircuitBreakerEvent{
+		WorkerName: fromWorker,
+		Event:      "skipped",
+		Reason:     fmt.Sprintf("redistributing to %s", toWorker),
+		PeerName:   toWorker,
+	})
 }
 
-// emitCircuitBreakerNoPeer logs when no peer is available for redistribution.
-func emitCircuitBreakerNoPeer(workerName string) {
-	fmt.Printf("  Circuit breaker: %s tripped, no same-caste peer available for redistribution\n", workerName)
+// emitCircuitBreakerNoPeer publishes a circuit breaker no-peer event via the ceremony event bus.
+func emitCircuitBreakerNoPeer(phase colony.Phase, wave int, workerName string) {
+	emitBuildCeremonyCircuitBreak(phase, wave, CircuitBreakerEvent{
+		WorkerName: workerName,
+		Event:      "skipped",
+		Reason:     "no same-caste peer available for redistribution",
+	})
 }
 
 // CircuitBreakerEvent describes a circuit breaker state change for ceremony output.
