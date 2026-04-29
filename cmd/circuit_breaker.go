@@ -1,0 +1,127 @@
+package cmd
+
+import (
+	"fmt"
+	"sort"
+	"sync"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+)
+
+// CircuitBreaker tracks consecutive failures per worker instance and prevents
+// dispatch to workers that exceed the failure threshold.
+// Per D-04: consecutive failure count triggers the breaker (configurable, default 3).
+// Per D-07: per-worker instance granularity.
+// Per D-06: per-wave reset via Reset().
+// All methods are goroutine-safe.
+type CircuitBreaker struct {
+	mu        sync.Mutex
+	threshold int
+	failures  map[string]int  // workerName -> consecutive failure count
+	tripped   map[string]bool // workerName -> tripped state
+}
+
+// NewCircuitBreaker creates a circuit breaker with the given failure threshold.
+// Thresholds below 1 are clamped to 3.
+func NewCircuitBreaker(threshold int) *CircuitBreaker {
+	if threshold < 1 {
+		threshold = 3
+	}
+	return &CircuitBreaker{
+		threshold: threshold,
+		failures:  make(map[string]int),
+		tripped:   make(map[string]bool),
+	}
+}
+
+// Allow returns false if the worker has been tripped (consecutive failures >= threshold).
+func (cb *CircuitBreaker) Allow(workerName string) bool {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	return !cb.tripped[workerName]
+}
+
+// RecordSuccess resets the failure counter for a worker. Per D-04: a single success resets.
+func (cb *CircuitBreaker) RecordSuccess(workerName string) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.failures[workerName] = 0
+	cb.tripped[workerName] = false
+}
+
+// RecordFailure increments the failure counter. Returns true if the worker just tripped.
+func (cb *CircuitBreaker) RecordFailure(workerName string) bool {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.failures[workerName]++
+	if cb.failures[workerName] >= cb.threshold {
+		cb.tripped[workerName] = true
+		return true
+	}
+	return false
+}
+
+// Reset clears all breaker state. Call at the start of each wave (per D-06).
+func (cb *CircuitBreaker) Reset() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.failures = make(map[string]int)
+	cb.tripped = make(map[string]bool)
+}
+
+// FailureCount returns the current consecutive failure count for a worker.
+func (cb *CircuitBreaker) FailureCount(workerName string) int {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	return cb.failures[workerName]
+}
+
+// TrippedWorkers returns the names of all currently tripped workers, sorted.
+func (cb *CircuitBreaker) TrippedWorkers() []string {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	var names []string
+	for name, tripped := range cb.tripped {
+		if tripped {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// findSameCastePeer finds a non-tripped worker of the same caste for task redistribution.
+// Per D-05: redistributes to same-caste peer. Per research Pitfall 3: peer must not be tripped.
+// Returns nil if no suitable peer exists.
+func findSameCastePeer(dispatches []codex.WorkerDispatch, current codex.WorkerDispatch, cb *CircuitBreaker) *codex.WorkerDispatch {
+	for i := range dispatches {
+		d := &dispatches[i]
+		if d.WorkerName == current.WorkerName {
+			continue
+		}
+		if d.Caste != current.Caste {
+			continue
+		}
+		if !cb.Allow(d.WorkerName) {
+			continue
+		}
+		return d
+	}
+	return nil
+}
+
+// emitCircuitBreakerTripped logs a circuit breaker event for build output visibility.
+func emitCircuitBreakerTripped(workerName string, threshold int, failureCount int) {
+	fmt.Printf("  Circuit breaker: %s tripped after %d consecutive failures (threshold: %d)\n",
+		workerName, failureCount, threshold)
+}
+
+// emitCircuitBreakerRedistributed logs when a task is redistributed.
+func emitCircuitBreakerRedistributed(fromWorker, toWorker string) {
+	fmt.Printf("  Circuit breaker: redistributing task from %s to %s\n", fromWorker, toWorker)
+}
+
+// emitCircuitBreakerNoPeer logs when no peer is available for redistribution.
+func emitCircuitBreakerNoPeer(workerName string) {
+	fmt.Printf("  Circuit breaker: %s tripped, no same-caste peer available for redistribution\n", workerName)
+}
