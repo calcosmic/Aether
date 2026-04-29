@@ -323,12 +323,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		for _, dispatch := range dispatches {
 			filesModified := 0
 			if dispatch.Status == "completed" {
-				for _, d := range dispatches {
-					if d.Name == dispatch.Name {
-						filesModified = len(d.Outputs)
-						break
-					}
-				}
+				filesModified = len(dispatch.Outputs)
 			}
 			_ = tracer.LogArtifact(*updatedState.RunID, "build.worker", map[string]interface{}{
 				"worker":         dispatch.Name,
