@@ -437,8 +437,9 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			} else {
 				cb.RecordFailure(dispatch.WorkerName)
 			}
-			if err := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); err != nil {
-				return nil, fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, err)
+			if statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); statusErr != nil {
+				dr.Status = "failed"
+				dr.Error = fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, statusErr)
 			}
 			emitBuildCeremonyWorkerFinished(dispatch, dr)
 			emitCodexBuildWorkerFinished(dispatch, dr)
