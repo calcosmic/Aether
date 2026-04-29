@@ -269,7 +269,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				if dr.Status != "completed" || dr.WorkerResult == nil {
 					finalStatus = colony.WorktreeOrphaned
 				} else {
-					touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, result)
+					touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, *dr.WorkerResult)
 					if touchErr != nil {
 						dr.Status = "failed"
 						dr.Error = touchErr
