@@ -157,11 +157,15 @@ var learningPromoteAutoCmd = &cobra.Command{
 		defer cancel()
 
 		promoted := 0
+		failed := 0
+		var failures []string
 		for _, obs := range file.Observations {
 			eligible, _ := memory.CheckPromotion(obs)
 			if eligible {
 				result, err := promoteService.Promote(ctx, obs, "auto-promote")
 				if err != nil {
+					failed++
+					failures = append(failures, fmt.Sprintf("%s: %v", obs.ContentHash, err))
 					continue
 				}
 				if result.IsNew {
@@ -172,6 +176,7 @@ var learningPromoteAutoCmd = &cobra.Command{
 
 		outputOK(map[string]interface{}{
 			"promoted":       promoted,
+			"failed":         failed,
 			"total_observed": len(file.Observations),
 		})
 		return nil
