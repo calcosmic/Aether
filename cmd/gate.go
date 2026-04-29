@@ -552,15 +552,17 @@ func shouldSkipGate(priorResults []colony.GateResultEntry, gateName string) bool
 func gateResultsWrite(entries []colony.GateResultEntry) error {
 	var updated colony.ColonyState
 	return store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
-		existing := make(map[string]colony.GateResultEntry, len(updated.GateResults))
-		for _, e := range updated.GateResults {
-			existing[e.Name] = e
+		indexByName := make(map[string]int, len(updated.GateResults))
+		result := append([]colony.GateResultEntry{}, updated.GateResults...)
+		for idx, e := range result {
+			indexByName[e.Name] = idx
 		}
 		for _, e := range entries {
-			existing[e.Name] = e
-		}
-		result := make([]colony.GateResultEntry, 0, len(existing))
-		for _, e := range existing {
+			if idx, ok := indexByName[e.Name]; ok {
+				result[idx] = e
+				continue
+			}
+			indexByName[e.Name] = len(result)
 			result = append(result, e)
 		}
 		updated.GateResults = result

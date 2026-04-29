@@ -120,9 +120,9 @@ var buildCmd = &cobra.Command{
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		cbThreshold, _ := cmd.Flags().GetInt("circuit-breaker-threshold")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
-			WorkerTimeout: workerTimeout,
-			Force:         forceBuild,
-			LightFlag:     lightFlag,
+			WorkerTimeout:           workerTimeout,
+			Force:                   forceBuild,
+			LightFlag:               lightFlag,
 			HeavyFlag:               heavyFlag,
 			CircuitBreakerThreshold: cbThreshold,
 		})
@@ -164,17 +164,23 @@ var continueCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		verificationTimeout, _, err := resolveContinueVerificationTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
-				ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
-				WorkerTimeout:    workerTimeout,
-				LightFlag:        lightFlag,
-				HeavyFlag:        heavyFlag,
-				SkipWatchers:     skipWatchers,
+				ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+				WorkerTimeout:       workerTimeout,
+				VerificationTimeout: verificationTimeout,
+				LightFlag:           lightFlag,
+				HeavyFlag:           heavyFlag,
+				SkipWatchers:        skipWatchers,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -185,11 +191,12 @@ var continueCmd = &cobra.Command{
 		}
 
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
-			ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
-			WorkerTimeout:    workerTimeout,
-			LightFlag:        lightFlag,
-			HeavyFlag:        heavyFlag,
-			SkipWatchers:     skipWatchers,
+			ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+			WorkerTimeout:       workerTimeout,
+			VerificationTimeout: verificationTimeout,
+			LightFlag:           lightFlag,
+			HeavyFlag:           heavyFlag,
+			SkipWatchers:        skipWatchers,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -244,6 +251,30 @@ func resolveWorkerTimeoutFlag(cmd *cobra.Command) (time.Duration, error) {
 		return 0, fmt.Errorf("--worker-timeout must be greater than 0")
 	}
 	return timeout, nil
+}
+
+func resolveContinueVerificationTimeoutFlag(cmd *cobra.Command) (time.Duration, bool, error) {
+	if cmd.Flags().Changed("verification-timeout") {
+		timeout, err := cmd.Flags().GetDuration("verification-timeout")
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid --verification-timeout: %w", err)
+		}
+		if timeout <= 0 {
+			return 0, false, fmt.Errorf("--verification-timeout must be greater than 0")
+		}
+		return timeout, true, nil
+	}
+	if envValue := strings.TrimSpace(os.Getenv("AETHER_CONTINUE_VERIFICATION_TIMEOUT")); envValue != "" {
+		timeout, err := time.ParseDuration(envValue)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid AETHER_CONTINUE_VERIFICATION_TIMEOUT: %w", err)
+		}
+		if timeout <= 0 {
+			return 0, false, fmt.Errorf("AETHER_CONTINUE_VERIFICATION_TIMEOUT must be greater than 0")
+		}
+		return timeout, true, nil
+	}
+	return continueVerificationTimeout, false, nil
 }
 
 // detectGitRepoName returns the repository name from git remote origin URL,
@@ -950,9 +981,11 @@ func init() {
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
 	continueCmd.Flags().Bool("heavy", false, "Force heavy review (full review gauntlet)")
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
+	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
+	continueFinalizeCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
 	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")

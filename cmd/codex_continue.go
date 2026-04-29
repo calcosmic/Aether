@@ -17,13 +17,15 @@ import (
 )
 
 type codexVerificationStep struct {
-	Name     string `json:"name"`
-	Command  string `json:"command,omitempty"`
-	Passed   bool   `json:"passed"`
-	Skipped  bool   `json:"skipped,omitempty"`
-	ExitCode int    `json:"exit_code,omitempty"`
-	Summary  string `json:"summary"`
-	Output   string `json:"output,omitempty"`
+	Name           string `json:"name"`
+	Command        string `json:"command,omitempty"`
+	Passed         bool   `json:"passed"`
+	Skipped        bool   `json:"skipped,omitempty"`
+	TimedOut       bool   `json:"timed_out,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	ExitCode       int    `json:"exit_code,omitempty"`
+	Summary        string `json:"summary"`
+	Output         string `json:"output,omitempty"`
 }
 
 type codexClaimVerification struct {
@@ -36,14 +38,15 @@ type codexClaimVerification struct {
 }
 
 type codexContinueVerificationReport struct {
-	Phase          int                      `json:"phase"`
-	GeneratedAt    string                   `json:"generated_at"`
-	Steps          []codexVerificationStep  `json:"steps"`
-	Claims         codexClaimVerification   `json:"claims"`
-	Watcher        codexWatcherVerification `json:"watcher"`
-	ChecksPassed   bool                     `json:"checks_passed"`
-	Passed         bool                     `json:"passed"`
-	BlockingIssues []string                 `json:"blocking_issues,omitempty"`
+	Phase                      int                      `json:"phase"`
+	GeneratedAt                string                   `json:"generated_at"`
+	VerificationTimeoutSeconds int                      `json:"verification_timeout_seconds,omitempty"`
+	Steps                      []codexVerificationStep  `json:"steps"`
+	Claims                     codexClaimVerification   `json:"claims"`
+	Watcher                    codexWatcherVerification `json:"watcher"`
+	ChecksPassed               bool                     `json:"checks_passed"`
+	Passed                     bool                     `json:"passed"`
+	BlockingIssues             []string                 `json:"blocking_issues,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -95,11 +98,12 @@ type codexVerificationCommands struct {
 }
 
 type codexContinueOptions struct {
-	ReconcileTaskIDs []string
-	WorkerTimeout    time.Duration
-	LightFlag        bool
-	HeavyFlag        bool
-	SkipWatchers     bool
+	ReconcileTaskIDs    []string
+	WorkerTimeout       time.Duration
+	VerificationTimeout time.Duration
+	LightFlag           bool
+	HeavyFlag           bool
+	SkipWatchers        bool
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
@@ -179,7 +183,7 @@ func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phas
 		"recovery":        recovery,
 		"next":            recovery.RedispatchCommand,
 		"continue_report": displayDataPath(continueReportRel),
-			"review_depth":    string(reviewDepth),
+		"review_depth":    string(reviewDepth),
 		"blocking_issues": []string{summary},
 	}
 	if options.WorkerTimeout > 0 {
@@ -244,12 +248,12 @@ type codexContinueClosedWorker struct {
 }
 
 type codexContinueWorkerFlowStep struct {
-	Stage   string `json:"stage,omitempty"`
-	Caste   string `json:"caste,omitempty"`
-	Name    string `json:"name"`
-	Task    string `json:"task,omitempty"`
-	Status  string `json:"status"`
-	Summary string `json:"summary,omitempty"`
+	Stage    string   `json:"stage,omitempty"`
+	Caste    string   `json:"caste,omitempty"`
+	Name     string   `json:"name"`
+	Task     string   `json:"task,omitempty"`
+	Status   string   `json:"status"`
+	Summary  string   `json:"summary,omitempty"`
 	Blockers []string `json:"blockers,omitempty"`
 	Duration float64  `json:"duration,omitempty"`
 	Report   string   `json:"report,omitempty"`
@@ -377,33 +381,33 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	// Ceremony progress tracking (visual mode only)
-	var progress *ceremonyProgress
-	if shouldRenderVisualOutput(stdout) {
-		continueSteps := []string{"Verification", "Housekeeping", "Advance", "Complete"}
-		progress = NewCeremonyProgress(continueSteps, stdout)
-	}
+		// Ceremony progress tracking (visual mode only)
+		var progress *ceremonyProgress
+		if shouldRenderVisualOutput(stdout) {
+			continueSteps := []string{"Verification", "Housekeeping", "Advance", "Complete"}
+			progress = NewCeremonyProgress(continueSteps, stdout)
+		}
 
-	verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout, options.SkipWatchers)
-	assessment := assessCodexContinue(phase, manifest, verification, options, now)
-	verification = attachContinueClaimVerification(verification, assessment)
-	priorGateResults := gateResultsRead()
+		verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
+		assessment := assessCodexContinue(phase, manifest, verification, options, now)
+		verification = attachContinueClaimVerification(verification, assessment)
+		priorGateResults := gateResultsRead()
 		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 		if progress != nil {
 			progress.Advance("Verification")
 		}
 
-		// Persist gate results after each gate run
-		var gateResultEntries []colony.GateResultEntry
-		for _, c := range gates.Checks {
-			gateResultEntries = append(gateResultEntries, colony.GateResultEntry{
-				Name:      c.Name,
-				Passed:    c.Passed,
-				Timestamp: now.Format(time.RFC3339),
-				Detail:    c.Detail,
-			})
-		}
-		_ = gateResultsWrite(gateResultEntries)
+	// Persist gate results after each gate run
+	var gateResultEntries []colony.GateResultEntry
+	for _, c := range gates.Checks {
+		gateResultEntries = append(gateResultEntries, colony.GateResultEntry{
+			Name:      c.Name,
+			Passed:    c.Passed,
+			Timestamp: now.Format(time.RFC3339),
+			Detail:    c.Detail,
+		})
+	}
+	_ = gateResultsWrite(gateResultEntries)
 
 	if tracer != nil && state.RunID != nil {
 		_ = tracer.LogArtifact(*state.RunID, "continue.verification", map[string]interface{}{
@@ -593,7 +597,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
 		}
 		updated.BuildStartedAt = nil
-			updated.GateResults = nil
+		updated.GateResults = nil
 
 		final = currentIdx == len(updated.Plan.Phases)-1
 		nextCommand = "aether seal"
@@ -843,7 +847,7 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 	},
 	{
 		Caste: "probe",
-		Task: "Probe the verification evidence for missing edge cases, weak tests, or unexercised behavior. Return blocked if test evidence is too weak to trust advancement.",
+		Task:  "Probe the verification evidence for missing edge cases, weak tests, or unexercised behavior. Return blocked if test evidence is too weak to trust advancement.",
 	},
 }
 
@@ -1029,14 +1033,15 @@ func isCodexWorkerAvailable() bool {
 	return invoker.IsAvailable(context.Background())
 }
 
-func runCodexContinueVerification(root string, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
+func runCodexContinueVerification(root string, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
 	now := time.Now().UTC()
+	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
 	commands := resolveCodexVerificationCommands(root)
 	steps := []codexVerificationStep{
-		runVerificationStep(root, "build", commands.Build),
-		runVerificationStep(root, "types", commands.Type),
-		runVerificationStep(root, "lint", commands.Lint),
-		runVerificationStep(root, "tests", commands.Test),
+		runVerificationStep(root, "build", commands.Build, verificationTimeout),
+		runVerificationStep(root, "types", commands.Type, verificationTimeout),
+		runVerificationStep(root, "lint", commands.Lint, verificationTimeout),
+		runVerificationStep(root, "tests", commands.Test, verificationTimeout),
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
@@ -1091,14 +1096,15 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 	}
 
 	return codexContinueVerificationReport{
-		Phase:          phase.ID,
-		GeneratedAt:    now.Format(time.RFC3339),
-		Steps:          steps,
-		Claims:         claims,
-		Watcher:        watcher,
-		ChecksPassed:   checksPassed,
-		Passed:         checksPassed,
-		BlockingIssues: blockers,
+		Phase:                      phase.ID,
+		GeneratedAt:                now.Format(time.RFC3339),
+		VerificationTimeoutSeconds: int(verificationTimeout / time.Second),
+		Steps:                      steps,
+		Claims:                     claims,
+		Watcher:                    watcher,
+		ChecksPassed:               checksPassed,
+		Passed:                     checksPassed,
+		BlockingIssues:             blockers,
 	}, watcherFlow
 }
 
@@ -1427,6 +1433,9 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	recovery := codexContinueRecoveryPlan{
 		ReverifyCommand: "aether continue",
 	}
+	if continueVerificationTimedOut(verification) {
+		recovery.ReverifyCommand = buildContinueVerificationTimeoutRecoveryCommand(options)
+	}
 	if len(options.ReconcileTaskIDs) == 0 {
 		recovery.ReconcileTasks = tasksNeedingRecovery(tasks)
 		if len(recovery.ReconcileTasks) > 0 {
@@ -1573,6 +1582,9 @@ func buildSkipPhaseCommand(phaseID int) string {
 }
 
 func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers []string, options codexContinueOptions) string {
+	if continueBlockersContainVerificationTimeout(blockers) {
+		return buildContinueVerificationTimeoutRecoveryCommand(options)
+	}
 	if continueBlockersContainWorkerTimeout(blockers) {
 		return buildContinueTimeoutRecoveryCommand(options)
 	}
@@ -1599,6 +1611,16 @@ func continueNextCommandForAssessment(assessment codexContinueAssessment) string
 	return "aether continue"
 }
 
+func continueBlockersContainVerificationTimeout(blockers []string) bool {
+	for _, blocker := range blockers {
+		lower := strings.ToLower(strings.TrimSpace(blocker))
+		if strings.Contains(lower, "verification command timed out") || strings.Contains(lower, "--verification-timeout") {
+			return true
+		}
+	}
+	return false
+}
+
 func continueBlockersContainWorkerTimeout(blockers []string) bool {
 	for _, blocker := range blockers {
 		lower := strings.ToLower(strings.TrimSpace(blocker))
@@ -1613,6 +1635,18 @@ func continueBlockersContainWorkerTimeout(blockers []string) bool {
 	return false
 }
 
+func buildContinueVerificationTimeoutRecoveryCommand(options codexContinueOptions) string {
+	timeout := recommendedContinueVerificationRecoveryTimeout(options.VerificationTimeout)
+	var b strings.Builder
+	b.WriteString("aether continue --verification-timeout ")
+	b.WriteString(formatDurationForCLI(timeout))
+	for _, taskID := range uniqueSortedStrings(options.ReconcileTaskIDs) {
+		b.WriteString(" --reconcile-task ")
+		b.WriteString(taskID)
+	}
+	return b.String()
+}
+
 func buildContinueTimeoutRecoveryCommand(options codexContinueOptions) string {
 	timeout := recommendedContinueRecoveryTimeout(options.WorkerTimeout)
 	var b strings.Builder
@@ -1625,6 +1659,16 @@ func buildContinueTimeoutRecoveryCommand(options codexContinueOptions) string {
 	return b.String()
 }
 
+func recommendedContinueVerificationRecoveryTimeout(current time.Duration) time.Duration {
+	effective := effectiveContinueVerificationTimeout(current)
+	recommended := effective * 2
+	minimum := 30 * time.Minute
+	if recommended < minimum {
+		return minimum
+	}
+	return recommended
+}
+
 func recommendedContinueRecoveryTimeout(current time.Duration) time.Duration {
 	effective := effectiveContinueReviewTimeout(current)
 	recommended := effective * 2
@@ -1633,6 +1677,15 @@ func recommendedContinueRecoveryTimeout(current time.Duration) time.Duration {
 		return minimum
 	}
 	return recommended
+}
+
+func continueVerificationTimedOut(verification codexContinueVerificationReport) bool {
+	for _, step := range verification.Steps {
+		if step.TimedOut {
+			return true
+		}
+	}
+	return false
 }
 
 func formatDurationForCLI(duration time.Duration) string {
@@ -2015,7 +2068,7 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 	}
 }
 
-func runVerificationStep(root, name, command string) codexVerificationStep {
+func runVerificationStep(root, name, command string, timeout time.Duration) codexVerificationStep {
 	if strings.TrimSpace(command) == "" {
 		return codexVerificationStep{
 			Name:    name,
@@ -2025,17 +2078,20 @@ func runVerificationStep(root, name, command string) codexVerificationStep {
 		}
 	}
 
-	output, exitCode, err := runShellCommand(root, command, 5*time.Minute)
+	timeout = effectiveContinueVerificationTimeout(timeout)
+	output, exitCode, timedOut, err := runShellCommand(root, command, timeout)
 	step := codexVerificationStep{
-		Name:     name,
-		Command:  command,
-		Passed:   err == nil,
-		ExitCode: exitCode,
-		Summary:  successSummaryForStep(name, exitCode, err),
-		Output:   output,
+		Name:           name,
+		Command:        command,
+		Passed:         err == nil,
+		TimedOut:       timedOut,
+		TimeoutSeconds: int(timeout / time.Second),
+		ExitCode:       exitCode,
+		Summary:        successSummaryForStep(name, exitCode, err),
+		Output:         output,
 	}
 	if err != nil {
-		step.Summary = failureSummaryForStep(name, exitCode, output, err)
+		step.Summary = failureSummaryForStep(name, exitCode, output, err, timedOut, timeout)
 	}
 	return step
 }
@@ -2564,7 +2620,7 @@ func updateCodexContinueContext(phase colony.Phase, manifest codexContinueManife
 	return writeContextDocument(content)
 }
 
-func runShellCommand(root, command string, timeout time.Duration) (string, int, error) {
+func runShellCommand(root, command string, timeout time.Duration) (string, int, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -2583,7 +2639,7 @@ func runShellCommand(root, command string, timeout time.Duration) (string, int, 
 	if cmd.ProcessState != nil {
 		exitCode = cmd.ProcessState.ExitCode()
 	}
-	return trimmed, exitCode, err
+	return trimmed, exitCode, ctx.Err() == context.DeadlineExceeded, err
 }
 
 func trimCommandOutput(output string) string {
@@ -2612,7 +2668,10 @@ func successSummaryForStep(name string, exitCode int, err error) string {
 	}
 }
 
-func failureSummaryForStep(name string, exitCode int, output string, err error) string {
+func failureSummaryForStep(name string, exitCode int, output string, err error, timedOut bool, timeout time.Duration) string {
+	if timedOut {
+		return fmt.Sprintf("verification command timed out after %s; increase with --verification-timeout or narrow the repo verification command", formatDurationForCLI(timeout))
+	}
 	if strings.TrimSpace(output) != "" {
 		lines := strings.Split(strings.TrimSpace(output), "\n")
 		return fmt.Sprintf("%s failed (exit %d): %s", name, exitCode, strings.TrimSpace(lines[len(lines)-1]))

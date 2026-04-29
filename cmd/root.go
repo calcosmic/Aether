@@ -178,6 +178,7 @@ var rootCmd = &cobra.Command{
 		}
 		store = s
 		tracer = trace.NewTracer(s)
+		checkAndEmitFirstRun(dataDir)
 		return nil
 	},
 }

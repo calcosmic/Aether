@@ -802,6 +802,12 @@ func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
 	if store == nil {
 		return 0, 0, fmt.Errorf("no store initialized")
 	}
+	if _, statErr := os.Stat(filepath.Join(store.BasePath(), "COLONY_STATE.json")); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return 0, 0, nil
+		}
+		return 0, 0, statErr
+	}
 	var state colony.ColonyState
 	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
 		root := storage.ResolveAetherRoot(context.Background())

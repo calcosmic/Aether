@@ -30,12 +30,20 @@ var continueFinalizeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		skipMissing, _ := cmd.Flags().GetBool("skip-missing")
+		verificationTimeout, verificationTimeoutExplicit, err := resolveContinueVerificationTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		if !verificationTimeoutExplicit {
+			verificationTimeout = 0
+		}
 		completion, err := loadExternalContinueCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
 		}
-		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing)
+		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -104,7 +112,7 @@ func (c codexExternalContinueCompletion) workerResults() []codexContinueExternal
 	return results
 }
 
-func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool, verificationTimeoutOverride time.Duration) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
@@ -115,7 +123,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if plan.DispatchMode != "plan-only" || !plan.RequiresFinalizer {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue_manifest must come from `aether continue --plan-only`")
 	}
-	if len(plan.Dispatches) == 0 {
+	if len(plan.Dispatches) == 0 && !(plan.SkipWatchers && plan.ReviewDepth == string(ReviewDepthLight)) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue_manifest contains no dispatches")
 	}
 
@@ -144,12 +152,18 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, err
 	}
 
-	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now)
-	verification, watcherFlow := attachExternalContinueWatcher(verification, workerFlow)
-	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs}, now)
+	verificationTimeout := continueFinalizeVerificationTimeout(plan, verificationTimeoutOverride)
+	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, plan.SkipWatchers)
+	var watcherFlow *codexContinueWorkerFlowStep
+	if plan.SkipWatchers {
+		verification.Watcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on runtime-owned verification commands"}
+	} else {
+		verification, watcherFlow = attachExternalContinueWatcher(verification, workerFlow)
+	}
+	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults := gateResultsRead()
-		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
 	gateReportRel := continuePlanArtifactsPath(phase.ID, "gates.json")
@@ -240,6 +254,16 @@ func validateExternalContinueState(plan *codexContinuePlanManifest) (colony.Colo
 		return state, phase, manifest, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
 	}
 	return state, phase, manifest, nil
+}
+
+func continueFinalizeVerificationTimeout(plan *codexContinuePlanManifest, override time.Duration) time.Duration {
+	if override > 0 {
+		return override
+	}
+	if plan != nil && plan.VerificationTimeout > 0 {
+		return time.Duration(plan.VerificationTimeout) * time.Second
+	}
+	return continueVerificationTimeout
 }
 
 func mergeExternalContinueResults(plan codexContinuePlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {

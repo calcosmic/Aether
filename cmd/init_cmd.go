@@ -76,6 +76,20 @@ var initCmd = &cobra.Command{
 		}
 
 	createFreshColony:
+		var charter *colony.Charter
+		if charterJSON, _ := cmd.Flags().GetString("charter-json"); charterJSON != "" {
+			var ch colony.Charter
+			if err := json.Unmarshal([]byte(charterJSON), &ch); err != nil {
+				outputError(1, fmt.Sprintf("invalid charter JSON: %v", err), nil)
+				return nil
+			}
+			if err := validateCharterFieldLength(ch); err != nil {
+				outputError(1, err.Error(), nil)
+				return nil
+			}
+			charter = &ch
+		}
+
 		// Rotate trace file if it has grown too large
 		if rotated, rotateErr := trace.RotateTraceFile(store, 50); rotateErr == nil && rotated {
 			fmt.Fprintf(os.Stderr, "warning: rotated trace.jsonl before init\n")
@@ -144,21 +158,7 @@ var initCmd = &cobra.Command{
 			Events:       []string{},
 			ParallelMode: colony.ModeInRepo,
 		}
-
-		// Parse --charter-json if provided
-		if charterJSON, _ := cmd.Flags().GetString("charter-json"); charterJSON != "" {
-			var ch colony.Charter
-			if err := json.Unmarshal([]byte(charterJSON), &ch); err != nil {
-				outputError(1, fmt.Sprintf("invalid charter JSON: %v", err), nil)
-				return nil
-			}
-			// Validate field lengths (T-72-01: reject values over 2000 chars)
-			if err := validateCharterFieldLength(ch); err != nil {
-				outputError(1, err.Error(), nil)
-				return nil
-			}
-			state.Charter = &ch
-		}
+		state.Charter = charter
 
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			outputError(1, fmt.Sprintf("failed to create COLONY_STATE.json: %v", err), nil)
@@ -208,14 +208,14 @@ var initCmd = &cobra.Command{
 		// Load active shelf for wrapper consumption
 		shelfEntries, _ := loadActiveShelf(store)
 		result := map[string]interface{}{
-			"state":             string(colony.StateREADY),
-			"goal":              goal,
-			"scope":             string(scope),
-			"version":           "3.0",
-			"phase":             0,
-			"session":           sessionID,
-			"data_dir":          dataDir,
-			"shelf_backlog":     shelfEntries,
+			"state":               string(colony.StateREADY),
+			"goal":                goal,
+			"scope":               string(scope),
+			"version":             "3.0",
+			"phase":               0,
+			"session":             sessionID,
+			"data_dir":            dataDir,
+			"shelf_backlog":       shelfEntries,
 			"shelf_backlog_count": len(shelfEntries),
 		}
 		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir))

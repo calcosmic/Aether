@@ -168,8 +168,11 @@ func hubStore() *storage.Store {
 }
 
 func renderVisualError(message string, details interface{}) string {
+	if entry, ok := friendlyErrorForPattern(message); ok {
+		return renderFriendlyError(entry, message)
+	}
 	var b strings.Builder
-	b.WriteString(renderBanner("❌", "Error"))
+	b.WriteString(renderBanner("\u274C", "Error"))
 	b.WriteString(visualDivider)
 	b.WriteString(strings.TrimSpace(message))
 	b.WriteString("\n")
@@ -180,5 +183,7 @@ func renderVisualError(message string, details interface{}) string {
 			b.WriteString("\n")
 		}
 	}
+	// Append generic hint for unmatched errors (per D-05)
+	b.WriteString("\nRun `aether patrol` for diagnostics or `aether status` to check colony health.\n")
 	return b.String()
 }
