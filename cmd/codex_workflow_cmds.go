@@ -975,6 +975,7 @@ func init() {
 	buildCmd.Flags().Bool("light", false, "Force light review (skip heavy agents on intermediate phases)")
 	buildCmd.Flags().Bool("heavy", false, "Force heavy review (full quality gauntlet on any phase)")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
+	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")

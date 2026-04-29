@@ -107,7 +107,7 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 
 	// Run the ceremony loop (supports Revise cycling)
 	for {
-		charter, pheromoneSuggestions, err := runCeremonyResearch(goal, target)
+		charter, pheromoneSuggestions, researchData, err := runCeremonyResearch(goal, target)
 		if err != nil {
 			outputError(1, fmt.Sprintf("research failed: %v", err), nil)
 			return nil
@@ -120,6 +120,11 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 
 		// Display charter
 		fmt.Fprint(os.Stderr, renderCharterDisplay(*charter))
+
+		// Display research data if available
+		if researchOutput := renderResearchDisplay(researchData); researchOutput != "" {
+			fmt.Fprint(os.Stderr, researchOutput)
+		}
 
 		// Auto-approve pheromone suggestions
 		if len(pheromoneSuggestions) > 0 {
@@ -176,8 +181,17 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// runCeremonyResearch runs init-research internally and extracts charter + pheromone suggestions.
-func runCeremonyResearch(goal, target string) (*colony.Charter, []pheromoneSuggestion, error) {
+// ceremonyResearchData holds the four research data fields extracted from the
+// init-research JSON envelope for display in the init ceremony.
+type ceremonyResearchData struct {
+	TechStackDetail      []techStackDetail
+	DirClassification    dirClassification
+	GovernanceDetails    []governanceDetail
+	ColonyContextSummary colonyContextSummary
+}
+
+// runCeremonyResearch runs init-research internally and extracts charter + pheromone suggestions + research data.
+func runCeremonyResearch(goal, target string) (*colony.Charter, []pheromoneSuggestion, ceremonyResearchData, error) {
 	// Capture init-research output by running it directly
 	var researchResult map[string]interface{}
 
@@ -209,35 +223,35 @@ func runCeremonyResearch(goal, target string) (*colony.Charter, []pheromoneSugge
 	_ = researchCmd.Flags().Set("target", target)
 
 	if err := researchCmd.RunE(researchCmd, []string{}); err != nil {
-		return nil, nil, fmt.Errorf("init-research failed: %w", err)
+		return nil, nil, ceremonyResearchData{}, fmt.Errorf("init-research failed: %w", err)
 	}
 
 	// Parse the JSON output
 	output := strings.TrimSpace(buf.String())
 	if output == "" {
-		return nil, nil, fmt.Errorf("init-research produced no output")
+		return nil, nil, ceremonyResearchData{}, fmt.Errorf("init-research produced no output")
 	}
 
 	// Parse the envelope
 	var envelope map[string]interface{}
 	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse research output: %w", err)
+		return nil, nil, ceremonyResearchData{}, fmt.Errorf("failed to parse research output: %w", err)
 	}
 
 	if ok, _ := envelope["ok"].(bool); !ok {
 		errMsg, _ := envelope["error"].(string)
-		return nil, nil, fmt.Errorf("init-research error: %s", errMsg)
+		return nil, nil, ceremonyResearchData{}, fmt.Errorf("init-research error: %s", errMsg)
 	}
 
 	researchResult, _ = envelope["result"].(map[string]interface{})
 	if researchResult == nil {
-		return nil, nil, fmt.Errorf("no result in init-research output")
+		return nil, nil, ceremonyResearchData{}, fmt.Errorf("no result in init-research output")
 	}
 
 	// Extract charter
 	charterMap, ok := researchResult["charter"].(map[string]interface{})
 	if !ok {
-		return nil, nil, fmt.Errorf("no charter in init-research output")
+		return nil, nil, ceremonyResearchData{}, fmt.Errorf("no charter in init-research output")
 	}
 	charter := extractCharterFromMap(charterMap)
 
@@ -255,7 +269,39 @@ func runCeremonyResearch(goal, target string) (*colony.Charter, []pheromoneSugge
 		}
 	}
 
-	return &charter, suggestions, nil
+	return &charter, suggestions, extractCeremonyResearchData(researchResult), nil
+}
+
+// extractCeremonyResearchData extracts the 4 research fields from the init-research
+// JSON envelope using json.Marshal/Unmarshal round-trip for type conversion.
+func extractCeremonyResearchData(result map[string]interface{}) ceremonyResearchData {
+	var data ceremonyResearchData
+
+	if raw, ok := result["tech_stack_detail"]; ok {
+		if b, err := json.Marshal(raw); err == nil {
+			_ = json.Unmarshal(b, &data.TechStackDetail)
+		}
+	}
+
+	if raw, ok := result["dir_classification"]; ok {
+		if b, err := json.Marshal(raw); err == nil {
+			_ = json.Unmarshal(b, &data.DirClassification)
+		}
+	}
+
+	if raw, ok := result["governance_details"]; ok {
+		if b, err := json.Marshal(raw); err == nil {
+			_ = json.Unmarshal(b, &data.GovernanceDetails)
+		}
+	}
+
+	if raw, ok := result["colony_context_summary"]; ok {
+		if b, err := json.Marshal(raw); err == nil {
+			_ = json.Unmarshal(b, &data.ColonyContextSummary)
+		}
+	}
+
+	return data
 }
 
 // extractCharterFromMap converts a raw map to colony.Charter.

@@ -498,6 +498,93 @@ func renderCharterDisplay(ch colony.Charter) string {
 	return b.String()
 }
 
+// renderResearchDisplay produces a visual rendering of the 4 research data sections
+// extracted from the init-research JSON envelope. Returns empty string if all fields
+// are nil/empty.
+func renderResearchDisplay(data ceremonyResearchData) string {
+	hasData := len(data.TechStackDetail) > 0 ||
+		data.DirClassification.Type != "" ||
+		len(data.GovernanceDetails) > 0 ||
+		data.ColonyContextSummary.DetectedType != ""
+	if !hasData {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("scout"), "Research Data"))
+	b.WriteString(visualDivider)
+
+	// Tech Stack Detail
+	if len(data.TechStackDetail) > 0 {
+		b.WriteString(renderStageMarker("Tech Stack Detail"))
+		for _, ts := range data.TechStackDetail {
+			depCount := len(ts.Deps) + len(ts.DevDeps)
+			b.WriteString("  ")
+			b.WriteString(emptyFallback(ts.Language, "(unknown)"))
+			if ts.SourceFile != "" {
+				b.WriteString("  (")
+				b.WriteString(ts.SourceFile)
+				b.WriteString(")")
+			}
+			b.WriteString(fmt.Sprintf("  %d dependencies", depCount))
+			b.WriteString("\n")
+		}
+	}
+
+	// Directory Classification
+	if data.DirClassification.Type != "" {
+		b.WriteString(renderStageMarker("Directory Classification"))
+		b.WriteString("  Type:    ")
+		b.WriteString(data.DirClassification.Type)
+		b.WriteString("\n")
+		if len(data.DirClassification.Signals) > 0 {
+			b.WriteString("  Signals: ")
+			b.WriteString(strings.Join(data.DirClassification.Signals, ", "))
+			b.WriteString("\n")
+		}
+	}
+
+	// Governance Details
+	if len(data.GovernanceDetails) > 0 {
+		b.WriteString(renderStageMarker("Governance Details"))
+		for _, gd := range data.GovernanceDetails {
+			b.WriteString("  ")
+			b.WriteString(emptyFallback(gd.Tool, "(unknown)"))
+			if gd.File != "" {
+				b.WriteString("  [")
+				b.WriteString(gd.File)
+				b.WriteString("]")
+			}
+			if gd.Category != "" {
+				b.WriteString("  (")
+				b.WriteString(gd.Category)
+				b.WriteString(")")
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	// Colony Context
+	if data.ColonyContextSummary.DetectedType != "" {
+		b.WriteString(renderStageMarker("Colony Context"))
+		cs := data.ColonyContextSummary
+		b.WriteString("  Detected Type:     ")
+		b.WriteString(emptyFallback(cs.DetectedType, "(none)"))
+		b.WriteString("\n")
+		b.WriteString("  Dir Type:          ")
+		b.WriteString(emptyFallback(cs.DirType, "(none)"))
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("  Tech Stack Files:  %d\n", cs.TechStackCount))
+		b.WriteString(fmt.Sprintf("  Governance Tools:  %d\n", cs.GovernanceToolCount))
+		b.WriteString(fmt.Sprintf("  Pheromone Count:   %d\n", cs.PheromoneCount))
+		b.WriteString(fmt.Sprintf("  File Count:        %d\n", cs.FileCount))
+		b.WriteString(fmt.Sprintf("  Is Git Repo:       %t\n", cs.IsGitRepo))
+	}
+
+	b.WriteString(visualDivider)
+	return b.String()
+}
+
 func renderColonizeVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("colonize"), "Colonize"))
