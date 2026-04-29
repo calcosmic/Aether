@@ -196,13 +196,21 @@ var memoryCaptureCmd = &cobra.Command{
 		if obsType == "" {
 			obsType = "observation"
 		}
+		sourceType, _ := cmd.Flags().GetString("source-type")
+		if sourceType == "" {
+			sourceType = "observation"
+		}
+		evidenceType, _ := cmd.Flags().GetString("evidence-type")
+		if evidenceType == "" {
+			evidenceType = "anecdotal"
+		}
 
 		bus := events.NewBus(store, events.DefaultConfig())
 		obsService := memory.NewObservationService(store, bus)
 
 		ctx, cancel := timeoutCtx(cmd)
 		defer cancel()
-		result, err := obsService.Capture(ctx, content, obsType, "unknown")
+		result, err := obsService.CaptureWithTrust(ctx, content, obsType, "unknown", sourceType, evidenceType)
 		if err != nil {
 			outputError(2, fmt.Sprintf("failed to capture: %v", err), nil)
 			return nil
@@ -229,6 +237,8 @@ func init() {
 
 	memoryCaptureCmd.Flags().String("content", "", "Observation content (required)")
 	memoryCaptureCmd.Flags().String("type", "", "Wisdom type (default: observation)")
+	memoryCaptureCmd.Flags().String("source-type", "", "Source type (default: observation)")
+	memoryCaptureCmd.Flags().String("evidence-type", "", "Evidence type (default: anecdotal)")
 
 	rootCmd.AddCommand(learningObserveCmd)
 	rootCmd.AddCommand(learningCheckPromotionCmd)
