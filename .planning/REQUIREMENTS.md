@@ -46,8 +46,8 @@ Restore lost intelligence features from the shell-to-Go migration.
 - [x] **INTEL-01**: Suggest-analyze runs during build (Step 4.2) — automatic pattern detection across codebase
 - [x] **INTEL-02**: Suggest-analyze deduplicates against existing pheromone signals
 - [x] **INTEL-03**: Suggest-approve provides tick-to-approve UI for reviewing suggestions
-- [ ] **INTEL-04**: Bayesian confidence scoring restored for wisdom pipeline (40/35/25 weighted, 60-day half-life)
-- [ ] **INTEL-05**: Circuit breaker prevents cascade failure across parallel workers
+- [x] **INTEL-04**: Bayesian confidence scoring restored for wisdom pipeline (40/35/25 weighted, 60-day half-life)
+- [x] **INTEL-05**: Circuit breaker prevents cascade failure across parallel workers
 
 ### UX Improvements
 
@@ -105,8 +105,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTEL-01 | Phase 74 | Complete |
 | INTEL-02 | Phase 74 | Complete |
 | INTEL-03 | Phase 74 | Complete |
-| INTEL-04 | Phase 75 | Pending |
-| INTEL-05 | Phase 75 | Pending |
+| INTEL-04 | Phase 75 | Complete |
+| INTEL-05 | Phase 75 | Complete |
 | UX-01 | Phase 76 | Pending |
 | UX-02 | Phase 76 | Pending |
 | UX-03 | Phase 76 | Pending |
