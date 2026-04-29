@@ -280,8 +280,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 76-01-PLAN.md -- (To be planned)
-- [ ] 76-02-PLAN.md -- (To be planned)
+- [ ] 76-01-PLAN.md -- First-run welcome banner, friendly error messages, ceremony progress bars
+- [ ] 76-02-PLAN.md -- Status dashboard redesign with warnings and next-step suggestions
 
 ## Progress
 
@@ -296,4 +296,4 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 | 73. Rich Init Research | v1.11 | 3/3 | Complete    | 2026-04-28 |
 | 74. Suggest-Analyze | v1.11 | 2/2 | Complete    | 2026-04-29 |
 | 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
-| 76. UX Improvements | v1.11 | 0/? | Not started | - |
+| 76. UX Improvements | v1.11 | 0/2 | Planned | - |
