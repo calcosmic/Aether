@@ -252,8 +252,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 74-01-PLAN.md -- Create suggest-analyze command with pattern detection, dedup, and persistence
-- [ ] 74-02-PLAN.md -- Implement suggest-approve with approval/dismiss flow, restore Step 4.2 playbook
+- [x] 74-01-PLAN.md -- Create suggest-analyze command with pattern detection, dedup, and persistence
+- [x] 74-02-PLAN.md -- Implement suggest-approve with approval/dismiss flow, restore Step 4.2 playbook
 
 ### Phase 75: Intelligence Core
 **Goal**: The wisdom pipeline uses Bayesian confidence scoring and parallel workers are protected from cascade failure
@@ -294,6 +294,6 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76
 | 71. Platform Hardening | v1.11 | 2/2 | Complete    | 2026-04-28 |
 | 72. Smart Init Charter | v1.11 | 2/2 | Complete    | 2026-04-28 |
 | 73. Rich Init Research | v1.11 | 3/3 | Complete    | 2026-04-28 |
-| 74. Suggest-Analyze | v1.11 | 0/2 | Not started | - |
+| 74. Suggest-Analyze | v1.11 | 2/2 | Complete    | 2026-04-29 |
 | 75. Intelligence Core | v1.11 | 0/? | Not started | - |
 | 76. UX Improvements | v1.11 | 0/? | Not started | - |

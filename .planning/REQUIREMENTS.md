@@ -43,9 +43,9 @@ Re-port the colony charter ceremony and rich init-research from the deleted shel
 
 Restore lost intelligence features from the shell-to-Go migration.
 
-- [ ] **INTEL-01**: Suggest-analyze runs during build (Step 4.2) — automatic pattern detection across codebase
-- [ ] **INTEL-02**: Suggest-analyze deduplicates against existing pheromone signals
-- [ ] **INTEL-03**: Suggest-approve provides tick-to-approve UI for reviewing suggestions
+- [x] **INTEL-01**: Suggest-analyze runs during build (Step 4.2) — automatic pattern detection across codebase
+- [x] **INTEL-02**: Suggest-analyze deduplicates against existing pheromone signals
+- [x] **INTEL-03**: Suggest-approve provides tick-to-approve UI for reviewing suggestions
 - [ ] **INTEL-04**: Bayesian confidence scoring restored for wisdom pipeline (40/35/25 weighted, 60-day half-life)
 - [ ] **INTEL-05**: Circuit breaker prevents cascade failure across parallel workers
 
@@ -102,9 +102,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INIT-05 | Phase 73 | Complete |
 | INIT-06 | Phase 73 | Complete |
 | INIT-07 | Phase 73 | Complete |
-| INTEL-01 | Phase 74 | Pending |
-| INTEL-02 | Phase 74 | Pending |
-| INTEL-03 | Phase 74 | Pending |
+| INTEL-01 | Phase 74 | Complete |
+| INTEL-02 | Phase 74 | Complete |
+| INTEL-03 | Phase 74 | Complete |
 | INTEL-04 | Phase 75 | Pending |
 | INTEL-05 | Phase 75 | Pending |
 | UX-01 | Phase 76 | Pending |
