@@ -1,201 +1,219 @@
 ---
 phase: 75-intelligence-core
-reviewed: 2026-04-29T00:00:00Z
+reviewed: 2026-04-29T19:30:00Z
 depth: standard
-files_reviewed: 10
+files_reviewed: 6
 files_reviewed_list:
-  - .aether/docs/command-playbooks/continue-advance.md
-  - .aether/docs/command-playbooks/continue-full.md
-  - cmd/ceremony_emitter.go
-  - cmd/circuit_breaker_test.go
+  - cmd/learning.go
+  - cmd/learning_test.go
   - cmd/circuit_breaker.go
+  - cmd/circuit_breaker_test.go
   - cmd/codex_build_worktree.go
   - cmd/codex_build.go
-  - cmd/codex_workflow_cmds.go
-  - cmd/learning.go
-  - pkg/events/ceremony.go
 findings:
-  critical: 1
-  warning: 5
-  info: 3
-  total: 9
+  critical: 2
+  warning: 4
+  info: 2
+  total: 8
 status: issues_found
 ---
 
 # Phase 75: Code Review Report
 
-**Reviewed:** 2026-04-29T00:00:00Z
+**Reviewed:** 2026-04-29T19:30:00Z
 **Depth:** standard
-**Files Reviewed:** 10
+**Files Reviewed:** 6
 **Status:** issues_found
 
 ## Summary
 
-Reviewed 10 files spanning the intelligence core domain: ceremony event emission, circuit breaker for build resilience, worktree-based parallel dispatch, build orchestration, workflow commands (seal, plan, build, continue, signals), learning/observation pipeline, and ceremony topic constants.
+Reviewed 6 files: the learning/observation CLI commands and tests, the circuit breaker for build resilience and its tests, the worktree-based parallel build dispatch, and the main codex build orchestration.
 
-The circuit breaker implementation is well-structured with good concurrency safety and comprehensive tests. The ceremony emitter provides a clean abstraction over event publishing. The worktree parallel dispatch has solid path traversal guards and state management. However, there are several logic inconsistencies, a goroutine safety issue in the ceremony emitter, a semantic contradiction in the circuit breaker's status reporting, and an indentation artifact in the ceremony topics.
+The circuit breaker is clean, well-tested, and goroutine-safe. The worktree dispatch has solid path traversal guards and state management. However, there are two critical issues: a nested-loop bug in the build tracer that uses O(n^2) to do an identity lookup (functionally wrong in intent), and a silent error swallow in the auto-promote command. Several warnings address error propagation patterns, redundant map lookups, and potential nil dereference in edge cases.
 
 ## Critical Issues
 
-### CR-01: Race condition on global `activeBuildCeremony` during concurrent build wave dispatch
+### CR-01: Nested loop in tracer block always finds self-match, masking actual output count
 
-**File:** `cmd/ceremony_emitter.go:36-72`
-**Issue:** The `activeBuildCeremony` global variable uses a `sync.RWMutex` for access, but the `setActiveBuildCeremony` function restores the previous value in a deferred closure. When the worktree-based dispatch (`dispatchCodexBuildWorkers` in `codex_build_worktree.go`) runs multiple waves concurrently via goroutines, each wave's results call `emitBuildCeremonyWorkerFinished` which reads `currentBuildCeremony()`. If a second build starts before the first completes, the restore closure from `setActiveBuildCeremony` will overwrite the new build's ceremony, causing events from the new build to be lost or published to the wrong narrator.
+**File:** `cmd/codex_build.go:323-331`
+**Issue:** The tracer block iterates over `dispatches` in an outer loop, and for each completed dispatch, performs an inner loop over the same `dispatches` slice to find a match by `d.Name == dispatch.Name`. Since `dispatch` is a range variable from the outer loop, the inner loop will always find `dispatch` itself on the first iteration where names match (which is always, since it is comparing the dispatch to itself). The result is that `filesModified` is always set to `len(dispatch.Outputs)` -- the same value it would have been with a direct assignment.
 
-More critically, in the worktree dispatch path, the `emitBuildCeremonyWaveEnd` call at line 340 happens after `wg.Wait()`, but `emitBuildCeremonyWorkerFinished` at line 334 happens inside the goroutine -- between worker dispatches across waves, the ceremony is stable, but if two separate `runCodexBuildWithOptions` calls overlap (e.g., user triggers two builds), the global swap/restore pattern breaks.
-
-**Fix:** The simplest fix is to pass the ceremony emitter as a parameter through the dispatch chain instead of relying on a global. Alternatively, scope the ceremony emitter per-run-handle so concurrent builds cannot clobber each other:
+While the current code produces the correct result by accident (it always finds itself), the intent was clearly to look up a different data structure or pre-computed index. This is not a data correctness bug today, but it is O(n^2) for no reason and signals confused logic. If a future refactor changes the dispatch names or the lookup intent, this will silently break.
 
 ```go
-// Instead of global activeBuildCeremony, pass via context or closure
-func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker, ceremony *buildCeremonyEmitter) ([]codex.DispatchResult, error) {
-    // use ceremony directly instead of currentBuildCeremony()
+for _, dispatch := range dispatches {
+    filesModified := 0
+    if dispatch.Status == "completed" {
+        for _, d := range dispatches {          // O(n) inner loop
+            if d.Name == dispatch.Name {         // always matches self
+                filesModified = len(d.Outputs)
+                break
+            }
+        }
+    }
+    _ = tracer.LogArtifact(...)
 }
+```
+
+**Fix:** Replace the inner loop with a direct field access:
+
+```go
+for _, dispatch := range dispatches {
+    filesModified := 0
+    if dispatch.Status == "completed" {
+        filesModified = len(dispatch.Outputs)
+    }
+    _ = tracer.LogArtifact(*updatedState.RunID, "build.worker", map[string]interface{}{
+        "worker":         dispatch.Name,
+        "status":         dispatch.Status,
+        "files_modified": filesModified,
+        "summary":        dispatch.Summary,
+    })
+}
+```
+
+### CR-02: `learningPromoteAutoCmd` silently swallows promotion errors
+
+**File:** `cmd/learning.go:160-168`
+**Issue:** In the auto-promote loop, when `promoteService.Promote(ctx, obs, "auto-promote")` returns an error, the error is silently discarded via `continue`. The command reports `promoted: 0` without any indication that promotion was attempted and failed. For a data pipeline that promotes observations to instincts, silently dropping failed promotions means learning is lost with no visibility.
+
+```go
+for _, obs := range file.Observations {
+    eligible, _ := memory.CheckPromotion(obs)
+    if eligible {
+        result, err := promoteService.Promote(ctx, obs, "auto-promote")
+        if err != nil {
+            continue  // error silently discarded
+        }
+        if result.IsNew {
+            promoted++
+        }
+    }
+}
+```
+
+**Fix:** Track failed promotions and include them in the output so callers know promotion was attempted but failed:
+
+```go
+failed := 0
+var failures []string
+for _, obs := range file.Observations {
+    eligible, _ := memory.CheckPromotion(obs)
+    if eligible {
+        result, err := promoteService.Promote(ctx, obs, "auto-promote")
+        if err != nil {
+            failed++
+            failures = append(failures, fmt.Sprintf("%s: %v", obs.ContentHash, err))
+            continue
+        }
+        if result.IsNew {
+            promoted++
+        }
+    }
+}
+outputOK(map[string]interface{}{
+    "promoted":       promoted,
+    "failed":         failed,
+    "total_observed": len(file.Observations),
+})
 ```
 
 ## Warnings
 
-### WR-01: Circuit breaker reports "completed" wave status even when all workers failed
+### WR-01: `runCodexBuildWithOptions` creates `context.Background()` instead of propagating parent context
 
-**File:** `cmd/ceremony_emitter.go:458-482`
-**Issue:** The `emitBuildCeremonyWaveEnd` function unconditionally sets `waveStatus` to `"completed"` at line 472, then only overrides it to `"blocked"` if `completed < len(waveResults) || len(blockers) > 0`. This means if all workers in a wave failed (completed == 0) but there are zero blockers (e.g., failures without error messages), the wave is reported as `"completed"`.
+**File:** `cmd/codex_build.go:252`
+**Issue:** At line 252, `newBuildCeremonyEmitter(context.Background(), root, phase)` creates a ceremony emitter with a detached context that ignores cancellation. The same pattern appears at line 289 where `executeCodexBuildDispatches(context.Background(), ...)` is called with `context.Background()` instead of a cancellable context. If the CLI process receives SIGINT/SIGTERM during a long build, the dispatch goroutines and ceremony emitter will not be cancelled. The `context.Background()` passed at line 289 becomes the `ctx` parameter for `dispatchCodexBuildWorkers`, which checks `ctx.Err()` at line 179/362 for early termination -- but since it is `Background()`, it will never be cancelled.
 
-Looking at the dispatch path in `codex_build_worktree.go:317`, when `dr.Status` is empty it is set to `"failed"`, but the error is not always populated into `blockers` -- specifically in the worktree path when `cb.RecordFailure` fires at line 325, there is no error, so no blocker is appended. Similarly, in the `codex_build.go:438` in-repo path, `cb.RecordFailure` happens without adding a blocker. The wave status would then be "completed" despite all workers having failed.
-
-**Fix:** Check for the failed status explicitly in addition to blockers:
+**Fix:** Create a cancellable context from the command's context or a signal handler:
 
 ```go
-failedCount := 0
-for _, result := range results {
-    if result.Status == "completed" {
-        completed++
-    } else if result.Status == "failed" {
-        failedCount++
-    }
-    // ... collect blockers as before
-}
-waveStatus := "completed"
-if completed < len(waveResults) || failedCount > 0 || len(blockers) > 0 {
-    waveStatus = "blocked"
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+// Use ctx instead of context.Background() in ceremony and dispatch calls
+ceremony := newBuildCeremonyEmitter(ctx, root, phase)
+// ...
+dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, ...)
+```
+
+### WR-02: `dispatchCodexBuildWorkersInRepo` returns `nil` error on `updateCodexBuildDispatchRuntimeStatus` failure
+
+**File:** `cmd/codex_build.go:440-442`
+**Issue:** When `updateCodexBuildDispatchRuntimeStatus` fails, the function returns `nil, fmt.Errorf(...)`. This propagates the error up and aborts the entire build. However, this status update is a non-critical bookkeeping operation -- failing it should not abort the build. Compare with the worktree path at `codex_build_worktree.go:329-332` which sets `dr.Status = "failed"` but continues.
+
+In the in-repo path, a transient store error during status update will rollback the entire build via `rollbackCodexBuildFailure`, discarding all worker results.
+
+**Fix:** Make the in-repo path consistent with the worktree path -- log the error but do not abort:
+
+```go
+if err := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); err != nil {
+    // Log but do not abort -- status update is non-critical bookkeeping
+    dr.Error = fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, err)
 }
 ```
 
-### WR-02: `ceremonyStepCompleted` contradicts `ceremonyStepStatus` for "spawned" and "planned"
+### WR-03: Potential nil dereference when `dr.WorkerResult` is nil and status is "completed"
 
-**File:** `cmd/ceremony_emitter.go:227-242`
-**Issue:** `ceremonyStepStatus` maps empty string, `"spawned"`, and `"planned"` to `"completed"` (line 229-230). However, `ceremonyStepCompleted` does NOT treat `"spawned"` or `"planned"` as completed -- it only treats `""`, `"completed"`, `"manually-reconciled"`, and `"skipped"` as completed (line 237-238).
+**File:** `cmd/codex_build_worktree.go:268-269`
+**Issue:** At line 268-269, the code checks `if dr.Status != "completed" || dr.WorkerResult == nil` to set `finalStatus = colony.WorktreeOrphaned`. However, the code at line 261-262 sets `dr.WorkerResult = &result` when `invokeErr == nil`, and then at line 263 sets `dr.Error = result.Error` when `result.Error != nil`. If the invoker returns `result{Status: "completed", Error: someErr}`, then `dr.Status` becomes `"completed"` and `dr.WorkerResult` is non-nil, so `finalStatus` stays `WorktreeMerged`. But then at line 272, `collectWorktreeTouchedPaths` runs on a potentially invalid result.
 
-This means in `emitLifecycleCeremonySequence` at line 188, a step with status `"spawned"` will be counted as `completed` (via `ceremonyStepCompleted` returning false because "spawned" is not in the completed set), but the ceremony event will report status `"completed"` (via `ceremonyStepStatus` returning "completed"). The `completed` counter at line 189 increments only when `ceremonyStepCompleted` returns true, so `"spawned"` steps are NOT counted as completed for the wave-end summary, but their individual spawn events say `"completed"`. This is a semantic inconsistency.
-
-**Fix:** Make both functions agree. Either `"spawned"` should be counted as completed in both, or neither:
+More critically, at line 288, the code checks `else if dr.WorkerResult != nil` before accessing `dr.WorkerResult.Summary`. If the `syncWorktreeChangesToRoot` call at line 280 succeeds but `dr.WorkerResult` is nil (which should not happen given the line 269 guard, but could happen if a later code path sets `dr.WorkerResult = nil`), the nil check saves it. This is defensive but the real risk is at line 272 where `dr.WorkerResult` is used without a nil check after the `finalStatus` guard:
 
 ```go
-func ceremonyStepCompleted(status string) bool {
-    switch strings.TrimSpace(status) {
-    case "", "completed", "manually-reconciled", "skipped", "spawned", "planned":
-        return true
-    default:
-        return false
-    }
-}
+if dr.Status != "completed" || dr.WorkerResult == nil {
+    finalStatus = colony.WorktreeOrphaned
+} else {
+    touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, result)
+    // 'result' is from the outer scope, not dr.WorkerResult -- this is correct but confusing
 ```
 
-Or, if "spawned" should not be "completed", fix `ceremonyStepStatus` to not map it that way.
+The `result` variable used at line 272 comes from the `invokeCodexWorkerWithRuntimeProgress` call at line 255, which is in the same scope. This is technically correct since `result` is only valid when `invokeErr == nil` (line 257 guard), but the pattern is fragile and easy to break during refactoring.
 
-### WR-03: `emitLifecycleCeremonySequence` mutates its input slice
-
-**File:** `cmd/ceremony_emitter.go:161-166`
-**Issue:** The function modifies `step.Wave` when `wave <= 0` (setting it to 1). Since `steps` is a slice passed by value but the elements are pointers to structs (actually they are value-typed `lifecycleCeremonyStep` structs, but slices share backing arrays), the mutation at line 166 modifies the caller's data. The callers in `emitPlanCeremonyDispatchSequence`, `emitColonizeCeremonyDispatchSequence`, and `emitContinueCeremonyFlowSequence` all pass locally-constructed slices, so in practice the mutation is harmless -- but it is a footgun if any caller reuses steps or expects them to be immutable.
-
-**Fix:** Either document the mutation clearly, or copy the step before modifying:
+**Fix:** Use `dr.WorkerResult` consistently instead of the outer `result` variable, and add a nil guard:
 
 ```go
-stepCopy := step
-if stepCopy.Wave <= 0 {
-    stepCopy.Wave = 1
-}
-waves[stepCopy.Wave] = append(waves[stepCopy.Wave], stepCopy)
+if dr.Status != "completed" || dr.WorkerResult == nil {
+    finalStatus = colony.WorktreeOrphaned
+} else {
+    touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, *dr.WorkerResult)
 ```
 
-### WR-04: Duplicate hive promotion loop in `codex_workflow_cmds.go` seal command
+### WR-04: `cleanupBuildWorktrees` uses `store.SaveJSON` instead of `store.UpdateJSONAtomically`
 
-**File:** `cmd/codex_workflow_cmds.go:330-352`
-**Issue:** The seal command iterates over `entries` twice with the same condition (`entry.Confidence >= 0.8 && entry.Action != ""`): once for local QUEEN.md promotion (lines 332-335) and once for hive promotion (lines 337-351). The `hiveEligibleCount` is incremented inside the second loop, but `promotedInstinctNames` is only appended in the first loop. If `promoteInstinctLocal` fails for an entry but `promoteToHive` succeeds, the instinct is promoted to the hive but not listed in `promotedInstinctNames`. This creates an inconsistency between what is reported as "promoted" and what actually reached the hive.
+**File:** `cmd/codex_build_worktree.go:789`
+**Issue:** `cleanupBuildWorktrees` loads the colony state, modifies it, and saves it back with `store.SaveJSON`. This is a non-atomic read-modify-write pattern. If another process (e.g., another goroutine in the same build) modifies `COLONY_STATE.json` between the load at line 756 and the save at line 789, those changes will be lost. The same issue exists in `gcOrphanedWorktrees` at line 829. Compare with `runCodexBuildWithOptions` which correctly uses `store.UpdateJSONAtomically` at line 305.
 
-This is not a data loss bug (hive promotion succeeds independently), but the `Promoted Instincts` list in CROWNED-ANTHILL.md will be incomplete.
-
-**Fix:** Track hive promotion results independently, or move `hiveEligibleCount` into the first loop and iterate only once:
+**Fix:** Use `store.UpdateJSONAtomically` for consistency and safety:
 
 ```go
-for _, entry := range entries {
-    if entry.Confidence >= 0.8 && entry.Action != "" {
-        hiveEligibleCount++
-        if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
-            promotedInstinctNames = append(promotedInstinctNames, entry.ID)
-        }
-        // hive promotion (non-blocking)
-        domain := entry.Domain
-        if domain == "" {
-            domain = "general"
-        }
-        if err := promoteToHive(entry.Action, domain, repoName, entry.Confidence); err != nil {
-            log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
-            hivePromotionFailures++
-        } else {
-            hivePromotedCount++
-        }
-    }
+var cleanedCount, orphanedCount int
+if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+    // ... cleanup logic modifying state.Worktrees
+    return nil
+}); err != nil {
+    return 0, 0, err
 }
-```
-
-### WR-05: `learning.go` error handling returns nil instead of propagating errors
-
-**File:** `cmd/learning.go:17-20, 50-53, 73-76, 143-145, 187-190, 213-216`
-**Issue:** Multiple commands return `nil` error after calling `outputErrorMessage` or `outputError`. For example, at line 19-20: when `store == nil`, the function returns `nil` error. Similarly, when `CaptureWithTrust` fails at line 51, the function returns `nil` error. This means the cobra command framework considers the command successful even when it failed. For CLI tools that may be called from scripts, this means exit code 0 on failure, which is incorrect.
-
-This pattern is consistent across all four commands in the file. It appears to be a project convention (the error is communicated via `outputError`'s JSON format), but it means any caller using `RunE` error propagation or shell `$?` will see success when the operation actually failed.
-
-**Fix:** If the project convention is intentional, this is not a bug per se. However, for commands that may be called from shell scripts, consider returning an actual error for hard failures:
-
-```go
-if store == nil {
-    outputErrorMessage("no store initialized")
-    return fmt.Errorf("no store initialized")
-}
+return cleanedCount, orphanedCount, nil
 ```
 
 ## Info
 
-### IN-01: Inconsistent indentation in `CeremonyTopics()` function
+### IN-01: Custom `max` function shadows Go 1.21+ builtin
 
-**File:** `pkg/events/ceremony.go:73`
-**Issue:** Line 73 has an extra tab indent compared to surrounding lines:
-```go
-			CeremonyTopicBuildCircuitBreak,  // extra indent
-```
-This is a cosmetic issue but suggests a merge or copy-paste artifact.
+**File:** `cmd/codex_build.go:1645-1650`
+**Issue:** Go 1.21 introduced a built-in `max` function for ordered types. The project targets Go 1.26 (per `go version`). The custom `max(a, b int) int` at line 1645 shadows the builtin. While this compiles and works correctly, it is unnecessary code that could confuse developers who expect the builtin behavior.
 
-**Fix:** Remove the extra tab to match surrounding lines:
-```go
-		CeremonyTopicBuildCircuitBreak,
-```
+**Fix:** Remove the custom `max` function and use the builtin directly.
 
-### IN-02: Compile-time check `var _ = timeoutCtx` is unnecessary
+### IN-02: `var _ = timeoutCtx` compile-time check is a no-op
 
 **File:** `cmd/learning.go:250`
-**Issue:** The line `var _ = timeoutCtx` is a compile-time interface satisfaction check, but `timeoutCtx` is a function, not an interface. This pattern is typically used for interfaces (e.g., `var _ io.Reader = ...`). For a function, the compiler will error if the function is undefined regardless. This line is dead code.
+**Issue:** The line `var _ = timeoutCtx` is intended as a compile-time usage check, but `timeoutCtx` is a function (not an interface). The Go compiler will error on undefined functions regardless. This line does nothing and is dead code.
 
-**Fix:** Remove the line.
-
-### IN-03: `continue-advance.md` and `continue-full.md` contain significant content duplication
-
-**File:** `.aether/docs/command-playbooks/continue-advance.md` and `.aether/docs/command-playbooks/continue-full.md`
-**Issue:** The `continue-full.md` file contains the complete continue flow (1737 lines) while `continue-advance.md` contains Steps 2.0.4 through 2.1.5 (704 lines). These two files share substantial duplicated content (Steps 2.1 through 2.1.5 appear in both with identical or near-identical text). If one is updated without the other, they will diverge silently.
-
-**Fix:** Extract the shared sections into a separate playbook (e.g., `continue-pheromones.md`) and have both files reference it, or document clearly which file is authoritative and mark the other as a derived/split file.
+**Fix:** Remove line 250.
 
 ---
 
-_Reviewed: 2026-04-29T00:00:00Z_
+_Reviewed: 2026-04-29T19:30:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
