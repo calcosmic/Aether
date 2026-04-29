@@ -1056,7 +1056,7 @@ Update COLONY_STATE.json:
   if [[ -n "$current_phase_learnings" ]]; then
     echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
       if [[ -n "$claim" ]]; then
-        aether memory-capture --type "learning" --content "$claim"
+        aether memory-capture --type "learning" --source-type success_pattern --evidence-type multi_phase --content "$claim"
       fi
     done
     echo "Recorded observations for threshold tracking"
@@ -1253,6 +1253,8 @@ if [[ "$midden_count" -gt 0 ]]; then
       # Capture as resolution candidate for promotion tracking
       aether memory-capture \
         --type "resolution" \
+        --source-type error_resolution \
+        --evidence-type multi_phase \
         --content "Recurring error pattern: $category ($count occurrences)" 2>/dev/null || true
     fi
   done
