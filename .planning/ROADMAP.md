@@ -249,8 +249,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 83-01-PLAN.md -- PlanningDepth type, CLI flag, manifest integration, visual output, and runtime tests
-- [ ] 83-02-PLAN.md -- YAML source and wrapper markdown updates for planning depth ceremony
+- [x] 83-01-PLAN.md -- PlanningDepth type, CLI flag, manifest integration, visual output, and runtime tests
+- [x] 83-02-PLAN.md -- YAML source and wrapper markdown updates for planning depth ceremony
 
 ### Phase 84: Verification Depth Extension
 **Goal**: Verification depth expands from two levels (light/heavy) to three levels (light/standard/heavy), independent of planning depth
@@ -305,7 +305,7 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 81. Plan and Lifecycle Loop Safety | v1.12 | 1/2 | Complete    | 2026-04-30 |
 | 82. Loop Detection Telemetry | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 83. Planning Depth System | v1.12 | 0/2 | Planned | - |
+| 83. Planning Depth System | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 84. Verification Depth Extension | v1.12 | 0/? | Not started | - |
 | 85. Smart Depth Defaults | v1.12 | 0/? | Not started | - |
 | 86. Depth Selection UI and Persistence | v1.12 | 0/? | Not started | - |
