@@ -112,22 +112,25 @@ func TestClassifyError(t *testing.T) {
 	}
 }
 
-// TestRenderRecoveryMenu verifies the recovery menu renders correctly.
+// TestRenderRecoveryMenu verifies the recovery menu renders correctly in visual mode.
+// Note: renderRecoveryMenu delegates to JSON mode in non-terminal environments,
+// so we test buildVisualRecoveryMenu directly for visual rendering assertions.
 func TestRenderRecoveryMenu(t *testing.T) {
-	result := renderRecoveryMenu("seal", "no colony initialized", nil)
+	options := recoveryOptionsForCommand("seal", "no colony initialized")
+	result := buildVisualRecoveryMenu("seal", "no colony initialized", options)
 
 	if result == "" {
-		t.Fatal("renderRecoveryMenu returned empty string")
+		t.Fatal("buildVisualRecoveryMenu returned empty string")
 	}
 
-	// Must contain "Recovery" in the banner
-	if !strings.Contains(result, "Recovery") {
-		t.Error("renderRecoveryMenu output should contain 'Recovery' in the banner")
+	// Must contain "R E C O V E R Y" (renderBanner uses spacedTitle which uppercases and spaces letters)
+	if !strings.Contains(result, "R E C O V E R Y") {
+		t.Error("recovery menu output should contain 'R E C O V E R Y' in the banner")
 	}
 
 	// Must contain a numbered list (at least "1.")
 	if !strings.Contains(result, "1.") {
-		t.Error("renderRecoveryMenu output should contain numbered options")
+		t.Error("recovery menu output should contain numbered options")
 	}
 }
 
