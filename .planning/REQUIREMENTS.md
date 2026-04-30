@@ -43,17 +43,17 @@ The verification depth selected at plan time must be stored in the build packet 
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| LOOP-01 | TBD | Pending |
-| LOOP-02 | TBD | Pending |
-| LOOP-03 | TBD | Pending |
-| LOOP-04 | TBD | Pending |
-| LOOP-05 | TBD | Pending |
-| LOOP-06 | TBD | Pending |
-| DEPTH-01 | TBD | Pending |
-| DEPTH-02 | TBD | Pending |
-| DEPTH-03 | TBD | Pending |
-| DEPTH-04 | TBD | Pending |
-| DEPTH-05 | TBD | Pending |
+| LOOP-01 | Phase 80 | Pending |
+| LOOP-02 | Phase 80 | Pending |
+| LOOP-03 | Phase 80 | Pending |
+| LOOP-04 | Phase 81 | Pending |
+| LOOP-05 | Phase 81 | Pending |
+| LOOP-06 | Phase 82 | Pending |
+| DEPTH-01 | Phase 83 | Pending |
+| DEPTH-02 | Phase 84 | Pending |
+| DEPTH-03 | Phase 85 | Pending |
+| DEPTH-04 | Phase 86 | Pending |
+| DEPTH-05 | Phase 86 | Pending |
 
 ## Out of Scope
 

@@ -14,6 +14,7 @@
 - **v1.9 Review Persistence** - Phases 52-56 (shipped 2026-04-26)
 - **v1.10 Colony Polish** - Phases 57-69 (shipped 2026-04-28)
 - **v1.11 Aether Unification** - Phases 70-79 (shipped 2026-04-30)
+- **v1.12 Safe Colony** - Phases 80-86 (in progress)
 
 ## Phases
 
@@ -115,9 +116,8 @@
 <details>
 <summary>v1.7 Planning Pipeline Recovery (Phases 47-48) -- SHIPPED 2026-04-24</summary>
 
-- [x] Phase 49: Stuck State Scanner and Diagnosis
-- [x] Phase 50: Repair Pipeline
-- [x] Phase 51: Recovery Verification
+- [x] Phase 47: Plan --force Recovery
+- [x] Phase 48: E2E Recovery Test
 
 </details>
 
@@ -161,179 +161,118 @@
 
 </details>
 
-### v1.11 Aether Unification (Shipped 2026-04-30)
+<details>
+<summary>v1.11 Aether Unification (Phases 70-79) -- SHIPPED 2026-04-30</summary>
 
-**Milestone Goal:** Make Aether clean, canonical, and intelligent again -- remove self-hosting artifacts, restore lost Smart Init intelligence, harden the 3-platform experience, and improve user-facing flows.
+- [x] Phase 70: Self-Hosting Cleanup
+- [x] Phase 71: Platform Hardening
+- [x] Phase 72: Smart Init Charter
+- [x] Phase 73: Rich Init Research
+- [x] Phase 74: Suggest-Analyze
+- [x] Phase 75: Intelligence Core
+- [x] Phase 76: UX Improvements
+- [x] Phase 77: Ceremony Data Surfacing
+- [x] Phase 78: Platform Test Coverage
+- [x] Phase 79: Documentation & Validation Hygiene
 
-- [x] **Phase 70: Self-Hosting Cleanup** - Remove stale artifacts from Aether-developing-Aether
-- [x] **Phase 71: Platform Hardening** - Fix cross-platform gaps across Claude Code, OpenCode, and Codex
-- [x] **Phase 72: Smart Init Charter** - Restore colony charter ceremony with approval flow
-- [x] **Phase 73: Rich Init Research** - Port deep codebase analysis to Go (tech stack, governance, pheromone suggestions)
-- [x] **Phase 74: Suggest-Analyze** - Restore automatic pheromone suggestions during builds
-- [x] **Phase 75: Intelligence Core** - Restore Bayesian confidence scoring and circuit breaker
-- [x] **Phase 76: UX Improvements** - Better onboarding, clearer feedback, smoother ceremony flows
-- [x] **Phase 77: Ceremony Data Surfacing** - Display rich research data in init ceremony, wire circuit breaker events, add --no-suggest flag
-- [x] **Phase 78: Platform Test Coverage** - Expand dispatch test to 25 castes, add platform audit data to dashboard warnings
-- [x] **Phase 79: Documentation & Validation Hygiene** - Populate empty summaries, fix Nyquist compliance, update requirement checkboxes
+</details>
+
+### v1.12 Safe Colony (In Progress)
+
+**Milestone Goal:** Make Aether loop-proof and give users independent control over planning depth and verification depth, with smart defaults that adapt to phase position and code change risk.
+
+- [ ] **Phase 80: Build/Continue Loop Prevention** - Prevent infinite watcher respawns, recovery loops, and build wave retry loops
+- [ ] **Phase 81: Plan and Lifecycle Loop Safety** - Block circular phase dependencies and ensure lifecycle commands suggest different recovery steps
+- [ ] **Phase 82: Loop Detection Telemetry** - Log all loop-breaking events to the event bus and surface them in status
+- [ ] **Phase 83: Planning Depth System** - Add light/standard/deep planning depth that controls task decomposition granularity
+- [ ] **Phase 84: Verification Depth Extension** - Extend verification depth from 2 levels (light/heavy) to 3 levels (light/standard/heavy)
+- [ ] **Phase 85: Smart Depth Defaults** - Auto-select planning and verification depth from phase position and code change risk
+- [ ] **Phase 86: Depth Selection UI and Persistence** - Present smart defaults to user at plan time and persist depths in the build packet
 
 ## Phase Details
 
 <details>
-<summary>v1.0 through v1.10 Phase Details (archived)</summary>
+<summary>v1.0 through v1.11 Phase Details (archived)</summary>
 
 All prior milestone phase details are archived. See MILESTONES.md for accomplishment summaries.
 
 </details>
 
-### Phase 70: Self-Hosting Cleanup
-**Goal**: Remove all stale artifacts that exist because Aether was used to develop itself, leaving a clean canonical repo
-**Depends on**: Nothing (first phase of v1.11)
-**Requirements**: CLEAN-01, CLEAN-02, CLEAN-03, CLEAN-04, CLEAN-05
+### Phase 80: Build/Continue Loop Prevention
+**Goal**: Build and continue commands never enter infinite retry cycles -- failed watchers are auto-skipped, recovery suggestions don't loop back, and build wave retries are tracked and escalated
+**Depends on**: Nothing (first phase of v1.12)
+**Requirements**: LOOP-01, LOOP-02, LOOP-03
 **Success Criteria** (what must be TRUE):
-  1. The stale `.aether/agents/` directory no longer exists (26 duplicate files removed)
-  2. No chamber files are tracked in git (241 files removed, chambers/ gitignored)
-  3. Runtime state files (CONTEXT.md, CROWNED-ANTHILL.md) are no longer tracked in git
-  4. `agents-claude/` is verified byte-identical to `.claude/agents/ant/`
-**Plans**: 1 plan
+  1. When `/ant-continue` spawns a watcher that fails N consecutive times (not timeouts), the watcher is auto-skipped on subsequent continue runs with a clear message
+  2. When `/ant-continue` suggests a recovery command, running that recovery command does not loop back to `/ant-continue` with identical blocking state
+  3. When `/ant-build` dispatches a worker that fails, the failure is tracked and the worker is escalated (not silently re-dispatched in the same wave)
+**Plans**: TBD
 
-Plans:
-- [x] 70-01-PLAN.md -- Remove 296 self-hosting artifacts, harden gitignore, verify integrity
-
-### Phase 71: Platform Hardening
-**Goal**: All three platforms (Claude Code, OpenCode, Codex CLI) produce consistent, correct output for every command
-**Depends on**: Phase 70 (clean repo before fixing platform gaps)
-**Requirements**: PLAT-01, PLAT-02, PLAT-03, PLAT-04, PLAT-05
+### Phase 81: Plan and Lifecycle Loop Safety
+**Goal**: Plans cannot contain circular dependencies, and lifecycle commands always suggest a different recovery action than the command that just failed
+**Depends on**: Phase 80 (loop prevention patterns established)
+**Requirements**: LOOP-04, LOOP-05
 **Success Criteria** (what must be TRUE):
-  1. OpenCode init.md and entomb.md include shelf backlog/archive sections matching Claude Code
-  2. Codex subagent dispatch correctly spawns all agent types without errors
-  3. All 50 slash commands produce correct output when run on each of the 3 platforms
-**Plans**: 2 plans
+  1. When `/ant-plan` generates a phase plan, circular dependency chains (A depends on B, B depends on A) are detected and rejected with an error
+  2. When `/ant-seal`, `/ant-entomb`, `/ant-status`, or `/ant-resume` encounters an error, the suggested next step is a different command -- never "re-run the same command"
+**Plans**: TBD
 
-Plans:
-- [x] 71-01-PLAN.md -- Commit uncommitted work, add state-mutate flags, verify dispatch manifests and shelf parity
-- [x] 71-02-PLAN.md -- Register 5 missing subcommands, create CLI smoke test
-
-### Phase 72: Smart Init Charter
-**Goal**: `/ant-init` runs a colony charter ceremony -- scanning the repo, presenting a charter, and requiring user approval before proceeding
-**Depends on**: Phase 71 (init uses platform commands that must work correctly)
-**Requirements**: INIT-01, INIT-02
+### Phase 82: Loop Detection Telemetry
+**Goal**: All loop-breaking events are logged to the colony event bus and visible in `/ant-status`, so users can see when and why the system intervened
+**Depends on**: Phase 80, Phase 81 (loop breakers must exist before they can emit telemetry)
+**Requirements**: LOOP-06
 **Success Criteria** (what must be TRUE):
-  1. Running `/ant-init "goal"` scans the repo and generates a charter document
-  2. User sees the charter and can accept, revise, or reject it before the colony proceeds
-  3. Rejecting the charter stops init cleanly without leaving partial state
-**Plans**: 2 plans
+  1. When a loop is detected and broken (watcher skip, recovery redirect, worker escalation, circular dep rejection, lifecycle recovery), an event is published to the colony event bus with loop type, detection signal, and action taken
+  2. `/ant-status` surfaces recent loop-break events in a dedicated section
+**Plans**: TBD
 
-Plans:
-- [x] 72-01-PLAN.md -- Expand charter to 7 sections, add Charter struct to colony package, wire --charter-json flag
-- [x] 72-02-PLAN.md -- Go-native init ceremony for Codex/CLI, visual rendering, wrapper updates
-
-### Phase 73: Rich Init Research
-**Goal**: The init ceremony produces deep codebase analysis -- tech stack, directory structure, governance patterns, and pheromone suggestions
-**Depends on**: Phase 72 (charter ceremony is the entry point that triggers research)
-**Requirements**: INIT-03, INIT-04, INIT-05, INIT-06, INIT-07
+### Phase 83: Planning Depth System
+**Goal**: `/ant-plan` supports a planning depth setting (light/standard/deep) that controls how thoroughly tasks are decomposed
+**Depends on**: Phase 81 (plan command must be loop-safe before adding new features)
+**Requirements**: DEPTH-01
 **Success Criteria** (what must be TRUE):
-  1. Init-research identifies the repo's languages, frameworks, and build tools
-  2. Init-research classifies the directory structure (monorepo, microservices, standard app, etc.)
-  3. Init-research detects governance files (.eslintrc, pyproject.toml, Makefile, etc.) and explains their rules
-  4. Init-research generates pheromone suggestions based on detected patterns
-  5. The init ceremony outputs a formatted colony context summary incorporating all research
-**Plans**: 3 plans
+  1. When `/ant-plan` runs with `--planning-depth light`, the generated plan contains minimal tasks (coarse decomposition)
+  2. When `/ant-plan` runs with `--planning-depth standard`, the generated plan has normal task breakdown
+  3. When `/ant-plan` runs with `--planning-depth deep`, the generated plan has granular subtasks including edge cases
+**Plans**: TBD
 
-Plans:
-- [x] 73-01-PLAN.md -- Dependency file parsing for 8 formats, tech_stack_detail output field
-- [x] 73-02-PLAN.md -- Directory classification with signals, governance deep parsing with extracted rules
-- [x] 73-03-PLAN.md -- Pheromone expansion (10 to ~25), colony context summary integration
-
-### Phase 74: Suggest-Analyze
-**Goal**: During builds (Step 4.2), Aether automatically detects codebase patterns and suggests them as pheromone signals for user review
-**Depends on**: Phase 71 (build commands must work correctly across platforms)
-**Requirements**: INTEL-01, INTEL-02, INTEL-03
+### Phase 84: Verification Depth Extension
+**Goal**: Verification depth expands from two levels (light/heavy) to three levels (light/standard/heavy), independent of planning depth
+**Depends on**: Phase 80 (continue must be loop-safe before extending verification)
+**Requirements**: DEPTH-02
 **Success Criteria** (what must be TRUE):
-  1. Running `/ant-build` triggers automatic pattern detection against the codebase
-  2. Suggested pheromones are deduplicated against existing active signals before being presented
-  3. User can review suggestions via a tick-to-approve interface and accept or dismiss each one
-**Plans**: 2 plans
+  1. `/ant-continue` honors a `--verification-depth light` flag that produces a minimal review
+  2. `/ant-continue` honors a `--verification-depth standard` flag that produces a normal review
+  3. `/ant-continue` honors a `--verification-depth heavy` flag that produces a thorough review (same as the old `--heavy` behavior)
+  4. The new 3-level system is backward-compatible: existing light/heavy behavior is preserved
+**Plans**: TBD
 
-Plans:
-- [x] 74-01-PLAN.md -- Create suggest-analyze command with pattern detection, dedup, and persistence
-- [x] 74-02-PLAN.md -- Implement suggest-approve with approval/dismiss flow, restore Step 4.2 playbook
-
-### Phase 75: Intelligence Core
-**Goal**: The wisdom pipeline uses Bayesian confidence scoring and parallel workers are protected from cascade failure
-**Depends on**: Phase 74 (intelligence features share patterns with suggest-analyze)
-**Requirements**: INTEL-04, INTEL-05
+### Phase 85: Smart Depth Defaults
+**Goal**: The system auto-selects planning depth and verification depth based on phase position and code change risk, without requiring user input
+**Depends on**: Phase 83 (planning depth exists), Phase 84 (verification depth extended)
+**Requirements**: DEPTH-03
 **Success Criteria** (what must be TRUE):
-  1. Wisdom observations receive a trust score using the 40/35/25 weighted formula with 60-day half-life decay
-  2. When a parallel worker fails repeatedly, the circuit breaker halts further dispatch to that worker without affecting others
-**Plans**: 2 plans
+  1. The final phase in a milestone automatically gets heavier planning and verification depth than intermediate phases
+  2. Phases touching security-critical paths (auth, secrets, permissions) automatically get heavier depth
+  3. Phases touching high-blast-radius files (cmd/ core runtime, state mutations) automatically get heavier depth
+  4. Early phases in a milestone default to lighter depths
+**Plans**: TBD
 
-Plans:
-- [x] 75-01-PLAN.md -- (To be planned)
-- [x] 75-02-PLAN.md -- (To be planned)
-
-### Phase 76: UX Improvements
-**Goal**: Aether provides clear guidance to new users, explains errors in plain language, and shows progress during long operations
-**Depends on**: Phase 71 (platform commands must work before polishing UX)
-**Requirements**: UX-01, UX-02, UX-03, UX-04
+### Phase 86: Depth Selection UI and Persistence
+**Goal**: At `/ant-plan` start, users see the smart default for both depths and can accept or override either, and the selected verification depth persists into the build packet for `/ant-continue`
+**Depends on**: Phase 85 (smart defaults exist to present)
+**Requirements**: DEPTH-04, DEPTH-05
 **Success Criteria** (what must be TRUE):
-  1. A first-time user running any Aether command sees guidance on how to get started
-  2. When a command fails, the error message explains what went wrong in plain language and suggests what to try next
-  3. Build and continue ceremonies show progress indicators during long-running steps
-  4. `/ant-status` surfaces actionable information (what to do next) rather than just raw state dumps
-**Plans**: 2 plans
-
-Plans:
-- [ ] 76-01-PLAN.md -- First-run welcome banner, friendly error messages, ceremony progress bars
-- [ ] 76-02-PLAN.md -- Status dashboard redesign with warnings and next-step suggestions
-
-### Phase 77: Ceremony Data Surfacing
-**Goal**: Rich research data from init-research is displayed in the init ceremony, circuit breaker events flow through the ceremony event bus, and builds can opt out of suggest-analyze
-**Depends on**: Phase 73 (rich research data exists), Phase 75 (circuit breaker exists)
-**Requirements**: INIT-03, INIT-04, INIT-05, INIT-07, INTEL-05, INTEL-01
-**Gap Closure**: Closes gaps from v1.11 audit (research data not surfaced, orphaned event function, missing flag)
-**Success Criteria** (what must be TRUE):
-  1. Init ceremony displays tech_stack_detail, dir_classification, governance_details, and colony_context_summary
-  2. Circuit breaker events are published to ceremony event bus (not just printf)
-  3. `--no-suggest` flag on `aether build` conditionally skips suggest-analyze in Step 4.2
-**Plans**: 1 plan
-
-Plans:
-- [x] 77-01-PLAN.md -- Display research data in init ceremony, wire circuit breaker events to ceremony bus, register --no-suggest flag
-
-
-### Phase 78: Platform Test Coverage
-**Goal**: All 25 agent castes have dispatch manifest test coverage, and platform audit data is available to the dashboard warnings system
-**Depends on**: Phase 71 (platform hardening complete), Phase 76 (dashboard warnings exist)
-**Requirements**: PLAT-03, PLAT-04, PLAT-05, UX-04
-**Gap Closure**: Closes gaps from v1.11 audit (dispatch test coverage, audit data not in dashboard, chamber-compare stub, state-mutate flag tests)
-**Success Criteria** (what must be TRUE):
-  1. Dispatch manifest test iterates all 25 castes through codexAgentFileForCaste/codexAgentNameForCaste (ALREADY EXISTS)
-  2. Dashboard warnings can consume platform audit/smoke test results as runtime data
-  3. chamber-compare produces real comparison data (not hardcoded empty)
-  4. state-mutate --verify-only and --revert flags have test coverage
-**Plans**: 1 plan
-
-Plans:
-- [ ] 78-01-PLAN.md -- Wire chamber-compare to real data, add platform health dashboard warnings, add state-mutate flag tests
-
-### Phase 79: Documentation & Validation Hygiene
-**Goal**: All phase summaries are populated, VALIDATION.md files are Nyquist-compliant, and REQUIREMENTS.md reflects actual completion state
-**Depends on**: Phase 72 (empty summary), Phase 72 (non-compliant VALIDATION.md)
-**Requirements**: Phase-72-Nyquist, Phase-72-Summary, Phase-77-Validation
-**Gap Closure**: Closes gaps from v1.11 audit (empty SUMMARY, Nyquist non-compliance, missing VALIDATION.md)
-**Success Criteria** (what must be TRUE):
-  1. 72-02-SUMMARY.md contains accurate summary of ceremony implementation
-  2. Phase 72 VALIDATION.md passes Nyquist validation
-  3. Phase 77 VALIDATION.md exists and passes Nyquist validation
-**Plans**: 1 plan
-
-Plans:
-- [x] 79-01-PLAN.md -- Populate 72-02-SUMMARY.md, fix Phase 72 VALIDATION.md Nyquist compliance, create Phase 77 VALIDATION.md
+  1. When `/ant-plan` runs, the user is shown the smart defaults for planning depth and verification depth before plan generation
+  2. The user can accept both defaults with a single confirmation, or override either depth individually
+  3. The verification depth selected at plan time is stored in the build packet JSON
+  4. `/ant-continue` reads the verification depth from the build packet and uses it without requiring the user to re-specify
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76 -> 77 -> 78 -> 79
+Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -347,3 +286,10 @@ Phases execute in numeric order: 70 -> 71 -> 72 -> 73 -> 74 -> 75 -> 76 -> 77 ->
 | 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
+| 80. Build/Continue Loop Prevention | v1.12 | 0/? | Not started | - |
+| 81. Plan and Lifecycle Loop Safety | v1.12 | 0/? | Not started | - |
+| 82. Loop Detection Telemetry | v1.12 | 0/? | Not started | - |
+| 83. Planning Depth System | v1.12 | 0/? | Not started | - |
+| 84. Verification Depth Extension | v1.12 | 0/? | Not started | - |
+| 85. Smart Depth Defaults | v1.12 | 0/? | Not started | - |
+| 86. Depth Selection UI and Persistence | v1.12 | 0/? | Not started | - |
