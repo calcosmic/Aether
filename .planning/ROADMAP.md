@@ -181,7 +181,7 @@
 
 **Milestone Goal:** Make Aether loop-proof and give users independent control over planning depth and verification depth, with smart defaults that adapt to phase position and code change risk.
 
-- [ ] **Phase 80: Build/Continue Loop Prevention** - Prevent infinite watcher respawns, recovery loops, and build wave retry loops
+- [x] **Phase 80: Build/Continue Loop Prevention** - Prevent infinite watcher respawns, recovery loops, and build wave retry loops
 - [ ] **Phase 81: Plan and Lifecycle Loop Safety** - Block circular phase dependencies and ensure lifecycle commands suggest different recovery steps
 - [ ] **Phase 82: Loop Detection Telemetry** - Log all loop-breaking events to the event bus and surface them in status
 - [ ] **Phase 83: Planning Depth System** - Add light/standard/deep planning depth that controls task decomposition granularity
@@ -219,7 +219,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. When `/ant-plan` generates a phase plan, circular dependency chains (A depends on B, B depends on A) are detected and rejected with an error
   2. When `/ant-seal`, `/ant-entomb`, `/ant-status`, or `/ant-resume` encounters an error, the suggested next step is a different command -- never "re-run the same command"
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 81-01-PLAN.md -- Cycle detection on task dependency graphs with plan validation gate (LOOP-04)
+- [ ] 81-02-PLAN.md -- Recovery engine for lifecycle commands with command exclusion filter (LOOP-05)
 
 ### Phase 82: Loop Detection Telemetry
 **Goal**: All loop-breaking events are logged to the colony event bus and visible in `/ant-status`, so users can see when and why the system intervened
@@ -291,7 +295,7 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
 | 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 81. Plan and Lifecycle Loop Safety | v1.12 | 0/? | Not started | - |
+| 81. Plan and Lifecycle Loop Safety | v1.12 | 0/2 | Not started | - |
 | 82. Loop Detection Telemetry | v1.12 | 0/? | Not started | - |
 | 83. Planning Depth System | v1.12 | 0/? | Not started | - |
 | 84. Verification Depth Extension | v1.12 | 0/? | Not started | - |
