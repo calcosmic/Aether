@@ -1,5 +1,35 @@
 # Aether Milestones
 
+## v1.11 Aether Unification
+
+**Shipped:** 2026-04-30
+**Phases:** 70-79 (10 phases) | **Plans:** 18
+
+### Accomplishments
+
+1. Removed self-hosting artifacts (stale agents, duplicate commands, orphaned companion files)
+2. Hardened 3-platform experience (PLAT-01 fix, Codex visual parity, wrapper updates)
+3. Restored Smart Init intelligence (charter ceremony, rich init-research, suggest-analyze)
+4. Built intelligence core (research rendering, circuit breaker events, data surfacing)
+5. Improved user-facing flows (UX polish, ceremony data display, test coverage)
+6. Documentation and validation hygiene (Nyquist compliance, empty summaries populated)
+
+### Stats
+
+- 59 commits, 1982 files changed, +361,826 / -77,084 lines
+- 18/18 plans completed, 10/10 phases verified
+- Timeline: 75 days (2026-02-14 to 2026-04-30)
+
+### Known Tech Debt
+
+- Phase 71: dispatch manifest test covers 1/25 agent types
+- Phase 71: state-mutate --verify-only and --revert flags registered but never read by RunE
+- Phase 71: suggest-approve returns hardcoded empty suggestions (compatibility stub)
+- Phase 72: 2 human verification items pending
+- Phase 76: 4 human verification items pending
+
+---
+
 ## v1.10 Colony Polish
 
 **Shipped:** 2026-04-28

@@ -33,8 +33,8 @@ That means:
 ## Current State
 
 - Go runtime is healthy, v1.0.24 shipped
-- Milestone v1.10 Colony Polish complete (shipped 2026-04-28)
-- 2910+ tests passing, full E2E regression coverage
+- Milestone v1.11 Aether Unification complete (shipped 2026-04-30)
+- 2900+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
 - Colony recovery system: `aether recover` + `--apply` for stuck-state rescue
 - Review persistence system: 7-domain ledger CRUD, colony-prime injection, lifecycle integration
@@ -43,6 +43,7 @@ That means:
 - Smart review depth: light/heavy modes, final phase always heavy, `--light` flag
 - Porter ant: 26th caste, wired into seal lifecycle with interactive publishing
 - All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
+- Smart Init intelligence: charter ceremony, rich init-research, suggest-analyze
 
 <details>
 <summary>Prior State History</summary>
@@ -186,4 +187,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Curation ant pipeline (8-ant orchestrated pipeline)
 - Consolidation pipeline (phase-end knowledge compression)
 
-*Last updated: 2026-04-30 after Phase 79 (documentation & validation hygiene) completed*
+*Last updated: 2026-04-30 after v1.11 Aether Unification milestone shipped*

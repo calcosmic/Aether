@@ -13,7 +13,7 @@
 - **v1.8 Colony Recovery** - Phases 49-51 (shipped 2026-04-25)
 - **v1.9 Review Persistence** - Phases 52-56 (shipped 2026-04-26)
 - **v1.10 Colony Polish** - Phases 57-69 (shipped 2026-04-28)
-- **v1.11 Aether Unification** - Phases 70-76 (in progress)
+- **v1.11 Aether Unification** - Phases 70-79 (shipped 2026-04-30)
 
 ## Phases
 
@@ -161,20 +161,20 @@
 
 </details>
 
-### v1.11 Aether Unification (In Progress)
+### v1.11 Aether Unification (Shipped 2026-04-30)
 
 **Milestone Goal:** Make Aether clean, canonical, and intelligent again -- remove self-hosting artifacts, restore lost Smart Init intelligence, harden the 3-platform experience, and improve user-facing flows.
 
-- [ ] **Phase 70: Self-Hosting Cleanup** - Remove stale artifacts from Aether-developing-Aether
-- [ ] **Phase 71: Platform Hardening** - Fix cross-platform gaps across Claude Code, OpenCode, and Codex
-- [ ] **Phase 72: Smart Init Charter** - Restore colony charter ceremony with approval flow
-- [ ] **Phase 73: Rich Init Research** - Port deep codebase analysis to Go (tech stack, governance, pheromone suggestions)
-- [ ] **Phase 74: Suggest-Analyze** - Restore automatic pheromone suggestions during builds
-- [ ] **Phase 75: Intelligence Core** - Restore Bayesian confidence scoring and circuit breaker
-- [ ] **Phase 76: UX Improvements** - Better onboarding, clearer feedback, smoother ceremony flows
-- [ ] **Phase 77: Ceremony Data Surfacing** - Display rich research data in init ceremony, wire circuit breaker events, add --no-suggest flag
-- [ ] **Phase 78: Platform Test Coverage** - Expand dispatch test to 25 castes, add platform audit data to dashboard warnings
-- [ ] **Phase 79: Documentation & Validation Hygiene** - Populate empty summaries, fix Nyquist compliance, update requirement checkboxes
+- [x] **Phase 70: Self-Hosting Cleanup** - Remove stale artifacts from Aether-developing-Aether
+- [x] **Phase 71: Platform Hardening** - Fix cross-platform gaps across Claude Code, OpenCode, and Codex
+- [x] **Phase 72: Smart Init Charter** - Restore colony charter ceremony with approval flow
+- [x] **Phase 73: Rich Init Research** - Port deep codebase analysis to Go (tech stack, governance, pheromone suggestions)
+- [x] **Phase 74: Suggest-Analyze** - Restore automatic pheromone suggestions during builds
+- [x] **Phase 75: Intelligence Core** - Restore Bayesian confidence scoring and circuit breaker
+- [x] **Phase 76: UX Improvements** - Better onboarding, clearer feedback, smoother ceremony flows
+- [x] **Phase 77: Ceremony Data Surfacing** - Display rich research data in init ceremony, wire circuit breaker events, add --no-suggest flag
+- [x] **Phase 78: Platform Test Coverage** - Expand dispatch test to 25 castes, add platform audit data to dashboard warnings
+- [x] **Phase 79: Documentation & Validation Hygiene** - Populate empty summaries, fix Nyquist compliance, update requirement checkboxes
 
 ## Phase Details
 
