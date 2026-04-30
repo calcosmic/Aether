@@ -163,7 +163,14 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, err
 	}
-	planningDepth, err := resolvePlanningDepth(opts.PlanningDepth)
+	currentPhase := firstBuildablePhase(state.Plan.Phases)
+	var planningPhase colony.Phase
+	if currentPhase > 0 && currentPhase <= len(state.Plan.Phases) {
+		planningPhase = state.Plan.Phases[currentPhase-1]
+	} else if len(state.Plan.Phases) > 0 {
+		planningPhase = state.Plan.Phases[0]
+	}
+	planningDepth, err := resolvePlanningDepthSmart(opts.PlanningDepth, planningPhase, len(state.Plan.Phases))
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +463,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
 	}
-	planningDepth, err := resolvePlanningDepth(opts.PlanningDepth)
+	planningDepth, err := resolvePlanningDepthSmart(opts.PlanningDepth, colony.Phase{ID: 1}, len(state.Plan.Phases))
 	if err != nil {
 		return nil, err
 	}
@@ -601,6 +608,22 @@ func resolvePlanningDepth(depth string) (string, error) {
 		}
 	}
 	return string(normalized), nil
+}
+
+// resolvePlanningDepthSmart wraps resolvePlanningDepth with smart defaults.
+// When depth is empty (no explicit user flag), it uses resolveSmartPlanningDepth
+// to auto-select based on phase position and risk signals.
+func resolvePlanningDepthSmart(depth string, phase colony.Phase, totalPhases int) (string, error) {
+	normalized, err := resolvePlanningDepth(depth)
+	if err != nil {
+		return "", err
+	}
+	// If user explicitly provided a depth, use it (normalized is non-default)
+	if depth != "" {
+		return normalized, nil
+	}
+	// No explicit depth -- use smart default
+	return string(resolveSmartPlanningDepth(phase, totalPhases)), nil
 }
 
 func planningDepthForGranularity(granularity colony.PlanGranularity) string {
