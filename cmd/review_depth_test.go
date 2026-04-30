@@ -409,6 +409,109 @@ func TestRenderReviewDepthLine_Light(t *testing.T) {
 	}
 }
 
+// --- Task 1 tests: VerificationDepth 3-level dispatch ---
+
+func TestResolveVerificationDepth_FinalPhaseAlwaysHeavy(t *testing.T) {
+	phase := colony.Phase{ID: 5, Name: "Final polish"}
+	got := resolveVerificationDepth(phase, 5, false, false, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("final phase no flags: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+	// light flag on final phase still gets heavy
+	got = resolveVerificationDepth(phase, 5, true, false, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("final phase with lightFlag=true: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+}
+
+func TestResolveVerificationDepth_StandardDefaultForIntermediate(t *testing.T) {
+	phase := colony.Phase{ID: 2, Name: "Feature work"}
+	got := resolveVerificationDepth(phase, 5, false, false, "")
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("non-final non-keyword no flags: got %q, want %q", got, colony.VerificationDepthStandard)
+	}
+	// Phase 3 of 5 also standard
+	phase3 := colony.Phase{ID: 3, Name: "More features"}
+	got = resolveVerificationDepth(phase3, 5, false, false, "")
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("non-final non-keyword no flags: got %q, want %q", got, colony.VerificationDepthStandard)
+	}
+}
+
+func TestResolveVerificationDepth_LightFlagOverrides(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work"}
+	got := resolveVerificationDepth(phase, 5, true, false, "")
+	if got != colony.VerificationDepthLight {
+		t.Errorf("lightFlag=true: got %q, want %q", got, colony.VerificationDepthLight)
+	}
+}
+
+func TestResolveVerificationDepth_HeavyFlagOverrides(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work"}
+	got := resolveVerificationDepth(phase, 5, false, true, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("heavyFlag=true: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+}
+
+func TestResolveVerificationDepth_ExplicitDepthString(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work"}
+	// Explicit "light" overrides auto-detect
+	got := resolveVerificationDepth(phase, 5, false, false, "light")
+	if got != colony.VerificationDepthLight {
+		t.Errorf("explicit light: got %q, want %q", got, colony.VerificationDepthLight)
+	}
+	// Explicit "heavy" overrides auto-detect
+	got = resolveVerificationDepth(phase, 5, false, false, "heavy")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("explicit heavy: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+	// Explicit "standard" overrides auto-detect
+	got = resolveVerificationDepth(phase, 5, false, false, "standard")
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("explicit standard: got %q, want %q", got, colony.VerificationDepthStandard)
+	}
+}
+
+func TestResolveVerificationDepth_KeywordPhaseAlwaysHeavy(t *testing.T) {
+	phase := colony.Phase{ID: 2, Name: "Security audit"}
+	got := resolveVerificationDepth(phase, 5, false, false, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("keyword phase no flags: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+	// light flag on keyword phase still heavy
+	got = resolveVerificationDepth(phase, 5, true, false, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("keyword phase with lightFlag=true: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+}
+
+func TestResolveVerificationDepthFlag_BoolPriority(t *testing.T) {
+	// --light takes priority over --verification-depth string
+	tests := []struct {
+		name       string
+		light      bool
+		heavy      bool
+		depthStr   string
+		want       string
+	}{
+		{"light flag overrides string", true, false, "heavy", "light"},
+		{"heavy flag overrides string", false, true, "light", "heavy"},
+		{"both bools: heavy wins", true, true, "light", "heavy"},
+		{"no bools: string passed through", false, false, "standard", "standard"},
+		{"no bools, empty string: empty passed through", false, false, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveVerificationDepthFlag(tt.light, tt.heavy, tt.depthStr)
+			if got != tt.want {
+				t.Errorf("resolveVerificationDepthFlag(%v, %v, %q) = %q, want %q",
+					tt.light, tt.heavy, tt.depthStr, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestColonyPrimeIncludesReviewDepth(t *testing.T) {
 	output := buildColonyPrimeOutput(false)
 	found := false
