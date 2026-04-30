@@ -505,6 +505,9 @@ func trimCeremonyPayload(payload events.CeremonyPayload) events.CeremonyPayload 
 	payload.Message = trimCeremonyText(payload.Message, ceremonyTextLimit)
 	payload.Skill = trimCeremonyText(payload.Skill, ceremonyTextLimit)
 	payload.PheromoneType = trimCeremonyText(payload.PheromoneType, ceremonyTextLimit)
+	payload.LoopType = trimCeremonyText(payload.LoopType, ceremonyTextLimit)
+	payload.DetectionSignal = trimCeremonyText(payload.DetectionSignal, ceremonyTextLimit)
+	payload.ActionTaken = trimCeremonyText(payload.ActionTaken, ceremonyTextLimit)
 	payload.FilesCreated = trimCeremonyList(payload.FilesCreated)
 	payload.FilesModified = trimCeremonyList(payload.FilesModified)
 	payload.TestsWritten = trimCeremonyList(payload.TestsWritten)
@@ -554,4 +557,12 @@ func emitBuildCeremonyCircuitBreak(phase colony.Phase, wave int, evt CircuitBrea
 		Status:    evt.Event,
 		Message:   evt.String(),
 	})
+}
+
+func emitLoopBreakEvent(loopType, detectionSignal, actionTaken, source string) {
+	emitLifecycleCeremony(events.CeremonyTopicLoopBreak, events.CeremonyPayload{
+		LoopType:        loopType,
+		DetectionSignal: detectionSignal,
+		ActionTaken:     actionTaken,
+	}, source)
 }

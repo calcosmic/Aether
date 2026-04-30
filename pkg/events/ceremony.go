@@ -26,6 +26,7 @@ const (
 	CeremonyTopicQueenPromote      = "ceremony.queen.promote"
 	CeremonyTopicHiveStore         = "ceremony.hive.store"
 	CeremonyTopicHivePromote       = "ceremony.hive.promote"
+	CeremonyTopicLoopBreak         = "ceremony.loop.break"
 )
 
 // CeremonyPayload is the shared event shape consumed by the bundled narrator.
@@ -52,7 +53,10 @@ type CeremonyPayload struct {
 	FilesModified   []string `json:"files_modified,omitempty"`
 	TestsWritten    []string `json:"tests_written,omitempty"`
 	Blockers        []string `json:"blockers,omitempty"`
-	SuccessCriteria []string `json:"success_criteria,omitempty"`
+	SuccessCriteria  []string `json:"success_criteria,omitempty"`
+	LoopType         string   `json:"loop_type,omitempty"`
+	DetectionSignal  string   `json:"detection_signal,omitempty"`
+	ActionTaken      string   `json:"action_taken,omitempty"`
 }
 
 func (p CeremonyPayload) RawMessage() (json.RawMessage, error) {
@@ -88,5 +92,6 @@ func CeremonyTopics() []string {
 		CeremonyTopicQueenPromote,
 		CeremonyTopicHiveStore,
 		CeremonyTopicHivePromote,
+		CeremonyTopicLoopBreak,
 	}
 }
