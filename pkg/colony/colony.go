@@ -112,6 +112,46 @@ func NormalizePlanningDepth(value string) PlanningDepth {
 	}
 }
 
+// VerificationDepth represents the review depth level for a phase.
+type VerificationDepth string
+
+const (
+	VerificationDepthLight    VerificationDepth = "light"
+	VerificationDepthStandard VerificationDepth = "standard"
+	VerificationDepthHeavy    VerificationDepth = "heavy"
+)
+
+// Valid reports whether d is a recognized verification depth level.
+func (d VerificationDepth) Valid() bool {
+	switch d {
+	case VerificationDepthLight, VerificationDepthStandard, VerificationDepthHeavy:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidVerificationDepth is returned when a verification depth value is not recognized.
+var ErrInvalidVerificationDepth = fmt.Errorf("invalid verification depth")
+
+// NormalizeVerificationDepth maps user input (including aliases) to a canonical VerificationDepth.
+// Empty input defaults to VerificationDepthStandard. Aliases:
+//   - light, minimal, coarse -> VerificationDepthLight
+//   - heavy, full, thorough -> VerificationDepthHeavy
+//   - standard, or anything else -> VerificationDepthStandard
+func NormalizeVerificationDepth(value string) VerificationDepth {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "light", "minimal", "coarse":
+		return VerificationDepthLight
+	case "heavy", "full", "thorough":
+		return VerificationDepthHeavy
+	case "":
+		return VerificationDepthStandard
+	default:
+		return VerificationDepthStandard
+	}
+}
+
 // ParallelMode represents the parallel execution strategy for colony work.
 type ParallelMode string
 
