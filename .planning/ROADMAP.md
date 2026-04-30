@@ -311,5 +311,5 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 82. Loop Detection Telemetry | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 83. Planning Depth System | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 85. Smart Depth Defaults | v1.12 | 0/? | Not started | - |
+| 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
 | 86. Depth Selection UI and Persistence | v1.12 | 0/? | Not started | - |
