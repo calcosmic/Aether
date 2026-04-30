@@ -3063,6 +3063,7 @@ func TestVerificationTimeoutBlockerUsesVerificationTimeoutRecovery(t *testing.T)
 		assessment,
 		[]string{"verification command timed out after 15m; increase with --verification-timeout or narrow the repo verification command"},
 		codexContinueOptions{VerificationTimeout: 15 * time.Minute},
+		1,
 	)
 
 	if next != "aether continue --verification-timeout 30m" {
@@ -5546,5 +5547,164 @@ func TestContinueWatcherFailureCountPerPhase(t *testing.T) {
 	// Phase 2 should have WatcherFailureCount=1 (incremented from 0).
 	if loadedState.Plan.Phases[1].WatcherFailureCount != 1 {
 		t.Fatalf("expected phase 2 WatcherFailureCount=1 (incremented), got %d", loadedState.Plan.Phases[1].WatcherFailureCount)
+	}
+}
+
+func TestRecoveryCommandDiffersFromLastInvocation(t *testing.T) {
+	options := codexContinueOptions{
+		VerificationTimeout: 10 * time.Minute,
+		WorkerTimeout:       5 * time.Minute,
+		ReconcileTaskIDs:    []string{"1.1", "2.1"},
+	}
+
+	// Case 1: last invocation had 10m, recovery should suggest something different.
+	lastOptions := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 600, // 10 minutes
+	}
+	cmd := buildContinueVerificationTimeoutRecoveryCommand(options, lastOptions)
+	if !strings.Contains(cmd, "--verification-timeout") {
+		t.Fatalf("expected command to contain '--verification-timeout', got %q", cmd)
+	}
+	// The recommended timeout is max(20m, 30m) = 30m, which is already > 10m (last),
+	// so no doubling occurs. Should contain "30m".
+	if !strings.Contains(cmd, "30m") {
+		t.Fatalf("expected command to contain '30m', got %q", cmd)
+	}
+
+	// Case 2: last invocation had 30m (matching the recovery recommendation),
+	// so the command should double to 60m.
+	lastOptions2 := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 1800, // 30 minutes (same as what recovery would suggest)
+	}
+	cmd2 := buildContinueVerificationTimeoutRecoveryCommand(options, lastOptions2)
+	if !strings.Contains(cmd2, "1h") {
+		t.Fatalf("expected command to contain '1h' (doubled from 30m), got %q", cmd2)
+	}
+}
+
+func TestRecoveryFallbackToBuildForce(t *testing.T) {
+	assessment := codexContinueAssessment{
+		Phase: 1,
+		Passed: false,
+		Recovery: codexContinueRecoveryPlan{
+			RedispatchCommand: "aether continue",
+		},
+	}
+	blockers := []string{"verification command timed out"}
+
+	currentOpts := codexContinueOptions{
+		VerificationTimeout: 10 * time.Minute,
+		WorkerTimeout:       5 * time.Minute,
+		SkipWatchers:        false,
+		LightFlag:           false,
+		HeavyFlag:           false,
+	}
+	lastOpts := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 600,
+		WorkerTimeoutSec:       300,
+		SkipWatchers:           false,
+		LightFlag:              false,
+		HeavyFlag:              false,
+	}
+
+	// Save a continue.json with the same options so loadLastContinueOptions can read them.
+	// We need a temp dir with a store.
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	// Write a continue.json with matching last options
+	buildDir := filepath.Join(dataDir, "build", "phase-1")
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		t.Fatalf("failed to create build dir: %v", err)
+	}
+	report := codexContinueReport{
+		Phase:              1,
+		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
+		LastContinueOptions: lastOpts,
+		Next:               "aether continue",
+	}
+	continueRel := filepath.Join("build", "phase-1", "continue.json")
+	if err := store.SaveJSON(continueRel, report); err != nil {
+		t.Fatalf("failed to save continue report: %v", err)
+	}
+
+	result := continueNextCommandForBlocked(assessment, blockers, currentOpts, 1)
+
+	expected := "aether build 1 --force"
+	if result != expected {
+		t.Fatalf("expected %q (build --force fallback), got %q", expected, result)
+	}
+}
+
+func TestContinueOptionsMatchCurrent(t *testing.T) {
+	opts := codexContinueOptions{
+		VerificationTimeout: 10 * time.Minute,
+		WorkerTimeout:       5 * time.Minute,
+		ReconcileTaskIDs:    []string{"1.1", "2.1"},
+		SkipWatchers:        false,
+		LightFlag:           false,
+		HeavyFlag:           false,
+	}
+
+	// nil last -> false (no previous run)
+	if continueOptionsMatchCurrent(opts, nil) {
+		t.Fatal("expected false when last is nil")
+	}
+
+	// Same options -> true
+	sameLast := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 600,
+		WorkerTimeoutSec:       300,
+		ReconcileTaskIDs:       []string{"1.1", "2.1"},
+		SkipWatchers:           false,
+		LightFlag:              false,
+		HeavyFlag:              false,
+	}
+	if !continueOptionsMatchCurrent(opts, sameLast) {
+		t.Fatal("expected true when options match")
+	}
+
+	// Different VerificationTimeout -> false
+	diffTimeout := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 1200, // 20 minutes instead of 10
+		WorkerTimeoutSec:       300,
+		ReconcileTaskIDs:       []string{"1.1", "2.1"},
+	}
+	if continueOptionsMatchCurrent(opts, diffTimeout) {
+		t.Fatal("expected false when VerificationTimeout differs")
+	}
+
+	// Different WorkerTimeout -> false
+	diffWorker := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 600,
+		WorkerTimeoutSec:       600, // 10 minutes instead of 5
+		ReconcileTaskIDs:       []string{"1.1", "2.1"},
+	}
+	if continueOptionsMatchCurrent(opts, diffWorker) {
+		t.Fatal("expected false when WorkerTimeout differs")
+	}
+
+	// Different ReconcileTaskIDs -> false
+	diffTasks := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 600,
+		WorkerTimeoutSec:       300,
+		ReconcileTaskIDs:       []string{"1.1", "3.1"},
+	}
+	if continueOptionsMatchCurrent(opts, diffTasks) {
+		t.Fatal("expected false when ReconcileTaskIDs differ")
+	}
+
+	// Same task IDs in different order -> true (order-independent)
+	diffOrder := &codexContinueOptionsJSON{
+		VerificationTimeoutSec: 600,
+		WorkerTimeoutSec:       300,
+		ReconcileTaskIDs:       []string{"2.1", "1.1"},
+	}
+	if !continueOptionsMatchCurrent(opts, diffOrder) {
+		t.Fatal("expected true when ReconcileTaskIDs match but order differs")
 	}
 }
