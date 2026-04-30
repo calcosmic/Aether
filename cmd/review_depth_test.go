@@ -512,6 +512,84 @@ func TestResolveVerificationDepthFlag_BoolPriority(t *testing.T) {
 	}
 }
 
+// --- Task 2 tests: standard mode dispatch and visual ---
+
+func TestContinueReviewDispatch_StandardMode_SpawnsProbeOnly(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+	invoker := &codex.FakeInvoker{}
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthStandard)
+	if len(dispatches) != 1 {
+		t.Errorf("standard mode review should produce 1 dispatch (probe only), got %d", len(dispatches))
+	}
+	if len(dispatches) > 0 && dispatches[0].Caste != "probe" {
+		t.Errorf("standard mode should spawn probe, got %q", dispatches[0].Caste)
+	}
+}
+
+func TestBuildDispatch_StandardMode_IncludesWatcherAndProbe(t *testing.T) {
+	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
+	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthStandard)
+	hasWatcher := false
+	hasProbe := false
+	for _, d := range dispatches {
+		if d.Caste == "watcher" {
+			hasWatcher = true
+		}
+		if d.Caste == "probe" {
+			hasProbe = true
+		}
+		if d.Caste == "measurer" {
+			t.Error("standard mode should skip measurer dispatch")
+		}
+		if d.Caste == "chaos" {
+			t.Error("standard mode should skip chaos dispatch")
+		}
+	}
+	if !hasWatcher {
+		t.Error("standard mode should include watcher dispatch")
+	}
+	if !hasProbe {
+		t.Error("standard mode should include probe dispatch")
+	}
+}
+
+func TestRenderReviewDepthLine_Standard(t *testing.T) {
+	got := renderReviewDepthLine(colony.VerificationDepthStandard, 3, 5)
+	want := "Review depth: standard (Phase 3 of 5)"
+	if got != want {
+		t.Errorf("renderReviewDepthLine(standard, 3, 5) = %q, want %q", got, want)
+	}
+}
+
+func TestReviewDepthFromResult_Standard(t *testing.T) {
+	result := map[string]interface{}{"review_depth": "standard"}
+	got := reviewDepthFromResult(result)
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("reviewDepthFromResult with 'standard' = %q, want %q", got, colony.VerificationDepthStandard)
+	}
+}
+
+func TestReviewDepthFlags_VerificationDepthString(t *testing.T) {
+	t.Run("build has verification-depth flag", func(t *testing.T) {
+		f := buildCmd.Flags().Lookup("verification-depth")
+		if f == nil {
+			t.Fatal("buildCmd has no --verification-depth flag")
+		}
+		if f.DefValue != "" {
+			t.Errorf("buildCmd --verification-depth default = %q, want empty", f.DefValue)
+		}
+	})
+	t.Run("continue has verification-depth flag", func(t *testing.T) {
+		f := continueCmd.Flags().Lookup("verification-depth")
+		if f == nil {
+			t.Fatal("continueCmd has no --verification-depth flag")
+		}
+		if f.DefValue != "" {
+			t.Errorf("continueCmd --verification-depth default = %q, want empty", f.DefValue)
+		}
+	})
+}
+
 func TestColonyPrimeIncludesReviewDepth(t *testing.T) {
 	output := buildColonyPrimeOutput(false)
 	found := false
