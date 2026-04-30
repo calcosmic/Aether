@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -604,4 +605,234 @@ func TestColonyPrimeIncludesReviewDepth(t *testing.T) {
 	// In test context without a real COLONY_STATE.json, it may be absent.
 	// The test verifies the function does not panic and the section name is correct.
 	t.Logf("review_depth section found: %v (acceptable in test env without colony state)", found)
+}
+
+// --- Phase 85 smart depth tests ---
+
+func TestPhasePositionLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		phaseID  int
+		total    int
+		expected string
+	}{
+		{"final phase", 5, 5, "final"},
+		{"single-phase plan", 1, 1, "final"},
+		{"early first of 10", 1, 10, "early"},
+		{"early boundary of 8", 2, 8, "early"}, // 2 <= 8*0.25=2.0
+		{"intermediate", 3, 8, "intermediate"},
+		{"late boundary of 8", 6, 8, "late"}, // 6 >= 8*0.75=6.0, 6 != 8
+		{"late of 8", 7, 8, "late"},
+		{"last is final", 8, 8, "final"},
+		{"late of 5", 4, 5, "late"}, // 4 >= 5*0.75=3.75, 4 != 5
+		{"intermediate of 5", 3, 5, "intermediate"}, // 3 > 1.25, 3 < 3.75
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := phasePositionLevel(tt.phaseID, tt.total)
+			if got != tt.expected {
+				t.Errorf("phasePositionLevel(%d, %d) = %q, want %q", tt.phaseID, tt.total, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCollectPhaseText(t *testing.T) {
+	t.Run("full phase with tasks", func(t *testing.T) {
+		phase := colony.Phase{
+			Name:        "Build Auth",
+			Description: "Add auth middleware",
+			SuccessCriteria: []string{"Auth works"},
+			Tasks: []colony.Task{{
+				Goal:            "Implement login",
+				Constraints:     []string{"Must use JWT"},
+				Hints:           []string{"Check bcrypt"},
+				SuccessCriteria: []string{"Login returns token"},
+			}},
+		}
+		text := collectPhaseText(phase)
+		expected := []string{"build auth", "add auth middleware", "auth works",
+			"implement login", "must use jwt", "check bcrypt", "login returns token"}
+		for _, exp := range expected {
+			if !strings.Contains(text, exp) {
+				t.Errorf("collectPhaseText missing %q in output: %q", exp, text)
+			}
+		}
+	})
+	t.Run("minimal phase", func(t *testing.T) {
+		phase := colony.Phase{Name: "UI Polish"}
+		text := collectPhaseText(phase)
+		// collectPhaseText joins Name and Description with spaces; empty Description
+		// produces a trailing space, which is harmless for keyword matching.
+		if !strings.Contains(text, "ui polish") {
+			t.Errorf("minimal phase: got %q, want to contain %q", text, "ui polish")
+		}
+	})
+	t.Run("nil slices no panic", func(t *testing.T) {
+		phase := colony.Phase{Name: "Safe Phase", Tasks: nil}
+		text := collectPhaseText(phase)
+		if !strings.Contains(text, "safe phase") {
+			t.Errorf("nil slices: got %q, want to contain %q", text, "safe phase")
+		}
+	})
+}
+
+func TestPhaseRiskLevel_High(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase colony.Phase
+	}{
+		{"security in name", colony.Phase{Name: "Security audit"}},
+		{"auth in name", colony.Phase{Name: "Add auth middleware"}},
+		{"token+session in desc", colony.Phase{Name: "Token refresh", Description: "Update session handling"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := phaseRiskLevel(tt.phase)
+			if got != "high" {
+				t.Errorf("phaseRiskLevel(%+v) = %q, want %q", tt.phase, got, "high")
+			}
+		})
+	}
+}
+
+func TestPhaseRiskLevel_Medium(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase colony.Phase
+	}{
+		{"core runtime in name", colony.Phase{Name: "Core runtime refactor"}},
+		{"state machine in name", colony.Phase{Name: "State machine transition fix"}},
+		{"dispatch in description", colony.Phase{Description: "Update dispatch logic"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := phaseRiskLevel(tt.phase)
+			if got != "medium" {
+				t.Errorf("phaseRiskLevel(%+v) = %q, want %q", tt.phase, got, "medium")
+			}
+		})
+	}
+}
+
+func TestPhaseRiskLevel_Low(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase colony.Phase
+	}{
+		{"ui polish", colony.Phase{Name: "UI polish"}},
+		{"feature work", colony.Phase{Name: "Feature work"}},
+		{"dashboard", colony.Phase{Name: "Dashboard redesign"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := phaseRiskLevel(tt.phase)
+			if got != "low" {
+				t.Errorf("phaseRiskLevel(%+v) = %q, want %q", tt.phase, got, "low")
+			}
+		})
+	}
+}
+
+func TestPhaseRiskLevel_TaskGoalsAnalyzed(t *testing.T) {
+	phase := colony.Phase{
+		Name: "Feature work",
+		Tasks: []colony.Task{{
+			Goal: "Add password reset flow",
+		}},
+	}
+	got := phaseRiskLevel(phase)
+	if got != "high" {
+		t.Errorf("task goal with 'password' should be high risk, got %q", got)
+	}
+}
+
+func TestResolveSmartPlanningDepth(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    colony.Phase
+		total    int
+		expected colony.PlanningDepth
+	}{
+		{"final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, colony.PlanningDepthDeep},
+		{"early low risk", colony.Phase{ID: 1, Name: "Project setup"}, 4, colony.PlanningDepthLight},
+		{"early security risk", colony.Phase{ID: 2, Name: "Auth system"}, 4, colony.PlanningDepthDeep},
+		{"late blast radius", colony.Phase{ID: 3, Name: "Core runtime changes"}, 4, colony.PlanningDepthStandard},
+		{"intermediate low risk", colony.Phase{ID: 2, Name: "Feature work"}, 5, colony.PlanningDepthStandard},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveSmartPlanningDepth(tt.phase, tt.total)
+			if got != tt.expected {
+				t.Errorf("resolveSmartPlanningDepth(%+v, %d) = %q, want %q", tt.phase, tt.total, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveSmartVerificationDepth(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    colony.Phase
+		total    int
+		expected colony.VerificationDepth
+	}{
+		{"final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, colony.VerificationDepthHeavy},
+		{"early low risk", colony.Phase{ID: 1, Name: "Setup"}, 6, colony.VerificationDepthLight},
+		{"security risk", colony.Phase{ID: 2, Name: "Secrets management"}, 4, colony.VerificationDepthHeavy},
+		{"blast radius intermediate", colony.Phase{ID: 3, Name: "Dispatch optimization"}, 5, colony.VerificationDepthStandard},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveSmartVerificationDepth(tt.phase, tt.total)
+			if got != tt.expected {
+				t.Errorf("resolveSmartVerificationDepth(%+v, %d) = %q, want %q", tt.phase, tt.total, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveSmartDepth_RiskOverridesPosition(t *testing.T) {
+	t.Run("early phase with security keyword gets deep/heavy", func(t *testing.T) {
+		phase := colony.Phase{ID: 1, Name: "Security hardening"}
+		total := 6
+		if got := resolveSmartPlanningDepth(phase, total); got != colony.PlanningDepthDeep {
+			t.Errorf("early security: planning = %q, want deep", got)
+		}
+		if got := resolveSmartVerificationDepth(phase, total); got != colony.VerificationDepthHeavy {
+			t.Errorf("early security: verification = %q, want heavy", got)
+		}
+	})
+	t.Run("early phase with blast-radius keyword gets standard", func(t *testing.T) {
+		phase := colony.Phase{ID: 1, Name: "Core runtime refactor"}
+		total := 6
+		if got := resolveSmartPlanningDepth(phase, total); got != colony.PlanningDepthStandard {
+			t.Errorf("early blast-radius: planning = %q, want standard", got)
+		}
+		if got := resolveSmartVerificationDepth(phase, total); got != colony.VerificationDepthStandard {
+			t.Errorf("early blast-radius: verification = %q, want standard", got)
+		}
+	})
+}
+
+func TestMatchesAnyKeyword(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		keywords []string
+		want     bool
+	}{
+		{"security matches", "security audit", securityRiskKeywords, true},
+		{"feature no match", "feature work", securityRiskKeywords, false},
+		{"core runtime matches", "core runtime changes", blastRadiusKeywords, true},
+		{"empty text no match", "", blastRadiusKeywords, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesAnyKeyword(tt.text, tt.keywords)
+			if got != tt.want {
+				t.Errorf("matchesAnyKeyword(%q, keywords) = %v, want %v", tt.text, got, tt.want)
+			}
+		})
+	}
 }
