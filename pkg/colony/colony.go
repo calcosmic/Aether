@@ -72,6 +72,46 @@ func (g PlanGranularity) Valid() bool {
 // ErrInvalidGranularity is returned when a granularity value is not recognized.
 var ErrInvalidGranularity = fmt.Errorf("invalid plan granularity")
 
+// PlanningDepth represents the task decomposition depth level (how detailed each phase is).
+type PlanningDepth string
+
+const (
+	PlanningDepthLight    PlanningDepth = "light"
+	PlanningDepthStandard PlanningDepth = "standard"
+	PlanningDepthDeep     PlanningDepth = "deep"
+)
+
+// Valid reports whether d is a recognized planning depth level.
+func (d PlanningDepth) Valid() bool {
+	switch d {
+	case PlanningDepthLight, PlanningDepthStandard, PlanningDepthDeep:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidPlanningDepth is returned when a planning depth value is not recognized.
+var ErrInvalidPlanningDepth = fmt.Errorf("invalid planning depth")
+
+// NormalizePlanningDepth maps user input (including aliases) to a canonical PlanningDepth.
+// Empty input defaults to PlanningDepthStandard. Aliases:
+//   - light, minimal, coarse -> PlanningDepthLight
+//   - deep, granular, thorough -> PlanningDepthDeep
+//   - standard, default, or anything else -> PlanningDepthStandard
+func NormalizePlanningDepth(value string) PlanningDepth {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "light", "minimal", "coarse":
+		return PlanningDepthLight
+	case "deep", "granular", "thorough":
+		return PlanningDepthDeep
+	case "":
+		return PlanningDepthStandard
+	default:
+		return PlanningDepthStandard
+	}
+}
+
 // ParallelMode represents the parallel execution strategy for colony work.
 type ParallelMode string
 
