@@ -206,7 +206,11 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
   1. When `/ant-continue` spawns a watcher that fails N consecutive times (not timeouts), the watcher is auto-skipped on subsequent continue runs with a clear message
   2. When `/ant-continue` suggests a recovery command, running that recovery command does not loop back to `/ant-continue` with identical blocking state
   3. When `/ant-build` dispatches a worker that fails, the failure is tracked and the worker is escalated (not silently re-dispatched in the same wave)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 80-01-PLAN.md -- Watcher failure tracking with auto-skip (LOOP-01) and recovery command loop prevention (LOOP-02)
+- [ ] 80-02-PLAN.md -- Circuit breaker edge-case validation tests (LOOP-03)
 
 ### Phase 81: Plan and Lifecycle Loop Safety
 **Goal**: Plans cannot contain circular dependencies, and lifecycle commands always suggest a different recovery action than the command that just failed
@@ -286,7 +290,7 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
-| 80. Build/Continue Loop Prevention | v1.12 | 0/? | Not started | - |
+| 80. Build/Continue Loop Prevention | v1.12 | 0/2 | Planned | - |
 | 81. Plan and Lifecycle Loop Safety | v1.12 | 0/? | Not started | - |
 | 82. Loop Detection Telemetry | v1.12 | 0/? | Not started | - |
 | 83. Planning Depth System | v1.12 | 0/? | Not started | - |
