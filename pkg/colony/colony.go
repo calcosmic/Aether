@@ -320,12 +320,13 @@ func decodePlanConfidence(raw json.RawMessage) (*float64, error) {
 
 // Phase represents a single phase in the colony plan.
 type Phase struct {
-	ID              int      `json:"id"`
-	Name            string   `json:"name"`
-	Description     string   `json:"description"`
-	Status          string   `json:"status"`
-	Tasks           []Task   `json:"tasks"`
-	SuccessCriteria []string `json:"success_criteria"`
+	ID                  int      `json:"id"`
+	Name                string   `json:"name"`
+	Description         string   `json:"description"`
+	Status              string   `json:"status"`
+	Tasks               []Task   `json:"tasks"`
+	SuccessCriteria     []string `json:"success_criteria"`
+	WatcherFailureCount int      `json:"watcher_failure_count,omitempty"`
 }
 
 // Task represents a single task within a phase.
