@@ -878,6 +878,76 @@ func TestTransitionErrorIs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// PlanningDepth.Valid() tests
+// ---------------------------------------------------------------------------
+
+func TestPlanningDepthValid(t *testing.T) {
+	tests := []struct {
+		d    PlanningDepth
+		want bool
+	}{
+		{PlanningDepthLight, true},
+		{PlanningDepthStandard, true},
+		{PlanningDepthDeep, true},
+		{"", false},
+		{"invalid", false},
+		{"SPRINT", false},
+		{"banana", false},
+	}
+	for _, tt := range tests {
+		name := string(tt.d)
+		if name == "" {
+			name = "(empty)"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := tt.d.Valid(); got != tt.want {
+				t.Errorf("PlanningDepth(%q).Valid() = %v, want %v", tt.d, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NormalizePlanningDepth tests
+// ---------------------------------------------------------------------------
+
+func TestNormalizePlanningDepth(t *testing.T) {
+	tests := []struct {
+		input string
+		want  PlanningDepth
+	}{
+		// light aliases
+		{"light", PlanningDepthLight},
+		{"minimal", PlanningDepthLight},
+		{"coarse", PlanningDepthLight},
+		// deep aliases
+		{"deep", PlanningDepthDeep},
+		{"granular", PlanningDepthDeep},
+		{"thorough", PlanningDepthDeep},
+		// standard / default
+		{"", PlanningDepthStandard},
+		{"standard", PlanningDepthStandard},
+		{"default", PlanningDepthStandard},
+		// case insensitivity
+		{"DEEP", PlanningDepthDeep},
+		{"LIGHT", PlanningDepthLight},
+		// whitespace trimming
+		{"  deep  ", PlanningDepthDeep},
+	}
+	for _, tt := range tests {
+		name := tt.input
+		if name == "" {
+			name = "(empty)"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := NormalizePlanningDepth(tt.input); got != tt.want {
+				t.Errorf("NormalizePlanningDepth(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
