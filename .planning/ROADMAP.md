@@ -209,8 +209,8 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
 **Plans**: 2 plans
 
 Plans:
-- [ ] 80-01-PLAN.md -- Watcher failure tracking with auto-skip (LOOP-01) and recovery command loop prevention (LOOP-02)
-- [ ] 80-02-PLAN.md -- Circuit breaker edge-case validation tests (LOOP-03)
+- [x] 80-01-PLAN.md -- Watcher failure tracking with auto-skip (LOOP-01) and recovery command loop prevention (LOOP-02)
+- [x] 80-02-PLAN.md -- Circuit breaker edge-case validation tests (LOOP-03)
 
 ### Phase 81: Plan and Lifecycle Loop Safety
 **Goal**: Plans cannot contain circular dependencies, and lifecycle commands always suggest a different recovery action than the command that just failed
@@ -290,7 +290,7 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
 | 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
-| 80. Build/Continue Loop Prevention | v1.12 | 0/2 | Planned | - |
+| 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 81. Plan and Lifecycle Loop Safety | v1.12 | 0/? | Not started | - |
 | 82. Loop Detection Telemetry | v1.12 | 0/? | Not started | - |
 | 83. Planning Depth System | v1.12 | 0/? | Not started | - |
