@@ -90,7 +90,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, "")
 	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
 	plan := codexContinuePlanManifest{
 		Phase:               phase.ID,
@@ -184,7 +184,7 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 	}
 }
 
-func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth ReviewDepth, skipWatchers bool) []codexContinueExternalDispatch {
+func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	dispatches := []codexContinueExternalDispatch{}
 	if !skipWatchers {
@@ -208,8 +208,11 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 		})
 	}
 	reviewSpecs := codexContinueReviewSpecs
-	if reviewDepth == ReviewDepthLight {
+	switch reviewDepth {
+	case colony.VerificationDepthLight:
 		reviewSpecs = []codexContinueReviewSpec{}
+	case colony.VerificationDepthStandard:
+		reviewSpecs = codexContinueReviewSpecs[2:] // probe only
 	}
 	reviewWave := 2
 	if skipWatchers {

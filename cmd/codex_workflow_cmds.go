@@ -109,10 +109,7 @@ var buildCmd = &cobra.Command{
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			reviewDepthPlan := ReviewDepthLight
-			if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-				reviewDepthPlan = ReviewDepthHeavy
-			}
+			reviewDepthPlan := reviewDepthFromResult(result)
 			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan))
 			return nil
 		}
@@ -147,10 +144,7 @@ var buildCmd = &cobra.Command{
 				dispatches = manifest.Dispatches
 			}
 		}
-		reviewDepthBuild := ReviewDepthLight
-		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-			reviewDepthBuild = ReviewDepthHeavy
-		}
+		reviewDepthBuild := reviewDepthFromResult(result)
 		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild))
 		return nil
 	},
@@ -210,10 +204,7 @@ var continueCmd = &cobra.Command{
 			return nil
 		}
 
-		reviewDepthContinue := ReviewDepthLight
-		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-			reviewDepthContinue = ReviewDepthHeavy
-		}
+		reviewDepthContinue := reviewDepthFromResult(result)
 		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue))
 		return nil
 	},
@@ -977,6 +968,7 @@ func init() {
 	buildCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build dispatches (e.g. 15m)")
 	buildCmd.Flags().Bool("light", false, "Force light review (skip heavy agents on intermediate phases)")
 	buildCmd.Flags().Bool("heavy", false, "Force heavy review (full quality gauntlet on any phase)")
+	buildCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
@@ -984,6 +976,7 @@ func init() {
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
 	continueCmd.Flags().Bool("heavy", false, "Force heavy review (full review gauntlet)")
+	continueCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
 	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")

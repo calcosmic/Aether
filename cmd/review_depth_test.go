@@ -218,7 +218,7 @@ func TestReviewDepthFlags(t *testing.T) {
 
 func TestBuildDispatch_LightMode_SkipsMeasurerAndChaos(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthLight)
+	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
 	for _, d := range dispatches {
 		if d.Caste == "measurer" {
 			t.Error("light mode should skip measurer dispatch")
@@ -238,7 +238,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range chaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_includes_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthLight)
+			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
 			found := false
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
@@ -254,7 +254,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range noChaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_skips_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthLight)
+			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
 					t.Errorf("light mode phase %d should skip chaos", pid)
@@ -266,7 +266,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 
 func TestBuildDispatch_HeavyMode_IncludesChaosAndMeasurer(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthHeavy)
+	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {
@@ -290,7 +290,7 @@ func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
 	// This test verifies the build dispatch path, not the resolveReviewDepth logic
 	phase := colony.Phase{ID: 5, Name: "Final polish", Tasks: []colony.Task{{Goal: "Polish", Status: "pending"}}}
 	// When resolveReviewDepth returns heavy (final phase), dispatches should include both
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, ReviewDepthHeavy)
+	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {
@@ -312,7 +312,7 @@ func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
 func TestContinueReviewDispatch_LightMode_SkipsAll(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, ReviewDepthLight)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight)
 	if len(dispatches) != 0 {
 		t.Errorf("light mode review should produce 0 dispatches, got %d", len(dispatches))
 	}
@@ -321,7 +321,7 @@ func TestContinueReviewDispatch_LightMode_SkipsAll(t *testing.T) {
 func TestContinueReviewDispatch_HeavyMode_SpawnsAll3(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, ReviewDepthHeavy)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy)
 	if len(dispatches) != 3 {
 		t.Errorf("heavy mode review should produce 3 dispatches (gatekeeper, auditor, probe), got %d", len(dispatches))
 	}
@@ -344,7 +344,7 @@ func TestContinueReviewDispatch_LightMode_HandlesEmptyGracefully(t *testing.T) {
 	// a report with Passed=true when dispatches is empty.
 	phase := colony.Phase{ID: 3, Name: "Feature work"}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, ReviewDepthLight)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight)
 	if len(dispatches) != 0 {
 		t.Fatalf("expected 0 dispatches in light mode, got %d", len(dispatches))
 	}
@@ -386,7 +386,7 @@ func TestChaosShouldRunInLightMode_Deterministic(t *testing.T) {
 // --- Task 2 tests: visual depth line and colony-prime context ---
 
 func TestRenderReviewDepthLine_Heavy(t *testing.T) {
-	got := renderReviewDepthLine(ReviewDepthHeavy, 5, 5)
+	got := renderReviewDepthLine(colony.VerificationDepthHeavy, 5, 5)
 	want := "Review depth: heavy (final phase)"
 	if got != want {
 		t.Errorf("renderReviewDepthLine(heavy, 5, 5) = %q, want %q", got, want)
@@ -394,7 +394,7 @@ func TestRenderReviewDepthLine_Heavy(t *testing.T) {
 }
 
 func TestRenderReviewDepthLine_HeavyNonFinal(t *testing.T) {
-	got := renderReviewDepthLine(ReviewDepthHeavy, 3, 5)
+	got := renderReviewDepthLine(colony.VerificationDepthHeavy, 3, 5)
 	want := "Review depth: heavy (Phase 3 of 5)"
 	if got != want {
 		t.Errorf("renderReviewDepthLine(heavy, 3, 5) = %q, want %q", got, want)
@@ -402,7 +402,7 @@ func TestRenderReviewDepthLine_HeavyNonFinal(t *testing.T) {
 }
 
 func TestRenderReviewDepthLine_Light(t *testing.T) {
-	got := renderReviewDepthLine(ReviewDepthLight, 3, 5)
+	got := renderReviewDepthLine(colony.VerificationDepthLight, 3, 5)
 	want := "Review depth: light (Phase 3 of 5 -- final phase gets full review)"
 	if got != want {
 		t.Errorf("renderReviewDepthLine(light, 3, 5) = %q, want %q", got, want)

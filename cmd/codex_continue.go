@@ -260,7 +260,7 @@ func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 }
 
 func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phase, options codexContinueOptions) map[string]interface{} {
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, "")
 	now := time.Now().UTC()
 	runHandle, _ := beginRuntimeSpawnRun("continue", now)
 	recovery := codexContinueRecoveryPlan{
@@ -415,7 +415,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 
 	currentIdx := state.CurrentPhase - 1
 	phase := state.Plan.Phases[currentIdx]
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, "")
 	if phase.Status != colony.PhaseInProgress {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
@@ -980,7 +980,7 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 	},
 }
 
-func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth ReviewDepth) codexContinueReviewReport {
+func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -1064,13 +1064,21 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 	return report
 }
 
-func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth ReviewDepth) []codex.WorkerDispatch {
+func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
 	pheromoneSection := resolvePheromoneSection()
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
-	specs := codexContinueReviewSpecs
-	if reviewDepth == ReviewDepthLight {
+	var specs []codexContinueReviewSpec
+	switch reviewDepth {
+	case colony.VerificationDepthLight:
 		specs = []codexContinueReviewSpec{}
+	case colony.VerificationDepthStandard:
+		// Probe only (index 2 in codexContinueReviewSpecs)
+		specs = codexContinueReviewSpecs[2:]
+	case colony.VerificationDepthHeavy:
+		specs = codexContinueReviewSpecs
+	default:
+		specs = codexContinueReviewSpecs
 	}
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {

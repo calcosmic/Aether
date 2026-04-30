@@ -274,7 +274,7 @@ func TestContinuePlanOnlySkipWatchersLightEmitsNoWorkerDispatches(t *testing.T) 
 	if !plan.SkipWatchers {
 		t.Fatal("continue_manifest skip_watchers = false, want true")
 	}
-	if plan.ReviewDepth != string(ReviewDepthLight) {
+	if plan.ReviewDepth != string(colony.VerificationDepthLight) {
 		t.Fatalf("review_depth = %q, want light", plan.ReviewDepth)
 	}
 	if len(plan.Dispatches) != 0 {
@@ -317,7 +317,7 @@ func TestContinuePlanOnlyHeavyOverridesLightWithSkipWatchers(t *testing.T) {
 		}
 	}
 	plan := result["continue_manifest"].(codexContinuePlanManifest)
-	if plan.ReviewDepth != string(ReviewDepthHeavy) {
+	if plan.ReviewDepth != string(colony.VerificationDepthHeavy) {
 		t.Fatalf("review_depth = %q, want heavy", plan.ReviewDepth)
 	}
 }
@@ -4618,7 +4618,7 @@ func TestExternalContinueReviewReportTimeoutNotBlocking(t *testing.T) {
 		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
 	}
 
-	report := externalContinueReviewReport(1, workerFlow, now, false, ReviewDepthHeavy)
+	report := externalContinueReviewReport(1, workerFlow, now, false, colony.VerificationDepthHeavy)
 
 	if !report.Passed {
 		t.Errorf("report.Passed = false, want true (timeouts should not block)")
@@ -4702,7 +4702,7 @@ func TestExternalContinueReviewReportSkipMissing(t *testing.T) {
 		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "timeout", Summary: "timed out"},
 	}
 
-	report := externalContinueReviewReport(1, workerFlow, now, true, ReviewDepthHeavy)
+	report := externalContinueReviewReport(1, workerFlow, now, true, colony.VerificationDepthHeavy)
 
 	if !report.Passed {
 		t.Errorf("report.Passed = false, want true")
@@ -4721,7 +4721,7 @@ func TestExternalContinueReviewReportLightSkipsCountCheck(t *testing.T) {
 		{Stage: "verification", Caste: "watcher", Name: "Keen-42", Status: "completed", Summary: "All green"},
 	}
 
-	report := externalContinueReviewReport(1, workerFlow, now, false, ReviewDepthLight)
+	report := externalContinueReviewReport(1, workerFlow, now, false, colony.VerificationDepthLight)
 
 	if !report.Passed {
 		t.Errorf("report.Passed = false, want true (light mode should not enforce review count)")

@@ -400,12 +400,17 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	// Review depth section (D-13, D-14)
 	if state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
 		reviewPhase := state.Plan.Phases[state.CurrentPhase-1]
-		reviewDepth := resolveReviewDepth(reviewPhase, len(state.Plan.Phases), false, false)
+		reviewDepth := resolveVerificationDepth(reviewPhase, len(state.Plan.Phases), false, false, "")
 		var depthText string
-		if reviewDepth == ReviewDepthLight {
+		switch reviewDepth {
+		case colony.VerificationDepthLight:
 			depthText = "Light review -- core verification only"
-		} else {
+		case colony.VerificationDepthStandard:
+			depthText = "Standard review -- watcher and probe verification"
+		case colony.VerificationDepthHeavy:
 			depthText = "Heavy review -- full quality gauntlet"
+		default:
+			depthText = "Standard review -- watcher and probe verification"
 		}
 		sections = append(sections, colonyPrimeSection{
 			name:           "review_depth",

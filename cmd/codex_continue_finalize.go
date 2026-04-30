@@ -52,9 +52,9 @@ var continueFinalizeCmd = &cobra.Command{
 			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))
 			return nil
 		}
-		reviewDepthFinalize := ReviewDepthLight
-		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-			reviewDepthFinalize = ReviewDepthHeavy
+		reviewDepthFinalize := colony.VerificationDepthLight
+		if rd, ok := result["review_depth"].(string); ok {
+			reviewDepthFinalize = colony.NormalizeVerificationDepth(rd)
 		}
 		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthFinalize))
 		return nil
@@ -123,7 +123,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if plan.DispatchMode != "plan-only" || !plan.RequiresFinalizer {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue_manifest must come from `aether continue --plan-only`")
 	}
-	if len(plan.Dispatches) == 0 && !(plan.SkipWatchers && plan.ReviewDepth == string(ReviewDepthLight)) {
+	if len(plan.Dispatches) == 0 && !(plan.SkipWatchers && plan.ReviewDepth == string(colony.VerificationDepthLight)) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue_manifest contains no dispatches")
 	}
 
@@ -199,9 +199,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	finalizeReviewDepth := ReviewDepthLight
-	if plan.ReviewDepth == string(ReviewDepthHeavy) {
-		finalizeReviewDepth = ReviewDepthHeavy
+	finalizeReviewDepth := colony.VerificationDepthLight
+	if plan.ReviewDepth != "" {
+		finalizeReviewDepth = colony.NormalizeVerificationDepth(plan.ReviewDepth)
 	}
 	review := externalContinueReviewReport(phase.ID, workerFlow, now, skipMissing, finalizeReviewDepth)
 	reviewReportRel := continuePlanArtifactsPath(phase.ID, "review.json")
@@ -378,7 +378,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 	return verification, nil
 }
 
-func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth ReviewDepth) codexContinueReviewReport {
+func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth colony.VerificationDepth) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phaseID,
 		GeneratedAt: now.Format(time.RFC3339),
@@ -409,7 +409,7 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", step.Name, summary))
 		}
 	}
-	if !skipMissing && reviewDepth != ReviewDepthLight && len(report.Workers) != len(codexContinueReviewSpecs) {
+	if !skipMissing && reviewDepth != colony.VerificationDepthLight && len(report.Workers) != len(codexContinueReviewSpecs) {
 		report.Passed = false
 		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", len(codexContinueReviewSpecs), len(report.Workers)))
 	}

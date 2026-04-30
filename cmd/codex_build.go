@@ -147,7 +147,7 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	generatedAt := time.Now().UTC()
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	playbooks := codexBuildPlaybooks()
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), false, false)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, "")
 	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
@@ -240,7 +240,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if depth == "" {
 		depth = "standard"
 	}
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, "")
 	playbooks := codexBuildPlaybooks()
 	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
@@ -533,7 +533,7 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 	phase := state.Plan.Phases[phaseNum-1]
 	state.Events = append(trimmedEvents(state.Events),
 		fmt.Sprintf("%s|phase_started|build|Phase %d: %s", startedAt.Format(time.RFC3339), phaseNum, phase.Name),
-		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelection(phase, normalizedBuildDepth(state.ColonyDepth), selectedTaskIDs, ReviewDepthLight)), phaseNum),
+		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelection(phase, normalizedBuildDepth(state.ColonyDepth), selectedTaskIDs, colony.VerificationDepthLight)), phaseNum),
 	)
 
 	if tracer != nil && state.RunID != nil {
@@ -594,10 +594,10 @@ func codexBuildPlaybooks() []string {
 }
 
 func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispatch {
-	return plannedBuildDispatchesForSelection(phase, depth, nil, ReviewDepthLight)
+	return plannedBuildDispatchesForSelection(phase, depth, nil, colony.VerificationDepthLight)
 }
 
-func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth ReviewDepth) []codexBuildDispatch {
+func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
 	depth = normalizedBuildDepth(depth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
@@ -671,10 +671,10 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 		Task:          "Independent verification before advancement" + findingsInjectionForCaste("watcher"),
 		Status:        "spawned",
 	})
-	if len(selected) == 0 && (depth == "deep" || depth == "full") && reviewDepth == ReviewDepthHeavy {
+	if len(selected) == 0 && (depth == "deep" || depth == "full") && reviewDepth == colony.VerificationDepthHeavy {
 		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "measurement", lastTaskExecutionWave+3, "measurer", "Performance and cost surface review after implementation"+findingsInjectionForCaste("measurer")))
 	}
-	if depth == "full" && reviewDepth == ReviewDepthHeavy {
+	if depth == "full" && reviewDepth == colony.VerificationDepthHeavy {
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:         "resilience",
 			ExecutionWave: lastTaskExecutionWave + 4,
@@ -684,7 +684,7 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 			Status:        "spawned",
 		})
 	}
-	if reviewDepth == ReviewDepthLight && chaosShouldRunInLightMode(phase.ID) {
+	if reviewDepth == colony.VerificationDepthLight && chaosShouldRunInLightMode(phase.ID) {
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:         "resilience",
 			ExecutionWave: lastTaskExecutionWave + 4,

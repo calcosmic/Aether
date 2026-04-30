@@ -1042,29 +1042,33 @@ func renderPlanDispatchPreview(goal string, dispatches []codexPlanningDispatch) 
 	return b.String()
 }
 
-func reviewDepthFromResult(result map[string]interface{}) ReviewDepth {
-	if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-		return ReviewDepthHeavy
+func reviewDepthFromResult(result map[string]interface{}) colony.VerificationDepth {
+	if rd, ok := result["review_depth"].(string); ok {
+		return colony.NormalizeVerificationDepth(rd)
 	}
-	return ReviewDepthLight
+	return colony.VerificationDepthLight
 }
 
-func renderReviewDepthLine(depth ReviewDepth, phaseNum, totalPhases int) string {
-	if depth == ReviewDepthHeavy {
+func renderReviewDepthLine(depth colony.VerificationDepth, phaseNum, totalPhases int) string {
+	switch depth {
+	case colony.VerificationDepthHeavy:
 		if phaseNum == totalPhases {
 			return "Review depth: heavy (final phase)"
 		}
 		return fmt.Sprintf("Review depth: heavy (Phase %d of %d)", phaseNum, totalPhases)
+	case colony.VerificationDepthStandard:
+		return fmt.Sprintf("Review depth: standard (Phase %d of %d)", phaseNum, totalPhases)
+	default:
+		return fmt.Sprintf("Review depth: light (Phase %d of %d -- final phase gets full review)", phaseNum, totalPhases)
 	}
-	return fmt.Sprintf("Review depth: light (Phase %d of %d -- final phase gets full review)", phaseNum, totalPhases)
 }
 
 func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), false, false)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, "")
 	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
 }
 
-func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth ReviewDepth) string {
+func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
 	b.WriteString(visualDivider)
@@ -1117,7 +1121,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	return b.String()
 }
 
-func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth ReviewDepth) string {
+func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Plan %d", phase.ID)))
 	b.WriteString(visualDivider)
@@ -1186,7 +1190,7 @@ func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, di
 	return b.String()
 }
 
-func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}, reviewDepth ReviewDepth) string {
+func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue"))
 	b.WriteString(visualDivider)
@@ -1254,7 +1258,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	return b.String()
 }
 
-func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch, reviewDepth ReviewDepth) string {
+func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue Plan"))
 	b.WriteString(visualDivider)
@@ -1294,7 +1298,7 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 	return b.String()
 }
 
-func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}, reviewDepth ReviewDepth) string {
+func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue-blocked"), "Continue Blocked"))
 	b.WriteString(visualDivider)
