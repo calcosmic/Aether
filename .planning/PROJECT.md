@@ -40,6 +40,7 @@ That means:
 - Review persistence system: 7-domain ledger CRUD, colony-prime injection, lifecycle integration
 - Idea shelving: persistent colony backlog, auto-shelve at seal, surface at init, survive entomb
 - Hive Brain: seal auto-promotes high-confidence instincts to cross-colony wisdom
+- Planning depth system: light/standard/deep task decomposition via --planning-depth flag (Phase 83)
 - Smart review depth: light/heavy modes, final phase always heavy, `--light` flag
 - Porter ant: 26th caste, wired into seal lifecycle with interactive publishing
 - All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
