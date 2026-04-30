@@ -107,6 +107,45 @@ type codexContinueOptions struct {
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
+const defaultWatcherFailureThreshold = 3
+
+// getWatcherFailureCount returns the watcher failure count for a given phase.
+func getWatcherFailureCount(state colony.ColonyState, phaseID int) int {
+	for _, p := range state.Plan.Phases {
+		if p.ID == phaseID {
+			return p.WatcherFailureCount
+		}
+	}
+	return 0
+}
+
+// incrementWatcherFailureCount atomically increments the watcher failure count for a phase.
+func incrementWatcherFailureCount(phaseID int) error {
+	var updated colony.ColonyState
+	return store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		for i := range updated.Plan.Phases {
+			if updated.Plan.Phases[i].ID == phaseID {
+				updated.Plan.Phases[i].WatcherFailureCount++
+				return nil
+			}
+		}
+		return fmt.Errorf("phase %d not found in colony state", phaseID)
+	})
+}
+
+// resetWatcherFailureCount atomically resets the watcher failure count for a phase to 0.
+func resetWatcherFailureCount(phaseID int) error {
+	var updated colony.ColonyState
+	return store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		for i := range updated.Plan.Phases {
+			if updated.Plan.Phases[i].ID == phaseID {
+				updated.Plan.Phases[i].WatcherFailureCount = 0
+				return nil
+			}
+		}
+		return fmt.Errorf("phase %d not found in colony state", phaseID)
+	})
+}
 
 // detectAbandonedBuild checks whether all manifest dispatches are stuck at
 // "spawned" and the build started long enough ago to be considered abandoned.
@@ -388,7 +427,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			progress = NewCeremonyProgress(continueSteps, stdout)
 		}
 
-		verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
+		verification, watcherFlow := runCodexContinueVerification(root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
 		assessment := assessCodexContinue(phase, manifest, verification, options, now)
 		verification = attachContinueClaimVerification(verification, assessment)
 		priorGateResults := gateResultsRead()
@@ -1033,7 +1072,7 @@ func isCodexWorkerAvailable() bool {
 	return invoker.IsAvailable(context.Background())
 }
 
-func runCodexContinueVerification(root string, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
+func runCodexContinueVerification(root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
 	now := time.Now().UTC()
 	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
 	commands := resolveCodexVerificationCommands(root)
@@ -1062,6 +1101,9 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 		// Auto-skip: shell verification passed but Codex CLI is unavailable.
 		// No point spawning a watcher that will immediately fail.
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; Codex CLI unavailable but runtime verification passed"}
+	} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
+		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
+		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
 	} else {
 		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
 	}
@@ -1093,6 +1135,14 @@ func runCodexContinueVerification(root string, phase colony.Phase, manifest code
 			checksPassed = false
 			blockers = append(blockers, summary)
 		}
+	}
+
+	// LOOP-01: Update watcher failure counter based on watcher outcome.
+	if continueWatcher.Present && !continueWatcher.Passed && continueWatcher.Status == "failed" {
+		_ = incrementWatcherFailureCount(phase.ID)
+	} else if continueWatcher.Passed && continueWatcher.Status != "skipped" {
+		// Only reset on actual pass, not on skip (preserve count for diagnostic purposes).
+		_ = resetWatcherFailureCount(phase.ID)
 	}
 
 	return codexContinueVerificationReport{
