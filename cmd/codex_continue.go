@@ -210,6 +210,9 @@ func continueOptionsMatchCurrent(current codexContinueOptions, last *codexContin
 
 // loadLastContinueOptions reads the last continue options from the saved continue report.
 func loadLastContinueOptions(phaseID int) *codexContinueOptionsJSON {
+	if store == nil {
+		return nil
+	}
 	rel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "continue.json"))
 	var report codexContinueReport
 	if err := store.LoadJSON(rel, &report); err != nil {
