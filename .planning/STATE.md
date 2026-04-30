@@ -4,8 +4,8 @@ milestone: v1.12
 milestone_name: Safe Colony
 status: executing
 stopped_at: Phase 81 planned
-last_updated: "2026-04-30T15:50:27.820Z"
-last_activity: 2026-04-30
+last_updated: "2026-04-30T15:52:38.076Z"
+last_activity: 2026-04-30 -- Phase 81 execution started
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-30)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 81 -- plan-and-lifecycle-loop-safety
+**Current focus:** Phase 81 — plan-and-lifecycle-loop-safety
 
 ## Current Position
 
-Phase: 81
-Plan: 2 plans ready for execution
-Status: Ready to execute
-Last activity: 2026-04-30
+Phase: 81 (plan-and-lifecycle-loop-safety) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 81
+Last activity: 2026-04-30 -- Phase 81 execution started
 
 Progress: [##        ] 14% (1/7 phases complete in this milestone)
 

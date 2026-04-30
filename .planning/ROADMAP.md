@@ -222,8 +222,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 81-01-PLAN.md -- Cycle detection on task dependency graphs with plan validation gate (LOOP-04)
-- [ ] 81-02-PLAN.md -- Recovery engine for lifecycle commands with command exclusion filter (LOOP-05)
+- [x] 81-01-PLAN.md -- Cycle detection on task dependency graphs with plan validation gate (LOOP-04)
+- [x] 81-02-PLAN.md -- Recovery engine for lifecycle commands with command exclusion filter (LOOP-05)
 
 ### Phase 82: Loop Detection Telemetry
 **Goal**: All loop-breaking events are logged to the colony event bus and visible in `/ant-status`, so users can see when and why the system intervened
