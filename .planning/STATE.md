@@ -1,62 +1,44 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.11
-milestone_name: Aether Unification
-status: milestone_complete
-stopped_at: Phase 79 complete
-last_updated: "2026-04-30T13:51:00Z"
-last_activity: 2026-04-30 -- v1.11 milestone complete
+milestone: v1.12
+milestone_name: Safe Colony
+status: defining_requirements
+stopped_at: Defining requirements
+last_updated: "2026-04-30T14:00:00Z"
+last_activity: 2026-04-30 -- v1.12 milestone started
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 18
-  completed_plans: 18
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-28)
+See: .planning/PROJECT.md (updated 2026-04-30)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 79 — Documentation & Validation Hygiene
+**Current focus:** Phase TBD — Defining requirements
 
 ## Current Position
 
-Phase: 79
-Plan: Not started
-Status: Milestone complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
 Last activity: 2026-04-30
 
-Progress: [░░░░░░░░░░] 0% (0/76 phases complete in this milestone)
+Progress: [░░░░░░░░░░] 0% (0/0 phases complete in this milestone)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16 (v1.11)
+- Total plans completed: 0 (v1.12)
 - Average duration: -
 - Total execution time: 0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 70 | 1 | - | - |
-| 71 | 2 | - | - |
-| 72 | 2 | - | - |
-| 73 | 3 | - | - |
-| 74 | 2 | - | - |
-| 75 | 3 | - | - |
-| 77 | 1 | - | - |
-| 79 | 1 | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: (none yet)
-- Trend: -
 
 *Updated after each plan completion*
 
@@ -65,10 +47,6 @@ Progress: [░░░░░░░░░░] 0% (0/76 phases complete in this mile
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- (v1.11): 7 phases derived from 26 requirements across 5 categories
-- (v1.11): Cleanup first, then platform, then intelligence features, then UX polish
 
 ### Pending Todos
 
@@ -76,18 +54,19 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 70 removes 241 tracked chamber files -- large git operation, use `git rm` carefully
-- Chamber deletion risk: verify no active colony data lives in `.aether/chambers/` before removal
-- Restoring shell-to-Go features: port concepts, don't copy bash patterns
+None yet.
 
 ## Deferred Items
 
-Items acknowledged and carried forward from previous milestone close:
+Items acknowledged and carried forward from previous milestones:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | Tech debt | Phase 64.1 missing VERIFICATION.md | Non-critical | v1.10 |
 | Tech debt | REQUIREMENTS.md checkboxes not ticked | Bookkeeping | v1.10 |
+| Tech debt | Phase 71 dispatch test covers 1/25 agent types | Non-critical | v1.11 |
+| Tech debt | Phase 71 state-mutate flags registered but never read | Non-critical | v1.11 |
+| Tech debt | Phase 71 suggest-approve returns hardcoded empty | Compatibility stub | v1.11 |
 | v2 scope | State machine transitions (INTEL-06) | Deferred | v1.11 |
 | v2 scope | Council system (INTEL-07) | Deferred | v1.11 |
 | v2 scope | Curation ant pipeline (INTEL-08) | Deferred | v1.11 |
@@ -95,8 +74,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: --stopped-at
-Stopped at: Phase 76 UI-SPEC approved
-Resume file: --resume-file
-
-**Planned Phase:** 76 (UX Improvements) — 2 plans — 2026-04-29T18:38:00.485Z
+Last session: --
+Stopped at: Defining requirements
+Resume file: --

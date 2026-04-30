@@ -84,7 +84,8 @@ That means:
 - [x] v1.8 Colony Recovery -- Phases 49-51 (completed 2026-04-25)
 - [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
 - [x] v1.10 Colony Polish -- Phases 57-69 (shipped 2026-04-28)
-- [ ] v1.11 Aether Unification -- Phases 70+
+- [x] v1.11 Aether Unification -- Phases 70-79 (shipped 2026-04-30)
+- [ ] v1.12 Safe Colony -- Phases 80+
 
 ## Requirements
 
@@ -113,12 +114,10 @@ That means:
 
 ### Active
 
-- Self-hosting cleanup (audit and remove stale artifacts from Aether-developing-Aether) -- v1.11
-- Smart Init ceremony restoration (charter approval, repo scan, governance detection) -- v1.11 [Validated in Phase 72]
-- Rich init-research (colony context, pheromone suggestions, complexity metrics) -- v1.11
-- Suggest-analyze restoration (automatic pheromone suggestions during builds) -- v1.11
-- Platform hardening (OpenCode parity, error handling, cross-platform consistency) -- v1.11
-- User experience improvements (onboarding, clearer feedback, smoother flows) -- v1.11
+- Full loop audit across all Aether commands (continue, build, plan, seal, etc.) -- v1.12
+- Independent planning depth and verification depth controls -- v1.12
+- Smart depth defaults based on phase position and code change risk -- v1.12
+- User depth override UI at plan start -- v1.12
 
 ### Out of Scope
 
@@ -188,3 +187,15 @@ This document evolves at phase transitions and milestone boundaries.
 - Consolidation pipeline (phase-end knowledge compression)
 
 *Last updated: 2026-04-30 after v1.11 Aether Unification milestone shipped*
+
+## Current Milestone: v1.12 Safe Colony
+
+**Goal:** Make Aether loop-proof and give users independent control over planning depth and verification depth, with smart defaults that adapt to phase position and code change risk.
+
+**Target features:**
+- Full loop audit — scan every Aether command for potential infinite loops, add circuit breakers
+- Independent depth controls — separate planning depth from verification depth, both user-settable
+- Smart depth defaults — auto-select depth from phase position + code change risk signals
+- User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
+
+*Last updated: 2026-04-30 — v1.12 Safe Colony milestone started*
