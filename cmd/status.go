@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
@@ -141,6 +143,59 @@ func renderWarningsSection(warnings []string) string {
 	return b.String()
 }
 
+// loadRecentLoopBreakEvents queries the event bus for loop-break events from the past 7 days.
+// Returns at most 5 events in newest-first order. Returns nil if store is nil or no events found.
+func loadRecentLoopBreakEvents(s *storage.Store) []events.Event {
+	if s == nil {
+		return nil
+	}
+	bus := events.NewBus(s, events.DefaultConfig())
+	since := time.Now().AddDate(0, 0, -7)
+	evts, err := bus.Query(context.Background(), events.CeremonyTopicLoopBreak, since, 5)
+	if err != nil || len(evts) == 0 {
+		return nil
+	}
+	// Reverse for newest-first display (Query returns oldest first)
+	for i, j := 0, len(evts)-1; i < j; i, j = i+1, j-1 {
+		evts[i], evts[j] = evts[j], evts[i]
+	}
+	return evts
+}
+
+// renderLoopSafetySection renders the Loop Safety dashboard section.
+// Returns empty string when no events are provided (section omitted per D-07).
+func renderLoopSafetySection(loopEvents []events.Event) string {
+	if len(loopEvents) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("\U0001F527", "Loop Safety"))
+	b.WriteString(visualDivider)
+	fmt.Fprintf(&b, "Loop Safety: %d events in last 7 days\n", len(loopEvents))
+
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Time", "Type", "Signal", "Action"})
+	for _, evt := range loopEvents {
+		var payload events.CeremonyPayload
+		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+			continue
+		}
+		signal := payload.DetectionSignal
+		if len(signal) > 40 {
+			signal = signal[:37] + "..."
+		}
+		action := payload.ActionTaken
+		if len(action) > 40 {
+			action = action[:37] + "..."
+		}
+		t.AppendRow(table.Row{formatTimestamp(evt.Timestamp), payload.LoopType, signal, action})
+	}
+	t.SetStyle(table.StyleRounded)
+	b.WriteString(t.Render())
+	b.WriteString("\n")
+	return b.String()
+}
+
 // renderDashboard produces the full colony status dashboard string.
 func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	var b strings.Builder
@@ -165,6 +220,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	// Warnings (visual-mode only)
 	warnings := computeWarnings(state, s)
 	b.WriteString(renderWarningsSection(warnings))
+
+	// Loop Safety (per D-05: between Warnings and Progress)
+	if s != nil {
+		loopEvents := loadRecentLoopBreakEvents(s)
+		if len(loopEvents) > 0 {
+			b.WriteString(renderLoopSafetySection(loopEvents))
+		}
+	}
 
 	// Progress
 	totalPhases := len(state.Plan.Phases)
