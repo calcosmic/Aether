@@ -235,8 +235,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 82-01-PLAN.md -- Event infrastructure: extend CeremonyPayload, add CeremonyTopicLoopBreak, create emitLoopBreakEvent, update trimCeremonyPayload
-- [ ] 82-02-PLAN.md -- Wire five emission calls and add Loop Safety section to /ant-status
+- [x] 82-01-PLAN.md -- Event infrastructure: extend CeremonyPayload, add CeremonyTopicLoopBreak, create emitLoopBreakEvent, update trimCeremonyPayload
+- [x] 82-02-PLAN.md -- Wire five emission calls and add Loop Safety section to /ant-status
 
 ### Phase 83: Planning Depth System
 **Goal**: `/ant-plan` supports a planning depth setting (light/standard/deep) that controls how thoroughly tasks are decomposed
@@ -300,7 +300,7 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
 | 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 81. Plan and Lifecycle Loop Safety | v1.12 | 1/2 | Complete    | 2026-04-30 |
-| 82. Loop Detection Telemetry | v1.12 | 0/2 | Planned | - |
+| 82. Loop Detection Telemetry | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 83. Planning Depth System | v1.12 | 0/? | Not started | - |
 | 84. Verification Depth Extension | v1.12 | 0/? | Not started | - |
 | 85. Smart Depth Defaults | v1.12 | 0/? | Not started | - |
