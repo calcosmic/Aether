@@ -40,6 +40,8 @@ That means:
 - Review persistence system: 7-domain ledger CRUD, colony-prime injection, lifecycle integration
 - Idea shelving: persistent colony backlog, auto-shelve at seal, surface at init, survive entomb
 - Hive Brain: seal auto-promotes high-confidence instincts to cross-colony wisdom
+- Planning depth system (light/standard/deep) with smart defaults -- Phase 83
+- Verification depth system (light/standard/heavy) with smart defaults -- Phase 84
 - Planning depth system: light/standard/deep task decomposition via --planning-depth flag (Phase 83)
 - Smart review depth: light/heavy modes, final phase always heavy, `--light` flag
 - Porter ant: 26th caste, wired into seal lifecycle with interactive publishing
@@ -116,8 +118,8 @@ That means:
 ### Active
 
 - Full loop audit across all Aether commands (continue, build, plan, seal, etc.) -- v1.12
-- Independent planning depth and verification depth controls -- v1.12
-- Smart depth defaults based on phase position and code change risk -- v1.12
+- Independent planning depth and verification depth controls -- v1.12 (Validated in Phase 83 & 84)
+- Smart depth defaults based on phase position and code change risk -- v1.12 (Validated in Phase 83 & 84)
 - User depth override UI at plan start -- v1.12
 
 ### Out of Scope
