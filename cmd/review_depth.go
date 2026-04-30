@@ -81,8 +81,8 @@ func resolveVerificationDepth(phase colony.Phase, totalPhases int, lightFlag, he
 	if verificationDepthStr != "" {
 		return colony.NormalizeVerificationDepth(verificationDepthStr)
 	}
-	// Default to standard for intermediate phases.
-	return colony.VerificationDepthStandard
+	// Smart default based on phase position + code change risk.
+	return resolveSmartVerificationDepth(phase, totalPhases)
 }
 
 // resolveVerificationDepthFlag returns the effective depth string for flag resolution.

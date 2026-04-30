@@ -1063,6 +1063,53 @@ func renderReviewDepthLine(depth colony.VerificationDepth, phaseNum, totalPhases
 	}
 }
 
+// renderSmartDepthReason produces a human-readable reason for why a depth was
+// auto-detected. Used by renderReviewDepthLineWithReason to annotate smart defaults.
+func renderSmartDepthReason(phase colony.Phase, totalPhases int) string {
+	risk := phaseRiskLevel(phase)
+	position := phasePositionLevel(phase.ID, totalPhases)
+
+	if risk == "high" {
+		return "auto: security risk"
+	}
+	if position == "final" {
+		return "auto: final phase"
+	}
+	if risk == "medium" {
+		return "auto: high blast radius"
+	}
+	if position == "early" {
+		return "auto: early phase"
+	}
+	if position == "late" {
+		return "auto: late phase"
+	}
+	return "auto: standard"
+}
+
+// renderReviewDepthLineWithReason wraps renderReviewDepthLine with smart-default
+// annotation. When smartDefault is true, the parenthetical reason is replaced with
+// the auto-detection reason. Phase 86 will switch callers to use this function
+// when it adds the UI layer that knows whether depth was auto-detected.
+func renderReviewDepthLineWithReason(depth colony.VerificationDepth, phaseNum, totalPhases int, phase colony.Phase, smartDefault bool) string {
+	base := renderReviewDepthLine(depth, phaseNum, totalPhases)
+	if !smartDefault {
+		return base
+	}
+	reason := renderSmartDepthReason(phase, totalPhases)
+	switch depth {
+	case colony.VerificationDepthHeavy:
+		if phaseNum == totalPhases {
+			return "Review depth: heavy (final phase)"
+		}
+		return fmt.Sprintf("Review depth: heavy (%s)", reason)
+	case colony.VerificationDepthStandard:
+		return fmt.Sprintf("Review depth: standard (%s)", reason)
+	default:
+		return fmt.Sprintf("Review depth: light (%s)", reason)
+	}
+}
+
 func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
 	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, "")
 	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
