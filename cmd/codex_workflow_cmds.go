@@ -310,17 +310,17 @@ var sealCmd = &cobra.Command{
 
 		state, err := loadActiveColonyState()
 		if err != nil {
-			outputError(1, colonyStateLoadMessage(err), nil)
+			renderRecoveryMenu("seal", colonyStateLoadMessage(err), nil)
 			return nil
 		}
 		if len(state.Plan.Phases) == 0 {
-			outputError(1, "No project plan. Run `aether plan` first.", nil)
+			renderRecoveryMenu("seal", "No project plan. Run `aether plan` first.", nil)
 			return nil
 		}
 
 		for _, phase := range state.Plan.Phases {
 			if phase.Status != colony.PhaseCompleted {
-				outputError(1, "all phases must be completed before sealing the colony", nil)
+				renderRecoveryMenu("seal", "all phases must be completed before sealing the colony", nil)
 				return nil
 			}
 		}
@@ -330,7 +330,7 @@ var sealCmd = &cobra.Command{
 		if len(blockers) > 0 {
 			forceFlag, _ := cmd.Flags().GetBool("force")
 			if !forceFlag {
-				outputError(1, renderBlockerSummary(blockers, issues), nil)
+				renderRecoveryMenu("seal", renderBlockerSummary(blockers, issues), nil)
 				return nil
 			}
 			// --force: warn but continue

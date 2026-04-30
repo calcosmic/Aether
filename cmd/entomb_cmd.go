@@ -30,24 +30,24 @@ var entombCmd = &cobra.Command{
 		// Backfill the legacy top-level session mirror when upgrading a repo that
 		// still carries only the older colony-scoped session path.
 		if _, err := ensureLegacySessionMirror(store); err != nil {
-			outputError(2, fmt.Sprintf("failed to prepare session mirror: %v", err), nil)
+			renderRecoveryMenu("entomb", fmt.Sprintf("failed to prepare session mirror: %v", err), nil)
 			return nil
 		}
 
 		state, err := loadActiveColonyState()
 		if err != nil {
-			outputError(1, colonyStateLoadMessage(err), nil)
+			renderRecoveryMenu("entomb", colonyStateLoadMessage(err), nil)
 			return nil
 		}
 		if strings.TrimSpace(state.Milestone) != "Crowned Anthill" {
-			outputError(1, fmt.Sprintf("Colony has not been sealed. Current milestone: %s. Run `aether seal` first.", emptyFallback(strings.TrimSpace(state.Milestone), "(none)")), nil)
+			renderRecoveryMenu("entomb", fmt.Sprintf("Colony has not been sealed. Current milestone: %s. Run `aether seal` first.", emptyFallback(strings.TrimSpace(state.Milestone), "(none)")), nil)
 			return nil
 		}
 
 		aetherRoot := resolveAetherRootPath()
 		sealSummaryPath := filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md")
 		if _, err := os.Stat(sealSummaryPath); err != nil {
-			outputError(1, "CROWNED-ANTHILL.md not found. Run `aether seal` again before entombing.", nil)
+			renderRecoveryMenu("entomb", "CROWNED-ANTHILL.md not found. Run `aether seal` again before entombing.", nil)
 			return nil
 		}
 

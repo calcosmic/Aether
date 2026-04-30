@@ -193,7 +193,7 @@ var resumeColonyCmd = &cobra.Command{
 				state.State = colony.StateREADY
 			}
 			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-				outputError(2, fmt.Sprintf("failed to restore runnable colony state: %v", err), nil)
+				renderRecoveryMenu("resume", fmt.Sprintf("failed to restore runnable colony state: %v", err), nil)
 				return nil
 			}
 			if state.State != colony.StateEXECUTING || state.BuildStartedAt == nil {
@@ -206,7 +206,7 @@ var resumeColonyCmd = &cobra.Command{
 				newRunID := fmt.Sprintf("resume_%d_%s", now.Unix(), randomHex(4))
 				state.RunID = &newRunID
 				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-					outputError(2, fmt.Sprintf("failed to clear stale spawn state: %v", err), nil)
+					renderRecoveryMenu("resume", fmt.Sprintf("failed to clear stale spawn state: %v", err), nil)
 					return nil
 				}
 				if tracer != nil && state.RunID != nil {
