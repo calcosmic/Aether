@@ -26,7 +26,7 @@ var statusCmd = &cobra.Command{
 				fmt.Fprint(stdout, renderNoColonyStatusVisual())
 				return nil
 			}
-			fmt.Fprintln(stdout, colonyStateLoadMessage(err))
+			renderRecoveryMenu("status", colonyStateLoadMessage(err), nil)
 			return nil
 		}
 

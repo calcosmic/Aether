@@ -39,8 +39,8 @@ func TestGenerateProgressBar(t *testing.T) {
 
 func TestStatusNoColony(t *testing.T) {
 	var buf bytes.Buffer
-	stdout = &buf
-	defer func() { stdout = os.Stdout }()
+	stderr = &buf
+	defer func() { stderr = os.Stderr }()
 
 	// Create temp dir with .aether/data/ but no COLONY_STATE.json
 	tmpDir := t.TempDir()
