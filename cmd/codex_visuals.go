@@ -866,6 +866,11 @@ func renderPlanVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\n")
 	}
+	if planningDepth := strings.TrimSpace(stringValue(result["planning_depth"])); planningDepth != "" && planningDepth != "standard" {
+		b.WriteString("Planning depth: ")
+		b.WriteString(planningDepth)
+		b.WriteString("\n")
+	}
 	if confidence, ok := result["confidence"].(map[string]interface{}); ok {
 		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", intValue(confidence["overall"])))
 	}

@@ -118,6 +118,7 @@ type codexPlanOptions struct {
 	Synthetic     bool
 	PlanOnly      bool
 	Depth         string
+	PlanningDepth string
 	WorkerTimeout time.Duration
 }
 
@@ -132,6 +133,7 @@ type codexPlanManifest struct {
 	Granularity        string                  `json:"granularity"`
 	GranularityMin     int                     `json:"granularity_min"`
 	GranularityMax     int                     `json:"granularity_max"`
+	PlanningDepth     string                  `json:"planning_depth"`
 	Survey             codexSurveyContext      `json:"survey"`
 	Dispatches         []codexPlanningDispatch `json:"dispatches"`
 	DispatchMode       string                  `json:"dispatch_mode"`
@@ -161,6 +163,10 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, err
 	}
+	planningDepth, err := resolvePlanningDepth(opts.PlanningDepth)
+	if err != nil {
+		return nil, err
+	}
 	pending := loadPendingDecisionFile()
 	unresolvedClarifications := countPendingClarifications(pending)
 	clarificationWarning := ""
@@ -186,6 +192,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			"phases":                    state.Plan.Phases,
 			"count":                     len(state.Plan.Phases),
 			"depth":                     planDepth,
+				"planning_depth":            planningDepth,
 			"granularity":               string(granularity),
 			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
 			"unresolved_clarifications": unresolvedClarifications,
@@ -415,6 +422,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"phases":                    phases,
 		"count":                     len(phases),
 		"depth":                     planDepth,
+			"planning_depth":            planningDepth,
 		"granularity":               string(granularity),
 		"granularity_min":           granularityMin(granularity),
 		"granularity_max":           granularityMax(granularity),
@@ -448,6 +456,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
 	}
+	planningDepth, err := resolvePlanningDepth(opts.PlanningDepth)
+	if err != nil {
+		return nil, err
+	}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
@@ -462,6 +474,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"phases":                    state.Plan.Phases,
 			"count":                     len(state.Plan.Phases),
 			"depth":                     planDepth,
+			"planning_depth":            planningDepth,
 			"granularity":               string(granularity),
 			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
 			"dispatch_mode":             "plan-only",
@@ -500,6 +513,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		Granularity:        string(granularity),
 		GranularityMin:     granularityMin(granularity),
 		GranularityMax:     granularityMax(granularity),
+		PlanningDepth:     planningDepth,
 		Survey:             survey,
 		Dispatches:         dispatches,
 		DispatchMode:       "plan-only",
@@ -515,6 +529,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"refreshed":                 opts.Refresh,
 		"goal":                      *state.Goal,
 		"depth":                     planDepth,
+			"planning_depth":            planningDepth,
 		"granularity":               string(granularity),
 		"granularity_min":           granularityMin(granularity),
 		"granularity_max":           granularityMax(granularity),
@@ -528,11 +543,12 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"clarification_warning":     clarificationWarning,
 		"next":                      "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
-			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive>",
+			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "pending",
 			"runtime_state_only":      true,
+			"planning_depth":          planningDepth,
 		},
 	}, nil
 }
@@ -570,6 +586,21 @@ func resolvePlanGranularityDepth(current colony.PlanGranularity, depth string) (
 	default:
 		return "", "", fmt.Errorf("invalid planning depth %q: must be fast, balanced, deep, or exhaustive", depth)
 	}
+}
+
+func resolvePlanningDepth(depth string) (string, error) {
+	normalized := colony.NormalizePlanningDepth(depth)
+	if depth != "" {
+		// User explicitly provided a value; validate it maps to a recognized constant.
+		lower := strings.ToLower(strings.TrimSpace(depth))
+		switch lower {
+		case "light", "minimal", "coarse", "deep", "granular", "thorough", "standard", "default":
+			// known alias or canonical value
+		default:
+			return "", fmt.Errorf("invalid planning depth %q: must be light, standard, or deep", depth)
+		}
+	}
+	return string(normalized), nil
 }
 
 func planningDepthForGranularity(granularity colony.PlanGranularity) string {
