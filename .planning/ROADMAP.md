@@ -232,7 +232,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. When a loop is detected and broken (watcher skip, recovery redirect, worker escalation, circular dep rejection, lifecycle recovery), an event is published to the colony event bus with loop type, detection signal, and action taken
   2. `/ant-status` surfaces recent loop-break events in a dedicated section
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 82-01-PLAN.md -- Event infrastructure: extend CeremonyPayload, add CeremonyTopicLoopBreak, create emitLoopBreakEvent, update trimCeremonyPayload
+- [ ] 82-02-PLAN.md -- Wire five emission calls and add Loop Safety section to /ant-status
 
 ### Phase 83: Planning Depth System
 **Goal**: `/ant-plan` supports a planning depth setting (light/standard/deep) that controls how thoroughly tasks are decomposed
@@ -296,7 +300,7 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
 | 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 81. Plan and Lifecycle Loop Safety | v1.12 | 1/2 | Complete    | 2026-04-30 |
-| 82. Loop Detection Telemetry | v1.12 | 0/? | Not started | - |
+| 82. Loop Detection Telemetry | v1.12 | 0/2 | Planned | - |
 | 83. Planning Depth System | v1.12 | 0/? | Not started | - |
 | 84. Verification Depth Extension | v1.12 | 0/? | Not started | - |
 | 85. Smart Depth Defaults | v1.12 | 0/? | Not started | - |
