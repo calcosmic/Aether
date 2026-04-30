@@ -1,7 +1,6 @@
 package colony
 
 import (
-	"errors"
 	"strings"
 	"testing"
 )
@@ -14,11 +13,12 @@ import (
 
 func TestDetectCycles(t *testing.T) {
 	tests := []struct {
-		name      string
-		phases    []Phase
-		wantErr   bool
-		errType   error // nil, CycleError, or MissingDepError
-		errDetail string // substring expected in error message
+		name        string
+		phases      []Phase
+		wantErr     bool
+		errIsCycle  bool
+		errIsMissing bool
+		errDetail   string // substring expected in error message
 	}{
 		{
 			name: "no dependencies returns nil",
@@ -55,8 +55,8 @@ func TestDetectCycles(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
-			errType: &CycleError{},
+			wantErr:    true,
+			errIsCycle: true,
 		},
 		{
 			name: "three-node cycle",
@@ -70,8 +70,8 @@ func TestDetectCycles(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
-			errType: &CycleError{},
+			wantErr:    true,
+			errIsCycle: true,
 		},
 		{
 			name: "cross-phase cycle",
@@ -89,8 +89,8 @@ func TestDetectCycles(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
-			errType: &CycleError{},
+			wantErr:    true,
+			errIsCycle: true,
 		},
 		{
 			name: "missing dependency reference",
@@ -102,9 +102,9 @@ func TestDetectCycles(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
-			errType: &MissingDepError{},
-			errDetail: "9.9",
+			wantErr:      true,
+			errIsMissing: true,
+			errDetail:    "9.9",
 		},
 		{
 			name: "CycleError produces readable string",
@@ -117,9 +117,9 @@ func TestDetectCycles(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
-			errType: &CycleError{},
-			errDetail: "circular dependency",
+			wantErr:    true,
+			errIsCycle: true,
+			errDetail:  "circular dependency",
 		},
 		{
 			name: "nil task IDs are skipped gracefully",
@@ -145,18 +145,46 @@ func TestDetectCycles(t *testing.T) {
 			if !tt.wantErr && err != nil {
 				t.Fatalf("expected no error, got: %v", err)
 			}
-			if tt.wantErr && tt.errType != nil {
-				if !errors.As(err, tt.errType) {
-					t.Fatalf("expected error type %T, got: %T (%v)", tt.errType, err, err)
+			if tt.errIsCycle {
+				var cycleErr *CycleError
+				if !errorAs(err, &cycleErr) {
+					t.Fatalf("expected CycleError, got: %T (%v)", err, err)
 				}
-				if tt.errDetail != "" {
-					if !strings.Contains(err.Error(), tt.errDetail) {
-						t.Fatalf("expected error to contain %q, got: %s", tt.errDetail, err.Error())
-					}
+			}
+			if tt.errIsMissing {
+				var missingErr *MissingDepError
+				if !errorAs(err, &missingErr) {
+					t.Fatalf("expected MissingDepError, got: %T (%v)", err, err)
+				}
+			}
+			if tt.errDetail != "" && err != nil {
+				if !strings.Contains(err.Error(), tt.errDetail) {
+					t.Fatalf("expected error to contain %q, got: %s", tt.errDetail, err.Error())
 				}
 			}
 		})
 	}
+}
+
+// errorAs is a test helper that wraps errors.As with proper nil-safety.
+func errorAs(err error, target interface{}) bool {
+	if err == nil {
+		return false
+	}
+	// Avoid importing errors -- use type assertion directly.
+	switch v := target.(type) {
+	case **CycleError:
+		if ce, ok := err.(*CycleError); ok {
+			*v = ce
+			return true
+		}
+	case **MissingDepError:
+		if mde, ok := err.(*MissingDepError); ok {
+			*v = mde
+			return true
+		}
+	}
+	return false
 }
 
 func TestCycleErrorFormat(t *testing.T) {
