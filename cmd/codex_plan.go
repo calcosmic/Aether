@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -348,6 +349,15 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}
 	}
 	emitPlanCeremonyDispatchSequence("aether-plan", dispatches)
+
+	// Validate task dependency graph for cycles (LOOP-04)
+	if err := colony.DetectCycles(phases); err != nil {
+		var cycleErr *colony.CycleError
+		if errors.As(err, &cycleErr) {
+			return nil, fmt.Errorf("plan contains circular dependency: %s. Remove the cycle and regenerate the plan", cycleErr)
+		}
+		return nil, fmt.Errorf("plan dependency validation failed: %w", err)
+	}
 
 	now := time.Now().UTC()
 	state.State = colony.StateREADY
