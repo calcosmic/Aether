@@ -23,14 +23,15 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	required := []string{
 		"AETHER_OUTPUT_MODE=visual aether status",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --light $ARGUMENTS",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --heavy $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
 		"result.continue_manifest",
 		"AETHER_OUTPUT_MODE=json aether spawn-log",
 		`subagent_type="{agent_name}"`,
 		"AETHER_OUTPUT_MODE=json aether spawn-complete",
 		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"## Verification Gates",
+			"## Verification Depth",
 		"Gatekeeper",
 		"Auditor",
 		"Probe",
@@ -50,10 +51,11 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	inOrder := []string{
 		"## What Continue Means",
 		"## Default Continue",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --light $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 		"## Verification Gates",
+			"## Verification Depth",
 		"## Heavy External Review",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --heavy $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
 		"## Learning Extraction",
 		"## After Continue",
 		"### If the phase advanced",
@@ -152,7 +154,7 @@ func TestContinueWrapperSourceAndMirrorsUseFastDevContinue(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	command := "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --light $ARGUMENTS"
+	command := "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
 	paths := []string{
 		filepath.Join(repoRoot, ".aether", "commands", "continue.yaml"),
 		filepath.Join(repoRoot, ".aether", "commands", "claude", "continue.md"),
