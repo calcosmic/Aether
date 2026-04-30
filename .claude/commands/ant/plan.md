@@ -21,6 +21,16 @@ If `$ARGUMENTS` already contains one of `fast`, `balanced`, `deep`, or `exhausti
 
 Do not continue until a depth is selected.
 
+## Planning Depth
+
+After selecting the planning depth (which controls how many phases are generated), choose the task decomposition depth. This controls how thoroughly tasks are decomposed within each plan -- it is independent of phase count.
+
+If `$ARGUMENTS` already contains one of `light`, `standard`, or `deep` as a planning-depth value, use it and state the selection. Otherwise default to `standard`:
+
+1. Light — coarse tasks, 1-3 per plan with objective-level descriptions
+2. Standard — normal task breakdown. Default
+3. Deep — granular subtasks including edge cases, error handling, and test coverage as separate tasks
+
 ## Colony Context
 
 Before requesting the manifest, ground yourself in runtime truth:
@@ -36,7 +46,7 @@ Use that output to keep the user oriented, but do not parse visual output as aut
 Ask the Go runtime for the authoritative planning manifest:
 
 ```
-AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> $ARGUMENTS
+AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2> $ARGUMENTS
 ```
 
 Parse `result.plan_manifest` or `result.planning_manifest`. This manifest is the only source for worker names, castes, waves, task IDs, briefs, survey context, depth, granularity bounds, and finalizer contract.
@@ -60,7 +70,7 @@ For each dispatch in the manifest, execute the planned workers by wave:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
 3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
-4. Inject the selected depth, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
+4. Inject the selected depth, planning depth selection, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
 5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
 6. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
@@ -163,7 +173,7 @@ The runtime writes canonical planning artifacts, updates `COLONY_STATE.json`, re
 
 Branch strictly on the `plan-finalize` result:
 
-1. If planning succeeded, summarize selected depth, phase count, confidence, and which planning agents ran.
+1. If planning succeeded, summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.
 2. Route first to `/ant-build 1` or the exact runtime-surfaced next build command.
 3. If planning blocked, translate the blocker into plain language and follow the runtime recovery command first.
 

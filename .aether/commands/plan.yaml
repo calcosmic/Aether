@@ -2,7 +2,7 @@ name: ant-plan
 description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive>"
+  command: "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>"
 wrapper_additions:
   depth_ceremony: |
     Prompt for planning depth before requesting the manifest:
@@ -11,10 +11,16 @@ wrapper_additions:
     3. Deep — quarter granularity, 8-12 phases.
     4. Exhaustive — major granularity, 13-20 phases.
     If `$ARGUMENTS` already contains a depth, use it and state the selected depth.
+  planning_depth_ceremony: |
+    After selecting planning depth (granularity), choose the task decomposition depth:
+    1. Light — coarse tasks, 1-3 per plan with objective-level descriptions.
+    2. Standard — normal task breakdown. Recommended default.
+    3. Deep — granular subtasks including edge cases, error handling, and test coverage as separate tasks.
+    This controls task detail within each plan, not how many phases are generated. If not specified, defaults to "standard".
   orchestration: |
     Restore real wrapper planning orchestration:
     1. Run `AETHER_OUTPUT_MODE=visual aether status`.
-    2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>`.
+    2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2>`.
     3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
     4. If the result reports `unresolved_clarifications` or `clarification_warning`, pause before spawning workers and route first to `/ant-discuss`; proceed with implicit assumptions only if the user explicitly chooses to continue.
     5. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `agent_name`, and each dispatch's runtime-provided `skill_section` when present.
@@ -23,7 +29,7 @@ wrapper_additions:
     8. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
   post_plan: |
     Close from the `plan-finalize` result only:
-    1. Summarize selected depth, phase count, confidence, and which planning agents ran.
+    1. Summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.
     2. Route first to `/ant-build 1` or the runtime-surfaced next build command.
     3. If finalization blocks, follow the runtime recovery command first.
 guardrails:
