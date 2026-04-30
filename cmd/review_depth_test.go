@@ -836,3 +836,125 @@ func TestMatchesAnyKeyword(t *testing.T) {
 		})
 	}
 }
+
+// --- Plan 85-02 Task 2: wiring tests for smart defaults in depth resolution ---
+
+func TestResolveVerificationDepth_SmartDefaultFallback(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    colony.Phase
+		total    int
+		expected colony.VerificationDepth
+	}{
+		{
+			name:     "early phase gets light (smart default)",
+			phase:    colony.Phase{ID: 1, Name: "Feature work", Description: "Add dashboard widgets"},
+			total:    6,
+			expected: colony.VerificationDepthLight,
+		},
+		{
+			name:     "intermediate phase gets standard (smart default)",
+			phase:    colony.Phase{ID: 3, Name: "More features", Description: "Expand API endpoints"},
+			total:    6,
+			expected: colony.VerificationDepthStandard,
+		},
+		{
+			name:     "late phase with no risk gets standard (smart default)",
+			phase:    colony.Phase{ID: 5, Name: "Polish work", Description: "Fix minor UI issues"},
+			total:    6,
+			expected: colony.VerificationDepthStandard,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveVerificationDepth(tt.phase, tt.total, false, false, "")
+			if got != tt.expected {
+				t.Errorf("resolveVerificationDepth(%+v, %d, no flags) = %q, want %q",
+					tt.phase, tt.total, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveVerificationDepth_SmartDefaultRisksOverride(t *testing.T) {
+	// Phase with security keyword in description should trigger heavy even
+	// without explicit flags, because resolveSmartVerificationDepth checks
+	// phase text (description + task goals) via phaseRiskLevel.
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Feature work",
+		Description: "Add password reset flow",
+	}
+	got := resolveVerificationDepth(phase, 6, false, false, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("security keyword in description: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+}
+
+func TestResolveVerificationDepth_ExplicitOverridesSmartDefault(t *testing.T) {
+	// lightFlag on a non-keyword phase should return light (checked before smart default)
+	phase := colony.Phase{ID: 2, Name: "Feature work", Description: "Regular feature"}
+	got := resolveVerificationDepth(phase, 6, true, false, "")
+	if got != colony.VerificationDepthLight {
+		t.Errorf("lightFlag overrides smart default: got %q, want %q", got, colony.VerificationDepthLight)
+	}
+	// heavyFlag always wins
+	got = resolveVerificationDepth(phase, 6, false, true, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("heavyFlag overrides smart default: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+	// explicit --verification-depth string overrides smart default
+	got = resolveVerificationDepth(phase, 6, false, false, "heavy")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("explicit string overrides smart default: got %q, want %q", got, colony.VerificationDepthHeavy)
+	}
+}
+
+func TestResolvePlanningDepthSmart_ExplicitValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		depth    string
+		phase    colony.Phase
+		total    int
+		expected string
+	}{
+		{"explicit deep preserved", "deep", colony.Phase{ID: 1, Name: "Setup"}, 6, "deep"},
+		{"explicit light overrides final phase", "light", colony.Phase{ID: 5, Name: "Final"}, 5, "light"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolvePlanningDepthSmart(tt.depth, tt.phase, tt.total)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.expected {
+				t.Errorf("resolvePlanningDepthSmart(%q, ...) = %q, want %q", tt.depth, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolvePlanningDepthSmart_EmptyUsesSmartDefault(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    colony.Phase
+		total    int
+		expected string
+	}{
+		{"early phase gets light", colony.Phase{ID: 1, Name: "Setup"}, 6, "light"},
+		{"final phase gets deep", colony.Phase{ID: 5, Name: "Final polish"}, 5, "deep"},
+		{"security risk gets deep", colony.Phase{ID: 2, Name: "Auth system"}, 4, "deep"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolvePlanningDepthSmart("", tt.phase, tt.total)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.expected {
+				t.Errorf("resolvePlanningDepthSmart(empty, %+v, %d) = %q, want %q",
+					tt.phase, tt.total, got, tt.expected)
+			}
+		})
+	}
+}
