@@ -51,3 +51,77 @@ func TestCeremonyPayloadLoopFields(t *testing.T) {
 		t.Errorf("JSON missing action_taken field: %s", s)
 	}
 }
+
+// --- Task 2: RED tests for emitLoopBreakEvent and trim behavior ---
+
+func TestEmitLoopBreakEvent(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	emitLoopBreakEvent("watcher_skip", "3 failures", "auto-skipped watcher", "test-source")
+
+	persisted := readPersistedCeremonyEvents(t)
+	found := false
+	for _, evt := range persisted {
+		if evt.Topic == events.CeremonyTopicLoopBreak {
+			found = true
+			var payload events.CeremonyPayload
+			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+				t.Fatalf("unmarshal payload: %v", err)
+			}
+			if payload.LoopType != "watcher_skip" {
+				t.Errorf("LoopType = %q, want %q", payload.LoopType, "watcher_skip")
+			}
+			if payload.DetectionSignal != "3 failures" {
+				t.Errorf("DetectionSignal = %q, want %q", payload.DetectionSignal, "3 failures")
+			}
+			if payload.ActionTaken != "auto-skipped watcher" {
+				t.Errorf("ActionTaken = %q, want %q", payload.ActionTaken, "auto-skipped watcher")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected ceremony.loop.break event in persisted events")
+	}
+}
+
+func TestEmitLoopBreakEventTrimsPayload(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	longSignal := strings.Repeat("x", ceremonyTextLimit+50)
+	emitLoopBreakEvent("infinite_loop", longSignal, "terminated", "test-source")
+
+	persisted := readPersistedCeremonyEvents(t)
+	found := false
+	for _, evt := range persisted {
+		if evt.Topic == events.CeremonyTopicLoopBreak {
+			found = true
+			var payload events.CeremonyPayload
+			if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+				t.Fatalf("unmarshal payload: %v", err)
+			}
+			if len(payload.DetectionSignal) > ceremonyTextLimit {
+				t.Errorf("DetectionSignal not trimmed: len=%d, limit=%d", len(payload.DetectionSignal), ceremonyTextLimit)
+			}
+			if !strings.HasSuffix(payload.DetectionSignal, "...") {
+				t.Errorf("DetectionSignal missing trim suffix: %q", payload.DetectionSignal)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected ceremony.loop.break event in persisted events")
+	}
+}
+
+func TestEmitLoopBreakEventNilStore(t *testing.T) {
+	saveGlobals(t)
+	store = nil
+
+	// Must not panic
+	emitLoopBreakEvent("timeout", "exceeded", "cancelled", "test-source")
+}
