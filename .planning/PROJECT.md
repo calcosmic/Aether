@@ -186,4 +186,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Curation ant pipeline (8-ant orchestrated pipeline)
 - Consolidation pipeline (phase-end knowledge compression)
 
-*Last updated: 2026-04-28 after v1.11 milestone started*
+*Last updated: 2026-04-30 after Phase 79 (documentation & validation hygiene) completed*
