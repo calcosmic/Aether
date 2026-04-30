@@ -354,6 +354,10 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err := colony.DetectCycles(phases); err != nil {
 		var cycleErr *colony.CycleError
 		if errors.As(err, &cycleErr) {
+			emitLoopBreakEvent("cycle_detected",
+				fmt.Sprintf("circular dependency detected: %s", cycleErr.Error()),
+				"plan rejected, cycle must be removed before regeneration",
+				"aether-plan")
 			return nil, fmt.Errorf("plan contains circular dependency: %s. Remove the cycle and regenerate the plan", cycleErr)
 		}
 		return nil, fmt.Errorf("plan dependency validation failed: %w", err)

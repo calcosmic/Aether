@@ -210,6 +210,11 @@ func recoveryOptionsForCommand(failedCmd string, errMsg string) []RecoveryOption
 func renderRecoveryMenu(failedCmd string, errMsg string, details interface{}) string {
 	options := recoveryOptionsForCommand(failedCmd, errMsg)
 
+	emitLoopBreakEvent("lifecycle_recovery",
+		fmt.Sprintf("command %s failed: %s", failedCmd, errMsg),
+		fmt.Sprintf("recovery menu displayed with %d option(s)", len(options)),
+		"aether-lifecycle")
+
 	if shouldRenderVisualOutput(stderr) {
 		return buildVisualRecoveryMenu(failedCmd, errMsg, options)
 	}

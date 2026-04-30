@@ -123,6 +123,11 @@ func (cb *CircuitBreaker) emitCircuitBreakerTripped(phase colony.Phase, wave int
 		Event:      "tripped",
 		Reason:     fmt.Sprintf("after %d consecutive failures (threshold: %d)", count, threshold),
 	})
+
+	emitLoopBreakEvent("circuit_break",
+		fmt.Sprintf("%d consecutive worker failures (threshold: %d)", count, threshold),
+		fmt.Sprintf("circuit breaker tripped for %s", workerName),
+		"aether-build")
 }
 
 // emitCircuitBreakerRedistributed publishes a circuit breaker redistribution event via the ceremony event bus.

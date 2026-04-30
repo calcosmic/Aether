@@ -565,6 +565,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		workerFlow := continueWorkerFlowWithWatcher(nil, watcherFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, blockers, options, phase.ID)
+		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
+			emitLoopBreakEvent("recovery_redirect",
+				fmt.Sprintf("recovery command differs from last invocation for phase %d", phase.ID),
+				fmt.Sprintf("redirected to %s to break potential loop", nextCommand),
+				"aether-continue")
+		}
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
 			Phase:              phase.ID,
 			GeneratedAt:        now.Format(time.RFC3339),
@@ -632,6 +638,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		workerFlow := continueWorkerFlowWithWatcher(review.Workers, watcherFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, review.BlockingIssues, options, phase.ID)
+		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
+			emitLoopBreakEvent("recovery_redirect",
+				fmt.Sprintf("recovery command differs from last invocation for phase %d", phase.ID),
+				fmt.Sprintf("redirected to %s to break potential loop", nextCommand),
+				"aether-continue")
+		}
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
 			Phase:              phase.ID,
 			GeneratedAt:        now.Format(time.RFC3339),
@@ -1181,6 +1193,10 @@ func runCodexContinueVerification(root string, state colony.ColonyState, phase c
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; Codex CLI unavailable but runtime verification passed"}
 	} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
 		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
+		emitLoopBreakEvent("watcher_skip",
+			fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
+			"auto-skipped watcher, advancing on runtime verification",
+			"aether-continue")
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
 	} else {
 		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
