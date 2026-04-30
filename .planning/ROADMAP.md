@@ -264,8 +264,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 84-01-PLAN.md -- VerificationDepth type, CLI flag, 3-level dispatch, visual rendering, colony-prime context, and tests
-- [ ] 84-02-PLAN.md -- YAML source and wrapper markdown updates for verification depth ceremony
+- [x] 84-01-PLAN.md -- VerificationDepth type, CLI flag, 3-level dispatch, visual rendering, colony-prime context, and tests
+- [x] 84-02-PLAN.md -- YAML source and wrapper markdown updates for verification depth ceremony
 
 ### Phase 85: Smart Depth Defaults
 **Goal**: The system auto-selects planning depth and verification depth based on phase position and code change risk, without requiring user input
@@ -310,6 +310,6 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 81. Plan and Lifecycle Loop Safety | v1.12 | 1/2 | Complete    | 2026-04-30 |
 | 82. Loop Detection Telemetry | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 83. Planning Depth System | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 84. Verification Depth Extension | v1.12 | 0/2 | Planned | - |
+| 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 85. Smart Depth Defaults | v1.12 | 0/? | Not started | - |
 | 86. Depth Selection UI and Persistence | v1.12 | 0/? | Not started | - |

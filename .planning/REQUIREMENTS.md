@@ -50,7 +50,7 @@ The verification depth selected at plan time must be stored in the build packet 
 | LOOP-05 | Phase 81 | Complete |
 | LOOP-06 | Phase 82 | Complete |
 | DEPTH-01 | Phase 83 | Complete |
-| DEPTH-02 | Phase 84 | Pending |
+| DEPTH-02 | Phase 84 | Complete |
 | DEPTH-03 | Phase 85 | Pending |
 | DEPTH-04 | Phase 86 | Pending |
 | DEPTH-05 | Phase 86 | Pending |
