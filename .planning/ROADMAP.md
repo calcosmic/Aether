@@ -223,7 +223,7 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
   5. Gate results persist per phase in gate-results.json; re-running gates skips previously passed/skipped gates (except Flags Gate and Watcher Veto)
   6. Smart gate retry hard-stops after N failed retries per phase (circuit breaker respected)
   7. Privacy/secret scan blocks writes containing credentials, API keys, tokens, SSH keys, env files, or local user paths before any learning data is stored
-**Plans**: TBD
+**Plans**: 4 plans
 
 ### Phase 89: Gate Self-Healing & Smart Planning
 **Goal**: The colony can fix its own gate failures via the Fixer caste, Oracle produces confidence-targeted research, and init synthesizes an approval-ready launch brief from codebase scouting
@@ -238,7 +238,13 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
   6. Init command scouts the repo and synthesizes an approval-ready launch brief; colony launch is blocked until user approves, edits, or rejects
   7. /ant-status shows a Gate Status section when gate-results.json exists for the current phase
   8. OpenCode agent hub template generates a valid name field that survives aether update; missing callback URL fails before worker spawn with clear config error
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [x] 89-01-PLAN.md -- Fixer caste agent + unblock dispatch with circuit breaker and attempt caps (GATE-06/07/08, LOOP-02/03/04)
+- [ ] 89-02-PLAN.md -- Oracle confidence targeting with rubric output (CONF-01/02/03)
+- [ ] 89-03-PLAN.md -- Init launch brief synthesis + status gate display (CONF-04/05, GATE-09)
+- [ ] 89-04-PLAN.md -- Platform fixes: OpenCode agent name + callback URL separation (PLAT-01/02)
 
 ### Phase 90: Learning Foundation
 **Goal**: Colony learning only fires on verified successful outcomes with full evidence provenance, backed by a unified memory API and repo isolation
@@ -304,8 +310,8 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 85. Smart Depth Defaults | v1.12 | 0/2 | Complete | 2026-04-30 |
 | 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete | 2026-05-01 |
 | 87. Fix Continue Depth Persistence | v1.12 | 1/1 | Complete | 2026-05-01 |
-| 88. Recovery Foundation | v1.13 | 0 | Not started | - |
-| 89. Gate Self-Healing & Smart Planning | v1.13 | 0 | Not started | - |
+| 88. Recovery Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
+| 89. Gate Self-Healing & Smart Planning | v1.13 | 1/4 | In Progress|  |
 | 90. Learning Foundation | v1.13 | 0 | Not started | - |
 | 91. Hive Intelligence | v1.13 | 0 | Not started | - |
 | 92. System Hardening & Validation | v1.13 | 0 | Not started | - |
