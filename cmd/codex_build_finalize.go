@@ -197,6 +197,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
 	}
 
+	// Prepare the updated state in memory first (needed for downstream writes).
 	updatedState := state
 	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs)
 	updatedState.State = colony.StateBUILT
@@ -224,9 +225,16 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := recordExternalBuildSpawnTree(dispatches); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
+
+	// Atomically commit the colony state mutation.
+	var committedState colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
+		committedState = updatedState
+		return nil
+	}); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
+	updatedState = committedState
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
 	result := map[string]interface{}{
