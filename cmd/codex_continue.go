@@ -105,6 +105,7 @@ type codexContinueOptions struct {
 	LightFlag           bool
 	HeavyFlag           bool
 	SkipWatchers        bool
+	VerificationDepth   string
 }
 
 // codexContinueOptionsJSON is a serializable snapshot of continue options,
@@ -116,6 +117,7 @@ type codexContinueOptionsJSON struct {
 	SkipWatchers           bool     `json:"skip_watchers,omitempty"`
 	LightFlag              bool     `json:"light_flag,omitempty"`
 	HeavyFlag              bool     `json:"heavy_flag,omitempty"`
+	VerificationDepth      string   `json:"verification_depth,omitempty"`
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
@@ -168,6 +170,7 @@ func continueOptionsToJSON(opts codexContinueOptions) *codexContinueOptionsJSON 
 		SkipWatchers:           opts.SkipWatchers,
 		LightFlag:              opts.LightFlag,
 		HeavyFlag:              opts.HeavyFlag,
+		VerificationDepth:      opts.VerificationDepth,
 	}
 }
 
@@ -192,6 +195,9 @@ func continueOptionsMatchCurrent(current codexContinueOptions, last *codexContin
 		return false
 	}
 	if current.HeavyFlag != last.HeavyFlag {
+		return false
+	}
+	if current.VerificationDepth != last.VerificationDepth {
 		return false
 	}
 	// Compare reconcile task IDs (order-independent).
@@ -260,7 +266,11 @@ func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 }
 
 func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phase, options codexContinueOptions) map[string]interface{} {
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, "")
+	effectiveDepthStr := resolveVerificationDepthFlag(options.LightFlag, options.HeavyFlag, options.VerificationDepth)
+	if effectiveDepthStr == "" {
+		effectiveDepthStr = strings.TrimSpace(state.VerificationDepth)
+	}
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, effectiveDepthStr)
 	now := time.Now().UTC()
 	runHandle, _ := beginRuntimeSpawnRun("continue", now)
 	recovery := codexContinueRecoveryPlan{
@@ -415,7 +425,11 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 
 	currentIdx := state.CurrentPhase - 1
 	phase := state.Plan.Phases[currentIdx]
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, "")
+	effectiveDepthStr := resolveVerificationDepthFlag(options.LightFlag, options.HeavyFlag, options.VerificationDepth)
+	if effectiveDepthStr == "" {
+		effectiveDepthStr = strings.TrimSpace(state.VerificationDepth)
+	}
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, effectiveDepthStr)
 	if phase.Status != colony.PhaseInProgress {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
