@@ -266,11 +266,7 @@ func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 }
 
 func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phase, options codexContinueOptions) map[string]interface{} {
-	effectiveDepthStr := resolveVerificationDepthFlag(options.LightFlag, options.HeavyFlag, options.VerificationDepth)
-	if effectiveDepthStr == "" {
-		effectiveDepthStr = strings.TrimSpace(state.VerificationDepth)
-	}
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, effectiveDepthStr)
+	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
 	now := time.Now().UTC()
 	runHandle, _ := beginRuntimeSpawnRun("continue", now)
 	recovery := codexContinueRecoveryPlan{
@@ -425,11 +421,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 
 	currentIdx := state.CurrentPhase - 1
 	phase := state.Plan.Phases[currentIdx]
-	effectiveDepthStr := resolveVerificationDepthFlag(options.LightFlag, options.HeavyFlag, options.VerificationDepth)
-	if effectiveDepthStr == "" {
-		effectiveDepthStr = strings.TrimSpace(state.VerificationDepth)
-	}
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, effectiveDepthStr)
+	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
 	if phase.Status != colony.PhaseInProgress {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}

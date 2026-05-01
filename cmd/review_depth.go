@@ -101,6 +101,19 @@ func resolveVerificationDepthFlag(lightFlag, heavyFlag bool, verificationDepthSt
 	return verificationDepthStr
 }
 
+// resolveEffectiveContinueDepth resolves the verification depth for continue paths.
+// It combines CLI flags (boolean and string) with persisted state depth, then
+// passes the original boolean flags through to resolveVerificationDepth so that
+// keyword-guard behavior (lightFlag blocking keyword-based heavy override) is
+// preserved -- matching the aether build behavior.
+func resolveEffectiveContinueDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFlag bool, verificationDepthStr string, stateDepth string) colony.VerificationDepth {
+	effectiveDepthStr := resolveVerificationDepthFlag(lightFlag, heavyFlag, verificationDepthStr)
+	if effectiveDepthStr == "" {
+		effectiveDepthStr = strings.TrimSpace(stateDepth)
+	}
+	return resolveVerificationDepth(phase, totalPhases, lightFlag, heavyFlag, effectiveDepthStr)
+}
+
 // --- Smart depth default functions (Phase 85) ---
 
 // securityRiskKeywords lists substrings that trigger "high" risk classification.

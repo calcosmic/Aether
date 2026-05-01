@@ -90,11 +90,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	effectiveDepthStr := resolveVerificationDepthFlag(options.LightFlag, options.HeavyFlag, options.VerificationDepth)
-	if effectiveDepthStr == "" {
-		effectiveDepthStr = strings.TrimSpace(state.VerificationDepth)
-	}
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, effectiveDepthStr)
+	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
 	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
 	plan := codexContinuePlanManifest{
 		Phase:               phase.ID,
