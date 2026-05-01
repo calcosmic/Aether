@@ -634,7 +634,7 @@ func TestOracleCompatibilityStopKillsControllerProcessTree(t *testing.T) {
 		t.Fatalf("write loop marker: %v", err)
 	}
 
-	result, err := runOracleCompatibility(root, []string{"stop"}, "")
+	result, err := runOracleCompatibility(root, []string{"stop"}, "", "")
 	if err != nil {
 		t.Fatalf("oracle stop returned error: %v", err)
 	}
@@ -875,7 +875,7 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := runOracleCompatibility(root, []string{"heartbeat test"}, "")
+		_, err := runOracleCompatibility(root, []string{"heartbeat test"}, "", "")
 		done <- err
 	}()
 
@@ -974,7 +974,7 @@ func TestOracleCompatibilityRejectsDuplicateActiveLoop(t *testing.T) {
 		t.Fatalf("write oracle state: %v", err)
 	}
 
-	_, err := runOracleCompatibility(root, []string{"new topic"}, "")
+	_, err := runOracleCompatibility(root, []string{"new topic"}, "", "")
 	if err == nil {
 		t.Fatal("expected duplicate active loop error, got nil")
 	}

@@ -60,7 +60,8 @@ var oracleCmd = &cobra.Command{
 		}
 
 		depth, _ := cmd.Flags().GetString("depth")
-			result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth)
+		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
+		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -135,6 +136,7 @@ func init() {
 	runCompatibilityCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build and continue dispatches (e.g. 15m)")
 
 	oracleCmd.Flags().String("depth", "", "Research depth: quick, balanced, deep, exhaustive (default: balanced)")
+	oracleCmd.Flags().String("confidence-target", "", "Target confidence percentage 1-100 (default: per depth level). Oracle will not finalize below this target unless a hard blocker is reported or max iterations are reached.")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)

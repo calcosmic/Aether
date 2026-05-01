@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultOracleMaxIterations    = 8
-	defaultOracleTargetConfidence = 85
+	defaultOracleTargetConfidence = 95
 	defaultOracleReasoningEffort  = "medium"
 	defaultOracleScope            = "both"
 	defaultOracleTemplate         = "custom"
@@ -44,6 +44,22 @@ func resolveOracleDepth(depth string) oracleDepthConfig {
 		return cfg
 	}
 	return oracleDepthLevels["balanced"]
+}
+
+// validateOracleConfidenceTarget returns an empty string if the value is valid (1-100),
+// or an error description if invalid.
+func validateOracleConfidenceTarget(value string) string {
+	v := 0
+	for _, ch := range value {
+		if ch < '0' || ch > '9' {
+			return fmt.Sprintf("--confidence-target must be an integer 1-100, got %q", value)
+		}
+		v = v*10 + int(ch-'0')
+	}
+	if v < 1 || v > 100 {
+		return fmt.Sprintf("--confidence-target must be between 1 and 100, got %d", v)
+	}
+	return ""
 }
 
 var newOracleWorkerInvoker = codex.NewWorkerInvoker
@@ -111,6 +127,7 @@ type oracleFinding struct {
 	Text      string   `json:"text"`
 	SourceIDs []string `json:"source_ids,omitempty"`
 	Iteration int      `json:"iteration,omitempty"`
+	Blocker   bool     `json:"blocker,omitempty"`
 }
 
 type oraclePaths struct {
@@ -181,7 +198,7 @@ type oracleWorkerEvidence struct {
 	Type     string `json:"type"`
 }
 
-func runOracleCompatibility(root string, args []string, depth string) (map[string]interface{}, error) {
+func runOracleCompatibility(root string, args []string, depth string, confidenceTarget string) (map[string]interface{}, error) {
 	mode := "status"
 	if len(args) > 0 {
 		mode = strings.ToLower(strings.TrimSpace(args[0]))
@@ -193,7 +210,7 @@ func runOracleCompatibility(root string, args []string, depth string) (map[strin
 	case "stop":
 		return stopOracleCompatibility(root)
 	default:
-		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth)
+		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget)
 	}
 }
 
@@ -295,7 +312,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func startOracleCompatibility(root, topic, depth string) (map[string]interface{}, error) {
+func startOracleCompatibility(root, topic, depth string, confidenceTarget string) (map[string]interface{}, error) {
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
@@ -321,6 +338,19 @@ func startOracleCompatibility(root, topic, depth string) (map[string]interface{}
 	detectedType, languages, frameworks := detectOracleProjectProfile(root)
 	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks)
 	depthCfg := resolveOracleDepth(depth)
+
+	// Validate and apply explicit confidence target override (per D-08)
+	if strings.TrimSpace(confidenceTarget) != "" {
+		if errMsg := validateOracleConfidenceTarget(strings.TrimSpace(confidenceTarget)); errMsg != "" {
+			return nil, fmt.Errorf("%s", errMsg)
+		}
+		v := 0
+		for _, ch := range strings.TrimSpace(confidenceTarget) {
+			v = v*10 + int(ch-'0')
+		}
+		depthCfg.TargetConfidence = v
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := oracleStateFile{
 		Version:           "1.1",
@@ -589,6 +619,165 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 	return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "max_iterations_reached", "max_iterations_reached", "aether oracle status")
 }
 
+// mapApprovalStatus maps internal Oracle status to user-facing approval status.
+func mapApprovalStatus(status string) string {
+	switch status {
+	case "complete":
+		return "approved"
+	case "blocked":
+		return "blocked"
+	case "max_iterations_reached":
+		return "max_iterations"
+	default:
+		return "below_target"
+	}
+}
+
+// hasHardBlocker returns true if any finding in the plan has been flagged as a hard blocker.
+func hasHardBlocker(plan oraclePlanFile, state oracleStateFile) bool {
+	for _, q := range plan.Questions {
+		for _, f := range q.KeyFindings {
+			if f.Blocker {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// oracleRubricEntry represents a single question's rubric assessment.
+type oracleRubricEntry map[string]interface{}
+
+// oracleGapEntry represents a single identified gap.
+type oracleGapEntry struct {
+	QuestionID string `json:"question_id"`
+	Question   string `json:"question"`
+	Reason     string `json:"reason"`
+	Confidence int    `json:"confidence"`
+}
+
+// oracleEvidenceEntry represents evidence summary for a question.
+type oracleEvidenceEntry struct {
+	QuestionID   string `json:"question_id"`
+	SummaryCount int    `json:"summary_count"`
+	SourceCount  int    `json:"source_count"`
+	TopSources   string `json:"top_sources,omitempty"`
+}
+
+// buildOracleRubric produces per-question breakdown with confidence score, sources, and assessment.
+func buildOracleRubric(plan oraclePlanFile, state oracleStateFile) []oracleRubricEntry {
+	rubric := make([]oracleRubricEntry, 0, len(plan.Questions))
+	for _, q := range plan.Questions {
+		entry := oracleRubricEntry{
+			"question_id": q.ID,
+			"question":    q.Text,
+			"status":      emptyFallback(q.Status, "open"),
+			"confidence":  q.Confidence,
+		}
+		// Collect unique source IDs
+		sourceSet := make(map[string]bool)
+		for _, f := range q.KeyFindings {
+			for _, sid := range f.SourceIDs {
+				sourceSet[sid] = true
+			}
+		}
+		sources := make([]string, 0, len(sourceSet))
+		for sid := range sourceSet {
+			sources = append(sources, sid)
+		}
+		sort.Strings(sources)
+		entry["source_count"] = len(sources)
+		entry["finding_count"] = len(q.KeyFindings)
+		entry["iterations_touched"] = len(q.IterationsTouched)
+
+		// Assessment
+		if q.Confidence >= state.TargetConfidence {
+			entry["assessment"] = "met"
+		} else if q.Confidence >= state.TargetConfidence/2 {
+			entry["assessment"] = "partial"
+		} else {
+			entry["assessment"] = "insufficient"
+		}
+
+		rubric = append(rubric, entry)
+	}
+	return rubric
+}
+
+// identifyGaps lists questions that haven't reached sufficient confidence or areas where evidence is thin.
+func identifyGaps(plan oraclePlanFile, state oracleStateFile) []oracleGapEntry {
+	var gaps []oracleGapEntry
+	for _, q := range plan.Questions {
+		status := strings.ToLower(strings.TrimSpace(q.Status))
+		if status == "answered" && q.Confidence >= state.TargetConfidence {
+			continue // fully met, no gap
+		}
+		reason := "below target confidence"
+		if status == "open" {
+			reason = "unanswered question"
+		} else if len(q.KeyFindings) == 0 {
+			reason = "no findings"
+		}
+		gaps = append(gaps, oracleGapEntry{
+			QuestionID: q.ID,
+			Question:   truncateString(q.Text, 200),
+			Reason:     reason,
+			Confidence: q.Confidence,
+		})
+	}
+	// Include open gaps from state
+	for _, gap := range state.OpenGaps {
+		gaps = append(gaps, oracleGapEntry{
+			QuestionID: "open_gap",
+			Question:   truncateString(gap, 200),
+			Reason:     "open gap from state",
+			Confidence: 0,
+		})
+	}
+	if len(gaps) == 0 {
+		return nil
+	}
+	return gaps
+}
+
+// collectEvidence aggregates evidence per question.
+func collectEvidence(plan oraclePlanFile, state oracleStateFile) []oracleEvidenceEntry {
+	var entries []oracleEvidenceEntry
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		sourceSet := make(map[string]bool)
+		for _, f := range q.KeyFindings {
+			for _, sid := range f.SourceIDs {
+				sourceSet[sid] = true
+			}
+		}
+		// Build top sources string
+		topSources := make([]string, 0, len(sourceSet))
+		for sid := range sourceSet {
+			if src, ok := plan.Sources[sid]; ok {
+				topSources = append(topSources, emptyFallback(src.Title, src.URL))
+			} else {
+				topSources = append(topSources, sid)
+			}
+		}
+		sort.Strings(topSources)
+		topStr := strings.Join(topSources, ", ")
+
+		entries = append(entries, oracleEvidenceEntry{
+			QuestionID:   q.ID,
+			SummaryCount: len(q.KeyFindings),
+			SourceCount:  len(sourceSet),
+			TopSources:   topStr,
+		})
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	return entries
+}
+
 func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, iterationsRun int, status, stopReason, next string) (map[string]interface{}, error) {
 	state.Status = status
 	state.Platform = "codex"
@@ -621,6 +810,7 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"max_iterations":     state.MaxIterations,
 		"overall_confidence": state.OverallConfidence,
 		"target_confidence":  state.TargetConfidence,
+		"final_confidence":   state.OverallConfidence,
 		"question_count":     questionCount,
 		"answered_count":     answeredCount,
 		"touched_count":      touchedCount,
@@ -646,6 +836,12 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"stop_reason":        stopReason,
 		"summary":            strings.TrimSpace(state.Summary),
 		"next":               next,
+			// Rubric output per D-09
+			"rubric":          buildOracleRubric(plan, state),
+			"gaps":            identifyGaps(plan, state),
+			"evidence":        collectEvidence(plan, state),
+			"approval_status": mapApprovalStatus(status),
+			"original_prompt": strings.TrimSpace(state.Topic),
 	}, nil
 }
 
