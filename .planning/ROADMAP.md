@@ -63,7 +63,7 @@
 - [x] Phase 20.1: Verify Emoji Consistency (INSERTED)
 - [x] Phase 21: Codex CLI Visual Parity
 - [x] Phase 21.1: Verify Codex Parity (INSERTED)
-- [x] Phase 22: Core Path Hardening
+- [x] Phase 22: Core Hardening
 - [x] Phase 22.1: Verify Core Hardening (INSERTED)
 - [x] Phase 23: Recovery and Continuity
 - [x] Phase 23.1: Verify Recovery Continuity (INSERTED)
@@ -287,7 +287,11 @@ Plans:
   2. The user can accept both defaults with a single confirmation, or override either depth individually
   3. The verification depth selected at plan time is stored in the build packet JSON
   4. `/ant-continue` reads the verification depth from the build packet and uses it without requiring the user to re-specify
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 86-01-PLAN.md -- Verification depth flag, smart resolver, depth selection banner, and plan result map enrichment (DEPTH-04)
+- [ ] 86-02-PLAN.md -- Build manifest ReviewDepth persistence and build stage marker depth display (DEPTH-04, DEPTH-05)
 
 ## Progress
 
@@ -312,4 +316,4 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 83. Planning Depth System | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
-| 86. Depth Selection UI and Persistence | v1.12 | 0/? | Not started | - |
+| 86. Depth Selection UI and Persistence | v1.12 | 0/2 | Not started | - |
