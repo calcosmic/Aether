@@ -117,6 +117,16 @@ func TestCheckAttemptCap_NotExceeded(t *testing.T) {
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
 
+	// Write gate results with 1 attempt (less than cap of 3)
+	fileData := gateResultsFile{
+		Attempts: 1,
+		Results:  []GateCheckResult{},
+	}
+	data, _ := json.MarshalIndent(fileData, "", "  ")
+	if err := os.WriteFile(filepath.Join(dataDir, "gate-results-1.json"), data, 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+
 	err := checkAttemptCap(1, 3)
 	if err != nil {
 		t.Errorf("checkAttemptCap(1, 3): expected nil, got %v", err)
@@ -131,6 +141,16 @@ func TestCheckAttemptCap_ExactlyAtCap(t *testing.T) {
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
+
+	// Write gate results with 3 attempts (at cap of 3)
+	fileData := gateResultsFile{
+		Attempts: 3,
+		Results:  []GateCheckResult{},
+	}
+	data, _ := json.MarshalIndent(fileData, "", "  ")
+	if err := os.WriteFile(filepath.Join(dataDir, "gate-results-3.json"), data, 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
 
 	err := checkAttemptCap(3, 3)
 	if err == nil {
@@ -149,6 +169,16 @@ func TestCheckAttemptCap_Exceeded(t *testing.T) {
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
+
+	// Write gate results with 5 attempts (exceeds cap of 3)
+	fileData := gateResultsFile{
+		Attempts: 5,
+		Results:  []GateCheckResult{},
+	}
+	data, _ := json.MarshalIndent(fileData, "", "  ")
+	if err := os.WriteFile(filepath.Join(dataDir, "gate-results-5.json"), data, 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
 
 	err := checkAttemptCap(5, 3)
 	if err == nil {
