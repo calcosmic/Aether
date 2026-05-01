@@ -78,7 +78,7 @@ When multiple documents overlap:
 
 ```
 Create colony-ready documents:
-  
+
   .aether/data/ingested/
      catalog.json           # All found docs with metadata
      decisions.md           # Consolidated decisions from ADRs
@@ -115,15 +115,15 @@ From ingested docs, populate colony context:
    Classification:
      ADRs: {count} | PRDs: {count} | Specs: {count}
      Docs: {count} | Templates: {count} | Other: {count}
-   
+
    Conflicts: {count} contradictions detected
    Gaps: {count} undocumented areas identified
-   
+
    Colony context updated:
     {count} decisions imported
     {count} requirements captured
     {count} specifications cataloged
-   
+
    Catalog: .aether/data/ingested/catalog.json
 ```
 

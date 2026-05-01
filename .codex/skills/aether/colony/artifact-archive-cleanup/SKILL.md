@@ -46,12 +46,12 @@ Before any archival, always offer a preview:
      - phase-1-requirements/     (completed 5 days ago, 12 files)
      - phase-2-design/           (completed 3 days ago, 8 files)
      - phase-3-implementation/   (completed 1 day ago, 23 files)
-   
+
    Stale data to archive:
      - .aether/data/colonization/ (last updated 7 days ago)
-   
+
    Total: 43 files, ~{size} -> will be archived to .aether/archive/milestone-{N}/
-   
+
    [Run with --confirm to execute]
 ```
 

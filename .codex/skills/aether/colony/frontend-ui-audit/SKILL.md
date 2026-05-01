@@ -87,27 +87,27 @@ For each pillar:
 
 ```
  UI REVIEW -- Phase {N}: {phase_name}
-   
+
    PILLAR              | Score   | Issues
-   
+
    Consistency         |  PASS | 0 issues
    Accessibility       |  WARN | 3 issues
    Responsiveness      |  PASS | 0 issues
    Performance         |  WARN | 2 issues
    Aesthetics          |  PASS | 1 minor
    Interaction         |  FAIL | 4 issues
-   
+
    Overall Score: {score}/100
-   
+
    Critical Issues:
     Missing alt text on 3 images (accessibility)
     No loading state on data fetch (interaction)
     Form submit has no feedback (interaction)
-   
+
    Warnings:
     Color contrast low on secondary text (accessibility)
     Bundle includes unused icon library (performance)
-   
+
    Details: .aether/phases/phase-{N}/UI-REVIEW.md
 ```
 

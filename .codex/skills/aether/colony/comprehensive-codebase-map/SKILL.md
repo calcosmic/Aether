@@ -64,15 +64,15 @@ Each agent follows this protocol:
 ```
 PHASE 1 -- Reconnaissance:
   Scan directory structure, identify file types, count modules
-  
+
 PHASE 2 -- Deep Read:
   Read source files relevant to their specialty
   Extract patterns, relationships, and anomalies
-  
+
 PHASE 3 -- Analysis:
   Cross-reference findings with other agents' domains
   Identify gaps and contradictions
-  
+
 PHASE 4 -- Document:
   Write structured findings to .aether/data/codebase/
 ```
@@ -138,7 +138,7 @@ If prior mapping exists:
    Documents produced: 7 + 1 summary
    Files analyzed: {count}
    Duration: {time}
-   
+
    Documents:
     ARCHITECTURE.md  -- {module_count} modules mapped
     DATA-FLOWS.md    -- {flow_count} data flows traced
@@ -147,7 +147,7 @@ If prior mapping exists:
     CONVENTIONS.md   -- {pattern_count} patterns identified
     TECH-DEBT.md     -- {debt_count} items ({critical} critical)
     RISK-MAP.md      -- {risk_count} risks assessed
-   
+
    Location: .aether/data/codebase/
 ```
 

@@ -44,7 +44,7 @@ For each planned deliverable:
   2. Is it tested? (check test coverage)
   3. Is it documented? (check docs)
   4. Does it meet acceptance criteria? (check UAT results)
-  
+
   Score:
     DELIVERED:     Fully implemented, tested, and documented
     PARTIAL:       Implemented but incomplete (missing tests or docs)
@@ -57,17 +57,17 @@ For each planned deliverable:
 
 ```
 Compare planned vs actual scope:
-  
+
   Scope expansion:
     - Features added that weren't planned
     - Phases added beyond original ROADMAP
     - Additional work discovered during execution
-  
+
   Scope reduction:
     - Features dropped due to complexity
     - Phases deferred to future milestones
     - Simplifications made during implementation
-  
+
   Record each scope change with:
     - What changed
     - Why it changed
@@ -93,36 +93,36 @@ Cross-cutting quality checks:
 ```
  MILESTONE AUDIT -- {milestone_name}
    Goal: {original_goal}
-   
+
    DELIVERY SCORECARD:
    Phase 1:  DELIVERED   -- {deliverables}
    Phase 2:  DELIVERED   -- {deliverables}
    Phase 3:  PARTIAL    -- {what's missing}
    Phase 4:  DELIVERED   -- {deliverables}
    Phase 5:  CHANGED    -- {what changed and why}
-   
+
    Overall: {delivered}/{total} fully delivered ({percentage}%)
-   
+
    SCOPE CHANGES:
    + {added scope item} (reason)
    - {removed scope item} (reason)
-   
+
    QUALITY:
    Test coverage: {percentage}%
    Lint: {clean/issues}
    Security: {clean/concerns}
-   
+
    GAPS: {count} items need attention
    1. {gap description} -- blocking/non-blocking
    2. {gap description} -- blocking/non-blocking
-   
+
    VERDICT: {APPROVED|CONDITIONAL|REJECTED}
    Conditions: {if CONDITIONAL, what must be fixed}
-   
+
    Lessons Learned:
     {lesson 1}
     {lesson 2}
-   
+
    Report: .aether/MILESTONE-AUDIT.md
 ```
 

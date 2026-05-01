@@ -49,7 +49,7 @@ Build a timeline of events:
   {timestamp} -- Worker reached {budget}%
   {timestamp} -- ERROR: {error message}
   {timestamp} -- Phase marked as FAILED
-  
+
   Identify: Where in the timeline did things diverge from plan?
 ```
 
@@ -92,7 +92,7 @@ What was affected:
   Files left in partial state: {list}
   Tests that were added: {list}
   Commits made: {list of hashes}
-  
+
   Is the codebase in a clean state? {yes/no}
   Can work be resumed from checkpoint? {yes/no}
 ```
@@ -101,32 +101,32 @@ What was affected:
 
 ```
  FORENSIC REPORT -- Phase {N}: {phase_name}
-   
+
    Failure time: {timestamp}
    Duration before failure: {time}
-   
+
    Root cause: {category}
    Description: {detailed explanation}
-   
+
    Timeline:
     {event_1}
     {event_2}
     {event_3}  failure point
-   
+
    Impact:
     {count} files in partial state
     {count} commits to preserve or revert
-   
+
    Recommendations:
    1. {fix_1}
    2. {fix_2}
    3. {prevention_measure}
-   
+
    Recovery options:
    [A] Revert to pre-phase state and re-plan
    [B] Resume from checkpoint (step {N} of PLAN.md)
    [C] Fix the specific failure and continue
-   
+
    Report: .aether/phases/phase-{N}/FORENSICS.md
 ```
 

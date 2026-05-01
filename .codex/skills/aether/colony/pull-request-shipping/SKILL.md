@@ -66,16 +66,16 @@ Title: {milestone_name} -- {summary}
 Body:
   ## Summary
   {auto-generated from ROADMAP completed phases}
-  
+
   ## Changes
   {per-phase breakdown of what was built}
-  
+
   ## Testing
   {test coverage summary, UAT results}
-  
+
   ## Screenshots (if applicable)
   {UI changes before/after}
-  
+
   ## Checklist
   - [x] All phases complete
   - [x] Tests pass
@@ -101,7 +101,7 @@ After review approval:
   2. Squash commits if preferred (colony commits are granular)
   3. Verify CI passes on final branch
   4. Wait for merge approval from user
-  
+
   Merge options:
   --squash    Squash all colony commits into one
   --rebase    Rebase colony commits onto main

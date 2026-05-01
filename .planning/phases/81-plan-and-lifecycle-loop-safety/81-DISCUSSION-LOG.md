@@ -61,4 +61,3 @@
 ## Deferred Ideas
 
 None.
-

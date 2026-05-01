@@ -91,15 +91,15 @@ For each generated phase:
 
 ```
  GAP ANALYSIS -- Milestone {N}
-   
+
    Gaps found: {total}
    Blocking: {count} | Important: {count} | Nice-to-have: {count}
-   
+
    Phases created: {count}
    Phase 7.1: Fix auth token refresh (blocking, small)
    Phase 7.2: Add integration tests for payments (important, medium)
    Phase 7.3: Document API error codes (nice-to-have, small)
-   
+
    Estimated effort: {total_hours} hours
    Recommended order: {phase_order}
 ```

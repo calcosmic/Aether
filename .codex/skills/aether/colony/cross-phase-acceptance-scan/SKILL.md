@@ -53,17 +53,17 @@ For each UAT item:
 
 ```
 Identify cross-cutting concerns:
-  
+
   INTEGRATION GAPS:
     - Phase A produces output that Phase B consumes
     - Is the integration tested? (often falls between phases)
     - Check: API contracts, data formats, event schemas
-  
+
   END-TO-END GAPS:
     - User journey spans multiple phases
     - Is the complete journey tested?
     - Check: signup->onboard->first-action flows
-  
+
   BOUNDARY CONDITIONS:
     - Error handling at phase boundaries
     - What happens when Phase A output is unexpected by Phase B?
@@ -74,7 +74,7 @@ Identify cross-cutting concerns:
 
 ```
  UAT CROSS-SCAN -- Milestone {N}
-   
+
    Total UAT items: {count}
     VERIFIED: {count} ({percentage}%)
     PARTIAL:  {count} ({percentage}%)
@@ -82,20 +82,20 @@ Identify cross-cutting concerns:
     FAILED:   {count} ({percentage}%)
     SKIPPED:  {count} ({percentage}%)
     STALE:    {count} ({percentage}%)
-   
+
    Cross-Phase Integration Gaps:
     Phase 2 -> Phase 3: API contract untested at boundary
     Phase 4 -> Phase 5: Data format mismatch potential
-   
+
    End-to-End Gaps:
     User signup -> first action: not tested end-to-end
     Payment -> receipt: happy path only, error path untested
-   
+
    Priority Fixes:
    1.  {failed/critical item} -- Phase {N}
    2.  {untested/critical item} -- Phase {N}
    3.  {partial item} -- Phase {N}
-   
+
    Report: .aether/UAT-CROSS-SCAN.md
 ```
 

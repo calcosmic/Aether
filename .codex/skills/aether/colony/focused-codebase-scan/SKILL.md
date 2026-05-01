@@ -105,17 +105,17 @@ Sections:
  SCAN -- {mode} | {project_name}
    Files scanned: {count} | Duration: {time}
    Health score: {1-10}
-   
+
    Key Findings:
     {finding 1}
     {finding 2}
     {finding 3}
-   
+
    Recommendations:
    1. {top recommendation}
    2. {second recommendation}
    3. {third recommendation}
-   
+
    Report: .aether/data/scans/scan-{mode}-{timestamp}.md
 ```
 

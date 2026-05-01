@@ -67,16 +67,16 @@ CONFLICTS TO CHECK:
 
 ```
  CONFLICT REPORT -- {source_name}
-   
+
     Compatible: {count} items (no conflicts)
     Partial:    {count} items (adjustable conflicts)
     Conflicts:  {count} items (hard conflicts requiring decision)
-   
+
    Hard Conflicts:
    1. Plan assumes MongoDB, colony uses PostgreSQL
    2. Plan creates phase "Auth", existing phase 3 already covers auth
    3. Plan targets Node 18, colony uses Node 20
-   
+
    Resolution Options:
    [A] Adapt plan to colony decisions (recommended)
    [B] Override colony decisions with plan

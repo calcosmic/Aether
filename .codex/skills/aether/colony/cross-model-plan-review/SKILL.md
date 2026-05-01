@@ -40,7 +40,7 @@ Package the plan for external review:
 
 ```
 Send to available AI CLIs:
-  
+
   For each available CLI:
     1. Format plan in that CLI's preferred input style
     2. Include evaluation rubric:
@@ -92,17 +92,17 @@ Merge feedback from all reviewers:
 ```
  CROSS-MODEL REVIEW -- {plan_name}
    Reviewers: {list of models}
-   
+
    Consensus Concerns ({count}):
     [HIGH] {concern} -- agreed by {reviewer_list}
     [MED]  {concern} -- agreed by {reviewer_list}
-   
+
    Unique Concerns ({count}):
     [MED]  {concern} -- only from {model}
-   
+
    Disagreements ({count}):
     {topic}: {model_A} says X, {model_B} says Y
-   
+
    Overall: {APPROVE|CONDITIONAL|REJECT}
    Recommendation: {action based on convergence}
 ```

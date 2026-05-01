@@ -86,16 +86,16 @@ Every generated test must:
 
 ```
  VALIDATION GAP FILL -- Phase {N}
-   
+
    Gaps identified: {count}
    Tests generated: {count}
    Types:
      Unit: {count} | Integration: {count} | E2E: {count}
-   
+
    Files created:
     {test_file_1} -- {tests_in_file} tests
     {test_file_2} -- {tests_in_file} tests
-   
+
    Coverage improvement: {before}% -> {after}%
    All tests pass: {yes/no}
 ```

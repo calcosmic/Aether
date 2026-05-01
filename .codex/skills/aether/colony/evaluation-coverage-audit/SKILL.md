@@ -61,9 +61,9 @@ For each dimension:
 
 ```
  EVAL COVERAGE -- Phase {N}: {name}
-   
+
    Dimension          | Score     | Evidence
-   
+
    Correctness        |  COVERED | 12 tests, all pass
    Edge Cases         |  PARTIAL | 3/5 edge cases tested
    Performance        |  MISSING | No perf tests
@@ -73,7 +73,7 @@ For each dimension:
    Error Handling     |  PARTIAL | Happy path covered
    Data Integrity     |  COVERED | Constraint tests pass
    Observability      |  MISSING | No logging/metrics
-   
+
    Overall: {covered}/{total} COVERED, {partial} PARTIAL, {missing} MISSING
    Coverage score: {percentage}%
 ```
