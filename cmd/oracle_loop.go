@@ -704,6 +704,33 @@ func buildOracleRubric(plan oraclePlanFile, state oracleStateFile) []oracleRubri
 	return rubric
 }
 
+// buildSynthesizedPrompt creates a consolidated research prompt from the Oracle's
+// accumulated findings, suitable for passing to downstream agents or users as a
+// summary of what was learned.
+func buildSynthesizedPrompt(plan oraclePlanFile, state oracleStateFile) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Oracle Research Synthesis\n\n")
+	fmt.Fprintf(&b, "**Topic:** %s\n", emptyFallback(state.Topic, "unknown"))
+	fmt.Fprintf(&b, "**Confidence:** %d%% / %d%%\n\n", state.OverallConfidence, state.TargetConfidence)
+
+	for _, q := range plan.Questions {
+		fmt.Fprintf(&b, "## %s: %s\n", q.ID, q.Text)
+		fmt.Fprintf(&b, "Status: %s | Confidence: %d%%\n", emptyFallback(q.Status, "open"), q.Confidence)
+		if len(q.KeyFindings) > 0 {
+			b.WriteString("\nKey findings:\n")
+			for _, f := range q.KeyFindings {
+				fmt.Fprintf(&b, "- %s\n", f.Text)
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	if len(state.FocusAreas) > 0 {
+		fmt.Fprintf(&b, "**Focus areas:** %s\n", strings.Join(state.FocusAreas, ", "))
+	}
+	return strings.TrimSpace(b.String())
+}
+
 // identifyGaps lists questions that haven't reached sufficient confidence or areas where evidence is thin.
 func identifyGaps(plan oraclePlanFile, state oracleStateFile) []oracleGapEntry {
 	var gaps []oracleGapEntry
@@ -842,6 +869,7 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 			"evidence":        collectEvidence(plan, state),
 			"approval_status": mapApprovalStatus(status),
 			"original_prompt": strings.TrimSpace(state.Topic),
+			"synthesized_prompt": buildSynthesizedPrompt(plan, state),
 	}, nil
 }
 
@@ -2085,7 +2113,7 @@ func containsOracleIteration(items []int, target int) bool {
 }
 
 func oracleReadyForCompletion(plan oraclePlanFile, state oracleStateFile) bool {
-	return state.OverallConfidence >= state.TargetConfidence || oracleAllQuestionsAnswered(plan)
+	return state.OverallConfidence >= state.TargetConfidence || (oracleAllQuestionsAnswered(plan) && state.OverallConfidence >= state.TargetConfidence/2)
 }
 
 func oracleAllQuestionsAnswered(plan oraclePlanFile) bool {
