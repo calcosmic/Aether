@@ -502,7 +502,8 @@ func normalizeClaimPathsToRoot(root string, paths []string) []string {
 }
 
 // findRepoRelativePath searches for a file in the repo that matches the claimed path.
-// Uses git ls-files for fast lookup, falls back to filepath.Glob if git unavailable.
+// Uses git ls-files for fast lookup. If git finds nothing, the file likely doesn't
+// exist in the repo (no unbounded filesystem walk fallback).
 func findRepoRelativePath(root, claimed string) string {
 	base := filepath.Base(claimed)
 	if base == "." || base == string(filepath.Separator) {
@@ -523,26 +524,8 @@ func findRepoRelativePath(root, claimed string) string {
 		}
 	}
 
-	// Fallback: recursive walk to find files matching the basename
-	var candidates []string
-	filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if d.Name() == base {
-			if rel, err := filepath.Rel(root, path); err == nil {
-				candidates = append(candidates, filepath.ToSlash(rel))
-			}
-		}
-		return nil
-	})
-	if len(candidates) == 0 {
-		return ""
-	}
-	if len(candidates) == 1 {
-		return candidates[0]
-	}
-	return bestMatchForClaimedPath(claimed, candidates)
+	// If git ls-files found nothing, the file likely doesn't exist in the repo.
+	return ""
 }
 
 // bestMatchForClaimedPath scores candidates by counting matching trailing path segments.
