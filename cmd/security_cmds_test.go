@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -503,5 +504,225 @@ func TestSignatureScanNoSignaturesFile(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	if result["found"] != false {
 		t.Errorf("found = %v, want false when no signatures file", result["found"])
+	}
+}
+
+// --- privacy-scan tests ---
+
+func TestPrivacyScan_BlocksAPIKey(t *testing.T) {
+	result := privacyScan("my secret key is sk-abc123def456ghi789jkl012mno345")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing sk- API key")
+	}
+	found := false
+	for _, f := range result.Findings {
+		if strings.Contains(f, "api_key") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected finding containing 'api_key', got: %v", result.Findings)
+	}
+}
+
+func TestPrivacyScan_BlocksKeyPrefix(t *testing.T) {
+	result := privacyScan("deploy key: key-abc123def456")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing key- prefix")
+	}
+	found := false
+	for _, f := range result.Findings {
+		if strings.Contains(f, "api_key_prefix") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected finding containing 'api_key_prefix', got: %v", result.Findings)
+	}
+}
+
+func TestPrivacyScan_BlocksBearerToken(t *testing.T) {
+	result := privacyScan("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing Bearer token")
+	}
+	found := false
+	for _, f := range result.Findings {
+		if strings.Contains(f, "bearer_token") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected finding containing 'bearer_token', got: %v", result.Findings)
+	}
+}
+
+func TestPrivacyScan_BlocksPrivateKey(t *testing.T) {
+	result := privacyScan("-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQ\n-----END RSA PRIVATE KEY-----")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing RSA private key")
+	}
+}
+
+func TestPrivacyScan_BlocksECPrivateKey(t *testing.T) {
+	result := privacyScan("-----BEGIN EC PRIVATE KEY-----\nMHQCAQEE\n-----END EC PRIVATE KEY-----")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing EC private key")
+	}
+}
+
+func TestPrivacyScan_BlocksOpenSSHKey(t *testing.T) {
+	result := privacyScan("-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC\n-----END OPENSSH PRIVATE KEY-----")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing OpenSSH private key")
+	}
+}
+
+func TestPrivacyScan_BlocksPassword(t *testing.T) {
+	result := privacyScan("database password='supersecretvalue'")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing long password")
+	}
+}
+
+func TestPrivacyScan_BlocksPasswd(t *testing.T) {
+	result := privacyScan("user passwd='mylongpassword'")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content containing long passwd")
+	}
+}
+
+func TestPrivacyScan_RedactsUserPath(t *testing.T) {
+	content := "The project is at /Users/john/projects/myapp/src/main.go"
+	result := privacyScan(content)
+	if result.Blocked {
+		t.Error("expected blocked=false for content with only home paths")
+	}
+	if !strings.Contains(result.Clean, "[REDACTED_PATH]") {
+		t.Errorf("expected Clean to contain [REDACTED_PATH], got: %s", result.Clean)
+	}
+	if strings.Contains(result.Clean, "/Users/john") {
+		t.Errorf("expected Clean to NOT contain /Users/john, got: %s", result.Clean)
+	}
+}
+
+func TestPrivacyScan_RedactsHomePath(t *testing.T) {
+	content := "deploying from /home/user/code/repo"
+	result := privacyScan(content)
+	if result.Blocked {
+		t.Error("expected blocked=false for content with only /home paths")
+	}
+	if !strings.Contains(result.Clean, "[REDACTED_PATH]") {
+		t.Errorf("expected Clean to contain [REDACTED_PATH], got: %s", result.Clean)
+	}
+}
+
+func TestPrivacyScan_RedactsTildePath(t *testing.T) {
+	content := "check ~/Documents/file.txt for details"
+	result := privacyScan(content)
+	if result.Blocked {
+		t.Error("expected blocked=false for content with only tilde paths")
+	}
+	if !strings.Contains(result.Clean, "[REDACTED_PATH]") {
+		t.Errorf("expected Clean to contain [REDACTED_PATH], got: %s", result.Clean)
+	}
+}
+
+func TestPrivacyScan_CleanContent(t *testing.T) {
+	content := "hello world, nothing to see here"
+	result := privacyScan(content)
+	if result.Blocked {
+		t.Error("expected blocked=false for clean content")
+	}
+	if result.Clean != content {
+		t.Errorf("expected Clean to equal original content, got: %s", result.Clean)
+	}
+}
+
+func TestPrivacyScan_SecretsTakePrecedence(t *testing.T) {
+	content := "api_key sk-abc123def456ghi789jkl and the project is at /Users/john/projects/myapp"
+	result := privacyScan(content)
+	if !result.Blocked {
+		t.Error("expected blocked=true when content has both secrets and paths (secrets take precedence)")
+	}
+	// When blocked, Clean should be empty (write rejected)
+	if result.Clean != "" {
+		t.Errorf("expected Clean to be empty when blocked, got: %s", result.Clean)
+	}
+}
+
+func TestPrivacyScan_EnvFilePatterns(t *testing.T) {
+	// Test .env
+	result := privacyScan("load config from .env")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content referencing .env")
+	}
+	// Test .env.local
+	result = privacyScan("use .env.local for local overrides")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content referencing .env.local")
+	}
+	// Test credentials.json
+	result = privacyScan("fetch credentials from credentials.json")
+	if !result.Blocked {
+		t.Error("expected blocked=true for content referencing credentials.json")
+	}
+}
+
+func TestPrivacyScan_AllowsShortPasswords(t *testing.T) {
+	result := privacyScan("password='abc'")
+	if result.Blocked {
+		t.Error("expected blocked=false for short passwords (< 8 chars)")
+	}
+}
+
+func TestPrivacyScan_CLICommand(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"privacy-scan", "--content", "hello world"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	result := env["result"].(map[string]interface{})
+	if result["blocked"] != false {
+		t.Errorf("blocked = %v, want false for clean content", result["blocked"])
+	}
+}
+
+func TestPrivacyScan_CLICommandBlocksSecret(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"privacy-scan", "--content", "secret key sk-abc123def456ghi789jkl012mno345"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	result := env["result"].(map[string]interface{})
+	if result["blocked"] != true {
+		t.Errorf("blocked = %v, want true for secret content", result["blocked"])
 	}
 }
