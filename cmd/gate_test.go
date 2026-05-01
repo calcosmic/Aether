@@ -341,8 +341,8 @@ func TestGateRecoveryTemplate_UnknownGate(t *testing.T) {
 }
 
 func TestShouldSkipGate_PassedGateSkipped(t *testing.T) {
-	prior := []colony.GateResultEntry{
-		{Name: "spawn_gate", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	prior := []GateCheckResult{
+		{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 	}
 	result := shouldSkipGate(prior, "spawn_gate")
 	if !result {
@@ -351,8 +351,8 @@ func TestShouldSkipGate_PassedGateSkipped(t *testing.T) {
 }
 
 func TestShouldSkipGate_TestsNeverSkipped(t *testing.T) {
-	prior := []colony.GateResultEntry{
-		{Name: "tests_pass", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	prior := []GateCheckResult{
+		{Name: "tests_pass", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 	}
 	result := shouldSkipGate(prior, "tests_pass")
 	if result {
@@ -361,8 +361,8 @@ func TestShouldSkipGate_TestsNeverSkipped(t *testing.T) {
 }
 
 func TestShouldSkipGate_FailedGateNotSkipped(t *testing.T) {
-	prior := []colony.GateResultEntry{
-		{Name: "spawn_gate", Passed: false, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	prior := []GateCheckResult{
+		{Name: "spawn_gate", Status: "failed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 	}
 	result := shouldSkipGate(prior, "spawn_gate")
 	if result {
@@ -777,8 +777,16 @@ func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
 
 	var buf bytes.Buffer
-	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate"})
+		rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate", "--phase", "1"})
 	stdout = &buf
+
+		// Write per-phase gate results file
+		phaseResults := []GateCheckResult{
+			{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		}
+		phaseData, _ := json.Marshal(phaseResults)
+		os.WriteFile(filepath.Join(dir, "gate-results-1.json"), phaseData, 0644)
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -858,11 +866,11 @@ func TestGateRecoveryTemplateCmd_UnknownGate(t *testing.T) {
 // re-checked, and tests_pass is never skipped regardless of prior results.
 func TestIncrementalGateChecking_SkipsPriorPassed(t *testing.T) {
 	ts := time.Now().UTC().Format(time.RFC3339)
-	prior := []colony.GateResultEntry{
-		{Name: "spawn_gate", Passed: true, Timestamp: ts},
-		{Name: "state_gate", Passed: true, Timestamp: ts},
-		{Name: "build_gate", Passed: false, Timestamp: ts},
-		{Name: "tests_pass", Passed: true, Timestamp: ts},
+	prior := []GateCheckResult{
+		{Name: "spawn_gate", Status: "passed", Timestamp: ts},
+		{Name: "state_gate", Status: "passed", Timestamp: ts},
+		{Name: "build_gate", Status: "failed", Timestamp: ts},
+		{Name: "tests_pass", Status: "passed", Timestamp: ts},
 	}
 
 	// Passed non-test gates should be skipped

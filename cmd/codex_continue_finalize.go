@@ -162,7 +162,15 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	priorGateResults := gateResultsRead()
+	priorGateResults, _ := gateResultsReadPhase(phase.ID)
+	if priorGateResults == nil {
+		priorGateResults = []GateCheckResult{}
+	}
+	// Per SAFE-03, SAFE-04: trace continue provenance against stored manifest data.
+	// Rejects claims that reference missing or stale worker results.
+	if err := traceContinueProvenance(manifest.Data.Dispatches); err != nil {
+		return nil, state, phase, nil, nil, false, err
+	}
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
@@ -185,6 +193,24 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		})
 	}
 	_ = gateResultsWrite(gateResultEntries)
+
+	// Per-phase gate results persistence (D-14)
+	var phaseGateResults []GateCheckResult
+	for _, c := range gates.Checks {
+		status := "passed"
+		if !c.Passed {
+			status = "failed"
+		}
+		phaseGateResults = append(phaseGateResults, GateCheckResult{
+			Name:            c.Name,
+			Status:          status,
+			Detail:          c.Detail,
+			FixHint:         c.FixHint,
+			RecoveryOptions: c.RecoveryOptions,
+			Timestamp:       now.Format(time.RFC3339),
+		})
+	}
+	_ = gateResultsWritePhase(phase.ID, phaseGateResults)
 
 	if err := writeCodexContinueWorkerOutcomeReports(root, phase, workerFlow, now); err != nil {
 		return nil, state, phase, nil, nil, false, err

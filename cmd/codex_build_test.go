@@ -474,6 +474,7 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesCreated = []string{"wrapper-evidence.txt"}
+			worker.FilesModified = []string{"cmd/main.go"}
 			worker.TestsWritten = []string{"wrapper-evidence.txt"}
 		}
 		dispatchResults = append(dispatchResults, worker)

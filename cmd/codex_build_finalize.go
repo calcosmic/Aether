@@ -186,6 +186,11 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	// Per SAFE-01, SAFE-02: validate build provenance before proceeding.
+	// Rejects phantom builds where no worker produced successful results with file modifications.
+	if err := validateBuildProvenance(completion.workerResults()); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	startedAt := parseManifestGeneratedAt(*manifest)
 	completedAt := time.Now().UTC()
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))

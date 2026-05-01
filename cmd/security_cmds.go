@@ -374,14 +374,87 @@ var signatureMatchCmd = &cobra.Command{
 	},
 }
 
+// --- privacy-scan ---
+
+// PrivacyScanResult reports what was found during a privacy scan.
+type PrivacyScanResult struct {
+	Blocked  bool     `json:"blocked"`
+	Clean    string   `json:"clean,omitempty"`
+	Findings []string `json:"findings,omitempty"`
+}
+
+// secretPatterns defines compiled regex patterns that trigger a block when matched.
+// These are compiled once at package init for performance.
+var secretPatterns = []struct {
+	name    string
+	pattern *regexp.Regexp
+}{
+	{"api_key", regexp.MustCompile(`(?i)sk-[a-zA-Z0-9]{20,}`)},
+	{"api_key_prefix", regexp.MustCompile(`(?i)key-[a-zA-Z0-9]{10,}`)},
+	{"token_prefix", regexp.MustCompile(`(?i)token-[a-zA-Z0-9]{10,}`)},
+	{"bearer_token", regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9\-._~+/]+=*`)},
+	{"private_key_rsa", regexp.MustCompile(`-----BEGIN\s+RSA\s+PRIVATE\s+KEY-----`)},
+	{"private_key_ec", regexp.MustCompile(`-----BEGIN\s+EC\s+PRIVATE\s+KEY-----`)},
+	{"private_key_openssh", regexp.MustCompile(`-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----`)},
+	{"private_key_generic", regexp.MustCompile(`-----BEGIN\s+PRIVATE\s+KEY-----`)},
+	{"password_assignment", regexp.MustCompile(`(?i)(?:password|passwd)\s*=\s*['"][^'"]{8,}['"]`)},
+	{"env_file_reference", regexp.MustCompile(`(?i)(?:^|\n|\s)(?:\.env(?:\.local|\.production|\.staging|\.development)?|credentials\.json)(?:\s|\n|$)`)},
+}
+
+// homePathPattern matches absolute paths starting with /Users/, /home/, or ~
+// followed by a username and optional subpath.
+var homePathPattern = regexp.MustCompile(`(?:/Users/[^/\s"']+|/home/[^/\s"']+|~[^/\s"']*)[/[^\s"']]*`)
+
+// privacyScan scans content for secrets and home directory paths.
+// Secrets trigger a block (write rejected, finding logged).
+// Home paths are redacted (write proceeds with paths removed).
+// Returns the scan result with blocked status, cleaned content, and findings.
+func privacyScan(content string) PrivacyScanResult {
+	// Check secrets first (block if found, per D-10)
+	var findings []string
+	for _, sp := range secretPatterns {
+		if sp.pattern.MatchString(content) {
+			findings = append(findings, fmt.Sprintf("secret pattern matched: %s", sp.name))
+		}
+	}
+	if len(findings) > 0 {
+		return PrivacyScanResult{
+			Blocked:  true,
+			Findings: findings,
+		}
+	}
+
+	// Redact home directory paths (proceed with clean content, per D-09)
+	clean := homePathPattern.ReplaceAllString(content, "[REDACTED_PATH]")
+	return PrivacyScanResult{
+		Blocked: false,
+		Clean:   clean,
+	}
+}
+
+var privacyScanCmd = &cobra.Command{
+	Use:   "privacy-scan",
+	Short: "Scan content for secrets and private paths",
+	Long:  `Scans input content for API keys, private keys, passwords, bearer tokens, and home directory paths. Secrets cause a block; paths are redacted.`,
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		content := mustGetString(cmd, "content")
+		result := privacyScan(content)
+		outputOK(result)
+		return nil
+	},
+}
+
 func init() {
 	checkAntipatternCmd.Flags().String("file", "", "File path to scan (required)")
 	signatureScanCmd.Flags().String("file", "", "Target file to scan (required)")
 	signatureScanCmd.Flags().String("name", "", "Signature name to search for (required)")
 	signatureMatchCmd.Flags().String("file", "", "Target file to scan (required)")
 	signatureMatchCmd.Flags().String("pattern", "", "Regex pattern to match (required)")
+	privacyScanCmd.Flags().String("content", "", "Content to scan (required)")
 
 	rootCmd.AddCommand(checkAntipatternCmd)
 	rootCmd.AddCommand(signatureScanCmd)
 	rootCmd.AddCommand(signatureMatchCmd)
+	rootCmd.AddCommand(privacyScanCmd)
 }
