@@ -2615,6 +2615,10 @@ func seedContinueBuildPacket(t *testing.T, dataDir string, phase int, phaseName,
 		if normalizedDispatches[i].Status == "" || normalizedDispatches[i].Status == "spawned" {
 			normalizedDispatches[i].Status = "completed"
 		}
+		// Completed dispatches must have Outputs for continue provenance validation (SAFE-03/04).
+		if normalizedDispatches[i].Status == "completed" && len(normalizedDispatches[i].Outputs) == 0 {
+			normalizedDispatches[i].Outputs = []string{"build/output.go"}
+		}
 	}
 
 	briefs := make([]string, 0, len(normalizedDispatches))
