@@ -5708,3 +5708,133 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		t.Fatal("expected true when ReconcileTaskIDs match but order differs")
 	}
 }
+
+
+func setupContinueStateWithDepth(t *testing.T, phaseName string, depth string) (string, string, string, string) {
+	t.Helper()
+	root, dataDir, goal, taskID := setupIntermediateContinueState(t, phaseName)
+	// Update the colony state to set VerificationDepth.
+	statePath := filepath.Join(dataDir, "COLONY_STATE.json")
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("failed to read colony state: %v", err)
+	}
+	var state colony.ColonyState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("failed to unmarshal colony state: %v", err)
+	}
+	state.VerificationDepth = depth
+	updated, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal colony state: %v", err)
+	}
+	if err := os.WriteFile(statePath, updated, 0644); err != nil {
+		t.Fatalf("failed to write colony state: %v", err)
+	}
+	return root, dataDir, goal, taskID
+}
+
+func TestContinuePlanOnlyHonorsStoredHeavyDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, _ := setupContinueStateWithDepth(t, "Feature work", "heavy")
+
+	result, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{
+		SkipWatchers:        true,
+		VerificationTimeout: 15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	plan := result["continue_manifest"].(codexContinuePlanManifest)
+	if plan.ReviewDepth != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("review_depth = %q, want %q", plan.ReviewDepth, colony.VerificationDepthHeavy)
+	}
+}
+
+func TestContinuePlanOnlyFlagOverridesStoredDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, _ := setupContinueStateWithDepth(t, "Feature work", "heavy")
+
+	result, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{
+		VerificationDepth:   "light",
+		SkipWatchers:        true,
+		VerificationTimeout: 15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	plan := result["continue_manifest"].(codexContinuePlanManifest)
+	if plan.ReviewDepth != string(colony.VerificationDepthLight) {
+		t.Fatalf("review_depth = %q, want %q (CLI flag should override stored depth)", plan.ReviewDepth, colony.VerificationDepthLight)
+	}
+}
+
+func TestContinuePlanOnlyBooleanFlagOverridesStoredDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, _ := setupContinueStateWithDepth(t, "Feature work", "light")
+
+	result, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{
+		LightFlag:           true,
+		SkipWatchers:        true,
+		VerificationTimeout: 15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	plan := result["continue_manifest"].(codexContinuePlanManifest)
+	if plan.ReviewDepth != string(colony.VerificationDepthLight) {
+		t.Fatalf("review_depth = %q, want %q", plan.ReviewDepth, colony.VerificationDepthLight)
+	}
+}
+
+func TestContinueOptionsToJSONIncludesVerificationDepth(t *testing.T) {
+	opts := codexContinueOptions{
+		VerificationDepth:   "heavy",
+		WorkerTimeout:       10 * time.Minute,
+		VerificationTimeout: 15 * time.Minute,
+	}
+	json := continueOptionsToJSON(opts)
+	if json.VerificationDepth != "heavy" {
+		t.Fatalf("VerificationDepth = %q, want heavy", json.VerificationDepth)
+	}
+
+	// Empty string should also be preserved.
+	optsEmpty := codexContinueOptions{
+		WorkerTimeout:       10 * time.Minute,
+		VerificationTimeout: 15 * time.Minute,
+	}
+	jsonEmpty := continueOptionsToJSON(optsEmpty)
+	if jsonEmpty.VerificationDepth != "" {
+		t.Fatalf("VerificationDepth = %q, want empty string", jsonEmpty.VerificationDepth)
+	}
+}
+
+func TestContinueOptionsMatchCurrentDetectsDepthChange(t *testing.T) {
+	current := codexContinueOptions{
+		VerificationDepth:   "heavy",
+		WorkerTimeout:       10 * time.Minute,
+		VerificationTimeout: 15 * time.Minute,
+	}
+	last := continueOptionsToJSON(current)
+
+	// Same depth -> true.
+	if !continueOptionsMatchCurrent(current, last) {
+		t.Fatal("expected true when VerificationDepth matches")
+	}
+
+	// Different depth -> false.
+	other := codexContinueOptions{
+		VerificationDepth:   "light",
+		WorkerTimeout:       10 * time.Minute,
+		VerificationTimeout: 15 * time.Minute,
+	}
+	if continueOptionsMatchCurrent(other, last) {
+		t.Fatal("expected false when VerificationDepth differs")
+	}
+}

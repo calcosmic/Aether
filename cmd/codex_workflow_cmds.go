@@ -171,6 +171,7 @@ var continueCmd = &cobra.Command{
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
+		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
@@ -179,6 +180,7 @@ var continueCmd = &cobra.Command{
 				LightFlag:           lightFlag,
 				HeavyFlag:           heavyFlag,
 				SkipWatchers:        skipWatchers,
+			VerificationDepth:   verificationDepth,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -195,6 +197,7 @@ var continueCmd = &cobra.Command{
 			LightFlag:           lightFlag,
 			HeavyFlag:           heavyFlag,
 			SkipWatchers:        skipWatchers,
+			VerificationDepth:   verificationDepth,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)

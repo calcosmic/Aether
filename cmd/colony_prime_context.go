@@ -400,7 +400,8 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	// Review depth section (D-13, D-14)
 	if state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
 		reviewPhase := state.Plan.Phases[state.CurrentPhase-1]
-		reviewDepth := resolveVerificationDepth(reviewPhase, len(state.Plan.Phases), false, false, "")
+		storedDepthStr := strings.TrimSpace(state.VerificationDepth)
+		reviewDepth := resolveVerificationDepth(reviewPhase, len(state.Plan.Phases), false, false, storedDepthStr)
 		var depthText string
 		switch reviewDepth {
 		case colony.VerificationDepthLight:
