@@ -1,42 +1,42 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.12
-milestone_name: Safe Colony
-status: milestone_complete
-stopped_at: Phase 86 context gathered
-last_updated: "2026-05-01T12:41:37.792Z"
-last_activity: 2026-05-01 -- Phase --phase execution started
+milestone: v1.13
+milestone_name: Recovery Hardening & Hive Learning
+status: defining_requirements
+stopped_at:
+last_updated: "2026-05-01T14:00:00.000Z"
+last_activity: 2026-05-01 -- Milestone v1.13 started
 progress:
-  total_phases: 7
-  completed_phases: 6
-  total_plans: 15
-  completed_plans: 9
-  percent: 86
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-30)
+See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase --phase — 86
+**Current focus:** Defining requirements for v1.13
 
 ## Current Position
 
-Phase: 87
-Plan: Not started
-Status: Milestone complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
 Last activity: 2026-05-01
 
-Progress: [##        ] 14% (1/7 phases complete in this milestone)
+Progress: [          ] 0% (0/0 phases complete in this milestone)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 13 (v1.12)
+- Total plans completed: 0 (v1.13)
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -74,8 +74,6 @@ Items acknowledged and carried forward from previous milestones:
 
 ## Session Continuity
 
-Last session: --stopped-at
-Stopped at: Phase 86 context gathered
-Resume file: --resume-file
-
-**Planned Phase:** 86 (depth-selection-ui-and-persistence) — 3 plans — 2026-05-01T12:33:18.382Z
+Last session: milestone start
+Stopped at: Requirements definition
+Resume file: —

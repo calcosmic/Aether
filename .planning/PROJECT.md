@@ -34,8 +34,8 @@ That means:
 
 ## Current State
 
-- Go runtime is healthy, v1.0.24 shipped
-- Milestone v1.11 Aether Unification complete (shipped 2026-04-30)
+- Go runtime is healthy, v1.0.26 shipped
+- Milestone v1.12 Safe Colony complete (shipped 2026-05-01)
 - 2900+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
 - Colony recovery system: `aether recover` + `--apply` for stuck-state rescue
@@ -91,7 +91,8 @@ That means:
 - [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
 - [x] v1.10 Colony Polish -- Phases 57-69 (shipped 2026-04-28)
 - [x] v1.11 Aether Unification -- Phases 70-79 (shipped 2026-04-30)
-- [ ] v1.12 Safe Colony -- Phases 80+
+- [x] v1.12 Safe Colony -- Phases 80-87 (shipped 2026-05-01)
+- [ ] v1.13 Recovery Hardening & Hive Learning -- Phases 88+
 
 ## Requirements
 
@@ -120,10 +121,21 @@ That means:
 - Independent planning depth and verification depth controls -- v1.12 (Phase 83 & 84)
 - Smart depth defaults based on phase position and code change risk -- v1.12 (Phase 83 & 84)
 - User depth override UI at plan start with persistence -- v1.12 (Phase 86)
+- Loop safety (watcher auto-skip, recovery redirect, circuit breaker, cycle detection, lifecycle exclusion, telemetry) -- v1.12
 
 ### Active
 
-- Full loop audit across all Aether commands (continue, build, plan, seal, etc.) -- v1.12
+- Build-complete rejects failed/zero-modification builds (AAC-001) -- v1.13
+- Continue gates reject phantom build claims via provenance validation (AAC-002) -- v1.13
+- Iterative Oracle loop with user-settable confidence target (AAC-003) -- v1.13
+- Init synthesizes approval-ready launch brief from codebase scouting (AAC-004) -- v1.13
+- Restore v5.4 full-context path for worker prompts (AAC-005) -- v1.13
+- Recoverable gate failure banners with /ant-unblock path (AAC-006–011) -- v1.13
+- OpenCode agent name field fix and LLM/callback URL separation (AAC-012–013) -- v1.13
+- Worker heartbeats, process groups, PID tracking, stale cleanup (AAC-014–017) -- v1.13
+- Full system hardening and E2E flow validation (AAC-018) -- v1.13
+- Hermes-inspired Aether-native hive learning layer (AAC-019–031) -- v1.13
+- Loop safety inheritance for all new gate/recovery flows (REC-LOOP-01) -- v1.13
 
 ### Out of Scope
 
@@ -163,7 +175,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Execute v1.11 with `/gsd-discuss-phase 70`.
+Execute v1.13 with `/gsd-discuss-phase 88`.
 
 ## Evolution
 
@@ -205,3 +217,19 @@ This document evolves at phase transitions and milestone boundaries.
 - User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
 
 *Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*
+
+## Current Milestone: v1.13 Recovery Hardening & Hive Learning
+
+**Goal:** Make Aether's build/continue gates bulletproof (no phantom advancement), add confidence-targeted planning with approval flows, build a repo-scoped hive learning system that turns verified colony work into reusable procedural memory, and ensure all new recovery flows inherit v1.12 loop safety.
+
+**Target features:**
+- Recovery hardening — build-complete rejects failed/empty builds, continue validates provenance, Oracle loop with confidence targets, init synthesizes approval-ready briefs, full-context path restoration
+- Gate recovery — recoverable banners, smart gate retry, `/ant-unblock` command, Fixer caste (27th), gate status in `/ant-status`
+- Platform fixes — OpenCode agent name field, LLM/callback URL separation
+- Worker lifecycle — heartbeats, process groups, PID tracking, stale worker cleanup
+- Hive learning — colony memory store, SQLite with FTS recall, pheromone skills, Keeper curator, learning triggers with evidence rules, prompt injection, repo isolation, privacy gate, auto-created skills from verified difficult tasks
+- Loop safety — all new gate/recovery flows inherit v1.12 circuit breaker, cycle detection, and telemetry (REC-LOOP-01)
+
+**Source:** PRD `aether_ant_colony_recovery_hardening_hive_learning_final_prd.docx` (31 work packages: AAC-001 through AAC-031)
+
+*Last updated: 2026-05-01 — v1.13 milestone started*
