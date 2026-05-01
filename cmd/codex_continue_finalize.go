@@ -163,6 +163,11 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults := gateResultsRead()
+	// Per SAFE-03, SAFE-04: trace continue provenance against stored manifest data.
+	// Rejects claims that reference missing or stale worker results.
+	if err := traceContinueProvenance(manifest.Data.Dispatches); err != nil {
+		return nil, state, phase, nil, nil, false, err
+	}
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
