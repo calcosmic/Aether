@@ -553,3 +553,175 @@ func TestContinueGates_ResultsPreservedOnFailure(t *testing.T) {
 		t.Errorf("gate results should be preserved on failure, got %d entries", len(verifyState.GateResults))
 	}
 }
+
+// --- Task 2 Tests: Structured gate failures and circuit breaker wiring ---
+
+// TestRunCodexContinueGates_FailedGateHasFixHint verifies that a failing
+// manifest_present gate includes a FixHint.
+func TestRunCodexContinueGates_FailedGateHasFixHint(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	goal := "test fix hint"
+	stateData, _ := json.Marshal(colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateBUILT,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Test", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	phase := colony.Phase{ID: 5, Name: "Test", Status: colony.PhaseInProgress}
+	manifest := codexContinueManifest{Present: false}
+	verification := codexContinueVerificationReport{ChecksPassed: true, Passed: true}
+	assessment := codexContinueAssessment{PositiveEvidence: true, Passed: true}
+
+	report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), nil)
+
+	for _, c := range report.Checks {
+		if c.Name == "manifest_present" && !c.Passed {
+			if c.FixHint == "" {
+				t.Error("manifest_present failure should have a FixHint")
+			}
+			return
+		}
+	}
+	t.Error("manifest_present gate should have failed when manifest is missing")
+}
+
+// TestRunCodexContinueGates_FailedGateHasRecoveryOptions verifies that a failing
+// verification gate includes RecoveryOptions.
+func TestRunCodexContinueGates_FailedGateHasRecoveryOptions(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	goal := "test recovery options"
+	stateData, _ := json.Marshal(colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateBUILT,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Test", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	phase := colony.Phase{ID: 5, Name: "Test", Status: colony.PhaseInProgress}
+	manifest := codexContinueManifest{Present: true}
+	verification := codexContinueVerificationReport{ChecksPassed: false, Passed: false, BlockingIssues: []string{"test failed"}}
+	assessment := codexContinueAssessment{PositiveEvidence: true, Passed: true}
+
+	report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), nil)
+
+	for _, c := range report.Checks {
+		if c.Name == "verification_steps_passed" && !c.Passed {
+			if len(c.RecoveryOptions) == 0 {
+				t.Error("verification_steps_passed failure should have RecoveryOptions")
+			}
+			return
+		}
+	}
+	t.Error("verification_steps_passed gate should have failed when verification fails")
+}
+
+// TestRunCodexContinueGates_FlagsGateAlwaysRuns verifies flags gate runs
+// even when prior results show it passed.
+func TestRunCodexContinueGates_FlagsGateAlwaysRuns(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	goal := "test flags always run"
+	stateData, _ := json.Marshal(colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateBUILT,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Test", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	prior := []GateCheckResult{
+		{Name: "no_critical_flags", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	phase := colony.Phase{ID: 5, Name: "Test", Status: colony.PhaseInProgress}
+	manifest := codexContinueManifest{Present: true}
+	verification := codexContinueVerificationReport{ChecksPassed: true, Passed: true}
+	assessment := codexContinueAssessment{PositiveEvidence: true, Passed: true}
+
+	report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), prior)
+
+	for _, c := range report.Checks {
+		if c.Name == "no_critical_flags" {
+			if c.Detail == "skipped: previously passed" {
+				t.Error("no_critical_flags should always run, not be skipped")
+			}
+			return
+		}
+	}
+	t.Error("no_critical_flags check should be present in gate report")
+}
+
+// TestRunCodexContinueGates_SkipsPreviouslyPassed verifies manifest_present
+// gate is skipped when prior phase results show status "passed".
+func TestRunCodexContinueGates_SkipsPreviouslyPassed(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	goal := "test skip passed"
+	stateData, _ := json.Marshal(colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateBUILT,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Test", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	prior := []GateCheckResult{
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	phase := colony.Phase{ID: 5, Name: "Test", Status: colony.PhaseInProgress}
+	manifest := codexContinueManifest{Present: true}
+	verification := codexContinueVerificationReport{ChecksPassed: true, Passed: true}
+	assessment := codexContinueAssessment{PositiveEvidence: true, Passed: true}
+
+	report := runCodexContinueGates(phase, manifest, verification, assessment, time.Now(), prior)
+
+	for _, c := range report.Checks {
+		if c.Name == "manifest_present" {
+			if !c.Passed || c.Detail != "skipped: previously passed" {
+				t.Errorf("manifest_present should be skipped, got Passed=%v Detail=%q", c.Passed, c.Detail)
+			}
+			return
+		}
+	}
+	t.Error("manifest_present should be in gate report")
+}
