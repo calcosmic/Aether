@@ -12,6 +12,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/spf13/cobra"
 )
 
@@ -242,6 +243,89 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		runStatus = "blocked"
 		return result, blockedState, phase, nil, nil, false, nil
 	}
+
+	// --- Learning capture (D-01, D-02, D-03, D-04) ---
+	// Learning fires only after gates pass AND review passes AND provenance valid AND all workers succeeded.
+	// This is the ONLY path that produces durable learning (D-03).
+	captureLearning := func() {
+		// Check if all workers succeeded (D-02)
+		allWorkersSucceeded := true
+		for _, step := range workerFlow {
+			if step.Status != "completed" {
+				allWorkersSucceeded = false
+				break
+			}
+		}
+
+		// Check if learning is enabled (D-16) -- config + flag
+		learningEnabled := true // default enabled; flag check added in Plan 04
+
+		if !learn.IsLearningEligible(allWorkersSucceeded, true, gates.Passed, learningEnabled) {
+			return // Not eligible -- no durable learning
+		}
+
+		// Collect evidence (D-09, LRN-02)
+		workerResults := make([]learn.WorkerResult, 0, len(workerFlow))
+		for _, step := range workerFlow {
+			workerResults = append(workerResults, learn.WorkerResult{
+				Name:         step.Name,
+				Caste:        step.Caste,
+				Status:       step.Status,
+				FilesTouched: nil, // codexContinueWorkerFlowStep has no FilesModified field
+			})
+		}
+
+		gatesPassed := 0
+		for _, c := range gates.Checks {
+			if c.Passed {
+				gatesPassed++
+			}
+		}
+
+		runID := ""
+		if runHandle != nil {
+			runID = runHandle.Run.ID
+		}
+		if runID == "" {
+			runID = fmt.Sprintf("run_%d_%s", phase.ID, now.Format("20060102_150405"))
+		}
+
+		evidence := learn.CollectEvidence(
+			runID, phase.ID, workerResults,
+			learn.GateResult{Passed: gatesPassed, Total: len(gates.Checks)},
+			"repo-local",
+		)
+
+		// Build learning content from phase summary
+		content := fmt.Sprintf("Phase %d completed successfully: %s", phase.ID, phase.Name)
+
+		// Run privacy scan + classify (D-10, D-11, PRIV-03)
+		scanResult := privacyScan(content)
+		classification := learn.ClassifyEntry(content, learn.PrivacyScanResult{
+			Blocked:  scanResult.Blocked,
+			Clean:    scanResult.Clean,
+			Findings: scanResult.Findings,
+		})
+
+		if classification == learn.ClassBlocked {
+			return // Blocked content never stored
+		}
+
+		// Store via ColonyStore (D-06: .aether/data/learn/)
+		learnStore := learn.NewColonyStore(store)
+		entry := learn.Entry{
+			Content:        scanResult.Clean, // use cleaned content
+			Evidence:       evidence,
+			Classification: classification,
+			Phase:          phase.ID,
+			Confidence:     evidence.Confidence,
+		}
+		if err := learnStore.Add(entry); err != nil {
+			// Non-blocking: learning failure must not prevent phase advancement
+			fmt.Fprintf(os.Stderr, "warning: failed to capture learning: %v\n", err)
+		}
+	}
+	captureLearning()
 
 	result, updated, nextPhase, housekeeping, final, err := advanceExternalContinue(root, state, phase, manifest, verification, assessment, gates, review, reviewReportRel, watcherFlow, workerFlow, now, verificationReportRel, gateReportRel)
 	if err != nil {
