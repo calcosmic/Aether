@@ -188,6 +188,7 @@
 - [ ] **Phase 84: Verification Depth Extension** - Extend verification depth from 2 levels (light/heavy) to 3 levels (light/standard/heavy)
 - [ ] **Phase 85: Smart Depth Defaults** - Auto-select planning and verification depth from phase position and code change risk
 - [ ] **Phase 86: Depth Selection UI and Persistence** - Present smart defaults to user at plan time and persist depths in the build packet
+- [ ] **Phase 87: Fix Continue Depth Persistence** - Close DEPTH-05 gap: continue reads persisted verification depth and honors --verification-depth flag
 
 ## Phase Details
 
@@ -294,10 +295,20 @@ Plans:
 - [x] 86-02-PLAN.md -- Build manifest ReviewDepth persistence and build stage marker depth display (DEPTH-04, DEPTH-05)
 - [x] 86-03-PLAN.md -- Gap closure: add missing depth keys to fresh plan generation result map (DEPTH-04)
 
+### Phase 87: Fix Continue Depth Persistence (Gap Closure)
+**Goal**: Continue command reads persisted verification depth from ColonyState and honors --verification-depth flag, closing DEPTH-05 gap
+**Depends on**: Phase 86 (depth persistence infrastructure exists but is incomplete in continue)
+**Requirements**: DEPTH-05
+**Gap Closure**: Closes DEPTH-05 unsatisfied requirement and plan->continue flow gap from v1.12 audit
+**Success Criteria** (what must be TRUE):
+  1. When `/ant-continue` runs, it reads `state.VerificationDepth` (persisted by plan) and passes it to `resolveVerificationDepth`
+  2. When user sets `--verification-depth heavy` at plan time, continue dispatches the same heavy review workers (not smart default)
+  3. The `--verification-depth` flag on the continue command is either wired (read in RunE) or removed if superseded by state persistence
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
+Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86 -> 87
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -318,3 +329,4 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
 | 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete    | 2026-05-01 |
+| 87. Fix Continue Depth Persistence | v1.12 | 0/0 | In Progress | |
