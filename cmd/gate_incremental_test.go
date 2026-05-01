@@ -4,12 +4,182 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
+
+// --- Gate Struct Extension Tests (Phase 88, Plan 02, Task 1) ---
+
+// TestGateCheckStruct_HasFixHintAndRecoveryOptions verifies gateCheck with
+// FixHint and RecoveryOptions serializes correctly.
+func TestGateCheckStruct_HasFixHintAndRecoveryOptions(t *testing.T) {
+	check := gateCheck{
+		Name:            "tests_pass",
+		Passed:          false,
+		Detail:          "2 tests failed",
+		FixHint:         "check tests",
+		RecoveryOptions: []string{"/ant-continue", "/ant-unblock"},
+	}
+	data, err := json.Marshal(check)
+	if err != nil {
+		t.Fatalf("marshal gateCheck: %v", err)
+	}
+	s := string(data)
+	if !strings.Contains(s, `"fix_hint":"check tests"`) {
+		t.Errorf("JSON should contain fix_hint, got: %s", s)
+	}
+	if !strings.Contains(s, `"recovery_options":["/ant-continue","/ant-unblock"]`) {
+		t.Errorf("JSON should contain recovery_options, got: %s", s)
+	}
+}
+
+// TestShouldSkipGate_AlwaysRunGates verifies "flags" gate returns false even when previously passed.
+func TestShouldSkipGate_AlwaysRunGates(t *testing.T) {
+	prior := []GateCheckResult{
+		{Name: "flags", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if shouldSkipGate(prior, "flags") {
+		t.Error("flags gate should never be skipped even when previously passed")
+	}
+}
+
+// TestShouldSkipGate_AlwaysRunWatcherVeto verifies "watcher_veto" gate returns false even when previously passed.
+func TestShouldSkipGate_AlwaysRunWatcherVeto(t *testing.T) {
+	prior := []GateCheckResult{
+		{Name: "watcher_veto", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if shouldSkipGate(prior, "watcher_veto") {
+		t.Error("watcher_veto gate should never be skipped even when previously passed")
+	}
+}
+
+// TestShouldSkipGate_SkipsPreviouslyPassed verifies "manifest_present" gate is skipped when prior result has status "passed".
+func TestShouldSkipGate_SkipsPreviouslyPassed(t *testing.T) {
+	prior := []GateCheckResult{
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if !shouldSkipGate(prior, "manifest_present") {
+		t.Error("manifest_present should be skipped when prior result has status passed")
+	}
+}
+
+// TestShouldSkipGate_SkipsPreviouslySkipped verifies "implementation_evidence" gate is skipped when prior result has status "skipped".
+func TestShouldSkipGate_SkipsPreviouslySkipped(t *testing.T) {
+	prior := []GateCheckResult{
+		{Name: "implementation_evidence", Status: "skipped", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if !shouldSkipGate(prior, "implementation_evidence") {
+		t.Error("implementation_evidence should be skipped when prior result has status skipped")
+	}
+}
+
+// TestGateResultsPhasePersistence verifies write/read roundtrip for per-phase gate results.
+func TestGateResultsPhasePersistence(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	entries := []GateCheckResult{
+		{Name: "tests_pass", Status: "failed", Detail: "2 tests failed", FixHint: "fix tests", Timestamp: "2026-05-01T00:00:00Z", RetryCount: 1},
+		{Name: "flags", Status: "passed", Timestamp: "2026-05-01T00:00:00Z"},
+	}
+	if err := gateResultsWritePhase(88, entries); err != nil {
+		t.Fatalf("gateResultsWritePhase: %v", err)
+	}
+
+	readBack, err := gateResultsReadPhase(88)
+	if err != nil {
+		t.Fatalf("gateResultsReadPhase: %v", err)
+	}
+	if len(readBack) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(readBack))
+	}
+	if readBack[0].Name != "tests_pass" || readBack[0].Status != "failed" {
+		t.Errorf("first entry mismatch: %+v", readBack[0])
+	}
+	if readBack[0].FixHint != "fix tests" {
+		t.Errorf("expected FixHint 'fix tests', got %q", readBack[0].FixHint)
+	}
+	if readBack[1].Name != "flags" || readBack[1].Status != "passed" {
+		t.Errorf("second entry mismatch: %+v", readBack[1])
+	}
+}
+
+// TestGateResultsPhasePersistence_EmptyPhase verifies reading nonexistent phase file returns error.
+func TestGateResultsPhasePersistence_EmptyPhase(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	_, err = gateResultsReadPhase(99)
+	if err == nil {
+		t.Error("expected error reading nonexistent phase file, got nil")
+	}
+}
+
+// TestCircuitBreaker_GateRetryTracking verifies RecordFailure with gate retry key format.
+func TestCircuitBreaker_GateRetryTracking(t *testing.T) {
+	cb := NewCircuitBreaker(3)
+	key := gateRetryKey(88, "tests_pass")
+	for i := 0; i < 3; i++ {
+		cb.RecordFailure(key)
+	}
+	if cb.Allow(key) {
+		t.Error("circuit breaker should be tripped after 3 failures")
+	}
+}
+
+// TestCircuitBreaker_GateRetryReset verifies RecordSuccess resets gate retry count.
+func TestCircuitBreaker_GateRetryReset(t *testing.T) {
+	cb := NewCircuitBreaker(3)
+	key := gateRetryKey(88, "tests_pass")
+	cb.RecordFailure(key)
+	cb.RecordFailure(key)
+	cb.RecordSuccess(key)
+	if !cb.Allow(key) {
+		t.Error("circuit breaker should allow after success reset")
+	}
+}
+
+// TestGateCheckResult_StructSerialization verifies GateCheckResult serializes correctly.
+func TestGateCheckResult_StructSerialization(t *testing.T) {
+	result := GateCheckResult{
+		Name:            "tests_pass",
+		Status:          "failed",
+		Detail:          "2 tests failed",
+		FixHint:         "check tests",
+		RecoveryOptions: []string{"/ant-continue", "/ant-unblock"},
+		Timestamp:       "2026-05-01T00:00:00Z",
+		RetryCount:      2,
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal GateCheckResult: %v", err)
+	}
+	s := string(data)
+	if !strings.Contains(s, `"status":"failed"`) {
+		t.Errorf("JSON should contain status, got: %s", s)
+	}
+	if !strings.Contains(s, `"fix_hint":"check tests"`) {
+		t.Errorf("JSON should contain fix_hint, got: %s", s)
+	}
+	if !strings.Contains(s, `"recovery_options":["/ant-continue","/ant-unblock"]`) {
+		t.Errorf("JSON should contain recovery_options, got: %s", s)
+	}
+	if !strings.Contains(s, `"retry_count":2`) {
+		t.Errorf("JSON should contain retry_count, got: %s", s)
+	}
+}
 
 // --- Gate Incremental Skip Tests (Phase 59, Plan 01, Task 2) ---
 
