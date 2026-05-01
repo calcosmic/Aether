@@ -1034,8 +1034,10 @@ func TestResolveVerificationDepthSmart_InvalidValue(t *testing.T) {
 }
 
 func TestDepthKeysPresentInFreshPlanResultMap(t *testing.T) {
-	// This test verifies the fix for the verification gap where the fresh
-	// plan generation result map was missing four depth-related keys.
+	// Structural regression guard: verifies depth keys appear in all three
+	// result-map paths. This intentionally scans source text because it is
+	// checking that a prior regression (missing keys) does not recur. If a
+	// refactor moves keys into a shared helper, update the expected count.
 	source, err := os.ReadFile("codex_plan.go")
 	if err != nil {
 		t.Fatal(err)
