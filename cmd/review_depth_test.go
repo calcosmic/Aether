@@ -703,7 +703,7 @@ func TestPhaseRiskLevel_Medium(t *testing.T) {
 	}{
 		{"core runtime in name", colony.Phase{Name: "Core runtime refactor"}},
 		{"state machine in name", colony.Phase{Name: "State machine transition fix"}},
-		{"dispatch in description", colony.Phase{Description: "Update dispatch logic"}},
+		{"dispatch in name", colony.Phase{Name: "Update dispatch logic"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -734,7 +734,9 @@ func TestPhaseRiskLevel_Low(t *testing.T) {
 	}
 }
 
-func TestPhaseRiskLevel_TaskGoalsAnalyzed(t *testing.T) {
+func TestPhaseRiskLevel_TaskGoalsNotAnalyzed(t *testing.T) {
+	// phaseRiskLevel only checks the phase name, not task goals or descriptions,
+	// to avoid false positives from common words like "session", "token", "password".
 	phase := colony.Phase{
 		Name: "Feature work",
 		Tasks: []colony.Task{{
@@ -742,8 +744,8 @@ func TestPhaseRiskLevel_TaskGoalsAnalyzed(t *testing.T) {
 		}},
 	}
 	got := phaseRiskLevel(phase)
-	if got != "high" {
-		t.Errorf("task goal with 'password' should be high risk, got %q", got)
+	if got != "low" {
+		t.Errorf("task goal with 'password' should not affect risk (name-only matching), got %q", got)
 	}
 }
 
@@ -877,17 +879,16 @@ func TestResolveVerificationDepth_SmartDefaultFallback(t *testing.T) {
 }
 
 func TestResolveVerificationDepth_SmartDefaultRisksOverride(t *testing.T) {
-	// Phase with security keyword in description should trigger heavy even
-	// without explicit flags, because resolveSmartVerificationDepth checks
-	// phase text (description + task goals) via phaseRiskLevel.
+	// Phase with security keyword in NAME triggers heavy via smart default.
+	// Description-only keywords do NOT trigger heavy (name-only matching to avoid false positives).
 	phase := colony.Phase{
 		ID:          1,
-		Name:        "Feature work",
+		Name:        "Password reset flow",
 		Description: "Add password reset flow",
 	}
 	got := resolveVerificationDepth(phase, 6, false, false, "")
 	if got != colony.VerificationDepthHeavy {
-		t.Errorf("security keyword in description: got %q, want %q", got, colony.VerificationDepthHeavy)
+		t.Errorf("security keyword in phase name: got %q, want %q", got, colony.VerificationDepthHeavy)
 	}
 }
 

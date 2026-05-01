@@ -161,13 +161,14 @@ func matchesAnyKeyword(text string, keywords []string) bool {
 }
 
 // phaseRiskLevel classifies a phase's risk as "high", "medium", or "low"
-// based on keyword matching against phase text.
+// based on keyword matching against phase name only (not description or task text)
+// to avoid false positives from common words like "session", "token", "password".
 func phaseRiskLevel(phase colony.Phase) string {
-	text := collectPhaseText(phase)
-	if matchesAnyKeyword(text, securityRiskKeywords) {
+	nameLower := strings.ToLower(phase.Name)
+	if matchesAnyKeyword(nameLower, securityRiskKeywords) {
 		return "high"
 	}
-	if matchesAnyKeyword(text, blastRadiusKeywords) {
+	if matchesAnyKeyword(nameLower, blastRadiusKeywords) {
 		return "medium"
 	}
 	return "low"
