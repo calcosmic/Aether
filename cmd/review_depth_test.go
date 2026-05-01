@@ -1013,21 +1013,22 @@ func TestResolveVerificationDepthSmart_EmptyUsesSmartDefault(t *testing.T) {
 
 func TestResolveVerificationDepthSmart_InvalidValue(t *testing.T) {
 	tests := []struct {
-		name  string
-		depth string
-		phase colony.Phase
-		total int
+		name     string
+		depth    string
+		phase    colony.Phase
+		total    int
+		expected string
 	}{
-		{"invalid depth returns error", "extreme", colony.Phase{ID: 1, Name: "Setup"}, 4},
+		{"unknown depth falls through to standard", "extreme", colony.Phase{ID: 1, Name: "Setup"}, 4, "standard"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := resolveVerificationDepthSmart(tt.depth, tt.phase, tt.total)
-			if err == nil {
-				t.Fatal("expected error for invalid depth, got nil")
+			got, err := resolveVerificationDepthSmart(tt.depth, tt.phase, tt.total)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
-			if !strings.Contains(err.Error(), "invalid verification depth") {
-				t.Errorf("error %q does not contain expected substring", err.Error())
+			if got != tt.expected {
+				t.Errorf("resolveVerificationDepthSmart(%q, ...) = %q, want %q", tt.depth, got, tt.expected)
 			}
 		})
 	}
