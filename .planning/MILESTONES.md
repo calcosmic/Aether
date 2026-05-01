@@ -188,3 +188,22 @@
 1. Colony ceremony and runtime visibility
 2. Pheromone system with steering signals
 3. Structural learning stack and curation
+
+## v1.12 — Safe Colony (2026-05-01)
+
+**Phases:** 8 | **Plans:** 16 | **Tasks:** 16+ | **Requirements:** 11/11 satisfied
+
+### Delivered
+- Loop-proof colony: 6 LOOP requirements covering watcher auto-skip, recovery redirect, circuit breaker, cycle detection, lifecycle exclusion, and telemetry
+- Independent 3-level planning depth (light/standard/deep) with CLI flag and manifest integration
+- Independent 3-level verification depth (light/standard/heavy) with 3-tier dispatch
+- Smart depth defaults based on phase position and code change risk
+- Depth selection UI with banner display and user override
+- Depth persistence from plan through build to continue (resolveEffectiveContinueDepth)
+- Code review fix: boolean flag preservation through depth resolution
+
+### Tech Debt
+- Phase 81 missing 81-01-SUMMARY.md (documentation only)
+- Phase 85 missing both SUMMARY.md files (documentation only)
+- REQUIREMENTS.md used text "Complete" instead of markdown [x] checkboxes
+
