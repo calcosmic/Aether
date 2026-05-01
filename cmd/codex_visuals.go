@@ -866,10 +866,46 @@ func renderPlanVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\n")
 	}
-	if planningDepth := strings.TrimSpace(stringValue(result["planning_depth"])); planningDepth != "" && planningDepth != "standard" {
-		b.WriteString("Planning depth: ")
-		b.WriteString(planningDepth)
-		b.WriteString("\n")
+	// Depth Selection Banner (per D-01, D-02)
+	if planningDepth := strings.TrimSpace(stringValue(result["planning_depth"])); planningDepth != "" {
+		verificationDepth := strings.TrimSpace(stringValue(result["verification_depth"]))
+		planningSmartDefault, _ := result["planning_smart_default"].(bool)
+		verificationSmartDefault, _ := result["verification_smart_default"].(bool)
+		totalPhases := intValue(result["count"])
+		if totalPhases == 0 {
+			if phases := phaseSliceValue(result["phases"]); len(phases) > 0 {
+				totalPhases = len(phases)
+			}
+		}
+		b.WriteString(renderStageMarker("Depth Selection"))
+
+		// Extract the planning Phase object from the result map for reason rendering
+		planningPhase, _ := result["planning_phase"].(colony.Phase)
+
+		// Planning depth line with full reason
+		if planningSmartDefault && planningPhase.ID > 0 {
+			reason := renderSmartDepthReason(planningPhase, totalPhases)
+			b.WriteString(fmt.Sprintf("Planning depth: %s (%s)\n", planningDepth, reason))
+		} else {
+			b.WriteString(fmt.Sprintf("Planning depth: %s\n", planningDepth))
+		}
+
+		// Verification depth line with full reason
+		if verificationDepth != "" {
+			if verificationSmartDefault && planningPhase.ID > 0 {
+				b.WriteString(renderReviewDepthLineWithReason(
+					colony.NormalizeVerificationDepth(verificationDepth),
+					planningPhase.ID, totalPhases, planningPhase, true,
+				))
+			} else {
+				b.WriteString(fmt.Sprintf("Verification depth: %s\n", verificationDepth))
+			}
+		}
+
+		// Override hint when either was smart-defaulted
+		if planningSmartDefault || verificationSmartDefault {
+			b.WriteString("Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>\n")
+		}
 	}
 	if confidence, ok := result["confidence"].(map[string]interface{}); ok {
 		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", intValue(confidence["overall"])))
