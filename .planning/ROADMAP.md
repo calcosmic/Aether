@@ -307,7 +307,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 87-01-PLAN.md -- Wire persisted verification depth into continue flow with tests (DEPTH-05)
+- [x] 87-01-PLAN.md -- Wire persisted verification depth into continue flow with tests (DEPTH-05)
 
 ## Progress
 
@@ -333,4 +333,4 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86 -> 87
 | 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
 | 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete    | 2026-05-01 |
-| 87. Fix Continue Depth Persistence | v1.12 | 0/1 | In Progress | |
+| 87. Fix Continue Depth Persistence | v1.12 | 1/1 | Complete    | 2026-05-01 |
