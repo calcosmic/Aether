@@ -304,6 +304,10 @@ Plans:
   1. When `/ant-continue` runs, it reads `state.VerificationDepth` (persisted by plan) and passes it to `resolveVerificationDepth`
   2. When user sets `--verification-depth heavy` at plan time, continue dispatches the same heavy review workers (not smart default)
   3. The `--verification-depth` flag on the continue command is either wired (read in RunE) or removed if superseded by state persistence
+**Plans**: 1 plan
+
+Plans:
+- [ ] 87-01-PLAN.md -- Wire persisted verification depth into continue flow with tests (DEPTH-05)
 
 ## Progress
 
@@ -329,4 +333,4 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86 -> 87
 | 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
 | 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete    | 2026-05-01 |
-| 87. Fix Continue Depth Persistence | v1.12 | 0/0 | In Progress | |
+| 87. Fix Continue Depth Persistence | v1.12 | 0/1 | In Progress | |
