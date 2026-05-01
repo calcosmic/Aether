@@ -9,6 +9,11 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+// gateRetryKey returns the circuit breaker key for a gate retry within a phase.
+func gateRetryKey(phaseNum int, gateName string) string {
+	return fmt.Sprintf("phase-%d:%s", phaseNum, gateName)
+}
+
 // CircuitBreaker tracks consecutive failures per worker instance and prevents
 // dispatch to workers that exceed the failure threshold.
 // Per D-04: consecutive failure count triggers the breaker (configurable, default 3).

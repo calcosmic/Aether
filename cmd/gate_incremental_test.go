@@ -213,7 +213,10 @@ func TestContinueGates_SkipPassedGates(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
 
 	// Run gates with prior results
-	priorResults := gateResultsRead()
+	priorResults := []GateCheckResult{
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "implementation_evidence", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
 	phase := colony.Phase{ID: 1, Name: "Test", Status: colony.PhaseInProgress}
 	manifest := codexContinueManifest{Present: true}
 	verification := codexContinueVerificationReport{ChecksPassed: true, Passed: true}
@@ -275,7 +278,13 @@ func TestContinueGates_TestsAlwaysRun(t *testing.T) {
 	stateData, _ := json.Marshal(state)
 	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
 
-	priorResults := gateResultsRead()
+	priorResults := []GateCheckResult{
+		{Name: "tests_pass", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "no_critical_flags", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "verification_steps_passed", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "implementation_evidence", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
 	phase := colony.Phase{ID: 1, Name: "Test", Status: colony.PhaseInProgress}
 	manifest := codexContinueManifest{Present: true}
 	verification := codexContinueVerificationReport{ChecksPassed: true, Passed: true}

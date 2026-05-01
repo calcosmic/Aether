@@ -20,15 +20,29 @@ import (
 // before allowing a task to be marked complete or a phase to advance.
 
 type gateCheck struct {
-	Name   string `json:"name"`
-	Passed bool   `json:"passed"`
-	Detail string `json:"detail,omitempty"`
+	Name            string   `json:"name"`
+	Passed          bool     `json:"passed"`
+	Detail          string   `json:"detail,omitempty"`
+	FixHint         string   `json:"fix_hint,omitempty"`
+	RecoveryOptions []string `json:"recovery_options,omitempty"`
 }
 
 type gateResult struct {
 	Allowed bool        `json:"allowed"`
 	Reason  string      `json:"reason,omitempty"`
 	Checks  []gateCheck `json:"checks"`
+}
+
+// GateCheckResult records a gate result for per-phase persistence.
+// This is the richer format stored in gate-results-{N}.json files.
+type GateCheckResult struct {
+	Name            string   `json:"name"`
+	Status          string   `json:"status"` // "passed", "failed", "skipped", "not-reached"
+	Detail          string   `json:"detail,omitempty"`
+	FixHint         string   `json:"fix_hint,omitempty"`
+	RecoveryOptions []string `json:"recovery_options,omitempty"`
+	Timestamp       string   `json:"timestamp"`
+	RetryCount      int      `json:"retry_count"`
 }
 
 var gateCheckCmd = &cobra.Command{
@@ -530,15 +544,22 @@ func gateRecoveryTemplate(name string) string {
 	return "No specific recovery instructions available for this gate."
 }
 
+// alwaysRunGates lists gates that always execute regardless of prior results.
+var alwaysRunGates = map[string]bool{
+	"tests_pass":        true,
+	"flags":             true,
+	"watcher_veto":      true,
+	"no_critical_flags": true,
+}
+
 // shouldSkipGate determines whether a gate should be skipped based on prior results.
-// Per D-10: tests_pass is never skipped regardless of prior results.
-// Per D-11: other passed gates are skipped on re-run.
-func shouldSkipGate(priorResults []colony.GateResultEntry, gateName string) bool {
-	if gateName == "tests_pass" {
+// Gates in alwaysRunGates never skip. Other gates with Status "passed" or "skipped" are skipped.
+func shouldSkipGate(priorResults []GateCheckResult, gateName string) bool {
+	if alwaysRunGates[gateName] {
 		return false
 	}
 	for _, r := range priorResults {
-		if r.Name == gateName && r.Passed {
+		if r.Name == gateName && (r.Status == "passed" || r.Status == "skipped") {
 			return true
 		}
 	}
@@ -578,6 +599,23 @@ func gateResultsRead() []colony.GateResultEntry {
 		return nil
 	}
 	return state.GateResults
+}
+
+// gateResultsWritePhase persists gate results to a per-phase file gate-results-{N}.json.
+func gateResultsWritePhase(phaseNum int, entries []GateCheckResult) error {
+	rel := fmt.Sprintf("gate-results-%d.json", phaseNum)
+	return store.SaveJSON(rel, entries)
+}
+
+// gateResultsReadPhase reads gate results from a per-phase file gate-results-{N}.json.
+// Returns an error if the file does not exist or cannot be read.
+func gateResultsReadPhase(phaseNum int) ([]GateCheckResult, error) {
+	rel := fmt.Sprintf("gate-results-%d.json", phaseNum)
+	var results []GateCheckResult
+	if err := store.LoadJSON(rel, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // formatSkipSummary produces a human-readable summary of prior gate results.
@@ -658,7 +696,14 @@ var shouldSkipGateCmd = &cobra.Command{
 			outputErrorMessage("--name is required")
 			return nil
 		}
-		prior := gateResultsRead()
+		phaseNum, _ := cmd.Flags().GetInt("phase")
+		var prior []GateCheckResult
+		if phaseNum > 0 {
+			prior, _ = gateResultsReadPhase(phaseNum)
+		}
+		if prior == nil {
+			prior = []GateCheckResult{}
+		}
 		result := shouldSkipGate(prior, name)
 		fmt.Fprintln(stdout, strconv.FormatBool(result))
 		return nil
@@ -696,6 +741,7 @@ func init() {
 	rootCmd.AddCommand(gateResultsWriteCmd)
 
 	shouldSkipGateCmd.Flags().String("name", "", "Gate name to check (required)")
+	shouldSkipGateCmd.Flags().Int("phase", 0, "Phase number for per-phase gate results lookup")
 	rootCmd.AddCommand(shouldSkipGateCmd)
 
 	gateRecoveryTemplateCmd.Flags().String("name", "", "Gate name (required)")

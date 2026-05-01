@@ -511,7 +511,10 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		verification, watcherFlow := runCodexContinueVerification(root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
 		assessment := assessCodexContinue(phase, manifest, verification, options, now)
 		verification = attachContinueClaimVerification(verification, assessment)
-		priorGateResults := gateResultsRead()
+		priorGateResults, _ := gateResultsReadPhase(phase.ID)
+		if priorGateResults == nil {
+			priorGateResults = []GateCheckResult{}
+		}
 		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 		if progress != nil {
 			progress.Advance("Verification")
@@ -528,6 +531,24 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		})
 	}
 	_ = gateResultsWrite(gateResultEntries)
+
+	// Per-phase gate results persistence (D-14)
+	var phaseGateResults []GateCheckResult
+	for _, c := range gates.Checks {
+		status := "passed"
+		if !c.Passed {
+			status = "failed"
+		}
+		phaseGateResults = append(phaseGateResults, GateCheckResult{
+			Name:            c.Name,
+			Status:          status,
+			Detail:          c.Detail,
+			FixHint:         c.FixHint,
+			RecoveryOptions: c.RecoveryOptions,
+			Timestamp:       now.Format(time.RFC3339),
+		})
+	}
+	_ = gateResultsWritePhase(phase.ID, phaseGateResults)
 
 	if tracer != nil && state.RunID != nil {
 		_ = tracer.LogArtifact(*state.RunID, "continue.verification", map[string]interface{}{
@@ -2358,7 +2379,7 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 	}
 }
 
-func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []colony.GateResultEntry) codexContinueGateReport {
+func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
 
