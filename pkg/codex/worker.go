@@ -44,6 +44,7 @@ type WorkerConfig struct {
 	PheromoneSection string        // Pheromone signal content injected into worker prompts
 	ConfigOverrides  []string      // Optional codex config overrides passed as -c key=value
 	ResponsePath     string        // Optional controller-managed response file path
+	CallbackURL      string        // Worker callback/messaging URL (separate from LLM provider URL)
 }
 
 // effectiveTimeout returns the configured timeout or the default.
@@ -912,6 +913,13 @@ func emitWorkerProgress(observer WorkerProgressObserver, event WorkerProgressEve
 }
 
 func validateWorkerLaunchConfig(config WorkerConfig) error {
+	// Validate callback URL scheme if set (T-89-09: reject file://, javascript:, data:)
+	if strings.TrimSpace(config.CallbackURL) != "" {
+		if err := validateCallbackURLScheme(config.CallbackURL); err != nil {
+			return err
+		}
+	}
+
 	root := strings.TrimSpace(config.Root)
 	if root == "" {
 		return nil
@@ -924,6 +932,28 @@ func validateWorkerLaunchConfig(config WorkerConfig) error {
 		return fmt.Errorf("worker startup failed: working directory %q is not a directory", root)
 	}
 	return nil
+}
+
+// validateCallbackURL validates that a callback URL is present and uses an
+// allowed scheme (http or https). This is the primary validation function
+// for callers that require a callback URL before spawning workers (D-13, PLAT-02).
+func validateCallbackURL(url string) error {
+	trimmed := strings.TrimSpace(url)
+	if trimmed == "" {
+		return fmt.Errorf("Missing worker callback URL -- configure provider.callback_url before spawning workers")
+	}
+	return validateCallbackURLScheme(trimmed)
+}
+
+// validateCallbackURLScheme checks that a non-empty callback URL uses
+// an allowed scheme. This is called both by validateCallbackURL (for the
+// required check) and by validateWorkerLaunchConfig (for the optional scheme check).
+func validateCallbackURLScheme(url string) error {
+	lower := strings.ToLower(strings.TrimSpace(url))
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return nil
+	}
+	return fmt.Errorf("worker callback URL %q uses an invalid scheme -- only http and https are allowed", url)
 }
 
 func workerHeartbeatInterval(timeout time.Duration) time.Duration {

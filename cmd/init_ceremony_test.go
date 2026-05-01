@@ -153,9 +153,10 @@ func TestInitCeremonyCancel(t *testing.T) {
 	}
 }
 
-// TestInitCeremonyRevise verifies that choosing "Revise" re-runs research
-// with a new goal and creates colony with revised charter.
-func TestInitCeremonyRevise(t *testing.T) {
+// TestInitCeremonyRejectThenApprove verifies that rejecting the brief
+// prevents colony creation (the old "Revise" flow is replaced by the
+// brief approval flow where "Reject" returns to goal prompt).
+func TestInitCeremonyRejectThenApprove(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	var outBuf, errBuf bytes.Buffer
@@ -169,22 +170,19 @@ func TestInitCeremonyRevise(t *testing.T) {
 	projectRoot := filepath.Dir(filepath.Dir(s.BasePath()))
 	os.WriteFile(filepath.Join(projectRoot, "go.mod"), []byte("module test\n"), 0644)
 
-	// Mock stdin: choose "2" (Revise), type new goal, then choose "1" (Proceed)
+	// Mock stdin: choose "3" (Reject) -- no more input, ceremony exits
 	r, w, _ := os.Pipe()
 	oldStdin := os.Stdin
 	os.Stdin = r
 	defer func() { os.Stdin = oldStdin }()
 
-	// Set stdinReader so the ceremony skips the TTY check in test mode
 	resetCachedStdinReader()
 	origStdinReader := stdinReader
 	stdinReader = func() *bufio.Reader { return bufio.NewReader(r) }
 	defer func() { stdinReader = origStdinReader; resetCachedStdinReader() }()
 
 	go func() {
-		w.WriteString("2\n")           // Revise
-		w.WriteString("Revised goal\n") // New goal
-		w.WriteString("1\n")           // Proceed
+		w.WriteString("3\n") // Reject brief
 		w.Close()
 	}()
 
@@ -194,26 +192,212 @@ func TestInitCeremonyRevise(t *testing.T) {
 		t.Fatalf("unexpected error: %v (stderr: %s)", err, errBuf.String())
 	}
 
-	// Verify COLONY_STATE.json was created with the REVISED charter
+	// Verify NO colony was created (reject prevents creation)
+	statePath := filepath.Join(s.BasePath(), "COLONY_STATE.json")
+	if _, err := os.Stat(statePath); err == nil {
+		t.Fatal("COLONY_STATE.json should NOT exist after brief rejection")
+	}
+}
+
+// TestSynthesizeLaunchBrief verifies that synthesizeLaunchBrief produces
+// markdown with all 6 required sections: Goal, Scope, Risks, Tech Stack, Dependencies, Success Criteria.
+func TestSynthesizeLaunchBrief(t *testing.T) {
+	goal := "Build a REST API"
+	charter := &colony.Charter{
+		Intent:      "Build a REST API",
+		Vision:      "A clean API server",
+		Governance:  "golangci-lint",
+		Goals:       "Ship v1.0 with auth endpoints",
+		TechStack:   "Go, PostgreSQL",
+		KeyRisks:    "No tests yet",
+		Constraints: "Follow lint rules",
+	}
+	researchData := ceremonyResearchData{
+		TechStackDetail: []techStackDetail{
+			{Language: "go", SourceFile: "go.mod", Deps: []depEntry{{Name: "cobra"}}},
+		},
+		DirClassification: dirClassification{Type: "standard"},
+		ColonyContextSummary: colonyContextSummary{
+			DetectedType: "go-project",
+			Languages:    []string{"go"},
+		},
+	}
+
+	brief := synthesizeLaunchBrief(goal, charter, researchData)
+
+	requiredSections := []string{
+		"# Colony Launch Brief",
+		"## Goal",
+		"## Scope",
+		"## Risks",
+		"## Tech Stack",
+		"## Dependencies",
+		"## Success Criteria",
+	}
+	for _, section := range requiredSections {
+		if !strings.Contains(brief, section) {
+			t.Errorf("synthesizeLaunchBrief missing section %q", section)
+		}
+	}
+
+	// Goal section should contain the colony goal
+	if !strings.Contains(brief, "Build a REST API") {
+		t.Error("synthesizeLaunchBrief missing goal content")
+	}
+
+	// Tech Stack section should include detected tech stack
+	if !strings.Contains(brief, "Go") {
+		t.Error("synthesizeLaunchBrief missing detected language Go")
+	}
+	if !strings.Contains(brief, "cobra") {
+		t.Error("synthesizeLaunchBrief missing detected dependency cobra")
+	}
+}
+
+// TestSynthesizeLaunchBriefIncludesTechStackFromCharter verifies tech stack
+// detected from research data appears in the brief.
+func TestSynthesizeLaunchBriefIncludesTechStackFromCharter(t *testing.T) {
+	charter := &colony.Charter{
+		Intent:    "Build something",
+		TechStack: "Go, Cobra, PostgreSQL",
+	}
+	researchData := ceremonyResearchData{
+		TechStackDetail: []techStackDetail{
+			{Language: "go", SourceFile: "go.mod", Deps: []depEntry{{Name: "github.com/lib/pq"}}},
+		},
+	}
+
+	brief := synthesizeLaunchBrief("Build something", charter, researchData)
+
+	if !strings.Contains(brief, "PostgreSQL") {
+		t.Error("synthesizeLaunchBrief should include PostgreSQL from charter tech stack")
+	}
+	if !strings.Contains(brief, "github.com/lib/pq") {
+		t.Error("synthesizeLaunchBrief should include dependency from research data")
+	}
+}
+
+// TestSynthesizeLaunchBriefEmptyData verifies that sections with no data
+// show "To be determined" rather than being empty.
+func TestSynthesizeLaunchBriefEmptyData(t *testing.T) {
+	charter := &colony.Charter{
+		Intent: "Some goal",
+	}
+	researchData := ceremonyResearchData{}
+
+	brief := synthesizeLaunchBrief("Some goal", charter, researchData)
+
+	// Empty sections should show TBD
+	if !strings.Contains(brief, "To be determined") {
+		t.Error("synthesizeLaunchBrief should show 'To be determined' for empty sections")
+	}
+}
+
+// TestSynthesizeLaunchBriefWithRisks verifies that KeyRisks from the charter
+// appear in the Risks section.
+func TestSynthesizeLaunchBriefWithRisks(t *testing.T) {
+	charter := &colony.Charter{
+		Intent:    "Risky project",
+		KeyRisks:  "No test coverage, tight deadline",
+		Constraints: "Must ship in 2 weeks",
+	}
+	researchData := ceremonyResearchData{}
+
+	brief := synthesizeLaunchBrief("Risky project", charter, researchData)
+
+	if !strings.Contains(brief, "No test coverage") {
+		t.Error("synthesizeLaunchBrief missing KeyRisks content in Risks section")
+	}
+	if !strings.Contains(brief, "tight deadline") {
+		t.Error("synthesizeLaunchBrief missing KeyRisks content in Risks section")
+	}
+}
+
+// TestInitCeremonyApproveBrief verifies that approving the brief creates the colony.
+func TestInitCeremonyApproveBrief(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	projectRoot := filepath.Dir(filepath.Dir(s.BasePath()))
+	os.WriteFile(filepath.Join(projectRoot, "go.mod"), []byte("module test\n"), 0644)
+
+	// Mock stdin: choose "1" (Approve brief)
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	resetCachedStdinReader()
+	origStdinReader := stdinReader
+	stdinReader = func() *bufio.Reader { return bufio.NewReader(r) }
+	defer func() { stdinReader = origStdinReader; resetCachedStdinReader() }()
+
+	go func() {
+		w.WriteString("1\n") // Approve brief
+		w.Close()
+	}()
+
+	rootCmd.SetArgs([]string{"init-ceremony", "Build something", "--target", projectRoot})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v (stderr: %s)", err, errBuf.String())
+	}
+
+	// Verify COLONY_STATE.json was created
 	statePath := filepath.Join(s.BasePath(), "COLONY_STATE.json")
 	if _, err := os.Stat(statePath); err != nil {
-		t.Fatalf("COLONY_STATE.json not created: %v", err)
+		t.Fatalf("COLONY_STATE.json not created after brief approval: %v", err)
+	}
+}
+
+// TestInitCeremonyRejectBrief verifies that rejecting the brief does NOT create the colony.
+func TestInitCeremonyRejectBrief(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	projectRoot := filepath.Dir(filepath.Dir(s.BasePath()))
+	os.WriteFile(filepath.Join(projectRoot, "go.mod"), []byte("module test\n"), 0644)
+
+	// Mock stdin: choose "3" (Reject brief)
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	resetCachedStdinReader()
+	origStdinReader := stdinReader
+	stdinReader = func() *bufio.Reader { return bufio.NewReader(r) }
+	defer func() { stdinReader = origStdinReader; resetCachedStdinReader() }()
+
+	go func() {
+		w.WriteString("3\n") // Reject brief
+		w.Close()
+	}()
+
+	rootCmd.SetArgs([]string{"init-ceremony", "Build something", "--target", projectRoot})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v (stderr: %s)", err, errBuf.String())
 	}
 
-	var state colony.ColonyState
-	data, _ := os.ReadFile(statePath)
-	if err := json.Unmarshal(data, &state); err != nil {
-		t.Fatalf("failed to parse COLONY_STATE.json: %v", err)
-	}
-
-	if state.Charter == nil {
-		t.Fatal("Charter is nil, want non-nil Charter sub-object")
-	}
-	if state.Charter.Intent != "Revised goal" {
-		t.Errorf("Charter.Intent = %q, want 'Revised goal'", state.Charter.Intent)
-	}
-	if ptrStr(state.Goal) != "Revised goal" {
-		t.Errorf("Goal = %q, want 'Revised goal'", ptrStr(state.Goal))
+	// Verify NO colony was created
+	statePath := filepath.Join(s.BasePath(), "COLONY_STATE.json")
+	if _, err := os.Stat(statePath); err == nil {
+		t.Fatal("COLONY_STATE.json should NOT exist after brief rejection")
 	}
 }
 

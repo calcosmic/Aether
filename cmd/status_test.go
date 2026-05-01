@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -1298,5 +1299,194 @@ func TestStatusShowsRecoveryDoorway(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("expected recovery doorway to contain %q, got:\n%s", want, output)
 		}
+	}
+}
+
+func TestRenderGateStatusSection_NoResults(t *testing.T) {
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	state := colony.ColonyState{CurrentPhase: 1}
+	section := renderGateStatusSection(state, s)
+	if section != "" {
+		t.Errorf("expected empty string when no gate-results file exists, got: %q", section)
+	}
+}
+
+func TestRenderGateStatusSection_AllPassed(t *testing.T) {
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	results := []GateCheckResult{
+		{Name: "tests_pass", Status: "passed", Timestamp: "2026-05-01T10:00:00Z"},
+		{Name: "no_flags", Status: "passed", Timestamp: "2026-05-01T10:00:00Z"},
+	}
+	if err := s.SaveJSON("gate-results-2.json", results); err != nil {
+		t.Fatalf("save gate results: %v", err)
+	}
+
+	state := colony.ColonyState{CurrentPhase: 2}
+	section := renderGateStatusSection(state, s)
+	if section == "" {
+		t.Fatal("expected non-empty section when gate-results file exists")
+	}
+	if !strings.Contains(section, "G A T E") {
+		t.Error("missing 'Gate Status' header")
+	}
+	if !strings.Contains(section, "Phase: 2") {
+		t.Error("missing phase number")
+	}
+	if !strings.Contains(section, "2 passed") {
+		t.Error("missing passed count")
+	}
+	if strings.Contains(section, "Failed") {
+		t.Error("should not show Failed section when all gates passed")
+	}
+}
+
+func TestRenderGateStatusSection_WithFailures(t *testing.T) {
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	results := []GateCheckResult{
+		{Name: "tests_pass", Status: "passed", Timestamp: "2026-05-01T10:00:00Z"},
+		{Name: "test_coverage", Status: "failed", Detail: "Coverage below 60%", FixHint: "Add more tests", Timestamp: "2026-05-01T10:00:00Z"},
+		{Name: "no_flags", Status: "skipped", Timestamp: "2026-05-01T10:00:00Z"},
+	}
+	if err := s.SaveJSON("gate-results-3.json", results); err != nil {
+		t.Fatalf("save gate results: %v", err)
+	}
+
+	state := colony.ColonyState{CurrentPhase: 3}
+	section := renderGateStatusSection(state, s)
+	if section == "" {
+		t.Fatal("expected non-empty section")
+	}
+	if !strings.Contains(section, "1 passed") {
+		t.Error("missing passed count")
+	}
+	if !strings.Contains(section, "1 failed") {
+		t.Error("missing failed count")
+	}
+	if !strings.Contains(section, "1 skipped") {
+		t.Error("missing skipped count")
+	}
+	if !strings.Contains(section, "test_coverage") {
+		t.Error("missing failed gate name")
+	}
+	if !strings.Contains(section, "Coverage below 60%") {
+		t.Error("missing failed gate detail")
+	}
+	if !strings.Contains(section, "Add more tests") {
+		t.Error("missing failed gate fix hint")
+	}
+}
+
+func TestRenderGateStatusSection_ZeroPhase(t *testing.T) {
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	results := []GateCheckResult{
+		{Name: "tests_pass", Status: "passed", Timestamp: "2026-05-01T10:00:00Z"},
+	}
+	if err := s.SaveJSON("gate-results-0.json", results); err != nil {
+		t.Fatalf("save gate results: %v", err)
+	}
+
+	state := colony.ColonyState{CurrentPhase: 0}
+	section := renderGateStatusSection(state, s)
+	if section != "" {
+		t.Errorf("expected empty string for phase 0, got: %q", section)
+	}
+}
+
+func TestStatusDashboard_IncludesGateSection(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Show gate status in dashboard"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     2,
+					Name:   "Gate phase",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build gates", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	results := []GateCheckResult{
+		{Name: "tests_pass", Status: "passed", Timestamp: "2026-05-01T10:00:00Z"},
+		{Name: "test_coverage", Status: "failed", Detail: "Low coverage", FixHint: "Add tests", Timestamp: "2026-05-01T10:00:00Z"},
+	}
+	if err := store.AtomicWrite("gate-results-2.json", func() []byte { b, _ := json.Marshal(results); return b }()); err != nil {
+		t.Fatalf("write gate results: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "G A T E") {
+		t.Fatalf("expected Gate Status section in dashboard output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Phase: 2") {
+		t.Errorf("expected Phase: 2 in Gate Status section, got:\n%s", output)
+	}
+}
+
+func TestStatusDashboard_OmitsGateSectionWhenNoResults(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "No gate results here"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 5,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     5,
+					Name:   "Phase 5",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "G A T E") {
+		t.Errorf("expected no Gate Status section when no gate-results file, got:\n%s", output)
 	}
 }
