@@ -268,7 +268,7 @@ Plans:
 - [x] 90-01-PLAN.md -- pkg/learn/ types, LearnStore interface, ColonyStore CRUD + repo isolation tests (HIVE-01/02, LRN-05)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 90-02-PLAN.md -- Evidence-gated trigger, evidence collection, automatic classification (LRN-01/02, PRIV-03/05)
+- [x] 90-02-PLAN.md -- Evidence-gated trigger, evidence collection, automatic classification (LRN-01/02, PRIV-03/05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 90-03-PLAN.md -- Continue-finalize trigger wiring + colony-prime context injection (LRN-01/02/04, HIVE-03, PRIV-03)
@@ -325,6 +325,6 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 87. Fix Continue Depth Persistence | v1.12 | 1/1 | Complete | 2026-05-01 |
 | 88. Recovery Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
 | 89. Gate Self-Healing & Smart Planning | v1.13 | 2/4 | Complete    | 2026-05-01 |
-| 90. Learning Foundation | v1.13 | 1/4 | In Progress|  |
+| 90. Learning Foundation | v1.13 | 2/4 | In Progress|  |
 | 91. Hive Intelligence | v1.13 | 0 | Not started | - |
 | 92. System Hardening & Validation | v1.13 | 0 | Not started | - |
