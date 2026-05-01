@@ -5,7 +5,7 @@
 
 ## v1 Requirements
 
-Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through AAC-031 + REC-LOOP-01.
+Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through AAC-031 + REC-LOOP-01 (60 v1 requirements).
 
 ### Build Safety
 
@@ -112,7 +112,7 @@ Deferred to future milestone.
 |---------|--------|
 | Cross-colony ledger sharing | Findings contain code-specific paths that go stale across repos |
 | Auto-block on critical findings | Conflicts with existing continue-review blocking |
-| Real-time ledger sync across agents | YAGNI — agents write during build/continue, not concurrently |
+| Real-time ledger sync across agents | YAGNI -- agents write during build/continue, not concurrently |
 | Ledger web UI | CLI-only for now |
 | CGO SQLite dependency | Pure Go modernc.org/sqlite chosen for cross-platform builds |
 | Hermes Agent runtime dependency | Concepts ported to Aether-native Go, not forked as sidecar |
@@ -125,72 +125,72 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | — | Pending |
-| SAFE-02 | — | Pending |
-| SAFE-03 | — | Pending |
-| SAFE-04 | — | Pending |
-| SAFE-05 | — | Pending |
-| SAFE-06 | — | Pending |
-| CONF-01 | — | Pending |
-| CONF-02 | — | Pending |
-| CONF-03 | — | Pending |
-| CONF-04 | — | Pending |
-| CONF-05 | — | Pending |
-| GATE-01 | — | Pending |
-| GATE-02 | — | Pending |
-| GATE-03 | — | Pending |
-| GATE-04 | — | Pending |
-| GATE-05 | — | Pending |
-| GATE-06 | — | Pending |
-| GATE-07 | — | Pending |
-| GATE-08 | — | Pending |
-| GATE-09 | — | Pending |
-| LOOP-01 | — | Pending |
-| LOOP-02 | — | Pending |
-| LOOP-03 | — | Pending |
-| LOOP-04 | — | Pending |
-| PLAT-01 | — | Pending |
-| PLAT-02 | — | Pending |
-| PLAT-03 | — | Pending |
-| PLAT-04 | — | Pending |
-| PLAT-05 | — | Pending |
-| PLAT-06 | — | Pending |
-| HIVE-01 | — | Pending |
-| HIVE-02 | — | Pending |
-| HIVE-03 | — | Pending |
-| HIVE-04 | — | Pending |
-| HIVE-05 | — | Pending |
-| HIVE-06 | — | Pending |
-| SKIL-01 | — | Pending |
-| SKIL-02 | — | Pending |
-| SKIL-03 | — | Pending |
-| SKIL-04 | — | Pending |
-| SKIL-05 | — | Pending |
-| SKIL-06 | — | Pending |
-| LRN-01 | — | Pending |
-| LRN-02 | — | Pending |
-| LRN-03 | — | Pending |
-| LRN-04 | — | Pending |
-| LRN-05 | — | Pending |
-| LRN-06 | — | Pending |
-| PRIV-01 | — | Pending |
-| PRIV-02 | — | Pending |
-| PRIV-03 | — | Pending |
-| PRIV-04 | — | Pending |
-| PRIV-05 | — | Pending |
-| AUTO-01 | — | Pending |
-| AUTO-02 | — | Pending |
-| AUTO-03 | — | Pending |
-| AUTO-04 | — | Pending |
-| VAL-01 | — | Pending |
-| VAL-02 | — | Pending |
-| VAL-03 | — | Pending |
+| SAFE-01 | Phase 88 | Pending |
+| SAFE-02 | Phase 88 | Pending |
+| SAFE-03 | Phase 88 | Pending |
+| SAFE-04 | Phase 88 | Pending |
+| SAFE-05 | Phase 92 | Pending |
+| SAFE-06 | Phase 92 | Pending |
+| CONF-01 | Phase 89 | Pending |
+| CONF-02 | Phase 89 | Pending |
+| CONF-03 | Phase 89 | Pending |
+| CONF-04 | Phase 89 | Pending |
+| CONF-05 | Phase 89 | Pending |
+| GATE-01 | Phase 88 | Pending |
+| GATE-02 | Phase 88 | Pending |
+| GATE-03 | Phase 88 | Pending |
+| GATE-04 | Phase 88 | Pending |
+| GATE-05 | Phase 88 | Pending |
+| GATE-06 | Phase 89 | Pending |
+| GATE-07 | Phase 89 | Pending |
+| GATE-08 | Phase 89 | Pending |
+| GATE-09 | Phase 89 | Pending |
+| LOOP-01 | Phase 88 | Pending |
+| LOOP-02 | Phase 89 | Pending |
+| LOOP-03 | Phase 89 | Pending |
+| LOOP-04 | Phase 89 | Pending |
+| PLAT-01 | Phase 89 | Pending |
+| PLAT-02 | Phase 89 | Pending |
+| PLAT-03 | Phase 92 | Pending |
+| PLAT-04 | Phase 92 | Pending |
+| PLAT-05 | Phase 92 | Pending |
+| PLAT-06 | Phase 92 | Pending |
+| HIVE-01 | Phase 90 | Pending |
+| HIVE-02 | Phase 90 | Pending |
+| HIVE-03 | Phase 90 | Pending |
+| HIVE-04 | Phase 91 | Pending |
+| HIVE-05 | Phase 91 | Pending |
+| HIVE-06 | Phase 91 | Pending |
+| SKIL-01 | Phase 91 | Pending |
+| SKIL-02 | Phase 91 | Pending |
+| SKIL-03 | Phase 91 | Pending |
+| SKIL-04 | Phase 91 | Pending |
+| SKIL-05 | Phase 91 | Pending |
+| SKIL-06 | Phase 91 | Pending |
+| LRN-01 | Phase 90 | Pending |
+| LRN-02 | Phase 90 | Pending |
+| LRN-03 | Phase 90 | Pending |
+| LRN-04 | Phase 90 | Pending |
+| LRN-05 | Phase 90 | Pending |
+| LRN-06 | Phase 90 | Pending |
+| PRIV-01 | Phase 88 | Pending |
+| PRIV-02 | Phase 88 | Pending |
+| PRIV-03 | Phase 90 | Pending |
+| PRIV-04 | Phase 90 | Pending |
+| PRIV-05 | Phase 90 | Pending |
+| AUTO-01 | Phase 91 | Pending |
+| AUTO-02 | Phase 91 | Pending |
+| AUTO-03 | Phase 91 | Pending |
+| AUTO-04 | Phase 91 | Pending |
+| VAL-01 | Phase 92 | Pending |
+| VAL-02 | Phase 92 | Pending |
+| VAL-03 | Phase 92 | Pending |
 
 **Coverage:**
-- v1 requirements: 49 total
-- Mapped to phases: 0
-- Unmapped: 49
+- v1 requirements: 60 total
+- Mapped to phases: 60
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-01*
-*Last updated: 2026-05-01 after initial definition*
+*Last updated: 2026-05-01 after roadmap creation*

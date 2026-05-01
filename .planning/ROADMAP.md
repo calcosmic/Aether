@@ -14,7 +14,8 @@
 - **v1.9 Review Persistence** - Phases 52-56 (shipped 2026-04-26)
 - **v1.10 Colony Polish** - Phases 57-69 (shipped 2026-04-28)
 - **v1.11 Aether Unification** - Phases 70-79 (shipped 2026-04-30)
-- ✅ **v1.12 Safe Colony** - Phases 80-87 (shipped 2026-05-01)
+- **v1.12 Safe Colony** - Phases 80-87 (shipped 2026-05-01)
+- [ ] **v1.13 Recovery Hardening & Hive Learning** - Phases 88-92 (in progress)
 
 ## Phases
 
@@ -178,29 +179,30 @@
 </details>
 
 <details>
-<summary>✅ v1.12 Safe Colony (Phases 80-87) — SHIPPED 2026-05-01</summary>
+<summary>v1.12 Safe Colony (Phases 80-87) -- SHIPPED 2026-05-01</summary>
 
-- [x] **Phase 80: Build/Continue Loop Prevention** - Prevent infinite watcher respawns, recovery loops, and build wave retry loops
-- [x] **Phase 81: Plan and Lifecycle Loop Safety** - Block circular phase dependencies and ensure lifecycle commands suggest different recovery steps
-- [x] **Phase 82: Loop Detection Telemetry** - Log all loop-breaking events to the event bus and surface them in status
-- [x] **Phase 83: Planning Depth System** - Add light/standard/deep planning depth that controls task decomposition granularity
-- [x] **Phase 84: Verification Depth Extension** - Extend verification depth from 2 levels (light/heavy) to 3 levels (light/standard/heavy)
-- [x] **Phase 85: Smart Depth Defaults** - Auto-select planning and verification depth from phase position and code change risk
-- [x] **Phase 86: Depth Selection UI and Persistence** - Present smart defaults to user at plan time and persist depths in the build packet
-- [x] **Phase 87: Fix Continue Depth Persistence** - Close DEPTH-05 gap: continue reads persisted verification depth and honors --verification-depth flag
+- [x] Phase 80: Build/Continue Loop Prevention
+- [x] Phase 81: Plan and Lifecycle Loop Safety
+- [x] Phase 82: Loop Detection Telemetry
+- [x] Phase 83: Planning Depth System
+- [x] Phase 84: Verification Depth Extension
+- [x] Phase 85: Smart Depth Defaults
+- [x] Phase 86: Depth Selection UI and Persistence
+- [x] Phase 87: Fix Continue Depth Persistence
 
 </details>
+
+### v1.13 Recovery Hardening & Hive Learning (In Progress)
+
+**Milestone Goal:** Make Aether's build/continue gates bulletproof, add confidence-targeted planning, build repo-scoped hive learning, and ensure loop safety inheritance.
+
+- [ ] **Phase 88: Recovery Foundation** - Build provenance validation, gate state persistence, /ant-unblock command, and privacy gate for learning writes
+- [ ] **Phase 89: Gate Self-Healing & Smart Planning** - Fixer caste (27th agent), smart gate retry, confidence-targeted Oracle, and init synthesis
+- [ ] **Phase 90: Learning Foundation** - Evidence-gated learning triggers, unified colony memory API, and repo isolation
+- [ ] **Phase 91: Hive Intelligence** - SQLite colony.db with FTS5 recall, pheromone skills lifecycle, Keeper curator, and auto-skills
+- [ ] **Phase 92: System Hardening & Validation** - Worker lifecycle (heartbeats, process groups, PID tracking), platform fixes, and full E2E validation
 
 ## Phase Details
-
-<details>
-<summary>v1.0 through v1.11 Phase Details (archived)</summary>
-
-All prior milestone phase details are archived. See MILESTONES.md for accomplishment summaries.
-
-</details>
-
-### Phase Details
 
 <details>
 <summary>v1.0 through v1.12 Phase Details (archived)</summary>
@@ -209,28 +211,101 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
 
 </details>
 
+### Phase 88: Recovery Foundation
+**Goal**: Builds reject phantom advancement and gate failures become structured, recoverable data with a clear unblock path -- the trust foundation all later phases build on
+**Depends on**: Phase 87 (v1.12 Safe Colony)
+**Requirements**: SAFE-01, SAFE-02, SAFE-03, SAFE-04, GATE-01, GATE-02, GATE-03, GATE-04, GATE-05, LOOP-01, PRIV-01, PRIV-02
+**Success Criteria** (what must be TRUE):
+  1. A build that produces zero successful worker results is rejected at build-complete with a clear message describing what went wrong
+  2. A build where every worker reports files_modified: 0 is rejected at build-complete
+  3. Continue verification traces every accepted build claim back to a successful worker with files_modified > 0, and rejects claims with missing or stale provenance
+  4. Gate failures display what went wrong, specific fixes, and two recovery options (manual fix then /ant-continue, or /ant-unblock) instead of STOP-wall messages
+  5. Gate results persist per phase in gate-results.json; re-running gates skips previously passed/skipped gates (except Flags Gate and Watcher Veto)
+  6. Smart gate retry hard-stops after N failed retries per phase (circuit breaker respected)
+  7. Privacy/secret scan blocks writes containing credentials, API keys, tokens, SSH keys, env files, or local user paths before any learning data is stored
+**Plans**: TBD
+
+### Phase 89: Gate Self-Healing & Smart Planning
+**Goal**: The colony can fix its own gate failures via the Fixer caste, Oracle produces confidence-targeted research, and init synthesizes an approval-ready launch brief from codebase scouting
+**Depends on**: Phase 88
+**Requirements**: GATE-06, GATE-07, GATE-08, GATE-09, LOOP-02, LOOP-03, LOOP-04, CONF-01, CONF-02, CONF-03, CONF-04, CONF-05, PLAT-01, PLAT-02
+**Success Criteria** (what must be TRUE):
+  1. /ant-unblock reads gate-results.json, shows a Gate Recovery Summary, and offers to dispatch the Fixer caste to investigate and fix failures
+  2. Fixer caste reads gate failure context, investigates root cause, applies a fix, verifies all gates pass, and reports structured JSON output
+  3. /ant-unblock tracks unblock attempts per phase and refuses after a configurable cap with a human-intervention message
+  4. Fixer dispatch is blocked when the circuit breaker has tripped for the current phase
+  5. Oracle loop accepts --confidence-target flag (default 95), does not finalize below target unless hard blocker or max iterations reached, and outputs full rubric breakdown with evidence
+  6. Init command scouts the repo and synthesizes an approval-ready launch brief; colony launch is blocked until user approves, edits, or rejects
+  7. /ant-status shows a Gate Status section when gate-results.json exists for the current phase
+  8. OpenCode agent hub template generates a valid name field that survives aether update; missing callback URL fails before worker spawn with clear config error
+**Plans**: TBD
+
+### Phase 90: Learning Foundation
+**Goal**: Colony learning only fires on verified successful outcomes with full evidence provenance, backed by a unified memory API and repo isolation
+**Depends on**: Phase 88 (provenance validation and privacy gate)
+**Requirements**: HIVE-01, HIVE-02, HIVE-03, LRN-01, LRN-02, LRN-03, LRN-04, LRN-05, LRN-06, PRIV-03, PRIV-04, PRIV-05
+**Success Criteria** (what must be TRUE):
+  1. Post-run learning triggers only after verified successful outcomes; failed, empty, or phantom runs are logged as transient only (never promoted to durable memory)
+  2. Every durable learning entry includes evidence: source run ID, worker name, files touched, tests/gates passed, confidence score, and scope
+  3. Promotion from repo-local to hive memory requires a privacy scan and explicit user approval
+  4. Colony memory store supports add, replace, remove, and compact operations with configurable character/token budgets
+  5. Colony memory is injected into init/oracle/worker prompts as a frozen snapshot; failed/empty builds never create durable memory
+  6. Learned context is injected ranked by phase, caste, file path, recency, and confidence
+  7. Two repos do not see each other's repo-local memory; hive entries are generic and redacted
+  8. Repo learning packs can be exported with manifest, redaction report, and preview-before-apply
+  9. Learning entries are classified as repo-local, hive-shareable, blocked, or needs-user-approval
+  10. Learning writes can be disabled by config and by per-command flag
+**Plans**: TBD
+
+### Phase 91: Hive Intelligence
+**Goal**: Colony learning is backed by SQLite with full-text search, pheromone skills auto-created from verified difficult tasks, and the Keeper curator maintains memory hygiene
+**Depends on**: Phase 90 (unified memory API, evidence-gated learning, privacy gate)
+**Requirements**: HIVE-04, HIVE-05, HIVE-06, SKIL-01, SKIL-02, SKIL-03, SKIL-04, SKIL-05, SKIL-06, AUTO-01, AUTO-02, AUTO-03, AUTO-04
+**Success Criteria** (what must be TRUE):
+  1. SQLite colony.db exists in WAL mode with tables for runs, workers, gates, memories, skills, decisions, trajectories, and schema_version
+  2. FTS5 search indexes enable full-text recall across worker summaries, gate failures, decisions, and memory text via `aether hive search`
+  3. Schema migrations are versioned, idempotent, and safe to run across Aether updates
+  4. Repo-local pheromone skills are stored in .aether/hive/skills/active/ with SKILL.md format including evidence frontmatter
+  5. Skills use progressive disclosure -- worker prompt includes index only, full content loads only when matched
+  6. Skill lifecycle supports create, patch, edit, delete/archive, view, list, search, pin, and promote actions
+  7. Keeper Curator tracks usage (view/use/patch counts) and auto-transitions unused skills from active to stale to archived
+  8. Pinned skills are immutable to both auto-transitions and agent writes; archived skills are recoverable and never auto-deleted
+  9. Auto-created repo-local skills are generated after difficult verified tasks (configurable: off/propose/auto) with hard rejection rules preventing creation from failed, zero-modification, phantom, or secret-containing runs
+  10. Auto-created skills include source evidence, verification steps, confidence score, privacy scan result, and repo fingerprint
+  11. `aether update` never overwrites repo-local learned skills
+**Plans**: TBD
+
+### Phase 92: System Hardening & Validation
+**Goal**: Worker lifecycle is managed with heartbeats and process groups, and the full system is validated end-to-end
+**Depends on**: Phase 91
+**Requirements**: SAFE-05, SAFE-06, PLAT-03, PLAT-04, PLAT-05, PLAT-06, VAL-01, VAL-02, VAL-03
+**Success Criteria** (what must be TRUE):
+  1. Worker prompts include all v5.4 context sections (colony-prime, prompt_section, survey context, phase research, matched skills, midden/graveyard cautions) refreshed immediately before spawn
+  2. Workers emit periodic heartbeats (first immediately, then throttled to ~30s intervals) and spawn in managed process groups (Setpgid on Unix)
+  3. Worker PIDs are tracked in colony state and killed on exit (SIGTERM then SIGKILL after ~2s)
+  4. Stale workers from previous sessions are detected and cleaned before new dispatch
+  5. Full smoke test passes from init/oracle through phase advancement with gate failure, unblock, fixer, continue, and process cleanup
+  6. All generated/mirrored files (agents, commands) survive `aether update` without corruption
+  7. Every new command and file format has validation and actionable error messages
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86 -> 87
+Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 70. Self-Hosting Cleanup | v1.11 | 1/1 | Complete    | 2026-04-28 |
-| 71. Platform Hardening | v1.11 | 2/2 | Complete    | 2026-04-28 |
-| 72. Smart Init Charter | v1.11 | 2/2 | Complete    | 2026-04-28 |
-| 73. Rich Init Research | v1.11 | 3/3 | Complete    | 2026-04-28 |
-| 74. Suggest-Analyze | v1.11 | 2/2 | Complete    | 2026-04-29 |
-| 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
-| 76. UX Improvements | v1.11 | 2/2 | Complete    | 2026-04-29 |
-| 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
-| 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
-| 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
-| 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 81. Plan and Lifecycle Loop Safety | v1.12 | 1/2 | Complete    | 2026-04-30 |
-| 82. Loop Detection Telemetry | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 83. Planning Depth System | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
-| 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete    | 2026-05-01 |
-| 87. Fix Continue Depth Persistence | v1.12 | 1/1 | Complete    | 2026-05-01 |
+| 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete | 2026-04-30 |
+| 81. Plan and Lifecycle Loop Safety | v1.12 | 1/2 | Complete | 2026-04-30 |
+| 82. Loop Detection Telemetry | v1.12 | 2/2 | Complete | 2026-04-30 |
+| 83. Planning Depth System | v1.12 | 2/2 | Complete | 2026-04-30 |
+| 84. Verification Depth Extension | v1.12 | 2/2 | Complete | 2026-04-30 |
+| 85. Smart Depth Defaults | v1.12 | 0/2 | Complete | 2026-04-30 |
+| 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete | 2026-05-01 |
+| 87. Fix Continue Depth Persistence | v1.12 | 1/1 | Complete | 2026-05-01 |
+| 88. Recovery Foundation | v1.13 | 0 | Not started | - |
+| 89. Gate Self-Healing & Smart Planning | v1.13 | 0 | Not started | - |
+| 90. Learning Foundation | v1.13 | 0 | Not started | - |
+| 91. Hive Intelligence | v1.13 | 0 | Not started | - |
+| 92. System Hardening & Validation | v1.13 | 0 | Not started | - |

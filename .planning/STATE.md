@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.13
 milestone_name: Recovery Hardening & Hive Learning
-status: defining_requirements
+status: roadmap_created
 stopped_at:
-last_updated: "2026-05-01T14:00:00.000Z"
-last_activity: 2026-05-01 -- Milestone v1.13 started
+last_updated: "2026-05-01T15:00:00.000Z"
+last_activity: 2026-05-01 -- Roadmap created (5 phases)
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Defining requirements for v1.13
+**Current focus:** Phase 88 - Recovery Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
+Phase: 88 of 92 (Recovery Foundation)
+Plan: Not started
+Status: Roadmap created, ready to plan Phase 88
 Last activity: 2026-05-01
 
-Progress: [          ] 0% (0/0 phases complete in this milestone)
+Progress: [          ] 0% (0/5 phases complete in this milestone)
 
 ## Performance Metrics
 
@@ -47,6 +47,11 @@ Progress: [          ] 0% (0/0 phases complete in this milestone)
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- v1.13: 5-phase roadmap following research-driven build order (Recovery Foundation -> Gate Self-Healing -> Learning Foundation -> Hive Intelligence -> System Hardening)
+- v1.13: LOOP requirements woven into gate recovery phases (88, 89), not isolated
+- v1.13: SAFE-05/06 (full-context path, refresh-before-spawn) deferred to Phase 92 (System Hardening) since they are worker lifecycle concerns
 
 ### Pending Todos
 
@@ -54,7 +59,9 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- Research flag: Phase 89 Fixer caste prompt design is novel -- no existing agent does root-cause analysis on gate failures
+- Research flag: Phase 91 SQLite FTS5 with modernc.org/sqlite needs validation spike
+- Research flag: Phase 91 auto-created skills from task context requires template design for procedural memory
 
 ## Deferred Items
 
@@ -74,6 +81,6 @@ Items acknowledged and carried forward from previous milestones:
 
 ## Session Continuity
 
-Last session: milestone start
-Stopped at: Requirements definition
-Resume file: —
+Last session: 2026-05-01
+Stopped at: Roadmap created
+Resume file: None
