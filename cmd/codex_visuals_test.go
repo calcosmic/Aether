@@ -84,7 +84,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -2034,7 +2034,7 @@ func TestCodexVisualParity(t *testing.T) {
 		}
 
 		output := stdout.(*bytes.Buffer).String()
-		for _, marker := range []string{"── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification ──", "── Housekeeping ──", "── Colony Complete ──"} {
+		for _, marker := range []string{"── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [", "── Housekeeping ──", "── Colony Complete ──"} {
 			if !strings.Contains(output, marker) {
 				t.Errorf("build visual missing stage marker %q (Codex parity)", marker)
 			}
