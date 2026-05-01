@@ -62,6 +62,7 @@ var planCmd = &cobra.Command{
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		depth, _ := cmd.Flags().GetString("depth")
 		planningDepth, _ := cmd.Flags().GetString("planning-depth")
+		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -73,6 +74,7 @@ var planCmd = &cobra.Command{
 			PlanOnly:      planOnly,
 			Depth:         depth,
 			PlanningDepth: planningDepth,
+			VerificationDepth: verificationDepth,
 			WorkerTimeout: workerTimeout,
 		})
 		if err != nil {
@@ -958,6 +960,7 @@ func init() {
 	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
 	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")
+	planCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results (use - for stdin)")

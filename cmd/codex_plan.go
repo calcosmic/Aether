@@ -114,12 +114,13 @@ type phaseTaskTemplate struct {
 }
 
 type codexPlanOptions struct {
-	Refresh       bool
-	Synthetic     bool
-	PlanOnly      bool
-	Depth         string
-	PlanningDepth string
-	WorkerTimeout time.Duration
+	Refresh            bool
+	Synthetic          bool
+	PlanOnly           bool
+	Depth              string
+	PlanningDepth      string
+	VerificationDepth  string
+	WorkerTimeout      time.Duration
 }
 
 type codexPlanManifest struct {
@@ -134,6 +135,7 @@ type codexPlanManifest struct {
 	GranularityMin     int                     `json:"granularity_min"`
 	GranularityMax     int                     `json:"granularity_max"`
 	PlanningDepth     string                  `json:"planning_depth"`
+	VerificationDepth string                  `json:"verification_depth,omitempty"`
 	Survey             codexSurveyContext      `json:"survey"`
 	Dispatches         []codexPlanningDispatch `json:"dispatches"`
 	DispatchMode       string                  `json:"dispatch_mode"`
@@ -174,6 +176,17 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, err
 	}
+	verificationDepth, err := resolveVerificationDepthSmart(opts.VerificationDepth, planningPhase, len(state.Plan.Phases))
+	if err != nil {
+		return nil, err
+	}
+	verificationSmartDefault := opts.VerificationDepth == ""
+	planningSmartDefault := opts.PlanningDepth == ""
+	// Persist resolved verification depth in ColonyState for downstream build consumption.
+	state.VerificationDepth = verificationDepth
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		return nil, fmt.Errorf("failed to persist verification depth: %w", err)
+	}
 	pending := loadPendingDecisionFile()
 	unresolvedClarifications := countPendingClarifications(pending)
 	clarificationWarning := ""
@@ -200,6 +213,10 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			"count":                     len(state.Plan.Phases),
 			"depth":                     planDepth,
 				"planning_depth":            planningDepth,
+			"verification_depth":         verificationDepth,
+			"verification_smart_default": verificationSmartDefault,
+			"planning_smart_default":     planningSmartDefault,
+			"planning_phase":             planningPhase,
 			"granularity":               string(granularity),
 			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
 			"unresolved_clarifications": unresolvedClarifications,
@@ -467,6 +484,18 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	if err != nil {
 		return nil, err
 	}
+	verificationDepth, err := resolveVerificationDepthSmart(opts.VerificationDepth, colony.Phase{ID: 1}, len(state.Plan.Phases))
+	if err != nil {
+		return nil, err
+	}
+	verificationSmartDefault := opts.VerificationDepth == ""
+	planningSmartDefault := opts.PlanningDepth == ""
+	planningPhase := colony.Phase{ID: 1}
+	// Persist resolved verification depth in ColonyState for downstream build consumption.
+	state.VerificationDepth = verificationDepth
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		return nil, fmt.Errorf("failed to persist verification depth: %w", err)
+	}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
@@ -482,6 +511,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"count":                     len(state.Plan.Phases),
 			"depth":                     planDepth,
 			"planning_depth":            planningDepth,
+			"verification_depth":         verificationDepth,
+			"verification_smart_default": verificationSmartDefault,
+			"planning_smart_default":     planningSmartDefault,
+			"planning_phase":             planningPhase,
 			"granularity":               string(granularity),
 			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
 			"dispatch_mode":             "plan-only",
@@ -521,6 +554,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		GranularityMin:     granularityMin(granularity),
 		GranularityMax:     granularityMax(granularity),
 		PlanningDepth:     planningDepth,
+		VerificationDepth: verificationDepth,
 		Survey:             survey,
 		Dispatches:         dispatches,
 		DispatchMode:       "plan-only",
@@ -537,6 +571,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"goal":                      *state.Goal,
 		"depth":                     planDepth,
 			"planning_depth":            planningDepth,
+		"verification_depth":         verificationDepth,
+		"verification_smart_default": verificationSmartDefault,
+		"planning_smart_default":     planningSmartDefault,
+		"planning_phase":             planningPhase,
 		"granularity":               string(granularity),
 		"granularity_min":           granularityMin(granularity),
 		"granularity_max":           granularityMax(granularity),

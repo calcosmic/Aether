@@ -958,3 +958,75 @@ func TestResolvePlanningDepthSmart_EmptyUsesSmartDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveVerificationDepthSmart_ExplicitValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		depth    string
+		phase    colony.Phase
+		total    int
+		expected string
+	}{
+		{"explicit heavy preserved", "heavy", colony.Phase{ID: 1, Name: "Setup"}, 6, "heavy"},
+		{"explicit light overrides final phase", "light", colony.Phase{ID: 5, Name: "Final"}, 5, "light"},
+		{"explicit standard preserved", "standard", colony.Phase{ID: 3, Name: "Core"}, 4, "standard"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveVerificationDepthSmart(tt.depth, tt.phase, tt.total)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.expected {
+				t.Errorf("resolveVerificationDepthSmart(%q, ...) = %q, want %q", tt.depth, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveVerificationDepthSmart_EmptyUsesSmartDefault(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    colony.Phase
+		total    int
+		expected string
+	}{
+		{"early phase gets light", colony.Phase{ID: 1, Name: "Setup"}, 6, "light"},
+		{"final phase gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, "heavy"},
+		{"security risk gets heavy", colony.Phase{ID: 2, Name: "Auth system"}, 4, "heavy"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveVerificationDepthSmart("", tt.phase, tt.total)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.expected {
+				t.Errorf("resolveVerificationDepthSmart(empty, %+v, %d) = %q, want %q",
+					tt.phase, tt.total, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveVerificationDepthSmart_InvalidValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		depth string
+		phase colony.Phase
+		total int
+	}{
+		{"invalid depth returns error", "extreme", colony.Phase{ID: 1, Name: "Setup"}, 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := resolveVerificationDepthSmart(tt.depth, tt.phase, tt.total)
+			if err == nil {
+				t.Fatal("expected error for invalid depth, got nil")
+			}
+			if !strings.Contains(err.Error(), "invalid verification depth") {
+				t.Errorf("error %q does not contain expected substring", err.Error())
+			}
+		})
+	}
+}

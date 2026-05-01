@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -207,4 +208,22 @@ func resolveSmartVerificationDepth(phase colony.Phase, totalPhases int) colony.V
 		return colony.VerificationDepthLight
 	}
 	return colony.VerificationDepthStandard
+}
+
+// resolveVerificationDepthSmart wraps NormalizeVerificationDepth with smart defaults.
+// When depth is empty (no explicit user flag), it uses resolveSmartVerificationDepth
+// to auto-select based on phase position and risk signals.
+func resolveVerificationDepthSmart(depth string, phase colony.Phase, totalPhases int) (string, error) {
+	normalized := colony.NormalizeVerificationDepth(depth)
+	if depth != "" {
+		lower := strings.ToLower(strings.TrimSpace(depth))
+		switch lower {
+		case "light", "minimal", "coarse", "standard", "default", "heavy", "full", "thorough":
+			// known alias or canonical value
+		default:
+			return "", fmt.Errorf("invalid verification depth %q: must be light, standard, or heavy", depth)
+		}
+		return string(normalized), nil
+	}
+	return string(resolveSmartVerificationDepth(phase, totalPhases)), nil
 }

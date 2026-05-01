@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.12
 milestone_name: Safe Colony
-status: planning
+status: executing
 stopped_at: Phase 86 context gathered
-last_updated: "2026-05-01T11:38:24.985Z"
-last_activity: 2026-04-30
+last_updated: "2026-05-01T11:39:35.613Z"
+last_activity: 2026-05-01 -- Phase 86 execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-30)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase --phase — 83
+**Current focus:** Phase 86 — depth-selection-ui-and-persistence
 
 ## Current Position
 
-Phase: 86
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-04-30
+Phase: 86 (depth-selection-ui-and-persistence) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 86
+Last activity: 2026-05-01 -- Phase 86 execution started
 
 Progress: [##        ] 14% (1/7 phases complete in this milestone)
 

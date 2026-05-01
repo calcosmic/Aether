@@ -285,6 +285,7 @@ type ColonyState struct {
 	Graveyards         []Graveyard     `json:"graveyards"`
 	Events             []string        `json:"events"`
 	ColonyDepth        string          `json:"colony_depth,omitempty"`
+	VerificationDepth  string          `json:"verification_depth,omitempty"`
 	PlanGranularity    PlanGranularity `json:"plan_granularity,omitempty"`
 	ParallelMode       ParallelMode    `json:"parallel_mode,omitempty"`
 	TerritorySurveyed  *string         `json:"territory_surveyed,omitempty"`
