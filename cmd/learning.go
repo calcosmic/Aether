@@ -1,13 +1,39 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
-	"github.com/calcosmic/Aether/pkg/memory"
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/spf13/cobra"
 )
+
+// isLearningEnabled checks config and flag for learning enablement (D-16, PRIV-05).
+// Default: enabled. Disabled by: config.json learning.enabled=false OR --no-learn flag.
+func isLearningEnabled(noLearnFlag bool) bool {
+	if noLearnFlag {
+		return false
+	}
+	// Check .planning/config.json for learning.enabled
+	if store != nil {
+		configPath := filepath.Join(filepath.Dir(store.BasePath()), "..", ".planning", "config.json")
+		if data, err := os.ReadFile(configPath); err == nil {
+			var cfg map[string]interface{}
+			if json.Unmarshal(data, &cfg) == nil {
+				if learning, ok := cfg["learning"].(map[string]interface{}); ok {
+					if enabled, ok := learning["enabled"].(bool); ok && !enabled {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true // default enabled
+}
 
 var learningObserveCmd = &cobra.Command{
 	Use:   "learning-observe",
@@ -42,7 +68,7 @@ var learningObserveCmd = &cobra.Command{
 		}
 
 		bus := events.NewBus(store, events.DefaultConfig())
-		obsService := memory.NewObservationService(store, bus)
+		obsService := learn.NewObservationService(store, bus)
 
 		ctx, cancel := timeoutCtx(cmd)
 		defer cancel()
@@ -86,7 +112,7 @@ var learningCheckPromotionCmd = &cobra.Command{
 		if checkAll {
 			var eligible []map[string]interface{}
 			for _, obs := range file.Observations {
-				isEligible, reason := memory.CheckPromotion(obs)
+				isEligible, reason := learn.CheckPromotion(obs)
 				if isEligible {
 					entry := map[string]interface{}{
 						"content_hash":      obs.ContentHash,
@@ -122,7 +148,7 @@ var learningCheckPromotionCmd = &cobra.Command{
 			return nil
 		}
 
-		eligible, reason := memory.CheckPromotion(*found)
+		eligible, reason := learn.CheckPromotion(*found)
 
 		outputOK(map[string]interface{}{
 			"promotable":        eligible,
@@ -151,7 +177,7 @@ var learningPromoteAutoCmd = &cobra.Command{
 		}
 
 		bus := events.NewBus(store, events.DefaultConfig())
-		promoteService := memory.NewPromoteService(store, bus)
+		promoteService := learn.NewPromoteService(store, bus)
 
 		ctx, cancel := timeoutCtx(cmd)
 		defer cancel()
@@ -160,7 +186,7 @@ var learningPromoteAutoCmd = &cobra.Command{
 		failed := 0
 		var failures []string
 		for _, obs := range file.Observations {
-			eligible, _ := memory.CheckPromotion(obs)
+			eligible, _ := learn.CheckPromotion(obs)
 			if eligible {
 				result, err := promoteService.Promote(ctx, obs, "auto-promote")
 				if err != nil {
@@ -211,7 +237,7 @@ var memoryCaptureCmd = &cobra.Command{
 		}
 
 		bus := events.NewBus(store, events.DefaultConfig())
-		obsService := memory.NewObservationService(store, bus)
+		obsService := learn.NewObservationService(store, bus)
 
 		ctx, cancel := timeoutCtx(cmd)
 		defer cancel()

@@ -31,6 +31,7 @@ var continueFinalizeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		skipMissing, _ := cmd.Flags().GetBool("skip-missing")
+		noLearn, _ := cmd.Flags().GetBool("no-learn")
 		verificationTimeout, verificationTimeoutExplicit, err := resolveContinueVerificationTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -44,7 +45,7 @@ var continueFinalizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
-		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout)
+		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout, noLearn)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -113,7 +114,7 @@ func (c codexExternalContinueCompletion) workerResults() []codexContinueExternal
 	return results
 }
 
-func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool, verificationTimeoutOverride time.Duration) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool, verificationTimeoutOverride time.Duration, noLearn bool) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
@@ -258,7 +259,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		}
 
 		// Check if learning is enabled (D-16) -- config + flag
-		learningEnabled := true // default enabled; flag check added in Plan 04
+		learningEnabled := isLearningEnabled(noLearn)
 
 		if !learn.IsLearningEligible(allWorkersSucceeded, true, gates.Passed, learningEnabled) {
 			return // Not eligible -- no durable learning
