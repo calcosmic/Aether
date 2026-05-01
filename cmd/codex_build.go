@@ -70,6 +70,7 @@ type codexBuildManifest struct {
 	SelectedTasks   []string                  `json:"selected_tasks,omitempty"`
 	Tasks           []codexBuildTaskPlan      `json:"tasks"`
 	SuccessCriteria []string                  `json:"success_criteria"`
+	ReviewDepth     string                    `json:"review_depth,omitempty"`
 }
 
 type codexWaveExecutionPlan struct {
@@ -147,7 +148,8 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	generatedAt := time.Now().UTC()
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	playbooks := codexBuildPlaybooks()
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, "")
+	storedDepthStr := strings.TrimSpace(state.VerificationDepth)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, storedDepthStr)
 	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
@@ -160,7 +162,7 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
-	manifest := buildCodexBuildManifest(root, state, phase, "", "", playbooks, dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true)
+	manifest := buildCodexBuildManifest(root, state, phase, "", "", playbooks, dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
 
 	result := map[string]interface{}{
 		"plan_only":         true,
@@ -240,7 +242,8 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if depth == "" {
 		depth = "standard"
 	}
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, "")
+	storedDepthStr := strings.TrimSpace(state.VerificationDepth)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, storedDepthStr)
 	playbooks := codexBuildPlaybooks()
 	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
@@ -287,7 +290,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		progress.Advance("Prepare")
 	}
 
-	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, "", selectedTaskIDs)
+	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, "", selectedTaskIDs, reviewDepth)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -319,7 +322,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	updatedState.State = colony.StateBUILT
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
-	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs); err != nil {
+	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth); err != nil {
 		return nil, err
 	}
 
@@ -1004,7 +1007,7 @@ func codexBuildTaskPlans(phase colony.Phase) []codexBuildTaskPlan {
 	return taskPlans
 }
 
-func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony.Phase, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, workerBriefs []string, planOnly bool) codexBuildManifest {
+func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony.Phase, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, workerBriefs []string, planOnly bool, reviewDepth colony.VerificationDepth) codexBuildManifest {
 	goal := ""
 	if state.Goal != nil {
 		goal = strings.TrimSpace(*state.Goal)
@@ -1044,6 +1047,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		SelectedTasks:   append([]string{}, selectedTaskIDs...),
 		Tasks:           codexBuildTaskPlans(phase),
 		SuccessCriteria: append([]string{}, phase.SuccessCriteria...),
+		ReviewDepth:     string(reviewDepth),
 	}
 }
 
@@ -1092,7 +1096,7 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 	return dispatchMaps
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string) ([]string, []codexBuildDispatch, error) {
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
 	briefOutputs := map[string]string{}
 	finalOutputs := map[string][]string{}
@@ -1127,7 +1131,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 		}
 	}
 
-	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, playbooks, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false)
+	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, playbooks, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	if err := store.SaveJSON(manifestRel, manifest); err != nil {
 		return nil, nil, fmt.Errorf("failed to write build manifest: %w", err)
