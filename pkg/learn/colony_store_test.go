@@ -50,11 +50,7 @@ func TestColonyStoreAdd(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	if entry.ID == "" {
-		t.Error("Add should assign an ID")
-	}
-
-	// Verify persistence
+	// Verify persistence (Add assigns ID internally)
 	var loaded []Entry
 	if err := store.LoadJSON("entries.json", &loaded); err != nil {
 		t.Fatalf("load entries: %v", err)
@@ -62,8 +58,8 @@ func TestColonyStoreAdd(t *testing.T) {
 	if len(loaded) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(loaded))
 	}
-	if loaded[0].ID != entry.ID {
-		t.Errorf("loaded ID = %q, want %q", loaded[0].ID, entry.ID)
+	if loaded[0].ID == "" {
+		t.Error("Add should assign an ID to the persisted entry")
 	}
 	if loaded[0].Content != "learned something" {
 		t.Errorf("loaded Content = %q, want %q", loaded[0].Content, "learned something")
@@ -74,12 +70,14 @@ func TestColonyStoreAdd(t *testing.T) {
 func TestColonyStoreGet(t *testing.T) {
 	cs, _, _ := newTestColonyStore(t)
 
-	entry := makeEntry("", "retrievable", 0.9)
-	if err := cs.Add(entry); err != nil {
-		t.Fatalf("Add: %v", err)
+	cs.Add(makeEntry("", "retrievable", 0.9))
+
+	entries, err := cs.List(EntryFilter{Limit: 1})
+	if err != nil {
+		t.Fatalf("List: %v", err)
 	}
 
-	got, err := cs.Get(entry.ID)
+	got, err := cs.Get(entries[0].ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -189,14 +187,18 @@ func TestColonyStoreReplace(t *testing.T) {
 	entry := makeEntry("", "original", 0.5)
 	cs.Add(entry)
 
-	updated := entry
+	// Retrieve the persisted entry to get the assigned ID
+	entries, _ := cs.List(EntryFilter{Limit: 1})
+	originalID := entries[0].ID
+
+	updated := entries[0]
 	updated.Content = "updated"
 	updated.Classification = ClassHiveShareable
-	if err := cs.Replace(entry.ID, updated); err != nil {
+	if err := cs.Replace(originalID, updated); err != nil {
 		t.Fatalf("Replace: %v", err)
 	}
 
-	got, err := cs.Get(entry.ID)
+	got, err := cs.Get(originalID)
 	if err != nil {
 		t.Fatalf("Get after replace: %v", err)
 	}
@@ -212,14 +214,16 @@ func TestColonyStoreReplace(t *testing.T) {
 func TestColonyStoreRemove(t *testing.T) {
 	cs, _, _ := newTestColonyStore(t)
 
-	entry := makeEntry("", "to remove", 0.7)
-	cs.Add(entry)
+	cs.Add(makeEntry("", "to remove", 0.7))
 
-	if err := cs.Remove(entry.ID); err != nil {
+	entries, _ := cs.List(EntryFilter{Limit: 1})
+	id := entries[0].ID
+
+	if err := cs.Remove(id); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 
-	got, err := cs.Get(entry.ID)
+	got, err := cs.Get(id)
 	if err != nil {
 		t.Fatalf("Get after remove: %v", err)
 	}
@@ -328,13 +332,18 @@ func TestColonyStoreRepoIsolation(t *testing.T) {
 func TestColonyStoreAddUniqueIDs(t *testing.T) {
 	cs, _, _ := newTestColonyStore(t)
 
-	e1 := makeEntry("", "first", 0.8)
-	e2 := makeEntry("", "second", 0.8)
-	cs.Add(e1)
-	cs.Add(e2)
+	cs.Add(makeEntry("", "first", 0.8))
+	cs.Add(makeEntry("", "second", 0.8))
 
-	if e1.ID == e2.ID {
-		t.Errorf("IDs should be unique: both = %q", e1.ID)
+	entries, err := cs.List(EntryFilter{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].ID == entries[1].ID {
+		t.Errorf("IDs should be unique: both = %q", entries[0].ID)
 	}
 }
 
