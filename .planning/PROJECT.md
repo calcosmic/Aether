@@ -42,6 +42,7 @@ That means:
 - Hive Brain: seal auto-promotes high-confidence instincts to cross-colony wisdom
 - Planning depth system (light/standard/deep) with smart defaults -- Phase 83
 - Verification depth system (light/standard/heavy) with smart defaults -- Phase 84
+- Depth selection UI with ColonyState persistence and build manifest propagation -- Phase 86
 - Planning depth system: light/standard/deep task decomposition via --planning-depth flag (Phase 83)
 - Smart review depth: light/heavy modes, final phase always heavy, `--light` flag
 - Porter ant: 26th caste, wired into seal lifecycle with interactive publishing
@@ -114,13 +115,13 @@ That means:
 - Idea shelving (persistent backlog, auto-shelve, init surfacing, entomb survival) -- v1.10
 - QUEEN.md pipeline fix (dedup, global wisdom injection, auto-promotion) -- v1.10
 - Hive Brain wiring (seal auto-promotes high-confidence instincts) -- v1.10
+- Independent planning depth and verification depth controls -- v1.12 (Phase 83 & 84)
+- Smart depth defaults based on phase position and code change risk -- v1.12 (Phase 83 & 84)
+- User depth override UI at plan start with persistence -- v1.12 (Phase 86)
 
 ### Active
 
 - Full loop audit across all Aether commands (continue, build, plan, seal, etc.) -- v1.12
-- Independent planning depth and verification depth controls -- v1.12 (Validated in Phase 83 & 84)
-- Smart depth defaults based on phase position and code change risk -- v1.12 (Validated in Phase 83 & 84)
-- User depth override UI at plan start -- v1.12
 
 ### Out of Scope
 
