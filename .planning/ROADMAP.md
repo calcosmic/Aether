@@ -274,7 +274,7 @@ Plans:
 - [x] 90-03-PLAN.md -- Continue-finalize trigger wiring + colony-prime context injection (LRN-01/02/04, HIVE-03, PRIV-03)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 90-04-PLAN.md -- HiveStore, export/import CLI, config/flag controls, call site migration (HIVE-01, LRN-03/06, PRIV-04/05)
+- [x] 90-04-PLAN.md -- HiveStore, export/import CLI, config/flag controls, call site migration (HIVE-01, LRN-03/06, PRIV-04/05)
 
 ### Phase 91: Hive Intelligence
 **Goal**: Colony learning is backed by SQLite with full-text search, pheromone skills auto-created from verified difficult tasks, and the Keeper curator maintains memory hygiene
@@ -325,6 +325,6 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 87. Fix Continue Depth Persistence | v1.12 | 1/1 | Complete | 2026-05-01 |
 | 88. Recovery Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
 | 89. Gate Self-Healing & Smart Planning | v1.13 | 2/4 | Complete    | 2026-05-01 |
-| 90. Learning Foundation | v1.13 | 3/4 | In Progress|  |
+| 90. Learning Foundation | v1.13 | 4/4 | Complete   | 2026-05-01 |
 | 91. Hive Intelligence | v1.13 | 0 | Not started | - |
 | 92. System Hardening & Validation | v1.13 | 0 | Not started | - |
