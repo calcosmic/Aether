@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -1029,5 +1030,31 @@ func TestResolveVerificationDepthSmart_InvalidValue(t *testing.T) {
 				t.Errorf("error %q does not contain expected substring", err.Error())
 			}
 		})
+	}
+}
+
+func TestDepthKeysPresentInFreshPlanResultMap(t *testing.T) {
+	// This test verifies the fix for the verification gap where the fresh
+	// plan generation result map was missing four depth-related keys.
+	source, err := os.ReadFile("codex_plan.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceStr := string(source)
+	requiredKeys := []string{
+		`"verification_depth":`,
+		`"verification_smart_default":`,
+		`"planning_smart_default":`,
+		`"planning_phase":`,
+	}
+	for _, key := range requiredKeys {
+		count := strings.Count(sourceStr, key)
+		// Each key must appear at least 3 times:
+		// 1. existing-plan path (~line 216)
+		// 2. fresh plan generation path (~line 449)
+		// 3. plan-only fresh path (~line 574)
+		if count < 3 {
+			t.Errorf("key %s found %d times in codex_plan.go, expected at least 3 (existing-plan, fresh generation, plan-only)", key, count)
+		}
 	}
 }
