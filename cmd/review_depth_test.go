@@ -75,10 +75,10 @@ func TestResolveReviewDepth_KeywordPhaseAutoHeavy(t *testing.T) {
 			expected: ReviewDepthHeavy,
 		},
 		{
-			name:     "keyword phase with light flag still heavy",
+			name:     "keyword phase with light flag overrides to light",
 			phase:    colony.Phase{ID: 2, Name: "Auth refactor"},
 			total:    5, light: true, heavy: false,
-			expected: ReviewDepthHeavy,
+			expected: ReviewDepthLight,
 		},
 		{
 			name:     "non-keyword non-final defaults light",

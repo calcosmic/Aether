@@ -33,8 +33,9 @@ func resolveReviewDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFla
 	if heavyFlag {
 		return ReviewDepthHeavy
 	}
-	// Keyword auto-detection triggers heavy review.
-	if phaseHasHeavyKeywords(phase.Name) {
+	// Keyword auto-detection triggers heavy review, BUT explicit light flag
+	// overrides keyword match (user intent takes priority).
+	if phaseHasHeavyKeywords(phase.Name) && !lightFlag {
 		return ReviewDepthHeavy
 	}
 	// Default to light for intermediate phases.
