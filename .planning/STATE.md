@@ -4,8 +4,8 @@ milestone: v1.12
 milestone_name: Safe Colony
 status: executing
 stopped_at: Phase 86 context gathered
-last_updated: "2026-05-01T12:33:18.390Z"
-last_activity: 2026-05-01 -- Phase 86 execution started
+last_updated: "2026-05-01T12:41:37.792Z"
+last_activity: 2026-05-01 -- Phase --phase execution started
 progress:
   total_phases: 7
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-30)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 86 — depth-selection-ui-and-persistence
+**Current focus:** Phase --phase — 86
 
 ## Current Position
 
-Phase: 86 (depth-selection-ui-and-persistence) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 86
-Last activity: 2026-05-01 -- Phase 86 execution started
+Phase: --phase (86) — EXECUTING
+Plan: 1 of --name
+Status: Executing Phase --phase
+Last activity: 2026-05-01 -- Phase --phase execution started
 
 Progress: [##        ] 14% (1/7 phases complete in this milestone)
 
