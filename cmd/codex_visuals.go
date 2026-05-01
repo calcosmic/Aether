@@ -1160,7 +1160,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	b.WriteString("Phase: ")
 	b.WriteString(phase.Name)
 	b.WriteString("\n")
-	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
+	b.WriteString(renderReviewDepthLineWithReason(reviewDepth, phase.ID, len(state.Plan.Phases), phase, true))
 	b.WriteString("\n")
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("Objective: ")
@@ -1185,7 +1185,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 		displayDataPath("last-build-claims.json"),
 		displayDataPath("spawn-tree.txt"),
 	))
-	b.WriteString(renderStageMarker("Verification"))
+	b.WriteString(renderStageMarker(fmt.Sprintf("Verification [%s]", string(reviewDepth))))
 	b.WriteString("Verification happens during `aether continue`.\n")
 	b.WriteString(renderStageMarker("Housekeeping"))
 	b.WriteString("Signal housekeeping runs during `aether continue`.\n")
@@ -1214,7 +1214,7 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 	b.WriteString("Phase: ")
 	b.WriteString(phase.Name)
 	b.WriteString("\n")
-	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
+	b.WriteString(renderReviewDepthLineWithReason(reviewDepth, phase.ID, len(state.Plan.Phases), phase, true))
 	b.WriteString("\n")
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("Objective: ")
