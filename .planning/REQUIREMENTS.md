@@ -9,44 +9,44 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 
 ### Build Safety
 
-- [ ] **SAFE-01**: Build-complete rejects completion when every worker result is failed, blocked, errored, or missing (AAC-001)
-- [ ] **SAFE-02**: Build-complete rejects completion when every worker result reports files_modified: 0 for a build phase (AAC-001)
-- [ ] **SAFE-03**: Continue verification traces every accepted build claim to a successful worker result with files_modified > 0 (AAC-002)
-- [ ] **SAFE-04**: Continue verification records provenance (worker name, caste, run ID, phase, timestamp, status, files_modified) and rejects claims with missing or stale provenance (AAC-002)
+- [x] **SAFE-01**: Build-complete rejects completion when every worker result is failed, blocked, errored, or missing (AAC-001)
+- [x] **SAFE-02**: Build-complete rejects completion when every worker result reports files_modified: 0 for a build phase (AAC-001)
+- [x] **SAFE-03**: Continue verification traces every accepted build claim to a successful worker result with files_modified > 0 (AAC-002)
+- [x] **SAFE-04**: Continue verification records provenance (worker name, caste, run ID, phase, timestamp, status, files_modified) and rejects claims with missing or stale provenance (AAC-002)
 - [ ] **SAFE-05**: Worker prompts include all v5.4 context sections: colony-prime, prompt_section, survey context, phase research, matched skills, midden/graveyard cautions (AAC-005)
 - [ ] **SAFE-06**: Context is refreshed immediately before worker spawn, not cached from session start (AAC-005)
 
 ### Confidence & Planning
 
-- [ ] **CONF-01**: Oracle loop accepts user-settable confidence target via --confidence-target flag (default 95) (AAC-003)
-- [ ] **CONF-02**: Oracle does not finalize below target unless a hard blocker is reported or max-iteration cap is reached (AAC-003)
-- [ ] **CONF-03**: Oracle output includes target, final score, iteration count, rubric breakdown, evidence, gaps, original prompt, synthesized prompt, and approval status (AAC-003)
-- [ ] **CONF-04**: Init command accepts raw user prompt, scouts the repo, and synthesizes an approval-ready launch brief (AAC-004)
-- [ ] **CONF-05**: Colony launch is blocked until user approves, edits, or rejects the synthesized brief (AAC-004)
+- [x] **CONF-01**: Oracle loop accepts user-settable confidence target via --confidence-target flag (default 95) (AAC-003)
+- [x] **CONF-02**: Oracle does not finalize below target unless a hard blocker is reported or max-iteration cap is reached (AAC-003)
+- [x] **CONF-03**: Oracle output includes target, final score, iteration count, rubric breakdown, evidence, gaps, original prompt, synthesized prompt, and approval status (AAC-003)
+- [x] **CONF-04**: Init command accepts raw user prompt, scouts the repo, and synthesizes an approval-ready launch brief (AAC-004)
+- [x] **CONF-05**: Colony launch is blocked until user approves, edits, or rejects the synthesized brief (AAC-004)
 
 ### Gate Recovery
 
-- [ ] **GATE-01**: Every blocking gate failure shows what went wrong, specific fixes, and two options: fix manually then /ant-continue, or run /ant-unblock (AAC-006)
-- [ ] **GATE-02**: Forbidden strings (CRITICAL: Do NOT proceed, The phase will NOT advance) removed from gate failure paths (AAC-006)
-- [ ] **GATE-03**: Watcher Veto leaves all working-tree changes intact (no git stash push, no ROLLBACK_VETO) (AAC-007)
-- [ ] **GATE-04**: Gate results persist in gate-results.json per phase with statuses: passed, failed, skipped, not-reached (AAC-008)
-- [ ] **GATE-05**: Previously passed/skipped gates are skipped on retry, except Flags Gate and Watcher Veto which always re-run (AAC-008)
-- [ ] **GATE-06**: /ant-unblock reads gate-results.json, shows Gate Recovery Summary, and offers to dispatch Fixer (AAC-009)
-- [ ] **GATE-07**: After Fixer resolves issues, addressed blockers are auto-resolved and /ant-continue retruns (AAC-009)
-- [ ] **GATE-08**: Fixer caste (27th agent) reads gate context, investigates, fixes, verifies, and reports JSON output (AAC-010)
-- [ ] **GATE-09**: /ant-status shows Gate Status section when gate-results.json exists for current phase (AAC-011)
+- [x] **GATE-01**: Every blocking gate failure shows what went wrong, specific fixes, and two options: fix manually then /ant-continue, or run /ant-unblock (AAC-006)
+- [x] **GATE-02**: Forbidden strings (CRITICAL: Do NOT proceed, The phase will NOT advance) removed from gate failure paths (AAC-006)
+- [x] **GATE-03**: Watcher Veto leaves all working-tree changes intact (no git stash push, no ROLLBACK_VETO) (AAC-007)
+- [x] **GATE-04**: Gate results persist in gate-results.json per phase with statuses: passed, failed, skipped, not-reached (AAC-008)
+- [x] **GATE-05**: Previously passed/skipped gates are skipped on retry, except Flags Gate and Watcher Veto which always re-run (AAC-008)
+- [x] **GATE-06**: /ant-unblock reads gate-results.json, shows Gate Recovery Summary, and offers to dispatch Fixer (AAC-009)
+- [x] **GATE-07**: After Fixer resolves issues, addressed blockers are auto-resolved and /ant-continue retruns (AAC-009)
+- [x] **GATE-08**: Fixer caste (27th agent) reads gate context, investigates, fixes, verifies, and reports JSON output (AAC-010)
+- [x] **GATE-09**: /ant-status shows Gate Status section when gate-results.json exists for current phase (AAC-011)
 
 ### Loop Safety Inheritance
 
-- [ ] **LOOP-01**: Smart gate retry (GATE-04/005) respects circuit breaker — hard-stop after N failed retries per phase (REC-LOOP-01)
-- [ ] **LOOP-02**: /ant-unblock (GATE-06) tracks unblock attempts per phase and refuses after configurable cap with human-intervention message (REC-LOOP-01)
-- [ ] **LOOP-03**: Fixer dispatch blocked when circuit breaker has tripped for current phase (REC-LOOP-01)
-- [ ] **LOOP-04**: All new gate/recovery paths wire through existing cycle detection and telemetry from v1.12 (REC-LOOP-01)
+- [x] **LOOP-01**: Smart gate retry (GATE-04/005) respects circuit breaker — hard-stop after N failed retries per phase (REC-LOOP-01)
+- [x] **LOOP-02**: /ant-unblock (GATE-06) tracks unblock attempts per phase and refuses after configurable cap with human-intervention message (REC-LOOP-01)
+- [x] **LOOP-03**: Fixer dispatch blocked when circuit breaker has tripped for current phase (REC-LOOP-01)
+- [x] **LOOP-04**: All new gate/recovery paths wire through existing cycle detection and telemetry from v1.12 (REC-LOOP-01)
 
 ### Platform
 
-- [ ] **PLAT-01**: OpenCode agent hub template generates valid name field; aether update preserves it (AAC-012)
-- [ ] **PLAT-02**: LLM provider baseURL is separated from worker callback/messaging URL; missing callback fails before worker spawn with clear config error (AAC-013)
+- [x] **PLAT-01**: OpenCode agent hub template generates valid name field; aether update preserves it (AAC-012)
+- [x] **PLAT-02**: LLM provider baseURL is separated from worker callback/messaging URL; missing callback fails before worker spawn with clear config error (AAC-013)
 - [ ] **PLAT-03**: Workers emit periodic heartbeats (first immediately, then throttled to ~30s intervals) (AAC-014)
 - [ ] **PLAT-04**: Workers spawn in managed process groups (Setpgid on Unix, stub on Windows) (AAC-015)
 - [ ] **PLAT-05**: Worker PIDs are tracked and killed on exit (SIGTERM then SIGKILL after ~2s) (AAC-016)
@@ -81,8 +81,8 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 
 ### Privacy & Auto-Skills
 
-- [ ] **PRIV-01**: Privacy/secret scan runs before any memory, skill, trajectory, or promotion write (AAC-029)
-- [ ] **PRIV-02**: Common credential files, API keys, tokens, SSH keys, env files, and local user paths are blocked or redacted (AAC-029)
+- [x] **PRIV-01**: Privacy/secret scan runs before any memory, skill, trajectory, or promotion write (AAC-029)
+- [x] **PRIV-02**: Common credential files, API keys, tokens, SSH keys, env files, and local user paths are blocked or redacted (AAC-029)
 - [ ] **PRIV-03**: Learning entries classified as repo-local, hive-shareable, blocked, or needs-user-approval (AAC-029)
 - [ ] **PRIV-04**: Trajectory records stored locally with strict redaction; export requires approval and redaction report (AAC-028)
 - [ ] **PRIV-05**: Learning writes can be disabled by config and by per-command flag (AAC-029)
@@ -125,32 +125,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | Phase 88 | Pending |
-| SAFE-02 | Phase 88 | Pending |
-| SAFE-03 | Phase 88 | Pending |
-| SAFE-04 | Phase 88 | Pending |
+| SAFE-01 | Phase 88 | Complete |
+| SAFE-02 | Phase 88 | Complete |
+| SAFE-03 | Phase 88 | Complete |
+| SAFE-04 | Phase 88 | Complete |
 | SAFE-05 | Phase 92 | Pending |
 | SAFE-06 | Phase 92 | Pending |
-| CONF-01 | Phase 89 | Pending |
-| CONF-02 | Phase 89 | Pending |
-| CONF-03 | Phase 89 | Pending |
-| CONF-04 | Phase 89 | Pending |
-| CONF-05 | Phase 89 | Pending |
-| GATE-01 | Phase 88 | Pending |
-| GATE-02 | Phase 88 | Pending |
-| GATE-03 | Phase 88 | Pending |
-| GATE-04 | Phase 88 | Pending |
-| GATE-05 | Phase 88 | Pending |
-| GATE-06 | Phase 89 | Pending |
-| GATE-07 | Phase 89 | Pending |
-| GATE-08 | Phase 89 | Pending |
-| GATE-09 | Phase 89 | Pending |
-| LOOP-01 | Phase 88 | Pending |
-| LOOP-02 | Phase 89 | Pending |
-| LOOP-03 | Phase 89 | Pending |
-| LOOP-04 | Phase 89 | Pending |
-| PLAT-01 | Phase 89 | Pending |
-| PLAT-02 | Phase 89 | Pending |
+| CONF-01 | Phase 89 | Complete |
+| CONF-02 | Phase 89 | Complete |
+| CONF-03 | Phase 89 | Complete |
+| CONF-04 | Phase 89 | Complete |
+| CONF-05 | Phase 89 | Complete |
+| GATE-01 | Phase 88 | Complete |
+| GATE-02 | Phase 88 | Complete |
+| GATE-03 | Phase 88 | Complete |
+| GATE-04 | Phase 88 | Complete |
+| GATE-05 | Phase 88 | Complete |
+| GATE-06 | Phase 89 | Complete |
+| GATE-07 | Phase 89 | Complete |
+| GATE-08 | Phase 89 | Complete |
+| GATE-09 | Phase 89 | Complete |
+| LOOP-01 | Phase 88 | Complete |
+| LOOP-02 | Phase 89 | Complete |
+| LOOP-03 | Phase 89 | Complete |
+| LOOP-04 | Phase 89 | Complete |
+| PLAT-01 | Phase 89 | Complete |
+| PLAT-02 | Phase 89 | Complete |
 | PLAT-03 | Phase 92 | Pending |
 | PLAT-04 | Phase 92 | Pending |
 | PLAT-05 | Phase 92 | Pending |
@@ -173,8 +173,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LRN-04 | Phase 90 | Pending |
 | LRN-05 | Phase 90 | Pending |
 | LRN-06 | Phase 90 | Pending |
-| PRIV-01 | Phase 88 | Pending |
-| PRIV-02 | Phase 88 | Pending |
+| PRIV-01 | Phase 88 | Complete |
+| PRIV-02 | Phase 88 | Complete |
 | PRIV-03 | Phase 90 | Pending |
 | PRIV-04 | Phase 90 | Pending |
 | PRIV-05 | Phase 90 | Pending |
