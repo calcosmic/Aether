@@ -5838,3 +5838,76 @@ func TestContinueOptionsMatchCurrentDetectsDepthChange(t *testing.T) {
 		t.Fatal("expected false when VerificationDepth differs")
 	}
 }
+
+func TestMissingBuildPacketHonorsStoredHeavyDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, _ := setupContinueStateWithDepth(t, "Feature work", "heavy")
+
+	// Remove the build packet so missingBuildPacketBlockedResult is the path taken.
+	dataDir := root + "/.aether/data"
+	packetPath := filepath.Join(dataDir, "build", "phase-1", "build-packet.json")
+	os.Remove(packetPath)
+
+	state, err := loadActiveColonyState()
+	if err != nil {
+		t.Fatalf("loadActiveColonyState: %v", err)
+	}
+	phase := state.Plan.Phases[0]
+
+	result := missingBuildPacketBlockedResult(state, phase, codexContinueOptions{
+		VerificationTimeout: 15 * time.Minute,
+	})
+	if result["review_depth"] != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
+	}
+}
+
+func TestMissingBuildPacketLightFlagBlocksKeywordOverride(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	// Phase name contains "security" keyword but user passes --light.
+	root, _, _, _ := setupContinueStateWithDepth(t, "Security hardening", "standard")
+
+	dataDir := root + "/.aether/data"
+	packetPath := filepath.Join(dataDir, "build", "phase-1", "build-packet.json")
+	os.Remove(packetPath)
+
+	state, err := loadActiveColonyState()
+	if err != nil {
+		t.Fatalf("loadActiveColonyState: %v", err)
+	}
+	phase := state.Plan.Phases[0]
+
+	result := missingBuildPacketBlockedResult(state, phase, codexContinueOptions{
+		LightFlag:           true,
+		VerificationTimeout: 15 * time.Minute,
+	})
+	if result["review_depth"] != string(colony.VerificationDepthLight) {
+		t.Fatalf("review_depth = %q, want %q (light flag should block keyword override)", result["review_depth"], colony.VerificationDepthLight)
+	}
+}
+
+func TestContinueMissingPacketHonorsStoredDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root, _, _, _ := setupContinueStateWithDepth(t, "Feature work", "heavy")
+
+	// Remove the build packet to trigger the missing-packet path inside runCodexContinue.
+	dataDir := root + "/.aether/data"
+	packetPath := filepath.Join(dataDir, "build", "phase-1", "build-packet.json")
+	os.Remove(packetPath)
+
+	result, _, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{
+		VerificationTimeout: 15 * time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("runCodexContinue returned error: %v", err)
+	}
+	if result["review_depth"] != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
+	}
+}
