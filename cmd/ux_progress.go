@@ -53,7 +53,7 @@ func (p *ceremonyProgress) Advance(stepName string) {
 		}
 		_ = p.bar.Set(p.current)
 	} else {
-		fmt.Fprintf(p.out, "  Step %d/%d: %s (%s)\n", p.current, len(p.steps), name, time.Since(p.start).Round(time.Second))
+		writeVisualOutput(p.out, fmt.Sprintf("  Step %d/%d: %s (%s)\n", p.current, len(p.steps), name, time.Since(p.start).Round(time.Second)))
 	}
 }
 
@@ -61,9 +61,9 @@ func (p *ceremonyProgress) Advance(stepName string) {
 func (p *ceremonyProgress) Finish() {
 	if p.tty && p.bar != nil {
 		_ = p.bar.Finish()
-		fmt.Fprintln(p.out)
+		writeVisualOutput(p.out, "\n")
 	}
-	fmt.Fprintf(p.out, "Ceremony complete in %s\n", time.Since(p.start).Round(time.Second))
+	writeVisualOutput(p.out, fmt.Sprintf("Ceremony complete in %s\n", time.Since(p.start).Round(time.Second)))
 }
 
 // Steps returns the step names for the ceremony.
