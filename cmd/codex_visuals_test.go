@@ -1875,6 +1875,37 @@ func TestCasteIdentityPorter(t *testing.T) {
 	}
 }
 
+// --- Fixer Caste Tests (Phase 89) ---
+
+func TestCasteIdentityFixer(t *testing.T) {
+	os.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	const fixerEmoji = "🔧"
+	const fixerColor = "33"
+	const fixerLabel = "Fixer"
+
+	identity := casteIdentity("fixer")
+	if !strings.Contains(identity, fixerEmoji) {
+		t.Errorf("casteIdentity(fixer): expected wrench emoji, got %q", identity)
+	}
+	if !strings.Contains(identity, fixerLabel) {
+		t.Errorf("casteIdentity(fixer): expected 'Fixer' label, got %q", identity)
+	}
+	emoji := casteEmoji("fixer")
+	if emoji != fixerEmoji {
+		t.Errorf("casteEmoji(fixer): expected 🔧, got %q", emoji)
+	}
+	label := casteLabel("fixer")
+	if label != fixerLabel {
+		t.Errorf("casteLabel(fixer): expected 'Fixer', got %q", label)
+	}
+	color := casteANSIColor("fixer")
+	if color != fixerColor {
+		t.Errorf("casteANSIColor(fixer): expected %q, got %q", fixerColor, color)
+	}
+}
+
 func TestGatekeeperEmojiCrossedSwords(t *testing.T) {
 	emoji := casteEmoji("gatekeeper")
 	if emoji != "⚔️" {
