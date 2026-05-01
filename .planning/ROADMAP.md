@@ -206,7 +206,7 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
   1. When `/ant-continue` spawns a watcher that fails N consecutive times (not timeouts), the watcher is auto-skipped on subsequent continue runs with a clear message
   2. When `/ant-continue` suggests a recovery command, running that recovery command does not loop back to `/ant-continue` with identical blocking state
   3. When `/ant-build` dispatches a worker that fails, the failure is tracked and the worker is escalated (not silently re-dispatched in the same wave)
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 80-01-PLAN.md -- Watcher failure tracking with auto-skip (LOOP-01) and recovery command loop prevention (LOOP-02)
@@ -219,7 +219,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. When `/ant-plan` generates a phase plan, circular dependency chains (A depends on B, B depends on A) are detected and rejected with an error
   2. When `/ant-seal`, `/ant-entomb`, `/ant-status`, or `/ant-resume` encounters an error, the suggested next step is a different command -- never "re-run the same command"
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 81-01-PLAN.md -- Cycle detection on task dependency graphs with plan validation gate (LOOP-04)
@@ -232,7 +232,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. When a loop is detected and broken (watcher skip, recovery redirect, worker escalation, circular dep rejection, lifecycle recovery), an event is published to the colony event bus with loop type, detection signal, and action taken
   2. `/ant-status` surfaces recent loop-break events in a dedicated section
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 82-01-PLAN.md -- Event infrastructure: extend CeremonyPayload, add CeremonyTopicLoopBreak, create emitLoopBreakEvent, update trimCeremonyPayload
@@ -246,7 +246,7 @@ Plans:
   1. When `/ant-plan` runs with `--planning-depth light`, the generated plan contains minimal tasks (coarse decomposition)
   2. When `/ant-plan` runs with `--planning-depth standard`, the generated plan has normal task breakdown
   3. When `/ant-plan` runs with `--planning-depth deep`, the generated plan has granular subtasks including edge cases
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 83-01-PLAN.md -- PlanningDepth type, CLI flag, manifest integration, visual output, and runtime tests
@@ -261,7 +261,7 @@ Plans:
   2. `/ant-continue` honors a `--verification-depth standard` flag that produces a normal review
   3. `/ant-continue` honors a `--verification-depth heavy` flag that produces a thorough review (same as the old `--heavy` behavior)
   4. The new 3-level system is backward-compatible: existing light/heavy behavior is preserved
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [x] 84-01-PLAN.md -- VerificationDepth type, CLI flag, 3-level dispatch, visual rendering, colony-prime context, and tests
@@ -287,11 +287,12 @@ Plans:
   2. The user can accept both defaults with a single confirmation, or override either depth individually
   3. The verification depth selected at plan time is stored in the build packet JSON
   4. `/ant-continue` reads the verification depth from the build packet and uses it without requiring the user to re-specify
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [ ] 86-01-PLAN.md -- Verification depth flag, smart resolver, depth selection banner, and plan result map enrichment (DEPTH-04)
 - [ ] 86-02-PLAN.md -- Build manifest ReviewDepth persistence and build stage marker depth display (DEPTH-04, DEPTH-05)
+- [ ] 86-03-PLAN.md -- Gap closure: add missing depth keys to fresh plan generation result map (DEPTH-04)
 
 ## Progress
 
