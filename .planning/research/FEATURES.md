@@ -1,187 +1,352 @@
-# Feature Research: Review Findings Persistence and Domain-Ledger System
+# Feature Landscape: Aether v1.11 Unification
 
-**Domain:** Review persistence for Aether colony framework (v1.9 milestone)
-**Researched:** 2026-04-26
-**Confidence:** HIGH (all findings verified against source code in `cmd/`, `.claude/agents/ant/`, `.opencode/commands/ant/`)
+**Domain:** Lost intelligence restoration, self-hosting cleanup, platform hardening
+**Researched:** 2026-04-28
+**Confidence:** HIGH (all findings verified against source code in `cmd/`, `pkg/`, `.claude/`, `.opencode/`, `.codex/`)
 
-## Feature Landscape
+## Executive Summary
 
-### Table Stakes (Users Expect These)
+v1.11 targets three categories: (1) restoring lost intelligence features from the April 2026 shell-to-Go migration, (2) removing self-hosting artifacts that exist because Aether develops itself, and (3) hardening the 3-platform experience. The lost features are already partially ported -- `init-research` exists with 10 pheromone suggestion patterns and charter generation, the curation pipeline has all 8 ants implemented in `pkg/agent/curation/`, the council system has CRUD commands, and trust scoring has `compute`/`decay`/`tier` subcommands. What is missing is wiring these components into the lifecycle flows where they were originally active, and restoring the suggest-analyze build-step analysis that was never ported from the original 618-line shell script.
 
-Features users assume exist when told "review findings survive `/clear` and accumulate across phases." Missing = the system feels broken or incomplete.
+The self-hosting artifacts are minimal -- the agent mirrors (`.aether/agents-claude/`, `.aether/agents-codex/`, `.aether/skills-codex/`) appear byte-identical with their source counterparts and the command parity test passes. The real cleanup is identifying and removing stale wrapper commands, orphaned companion files, and ensuring the publish pipeline does not re-introduce artifacts. Platform hardening is mostly about OpenCode command parity and error handling consistency across the three platforms.
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Continue-review worker outcome reports | Build workers already get per-worker `.md` files at `build/phase-N/worker-reports/`. Review workers returning rich JSON findings with no file output is an asymmetric gap. Users who inspect build artifacts will expect review artifacts too. | LOW | Directly mirrors `writeCodexBuildOutcomeReports()` / `renderCodexBuildWorkerOutcomeReport()`. Same `store.AtomicWrite` pattern, same `build/phase-N/worker-reports/{name}.md` path. The `codexContinueExternalDispatch` struct needs a `Report` field, and `mergeExternalContinueResults()` needs to preserve it. |
-| Structured domain ledger files | If findings "accumulate across phases," users expect to find them in a predictable location with predictable structure. Seven domains (security, quality, performance, resilience, testing, history, bugs) with agent-to-domain mapping is clear and discoverable. | MEDIUM | New file `cmd/review_ledger.go` with four subcommands. Each domain gets `reviews/{domain}/ledger.json`. Entries have deterministic IDs like `sec-2-001`. Needs the existing `pkg/storage/` atomic write and file locking. |
-| Colony-prime injection of prior reviews | The whole point of persistence is downstream consumption. If builders cannot see prior review findings in their prompt context, persistence is pointless. This is the primary user-facing value. | MEDIUM | New `prior-reviews` section in `colony_prime_context.go`, priority 8 (between pheromones at 9 and user preferences at 7). Reads open findings from all 7 domain ledgers, formats as markdown section. Must respect the character budget and be trimmable. |
-| Review agent Write tool access | Review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) currently have `tools: Read, Grep, Glob`. They produce structured JSON findings in their `return_format` but those findings only survive as a summary string. The agents themselves cannot persist findings. | LOW | Add `Write` tool to each of the 7 agent frontmatter fields. Add write-scope guardrails restricting writes to `.aether/data/reviews/` paths only. Mirror changes to all 4 agent surfaces (`.claude/agents/ant/`, `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/`). |
-| Ledger subcommands (write, read, summary, resolve) | Users and colony-prime need programmatic access to ledger data. Without CLI subcommands, the data is inaccessible outside the Go runtime. | MEDIUM | `review-ledger-write` appends entries with domain validation, `review-ledger-read` reads with optional domain filter, `review-ledger-summary` returns aggregate counts by severity and status, `review-ledger-resolve` marks entries as resolved. All use existing `pkg/storage/` patterns. |
-| Seal/entomb ledger lifecycle | Ledgers are colony-scoped data. Seal should include ledger summary in the CROWNED-ANTHILL report. Entomb should archive ledgers into chambers. Users who inspect chambers expect to see review findings alongside colony state. | LOW | `copyEntombArtifacts` already copies data files and directories. Add `reviews/` directory copy. `buildSealSummary` gets a review findings summary line. `clearActiveColonyRuntimeFiles` cleans up ledgers on entomb. |
+## Feature Categories
 
-### Differentiators (Competitive Advantage)
+### Category A: Lost Intelligence Restoration
 
-Features that elevate the review persistence system beyond basic file output. These make the system feel intelligent rather than merely archival.
+These features existed in the shell-based Aether and were lost during the Go migration. Some have been partially ported; others were never ported.
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Deterministic finding IDs | IDs like `sec-2-001` (domain-phase-sequence) are human-readable, searchable, and stable across re-runs. Users can reference findings by ID in pheromones, discussions, and commit messages. | LOW | Generated by the `review-ledger-write` subcommand using domain prefix + phase + incrementing counter. Must be unique within a domain. |
-| Domain-scoped agent mapping | Each agent maps to specific domains (Gatekeeper to security, Auditor to quality/security/performance, etc.). This prevents findings from piling up in a single undifferentiated bucket and makes the colony-prime injection domain-aware. | LOW | Static mapping defined once in `review_ledger.go`. Multi-domain agents (Auditor maps to 3 domains) write entries to multiple ledgers in a single `review-ledger-write` call. |
-| Accumulating severity summaries | Each ledger maintains a computed summary with counts by severity (CRITICAL, HIGH, MEDIUM, LOW, INFO). Colony-prime can show "3 HIGH open in security, 1 CRITICAL in bugs" without loading every entry. | LOW | Summary is computed on write and stored as a field in the ledger JSON. `review-ledger-summary` aggregates across all domains. Colony-prime reads summary, not individual entries. |
-| Prior-reviews priority 8 in colony-prime | Placing prior reviews at priority 8 (above instincts at 6, below pheromones at 9) means review findings are retained even when the context budget is tight. This is the correct weighting: unresolved security or quality findings from prior phases should outweigh phase learnings. | LOW | One new `colonyPrimeSection` in `buildColonyPrimeOutput()` with `priority: 8`. Uses `review-ledger-summary` output to construct a compact markdown section. |
-| Status integration with open finding counts | `aether status` already shows memory health and pheromone tables. A review findings summary ("2 open security, 1 open quality") makes the health picture complete. Without it, status shows a colony that looks healthy while harboring unresolved findings. | LOW | Add a "Review Findings" section after "Memory Health" in `status.go` and `codex_visuals.go`. Read from `review-ledger-summary`. |
-| Resolved finding tracking | Users need to see which findings were addressed. A `review-ledger-resolve` command that marks entries as resolved (keeping the record for audit) is more valuable than deleting entries. | LOW | Entries get a `status` field (`open`/`resolved`). Resolved entries have a `resolved_at` timestamp. Colony-prime only injects `open` entries. |
+#### A1. Smart Init Ceremony (Charter Approval Flow)
 
-### Anti-Features (Commonly Requested, Often Problematic)
+**Current state:** `init-research` command exists at `cmd/init_research.go` with full codebase scanning, governance detection, pheromone suggestion generation (10 patterns), and charter generation. The init wrapper at `.claude/commands/ant/init.md` already calls `aether init-research` and presents charter for approval. However, the Go `aether init` command itself does not call `init-research` internally -- the ceremony only happens when the wrapper orchestrates it.
 
-Features that seem natural for "review persistence" but would create problems in this system.
+**What's missing:**
+- The Go runtime `aether init` does not integrate `init-research` as part of its flow. It creates colony state directly without the scanning step.
+- No charter data is persisted in `COLONY_STATE.json` or a separate charter file.
+- The pheromone suggestions are presented by the wrapper but the approval flow only works on Claude Code. OpenCode and Codex have no charter ceremony.
+- Charter data (intent, vision, governance, goals) is computed but never stored for downstream reference.
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Cross-colony ledger sharing | "If security findings from Repo A could inform Repo B..." | Ledger entries contain repo-specific file paths and line numbers that go stale outside the originating repo. A `sec-2-001` finding pointing to `cmd/auth.go:42` is meaningless in another codebase. This is already noted in PROJECT.md: "Not cross-colony -- findings contain code-specific file paths that go stale." | Promote high-value patterns to Hive Brain via the existing instinct pipeline at seal time. Hive entries are generalized wisdom, not code-specific findings. |
-| Auto-block on critical findings | "If a security finding is CRITICAL, the build should stop." | This couples review persistence to the build/continue flow in a dangerous way. The current continue-review flow (Gatekeeper, Auditor, Probe) already handles blocking. Adding a second blocking mechanism from accumulated ledger data would create conflicting signals and unclear failure modes. | Let colony-prime injection surface prior findings as context for workers. Workers and review agents decide whether to block based on the full picture, not a rigid severity threshold. |
-| Finding deduplication across phases | "Don't show me the same security issue from Phase 2 and Phase 3." | Determining whether two findings about the same file are "the same issue" or "the same file, new issue" requires semantic understanding that structured JSON cannot provide. False deduplication hides real regressions. | Use deterministic IDs and let users resolve findings they have addressed. If a finding persists across phases, it stays open -- that is correct behavior. |
-| Rich query/filter API for ledgers | "Let me query findings by file, severity range, date, agent..." | This turns the ledger into a database, which is not the system's purpose. Aether's data layer is JSON files with atomic writes, not a query engine. Adding query complexity fights the architecture. | `review-ledger-read` with domain filter and `review-ledger-summary` for aggregate counts. For detailed analysis, the per-worker `.md` reports and the ledger JSON files are directly readable. |
-| Automatic finding promotion to pheromones | "Turn security findings into REDIRECT signals automatically." | Findings are observations, not instructions. A Gatekeeper finding of "unpinned dependency" should not automatically become a REDIRECT (hard constraint) that blocks future builds. The mapping between "finding" and "action" requires judgment. | Keep findings and pheromones as separate systems. Colony-prime injects both into worker context. Workers see the finding AND any related pheromone signal and exercise judgment. |
+**Expected behavior (Go CLI standard):**
+1. User runs `aether init "Build a web app"`
+2. Go runtime scans the codebase (languages, frameworks, governance, git history, complexity)
+3. Generates charter data and pheromone suggestions
+4. Outputs both for the wrapper to present
+5. Wrapper shows charter, user approves/revises/cancels
+6. Approved pheromone suggestions are written via `pheromone-write`
+7. Colony state is created with charter metadata attached
+
+**Complexity:** LOW-MEDIUM. The scanning logic exists. The wiring is missing.
+
+#### A2. Suggest-Analyze (Build-Step Pheromone Suggestions)
+
+**Current state:** The build playbook at `.aether/docs/command-playbooks/build-prep.md` references `--no-suggest` as a flag and mentions "the colony analyzes the codebase for patterns that might benefit from pheromone signals." However, no `suggest-analyze` subcommand exists in the Go runtime. The original was a 618-line shell script that analyzed files for patterns (TODO comments, debug artifacts, complex files, etc.) and produced pheromone suggestions.
+
+**What's missing entirely:**
+- No `aether suggest-analyze` subcommand in Go
+- No build-wave integration point that calls suggest-analyze
+- The `init-research` pheromone suggestions only cover 10 static patterns. The original suggest-analyze had dynamic codebase analysis (file complexity, TODO density, debug artifact detection, stale file detection, etc.)
+
+**Expected behavior:**
+1. At build start (before worker dispatch), colony scans the codebase for actionable patterns
+2. Patterns are scored and presented as FOCUS pheromone suggestions
+3. User approves/dismisses each suggestion
+4. Approved suggestions are written as active pheromone signals
+5. Workers receive these signals in their context
+
+**Analysis patterns that should be restored:**
+- TODO/FIXME/HACK comment density (files with many TODOs may need attention)
+- Debug artifact detection (console.log, fmt.Println, debug-only code)
+- Large file detection (files exceeding complexity thresholds)
+- Stale file detection (files not modified in N months)
+- Test coverage gaps (source files without corresponding test files)
+- Dependency health (outdated or vulnerable dependencies if lockfile available)
+- Duplicate code patterns (similar file names in different directories)
+
+**Complexity:** MEDIUM-HIGH. The original was 618 lines. The analysis logic is non-trivial and needs to handle multiple languages. However, it can be simplified by reusing the file-walking infrastructure from `init-research.go`.
+
+#### A3. Circuit Breaker (Cascade Failure Protection)
+
+**Current state:** The immune system at `cmd/immune.go` provides `trophallaxis-diagnose` (error classification), `trophallaxis-retry` (exponential backoff), `scar-add`/`scar-list`/`scar-check` (failure pattern tracking), and `immune-auto-scar` (midden-based pattern detection). This is a retry/immune system but NOT a circuit breaker.
+
+**What's missing:**
+- No circuit breaker pattern that prevents cascading failures across workers
+- No threshold-based failure detection that halts a build wave when failures exceed a limit
+- No automatic phase rollback or pause when consecutive failures suggest systemic issues
+
+**Expected behavior:**
+1. During build waves, track failure rate per-wave and per-phase
+2. If failure rate exceeds threshold (e.g., 3 failures in a row, or 50% of tasks in a wave), open the circuit
+3. Open circuit stops dispatching new workers and surfaces the failure pattern
+4. After a cooldown period or manual intervention, close the circuit
+5. Failure patterns are recorded as scars for future avoidance
+
+**Complexity:** MEDIUM. The scar/immune infrastructure exists. The circuit breaker logic needs to be added to the build-wave dispatch path and the continue-gate path.
+
+#### A4. Consolidation Pipeline (Phase-End Knowledge Compression)
+
+**Current state:** `cmd/graph_consolidation_cmds.go` exists with graph commands (link, unlink, nodes, edges, shortest-path, cluster). The `pkg/agent/curation/` package has all 8 curation ants (archivist, critic, herald, janitor, librarian, nurse, scribe, sentinel) with an orchestrator. `cmd/curation_cmds.go` exposes CLI subcommands for running individual curation ants.
+
+**What's missing:**
+- The consolidation pipeline is not wired into the continue lifecycle. After a phase completes and `/ant-continue` runs, the curation pipeline should automatically run to compress phase learnings, detect contradictions, and promote high-confidence instincts.
+- The curation orchestrator exists but is not called from any lifecycle command.
+
+**Expected behavior:**
+1. At phase end (during continue), the consolidation pipeline runs automatically
+2. Phase learnings are compressed (redundant observations merged, contradictions flagged)
+3. Trust scores are recalculated with decay
+4. High-confidence instincts are promoted to QUEEN.md
+5. Curation results are included in the continue report
+
+**Complexity:** LOW. The infrastructure is all there. The wiring is missing -- a single call to the curation orchestrator from the continue flow.
+
+### Category B: Self-Hosting Cleanup
+
+These are artifacts that exist because Aether was used to develop itself.
+
+#### B1. Agent Mirror Verification and Cleanup
+
+**Current state:** 26 agents across 4 surfaces:
+- `.claude/agents/ant/` (26 files, canonical source)
+- `.aether/agents-claude/` (26 files, packaging mirror for npm distribution)
+- `.opencode/agents/` (26 files, OpenCode surface)
+- `.codex/agents/` (26 TOML files, Codex surface)
+
+The `command_parity_test.go` and `command_source_hygiene_test.go` verify agent count parity. The agent mirrors appear to be byte-identical with their source counterparts based on the listing.
+
+**What to verify:**
+- Are `.aether/agents-claude/` files truly byte-identical with `.claude/agents/ant/`? If not, what drifted?
+- Are there any agents defined in mirrors but not in the source, or vice versa?
+- Is the publish pipeline correctly syncing agent mirrors?
+
+**Expected outcome:** Confirm mirrors are in sync, add a byte-identity test, fix any drift.
+
+**Complexity:** LOW. Mostly verification and a test addition.
+
+#### B2. Stale Companion Files
+
+**What to audit:**
+- `.aether/skills/` (29 skills) -- are all referenced by the skill-index system?
+- `.aether/skills-codex/` -- is this a byte-identical mirror?
+- `.aether/templates/` (12 templates) -- are all used by the runtime?
+- `.aether/docs/` -- are there stale or orphaned documentation files?
+- `.aether/exchange/` -- XML exchange modules -- still used?
+- `.aether/utils/` -- runtime utilities -- still referenced?
+
+**Expected outcome:** Remove unreferenced files, verify mirrors are in sync.
+
+**Complexity:** LOW. Audit and delete.
+
+#### B3. Duplicate or Stale Wrapper Commands
+
+**Current state:** 50 commands on Claude Code, 50 on OpenCode, 50 YAML source definitions. The `command_count_test.go` verifies command counts.
+
+**What to verify:**
+- Are there commands in `.claude/commands/ant/` or `.opencode/commands/ant/` that have no corresponding YAML source?
+- Are there YAML sources that have no generated wrapper?
+- Are there commands that reference deleted subcommands?
+
+**Complexity:** LOW.
+
+### Category C: Platform Hardening
+
+#### C1. OpenCode Parity Gaps
+
+**Current state:** OpenCode has 50 commands matching Claude Code's 50. The agent count matches (26 on each surface). However, there may be behavioral differences in how commands execute.
+
+**What to verify:**
+- Do all OpenCode commands produce the same JSON output format as Claude Code equivalents?
+- Do OpenCode commands handle errors consistently with Claude Code?
+- Are there commands that work on Claude Code but fail silently on OpenCode?
+
+**Expected behavior:** All 50 commands work identically across Claude Code and OpenCode. Same JSON output, same error handling, same flags.
+
+**Complexity:** MEDIUM. Requires testing each command on both platforms.
+
+#### C2. Error Handling Consistency
+
+**What to verify:**
+- All Go subcommands use consistent error patterns (`outputError` with codes, `outputErrorMessage` for no-store, proper JSON error responses)
+- Wrapper commands handle Go runtime errors gracefully (parse error JSON, surface to user)
+- No subcommands panic or return nil errors when they should return structured errors
+
+**Complexity:** LOW-MEDIUM. Mostly audit and fixes.
+
+#### C3. Cross-Platform Consistency (Codex)
+
+**Current state:** Codex CLI has runtime-native UX (no wrapper markdown). It uses the Go runtime directly. The `.codex/agents/` directory has 26 TOML definitions and `CODEX.md` documents commands and rules.
+
+**What to verify:**
+- Are all 26 Codex agents structurally equivalent to their Claude/OpenCode counterparts?
+- Does `CODEX.md` accurately reflect current command capabilities?
+- Are there Codex-specific commands that reference removed or changed subcommands?
+
+**Complexity:** LOW-MEDIUM.
+
+#### C4. User Experience Improvements
+
+**What to improve:**
+- Init ceremony should feel like a guided onboarding, not a dry JSON dump
+- Build feedback should be more actionable (what failed, what to do next)
+- Status command should be scannable at a glance
+- Error messages should suggest recovery actions, not just report failures
+
+**Complexity:** MEDIUM. Requires UX design decisions.
 
 ## Feature Dependencies
 
 ```
-Continue-review worker outcome reports (Part A)
+A1. Smart Init Ceremony
     |
-    v
-codexContinueExternalDispatch.Report field
-    |
-    v
-writeCodexContinueOutcomeReports() function
-    |
-    v
-Domain-ledger write subcommand (Part B)
-    |
-    +---> Colony-prime prior-reviews section
+    +---> Charter persistence in COLONY_STATE.json
     |         |
     |         v
-    |     Status command integration
+    |     Charter data available to colony-prime context
     |
-    +---> Agent Write tool additions
+    +---> Pheromone suggestion approval flow
     |         |
     |         v
-    |     Agent mirror sync (4 surfaces)
+    |     Approved suggestions written via pheromone-write
     |
-    +---> Seal/entomb lifecycle integration
+    +---> OpenCode/Codex ceremony parity
               |
               v
-          Ledger cleanup on entomb
-          Ledger summary in seal
+          All 3 platforms have consistent init experience
+
+A2. Suggest-Analyze
+    |
+    +---> suggest-analyze subcommand (Go runtime)
+    |         |
+    |         v
+    |     Pattern analysis engine (file walking, detection)
+    |
+    +---> Build-wave integration
+    |         |
+    |         v
+    |     suggest-analyze called before worker dispatch
+    |
+    +---> Tick-to-approve UI in wrappers
+              |
+              v
+          Suggestions presented, approved, written as pheromones
+
+A3. Circuit Breaker
+    |
+    +---> Failure tracking in build-wave
+    |         |
+    |         v
+    |     Threshold detection, circuit open/close
+    |
+    +---> Continue-gate integration
+    |         |
+    |         v
+    |     Circuit state checked during continue gates
+    |
+    +---> Scar recording for future avoidance
+              |
+              v
+          Failure patterns become immune system data
+
+A4. Consolidation Pipeline Wiring
+    |
+    +---> Curation orchestrator called from continue
+    |         |
+    |         v
+    |     Phase learnings compressed, instincts promoted
+    |
+    +---> Trust score recalculation
+              |
+              v
+          Decay applied, scores updated
+
+B1-B3. Self-Hosting Cleanup (independent of A features)
+
+C1-C4. Platform Hardening (independent of A and B features)
 ```
-
-### Dependency Notes
-
-- **Continue-review outcome reports require `Report` field addition first:** The `codexContinueExternalDispatch` struct (line 12 of `codex_continue_plan.go`) currently has no `Report` field. The `codexContinueWorkerFlowStep` struct (line 241 of `codex_continue.go`) also lacks `Report`, `Blockers []string`, and `Duration float64`. These must be added before `writeCodexContinueOutcomeReports()` can access the data.
-
-- **Domain-ledger write subcommand is the foundation for everything else in Part B:** Colony-prime injection, status integration, seal/entomb lifecycle, and the resolve subcommand all depend on ledgers existing with data. The write subcommand must be built first.
-
-- **Agent Write tool additions are independent of the Go runtime changes:** Agent definition files (`.claude/agents/ant/*.md`, mirrors) can be updated in parallel with Go runtime work. They are text files with frontmatter changes and instruction additions.
-
-- **Colony-prime prior-reviews section depends on ledger read subcommand:** The injection reads from ledgers via `review-ledger-read`/`review-ledger-summary`. Without those subcommands, there is nothing to inject.
-
-- **Seal/entomb integration depends on ledgers existing:** `copyEntombArtifacts` needs the `reviews/` directory to exist before it can copy it. `clearActiveColonyRuntimeFiles` needs to know about ledger files to clean them. These are small changes but must come after ledger creation works.
-
-- **Wrapper completion packet enhancement conflicts with nothing but requires coordination:** The continue wrapper (`.claude/commands/ant/continue.md` and `.opencode/commands/ant/continue.md`) completion packet must add a `report` field to the dispatch JSON shape. This is a documentation change in markdown, but it must match the new `Report` field in the Go struct exactly. Out-of-sync wrappers produce silent data loss (the report field gets dropped during `mergeExternalContinueResults`).
 
 ## MVP Definition
 
-### Launch With (v1.9 Minimum)
+### Launch With (v1.11 Minimum)
 
-The minimum viable review persistence system: findings survive `/clear`, accumulate, and inform downstream workers.
+The minimum that makes v1.11 feel like a meaningful release:
 
-- [ ] `Report` field on `codexContinueExternalDispatch` and `codexContinueWorkerFlowStep` -- without this, no report data flows from wrapper to runtime
-- [ ] `writeCodexContinueOutcomeReports()` in `codex_continue_finalize.go` -- mirrors the build report writer, writes `build/phase-N/worker-reports/{name}.md` for review workers
-- [ ] `review-ledger-write` subcommand -- accepts domain, phase, agent, structured finding data; writes to `reviews/{domain}/ledger.json` with deterministic IDs
-- [ ] `review-ledger-read` subcommand -- reads entries with domain filter
-- [ ] `review-ledger-summary` subcommand -- aggregate counts by domain, severity, status
-- [ ] Colony-prime `prior-reviews` section -- priority 8, reads summaries, injects into worker context
-- [ ] Wrapper completion packet `report` field -- continue.md and its OpenCode mirror updated to include report in dispatch JSON
-- [ ] Agent Write tool for 7 review agents -- frontmatter + write-scope guardrails + findings instructions
-- [ ] Agent mirror sync -- Claude, OpenCode, Codex surfaces all updated
+- [ ] **A1: Charter persistence** -- Store charter data in COLONY_STATE.json so downstream flows can reference it. This is the cheapest win because `init-research` already generates charter data.
+- [ ] **A2: suggest-analyze subcommand** -- Restore the build-step analysis. Even a simplified version (5-7 patterns instead of the original 618-line full scan) provides immediate value during builds.
+- [ ] **A4: Curation pipeline wiring** -- Single integration point. Call the orchestrator from continue. All 8 ants are already implemented.
+- [ ] **B1-B3: Self-hosting cleanup audit** -- Verify mirrors, remove orphans, add byte-identity test.
+- [ ] **C1: OpenCode parity verification** -- Ensure commands work identically.
 
-### Add After Validation (v1.9.x)
+### Add After Validation (v1.11.x)
 
-Features that complete the lifecycle but are not needed for the core value proposition.
-
-- [ ] `review-ledger-resolve` subcommand -- marking entries as resolved is valuable but not needed for findings to persist and inform
-- [ ] Status command review findings section -- "2 open security, 1 open quality" in status output
-- [ ] Seal summary ledger integration -- review findings count in CROWNED-ANTHILL.md
-- [ ] Entomb ledger archival and cleanup -- `reviews/` directory copied to chambers and cleaned from active state
+- [ ] **A1: OpenCode/Codex ceremony parity** -- The init ceremony currently only works fully on Claude Code.
+- [ ] **A3: Circuit breaker** -- More complex, builds on the immune system.
+- [ ] **C2-C4: Error handling and UX improvements** -- Polish pass after core features land.
 
 ### Future Consideration (v2+)
 
-Features that depend on the review persistence system being established and proven in production use.
-
-- [ ] High-value finding patterns promoting to Hive Brain at seal -- generalized findings that lose file-path specificity
-- [ ] Pheromone integration -- FOCUS signals auto-created from accumulated CRITICAL findings in a domain
-- [ ] Review trend across colonies -- if Hive Brain stores generalized finding patterns, cross-colony trend analysis becomes possible
-- [ ] Finding deduplication heuristics -- only after real usage data shows whether same-file same-category findings are genuinely redundant
+- [ ] **A2: Full 618-line suggest-analyze** -- The original had more patterns than needed. Start simple, expand based on usage.
+- [ ] **A3: Adaptive circuit breaker** -- Thresholds that adjust based on project complexity and historical failure rates.
+- [ ] **C4: Interactive ceremony improvements** -- Rich terminal UI for init ceremony, build progress, etc.
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Continue-review worker outcome reports | HIGH | LOW | P1 |
-| `Report` field on continue structs | HIGH (enabler) | LOW | P1 |
-| `review-ledger-write` subcommand | HIGH | MEDIUM | P1 |
-| `review-ledger-read` subcommand | MEDIUM | LOW | P1 |
-| `review-ledger-summary` subcommand | HIGH (enabler for colony-prime) | LOW | P1 |
-| Colony-prime prior-reviews section | HIGH (primary value) | MEDIUM | P1 |
-| Wrapper completion packet `report` field | HIGH (enabler) | LOW | P1 |
-| Agent Write tool (7 agents + mirrors) | HIGH | LOW | P1 |
-| `review-ledger-resolve` subcommand | MEDIUM | LOW | P2 |
-| Status command review findings section | MEDIUM | LOW | P2 |
-| Seal summary ledger integration | LOW | LOW | P2 |
-| Entomb ledger archival/cleanup | MEDIUM | LOW | P2 |
-| Deterministic finding IDs | MEDIUM | LOW | P1 (part of ledger write) |
-| Domain-scoped agent mapping | MEDIUM | LOW | P1 (part of ledger write) |
-
-**Priority key:**
-- P1: Must have for the milestone -- findings persist, accumulate, and inform
-- P2: Should have -- completes the lifecycle, but the system works without it
-- P3: Nice to have -- future enhancement after validation
+| A1: Charter persistence in COLONY_STATE | HIGH | LOW | P1 |
+| A2: suggest-analyze subcommand (simplified) | HIGH | MEDIUM | P1 |
+| A4: Curation pipeline wiring into continue | HIGH | LOW | P1 |
+| B1: Agent mirror byte-identity test | MEDIUM | LOW | P1 |
+| B2-B3: Stale file audit and cleanup | MEDIUM | LOW | P1 |
+| C1: OpenCode command parity verification | MEDIUM | MEDIUM | P1 |
+| A1: OpenCode/Codex ceremony parity | MEDIUM | MEDIUM | P2 |
+| A3: Circuit breaker (basic) | MEDIUM | MEDIUM | P2 |
+| C2: Error handling consistency | MEDIUM | LOW | P2 |
+| C3: Codex agent/commands audit | LOW | LOW | P2 |
+| C4: UX improvements (init, build, status) | MEDIUM | MEDIUM | P2 |
+| A3: Adaptive circuit breaker | LOW | HIGH | P3 |
+| A2: Full suggest-analyze expansion | LOW | MEDIUM | P3 |
 
 ## Existing System Integration Points
 
-These are the concrete code locations where the new features plug in.
-
 | Feature | Integration Point | File | What Changes |
 |---------|-------------------|------|-------------|
-| `Report` field | `codexContinueExternalDispatch` struct | `cmd/codex_continue_plan.go:12` | Add `Report string` field |
-| `Report` field | `codexContinueWorkerFlowStep` struct | `cmd/codex_continue.go:241` | Add `Report`, `Blockers`, `Duration` fields |
-| Report preservation | `mergeExternalContinueResults()` | `cmd/codex_continue_finalize.go:217` | Copy new fields from external dispatch to flow step |
-| Report writer | `runCodexContinueFinalize()` | `cmd/codex_continue_finalize.go:100` | Call `writeCodexContinueOutcomeReports()` after `review.json` |
-| Report writer function | New file | `cmd/codex_continue_finalize.go` (append) | `writeCodexContinueOutcomeReports()` + `renderCodexContinueWorkerOutcomeReport()` |
-| Colony-prime section | `buildColonyPrimeOutput()` | `cmd/colony_prime_context.go:123` | New section after blockers, priority 8 |
-| Ledger subcommands | New file | `cmd/review_ledger.go` | Four subcommands, ledger types, ID generation |
-| Agent Write tool | 7 agent frontmatters | `.claude/agents/ant/aether-{gatekeeper,auditor,chaos,watcher,archaeologist,measurer,tracker}.md` | `tools:` line adds `Write` |
-| Agent findings instructions | 7 agent bodies | Same files | Add `<write_scope>` and `<findings_output>` sections |
-| Agent mirrors | 4 surfaces | `.aether/agents-claude/`, `.opencode/agents/`, `.codex/agents/` | Byte-identical / structural sync |
-| Wrapper packet | Continue wrappers | `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md` | Add `report` to dispatch JSON shape |
-| Status display | `status.go`, `codex_visuals.go` | `cmd/status.go`, `cmd/codex_visuals.go` | Add review findings table after memory health |
-| Seal summary | `buildSealSummary()` | `cmd/codex_workflow_cmds.go:573` | Add review findings count line |
-| Entomb archive | `copyEntombArtifacts()` | `cmd/entomb_cmd.go:249` | Add `reviews/` directory copy |
-| Entomb cleanup | `clearActiveColonyRuntimeFiles()` | `cmd/entomb_cmd.go:423` | Add `reviews/` removal |
+| Charter persistence | `ColonyState` struct | `pkg/colony/colony.go` | Add `Charter *charterData` field with `omitempty` |
+| Charter generation | `initCmd.RunE` | `cmd/init_cmd.go` | Call `init-research` logic, store charter in state |
+| Charter in context | `buildColonyPrimeOutput()` | `cmd/colony_prime_context.go` | Add charter section to colony-prime prompt |
+| suggest-analyze | New subcommand | `cmd/suggest_analyze.go` | Pattern analysis, pheromone suggestion output |
+| suggest-analyze build integration | Build-wave playbook | `.aether/docs/command-playbooks/build-wave.md` | Call `aether suggest-analyze` before dispatch |
+| Curation wiring | Continue finalize | `cmd/codex_continue_finalize.go` | Call curation orchestrator after phase completion |
+| Curation wiring | Continue wrapper | `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md` | Add curation step |
+| Circuit breaker | Build-wave dispatch | `cmd/codex_build.go` | Add failure threshold tracking |
+| Circuit breaker | Continue gates | `cmd/codex_continue.go` | Check circuit state before advancing |
+| Agent mirror test | Test file | `cmd/command_parity_test.go` or new test | Byte-identity comparison for agent files |
+| OpenCode parity | Platform doc hygiene | `cmd/platform_doc_hygiene_test.go` | Add OpenCode command output format tests |
+
+## Anti-Features
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Full 618-line suggest-analyze re-port | The original was a monolithic shell script with redundant patterns. Re-porting all 618 lines introduces unmaintainable complexity. | Start with 5-7 high-value patterns. Expand based on real usage data. |
+| Charter as a separate file system | Charters stored in separate files create sync issues with colony state. If the charter file drifts from state, workers get conflicting information. | Store charter as a field in COLONY_STATE.json. Single source of truth. |
+| Circuit breaker with machine learning thresholds | Adaptive thresholds sound smart but require significant training data and add unpredictable behavior. | Start with fixed thresholds (e.g., 3 consecutive failures). Tune based on real colony data. |
+| Cross-platform ceremony via markdown generation | Generating markdown ceremony files that all three platforms must parse creates fragile coupling. | Each platform calls the same Go CLI and parses the same JSON output. Platform-specific presentation is the wrapper's job. |
+| Stale file auto-deletion during cleanup | Automatically deleting files the audit identifies as stale is dangerous. A file might look unreferenced but be loaded dynamically or referenced by name in a config file. | List stale candidates, require explicit confirmation before deletion. |
 
 ## Sources
 
-- `cmd/codex_continue_finalize.go` -- continue-finalize flow, `mergeExternalContinueResults()`, `externalContinueReviewReport()`
-- `cmd/codex_continue_plan.go` -- `codexContinueExternalDispatch` struct, `plannedExternalContinueDispatches()`
-- `cmd/codex_continue.go` -- `codexContinueWorkerFlowStep` struct, `codexContinueReviewSpecs`, `cleanupStaleContinueReports()`
-- `cmd/codex_build.go` -- `writeCodexBuildOutcomeReports()`, `renderCodexBuildWorkerOutcomeReport()` (direct template)
-- `cmd/colony_prime_context.go` -- `buildColonyPrimeOutput()`, section priority system, character budget
-- `cmd/codex_workflow_cmds.go` -- seal command, `buildSealSummary()`
-- `cmd/entomb_cmd.go` -- entomb command, `copyEntombArtifacts()`, `clearActiveColonyRuntimeFiles()`
-- `.claude/agents/ant/aether-gatekeeper.md` -- current agent definition structure, tools line, return format
-- `.claude/commands/ant/continue.md` -- wrapper completion packet JSON shape
-- `pkg/storage/` -- atomic write, file locking (existing infrastructure for ledger writes)
+- `cmd/init_research.go` -- existing codebase scanning, governance detection, pheromone suggestions (10 patterns), charter generation
+- `cmd/init_cmd.go` -- current init flow (no research integration)
+- `cmd/immune.go` -- immune system (diagnose, retry, scar tracking)
+- `cmd/council.go` -- council deliberation system (already ported)
+- `cmd/trust.go` -- trust scoring (compute, decay, tier)
+- `cmd/curation_cmds.go` -- curation ant CLI subcommands
+- `pkg/agent/curation/` -- all 8 curation ants implemented
+- `cmd/graph_consolidation_cmds.go` -- graph commands and consolidation
+- `cmd/pheromone_write.go` -- pheromone creation with dedup, sanitization, TTL
+- `.claude/commands/ant/init.md` -- current init wrapper ceremony flow
+- `.aether/docs/command-playbooks/build-prep.md` -- build prep with suggest-analyze reference
+- `.aether/docs/command-playbooks/build-wave.md` -- build-wave dispatch flow
+- `.planning/PROJECT.md` -- milestone requirements and known losses
 
 ---
-*Feature research for: Aether v1.9 Review Persistence*
-*Researched: 2026-04-26*
+*Feature research for: Aether v1.11 Unification*
+*Researched: 2026-04-28*

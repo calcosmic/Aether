@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
@@ -26,7 +28,7 @@ var statusCmd = &cobra.Command{
 				fmt.Fprint(stdout, renderNoColonyStatusVisual())
 				return nil
 			}
-			fmt.Fprintln(stdout, colonyStateLoadMessage(err))
+			renderRecoveryMenu("status", colonyStateLoadMessage(err), nil)
 			return nil
 		}
 
@@ -52,6 +54,344 @@ func renderNoColonyStatusVisual() string {
 	return b.String()
 }
 
+// computeWarnings inspects colony state and data files for actionable issues.
+// Returns a list of warning strings. Empty list means no warnings.
+func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
+	var warnings []string
+
+	// 1. Stale state warning
+	if state.InitializedAt != nil && time.Since(*state.InitializedAt) > 7*24*time.Hour {
+		warnings = append(warnings, "Stale: colony was last active more than 7 days ago. Recent work may not be reflected.")
+	}
+	if state.Plan.GeneratedAt != nil && time.Since(*state.Plan.GeneratedAt) > 7*24*time.Hour {
+		warnings = append(warnings, "Stale: colony plan was generated more than 7 days ago. Recent work may not be reflected.")
+	}
+
+	// 2. Failed phases warning
+	for _, phase := range state.Plan.Phases {
+		if phase.Status == "failed" {
+			warnings = append(warnings, fmt.Sprintf("Failed phase %d (%s). Run `aether build %d` to retry.", phase.ID, phase.Name, phase.ID))
+		}
+	}
+
+	// 3. Unacknowledged midden warning
+	if s != nil {
+		var mf colony.MiddenFile
+		if s.LoadJSON("midden.json", &mf) == nil {
+			unackCount := 0
+			for _, entry := range mf.Entries {
+				if entry.Acknowledged == nil || *entry.Acknowledged == false {
+					unackCount++
+				}
+			}
+			if unackCount > 0 {
+				warnings = append(warnings, fmt.Sprintf("%d unacknowledged failure(s). Run `aether midden-review` to inspect.", unackCount))
+			}
+		}
+
+		// 4. Pheromone expiry warning
+		var pf colony.PheromoneFile
+		if s.LoadJSON("pheromones.json", &pf) == nil {
+			for _, sig := range pf.Signals {
+				if !sig.Active || sig.ExpiresAt == nil {
+					continue
+				}
+				expiry, err := time.Parse(time.RFC3339, *sig.ExpiresAt)
+				if err != nil {
+					continue
+				}
+				if time.Until(expiry) < 3*24*time.Hour {
+					content := extractContentText(sig.Content)
+					if len(content) > 40 {
+						content = content[:37] + "..."
+					}
+					warnings = append(warnings, fmt.Sprintf("Expiring signal: %s -- %s (expires in less than 3 days)", sig.Type, content))
+				}
+			}
+		}
+	}
+
+	// 5. Platform health warnings
+	if s != nil {
+		var ph map[string]interface{}
+		if s.LoadJSON("platform-health.json", &ph) == nil {
+			if failed, ok := ph["failed_commands"].([]interface{}); ok && len(failed) > 0 {
+				warnings = append(warnings, fmt.Sprintf("Platform health: %d command(s) failed smoke test. Run `aether smoke-test` to diagnose.", len(failed)))
+			}
+			if mismatches, ok := ph["flag_mismatches"].([]interface{}); ok && len(mismatches) > 0 {
+				warnings = append(warnings, fmt.Sprintf("Platform health: %d CLI flag mismatch(es) detected. Run `aether cli-audit` to review.", len(mismatches)))
+			}
+		}
+	}
+
+	return warnings
+}
+
+// Warnings are visual-mode only. JSON output uses structured colony state data.
+func renderWarningsSection(warnings []string) string {
+	if len(warnings) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("\u26A0\uFE0F", "Warnings"))
+	b.WriteString(visualDivider)
+	for _, w := range warnings {
+		b.WriteString(w)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// loadRecentLoopBreakEvents queries the event bus for loop-break events from the past 7 days.
+// Returns at most 5 events in newest-first order. Returns nil if store is nil or no events found.
+func loadRecentLoopBreakEvents(s *storage.Store) []events.Event {
+	if s == nil {
+		return nil
+	}
+	bus := events.NewBus(s, events.DefaultConfig())
+	since := time.Now().AddDate(0, 0, -7)
+	evts, err := bus.Query(context.Background(), events.CeremonyTopicLoopBreak, since, 5)
+	if err != nil || len(evts) == 0 {
+		return nil
+	}
+	// Reverse for newest-first display (Query returns oldest first)
+	for i, j := 0, len(evts)-1; i < j; i, j = i+1, j-1 {
+		evts[i], evts[j] = evts[j], evts[i]
+	}
+	return evts
+}
+
+// renderLoopSafetySection renders the Loop Safety dashboard section.
+// Returns empty string when no events are provided (section omitted per D-07).
+func renderLoopSafetySection(loopEvents []events.Event) string {
+	if len(loopEvents) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("\U0001F527", "Loop Safety"))
+	b.WriteString(visualDivider)
+	fmt.Fprintf(&b, "Loop Safety: %d events in last 7 days\n", len(loopEvents))
+
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Time", "Type", "Signal", "Action"})
+	for _, evt := range loopEvents {
+		var payload events.CeremonyPayload
+		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+			continue
+		}
+		signal := payload.DetectionSignal
+		if len(signal) > 40 {
+			signal = signal[:37] + "..."
+		}
+		action := payload.ActionTaken
+		if len(action) > 40 {
+			action = action[:37] + "..."
+		}
+		t.AppendRow(table.Row{formatTimestamp(evt.Timestamp), payload.LoopType, signal, action})
+	}
+	t.SetStyle(table.StyleRounded)
+	b.WriteString(t.Render())
+	b.WriteString("\n")
+	return b.String()
+}
+
+func loadGuidedActions(s *storage.Store, root string) []guidedAction {
+	if s == nil {
+		return nil
+	}
+	actions := []guidedAction{}
+	if action, ok := activeFlagGuidedAction(s); ok {
+		actions = append(actions, action)
+	}
+	if action, ok := oracleGuidedAction(root); ok {
+		actions = append(actions, action)
+	}
+	if action, ok := middenGuidedAction(s); ok {
+		actions = append(actions, action)
+	}
+	return actions
+}
+
+func activeFlagGuidedAction(s *storage.Store) (guidedAction, bool) {
+	flags, ok := loadFlagsFile(s)
+	if !ok {
+		return guidedAction{}, false
+	}
+	active := make([]colony.FlagEntry, 0, len(flags.Decisions))
+	blockers := 0
+	issues := 0
+	for _, flag := range flags.Decisions {
+		if flag.Resolved {
+			continue
+		}
+		active = append(active, flag)
+		switch flag.Type {
+		case "blocker":
+			blockers++
+		case "issue":
+			issues++
+		}
+	}
+	if len(active) == 0 {
+		return guidedAction{}, false
+	}
+	top := firstActionableFlag(active)
+	summary := fmt.Sprintf("%d active flag(s)", len(active))
+	if blockers > 0 || issues > 0 {
+		summary = fmt.Sprintf("%d active flag(s): %d blocker(s), %d issue(s)", len(active), blockers, issues)
+	}
+	if strings.TrimSpace(top.Description) != "" {
+		summary += ". Top: " + compactActionText(top.Description, 90)
+	}
+	action := guidedAction{
+		Title:   "Flags",
+		Summary: summary,
+		Command: "aether flags --status active",
+	}
+	if strings.TrimSpace(top.Description) != "" {
+		action.AlternativeCommand = fmt.Sprintf("aether swarm %s", quoteCommandArg(top.Description))
+	}
+	return action, true
+}
+
+func firstActionableFlag(flags []colony.FlagEntry) colony.FlagEntry {
+	for _, flag := range flags {
+		if flag.Type == "blocker" {
+			return flag
+		}
+	}
+	for _, flag := range flags {
+		if flag.Type == "issue" {
+			return flag
+		}
+	}
+	return flags[0]
+}
+
+func oracleGuidedAction(root string) (guidedAction, bool) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return guidedAction{}, false
+	}
+	paths := oracleWorkspacePaths(root)
+	if _, err := os.Stat(paths.StatePath); err != nil {
+		return guidedAction{}, false
+	}
+	state, err := loadOracleStateFile(paths.StatePath)
+	if err != nil {
+		return guidedAction{}, false
+	}
+	status := strings.ToLower(strings.TrimSpace(state.Status))
+	if status == "" || status == "complete" || status == "stopped" {
+		return guidedAction{}, false
+	}
+	summary := "Oracle research is " + status
+	if strings.TrimSpace(state.Summary) != "" {
+		summary += ": " + compactActionText(state.Summary, 100)
+	} else if strings.TrimSpace(state.ActiveQuestionText) != "" {
+		summary += ": " + compactActionText(state.ActiveQuestionText, 100)
+	}
+	return guidedAction{
+		Title:   "Oracle",
+		Summary: summary,
+		Command: "aether oracle status",
+	}, true
+}
+
+func middenGuidedAction(s *storage.Store) (guidedAction, bool) {
+	var mf colony.MiddenFile
+	if err := s.LoadJSON("midden.json", &mf); err != nil {
+		return guidedAction{}, false
+	}
+	count := 0
+	var top colony.MiddenEntry
+	for _, entry := range mf.Entries {
+		if entry.Acknowledged != nil && *entry.Acknowledged {
+			continue
+		}
+		count++
+		if top.ID == "" {
+			top = entry
+		}
+	}
+	if count == 0 {
+		return guidedAction{}, false
+	}
+	summary := fmt.Sprintf("%d unacknowledged failure(s)", count)
+	if strings.TrimSpace(top.Message) != "" {
+		summary += ". Top: " + compactActionText(top.Message, 90)
+	}
+	action := guidedAction{
+		Title:   "Failures",
+		Summary: summary,
+		Command: "aether midden-review",
+	}
+	if strings.TrimSpace(top.Message) != "" {
+		action.AlternativeCommand = fmt.Sprintf("aether swarm %s", quoteCommandArg(top.Message))
+	}
+	return action, true
+}
+
+func renderGuidedActions(actions []guidedAction) string {
+	if len(actions) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\nGuided Actions\n")
+	for _, action := range actions {
+		b.WriteString("   ")
+		b.WriteString(action.Title)
+		b.WriteString(": ")
+		b.WriteString(action.Summary)
+		b.WriteString("\n")
+		if strings.TrimSpace(action.Command) != "" {
+			b.WriteString("      Next: `")
+			b.WriteString(action.Command)
+			b.WriteString("`\n")
+		}
+		if strings.TrimSpace(action.AlternativeCommand) != "" {
+			b.WriteString("      Swarm: `")
+			b.WriteString(action.AlternativeCommand)
+			b.WriteString("`\n")
+		}
+	}
+	return b.String()
+}
+
+func guidedActionNextUpPrimary(action guidedAction) string {
+	if strings.TrimSpace(action.Command) == "" {
+		return action.Summary
+	}
+	return fmt.Sprintf("Run `%s` to handle: %s.", action.Command, action.Summary)
+}
+
+func guidedActionNextUpAlternatives(actions []guidedAction) []string {
+	alternatives := []string{}
+	for _, action := range actions {
+		if strings.TrimSpace(action.AlternativeCommand) != "" {
+			alternatives = append(alternatives, fmt.Sprintf("Run `%s` to investigate with the swarm.", action.AlternativeCommand))
+		}
+		if strings.TrimSpace(action.Command) != "" {
+			alternatives = append(alternatives, fmt.Sprintf("Run `%s` to inspect %s.", action.Command, strings.ToLower(action.Title)))
+		}
+	}
+	return alternatives
+}
+
+func guidedActionMaps(actions []guidedAction) []map[string]interface{} {
+	maps := make([]map[string]interface{}, 0, len(actions))
+	for _, action := range actions {
+		maps = append(maps, map[string]interface{}{
+			"title":               action.Title,
+			"summary":             action.Summary,
+			"command":             action.Command,
+			"alternative_command": action.AlternativeCommand,
+		})
+	}
+	return maps
+}
+
 // renderDashboard produces the full colony status dashboard string.
 func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	var b strings.Builder
@@ -66,6 +406,24 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		goal = goal[:57] + "..."
 	}
 	fmt.Fprintf(&b, "Goal: %s\n\n", goal)
+
+	// Version line
+	renderVersionLine(&b)
+
+	// Signal summary
+	renderSignalSummaryLine(&b, s)
+
+	// Warnings (visual-mode only)
+	warnings := computeWarnings(state, s)
+	b.WriteString(renderWarningsSection(warnings))
+
+	// Loop Safety (per D-05: between Warnings and Progress)
+	if s != nil {
+		loopEvents := loadRecentLoopBreakEvents(s)
+		if len(loopEvents) > 0 {
+			b.WriteString(renderLoopSafetySection(loopEvents))
+		}
+	}
 
 	// Progress
 	totalPhases := len(state.Plan.Phases)
@@ -188,6 +546,12 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 	fmt.Fprintf(&b, "Parallel: %s\n\n", parallelMode)
 
+	guidedActions := loadGuidedActions(s, skillWorkspaceRoot())
+	b.WriteString(renderGuidedActions(guidedActions))
+	if len(guidedActions) > 0 {
+		b.WriteString("\n")
+	}
+
 	proof := buildProofOutput(skillWorkspaceRoot(), state)
 	b.WriteString("Proof\n")
 	fmt.Fprintf(&b, "   Context: %s | %d included | %d preserved | %d trimmed | %d blocked\n",
@@ -292,6 +656,20 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		return b.String()
 	}
 	primary, alternatives := workflowSuggestionsForState(state)
+	if len(guidedActions) > 0 {
+		workflowPrimary := primary
+		workflowAlternatives := append([]string{}, alternatives...)
+		primary = guidedActionNextUpPrimary(guidedActions[0])
+		alternatives = []string{}
+		if strings.TrimSpace(guidedActions[0].AlternativeCommand) != "" {
+			alternatives = append(alternatives, fmt.Sprintf("Run `%s` to investigate with the swarm.", guidedActions[0].AlternativeCommand))
+		}
+		if len(guidedActions) > 1 {
+			alternatives = append(alternatives, guidedActionNextUpAlternatives(guidedActions[1:])...)
+		}
+		alternatives = append(alternatives, workflowPrimary)
+		alternatives = append(alternatives, workflowAlternatives...)
+	}
 	alternatives = append(alternatives, `Run `+"`aether proof`"+` to inspect the current context and skill proof.`)
 	b.WriteString(renderNextUp(primary, alternatives...))
 
@@ -313,6 +691,13 @@ type spawnActivitySummary struct {
 	FailedCount          int
 	CurrentRunID         string
 	CurrentCommand       string
+}
+
+type guidedAction struct {
+	Title              string
+	Summary            string
+	Command            string
+	AlternativeCommand string
 }
 
 func loadSpawnActivitySummary(s *storage.Store) spawnActivitySummary {
@@ -533,14 +918,14 @@ func countConstraints(s *storage.Store) (focus, avoid int) {
 
 // countFlags loads flags.json and counts by type.
 func countFlags(s *storage.Store) (blockers, issues, notes int) {
-	var flags colony.FlagsFile
-	if err := s.LoadJSON("pending-decisions.json", &flags); err != nil {
-		// Try alternate name
-		if err2 := s.LoadJSON("flags.json", &flags); err2 != nil {
-			return 0, 0, 0
-		}
+	flags, ok := loadFlagsFile(s)
+	if !ok {
+		return 0, 0, 0
 	}
 	for _, f := range flags.Decisions {
+		if f.Resolved {
+			continue
+		}
 		switch f.Type {
 		case "blocker":
 			blockers++
@@ -551,6 +936,37 @@ func countFlags(s *storage.Store) (blockers, issues, notes int) {
 		}
 	}
 	return
+}
+
+func loadFlagsFile(s *storage.Store) (colony.FlagsFile, bool) {
+	if s == nil {
+		return colony.FlagsFile{}, false
+	}
+	var flags colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &flags); err == nil {
+		return flags, true
+	}
+	if err := s.LoadJSON("flags.json", &flags); err == nil {
+		return flags, true
+	}
+	return colony.FlagsFile{}, false
+}
+
+func compactActionText(text string, limit int) string {
+	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	if limit <= 0 || len(text) <= limit {
+		return text
+	}
+	if limit <= 3 {
+		return text[:limit]
+	}
+	return text[:limit-3] + "..."
+}
+
+func quoteCommandArg(text string) string {
+	text = compactActionText(text, 140)
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "`", "'", "\n", " ", "\r", " ")
+	return `"` + replacer.Replace(text) + `"`
 }
 
 // depthLabel maps colony depth to a human-readable description.
@@ -711,6 +1127,58 @@ func renderRecentInstincts(b *strings.Builder, instincts []colony.Instinct) {
 		}
 		fmt.Fprintf(b, "   [%.2f] %s: %s\n", inst.Confidence, domain, inst.Action)
 	}
+}
+
+// renderVersionLine writes the runtime version line to the dashboard.
+func renderVersionLine(b *strings.Builder) {
+	binaryVersion := resolveVersion()
+	hubVersion := readInstalledHubVersion()
+	if hubVersion != "" {
+		if binaryVersion != hubVersion {
+			fmt.Fprintf(b, "Runtime: %s | Hub: %s  MISMATCH\n\n", binaryVersion, hubVersion)
+		} else {
+			fmt.Fprintf(b, "Runtime: %s | Hub: %s\n\n", binaryVersion, hubVersion)
+		}
+	} else {
+		fmt.Fprintf(b, "Runtime: %s\n\n", binaryVersion)
+	}
+}
+
+// renderSignalSummaryLine writes a one-line signal summary with expiry awareness.
+func renderSignalSummaryLine(b *strings.Builder, s *storage.Store) {
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		return // no pheromones -- skip silently
+	}
+	focusCount, redirectCount, feedbackCount := 0, 0, 0
+	for _, sig := range pf.Signals {
+		if !sig.Active {
+			continue
+		}
+		switch sig.Type {
+		case "FOCUS":
+			focusCount++
+		case "REDIRECT":
+			redirectCount++
+		case "FEEDBACK":
+			feedbackCount++
+		}
+	}
+	total := focusCount + redirectCount + feedbackCount
+	if total == 0 {
+		return
+	}
+	var parts []string
+	if focusCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d FOCUS expire at seal", focusCount))
+	}
+	if redirectCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d REDIRECT persists", redirectCount))
+	}
+	if feedbackCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d FEEDBACK", feedbackCount))
+	}
+	fmt.Fprintf(b, "Signals: %d active (%s)\n", total, strings.Join(parts, ", "))
 }
 
 // extractContentText extracts the text field from a json.RawMessage content.

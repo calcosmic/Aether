@@ -72,6 +72,86 @@ func (g PlanGranularity) Valid() bool {
 // ErrInvalidGranularity is returned when a granularity value is not recognized.
 var ErrInvalidGranularity = fmt.Errorf("invalid plan granularity")
 
+// PlanningDepth represents the task decomposition depth level (how detailed each phase is).
+type PlanningDepth string
+
+const (
+	PlanningDepthLight    PlanningDepth = "light"
+	PlanningDepthStandard PlanningDepth = "standard"
+	PlanningDepthDeep     PlanningDepth = "deep"
+)
+
+// Valid reports whether d is a recognized planning depth level.
+func (d PlanningDepth) Valid() bool {
+	switch d {
+	case PlanningDepthLight, PlanningDepthStandard, PlanningDepthDeep:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidPlanningDepth is returned when a planning depth value is not recognized.
+var ErrInvalidPlanningDepth = fmt.Errorf("invalid planning depth")
+
+// NormalizePlanningDepth maps user input (including aliases) to a canonical PlanningDepth.
+// Empty input defaults to PlanningDepthStandard. Aliases:
+//   - light, minimal, coarse -> PlanningDepthLight
+//   - deep, granular, thorough -> PlanningDepthDeep
+//   - standard, default, or anything else -> PlanningDepthStandard
+func NormalizePlanningDepth(value string) PlanningDepth {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "light", "minimal", "coarse":
+		return PlanningDepthLight
+	case "deep", "granular", "thorough":
+		return PlanningDepthDeep
+	case "":
+		return PlanningDepthStandard
+	default:
+		return PlanningDepthStandard
+	}
+}
+
+// VerificationDepth represents the review depth level for a phase.
+type VerificationDepth string
+
+const (
+	VerificationDepthLight    VerificationDepth = "light"
+	VerificationDepthStandard VerificationDepth = "standard"
+	VerificationDepthHeavy    VerificationDepth = "heavy"
+)
+
+// Valid reports whether d is a recognized verification depth level.
+func (d VerificationDepth) Valid() bool {
+	switch d {
+	case VerificationDepthLight, VerificationDepthStandard, VerificationDepthHeavy:
+		return true
+	}
+	return false
+}
+
+// ErrInvalidVerificationDepth is returned when a verification depth value is not recognized.
+var ErrInvalidVerificationDepth = fmt.Errorf("invalid verification depth")
+
+// NormalizeVerificationDepth maps user input (including aliases) to a canonical VerificationDepth.
+// Empty input defaults to VerificationDepthStandard. Aliases:
+//   - light, minimal, coarse -> VerificationDepthLight
+//   - heavy, full, thorough -> VerificationDepthHeavy
+//   - standard, or anything else -> VerificationDepthStandard
+func NormalizeVerificationDepth(value string) VerificationDepth {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "light", "minimal", "coarse":
+		return VerificationDepthLight
+	case "heavy", "full", "thorough":
+		return VerificationDepthHeavy
+	case "":
+		return VerificationDepthStandard
+	default:
+		return VerificationDepthStandard
+	}
+}
+
 // ParallelMode represents the parallel execution strategy for colony work.
 type ParallelMode string
 
@@ -152,6 +232,37 @@ type GateResultEntry struct {
 }
 
 // ---------------------------------------------------------------------------
+// Charter
+// ---------------------------------------------------------------------------
+
+// Charter holds the approved charter data for a colony, including its intent,
+// vision, governance approach, goals, tech stack, key risks, and constraints.
+type Charter struct {
+	Intent      string `json:"intent"`
+	Vision      string `json:"vision"`
+	Governance  string `json:"governance"`
+	Goals       string `json:"goals"`
+	TechStack   string `json:"tech_stack"`
+	KeyRisks    string `json:"key_risks"`
+	Constraints string `json:"constraints"`
+}
+
+// ---------------------------------------------------------------------------
+// Pending suggestion (suggest-analyze)
+// ---------------------------------------------------------------------------
+
+// PendingSuggestion holds an unreviewed pheromone suggestion from suggest-analyze.
+type PendingSuggestion struct {
+	ID          string `json:"id"`
+	Type        string `json:"type"`        // FOCUS, REDIRECT, or FEEDBACK
+	Content     string `json:"content"`
+	Reason      string `json:"reason"`
+	ContentHash string `json:"content_hash"`
+	CreatedAt   string `json:"created_at"`
+	Dismissed   bool   `json:"dismissed"`
+}
+
+// ---------------------------------------------------------------------------
 // Top-level state
 // ---------------------------------------------------------------------------
 
@@ -174,6 +285,7 @@ type ColonyState struct {
 	Graveyards         []Graveyard     `json:"graveyards"`
 	Events             []string        `json:"events"`
 	ColonyDepth        string          `json:"colony_depth,omitempty"`
+	VerificationDepth  string          `json:"verification_depth,omitempty"`
 	PlanGranularity    PlanGranularity `json:"plan_granularity,omitempty"`
 	ParallelMode       ParallelMode    `json:"parallel_mode,omitempty"`
 	TerritorySurveyed  *string         `json:"territory_surveyed,omitempty"`
@@ -184,6 +296,9 @@ type ColonyState struct {
 	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
 	RunID              *string            `json:"run_id,omitempty"`
 	GateResults        []GateResultEntry  `json:"gate_results,omitempty"`
+	Charter            *Charter              `json:"charter,omitempty"`
+	PendingSuggestions *[]PendingSuggestion  `json:"pending_suggestions,omitempty"`
+	LastAnalyzeCommit  *string               `json:"last_analyze_commit,omitempty"`
 }
 
 // EffectiveScope returns the compatibility-safe colony scope.
@@ -286,12 +401,13 @@ func decodePlanConfidence(raw json.RawMessage) (*float64, error) {
 
 // Phase represents a single phase in the colony plan.
 type Phase struct {
-	ID              int      `json:"id"`
-	Name            string   `json:"name"`
-	Description     string   `json:"description"`
-	Status          string   `json:"status"`
-	Tasks           []Task   `json:"tasks"`
-	SuccessCriteria []string `json:"success_criteria"`
+	ID                  int      `json:"id"`
+	Name                string   `json:"name"`
+	Description         string   `json:"description"`
+	Status              string   `json:"status"`
+	Tasks               []Task   `json:"tasks"`
+	SuccessCriteria     []string `json:"success_criteria"`
+	WatcherFailureCount int      `json:"watcher_failure_count,omitempty"`
 }
 
 // Task represents a single task within a phase.

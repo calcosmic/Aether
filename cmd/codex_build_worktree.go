@@ -144,12 +144,12 @@ func collectRepoTouchedPaths(root string, baseline map[string]string, result cod
 	return out, nil
 }
 
-func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode) ([]codex.DispatchResult, error) {
+func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
 	if parallelMode != colony.ModeWorktree {
-		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode)
+		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode, cb)
 	}
 	if _, ok := invoker.(*codex.FakeInvoker); ok {
-		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode)
+		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode, cb)
 	}
 	if err := ensureGitRepository(root); err != nil {
 		return nil, fmt.Errorf("worktree mode requires a git repository: %w", err)
@@ -169,6 +169,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
 		waveResults := make([]codex.DispatchResult, len(waveDispatches))
+		cb.Reset() // Per D-06: per-wave reset
 		var wg sync.WaitGroup
 		for idx, dispatch := range waveDispatches {
 			wg.Add(1)
@@ -183,6 +184,23 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 					}
 					emitBuildCeremonyWorkerTimeout(dispatch, wave, ctx.Err())
 					return
+				}
+
+				if !cb.Allow(dispatch.WorkerName) {
+					peer := findSameCastePeer(waveDispatches, dispatch, cb)
+					if peer != nil {
+						emitCircuitBreakerRedistributed(phase, wave, dispatch.WorkerName, peer.WorkerName)
+						dispatch = *peer
+					} else {
+						emitCircuitBreakerNoPeer(phase, wave, dispatch.WorkerName)
+						waveResults[i] = codex.DispatchResult{
+							WorkerName: dispatch.WorkerName,
+							Status:     "failed",
+							Error:      fmt.Errorf("circuit breaker tripped, no same-caste peer for redistribution"),
+						}
+						emitBuildCeremonyWorkerFailed(dispatch, wave, waveResults[i].Error)
+						return
+					}
 				}
 
 				var session *buildWorktreeSession
@@ -251,7 +269,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				if dr.Status != "completed" || dr.WorkerResult == nil {
 					finalStatus = colony.WorktreeOrphaned
 				} else {
-					touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, result)
+					touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, *dr.WorkerResult)
 					if touchErr != nil {
 						dr.Status = "failed"
 						dr.Error = touchErr
@@ -299,6 +317,13 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				if dr.Status == "" {
 					dr.Status = "failed"
 				}
+
+				// Record result with circuit breaker
+				if dr.Status == "completed" {
+					cb.RecordSuccess(dispatch.WorkerName)
+				} else if cb.RecordFailure(dispatch.WorkerName) {
+					cb.emitCircuitBreakerTripped(phase, wave, dispatch.WorkerName)
+				}
 				statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr))
 				rootOpsMu.Unlock()
 				if statusErr != nil {
@@ -318,7 +343,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 	return results, nil
 }
 
-func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode) ([]codex.DispatchResult, error) {
+func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
 	waves := codex.GroupByWave(dispatches)
 	waveNumbers := make([]int, 0, len(waves))
 	for wave := range waves {
@@ -332,6 +357,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
 		waveResults := make([]codex.DispatchResult, 0, len(waveDispatches))
+		cb.Reset() // Per D-06: per-wave reset
 		for _, dispatch := range waveDispatches {
 			if ctx.Err() != nil {
 				dr := codex.DispatchResult{
@@ -343,6 +369,25 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 				waveResults = append(waveResults, dr)
 				results = append(results, dr)
 				continue
+			}
+
+			if !cb.Allow(dispatch.WorkerName) {
+				peer := findSameCastePeer(waveDispatches, dispatch, cb)
+				if peer != nil {
+					emitCircuitBreakerRedistributed(phase, wave, dispatch.WorkerName, peer.WorkerName)
+					dispatch = *peer
+				} else {
+					emitCircuitBreakerNoPeer(phase, wave, dispatch.WorkerName)
+					dr := codex.DispatchResult{
+						WorkerName: dispatch.WorkerName,
+						Status:     "failed",
+						Error:      fmt.Errorf("circuit breaker tripped, no same-caste peer for redistribution"),
+					}
+					emitBuildCeremonyWorkerFailed(dispatch, wave, dr.Error)
+					waveResults = append(waveResults, dr)
+					results = append(results, dr)
+					continue
+				}
 			}
 
 			baseline, baselineErr := snapshotGitStatus(dispatch.Root)
@@ -386,8 +431,15 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			if dr.Status == "" {
 				dr.Status = "failed"
 			}
-			if err := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); err != nil {
-				return nil, fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, err)
+			// Record result with circuit breaker
+			if dr.Status == "completed" {
+				cb.RecordSuccess(dispatch.WorkerName)
+			} else if cb.RecordFailure(dispatch.WorkerName) {
+				cb.emitCircuitBreakerTripped(phase, wave, dispatch.WorkerName)
+			}
+			if statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); statusErr != nil {
+				dr.Status = "failed"
+				dr.Error = fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, statusErr)
 			}
 			emitBuildCeremonyWorkerFinished(dispatch, dr)
 			emitCodexBuildWorkerFinished(dispatch, dr)
@@ -701,42 +753,43 @@ func applyRelativePathStatus(srcRoot, dstRoot, rel, status string) error {
 // It scans the colony state for worktree entries with Allocated or InProgress status,
 // attempts to remove them, and updates their status to Orphaned on failure.
 func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
+	if store == nil {
+		return 0, 0, fmt.Errorf("no store initialized")
+	}
 	var state colony.ColonyState
-	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
-		return 0, 0, loadErr
-	}
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+		root := storage.ResolveAetherRoot(context.Background())
+		var remaining []colony.WorktreeEntry
+		for _, entry := range state.Worktrees {
+			if entry.Phase != phaseID {
+				remaining = append(remaining, entry)
+				continue
+			}
+			if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress {
+				remaining = append(remaining, entry)
+				continue
+			}
 
-	root := storage.ResolveAetherRoot(context.Background())
-	var remaining []colony.WorktreeEntry
-	for _, entry := range state.Worktrees {
-		if entry.Phase != phaseID {
-			remaining = append(remaining, entry)
-			continue
-		}
-		if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress {
-			remaining = append(remaining, entry)
-			continue
+			absPath := filepath.Join(root, entry.Path)
+			// If the path doesn't exist on disk, just remove the stale entry
+			if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
+				cleaned++
+				continue
+			}
+			if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+				entry.Status = colony.WorktreeOrphaned
+				remaining = append(remaining, entry)
+				orphaned++
+			} else {
+				cleaned++
+				// Don't append — entry is removed
+			}
 		}
 
-		absPath := filepath.Join(root, entry.Path)
-		// If the path doesn't exist on disk, just remove the stale entry
-		if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
-			cleaned++
-			continue
-		}
-		if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
-			entry.Status = colony.WorktreeOrphaned
-			remaining = append(remaining, entry)
-			orphaned++
-		} else {
-			cleaned++
-			// Don't append — entry is removed
-		}
-	}
-
-	state.Worktrees = remaining
-	if saveErr := store.SaveJSON("COLONY_STATE.json", state); saveErr != nil {
-		return cleaned, orphaned, saveErr
+		state.Worktrees = remaining
+		return nil
+	}); err != nil {
+		return 0, 0, err
 	}
 	return cleaned, orphaned, nil
 }
@@ -746,38 +799,45 @@ func cleanupBuildWorktrees(phaseID int) (cleaned int, orphaned int, err error) {
 // cleaned and orphaned worktrees. Unlike cleanupBuildWorktrees, it operates
 // across all phases and does not filter by phase ID.
 func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
+	if store == nil {
+		return 0, 0, fmt.Errorf("no store initialized")
+	}
+	if _, statErr := os.Stat(filepath.Join(store.BasePath(), "COLONY_STATE.json")); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return 0, 0, nil
+		}
+		return 0, 0, statErr
+	}
 	var state colony.ColonyState
-	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
-		return 0, 0, loadErr
-	}
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+		root := storage.ResolveAetherRoot(context.Background())
+		var remaining []colony.WorktreeEntry
+		for _, entry := range state.Worktrees {
+			if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress && entry.Status != colony.WorktreeOrphaned {
+				remaining = append(remaining, entry)
+				continue
+			}
 
-	root := storage.ResolveAetherRoot(context.Background())
-	var remaining []colony.WorktreeEntry
-	for _, entry := range state.Worktrees {
-		if entry.Status != colony.WorktreeAllocated && entry.Status != colony.WorktreeInProgress && entry.Status != colony.WorktreeOrphaned {
-			remaining = append(remaining, entry)
-			continue
+			absPath := filepath.Join(root, entry.Path)
+			// If the path doesn't exist on disk, just remove the stale entry
+			if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
+				cleaned++
+				continue
+			}
+			if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
+				entry.Status = colony.WorktreeOrphaned
+				remaining = append(remaining, entry)
+				orphaned++
+			} else {
+				cleaned++
+				// Don't append — entry is removed
+			}
 		}
 
-		absPath := filepath.Join(root, entry.Path)
-		// If the path doesn't exist on disk, just remove the stale entry
-		if _, statErr := os.Stat(absPath); statErr != nil && os.IsNotExist(statErr) {
-			cleaned++
-			continue
-		}
-		if removeErr := removeGitWorktree(root, absPath, entry.Branch); removeErr != nil {
-			entry.Status = colony.WorktreeOrphaned
-			remaining = append(remaining, entry)
-			orphaned++
-		} else {
-			cleaned++
-			// Don't append — entry is removed
-		}
-	}
-
-	state.Worktrees = remaining
-	if saveErr := store.SaveJSON("COLONY_STATE.json", state); saveErr != nil {
-		return cleaned, orphaned, saveErr
+		state.Worktrees = remaining
+		return nil
+	}); err != nil {
+		return 0, 0, err
 	}
 	return cleaned, orphaned, nil
 }

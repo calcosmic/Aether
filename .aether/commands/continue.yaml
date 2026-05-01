@@ -2,31 +2,40 @@ name: ant-continue
 description: "👁️ Verify build work, extract learnings, and advance the colony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether continue --plan-only"
+  command: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
 wrapper_additions:
   pre_continue: |
-    Ground continue before spawning review workers:
+    Ground continue before running the runtime-owned verification path:
     1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
     2. Frame continue as the colony's inspection point, not another build pass.
-    3. Name the review castes briefly: Watcher for independent verification, Gatekeeper for safety, Auditor for quality, and Probe for coverage and weak spots.
-    4. Immediately before requesting the manifest, say: `Asking the runtime for the continue manifest...`
+    3. Immediately run the default continue command unless the user explicitly requested `--verification-depth heavy` or `--heavy`.
   orchestration: |
-    Restore real wrapper verification orchestration:
-    1. Run `AETHER_OUTPUT_MODE=json aether continue --plan-only`.
+    Default path:
+    1. Run `AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS`.
+    2. Do not use plan-only, spawn wrapper workers, or call continue-finalize on the default path.
+
+    Heavy external review path:
+    1. Only when the user explicitly requested `--verification-depth heavy` or `--heavy`, or the runtime specifically asks for wrapper-spawned review workers, run `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS`.
     2. Parse `result.continue_manifest`; do not parse visual output.
-    3. For each planned wave, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
-    4. Wave 1 must complete before wave 2; wave 2 review agents may run in parallel when the platform supports it.
-    5. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
-    6. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>` to let the runtime re-run deterministic verification, write reports, apply gates, and advance or block.
+    3. For each planned dispatch, call `aether spawn-log`, spawn the matching platform agent using `agent_name`, then call `aether spawn-complete`.
+    4. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
+    5. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`.
   post_continue: |
-    Close from the `continue-finalize` result only:
+    Close from runtime output only:
     1. If the phase advanced, summarize what was verified, which review workers ran, what the colony learned, and route first to `/ant-build N+1`.
     2. If continue blocked, translate the blocker into plain language and follow the runtime's recovery command first when it surfaces one; only fall back to `/ant-continue` when the runtime stayed generic.
     3. If the colony completed, mark the achievement briefly and route first to `/ant-seal`.
     4. Mention signal housekeeping only if the runtime surfaced it, and keep that note to one short line.
     5. When signal housekeeping appears, explain what expired, what remained active, and what that means for the next phase or final seal without diffing pheromone files directly.
+  verification_depth_ceremony: |
+    Verification depth controls how thorough the continue review is. Three levels:
+    - light: Skip all review agents (fastest, minimal safety net)
+    - standard: Probe-only review (default, watcher + probe coverage)
+    - heavy: Full quality gauntlet (gatekeeper + auditor + probe)
+    The default is "standard" for intermediate phases. Final phases always use "heavy".
+    Users can override with --verification-depth <light|standard|heavy>.
 guardrails:
-  - "Do NOT run `aether continue` without `--plan-only` from Claude/OpenCode wrapper orchestration."
+  - "Do NOT use `--plan-only` or `continue-finalize` for default fast continue."
   - "Do NOT run `aether continue --synthetic` after real wrapper Task agents complete."
   - "Do NOT replay verification loops or reimplement runtime gate logic."
   - "Do NOT read or write colony state files by hand."

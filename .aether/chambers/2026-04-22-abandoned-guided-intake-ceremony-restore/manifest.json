@@ -1,7 +1,0 @@
-{
-  "goal": "Restore guided colony intake so Aether synthesizes the best colony goal before init, asks for planning depth, clarification depth, verification strictness, and execution mode, persists those choices in colony state, gives explicit next-command guidance at every lifecycle step, and tells the user exactly when to clear context or resume across Claude, OpenCode, and Codex.",
-  "milestone": "Abandoned (unfinished colony)",
-  "name": "2026-04-22-abandoned-guided-intake-ceremony-restore",
-  "phases_completed": 0,
-  "total_phases": 6
-}

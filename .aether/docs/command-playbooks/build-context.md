@@ -144,41 +144,54 @@ Otherwise: Apply existing file-modification conditional below.
    - Skip this step silently — produce no output, no spawn
    - Proceed directly to Step 4.2
 
-### Step 4.2: Suggest Pheromones (DEPRECATED)
+### Step 4.2: Suggest Pheromones
 
-**Conditional step — skipped if `--no-suggest` flag is passed.**
+**Conditional step -- skipped if `--no-suggest` flag is passed.**
 
-> **DEPRECATED**: The `suggest-*` commands have been deprecated and will be removed
-> in a future version. They return `ok:true` with `deprecated:true` for backward
-> compatibility. This step now always skips gracefully.
+1. **Check skip condition:**
+   If `suggest_enabled` is false (from `--no-suggest` flag): Skip to Step 4.3.
 
-Run using the Bash tool with description "Checking suggest deprecation status...":
-```bash
-suggest_result=$(aether suggest-approve --dry-run 2>/dev/null)
-suggest_deprecated=$(echo "$suggest_result" | jq -r '.result.deprecated // false')
+2. **Run suggest-analyze** to detect patterns worth capturing:
+   Run using the Bash tool with description "Analyzing codebase for pheromone suggestions...":
+   ```bash
+   suggest_result=$(aether suggest-analyze 2>/dev/null)
+   ```
 
-if [[ "$suggest_deprecated" == "true" ]]; then
-    # Command is deprecated — skip silently, continue to Step 4.3
-    :
-elif [[ -z "$suggest_result" ]]; then
-    # Command failed entirely — skip silently
-    :
-else
-    # Legacy path: parse suggestion_count (for older aether versions)
-    suggestion_count=$(echo "$suggest_result" | jq -r '.result.suggestion_count // 0')
-    if [[ "$suggestion_count" -gt 0 ]]; then
-        echo "$suggestion_count pheromone suggestion(s) detected from code analysis"
-        aether suggest-approve 2>/dev/null || true
-    fi
-fi
-```
+3. **Parse the JSON response:**
+   - If `suggest_result` is empty or `.ok` is false: Skip silently, continue to Step 4.3
+   - Extract `.result.total` as `suggestion_total`
+   - Extract `.result.new_count` as `new_suggestions`
 
-**Non-blocking**: This step never stops the build.
+4. **If no pending suggestions** (`suggestion_total == 0`): Continue to Step 4.3 (no pause needed).
 
-**Error handling**:
-- If suggest-approve returns error: Skip silently, continue
-- If suggest-approve returns deprecated: Skip silently, continue
-- Never let suggestion failures block the build
+5. **If pending suggestions exist** (`suggestion_total > 0`), BLOCKING REVIEW (per D-04):
+   ```
+   ── Suggest Pheromones ──
+
+   {new_suggestions} new pheromone suggestion(s) detected ({suggestion_total} total pending)
+
+   ```
+   Run using the Bash tool with description "Displaying pending suggestions...":
+   ```bash
+   aether suggest-approve
+   ```
+
+   ```
+   REVIEW REQUIRED: The build is paused for suggestion review.
+   For each suggestion above:
+     Approve:      aether suggest-approve --approve <id>
+     Dismiss:      aether suggest-approve --dismiss <id>
+     Dismiss all:  aether suggest-approve --dismiss-all
+
+   When finished reviewing, say "continue" to proceed with the build.
+   ```
+
+6. **Wait for user** to indicate review is complete. The user will run approve/dismiss commands in the conversation and then signal continuation. The build does NOT proceed to Step 4.3 until the user has had the opportunity to review suggestions.
+
+**Error handling** (detection is non-blocking; review pause is intentional):
+- If suggest-analyze returns error: Skip silently, continue to Step 4.3 (no pause)
+- If suggest-approve returns error during review: Log the error but keep the pause -- user still needs to acknowledge
+- Never let suggestion DETECTION failures block the build, but the REVIEW PAUSE is intentional per D-04
 
 ### Step 4.3: Skill Detection
 

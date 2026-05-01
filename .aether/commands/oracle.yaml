@@ -6,3 +6,5 @@ runtime:
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."
+follow_up:
+  persistence: "After oracle completes, suggest persisting high-value findings as pheromone signals (aether pheromone-write) or hive wisdom (aether hive-store). User approves each suggestion."

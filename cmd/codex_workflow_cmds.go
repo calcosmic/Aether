@@ -3,7 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -59,6 +61,8 @@ var planCmd = &cobra.Command{
 		synthetic, _ := cmd.Flags().GetBool("synthetic")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		depth, _ := cmd.Flags().GetString("depth")
+		planningDepth, _ := cmd.Flags().GetString("planning-depth")
+		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -69,6 +73,8 @@ var planCmd = &cobra.Command{
 			Synthetic:     synthetic,
 			PlanOnly:      planOnly,
 			Depth:         depth,
+			PlanningDepth: planningDepth,
+			VerificationDepth: verificationDepth,
 			WorkerTimeout: workerTimeout,
 		})
 		if err != nil {
@@ -105,10 +111,7 @@ var buildCmd = &cobra.Command{
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			reviewDepthPlan := ReviewDepthLight
-			if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-				reviewDepthPlan = ReviewDepthHeavy
-			}
+			reviewDepthPlan := reviewDepthFromResult(result)
 			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan))
 			return nil
 		}
@@ -116,11 +119,13 @@ var buildCmd = &cobra.Command{
 		syntheticBuild, _ := cmd.Flags().GetBool("synthetic")
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
+		cbThreshold, _ := cmd.Flags().GetInt("circuit-breaker-threshold")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
-			WorkerTimeout: workerTimeout,
-			Force:         forceBuild,
-			LightFlag:     lightFlag,
-			HeavyFlag:     heavyFlag,
+			WorkerTimeout:           workerTimeout,
+			Force:                   forceBuild,
+			LightFlag:               lightFlag,
+			HeavyFlag:               heavyFlag,
+			CircuitBreakerThreshold: cbThreshold,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -141,10 +146,7 @@ var buildCmd = &cobra.Command{
 				dispatches = manifest.Dispatches
 			}
 		}
-		reviewDepthBuild := ReviewDepthLight
-		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-			reviewDepthBuild = ReviewDepthHeavy
-		}
+		reviewDepthBuild := reviewDepthFromResult(result)
 		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild))
 		return nil
 	},
@@ -160,15 +162,25 @@ var continueCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		verificationTimeout, _, err := resolveContinueVerificationTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
+		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
+		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
-				ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
-				WorkerTimeout:    workerTimeout,
-				LightFlag:        lightFlag,
-				HeavyFlag:        heavyFlag,
+				ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+				WorkerTimeout:       workerTimeout,
+				VerificationTimeout: verificationTimeout,
+				LightFlag:           lightFlag,
+				HeavyFlag:           heavyFlag,
+				SkipWatchers:        skipWatchers,
+			VerificationDepth:   verificationDepth,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -179,10 +191,13 @@ var continueCmd = &cobra.Command{
 		}
 
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinue(skillWorkspaceRoot(), codexContinueOptions{
-			ReconcileTaskIDs: normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
-			WorkerTimeout:    workerTimeout,
-			LightFlag:        lightFlag,
-			HeavyFlag:        heavyFlag,
+			ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
+			WorkerTimeout:       workerTimeout,
+			VerificationTimeout: verificationTimeout,
+			LightFlag:           lightFlag,
+			HeavyFlag:           heavyFlag,
+			SkipWatchers:        skipWatchers,
+			VerificationDepth:   verificationDepth,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -194,10 +209,7 @@ var continueCmd = &cobra.Command{
 			return nil
 		}
 
-		reviewDepthContinue := ReviewDepthLight
-		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-			reviewDepthContinue = ReviewDepthHeavy
-		}
+		reviewDepthContinue := reviewDepthFromResult(result)
 		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue))
 		return nil
 	},
@@ -239,6 +251,51 @@ func resolveWorkerTimeoutFlag(cmd *cobra.Command) (time.Duration, error) {
 	return timeout, nil
 }
 
+func resolveContinueVerificationTimeoutFlag(cmd *cobra.Command) (time.Duration, bool, error) {
+	if cmd.Flags().Changed("verification-timeout") {
+		timeout, err := cmd.Flags().GetDuration("verification-timeout")
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid --verification-timeout: %w", err)
+		}
+		if timeout <= 0 {
+			return 0, false, fmt.Errorf("--verification-timeout must be greater than 0")
+		}
+		return timeout, true, nil
+	}
+	if envValue := strings.TrimSpace(os.Getenv("AETHER_CONTINUE_VERIFICATION_TIMEOUT")); envValue != "" {
+		timeout, err := time.ParseDuration(envValue)
+		if err != nil {
+			return 0, false, fmt.Errorf("invalid AETHER_CONTINUE_VERIFICATION_TIMEOUT: %w", err)
+		}
+		if timeout <= 0 {
+			return 0, false, fmt.Errorf("AETHER_CONTINUE_VERIFICATION_TIMEOUT must be greater than 0")
+		}
+		return timeout, true, nil
+	}
+	return continueVerificationTimeout, false, nil
+}
+
+// detectGitRepoName returns the repository name from git remote origin URL,
+// falling back to the working directory basename if unavailable.
+func detectGitRepoName() string {
+	if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+		remote := strings.TrimSpace(string(out))
+		// Extract last path component, strip .git suffix
+		if idx := strings.LastIndex(remote, "/"); idx >= 0 {
+			name := remote[idx+1:]
+			name = strings.TrimSuffix(name, ".git")
+			if name != "" {
+				return name
+			}
+		}
+	}
+	// Fallback: use working directory basename
+	if wd, err := os.Getwd(); err == nil {
+		return filepath.Base(wd)
+	}
+	return ""
+}
+
 var sealCmd = &cobra.Command{
 	Use:   "seal",
 	Short: "Seal a completed colony and write a summary artifact",
@@ -251,17 +308,17 @@ var sealCmd = &cobra.Command{
 
 		state, err := loadActiveColonyState()
 		if err != nil {
-			outputError(1, colonyStateLoadMessage(err), nil)
+			renderRecoveryMenu("seal", colonyStateLoadMessage(err), nil)
 			return nil
 		}
 		if len(state.Plan.Phases) == 0 {
-			outputError(1, "No project plan. Run `aether plan` first.", nil)
+			renderRecoveryMenu("seal", "No project plan. Run `aether plan` first.", nil)
 			return nil
 		}
 
 		for _, phase := range state.Plan.Phases {
 			if phase.Status != colony.PhaseCompleted {
-				outputError(1, "all phases must be completed before sealing the colony", nil)
+				renderRecoveryMenu("seal", "all phases must be completed before sealing the colony", nil)
 				return nil
 			}
 		}
@@ -271,7 +328,7 @@ var sealCmd = &cobra.Command{
 		if len(blockers) > 0 {
 			forceFlag, _ := cmd.Flags().GetBool("force")
 			if !forceFlag {
-				outputError(1, renderBlockerSummary(blockers, issues), nil)
+				renderRecoveryMenu("seal", renderBlockerSummary(blockers, issues), nil)
 				return nil
 			}
 			// --force: warn but continue
@@ -280,9 +337,25 @@ var sealCmd = &cobra.Command{
 			fmt.Fprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
-		// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md only (D-08)
+		// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md and Hive Brain (D-08, CERE-02)
+		var repoName string
+		if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+			remote := strings.TrimSpace(string(out))
+			// Extract repo name from remote URL (handles both https and ssh)
+			parts := strings.Split(remote, "/")
+			if len(parts) > 0 {
+				repoName = strings.TrimSuffix(parts[len(parts)-1], ".git")
+			}
+		}
+		if repoName == "" {
+			if cwd, err := os.Getwd(); err == nil {
+				repoName = filepath.Base(cwd)
+			}
+		}
 		var promotedInstinctNames []string
 		var hiveEligibleCount int
+		var hivePromotedCount int
+		var hivePromotionFailures int
 		if entries, err := loadActiveInstinctEntriesFromStore(store); err == nil {
 			for _, entry := range entries {
 				if entry.Confidence >= 0.8 && entry.Action != "" {
@@ -290,15 +363,29 @@ var sealCmd = &cobra.Command{
 						promotedInstinctNames = append(promotedInstinctNames, entry.ID)
 					}
 				}
-				if entry.Confidence >= 0.8 {
+				if entry.Confidence >= 0.8 && entry.Action != "" {
 					hiveEligibleCount++
+					// Hive Brain promotion (non-blocking per CERE-02)
+					domain := entry.Domain
+					if domain == "" {
+						domain = "general"
+					}
+					if err := promoteToHive(entry.Action, domain, repoName, entry.Confidence); err != nil {
+						log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
+						hivePromotionFailures++
+					} else {
+						hivePromotedCount++
+					}
 				}
 			}
 		}
 
-		// Ceremony Step 2: Log hive-eligible count as suggestion (D-09)
-		if hiveEligibleCount > 0 {
-			fmt.Fprintln(stdout, fmt.Sprintf("SUGGESTION: %d instinct(s) eligible for global promotion. Run 'aether queen-promote-instinct <id>' or 'aether hive-promote' to promote.", hiveEligibleCount))
+		// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
+		if hivePromotedCount > 0 {
+			fmt.Fprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
+		}
+		if hivePromotionFailures > 0 {
+			fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
 		}
 
 		// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
@@ -315,6 +402,12 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
+		// Shelf candidate detection (before archiving)
+		candidates, _ := detectShelfCandidates(state, store)
+		if len(candidates) > 0 {
+			fmt.Fprintln(stdout, shelfCandidateSummary(candidates))
+		}
+
 		// Scan for high-severity open findings before building summary
 		warnings := scanHighSeverityOpen(store)
 
@@ -324,11 +417,14 @@ var sealCmd = &cobra.Command{
 
 		// Build enrichment data for CROWNED-ANTHILL.md
 		enrichment := sealEnrichment{
-			LearningsCount:    len(state.Memory.PhaseLearnings),
-			InstinctsPromoted: promotedInstinctNames,
-			HiveEligible:      hiveEligibleCount,
-			SignalsExpired:    expiredFOCUSCount,
-			FlagsResolved:     countResolvedFlags(store),
+			LearningsCount:        len(state.Memory.PhaseLearnings),
+			InstinctsPromoted:     promotedInstinctNames,
+			HiveEligible:          hiveEligibleCount,
+			HivePromoted:          hivePromotedCount,
+			HivePromotionFailures: hivePromotionFailures,
+			SignalsExpired:        expiredFOCUSCount,
+			FlagsResolved:         countResolvedFlags(store),
+			ShelfCandidates:       candidates,
 		}
 
 		summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -750,11 +846,14 @@ func countResolvedFlags(s *storage.Store) int {
 
 // sealEnrichment holds data for enriching the CROWNED-ANTHILL.md summary.
 type sealEnrichment struct {
-	LearningsCount    int
-	InstinctsPromoted []string
-	HiveEligible      int
-	SignalsExpired    int
-	FlagsResolved     int
+	LearningsCount        int
+	InstinctsPromoted     []string
+	HiveEligible          int
+	HivePromoted          int
+	HivePromotionFailures int
+	SignalsExpired        int
+	FlagsResolved         int
+	ShelfCandidates       []colony.ShelfEntry
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -789,6 +888,10 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 	b.WriteString(fmt.Sprintf("| Learnings captured | %d |\n", enrichment.LearningsCount))
 	b.WriteString(fmt.Sprintf("| Instincts promoted | %d |\n", len(enrichment.InstinctsPromoted)))
 	b.WriteString(fmt.Sprintf("| Hive-eligible instincts | %d |\n", enrichment.HiveEligible))
+	b.WriteString(fmt.Sprintf("| Hive-promoted instincts | %d |\n", enrichment.HivePromoted))
+	if enrichment.HivePromotionFailures > 0 {
+		b.WriteString(fmt.Sprintf("| Hive promotion failures | %d |\n", enrichment.HivePromotionFailures))
+	}
 	b.WriteString(fmt.Sprintf("| FOCUS signals expired | %d |\n", enrichment.SignalsExpired))
 	b.WriteString(fmt.Sprintf("| Flags resolved | %d |\n", enrichment.FlagsResolved))
 
@@ -796,6 +899,18 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 		b.WriteString("\n### Promoted Instincts\n")
 		for _, id := range enrichment.InstinctsPromoted {
 			b.WriteString(fmt.Sprintf("- %s\n", id))
+		}
+	}
+
+	// Shelf candidates section
+	if len(enrichment.ShelfCandidates) > 0 {
+		b.WriteString(fmt.Sprintf("\n## Shelf Candidates\n%d shelf candidate(s) detected:\n", len(enrichment.ShelfCandidates)))
+		for _, c := range enrichment.ShelfCandidates {
+			auto := ""
+			if c.AutoDetected {
+				auto = " (auto-detected)"
+			}
+			b.WriteString(fmt.Sprintf("- [%s] %s%s\n", c.Category, c.Text, auto))
 		}
 	}
 
@@ -847,6 +962,8 @@ func init() {
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
 	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
 	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
+	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")
+	planCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results (use - for stdin)")
@@ -857,13 +974,21 @@ func init() {
 	buildCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build dispatches (e.g. 15m)")
 	buildCmd.Flags().Bool("light", false, "Force light review (skip heavy agents on intermediate phases)")
 	buildCmd.Flags().Bool("heavy", false, "Force heavy review (full quality gauntlet on any phase)")
+	buildCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
+	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
+	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
 	continueCmd.Flags().Bool("heavy", false, "Force heavy review (full review gauntlet)")
+	continueCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
+	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
+	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
+	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
+	continueFinalizeCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
 	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")

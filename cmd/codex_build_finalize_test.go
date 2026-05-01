@@ -289,16 +289,16 @@ func TestNormalizeClaimPathsToRoot_SubdirectoryRelative(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Claim uses subdirectory-relative path
+	// Claim uses subdirectory-relative path.
+	// Since this temp dir is not a git repo, findRepoRelativePath returns empty
+	// (no filesystem walk fallback), so the original claimed path is kept as-is.
 	claimed := "resources/js/animations.js"
 	result := normalizeClaimPathsToRoot(tmp, []string{claimed})
 	if len(result) != 1 {
 		t.Fatalf("got %d results, want 1", len(result))
 	}
-	// Should be normalized to root-relative
-	expected := "app/public/wp-content/themes/mytheme/resources/js/animations.js"
-	if result[0] != expected {
-		t.Errorf("got %q, want %q", result[0], expected)
+	if result[0] != claimed {
+		t.Errorf("got %q, want %q (original kept when not resolvable)", result[0], claimed)
 	}
 }
 

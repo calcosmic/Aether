@@ -110,6 +110,12 @@ var pheromoneWriteCmd = &cobra.Command{
 			Tags:        make([]colony.PheromoneTag, 0, len(tags)),
 		}
 
+			// Populate source_phase from current colony state
+			var cs colony.ColonyState
+			if loadErr := store.LoadJSON("COLONY_STATE.json", &cs); loadErr == nil && cs.CurrentPhase > 0 {
+				signal.SourcePhase = &cs.CurrentPhase
+			}
+
 		if reasonFlag != "" {
 			signal.Reason = &reasonFlag
 		}
@@ -165,6 +171,11 @@ var pheromoneWriteCmd = &cobra.Command{
 				*sig.ReinforcementCount++
 				maxStr := 1.0
 				sig.Strength = &maxStr
+				// Update source_phase on reinforcement
+				var rcs colony.ColonyState
+				if loadErr := store.LoadJSON("COLONY_STATE.json", &rcs); loadErr == nil && rcs.CurrentPhase > 0 {
+					sig.SourcePhase = &rcs.CurrentPhase
+				}
 				replaced = true
 				break
 			}
@@ -303,6 +314,7 @@ func init() {
 	pheromoneWriteCmd.Flags().String("ttl", "", "Override expiry duration: Nd (days), Nh (hours), Nw (weeks) (optional)")
 
 	pheromoneExpireCmd.Flags().String("id", "", "Signal ID to expire (required)")
+	pheromoneExpireCmd.Flags().Bool("phase-end-only", false, "Only expire signals marked as phase-scoped")
 
 	rootCmd.AddCommand(pheromoneWriteCmd)
 	rootCmd.AddCommand(pheromoneExpireCmd)

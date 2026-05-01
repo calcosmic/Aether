@@ -393,6 +393,26 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 			}
 	}
 
+	// Check for failed phases -- suggest retry
+	for _, phase := range state.Plan.Phases {
+		if phase.Status == "failed" {
+			return fmt.Sprintf("Run `aether build %d` to retry failed phase %d (%s).", phase.ID, phase.ID, phase.Name), nil
+		}
+	}
+
+	// Check if all phases complete but colony not yet sealed
+	allComplete := len(state.Plan.Phases) > 0
+	for _, phase := range state.Plan.Phases {
+		if phase.Status != "completed" {
+			allComplete = false
+			break
+		}
+	}
+	if allComplete && state.State != colony.StateCOMPLETED {
+		return `Run ` + "`aether seal`" + ` to mark the colony as Crowned Anthill (all phases complete).`,
+			[]string{`Run ` + "`aether status`" + ` to review the full dashboard before sealing.`}
+	}
+
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
 		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
@@ -444,6 +464,124 @@ func renderInitVisual(goal, scope, sessionID, dataDir string) string {
 		`Run `+"`aether colonize`"+` first if you want a quick codebase scan before planning.`,
 	))
 	b.WriteString(renderContextClearGuidance())
+	return b.String()
+}
+
+// renderCharterDisplay produces a visual rendering of the 7-section colony charter.
+func renderCharterDisplay(ch colony.Charter) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("init"), "Colony Charter"))
+	b.WriteString(visualDivider)
+	b.WriteString(renderStageMarker("Charter"))
+	b.WriteString("  Intent:      ")
+	b.WriteString(emptyFallback(ch.Intent, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Vision:      ")
+	b.WriteString(emptyFallback(ch.Vision, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Governance:  ")
+	b.WriteString(emptyFallback(ch.Governance, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Goals:       ")
+	b.WriteString(emptyFallback(ch.Goals, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Tech Stack:  ")
+	b.WriteString(emptyFallback(ch.TechStack, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Key Risks:   ")
+	b.WriteString(emptyFallback(ch.KeyRisks, "(none)"))
+	b.WriteString("\n")
+	b.WriteString("  Constraints: ")
+	b.WriteString(emptyFallback(ch.Constraints, "(none)"))
+	b.WriteString("\n")
+	b.WriteString(visualDivider)
+	return b.String()
+}
+
+// renderResearchDisplay produces a visual rendering of the 4 research data sections
+// extracted from the init-research JSON envelope. Returns empty string if all fields
+// are nil/empty.
+func renderResearchDisplay(data ceremonyResearchData) string {
+	hasData := len(data.TechStackDetail) > 0 ||
+		data.DirClassification.Type != "" ||
+		len(data.GovernanceDetails) > 0 ||
+		data.ColonyContextSummary.DetectedType != ""
+	if !hasData {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("scout"), "Research Data"))
+	b.WriteString(visualDivider)
+
+	// Tech Stack Detail
+	if len(data.TechStackDetail) > 0 {
+		b.WriteString(renderStageMarker("Tech Stack Detail"))
+		for _, ts := range data.TechStackDetail {
+			depCount := len(ts.Deps) + len(ts.DevDeps)
+			b.WriteString("  ")
+			b.WriteString(emptyFallback(ts.Language, "(unknown)"))
+			if ts.SourceFile != "" {
+				b.WriteString("  (")
+				b.WriteString(ts.SourceFile)
+				b.WriteString(")")
+			}
+			b.WriteString(fmt.Sprintf("  %d dependencies", depCount))
+			b.WriteString("\n")
+		}
+	}
+
+	// Directory Classification
+	if data.DirClassification.Type != "" {
+		b.WriteString(renderStageMarker("Directory Classification"))
+		b.WriteString("  Type:    ")
+		b.WriteString(data.DirClassification.Type)
+		b.WriteString("\n")
+		if len(data.DirClassification.Signals) > 0 {
+			b.WriteString("  Signals: ")
+			b.WriteString(strings.Join(data.DirClassification.Signals, ", "))
+			b.WriteString("\n")
+		}
+	}
+
+	// Governance Details
+	if len(data.GovernanceDetails) > 0 {
+		b.WriteString(renderStageMarker("Governance Details"))
+		for _, gd := range data.GovernanceDetails {
+			b.WriteString("  ")
+			b.WriteString(emptyFallback(gd.Tool, "(unknown)"))
+			if gd.File != "" {
+				b.WriteString("  [")
+				b.WriteString(gd.File)
+				b.WriteString("]")
+			}
+			if gd.Category != "" {
+				b.WriteString("  (")
+				b.WriteString(gd.Category)
+				b.WriteString(")")
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	// Colony Context
+	if data.ColonyContextSummary.DetectedType != "" {
+		b.WriteString(renderStageMarker("Colony Context"))
+		cs := data.ColonyContextSummary
+		b.WriteString("  Detected Type:     ")
+		b.WriteString(emptyFallback(cs.DetectedType, "(none)"))
+		b.WriteString("\n")
+		b.WriteString("  Dir Type:          ")
+		b.WriteString(emptyFallback(cs.DirType, "(none)"))
+		b.WriteString("\n")
+		b.WriteString(fmt.Sprintf("  Tech Stack Files:  %d\n", cs.TechStackCount))
+		b.WriteString(fmt.Sprintf("  Governance Tools:  %d\n", cs.GovernanceToolCount))
+		b.WriteString(fmt.Sprintf("  Pheromone Count:   %d\n", cs.PheromoneCount))
+		b.WriteString(fmt.Sprintf("  File Count:        %d\n", cs.FileCount))
+		b.WriteString(fmt.Sprintf("  Is Git Repo:       %t\n", cs.IsGitRepo))
+	}
+
+	b.WriteString(visualDivider)
 	return b.String()
 }
 
@@ -728,6 +866,47 @@ func renderPlanVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\n")
 	}
+	// Depth Selection Banner (per D-01, D-02)
+	if planningDepth := strings.TrimSpace(stringValue(result["planning_depth"])); planningDepth != "" {
+		verificationDepth := strings.TrimSpace(stringValue(result["verification_depth"]))
+		planningSmartDefault, _ := result["planning_smart_default"].(bool)
+		verificationSmartDefault, _ := result["verification_smart_default"].(bool)
+		totalPhases := intValue(result["count"])
+		if totalPhases == 0 {
+			if phases := phaseSliceValue(result["phases"]); len(phases) > 0 {
+				totalPhases = len(phases)
+			}
+		}
+		b.WriteString(renderStageMarker("Depth Selection"))
+
+		// Extract the planning Phase object from the result map for reason rendering
+		planningPhase, _ := result["planning_phase"].(colony.Phase)
+
+		// Planning depth line with full reason
+		if planningSmartDefault && planningPhase.ID > 0 {
+			reason := renderSmartDepthReason(planningPhase, totalPhases)
+			b.WriteString(fmt.Sprintf("Planning depth: %s (%s)\n", planningDepth, reason))
+		} else {
+			b.WriteString(fmt.Sprintf("Planning depth: %s\n", planningDepth))
+		}
+
+		// Verification depth line with full reason
+		if verificationDepth != "" {
+			if verificationSmartDefault && planningPhase.ID > 0 {
+				b.WriteString(renderReviewDepthLineWithReason(
+					colony.NormalizeVerificationDepth(verificationDepth),
+					planningPhase.ID, totalPhases, planningPhase, true,
+				))
+			} else {
+				b.WriteString(fmt.Sprintf("Verification depth: %s\n", verificationDepth))
+			}
+		}
+
+		// Override hint when either was smart-defaulted
+		if planningSmartDefault || verificationSmartDefault {
+			b.WriteString("Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>\n")
+		}
+	}
 	if confidence, ok := result["confidence"].(map[string]interface{}); ok {
 		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", intValue(confidence["overall"])))
 	}
@@ -899,29 +1078,80 @@ func renderPlanDispatchPreview(goal string, dispatches []codexPlanningDispatch) 
 	return b.String()
 }
 
-func reviewDepthFromResult(result map[string]interface{}) ReviewDepth {
-	if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-		return ReviewDepthHeavy
+func reviewDepthFromResult(result map[string]interface{}) colony.VerificationDepth {
+	if rd, ok := result["review_depth"].(string); ok {
+		return colony.NormalizeVerificationDepth(rd)
 	}
-	return ReviewDepthLight
+	return colony.VerificationDepthLight
 }
 
-func renderReviewDepthLine(depth ReviewDepth, phaseNum, totalPhases int) string {
-	if depth == ReviewDepthHeavy {
+func renderReviewDepthLine(depth colony.VerificationDepth, phaseNum, totalPhases int) string {
+	switch depth {
+	case colony.VerificationDepthHeavy:
 		if phaseNum == totalPhases {
 			return "Review depth: heavy (final phase)"
 		}
 		return fmt.Sprintf("Review depth: heavy (Phase %d of %d)", phaseNum, totalPhases)
+	case colony.VerificationDepthStandard:
+		return fmt.Sprintf("Review depth: standard (Phase %d of %d)", phaseNum, totalPhases)
+	default:
+		return fmt.Sprintf("Review depth: light (Phase %d of %d -- final phase gets full review)", phaseNum, totalPhases)
 	}
-	return fmt.Sprintf("Review depth: light (Phase %d of %d -- final phase gets full review)", phaseNum, totalPhases)
+}
+
+// renderSmartDepthReason produces a human-readable reason for why a depth was
+// auto-detected. Used by renderReviewDepthLineWithReason to annotate smart defaults.
+func renderSmartDepthReason(phase colony.Phase, totalPhases int) string {
+	risk := phaseRiskLevel(phase)
+	position := phasePositionLevel(phase.ID, totalPhases)
+
+	if risk == "high" {
+		return "auto: security risk"
+	}
+	if position == "final" {
+		return "auto: final phase"
+	}
+	if risk == "medium" {
+		return "auto: high blast radius"
+	}
+	if position == "early" {
+		return "auto: early phase"
+	}
+	if position == "late" {
+		return "auto: late phase"
+	}
+	return "auto: standard"
+}
+
+// renderReviewDepthLineWithReason wraps renderReviewDepthLine with smart-default
+// annotation. When smartDefault is true, the parenthetical reason is replaced with
+// the auto-detection reason. Phase 86 will switch callers to use this function
+// when it adds the UI layer that knows whether depth was auto-detected.
+func renderReviewDepthLineWithReason(depth colony.VerificationDepth, phaseNum, totalPhases int, phase colony.Phase, smartDefault bool) string {
+	base := renderReviewDepthLine(depth, phaseNum, totalPhases)
+	if !smartDefault {
+		return base
+	}
+	reason := renderSmartDepthReason(phase, totalPhases)
+	switch depth {
+	case colony.VerificationDepthHeavy:
+		if phaseNum == totalPhases {
+			return "Review depth: heavy (final phase)"
+		}
+		return fmt.Sprintf("Review depth: heavy (%s)", reason)
+	case colony.VerificationDepthStandard:
+		return fmt.Sprintf("Review depth: standard (%s)", reason)
+	default:
+		return fmt.Sprintf("Review depth: light (%s)", reason)
+	}
 }
 
 func renderBuildVisual(state colony.ColonyState, phase colony.Phase) string {
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), false, false)
+	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, "")
 	return renderBuildVisualWithDispatches(state, phase, plannedBuildDispatches(phase, state.ColonyDepth), reviewDepth)
 }
 
-func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth ReviewDepth) string {
+func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
 	b.WriteString(visualDivider)
@@ -955,7 +1185,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 		displayDataPath("last-build-claims.json"),
 		displayDataPath("spawn-tree.txt"),
 	))
-	b.WriteString(renderStageMarker("Verification"))
+	b.WriteString(renderStageMarker(fmt.Sprintf("Verification [%s]", string(reviewDepth))))
 	b.WriteString("Verification happens during `aether continue`.\n")
 	b.WriteString(renderStageMarker("Housekeeping"))
 	b.WriteString("Signal housekeeping runs during `aether continue`.\n")
@@ -974,7 +1204,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	return b.String()
 }
 
-func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth ReviewDepth) string {
+func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build-dispatch"), fmt.Sprintf("Build Plan %d", phase.ID)))
 	b.WriteString(visualDivider)
@@ -1043,7 +1273,7 @@ func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, di
 	return b.String()
 }
 
-func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}, reviewDepth ReviewDepth) string {
+func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue"))
 	b.WriteString(visualDivider)
@@ -1111,7 +1341,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	return b.String()
 }
 
-func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch, reviewDepth ReviewDepth) string {
+func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexContinueExternalDispatch, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue Plan"))
 	b.WriteString(visualDivider)
@@ -1151,7 +1381,7 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 	return b.String()
 }
 
-func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}, reviewDepth ReviewDepth) string {
+func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue-blocked"), "Continue Blocked"))
 	b.WriteString(visualDivider)
@@ -1706,6 +1936,18 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 		}
 		if orphaned > 0 {
 			b.WriteString(fmt.Sprintf("⚠️ %d worktree(s) could not be cleaned — run `aether worktree-cleanup`\n", orphaned))
+		}
+	}
+
+	// Stale FOCUS pheromone warning (Codex gets runtime-native warning only)
+	if staleRaw, ok := result["stale_signals"]; ok {
+		if staleList, ok := staleRaw.([]map[string]interface{}); ok && len(staleList) > 0 {
+			b.WriteString(fmt.Sprintf("Warning: %d stale FOCUS signal(s) detected from previous phases\n", len(staleList)))
+			for _, sig := range staleList {
+				content, _ := sig["content"].(string)
+				srcPhase, _ := sig["source_phase"].(int)
+				b.WriteString(fmt.Sprintf("  - Phase %d: %s\n", srcPhase, content))
+			}
 		}
 	}
 

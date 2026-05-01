@@ -960,6 +960,123 @@ func TestInitCmd_ClearsReviews(t *testing.T) {
 	}
 }
 
+func TestInitWithCharterJSONFlag(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	charterJSON := `{"intent":"Build X","vision":"A go project","governance":"No governance","goals":"Goal: Build X","tech_stack":"Languages: go","key_risks":"No risks","constraints":"No constraints"}`
+
+	rootCmd.SetArgs([]string{"init", "--charter-json", charterJSON, "Build X"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("COLONY_STATE.json not found: %v", err)
+	}
+
+	if state.Charter == nil {
+		t.Fatal("expected non-nil Charter")
+	}
+	if state.Charter.Intent != "Build X" {
+		t.Errorf("Charter.Intent = %q, want 'Build X'", state.Charter.Intent)
+	}
+	if state.Charter.Vision != "A go project" {
+		t.Errorf("Charter.Vision = %q, want 'A go project'", state.Charter.Vision)
+	}
+	if state.Charter.TechStack != "Languages: go" {
+		t.Errorf("Charter.TechStack = %q, want 'Languages: go'", state.Charter.TechStack)
+	}
+	if state.Charter.KeyRisks != "No risks" {
+		t.Errorf("Charter.KeyRisks = %q, want 'No risks'", state.Charter.KeyRisks)
+	}
+	if state.Charter.Constraints != "No constraints" {
+		t.Errorf("Charter.Constraints = %q, want 'No constraints'", state.Charter.Constraints)
+	}
+}
+
+func TestInitWithoutCharterJSONFlag(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Build Y"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("COLONY_STATE.json not found: %v", err)
+	}
+
+	// Charter should be nil when --charter-json is not provided
+	if state.Charter != nil {
+		t.Errorf("expected nil Charter when --charter-json not provided, got: %+v", state.Charter)
+	}
+}
+
+func TestInitInvalidCharterJSON(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stderr = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "--charter-json", "not-json", "Build Z"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != false {
+		t.Fatalf("expected ok:false for invalid JSON, got: %v", env["ok"])
+	}
+
+	// Verify COLONY_STATE.json was NOT created
+	_, err := os.Stat(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err == nil {
+		t.Error("expected COLONY_STATE.json to NOT be created with invalid charter JSON")
+	}
+}
+
 func TestInitCmd_ClearsReviews_NoReviewsDir(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

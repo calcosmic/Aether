@@ -92,11 +92,13 @@ var hiveStoreCmd = &cobra.Command{
 
 		var wf hiveWisdomData
 		if raw, err := os.ReadFile(wisdomPath); err == nil {
-			json.Unmarshal(raw, &wf)
+			if err := json.Unmarshal(raw, &wf); err != nil {
+				outputError(2, fmt.Sprintf("corrupted wisdom.json: %v", err), nil)
+				return nil
+			}
 		}
 
 		// Dedup: check if same text+domain already exists
-		textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
 		for i, e := range wf.Entries {
 			if e.Text == text && e.Domain == domain {
 				// Reinforce
@@ -130,6 +132,7 @@ var hiveStoreCmd = &cobra.Command{
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
+		textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
 		entry := hiveWisdomEntry{
 			ID:          fmt.Sprintf("%s_%s", domain, textHash[:12]),
 			Text:        text,
@@ -177,7 +180,10 @@ var hiveReadCmd = &cobra.Command{
 			outputOK(map[string]interface{}{"entries": []hiveWisdomEntry{}, "total": 0})
 			return nil
 		} else {
-			json.Unmarshal(raw, &wf)
+			if err := json.Unmarshal(raw, &wf); err != nil {
+				outputError(2, fmt.Sprintf("corrupted wisdom.json: %v", err), nil)
+				return nil
+			}
 		}
 
 		// Update access times
@@ -198,7 +204,10 @@ var hiveReadCmd = &cobra.Command{
 		}
 
 		// Persist access updates
-		writeWisdom(wisdomPath, wf)
+		if err := writeWisdom(wisdomPath, wf); err != nil {
+			outputError(2, fmt.Sprintf("failed to persist access updates: %v", err), nil)
+			return nil
+		}
 
 		outputOK(map[string]interface{}{"entries": results, "total": len(results)})
 		return nil
@@ -239,6 +248,100 @@ var hiveAbstractCmd = &cobra.Command{
 
 // --- hive-promote ---
 
+// promoteToHive is a reusable function that abstracts text, stores it in the hive
+// wisdom file, and emits a promotion event. It returns an error on failure so callers
+// can decide whether to block or continue.
+func promoteToHive(text, domain, sourceRepo string, confidence float64) error {
+	if text == "" {
+		return nil
+	}
+	if domain == "" {
+		domain = "general"
+	}
+	if confidence <= 0 {
+		confidence = 0.75
+	}
+
+	// Abstract
+	abstracted := text
+	if sourceRepo != "" {
+		abstracted = strings.ReplaceAll(abstracted, sourceRepo, "<repo>")
+	}
+	for _, prefix := range []string{"src/", "lib/", "pkg/", "cmd/", "internal/"} {
+		abstracted = strings.ReplaceAll(abstracted, prefix, "")
+	}
+
+	// Store
+	hub := resolveHubPath()
+	wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
+
+	var wf hiveWisdomData
+	if raw, err := os.ReadFile(wisdomPath); err == nil {
+		if err := json.Unmarshal(raw, &wf); err != nil {
+			return fmt.Errorf("corrupted wisdom.json: %w", err)
+		}
+	}
+
+	textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(abstracted)))
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Check for existing entry to boost confidence
+	for i, e := range wf.Entries {
+		if e.Text == abstracted && e.Domain == domain {
+			if confidence > wf.Entries[i].Confidence {
+				wf.Entries[i].Confidence = confidence
+			}
+			wf.Entries[i].AccessCount++
+			wf.Entries[i].AccessedAt = now
+			if err := writeWisdom(wisdomPath, wf); err != nil {
+				return fmt.Errorf("failed to save wisdom: %w", err)
+			}
+			emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
+				TaskID:  e.ID,
+				Task:    domain,
+				Status:  "boosted",
+				Message: abstracted,
+			}, "aether-hive")
+			return nil
+		}
+	}
+
+	// LRU eviction
+	if len(wf.Entries) >= maxHiveEntries {
+		oldestIdx := 0
+		for i, e := range wf.Entries {
+			if e.AccessedAt < wf.Entries[oldestIdx].AccessedAt {
+				oldestIdx = i
+			}
+		}
+		wf.Entries = append(wf.Entries[:oldestIdx], wf.Entries[oldestIdx+1:]...)
+	}
+
+	entry := hiveWisdomEntry{
+		ID:          fmt.Sprintf("%s_%s", domain, textHash[:12]),
+		Text:        abstracted,
+		Domain:      domain,
+		SourceRepo:  sourceRepo,
+		Confidence:  confidence,
+		CreatedAt:   now,
+		AccessedAt:  now,
+		AccessCount: 0,
+	}
+	wf.Entries = append(wf.Entries, entry)
+	if err := writeWisdom(wisdomPath, wf); err != nil {
+		return fmt.Errorf("failed to save wisdom: %w", err)
+	}
+
+	emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
+		TaskID:  entry.ID,
+		Task:    domain,
+		Status:  "promoted",
+		Message: abstracted,
+	}, "aether-hive")
+
+	return nil
+}
+
 var hivePromoteCmd = &cobra.Command{
 	Use:   "hive-promote [text] [domain] [source-repo] [confidence]",
 	Short: "End-to-end abstract + store pipeline for wisdom promotion",
@@ -265,85 +368,12 @@ var hivePromoteCmd = &cobra.Command{
 			}
 		}
 
-		// Abstract
-		abstracted := text
-		if sourceRepo != "" {
-			abstracted = strings.ReplaceAll(abstracted, sourceRepo, "<repo>")
-		}
-		for _, prefix := range []string{"src/", "lib/", "pkg/", "cmd/", "internal/"} {
-			abstracted = strings.ReplaceAll(abstracted, prefix, "")
-		}
-
-		// Store
-		hub := resolveHubPath()
-		wisdomPath := filepath.Join(hub, "hive", "wisdom.json")
-
-		var wf hiveWisdomData
-		if raw, err := os.ReadFile(wisdomPath); err == nil {
-			json.Unmarshal(raw, &wf)
-		}
-
-		textHash := fmt.Sprintf("%x", sha256.Sum256([]byte(abstracted)))
-		now := time.Now().UTC().Format(time.RFC3339)
-
-		// Check for existing entry to boost confidence
-		for i, e := range wf.Entries {
-			if e.Text == abstracted && e.Domain == domain {
-				if confidence > wf.Entries[i].Confidence {
-					wf.Entries[i].Confidence = confidence
-				}
-				wf.Entries[i].AccessCount++
-				wf.Entries[i].AccessedAt = now
-				if err := writeWisdom(wisdomPath, wf); err != nil {
-					outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
-					return nil
-				}
-				emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
-					TaskID:  e.ID,
-					Task:    domain,
-					Status:  "boosted",
-					Message: abstracted,
-				}, "aether-hive")
-				outputOK(map[string]interface{}{"promoted": true, "boosted": true, "id": e.ID, "confidence": wf.Entries[i].Confidence})
-				return nil
-			}
-		}
-
-		// LRU eviction
-		if len(wf.Entries) >= maxHiveEntries {
-			oldestIdx := 0
-			for i, e := range wf.Entries {
-				if e.AccessedAt < wf.Entries[oldestIdx].AccessedAt {
-					oldestIdx = i
-				}
-			}
-			wf.Entries = append(wf.Entries[:oldestIdx], wf.Entries[oldestIdx+1:]...)
-		}
-
-		entry := hiveWisdomEntry{
-			ID:          fmt.Sprintf("%s_%s", domain, textHash[:12]),
-			Text:        abstracted,
-			Domain:      domain,
-			SourceRepo:  sourceRepo,
-			Confidence:  confidence,
-			CreatedAt:   now,
-			AccessedAt:  now,
-			AccessCount: 0,
-		}
-		wf.Entries = append(wf.Entries, entry)
-		if err := writeWisdom(wisdomPath, wf); err != nil {
-			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
+		if err := promoteToHive(text, domain, sourceRepo, confidence); err != nil {
+			outputError(2, fmt.Sprintf("hive promotion failed: %v", err), nil)
 			return nil
 		}
 
-		emitLifecycleCeremony(events.CeremonyTopicHivePromote, events.CeremonyPayload{
-			TaskID:  entry.ID,
-			Task:    domain,
-			Status:  "promoted",
-			Message: abstracted,
-		}, "aether-hive")
-
-		outputOK(map[string]interface{}{"promoted": true, "boosted": false, "id": entry.ID, "confidence": confidence})
+		outputOK(map[string]interface{}{"promoted": true})
 		return nil
 	},
 }

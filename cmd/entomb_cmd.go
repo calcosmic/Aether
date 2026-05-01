@@ -13,6 +13,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -29,24 +30,24 @@ var entombCmd = &cobra.Command{
 		// Backfill the legacy top-level session mirror when upgrading a repo that
 		// still carries only the older colony-scoped session path.
 		if _, err := ensureLegacySessionMirror(store); err != nil {
-			outputError(2, fmt.Sprintf("failed to prepare session mirror: %v", err), nil)
+			renderRecoveryMenu("entomb", fmt.Sprintf("failed to prepare session mirror: %v", err), nil)
 			return nil
 		}
 
 		state, err := loadActiveColonyState()
 		if err != nil {
-			outputError(1, colonyStateLoadMessage(err), nil)
+			renderRecoveryMenu("entomb", colonyStateLoadMessage(err), nil)
 			return nil
 		}
 		if strings.TrimSpace(state.Milestone) != "Crowned Anthill" {
-			outputError(1, fmt.Sprintf("Colony has not been sealed. Current milestone: %s. Run `aether seal` first.", emptyFallback(strings.TrimSpace(state.Milestone), "(none)")), nil)
+			renderRecoveryMenu("entomb", fmt.Sprintf("Colony has not been sealed. Current milestone: %s. Run `aether seal` first.", emptyFallback(strings.TrimSpace(state.Milestone), "(none)")), nil)
 			return nil
 		}
 
 		aetherRoot := resolveAetherRootPath()
 		sealSummaryPath := filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md")
 		if _, err := os.Stat(sealSummaryPath); err != nil {
-			outputError(1, "CROWNED-ANTHILL.md not found. Run `aether seal` again before entombing.", nil)
+			renderRecoveryMenu("entomb", "CROWNED-ANTHILL.md not found. Run `aether seal` again before entombing.", nil)
 			return nil
 		}
 
@@ -73,6 +74,48 @@ var entombCmd = &cobra.Command{
 			return nil
 		}
 
+		// Extract near-miss instincts and write to chamber
+		nearMiss := extractNearMissInstincts(state)
+		if len(nearMiss) > 0 {
+			nearMissData, _ := json.MarshalIndent(nearMiss, "", "  ")
+			_ = os.WriteFile(filepath.Join(chamberDir, "near-miss-instincts.json"), append(nearMissData, '\n'), 0644)
+			// Update manifest with near-miss count
+			manifestPath := filepath.Join(chamberDir, "manifest.json")
+			if raw, err := os.ReadFile(manifestPath); err == nil {
+				var manifest map[string]interface{}
+				if json.Unmarshal(raw, &manifest) == nil {
+					manifest["near_miss_instincts"] = len(nearMiss)
+					if data, err := json.MarshalIndent(manifest, "", "  "); err == nil {
+						_ = os.WriteFile(manifestPath, append(data, '\n'), 0644)
+					}
+				}
+			}
+		}
+
+		// Copy shelf archive to chamber
+		if err := copyShelfToChamber(store, chamberDir); err != nil {
+			_ = os.RemoveAll(chamberDir)
+			outputError(2, fmt.Sprintf("failed to copy shelf to chamber: %v", err), nil)
+			return nil
+		}
+		// Update manifest with shelf summary
+		shelfSummary := shelfChamberSummary(store)
+		if shelfSummary != "Shelved ideas: 0" {
+			manifestPath := filepath.Join(chamberDir, "manifest.json")
+			if raw, err := os.ReadFile(manifestPath); err == nil {
+				var manifest map[string]interface{}
+				if json.Unmarshal(raw, &manifest) == nil {
+					manifest["shelf_archive"] = shelfSummary
+					if data, err := json.MarshalIndent(manifest, "", "  "); err == nil {
+						_ = os.WriteFile(manifestPath, append(data, '\n'), 0644)
+					}
+				}
+			}
+		}
+
+		// Run temp sweep (before reset, after artifacts are copied to chamber)
+		tempSwept := entombTempSweep(store.BasePath(), store)
+
 		if err := exportArchiveXMLToFile(filepath.Join(chamberDir, "colony-archive.xml")); err != nil {
 			_ = os.RemoveAll(chamberDir)
 			outputError(2, fmt.Sprintf("failed to export colony archive XML: %v", err), nil)
@@ -95,6 +138,17 @@ var entombCmd = &cobra.Command{
 			return nil
 		}
 
+		// Update registry with final stats (best-effort)
+		repoPath, _ := os.Getwd()
+		updateRegistryFinalStats(repoPath, registryFinalStats{
+			PhaseCount:    len(state.Plan.Phases),
+			PlanCount:     countTotalPlans(state),
+			LearningCount: len(state.Memory.PhaseLearnings),
+			InstinctCount: len(state.Memory.Instincts),
+			SealDate:      now.Format(time.RFC3339),
+			Duration:      computeColonyDuration(state),
+		})
+
 		if err := writeEntombRecoveryDocs(chamberName, goal, state, now); err != nil {
 			outputError(2, fmt.Sprintf("failed to write entomb recovery docs: %v", err), nil)
 			return nil
@@ -111,14 +165,19 @@ var entombCmd = &cobra.Command{
 		}, "aether-entomb")
 
 		result := map[string]interface{}{
-			"entombed":         true,
-			"goal":             goal,
-			"scope":            string(scope),
-			"chamber":          chamberName,
-			"chamber_path":     chamberDir,
-			"phases_completed": completedPhaseCount(state),
-			"total_phases":     len(state.Plan.Phases),
-			"next":             `aether init "next goal"`,
+			"entombed":           true,
+			"goal":               goal,
+			"scope":              string(scope),
+			"chamber":            chamberName,
+			"chamber_path":       chamberDir,
+			"phases_completed":   completedPhaseCount(state),
+			"total_phases":       len(state.Plan.Phases),
+			"near_miss_instincts": len(nearMiss),
+			"temp_swept":         tempSwept,
+			"next":               `aether init "next goal"`,
+		}
+		if len(nearMiss) > 0 {
+			result["suggestion"] = fmt.Sprintf("%d instincts eligible for hive promotion -- run aether hive-promote", len(nearMiss))
 		}
 		outputWorkflow(result, renderEntombVisual(result))
 		return nil
@@ -258,6 +317,7 @@ func copyEntombArtifacts(aetherRoot, dataDir, chamberDir string) error {
 		"spawn-runs.json",
 		"timing.log",
 		"view-state.json",
+		"midden.json",
 	}
 	for _, name := range dataFiles {
 		if err := copyIfExists(filepath.Join(dataDir, name), filepath.Join(chamberDir, name)); err != nil {
@@ -515,6 +575,102 @@ func errString(err error) string {
 	return err.Error()
 }
 
+// extractNearMissInstincts returns instincts with confidence in the near-miss
+// range [0.5, 0.8). These are worth preserving in the chamber archive but not
+// yet high-confidence enough for hive promotion.
+func extractNearMissInstincts(state colony.ColonyState) []colony.Instinct {
+	var nearMiss []colony.Instinct
+	for _, inst := range state.Memory.Instincts {
+		if inst.Confidence >= 0.5 && inst.Confidence < 0.8 {
+			nearMiss = append(nearMiss, inst)
+		}
+	}
+	return nearMiss
+}
+
+// entombTempSweep performs cleanup of stale data files that should not persist
+// after entomb. It runs AFTER copyEntombArtifacts so the chamber copy is preserved.
+// Returns the count of items cleaned.
+func entombTempSweep(dataDir string, s *storage.Store) int {
+	cleaned := 0
+
+	// 1. Prune expired pheromones (Active=false and Strength=0 or nil)
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err == nil && len(pf.Signals) > 0 {
+		var kept []colony.PheromoneSignal
+		for _, sig := range pf.Signals {
+			if !sig.Active && (sig.Strength == nil || *sig.Strength == 0) {
+				cleaned++
+				continue
+			}
+			kept = append(kept, sig)
+		}
+		if cleaned > 0 {
+			pf.Signals = kept
+			_ = s.SaveJSON("pheromones.json", pf)
+		}
+	}
+
+	// 2. Prune midden entries older than 30 days
+	var mf colony.MiddenFile
+	if err := s.LoadJSON("midden.json", &mf); err == nil && len(mf.Entries) > 0 {
+		cutoff := time.Now().Add(-30 * 24 * time.Hour)
+		var kept []colony.MiddenEntry
+		for _, entry := range mf.Entries {
+			ts, err := time.Parse(time.RFC3339, entry.Timestamp)
+			if err != nil || ts.After(cutoff) {
+				kept = append(kept, entry) // keep if parse error or recent
+				continue
+			}
+			cleaned++
+		}
+		if len(kept) < len(mf.Entries) {
+			mf.Entries = kept
+			_ = s.SaveJSON("midden.json", mf)
+		}
+	}
+
+	// 3. Clean old session snapshots (backups directory)
+	backupDir := filepath.Join(dataDir, "backups")
+	if entries, err := os.ReadDir(backupDir); err == nil {
+		cutoff := time.Now().Add(-7 * 24 * time.Hour)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().Before(cutoff) {
+				_ = os.Remove(filepath.Join(backupDir, entry.Name()))
+				cleaned++
+			}
+		}
+	}
+
+	return cleaned
+}
+
+// countTotalPlans counts total plans across all phases in colony state.
+// Since Phase struct doesn't have PlanCount, we count completed phases as proxy.
+func countTotalPlans(state colony.ColonyState) int {
+	return completedPhaseCount(state)
+}
+
+// computeColonyDuration returns a human-readable duration string since colony init.
+func computeColonyDuration(state colony.ColonyState) string {
+	if state.InitializedAt == nil {
+		return ""
+	}
+	duration := time.Since(*state.InitializedAt)
+	days := int(duration.Hours() / 24)
+	if days > 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%.0fh", duration.Hours())
+}
+
 func renderEntombVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("⚰️", "Entomb"))
@@ -530,6 +686,14 @@ func renderEntombVisual(result map[string]interface{}) string {
 	b.WriteString(emptyFallback(stringValue(result["chamber_path"]), stringValue(result["chamber"])))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Phases: %d/%d complete\n", intValue(result["phases_completed"]), intValue(result["total_phases"])))
+	nmCount := intValue(result["near_miss_instincts"])
+	if nmCount > 0 {
+		b.WriteString(fmt.Sprintf("Near-miss instincts: %d (eligible for hive promotion)\n", nmCount))
+	}
+	tsCount := intValue(result["temp_swept"])
+	if tsCount > 0 {
+		b.WriteString(fmt.Sprintf("Temp files swept: %d\n", tsCount))
+	}
 	b.WriteString(renderNextUp(
 		`Run `+"`aether init \"next goal\"`"+` to found the next colony.`,
 		`Run `+"`aether tunnels`"+` to browse archived chambers.`,

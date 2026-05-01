@@ -546,10 +546,26 @@ func shouldSkipGate(priorResults []colony.GateResultEntry, gateName string) bool
 }
 
 // gateResultsWrite persists gate results to COLONY_STATE.json using atomic write.
+// Entries are merged by Name key: existing entries with the same name are updated
+// (upserted), and new entries are appended. This ensures sequential calls accumulate
+// results instead of replacing all previous entries.
 func gateResultsWrite(entries []colony.GateResultEntry) error {
 	var updated colony.ColonyState
 	return store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
-		updated.GateResults = entries
+		indexByName := make(map[string]int, len(updated.GateResults))
+		result := append([]colony.GateResultEntry{}, updated.GateResults...)
+		for idx, e := range result {
+			indexByName[e.Name] = idx
+		}
+		for _, e := range entries {
+			if idx, ok := indexByName[e.Name]; ok {
+				result[idx] = e
+				continue
+			}
+			indexByName[e.Name] = len(result)
+			result = append(result, e)
+		}
+		updated.GateResults = result
 		return nil
 	})
 }

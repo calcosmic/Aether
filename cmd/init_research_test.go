@@ -457,3 +457,1344 @@ func TestInitResearchPriorColonies(t *testing.T) {
 	}
 }
 
+
+// --- Task 1: Dependency parser tests ---
+
+func TestParsePackageJsonDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "package.json"), []byte(`{
+		"dependencies": {
+			"express": "^4.18.0",
+			"lodash": "4.17.21"
+		},
+		"devDependencies": {
+			"jest": "^29.0.0"
+		}
+	}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pkg json test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "node" {
+		t.Errorf("language = %v, want node", entry["language"])
+	}
+	if entry["source_file"] != "package.json" {
+		t.Errorf("source_file = %v, want package.json", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 1 {
+		t.Fatalf("dependencies empty, want at least 1")
+	}
+	foundExpress := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "express" {
+			foundExpress = true
+		}
+	}
+	if !foundExpress {
+		t.Errorf("dependencies = %v, want to contain express", deps)
+	}
+	devDeps := entry["dev_dependencies"].([]interface{})
+	if len(devDeps) < 1 {
+		t.Fatalf("dev_dependencies empty, want at least 1")
+	}
+	foundJest := false
+	for _, d := range devDeps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "jest" {
+			foundJest = true
+		}
+	}
+	if !foundJest {
+		t.Errorf("dev_dependencies = %v, want to contain jest", devDeps)
+	}
+}
+
+func TestParseGoModDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module example.com/myapp\n\ngo 1.21\n\nrequire (\n\tgithub.com/spf13/cobra v1.8.0\n\tgithub.com/tidwall/gjson v1.17.0 // indirect\n)\n\nrequire github.com/BurntSushi/toml v1.3.2\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "go mod test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "go" {
+		t.Errorf("language = %v, want go", entry["language"])
+	}
+	direct := entry["dependencies"].([]interface{})
+	if len(direct) < 1 {
+		t.Fatalf("dependencies empty, want at least 1 direct dep")
+	}
+	indirect := entry["indirect"].([]interface{})
+	if len(indirect) < 1 {
+		t.Fatalf("indirect empty, want at least 1 indirect dep")
+	}
+}
+
+func TestParseCargoTomlDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "Cargo.toml"), []byte("[package]\nname = \"myapp\"\nversion = \"0.1.0\"\n\n[dependencies]\nserde = { version = \"1.0\", features = [\"derive\"] }\ntokio = \"1.35\"\nclap = \"4.4\"\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "cargo test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "rust" {
+		t.Errorf("language = %v, want rust", entry["language"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 3 {
+		t.Errorf("dependencies count = %d, want at least 3", len(deps))
+	}
+}
+
+func TestParsePyprojectDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "pyproject.toml"), []byte("[project]\nname = \"myapp\"\nversion = \"0.1.0\"\ndependencies = [\"requests>=2.0\", \"flask==2.1.0\", \"click\"]\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pyproject test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "python" {
+		t.Errorf("language = %v, want python", entry["language"])
+	}
+	if entry["source_file"] != "pyproject.toml" {
+		t.Errorf("source_file = %v, want pyproject.toml", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	if len(deps) < 2 {
+		t.Errorf("dependencies count = %d, want at least 2", len(deps))
+	}
+	foundRequests := false
+	foundFlask := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "requests" {
+			foundRequests = true
+		}
+		if dep["name"] == "flask" {
+			foundFlask = true
+		}
+	}
+	if !foundRequests {
+		t.Errorf("dependencies = %v, want to contain requests", deps)
+	}
+	if !foundFlask {
+		t.Errorf("dependencies = %v, want to contain flask", deps)
+	}
+}
+
+func TestParseComposerJsonDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "composer.json"), []byte("{\"require\":{\"laravel/framework\":\"^10.0\",\"php\":\"^8.1\"},\"require-dev\":{\"phpunit/phpunit\":\"^10.0\"}}\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "composer test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	entry := tsd[0].(map[string]interface{})
+	if entry["language"] != "php" {
+		t.Errorf("language = %v, want php", entry["language"])
+	}
+	if entry["source_file"] != "composer.json" {
+		t.Errorf("source_file = %v, want composer.json", entry["source_file"])
+	}
+	deps := entry["dependencies"].([]interface{})
+	foundLaravel := false
+	for _, d := range deps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "laravel/framework" {
+			foundLaravel = true
+		}
+	}
+	if !foundLaravel {
+		t.Errorf("dependencies = %v, want to contain laravel/framework", deps)
+	}
+	devDeps := entry["dev_dependencies"].([]interface{})
+	foundPhpunit := false
+	for _, d := range devDeps {
+		dep := d.(map[string]interface{})
+		if dep["name"] == "phpunit/phpunit" {
+			foundPhpunit = true
+		}
+	}
+	if !foundPhpunit {
+		t.Errorf("dev_dependencies = %v, want to contain phpunit/phpunit", devDeps)
+	}
+}
+
+// --- Task 2: Regex/XML/line parser tests ---
+
+func TestParseRequirementsTxt(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "requirements.txt"), []byte("django==4.2\n# comment\n-r other.txt\npytest>=7.0\nrequests\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "req txt test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundReqTxt := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "requirements.txt" {
+			foundReqTxt = true
+			if entry["language"] != "python" {
+				t.Errorf("language = %v, want python", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			foundDjango := false
+			foundPytest := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "django" {
+					foundDjango = true
+				}
+				if dep["name"] == "pytest" {
+					foundPytest = true
+				}
+			}
+			if !foundDjango {
+				t.Errorf("deps = %v, want to contain django", deps)
+			}
+			if !foundPytest {
+				t.Errorf("deps = %v, want to contain pytest", deps)
+			}
+		}
+	}
+	if !foundReqTxt {
+		t.Error("no requirements.txt entry found in tech_stack_detail")
+	}
+}
+
+func TestParseGemfileDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "Gemfile"), []byte("source \"https://rubygems.org\"\ngem \"rails\", \"~> 7.0\"\ngem \"pg\"\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "gemfile test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundGemfile := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "Gemfile" {
+			foundGemfile = true
+			if entry["language"] != "ruby" {
+				t.Errorf("language = %v, want ruby", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 2 {
+				t.Errorf("deps count = %d, want at least 2", len(deps))
+			}
+			foundRails := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "rails" {
+					foundRails = true
+				}
+			}
+			if !foundRails {
+				t.Errorf("deps = %v, want to contain rails", deps)
+			}
+		}
+	}
+	if !foundGemfile {
+		t.Error("no Gemfile entry found in tech_stack_detail")
+	}
+}
+
+func TestParsePomXmlDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "pom.xml"), []byte("<project><dependencies><dependency><groupId>org.springframework</groupId><artifactId>spring-core</artifactId><version>5.3.0</version></dependency></dependencies></project>\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pom xml test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundPom := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "pom.xml" {
+			foundPom = true
+			if entry["language"] != "java" {
+				t.Errorf("language = %v, want java", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 1 {
+				t.Errorf("deps count = %d, want at least 1", len(deps))
+			}
+			foundSpring := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if strings.Contains(dep["name"].(string), "spring-core") {
+					foundSpring = true
+				}
+			}
+			if !foundSpring {
+				t.Errorf("deps = %v, want to contain spring-core", deps)
+			}
+		}
+	}
+	if !foundPom {
+		t.Error("no pom.xml entry found in tech_stack_detail")
+	}
+}
+
+func TestParseMixExsDeps(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "mix.exs"), []byte("defp deps do\n  [\n    {:phoenix, \"~> 1.7\"},\n    {:ecto_sql, \"~> 3.10\"}\n  ]\nend\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "mix.exs test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	foundMix := false
+	for _, item := range tsd {
+		entry := item.(map[string]interface{})
+		if entry["source_file"] == "mix.exs" {
+			foundMix = true
+			if entry["language"] != "elixir" {
+				t.Errorf("language = %v, want elixir", entry["language"])
+			}
+			deps := entry["dependencies"].([]interface{})
+			if len(deps) < 2 {
+				t.Errorf("deps count = %d, want at least 2", len(deps))
+			}
+			foundPhoenix := false
+			foundEcto := false
+			for _, d := range deps {
+				dep := d.(map[string]interface{})
+				if dep["name"] == "phoenix" {
+					foundPhoenix = true
+				}
+				if dep["name"] == "ecto_sql" {
+					foundEcto = true
+				}
+			}
+			if !foundPhoenix {
+				t.Errorf("deps = %v, want to contain phoenix", deps)
+			}
+			if !foundEcto {
+				t.Errorf("deps = %v, want to contain ecto_sql", deps)
+			}
+		}
+	}
+	if !foundMix {
+		t.Error("no mix.exs entry found in tech_stack_detail")
+	}
+}
+
+func TestInitResearchTechStackDetailIntegration(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "package.json"), []byte(`{"dependencies":{"express":"^4.0"}}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "integration test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	tsd := result["tech_stack_detail"].([]interface{})
+	if len(tsd) != 1 {
+		t.Fatalf("tech_stack_detail length = %d, want 1", len(tsd))
+	}
+	if result["detected_type"] != "node" {
+		t.Errorf("detected_type = %v, want node", result["detected_type"])
+	}
+}
+
+func TestInitResearchBackwardCompat(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module test\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "backward compat test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	requiredFields := []string{
+		"detected_type", "languages", "frameworks", "goal",
+		"top_level_dirs", "file_count", "is_git_repo",
+		"governance", "complexity", "prior_colonies",
+		"pheromone_suggestions", "charter", "tech_stack_detail",
+	}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("missing required field: %s", field)
+		}
+	}
+}
+
+// --- Plan 02 Task 1: Directory classification tests ---
+
+func TestClassifyDirMonorepo(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "packages"), 0755)
+	os.WriteFile(filepath.Join(target, "pnpm-workspace.yaml"), []byte("packages:\n  - 'packages/*'\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "monorepo test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "monorepo" {
+		t.Errorf("dir_classification.type = %v, want monorepo", dirClass["type"])
+	}
+	signals := dirClass["signals"].([]interface{})
+	if len(signals) < 2 {
+		t.Errorf("signals count = %d, want >= 2", len(signals))
+	}
+}
+
+func TestClassifyDirMicroservices(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "service-a"), 0755)
+	os.WriteFile(filepath.Join(target, "service-a", "Dockerfile"), []byte("FROM node:20\n"), 0644)
+	os.MkdirAll(filepath.Join(target, "service-b"), 0755)
+	os.WriteFile(filepath.Join(target, "service-b", "Dockerfile"), []byte("FROM python:3.11\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "microservices test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "microservices" {
+		t.Errorf("dir_classification.type = %v, want microservices", dirClass["type"])
+	}
+}
+
+func TestClassifyDirStandardApp(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "src"), 0755)
+	os.MkdirAll(filepath.Join(target, "cmd"), 0755)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "standard app test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "standard_app" {
+		t.Errorf("dir_classification.type = %v, want standard_app", dirClass["type"])
+	}
+	signals := dirClass["signals"].([]interface{})
+	foundSrc := false
+	for _, s := range signals {
+		if strings.Contains(s.(string), "src/") {
+			foundSrc = true
+		}
+	}
+	if !foundSrc {
+		t.Errorf("signals = %v, want to contain src/", signals)
+	}
+}
+
+func TestClassifyDirLibrary(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "main.go"), []byte("package main\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "library test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "library" {
+		t.Errorf("dir_classification.type = %v, want library", dirClass["type"])
+	}
+}
+
+func TestClassifyDirUnknown(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "unknown test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	dirClass := result["dir_classification"].(map[string]interface{})
+	if dirClass["type"] != "unknown" {
+		t.Errorf("dir_classification.type = %v, want unknown", dirClass["type"])
+	}
+}
+
+// --- Plan 02 Task 2: Deep governance parsing tests ---
+
+func TestDeepParseEslintrc(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	eslintrc := `{"rules":{"no-unused-vars":"warn","semi":"error"},"extends":["next/core-web-vitals"]}`
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(eslintrc), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "eslint deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "ESLint" && d["category"] == "linter" {
+			found = true
+			rules := d["rules"].(map[string]interface{})
+			if _, ok := rules["no-unused-vars"]; !ok {
+				t.Error("expected rules to contain no-unused-vars")
+			}
+			extends := d["extends"].([]interface{})
+			foundExtends := false
+			for _, e := range extends {
+				if e == "next/core-web-vitals" {
+					foundExtends = true
+				}
+			}
+			if !foundExtends {
+				t.Errorf("extends = %v, want to contain next/core-web-vitals", extends)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want ESLint entry", govDetails)
+	}
+}
+
+func TestDeepParseGolangci(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	golangci := "linters:\n  enable:\n    - errcheck\n    - govet\nissues:\n  exclude-rules:\n    - linters:\n        - errcheck"
+	os.WriteFile(filepath.Join(target, ".golangci.yml"), []byte(golangci), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "golangci deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "golangci-lint" && d["category"] == "linter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			linters := config["enabled_linters"].([]interface{})
+			if len(linters) < 2 {
+				t.Errorf("enabled_linters = %v, want at least 2", linters)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want golangci-lint entry", govDetails)
+	}
+}
+
+func TestDeepParsePrettier(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	prettier := `{"semi":true,"singleQuote":true,"tabWidth":2}`
+	os.WriteFile(filepath.Join(target, ".prettierrc.json"), []byte(prettier), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "prettier deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Prettier" && d["category"] == "formatter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["semi"] != true {
+				t.Errorf("config.semi = %v, want true", config["semi"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Prettier entry", govDetails)
+	}
+}
+
+func TestDeepParseBiome(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	biome := `{"formatter":{"enabled":true,"indentStyle":"space"},"linter":{"enabled":true,"rules":{"recommended":true}}}`
+	os.WriteFile(filepath.Join(target, "biome.json"), []byte(biome), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "biome deep test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Biome" && d["category"] == "formatter" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if _, ok := config["formatter"]; !ok {
+				t.Error("expected config to contain formatter")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Biome entry", govDetails)
+	}
+}
+
+
+func TestDeepParseGHActions(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, ".github", "workflows"), 0755)
+	workflow := "name: CI\n\non: [push, pull_request]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: go test\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo done\n"
+	os.WriteFile(filepath.Join(target, ".github", "workflows", "ci.yml"), []byte(workflow), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "gh actions test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "GitHub Actions" && d["category"] == "ci" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["name"] != "CI" {
+				t.Errorf("config.name = %v, want CI", config["name"])
+			}
+			if config["job_count"].(float64) < 1 {
+				t.Errorf("config.job_count = %v, want >= 1", config["job_count"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want GitHub Actions entry", govDetails)
+	}
+}
+
+func TestDeepParseMakefile(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	makefile := "build:\n\tgo build ./...\ntest:\n\tgo test ./...\nlint:\n\tgolangci-lint run\n"
+	os.WriteFile(filepath.Join(target, "Makefile"), []byte(makefile), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "makefile test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Make" && d["category"] == "build" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			targets := config["targets"].([]interface{})
+			if len(targets) < 3 {
+				t.Errorf("config.targets = %v, want at least 3", targets)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Make entry", govDetails)
+	}
+}
+
+func TestDeepParseJest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	jest := "module.exports = {\n  preset: 'ts-jest',\n  testEnvironment: 'node',\n  testMatch: ['**/*.test.ts'],\n};\n"
+	os.WriteFile(filepath.Join(target, "jest.config.js"), []byte(jest), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "jest test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	govDetails := result["governance_details"].([]interface{})
+	found := false
+	for _, item := range govDetails {
+		d := item.(map[string]interface{})
+		if d["tool"] == "Jest" && d["category"] == "test" {
+			found = true
+			config := d["config"].(map[string]interface{})
+			if config["preset"] != "ts-jest" {
+				t.Errorf("config.preset = %v, want ts-jest", config["preset"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("governance_details = %v, want Jest entry", govDetails)
+	}
+}
+
+func TestGovernanceBackwardCompat(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(`{"rules":{"no-unused-vars":"warn"}}`), 0644)
+	os.WriteFile(filepath.Join(target, "jest.config.js"), []byte("module.exports = {};"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "backward compat gov", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	// Old governance field must still exist and contain ESLint
+	governance := result["governance"].(map[string]interface{})
+	linters := governance["linters"].([]interface{})
+	foundESLint := false
+	for _, l := range linters {
+		if l == "ESLint" {
+			foundESLint = true
+		}
+	}
+	if !foundESLint {
+		t.Errorf("governance.linters = %v, want to contain ESLint", linters)
+	}
+
+	// Old governance field must still contain Jest
+	testFrameworks := governance["test_frameworks"].([]interface{})
+	foundJest := false
+	for _, tf := range testFrameworks {
+		if tf == "Jest" {
+			foundJest = true
+		}
+	}
+	if !foundJest {
+		t.Errorf("governance.test_frameworks = %v, want to contain Jest", testFrameworks)
+	}
+
+	// New governance_details field must also exist
+	govDetails := result["governance_details"].([]interface{})
+	if len(govDetails) == 0 {
+		t.Error("governance_details is empty, want at least 1 entry")
+	}
+}
+
+// --- Plan 03 Task 1: Expanded pheromone patterns and colony context summary tests ---
+
+func TestPheromonePatternsExpanded(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	// Create fixtures that trigger multiple new patterns
+	os.WriteFile(filepath.Join(target, ".env"), []byte("KEY=value\n"), 0644)
+	os.WriteFile(filepath.Join(target, "docker-compose.yml"), []byte("services:\n  app:\n    image: node:20\n"), 0644)
+	os.WriteFile(filepath.Join(target, "CHANGELOG.md"), []byte("# Changelog\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".env.example"), []byte("KEY=\n"), 0644)
+	// No .gitignore -- should trigger REDIRECT about secrets
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "pheromone expanded test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	if len(suggestions) < 5 {
+		t.Fatalf("pheromone_suggestions count = %d, want >= 5", len(suggestions))
+	}
+
+	// Verify at least 1 FEEDBACK and 1 REDIRECT type exist
+	foundFeedback := false
+	foundRedirect := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		if sug["type"] == "FEEDBACK" {
+			foundFeedback = true
+		}
+		if sug["type"] == "REDIRECT" {
+			foundRedirect = true
+		}
+	}
+	if !foundFeedback {
+		t.Errorf("no FEEDBACK suggestions found in %d suggestions", len(suggestions))
+	}
+	if !foundRedirect {
+		t.Errorf("no REDIRECT suggestions found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestPheromoneMonorepoPatterns(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "packages"), 0755)
+	os.WriteFile(filepath.Join(target, "pnpm-workspace.yaml"), []byte("packages:\n  - 'packages/*'\n"), 0644)
+	os.WriteFile(filepath.Join(target, "docker-compose.yml"), []byte("services:\n  app:\n    image: node\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "monorepo pheromone test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	foundMonorepoFocus := false
+	foundContainerFocus := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		reason := sug["reason"].(string)
+		content := sug["content"].(string)
+		sugType := sug["type"].(string)
+		if (strings.Contains(reason, "workspace") || strings.Contains(content, "workspace")) && sugType == "FEEDBACK" {
+			foundMonorepoFocus = true
+		}
+		if strings.Contains(reason, "docker-compose") && sugType == "FOCUS" {
+			foundContainerFocus = true
+		}
+	}
+	if !foundMonorepoFocus {
+		t.Errorf("no monorepo-related FEEDBACK suggestion found in %d suggestions", len(suggestions))
+	}
+	if !foundContainerFocus {
+		t.Errorf("no container FOCUS suggestion found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestPheromoneDatabasePatterns(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "migrations"), 0755)
+	os.WriteFile(filepath.Join(target, "migrations", "001_create_users.sql"), []byte("CREATE TABLE users (id INT);"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "database pheromone test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	foundMigrationFocus := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		content := sug["content"].(string)
+		if strings.Contains(strings.ToLower(content), "migration") {
+			foundMigrationFocus = true
+		}
+	}
+	if !foundMigrationFocus {
+		t.Errorf("no migration-related FOCUS suggestion found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestPheromoneApiPatterns(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, "api"), 0755)
+	os.WriteFile(filepath.Join(target, "api", "routes.go"), []byte("package api\n"), 0644)
+	os.WriteFile(filepath.Join(target, "swagger.yaml"), []byte("openapi: 3.0.0\ninfo:\n  title: Test API\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "api pheromone test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	suggestions := result["pheromone_suggestions"].([]interface{})
+	foundApiSpecFocus := false
+	for _, s := range suggestions {
+		sug := s.(map[string]interface{})
+		reason := sug["reason"].(string)
+		if strings.Contains(reason, "OpenAPI") || strings.Contains(reason, "Swagger") {
+			foundApiSpecFocus = true
+		}
+	}
+	if !foundApiSpecFocus {
+		t.Errorf("no API spec FOCUS suggestion found in %d suggestions", len(suggestions))
+	}
+}
+
+func TestColonyContextSummary(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module test\n"), 0644)
+	os.MkdirAll(filepath.Join(target, "src"), 0755)
+	os.WriteFile(filepath.Join(target, "src", "main.go"), []byte("package main\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(`{"rules":{}}`), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "context summary test", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	summary, ok := result["colony_context_summary"].(map[string]interface{})
+	if !ok {
+		t.Fatal("colony_context_summary missing or not a map")
+	}
+
+	// Verify all expected fields exist
+	expectedFields := []string{"detected_type", "dir_type", "tech_stack_count", "governance_tool_count", "pheromone_count", "is_git_repo", "file_count"}
+	for _, field := range expectedFields {
+		if _, ok := summary[field]; !ok {
+			t.Errorf("colony_context_summary missing field: %s", field)
+		}
+	}
+
+	// Verify non-zero values where expected
+	if summary["tech_stack_count"].(float64) < 1 {
+		t.Errorf("tech_stack_count = %v, want >= 1", summary["tech_stack_count"])
+	}
+	if summary["governance_tool_count"].(float64) < 1 {
+		t.Errorf("governance_tool_count = %v, want >= 1", summary["governance_tool_count"])
+	}
+	if summary["pheromone_count"].(float64) < 1 {
+		t.Errorf("pheromone_count = %v, want >= 1", summary["pheromone_count"])
+	}
+	if summary["file_count"].(float64) < 1 {
+		t.Errorf("file_count = %v, want >= 1", summary["file_count"])
+	}
+}
+
+func TestInitResearchFullOutputIntegration(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	target := t.TempDir()
+	os.WriteFile(filepath.Join(target, "go.mod"), []byte("module test\n\ngo 1.21\n\nrequire (\n\tgithub.com/spf13/cobra v1.8.0\n)\n"), 0644)
+	os.MkdirAll(filepath.Join(target, "src"), 0755)
+	os.WriteFile(filepath.Join(target, "src", "main.go"), []byte("package main\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".eslintrc.json"), []byte(`{"rules":{"semi":"error"}}`), 0644)
+	os.WriteFile(filepath.Join(target, "docker-compose.yml"), []byte("services:\n  app:\n    image: node:20\n"), 0644)
+	os.WriteFile(filepath.Join(target, ".env"), []byte("KEY=value\n"), 0644)
+	os.WriteFile(filepath.Join(target, "CHANGELOG.md"), []byte("# Changelog\n"), 0644)
+	os.WriteFile(filepath.Join(target, "Makefile"), []byte("build:\n\tgo build\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "full output integration", "--target", target})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+
+	// Master integration test: verify ALL 18 output fields exist
+	requiredFields := []string{
+		"detected_type", "languages", "frameworks", "goal",
+		"top_level_dirs", "file_count", "is_git_repo",
+		"readme_summary", "git_history", "governance", "complexity",
+		"prior_colonies", "pheromone_suggestions", "charter",
+		"tech_stack_detail", "dir_classification", "governance_details",
+		"colony_context_summary",
+	}
+	missing := []string{}
+	for _, field := range requiredFields {
+		if _, ok := result[field]; !ok {
+			missing = append(missing, field)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("missing output fields: %v", missing)
+	}
+}

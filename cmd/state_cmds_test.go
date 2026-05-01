@@ -172,3 +172,76 @@ func TestStateMutateBracket(t *testing.T) {
 		t.Errorf("phases[0].status = %q, want %q", updated.Plan.Phases[0].Status, "completed")
 	}
 }
+
+func TestStateMutateExpressionStringNotDoubleQuoted(t *testing.T) {
+	// Regression: expression mode with a quoted string value should store "READY"
+	// not "\"READY\"" (literal escaped quotes embedded in the string).
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "phase one", Status: "pending"},
+			},
+		},
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	rootCmd.SetArgs([]string{"state-mutate", `.state = "EXECUTING"`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.State != colony.StateEXECUTING {
+		t.Errorf("state = %q, want %q", updated.State, colony.StateEXECUTING)
+	}
+}
+
+func TestStateMutateExpressionNumericStillWorks(t *testing.T) {
+	// Numeric values should still use SetRawBytes (raw JSON).
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "phase one", Status: "pending"},
+			},
+		},
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	rootCmd.SetArgs([]string{"state-mutate", `.current_phase = 3`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var updated colony.ColonyState
+	s.LoadJSON("COLONY_STATE.json", &updated)
+	if updated.CurrentPhase != 3 {
+		t.Errorf("current_phase = %d, want 3", updated.CurrentPhase)
+	}
+}

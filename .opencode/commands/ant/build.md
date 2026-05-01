@@ -114,6 +114,10 @@ Once `build-finalize` succeeds:
 3. Guide the user first to `/ant-continue` as the next command.
 4. Keep the closeout tight — one clear next move is better than an option menu.
 
+## Verification Depth
+
+The runtime supports `--verification-depth <light|standard|heavy>` to control post-build review thoroughness. The default is "standard" (probe-only review). Use `--verification-depth heavy` for full quality gates (gatekeeper + auditor + probe) or `--light` to skip review agents entirely. The old `--light` and `--heavy` flags still work as backward-compatible aliases.
+
 ## Guardrails
 
 - Do NOT run `aether build` without `--plan-only` from this wrapper.

@@ -1387,3 +1387,170 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 		t.Fatal("expected colony state to be recovered from stale EXECUTING phase 1, but it's still stuck")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// PlanningDepth tests (resolvePlanningDepth function)
+// ---------------------------------------------------------------------------
+
+func TestPlanningDepthDefault(t *testing.T) {
+	got, err := resolvePlanningDepth("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "standard" {
+		t.Fatalf("resolvePlanningDepth(\"\") = %q, want %q", got, "standard")
+	}
+}
+
+func TestPlanningDepthValues(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"light", "light"},
+		{"deep", "deep"},
+		{"standard", "standard"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := resolvePlanningDepth(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolvePlanningDepth(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlanningDepthAliases(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"minimal", "light"},
+		{"thorough", "deep"},
+		{"granular", "deep"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := resolvePlanningDepth(tt.input)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolvePlanningDepth(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlanningDepthInvalid(t *testing.T) {
+	_, err := resolvePlanningDepth("bad")
+	if err == nil {
+		t.Fatal("expected error for invalid planning depth")
+	}
+	if !strings.Contains(err.Error(), "invalid planning depth") {
+		t.Fatalf("error %q should contain 'invalid planning depth'", err.Error())
+	}
+}
+
+func TestPlanningDepthIndependentOfGranularity(t *testing.T) {
+	gotGran, _, err := resolvePlanGranularityDepth("", "balanced")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	min, max := colony.GranularityRange(gotGran)
+
+	_, err = resolvePlanningDepth("light")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gotGran2, _, err := resolvePlanGranularityDepth("", "balanced")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	min2, max2 := colony.GranularityRange(gotGran2)
+	if min != min2 || max != max2 {
+		t.Fatalf("granularity bounds changed: before=%d-%d after=%d-%d", min, max, min2, max2)
+	}
+}
+
+func TestPlanningDepthInManifest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-plan-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	goal := "Test planning depth in manifest"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--depth", "fast", "--planning-depth", "light"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --plan-only returned error: %v", err)
+	}
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	manifest := env["result"].(map[string]interface{})["plan_manifest"].(map[string]interface{})
+
+	pd, ok := manifest["planning_depth"].(string)
+	if !ok {
+		t.Fatal("expected planning_depth string in manifest")
+	}
+	if pd != "light" {
+		t.Fatalf("planning_depth = %q, want %q", pd, "light")
+	}
+}
+
+func TestPlanningDepthInWrapperContract(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-plan-wc\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	goal := "Test planning depth in wrapper contract"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--depth", "fast", "--planning-depth", "deep"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --plan-only returned error: %v", err)
+	}
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	wrapperContract, ok := result["wrapper_contract"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected wrapper_contract in result")
+	}
+	pd, ok := wrapperContract["planning_depth"].(string)
+	if !ok {
+		t.Fatal("expected planning_depth string in wrapper_contract")
+	}
+	if pd != "deep" {
+		t.Fatalf("wrapper_contract planning_depth = %q, want %q", pd, "deep")
+	}
+}

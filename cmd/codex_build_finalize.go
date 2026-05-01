@@ -197,6 +197,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
 	}
 
+	// Prepare the updated state in memory first (needed for downstream writes).
 	updatedState := state
 	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs)
 	updatedState.State = colony.StateBUILT
@@ -216,7 +217,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
-	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, manifest.Playbooks, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false)
+	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, manifest.Playbooks, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
 	finalManifest.GeneratedAt = completedAt.Format(time.RFC3339)
 	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build manifest: %w", err)
@@ -224,9 +225,16 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := recordExternalBuildSpawnTree(dispatches); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
+
+	// Atomically commit the colony state mutation.
+	var committedState colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
+		committedState = updatedState
+		return nil
+	}); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
+	updatedState = committedState
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
 	result := map[string]interface{}{
@@ -502,7 +510,8 @@ func normalizeClaimPathsToRoot(root string, paths []string) []string {
 }
 
 // findRepoRelativePath searches for a file in the repo that matches the claimed path.
-// Uses git ls-files for fast lookup, falls back to filepath.Glob if git unavailable.
+// Uses git ls-files for fast lookup. If git finds nothing, the file likely doesn't
+// exist in the repo (no unbounded filesystem walk fallback).
 func findRepoRelativePath(root, claimed string) string {
 	base := filepath.Base(claimed)
 	if base == "." || base == string(filepath.Separator) {
@@ -523,26 +532,8 @@ func findRepoRelativePath(root, claimed string) string {
 		}
 	}
 
-	// Fallback: recursive walk to find files matching the basename
-	var candidates []string
-	filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if d.Name() == base {
-			if rel, err := filepath.Rel(root, path); err == nil {
-				candidates = append(candidates, filepath.ToSlash(rel))
-			}
-		}
-		return nil
-	})
-	if len(candidates) == 0 {
-		return ""
-	}
-	if len(candidates) == 1 {
-		return candidates[0]
-	}
-	return bestMatchForClaimedPath(claimed, candidates)
+	// If git ls-files found nothing, the file likely doesn't exist in the repo.
+	return ""
 }
 
 // bestMatchForClaimedPath scores candidates by counting matching trailing path segments.

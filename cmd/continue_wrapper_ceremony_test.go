@@ -23,13 +23,15 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	required := []string{
 		"AETHER_OUTPUT_MODE=visual aether status",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
 		"result.continue_manifest",
 		"AETHER_OUTPUT_MODE=json aether spawn-log",
 		`subagent_type="{agent_name}"`,
 		"AETHER_OUTPUT_MODE=json aether spawn-complete",
 		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"## Verification Gates",
+			"## Verification Depth",
 		"Gatekeeper",
 		"Auditor",
 		"Probe",
@@ -48,12 +50,12 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	inOrder := []string{
 		"## What Continue Means",
-		"## Colony Context",
-		"## Continue Manifest",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only $ARGUMENTS",
-		"## Wave Execution",
-		"## Completion Packet",
-		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
+		"## Default Continue",
+		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+		"## Verification Gates",
+			"## Verification Depth",
+		"## Heavy External Review",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
 		"## Learning Extraction",
 		"## After Continue",
 		"### If the phase advanced",
@@ -73,7 +75,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 				t.Errorf("%s missing %q", wrapperPath, want)
 			}
 		}
-		if guardrail := "Do NOT run `aether continue` without `--plan-only` from this wrapper."; !strings.Contains(text, guardrail) {
+		if guardrail := "Do NOT use `--plan-only` or `continue-finalize` for default fast continue."; !strings.Contains(text, guardrail) {
 			t.Errorf("%s missing guardrail %q", wrapperPath, guardrail)
 		}
 		for _, forbidden := range []string{"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS"} {
@@ -128,21 +130,46 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	phase := colony.Phase{ID: 1, Name: "Contract check"}
 
 	// Non-final case
-	nonFinalOutput := renderContinueVisual(state, phase, nil, false, &colony.Phase{ID: 2, Name: "Next"}, nil, ReviewDepthLight)
+	nonFinalOutput := renderContinueVisual(state, phase, nil, false, &colony.Phase{ID: 2, Name: "Next"}, nil, colony.VerificationDepthLight)
 	if !strings.Contains(nonFinalOutput, "It's safe to clear your context now.") {
 		t.Errorf("renderContinueVisual() non-final missing context-clear guidance\n%s", nonFinalOutput)
 	}
 
 	// Final case
-	finalOutput := renderContinueVisual(state, phase, nil, true, nil, nil, ReviewDepthLight)
+	finalOutput := renderContinueVisual(state, phase, nil, true, nil, nil, colony.VerificationDepthLight)
 	if !strings.Contains(finalOutput, "It's safe to clear your context now.") {
 		t.Errorf("renderContinueVisual() final missing context-clear guidance\n%s", finalOutput)
 	}
 
 	// Blocked case must NOT contain guidance
-	blockedOutput := renderContinueBlockedVisual(state, phase, nil, ReviewDepthLight)
+	blockedOutput := renderContinueBlockedVisual(state, phase, nil, colony.VerificationDepthLight)
 	if strings.Contains(blockedOutput, "It's safe to clear your context now.") {
 		t.Errorf("renderContinueBlockedVisual() should not contain context-clear guidance\n%s", blockedOutput)
+	}
+}
+
+func TestContinueWrapperSourceAndMirrorsUseFastDevContinue(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	command := "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
+	paths := []string{
+		filepath.Join(repoRoot, ".aether", "commands", "continue.yaml"),
+		filepath.Join(repoRoot, ".aether", "commands", "claude", "continue.md"),
+		filepath.Join(repoRoot, ".aether", "commands", "opencode", "continue.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "continue.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "continue.md"),
+	}
+	for _, path := range paths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if !strings.Contains(string(content), command) {
+			t.Fatalf("%s missing fast-dev continue command %q", path, command)
+		}
 	}
 }
 

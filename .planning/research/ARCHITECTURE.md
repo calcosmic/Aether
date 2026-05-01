@@ -1,453 +1,371 @@
-# Architecture Research: `aether recover` Stuck-State Colony Recovery
+# Architecture Research: Aether v1.11 Integration
 
-**Project:** Aether v1.8 Colony Recovery
-**Researched:** 2026-04-25
-**Confidence:** HIGH (based on direct source code analysis)
+**Domain:** Smart Init, suggest-analyze, and self-hosting cleanup for the Aether Go codebase
+**Researched:** 2026-04-28
+**Overall confidence:** HIGH (based on direct source code analysis of cmd/, pkg/, and wrapper markdown)
 
 ## Executive Summary
 
-The recovery command should be a **new top-level cobra command** (`cmd/recover.go`) that **orchestrates existing subsystems** rather than duplicating their logic. The medic scanner (`cmd/medic_scanner.go`) already diagnoses 5 categories of colony health issues, but it is a general-purpose health tool. The recover command needs to specialize in the 7 classes of *stuck state* -- scenarios where the colony cannot make forward progress.
+Aether v1.11 restores three lost intelligence features from the original shell-to-Go migration (April 2026) and performs a self-hosting cleanup. The integration architecture is clean because the Go runtime already has well-defined hooks at the right points -- the shell features were never re-ported, so this is additive integration, not retrofitting.
 
-The right architecture is a **diagnosis-then-repair pipeline** built from reusable scan+fix functions extracted from existing commands. Each stuck-state class maps to an existing code path that already knows how to detect and fix that specific problem. Recover composes these rather than reinventing them.
+**Smart Init** integrates into the existing `aether init` command flow as a pre-init ceremony: `init-research` already runs as a standalone Cobra subcommand called by wrapper markdown. The missing piece is the charter approval flow (currently the wrapper does the approval UX, but the Go runtime has no ceremony for it). The architecture is: wrapper calls `init-research`, presents charter for approval, then calls `init`. No Go-side ceremony gap needs fixing -- the wrappers own the approval UX per the wrapper-runtime contract.
 
-## Recommended Architecture
+**Suggest-analyze** is the biggest integration surface. The original shell version was 618 lines of pattern detection. The Go `init-research` already has `generatePheromoneSuggestions()` with 10 patterns, but this only runs during init. The build-time suggest-analyze (called in build-prep.md Step 4.2) was never ported to Go -- it only exists as a documentation concept. The architecture requires: (1) a new `suggest-analyze` Cobra subcommand, (2) a `suggest-approve` tick-to-approve command, (3) integration into the build flow via the Codex build pipeline (`executeCodexBuildDispatches`), and (4) deduplication against existing active signals.
 
-### New Files
+**Self-hosting cleanup** is the simplest -- it is deletion and documentation. The agent mirrors (`.aether/agents-claude/`, `.aether/agents-codex/`, `.aether/skills-codex/`) are already byte-identical to their sources. The cleanup is: (1) audit for orphaned companion files in `.aether/`, (2) verify agent mirror integrity as part of `aether integrity`, (3) remove any stale artifacts that exist because Aether was used to develop itself.
 
-| File | Purpose |
-|------|---------|
-| `cmd/recover.go` | Cobra command registration, flag parsing, top-level orchestration |
-| `cmd/recover_scanner.go` | 7-class stuck-state detector (new, focused on stuck states) |
-| `cmd/recover_repair.go` | Repair dispatcher that composes existing fix functions |
-| `cmd/recover_test.go` | Unit tests for diagnosis and repair |
-| `cmd/recover_visuals.go` | Rendering for human-readable output |
+## Key Findings
 
-### Modified Files (minor)
+**Stack:** Go 1.24, Cobra CLI, pkg/storage file locking -- no new dependencies needed
+**Architecture:** Three independent feature streams with one shared integration surface (pheromone pipeline)
+**Critical pitfall:** suggest-analyze during build must not block the build pipeline if the scan is slow or the user has `--no-suggest`
 
-| File | Change |
-|------|--------|
-| `cmd/root.go` | Add `recoverCmd` to root |
-| `cmd/medic_scanner.go` | Extract reusable scanner helpers (no behavior change) |
+## Integration Architecture
 
-### No New Package Dependencies
-
-The recover command lives entirely in `cmd/` and uses existing types from `pkg/colony`, `pkg/storage`, `pkg/agent`, and `pkg/trace`. No new packages needed.
-
----
-
-## Internal Structure
-
-### 1. Command Registration Pattern
-
-Follow the established pattern used by `medic_cmd.go`:
+### Component Map
 
 ```
-aether recover          -- scan only, print diagnosis
-aether recover --apply  -- scan + fix
-aether recover --force  -- allow destructive repairs (reset state)
-aether recover --json   -- structured output
+EXISTING                                           NEW (v1.11)
+========                                           ============
+
+cmd/init_cmd.go .......................... cmd/suggest_analyze.go
+cmd/init_research.go .................... cmd/suggest_analyze.go
+cmd/pheromone_write.go .................. cmd/suggest_analyze.go
+cmd/colony_prime_context.go ............. (no change -- reads pheromones.json)
+cmd/codex_build.go ...................... cmd/codex_build.go (suggest hook)
+cmd/recover_scanner.go .................. cmd/integrity_audit.go (new)
+.aether/docs/command-playbooks/ ......... build-prep.md (suggest step)
+
+WRAPPER LAYER
+=============
+.claude/commands/ant/init.md ............ (minor -- suggest-analyze step)
+.opencode/commands/ant/init.md .......... (minor -- suggest-analyze step)
+.codex/CODEX.md ......................... (new build-prep suggest step)
 ```
 
-Registration in `cmd/recover.go`:
+### Data Flow: Smart Init
 
-```go
-var recoverCmd = &cobra.Command{
-    Use:   "recover",
-    Short: "Rescue a stuck colony",
-    Long:  `Scan the colony for stuck-state conditions, print a clean diagnosis, and optionally apply fixes.`,
-    Args:  cobra.NoArgs,
-    RunE:  runRecover,
-}
-
-func init() {
-    rootCmd.AddCommand(recoverCmd)
-    recoverCmd.Flags().Bool("apply", false, "apply fixes for detected issues")
-    recoverCmd.Flags().Bool("force", false, "allow destructive repairs (state resets)")
-    recoverCmd.Flags().Bool("json", false, "output structured JSON")
-}
+```
+User: /ant-init "Build feature X"
+  |
+  v
+Wrapper (.claude/commands/ant/init.md):
+  1. aether init-research --goal "Build feature X" --target .
+     |-> Returns: charter, pheromone_suggestions, governance, git_history, etc.
+  |
+  v
+Wrapper presents charter for approval:
+  - Intent, Vision, Governance, Goals
+  - Tick-to-approve pheromone suggestions
+  |
+  v
+User approves/revises
+  |
+  v
+Wrapper: for each approved suggestion:
+  aether pheromone-write --type FOCUS --content "..." --source "init-research"
+  |
+  v
+Wrapper: aether init "Build feature X"
+  |-> Creates COLONY_STATE.json, session.json
+  |-> Returns state + shelf_backlog
+  |
+  v
+Wrapper: handles shelf backlog (promote/dismiss)
 ```
 
-### 2. Diagnosis Pipeline
+**Key insight:** The Go runtime already does everything needed. The wrapper markdown (init.md) already implements the full ceremony. The gap documented in PROJECT.md ("charter ceremony lost in shell-to-Go migration") is actually about the Codex lane -- Codex has no wrapper markdown, so it skips the charter approval and pheromone suggestion steps entirely.
 
-The scanner checks 7 specific stuck-state classes. Each check is a standalone function that returns a list of `StuckStateIssue` structs.
+**For Codex:** Add a charter approval step to the `aether init` command itself, controlled by a `--no-ceremony` flag. The Go runtime presents charter data in structured output and the Codex agent workflow handles approval. Alternatively, add a `aether init --charter-only` mode that returns the charter for review before creating the colony.
 
-```go
-type StuckStateIssue struct {
-    Class       string // e.g., "missing_build_packet", "stale_spawned"
-    Severity    string // "critical", "warning"
-    Message     string // human-readable description
-    File        string // relevant file
-    Fixable     bool   // can --apply fix this?
-    Destructive bool   // does fixing require --force?
-    FixHint     string // what the fix does
-}
+### Data Flow: Suggest-Analyze (Build Time)
+
+```
+User: /ant-build 1
+  |
+  v
+Codex build pipeline (cmd/codex_build.go):
+  runCodexBuildWithOptions()
+    |
+    +-- NEW: if !options.NoSuggest {
+    |     suggestions = runSuggestAnalyze(root, phase)
+    |     // Returns []pheromoneSuggestion (deduped against active signals)
+    |     // Stores to .aether/data/suggest-pending.json for approve step
+    |   }
+    |
+    +-- existing: validateCodexBuildState()
+    +-- existing: plannedBuildDispatchesForSelection()
+    +-- existing: executeCodexBuildDispatches()
 ```
 
-The 7 stuck-state classes and where their detection/fix logic already lives:
+**For wrapper builds (Claude/OpenCode):** The suggest-analyze step is already documented in build-prep.md header but never implemented as a Go command. The wrapper would call:
 
-| Class | Detection Source | Fix Source | New? |
-|-------|-----------------|------------|------|
-| 1. Missing build packet | `codex_continue.go` manifest loading | `build --force` pattern | Detection exists; fix composes existing |
-| 2. Stale spawned workers | `spawn_track.go` timeout check | `spawn-track --action clear` | Detection exists; fix exists |
-| 3. Partial phase (EXECUTING with no build) | `medic_scanner.go` state consistency check | `state_repair.go` EXECUTING reset | Both exist |
-| 4. Bad manifest | `codex_build.go` manifest validation | Rebuild from state | New detection |
-| 5. Dirty/orphaned worktrees | `worktree.go` orphan scan | `worktree-orphan-scan` + cleanup | Both exist |
-| 6. Broken survey data | `survey.go` validation | Reset survey | New detection |
-| 7. Missing agent files | `.claude/agents/ant/` file check | `generate_cmds.go` regeneration | New detection |
-
-### 3. Scan Orchestrator
-
-```go
-func performStuckStateScan(dataDir string) (*StuckStateScanResult, error) {
-    start := time.Now()
-    var issues []StuckStateIssue
-
-    // Load state once (shared across all checks)
-    state, stateErr := loadActiveColonyState()
-
-    issues = append(issues, scanMissingBuildPacket(state, dataDir)...)
-    issues = append(issues, scanStaleSpawnedWorkers(dataDir)...)
-    issues = append(issues, scanPartialPhase(state)...)
-    issues = append(issues, scanBadManifest(state, dataDir)...)
-    issues = append(issues, scanDirtyWorktrees(state)...)
-    issues = append(issues, scanBrokenSurvey(dataDir)...)
-    issues = append(issues, scanMissingAgentFiles()...)
-
-    return &StuckStateScanResult{
-        Issues:    issues,
-        State:     state,
-        Duration:  time.Since(start),
-    }, nil
-}
+```
+aether suggest-analyze --phase 1
+-> Returns: suggestions (deduped)
+Wrapper presents for approval
+aether suggest-approve --ids "1,3,5"  // tick-to-approve
+-> Writes approved signals to pheromones.json
 ```
 
-### 4. Repair Pipeline
+**For Codex builds:** The Codex build pipeline (`executeCodexBuildDispatches`) would call `runSuggestAnalyze()` as a pre-dispatch step. Since Codex has no tick-to-approve UI, suggestions would be auto-written as low-strength FOCUS signals, or skipped entirely (Codex builds are already verbose).
 
-The repair pipeline composes existing fix functions. It does **not** reimplement any repair logic.
+### Data Flow: Self-Hosting Cleanup
 
-```go
-func performStuckStateRepairs(scan *StuckStateScanResult, opts RecoverOptions, dataDir string) (*RepairResult, error) {
-    // 1. Create backup (reuse medic_repair.go createBackup)
-    backupPath, err := createBackup(dataDir)
-
-    // 2. Sort by severity, filter by fixable
-    fixable := filterFixable(scan.Issues)
-
-    // 3. Dispatch to existing repair functions
-    for _, issue := range fixable {
-        switch issue.Class {
-        case "missing_build_packet":
-            // Reset state to READY, clear BuildStartedAt
-            // Reuse pattern from medic_repair.go repairStateIssues
-        case "stale_spawned_workers":
-            // Reuse spawnTrackClear pattern
-        case "partial_phase":
-            // Reuse medic_repair.go EXECUTING reset
-        case "dirty_worktrees":
-            // Reuse worktree-orphan-scan cleanup pattern
-        case "bad_manifest":
-            // Delete corrupt manifest, reset state
-        case "broken_survey":
-            // Reset survey data
-        case "missing_agent_files":
-            // Cannot auto-fix -- report only
-        }
-    }
-
-    // 4. Re-scan to confirm fixes
-    // 5. Return repair report
-}
 ```
-
----
-
-## Why Compose, Not Monolith
-
-### Option A: Single monolithic command (REJECTED)
-
-A monolithic `recover.go` that contains all detection and repair logic inline.
-
-**Problems:**
-- Duplicates medic scanner logic
-- Duplicates spawn-track timeout logic
-- Duplicates worktree orphan detection
-- Maintenance burden: every fix in medic/spawn/worktree must be mirrored
-
-### Option B: Compose existing subsystems (RECOMMENDED)
-
-Recover orchestrates calls to existing detection and repair functions.
-
-**Benefits:**
-- Single source of truth for each repair
-- Medic improvements automatically benefit recover
-- Test coverage compounds (existing tests + new recover-specific tests)
-- Follows the established Aether pattern: `medic --fix` already does exactly this for general health
-
-### Why Not Subcommand Composition
-
-One alternative would be having `recover` shell out to `aether medic --fix`, `aether worktree-orphan-scan`, etc. This is rejected because:
-
-1. Cross-command orchestration is fragile (flag parsing, output format, exit codes)
-2. Performance: loading state N times instead of once
-3. Atomicity: partial failures across subcommands leave inconsistent state
-4. The existing functions are in the same Go package (`cmd/`) -- direct function calls are natural
-
----
+aether integrity
+  |
+  +-- NEW: auditAgentMirrors()
+  |     Compare .claude/agents/ant/*.md vs .aether/agents-claude/*.md
+  |     Compare .codex/agents/*.toml vs .aether/agents-codex/*.toml
+  |     Compare .aether/skills/ vs .aether/skills-codex/
+  |     Report mismatches
+  |
+  +-- NEW: auditOrphanedCompanionFiles()
+  |     Check for files in .aether/ that have no corresponding source
+  |     Report stale artifacts
+  |
+  +-- existing: binary version check
+  +-- existing: hub version check
+  +-- existing: release pipeline chain
+```
 
 ## Component Boundaries
 
-```
-cmd/recover.go              -- CLI entry point, flags, output routing
-    |
-    v
-cmd/recover_scanner.go      -- 7-class stuck-state detector
-    |
-    |--- calls into cmd/medic_scanner.go helpers (scanColonyState, etc.)
-    |--- calls into cmd/spawn_track.go (readSpawnTrack)
-    |--- calls into cmd/worktree.go (worktree orphan detection)
-    |
-    v
-cmd/recover_repair.go       -- Repair dispatcher
-    |
-    |--- calls into cmd/medic_repair.go (createBackup, atomicWriteFile, repairStateIssues)
-    |--- calls into cmd/spawn_track.go (clear pattern)
-    |--- calls into cmd/worktree.go (cleanup pattern)
-    |--- calls into cmd/state_repair.go (repairMissingPlanFromArtifacts)
-    |
-    v
-cmd/recover_visuals.go      -- Output rendering (visual + JSON)
-```
+### New: cmd/suggest_analyze.go
 
-### Data Flow
+| Responsibility | Communicates With |
+|----------------|-------------------|
+| Pattern detection (reuse `generatePheromoneSuggestions` from `init_research.go`) | pheromones.json (dedup check), suggest-pending.json (storage) |
+| Deduplication against active signals | `pheromone_write.go` signal format |
+| Approval flow (`suggest-approve` subcommand) | pheromones.json (writes approved signals) |
+| Phase-aware pattern detection | COLONY_STATE.json (reads current phase, plan) |
 
-```
-User runs: aether recover [--apply] [--force]
+**Key design decision:** Extract `generatePheromoneSuggestions()` from `init_research.go` into a shared function (or move to a new file) so both `init-research` and `suggest-analyze` can use it. Currently it is a package-level function in `cmd/`, so it is already accessible -- no extraction needed.
 
-1. loadActiveColonyState()
-   - loads COLONY_STATE.json
-   - runs normalizeLegacyColonyState()
-   - runs repairMissingPlanFromArtifacts()
+**Additional patterns for build-time analysis** (beyond the 10 init patterns):
+- Large files (>1MB) -> FOCUS about refactoring
+- TODO/FIXME density -> FOCUS about tech debt
+- Test file coverage gaps -> FOCUS about testing
+- Debug artifacts (console.log, fmt.Println) -> REDIRECT about debug code
+- Circular dependencies -> REDIRECT about architecture
 
-2. performStuckStateScan(state, dataDir)
-   - runs 7 detection checks
-   - returns StuckStateIssue list
+### New: cmd/integrity_audit.go
 
-3. renderDiagnosis(issues)      [scan-only mode: stop here]
-   - prints clean summary table
-   - prints each issue with severity and fix hint
-   - suggests: "run aether recover --apply"
+| Responsibility | Communicates With |
+|----------------|-------------------|
+| Agent mirror byte comparison | Filesystem (3 mirror locations) |
+| Orphan detection in .aether/ | Filesystem, manifest |
+| Report generation | stdout (JSON/visual) |
 
-4. createBackup(dataDir)        [apply mode only]
-   - copies .aether/data/ to .aether/backups/recover-TIMESTAMP/
+### Modified: cmd/codex_build.go
 
-5. performStuckStateRepairs(scan, opts, dataDir)
-   - dispatches each fixable issue to its repair function
-   - logs each repair attempt via trace
+| Change | Location | Impact |
+|--------|----------|--------|
+| Add suggest-analyze hook | `runCodexBuildWithOptions()` before dispatch | Non-blocking, gated by `--no-suggest` flag |
+| Add `NoSuggest` to `codexBuildOptions` | Struct definition | New field |
+| Store suggestions as build metadata | `last-build-claims.json` or new file | Audit trail |
 
-6. re-scan to confirm
-   - runs detection again
-   - reports what's still stuck
+### Modified: cmd/init_cmd.go
 
-7. renderRepairReport(original, postRepair, repairResult)
-   - shows fixed/unfixed summary
-   - suggests next command
-```
+| Change | Location | Impact |
+|--------|----------|--------|
+| Return charter data in init output | `outputWorkflow()` call | Enables Codex to present charter |
+| Return pheromone suggestions in init output | `outputWorkflow()` call | Enables Codex auto-suggest |
 
----
+### Modified: .aether/docs/command-playbooks/build-prep.md
 
-## Integration Points with Existing Commands
+| Change | Location | Impact |
+|--------|----------|--------|
+| Add suggest-analyze step as Go command | After Step 3.1 | Replaces documentation-only concept with real command |
 
-### medic (cmd/medic_cmd.go)
+## Patterns to Follow
 
-**Relationship:** Recover is a specialized stuck-state tool. Medic is a general health scanner.
+### Pattern 1: Suggest-Analyze as Pre-Dispatch Hook
 
-- Recover reuses `HealthIssue` struct for compatibility
-- Recover reuses `createBackup()` and `atomicWriteFile()` from `medic_repair.go`
-- Recover does NOT replace medic. Medic scans for data corruption, schema issues, and deep integrity. Recover scans for stuck-state specifically.
-- A colony can be "healthy" by medic standards but "stuck" by recover standards (e.g., EXECUTING with a stale build -- medic sees valid state, recover sees a stuck colony)
+**What:** Run pattern analysis before worker dispatch, store suggestions for approval, write approved signals.
 
-**Implementation note:** Extract the following from `medic_scanner.go` into shared helpers:
-- `issueCritical()`, `issueWarning()`, `issueInfo()`, `fixableIssue()` -- already used by both
-- `checkJSONFile()` -- useful for recover's manifest and survey checks
-- `parseTimestamp()` -- useful for staleness checks
+**When:** During `aether build` (both wrapper and Codex paths).
 
-These are already unexported functions in the same package, so no extraction needed -- just call them directly.
+**Why:** This follows the existing build-prep pattern where `init-research` runs before `init`. The suggest step is a parallel -- it runs before dispatch to inform workers with fresh signals.
 
-### build --force (cmd/codex_build.go)
-
-**Relationship:** `build --force` handles one specific recovery path (redispatch an active phase).
-
-- Recover detects the "missing build packet" condition and reports it
-- When `--apply` is used, recover can reset the colony to READY state so the user can run `aether build N` next
-- Recover does NOT directly invoke `build --force` internally (cross-command invocation is the anti-pattern)
-- Instead, recover resets the state and tells the user to run `build N` or `build N --force`
-
-### skip-phase --force (cmd/phase_skip.go)
-
-**Relationship:** Skip-phase is the emergency escape hatch for an unrecoverable phase.
-
-- Recover detects when a phase is truly stuck (no workers, stale state, no manifest)
-- Recover suggests `aether skip-phase N --force` as the fix
-- Recover does NOT auto-skip phases (too destructive even with `--force`)
-- The repair for "partial phase" resets to READY and suggests the next command
-
-### plan --force (cmd/codex_plan.go)
-
-**Relationship:** `plan --force` (the `--refresh` flag) resets stale plan state.
-
-- Recover can detect when the plan is in an inconsistent state (phases with wrong statuses)
-- Recover does NOT call plan logic -- it reports and suggests `aether plan --refresh`
-- For plan recovery from artifacts, `state_repair.go:repairMissingPlanFromArtifacts()` is already called during `loadActiveColonyState()` -- recover gets this for free
-
-### worktree-orphan-scan (cmd/worktree.go)
-
-**Relationship:** Worktree orphan detection is fully implemented.
-
-- Recover calls the same detection logic inline (the orphan detection is straightforward)
-- For repair, recover marks orphaned worktrees for cleanup and runs `git worktree remove` + `git worktree prune`
-- Reuses `getGitWorktreePaths()` and `isWorktreeOrphaned()` from the existing worktree code
-
-### spawn-track (cmd/spawn_track.go)
-
-**Relationship:** Spawn tracking already has timeout enforcement.
-
-- Recover reads `spawn-track.json` to find stale agents
-- Recover reads `spawn-runs.json` to find stuck runs
-- For repair, recover clears stale spawn state (reuse `repairDataIssues` "stale spawn" path from `medic_repair.go`)
-
----
-
-## Output Format
-
-### Visual (default)
-
-```
-Colony Recovery: "Build feature X"
-Phase 3/6 -- EXECUTING
-
-Scanning for stuck-state conditions...
-
-  CRITICAL [missing_build_packet] No build manifest for phase 3
-    Fix: aether build 3 --force
-
-  WARNING [stale_spawned] 2 workers spawned >1h ago with no completion
-    Fixable with --apply
-
-  INFO [orphaned_worktrees] 1 orphaned worktree detected
-    Fixable with --apply
-
-3 issues found (1 critical, 1 warning, 1 info)
-
-Run `aether recover --apply` to fix 2 issues automatically.
-```
-
-### JSON (--json flag)
-
-```json
-{
-  "timestamp": "2026-04-25T...",
-  "goal": "Build feature X",
-  "phase": 3,
-  "total_phases": 6,
-  "state": "EXECUTING",
-  "issues": [
-    {
-      "class": "missing_build_packet",
-      "severity": "critical",
-      "message": "No build manifest for phase 3",
-      "fixable": false,
-      "destructive": false,
-      "fix_hint": "aether build 3 --force"
+```go
+// In cmd/codex_build.go, before executeCodexBuildDispatches:
+if !options.NoSuggest {
+    suggestions := runBuildSuggestAnalyze(root, phase, store)
+    if len(suggestions) > 0 {
+        storePendingSuggestions(store, suggestions)
+        // For Codex: auto-approve with low strength
+        // For wrappers: return in output for tick-to-approve
     }
-  ],
-  "summary": {
-    "critical": 1,
-    "warning": 1,
-    "info": 1,
-    "fixable": 2
-  },
-  "repairs": null
 }
 ```
 
----
+### Pattern 2: Deduplication Against Active Signals
+
+**What:** Before presenting suggestions, check pheromones.json for existing signals with the same type+content hash.
+
+**When:** Every suggest-analyze invocation.
+
+**Why:** The pheromone system already has content-hash-based dedup in `pheromone_write.go`. Suggest-analyze must use the same dedup logic to avoid presenting duplicates.
+
+```go
+func dedupSuggestionsAgainstActive(existing []colony.PheromoneSignal, new []pheromoneSuggestion) []pheromoneSuggestion {
+    activeHashes := make(map[string]bool)
+    for _, sig := range existing {
+        if sig.Active && sig.ContentHash != nil {
+            activeHashes[*sig.ContentHash] = true
+        }
+    }
+    var filtered []pheromoneSuggestion
+    for _, s := range new {
+        hash := "sha256:" + sha256Sum(s.Content)
+        if !activeHashes[hash] {
+            filtered = append(filtered, s)
+        }
+    }
+    return filtered
+}
+```
+
+### Pattern 3: Agent Mirror Integrity as Part of `aether integrity`
+
+**What:** Compare source agent files against their packaging mirrors during integrity checks.
+
+**When:** `aether integrity` invocation (also runs during `aether publish`).
+
+**Why:** Self-hosting artifacts are a silent source of drift. A byte-level comparison catches accidental edits to mirrors.
+
+```go
+func auditAgentMirrors(baseDir string) []integrityIssue {
+    // Compare .claude/agents/ant/*.md vs .aether/agents-claude/*.md
+    // Compare .codex/agents/*.toml vs .aether/agents-codex/*.toml
+    // Compare .aether/skills/ vs .aether/skills-codex/
+    // Report any differences as warnings
+}
+```
 
 ## Anti-Patterns to Avoid
 
-### 1. Do Not Shell Out to Other Commands
+### Anti-Pattern 1: Suggest-Analyze Blocks Build
 
-The existing pattern in Aether is direct function calls within the `cmd/` package. Never use `exec.Command("aether", "medic", ...)` from within recover.
+**What:** Running suggest-analyze synchronously in the build pipeline and failing if it errors.
 
-### 2. Do Not Duplicate medic's General Health Scanning
+**Why bad:** The suggest step is advisory. A slow or failed scan should not prevent the build from proceeding.
 
-Recover is specialized for stuck-state. It does not re-check JSON validity, schema conformance, or data file corruption. That is medic's job. Users should run both if they want full diagnostics.
+**Instead:** Run suggest-analyze with a timeout. If it fails or times out, log a warning and proceed with the build. The `--no-suggest` flag provides an explicit opt-out.
 
-### 3. Do Not Auto-Skip Phases
+### Anti-Pattern 2: Charter Approval in Go Runtime
 
-Even with `--force`, recover should not skip phases. Skip-phase is a separate decision. Recover resets the state to allow the user to make that choice.
+**What:** Adding interactive approval prompts to `aether init` in the Go binary.
 
-### 4. Do Not Modify ColonyState Without Backup
+**Why bad:** The wrapper-runtime contract says wrappers own presentation. Adding approval logic to the Go runtime breaks this contract and creates a CLI UX problem for non-interactive use.
 
-Follow medic's pattern: always create a timestamped backup before any state mutation.
+**Instead:** Return charter data in structured output. Let the wrapper (or Codex agent workflow) handle the approval UX. For Codex, add a `--charter-only` flag to `init-research` that returns just the charter without creating the colony.
 
-### 5. Do Not Invent New State Transitions
+### Anti-Pattern 3: Deleting Self-Hosting Artifacts Without Audit
 
-Recover should only use existing valid state transitions from `pkg/colony/state_machine.go`. EXECUTING -> READY is valid. BUILT -> READY is valid. Any new transition needs to go through the state machine first.
+**What:** Removing files from `.aether/agents-claude/` or `.aether/agents-codex/` because they "look stale."
 
----
+**Why bad:** These are packaging mirrors that `aether publish` distributes. Deleting them breaks the publish pipeline.
+
+**Instead:** Run the byte-comparison audit first. Only flag files that differ from their source. Never delete -- report and let the user decide.
+
+### Anti-Pattern 4: Suggest-Analyze Writes Signals Directly
+
+**What:** Having `suggest-analyze` write pheromone signals directly to pheromones.json without user approval.
+
+**Why bad:** Auto-writing signals bypasses the user's control over their colony's behavior. The pheromone system is the user-colony communication channel -- it should not be automated without consent.
+
+**Instead:** `suggest-analyze` stores suggestions to a pending file (`suggest-pending.json`). A separate `suggest-approve` command writes approved signals. For Codex auto-approve, use a low strength (0.5) and source "auto:suggest" so they are distinguishable.
 
 ## Scalability Considerations
 
-| Concern | Current (1 colony) | Future (10 colonies) | Notes |
-|---------|-------------------|---------------------|-------|
-| Scan time | <100ms | ~1s | File I/O is the bottleneck, not CPU |
-| State size | ~50KB COLONY_STATE.json | N/A (per-repo) | Recovery is per-colony |
-| Backup space | ~500KB per backup | ~5MB with retention | Keep 3 most recent backups |
-| Agent file check | O(N) file stat calls | N/A | Only checks current repo |
+| Concern | Impact |
+|---------|--------|
+| Suggest-analyze scan time on large repos | Cap file walk at 10K files or 5s timeout; skip vendor/node_modules (already in `extendedSkipDirs`) |
+| Pheromone dedup with many active signals | O(N*M) where N=active signals, M=suggestions; both are small (<100 each) |
+| Agent mirror comparison | O(F) file reads where F=26 agents + 29 skills; negligible |
+| Integrity audit in publish pipeline | Adds <100ms to `aether integrity`; acceptable |
 
----
+## Build Order (Suggested Phase Sequence)
 
-## Build Order (Dependencies)
+Based on dependency analysis:
 
-The phases should be ordered by dependency:
+### 1. Self-Hosting Cleanup (lowest risk, highest signal)
 
-1. **Phase A: Scanner foundation** (`cmd/recover.go` + `cmd/recover_scanner.go`)
-   - Implement diagnosis-only mode first
-   - Reuses existing detection functions
-   - No mutations, safe to test
-   - Validates all 7 detection classes work
+**Why first:** It is pure deletion and audit. No new logic. Proves the integrity pipeline works. Removes noise from the codebase before adding new features.
 
-2. **Phase B: Repair pipeline** (`cmd/recover_repair.go`)
-   - Add `--apply` and `--force` flags
-   - Implement repair dispatch for fixable issues
-   - Reuses existing repair functions
-   - Backup before any mutation
+**Files:**
+- `cmd/integrity_audit.go` (new -- agent mirror audit + orphan detection)
+- Modify `aether integrity` to include new audits
+- Remove any confirmed orphaned files
 
-3. **Phase C: Visual output** (`cmd/recover_visuals.go`)
-   - Human-readable rendering
-   - JSON output
-   - Follows existing `codex_visuals.go` patterns
+**Dependencies:** None. Standalone.
 
-4. **Phase D: Integration tests** (`cmd/recover_test.go`)
-   - Test each stuck-state class in isolation
-   - Test repair pipeline end-to-end
-   - Test backup/restore
-   - Test that fixable issues are fixed and unfixable issues are reported
+### 2. Suggest-Analyze (new command)
 
-**Rationale:** Scanner first because it has zero risk (no mutations). Repair second because it depends on scanner output. Visuals third because it is presentation-only. Tests throughout, but the dedicated integration test phase validates the full pipeline.
+**Why second:** It is a new standalone command that does not modify existing behavior. Can be tested in isolation.
 
----
+**Files:**
+- `cmd/suggest_analyze.go` (new -- `suggest-analyze` and `suggest-approve` subcommands)
+- Reuse `generatePheromoneSuggestions()` from `init_research.go`
+- Add `suggest-pending.json` storage format
+- Tests: `cmd/suggest_analyze_test.go`
+
+**Dependencies:** `pheromone_write.go` (for writing approved signals), `init_research.go` (for pattern functions).
+
+### 3. Suggest-Analyze Build Integration (wires into build)
+
+**Why third:** Depends on suggest-analyze command existing.
+
+**Files:**
+- `cmd/codex_build.go` (add suggest hook to `runCodexBuildWithOptions`)
+- `cmd/codex_build.go` (add `NoSuggest` to `codexBuildOptions`)
+- `.aether/docs/command-playbooks/build-prep.md` (add suggest step)
+- Wrapper markdown updates (Claude/OpenCode init and build)
+
+**Dependencies:** `cmd/suggest_analyze.go` must exist.
+
+### 4. Smart Init Hardening (charter ceremony for Codex)
+
+**Why last:** The charter ceremony already works in wrappers. This phase extends it to the Codex lane and adds any missing pieces.
+
+**Files:**
+- `cmd/init_cmd.go` (return charter + suggestions in output)
+- `.codex/CODEX.md` (add charter approval workflow)
+- Possibly `cmd/init_research.go` (add `--charter-only` flag)
+
+**Dependencies:** `cmd/suggest_analyze.go` (for Codex to auto-suggest after init).
+
+## Integration Points Summary
+
+| Integration Point | Existing File | Change Type | Risk |
+|------------------|---------------|-------------|------|
+| suggest-analyze command | `cmd/suggest_analyze.go` | NEW | Low |
+| suggest-approve command | `cmd/suggest_analyze.go` | NEW | Low |
+| Build pipeline suggest hook | `cmd/codex_build.go` | MODIFY (add hook) | Medium |
+| Init output enhancement | `cmd/init_cmd.go` | MODIFY (add fields) | Low |
+| Integrity audit | `cmd/integrity_audit.go` | NEW | Low |
+| Build-prep playbook | `build-prep.md` | MODIFY (add step) | Low |
+| Wrapper init commands | `ant/init.md` | MODIFY (minor) | Low |
+| Codex init workflow | `CODEX.md` | MODIFY (add charter) | Low |
+
+## Open Questions
+
+1. **Codex suggest-analyze UX:** Should Codex auto-approve suggestions or skip them entirely? The `--no-suggest` flag already exists for wrappers. Codex builds have no tick-to-approve UI. Recommendation: auto-write with low strength and `auto:suggest` source, or skip entirely.
+
+2. **Suggest-analyze scope for builds:** Should build-time suggest-analyze use the same 10 patterns as init, or a different set? Init patterns are about project setup (no .gitignore, no CI). Build patterns should be about code quality (TODOs, debug artifacts, large files). Recommendation: use a separate `generateBuildPheromoneSuggestions()` function with build-relevant patterns.
+
+3. **Agent mirror automation:** Should `aether publish` auto-sync agent mirrors, or should it require manual confirmation? Currently the mirrors are maintained manually. Recommendation: auto-sync with a diff report, no confirmation needed (they are generated artifacts).
+
+4. **Pending suggestions lifecycle:** How long should `suggest-pending.json` persist? Should unapproved suggestions expire? Recommendation: clear on build completion (they become stale if the codebase changed during the build).
 
 ## Sources
 
-- Direct source code analysis of `cmd/` and `pkg/colony/` (2900+ tests, v1.0.20+)
-- `cmd/medic_cmd.go`, `cmd/medic_scanner.go`, `cmd/medic_repair.go` -- existing health scan and repair patterns
-- `cmd/state_repair.go` -- plan recovery from artifacts
-- `cmd/phase_skip.go` -- force-skip pattern
-- `cmd/worktree.go` -- worktree lifecycle management
-- `cmd/spawn_track.go` -- spawn timeout tracking
-- `cmd/lifecycle_helpers.go` -- recovery guidance and next-command logic
-- `cmd/codex_build.go` -- build manifest structure
-- `cmd/codex_continue.go` -- continue report and recovery plan structures
-- `pkg/colony/colony.go` -- ColonyState and related types
-- `pkg/colony/state_machine.go` -- legal state transitions
+- Direct source code analysis: `cmd/init_research.go`, `cmd/init_cmd.go`, `cmd/codex_build.go`, `cmd/pheromone_write.go`, `cmd/colony_prime_context.go`, `cmd/discuss_analyze.go`
+- Wrapper markdown: `.claude/commands/ant/init.md`, `.aether/docs/command-playbooks/build-prep.md`, `.aether/docs/command-playbooks/build-wave.md`
+- Platform documentation: `.codex/CODEX.md`, `.opencode/OPENCODE.md`
+- Agent definitions: `.claude/agents/ant/`, `.aether/agents-claude/`, `.codex/agents/`, `.opencode/agents/`
+- Colony types: `pkg/colony/colony.go`, `pkg/storage/storage.go`
+- HIGH confidence: all findings based on direct source code reading

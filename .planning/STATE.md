@@ -1,75 +1,81 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.10
-milestone_name: Colony Polish
-current_phase: 63
-status: planning
-stopped_at: Phase 63 context gathered
-last_updated: "2026-04-27T16:58:06.658Z"
-last_activity: 2026-04-27
+milestone: v1.12
+milestone_name: Safe Colony
+status: milestone_complete
+stopped_at: Phase 86 context gathered
+last_updated: "2026-05-01T12:41:37.792Z"
+last_activity: 2026-05-01 -- Phase --phase execution started
 progress:
-  total_phases: 9
-  completed_phases: 5
-  total_plans: 19
-  completed_plans: 15
-  percent: 79
+  total_phases: 7
+  completed_phases: 6
+  total_plans: 15
+  completed_plans: 9
+  percent: 86
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [.planning/PROJECT.md](/Users/callumcowie/repos/Aether/.planning/PROJECT.md:1)
+See: .planning/PROJECT.md (updated 2026-04-30)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase --phase — 61
+**Current focus:** Phase --phase — 86
 
 ## Current Position
 
-Phase: --phase (61) — EXECUTING
+Phase: 87
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-04-27
+Status: Milestone complete
+Last activity: 2026-05-01
 
-Progress: [###       ] 33%
+Progress: [##        ] 14% (1/7 phases complete in this milestone)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 143 (across 57 phases, 10 milestones)
-- All tests green (2910+ passing)
+- Total plans completed: 13 (v1.12)
+- Average duration: -
+- Total execution time: 0 hours
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-- Review findings are colony-scoped (not cross-colony) -- code-specific paths go stale
-- Domain ledger uses append pattern with computed summaries (YAGNI)
-- All new struct fields use `omitempty` for backward compatibility
-- Zero new dependencies -- everything uses existing pkg/storage/, cobra, Go stdlib
-- Tracker gets bugs domain carve-out: Write for findings persistence only
-- Intermediate phases get light review (Watcher only); final/security phases get heavy (full gauntlet)
-- Chaos 30% deterministic sampling in light mode (phaseID % 10 < 3)
-- 12 hardcoded heavy keywords for auto-heavy detection (security, auth, crypto, etc.)
+Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None.
+None yet.
 
 ### Blockers/Concerns
 
-None.
+None yet.
+
+## Deferred Items
+
+Items acknowledged and carried forward from previous milestones:
+
+| Category | Item | Status | Deferred At |
+|----------|------|--------|-------------|
+| Tech debt | Phase 64.1 missing VERIFICATION.md | Non-critical | v1.10 |
+| Tech debt | REQUIREMENTS.md checkboxes not ticked | Bookkeeping | v1.10 |
+| Tech debt | Phase 71 dispatch test covers 1/25 agent types | Non-critical | v1.11 |
+| Tech debt | Phase 71 state-mutate flags registered but never read | Non-critical | v1.11 |
+| Tech debt | Phase 71 suggest-approve returns hardcoded empty | Compatibility stub | v1.11 |
+| v2 scope | State machine transitions (INTEL-06) | Deferred | v1.11 |
+| v2 scope | Council system (INTEL-07) | Deferred | v1.11 |
+| v2 scope | Curation ant pipeline (INTEL-08) | Deferred | v1.11 |
+| v2 scope | Consolidation pipeline (INTEL-09) | Deferred | v1.11 |
 
 ## Session Continuity
 
 Last session: --stopped-at
-Stopped at: Phase 63 context gathered
+Stopped at: Phase 86 context gathered
 Resume file: --resume-file
 
-**Completed Milestones:** v1.0 through v1.9 (all 10 milestones complete, 57 phases)
-
-**Completed Phase:** 58 (smart-review-depth) -- 2 plans -- 2026-04-27
-**Current Phase:** 63
-
-**Planned Phase:** 63 (lifecycle-ceremony-status-entomb-resume) — 3 plans — 2026-04-27T16:58:06.647Z
+**Planned Phase:** 86 (depth-selection-ui-and-persistence) — 3 plans — 2026-05-01T12:33:18.382Z

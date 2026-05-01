@@ -17,13 +17,15 @@ import (
 )
 
 type codexVerificationStep struct {
-	Name     string `json:"name"`
-	Command  string `json:"command,omitempty"`
-	Passed   bool   `json:"passed"`
-	Skipped  bool   `json:"skipped,omitempty"`
-	ExitCode int    `json:"exit_code,omitempty"`
-	Summary  string `json:"summary"`
-	Output   string `json:"output,omitempty"`
+	Name           string `json:"name"`
+	Command        string `json:"command,omitempty"`
+	Passed         bool   `json:"passed"`
+	Skipped        bool   `json:"skipped,omitempty"`
+	TimedOut       bool   `json:"timed_out,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	ExitCode       int    `json:"exit_code,omitempty"`
+	Summary        string `json:"summary"`
+	Output         string `json:"output,omitempty"`
 }
 
 type codexClaimVerification struct {
@@ -36,14 +38,15 @@ type codexClaimVerification struct {
 }
 
 type codexContinueVerificationReport struct {
-	Phase          int                      `json:"phase"`
-	GeneratedAt    string                   `json:"generated_at"`
-	Steps          []codexVerificationStep  `json:"steps"`
-	Claims         codexClaimVerification   `json:"claims"`
-	Watcher        codexWatcherVerification `json:"watcher"`
-	ChecksPassed   bool                     `json:"checks_passed"`
-	Passed         bool                     `json:"passed"`
-	BlockingIssues []string                 `json:"blocking_issues,omitempty"`
+	Phase                      int                      `json:"phase"`
+	GeneratedAt                string                   `json:"generated_at"`
+	VerificationTimeoutSeconds int                      `json:"verification_timeout_seconds,omitempty"`
+	Steps                      []codexVerificationStep  `json:"steps"`
+	Claims                     codexClaimVerification   `json:"claims"`
+	Watcher                    codexWatcherVerification `json:"watcher"`
+	ChecksPassed               bool                     `json:"checks_passed"`
+	Passed                     bool                     `json:"passed"`
+	BlockingIssues             []string                 `json:"blocking_issues,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -79,6 +82,7 @@ type codexContinueReport struct {
 	Advanced           bool                          `json:"advanced"`
 	Completed          bool                          `json:"completed"`
 	Next               string                        `json:"next"`
+	LastContinueOptions *codexContinueOptionsJSON        `json:"last_continue_options,omitempty"`
 }
 
 type codexContinueManifest struct {
@@ -95,13 +99,133 @@ type codexVerificationCommands struct {
 }
 
 type codexContinueOptions struct {
-	ReconcileTaskIDs []string
-	WorkerTimeout    time.Duration
-	LightFlag        bool
-	HeavyFlag        bool
+	ReconcileTaskIDs    []string
+	WorkerTimeout       time.Duration
+	VerificationTimeout time.Duration
+	LightFlag           bool
+	HeavyFlag           bool
+	SkipWatchers        bool
+	VerificationDepth   string
+}
+
+// codexContinueOptionsJSON is a serializable snapshot of continue options,
+// stored in the continue report so the next invocation can detect parameter loops.
+type codexContinueOptionsJSON struct {
+	VerificationTimeoutSec int      `json:"verification_timeout_sec,omitempty"`
+	WorkerTimeoutSec       int      `json:"worker_timeout_sec,omitempty"`
+	ReconcileTaskIDs       []string `json:"reconcile_task_ids,omitempty"`
+	SkipWatchers           bool     `json:"skip_watchers,omitempty"`
+	LightFlag              bool     `json:"light_flag,omitempty"`
+	HeavyFlag              bool     `json:"heavy_flag,omitempty"`
+	VerificationDepth      string   `json:"verification_depth,omitempty"`
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
+const defaultWatcherFailureThreshold = 3
+
+// getWatcherFailureCount returns the watcher failure count for a given phase.
+func getWatcherFailureCount(state colony.ColonyState, phaseID int) int {
+	for _, p := range state.Plan.Phases {
+		if p.ID == phaseID {
+			return p.WatcherFailureCount
+		}
+	}
+	return 0
+}
+
+// incrementWatcherFailureCount atomically increments the watcher failure count for a phase.
+func incrementWatcherFailureCount(phaseID int) error {
+	var updated colony.ColonyState
+	return store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		for i := range updated.Plan.Phases {
+			if updated.Plan.Phases[i].ID == phaseID {
+				updated.Plan.Phases[i].WatcherFailureCount++
+				return nil
+			}
+		}
+		return fmt.Errorf("phase %d not found in colony state", phaseID)
+	})
+}
+
+// resetWatcherFailureCount atomically resets the watcher failure count for a phase to 0.
+func resetWatcherFailureCount(phaseID int) error {
+	var updated colony.ColonyState
+	return store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		for i := range updated.Plan.Phases {
+			if updated.Plan.Phases[i].ID == phaseID {
+				updated.Plan.Phases[i].WatcherFailureCount = 0
+				return nil
+			}
+		}
+		return fmt.Errorf("phase %d not found in colony state", phaseID)
+	})
+}
+
+// continueOptionsToJSON converts codexContinueOptions to a serializable snapshot.
+func continueOptionsToJSON(opts codexContinueOptions) *codexContinueOptionsJSON {
+	return &codexContinueOptionsJSON{
+		VerificationTimeoutSec: int(opts.VerificationTimeout / time.Second),
+		WorkerTimeoutSec:       int(opts.WorkerTimeout / time.Second),
+		ReconcileTaskIDs:       opts.ReconcileTaskIDs,
+		SkipWatchers:           opts.SkipWatchers,
+		LightFlag:              opts.LightFlag,
+		HeavyFlag:              opts.HeavyFlag,
+		VerificationDepth:      opts.VerificationDepth,
+	}
+}
+
+// continueOptionsMatchCurrent checks whether the current continue options match
+// the last invocation's options, indicating a potential parameter loop.
+func continueOptionsMatchCurrent(current codexContinueOptions, last *codexContinueOptionsJSON) bool {
+	if last == nil {
+		return false
+	}
+	currentSec := int(current.VerificationTimeout / time.Second)
+	if currentSec != last.VerificationTimeoutSec {
+		return false
+	}
+	workerSec := int(current.WorkerTimeout / time.Second)
+	if workerSec != last.WorkerTimeoutSec {
+		return false
+	}
+	if current.SkipWatchers != last.SkipWatchers {
+		return false
+	}
+	if current.LightFlag != last.LightFlag {
+		return false
+	}
+	if current.HeavyFlag != last.HeavyFlag {
+		return false
+	}
+	if current.VerificationDepth != last.VerificationDepth {
+		return false
+	}
+	// Compare reconcile task IDs (order-independent).
+	if len(current.ReconcileTaskIDs) != len(last.ReconcileTaskIDs) {
+		return false
+	}
+	currentSorted := uniqueSortedStrings(current.ReconcileTaskIDs)
+	lastSorted := uniqueSortedStrings(last.ReconcileTaskIDs)
+	for i := range currentSorted {
+		if currentSorted[i] != lastSorted[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// loadLastContinueOptions reads the last continue options from the saved continue report.
+func loadLastContinueOptions(phaseID int) *codexContinueOptionsJSON {
+	if store == nil {
+		return nil
+	}
+	rel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "continue.json"))
+	var report codexContinueReport
+	if err := store.LoadJSON(rel, &report); err != nil {
+		return nil
+	}
+	return report.LastContinueOptions
+}
 
 // detectAbandonedBuild checks whether all manifest dispatches are stuck at
 // "spawned" and the build started long enough ago to be considered abandoned.
@@ -142,7 +266,7 @@ func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 }
 
 func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phase, options codexContinueOptions) map[string]interface{} {
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
+	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
 	now := time.Now().UTC()
 	runHandle, _ := beginRuntimeSpawnRun("continue", now)
 	recovery := codexContinueRecoveryPlan{
@@ -165,6 +289,7 @@ func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phas
 		Advanced:    false,
 		Completed:   false,
 		Next:        recovery.RedispatchCommand,
+		LastContinueOptions: continueOptionsToJSON(options),
 	})
 	updateSessionSummary("continue", recovery.RedispatchCommand, summary)
 	finishRuntimeSpawnRun(runHandle, "blocked-missing-build-packet", now)
@@ -178,7 +303,7 @@ func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phas
 		"recovery":        recovery,
 		"next":            recovery.RedispatchCommand,
 		"continue_report": displayDataPath(continueReportRel),
-			"review_depth":    string(reviewDepth),
+		"review_depth":    string(reviewDepth),
 		"blocking_issues": []string{summary},
 	}
 	if options.WorkerTimeout > 0 {
@@ -243,12 +368,12 @@ type codexContinueClosedWorker struct {
 }
 
 type codexContinueWorkerFlowStep struct {
-	Stage   string `json:"stage,omitempty"`
-	Caste   string `json:"caste,omitempty"`
-	Name    string `json:"name"`
-	Task    string `json:"task,omitempty"`
-	Status  string `json:"status"`
-	Summary string `json:"summary,omitempty"`
+	Stage    string   `json:"stage,omitempty"`
+	Caste    string   `json:"caste,omitempty"`
+	Name     string   `json:"name"`
+	Task     string   `json:"task,omitempty"`
+	Status   string   `json:"status"`
+	Summary  string   `json:"summary,omitempty"`
 	Blockers []string `json:"blockers,omitempty"`
 	Duration float64  `json:"duration,omitempty"`
 	Report   string   `json:"report,omitempty"`
@@ -296,7 +421,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 
 	currentIdx := state.CurrentPhase - 1
 	phase := state.Plan.Phases[currentIdx]
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
+	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
 	if phase.Status != colony.PhaseInProgress {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("phase %d is not in progress; run `aether build %d` first", phase.ID, phase.ID)
 	}
@@ -376,23 +501,33 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	verification, watcherFlow := runCodexContinueVerification(root, phase, manifest, options.WorkerTimeout)
-	assessment := assessCodexContinue(phase, manifest, verification, options, now)
-	verification = attachContinueClaimVerification(verification, assessment)
-	priorGateResults := gateResultsRead()
-		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
-
-		// Persist gate results after each gate run
-		var gateResultEntries []colony.GateResultEntry
-		for _, c := range gates.Checks {
-			gateResultEntries = append(gateResultEntries, colony.GateResultEntry{
-				Name:      c.Name,
-				Passed:    c.Passed,
-				Timestamp: now.Format(time.RFC3339),
-				Detail:    c.Detail,
-			})
+		// Ceremony progress tracking (visual mode only)
+		var progress *ceremonyProgress
+		if shouldRenderVisualOutput(stdout) {
+			continueSteps := []string{"Verification", "Housekeeping", "Advance", "Complete"}
+			progress = NewCeremonyProgress(continueSteps, stdout)
 		}
-		_ = gateResultsWrite(gateResultEntries)
+
+		verification, watcherFlow := runCodexContinueVerification(root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
+		assessment := assessCodexContinue(phase, manifest, verification, options, now)
+		verification = attachContinueClaimVerification(verification, assessment)
+		priorGateResults := gateResultsRead()
+		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+		if progress != nil {
+			progress.Advance("Verification")
+		}
+
+	// Persist gate results after each gate run
+	var gateResultEntries []colony.GateResultEntry
+	for _, c := range gates.Checks {
+		gateResultEntries = append(gateResultEntries, colony.GateResultEntry{
+			Name:      c.Name,
+			Passed:    c.Passed,
+			Timestamp: now.Format(time.RFC3339),
+			Detail:    c.Detail,
+		})
+	}
+	_ = gateResultsWrite(gateResultEntries)
 
 	if tracer != nil && state.RunID != nil {
 		_ = tracer.LogArtifact(*state.RunID, "continue.verification", map[string]interface{}{
@@ -435,7 +570,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowWithWatcher(nil, watcherFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
-		nextCommand := continueNextCommandForBlocked(assessment, blockers, options)
+		nextCommand := continueNextCommandForBlocked(assessment, blockers, options, phase.ID)
+		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
+			emitLoopBreakEvent("recovery_redirect",
+				fmt.Sprintf("recovery command differs from last invocation for phase %d", phase.ID),
+				fmt.Sprintf("redirected to %s to break potential loop", nextCommand),
+				"aether-continue")
+		}
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
 			Phase:              phase.ID,
 			GeneratedAt:        now.Format(time.RFC3339),
@@ -451,6 +592,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			Advanced:           false,
 			Completed:          false,
 			Next:               nextCommand,
+			LastContinueOptions: continueOptionsToJSON(options),
 		})
 		blockedState, flowErr := recordBlockedContinueWorkerFlow(state, now, workerFlow)
 		if flowErr != nil {
@@ -501,7 +643,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowWithWatcher(review.Workers, watcherFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
-		nextCommand := continueNextCommandForBlocked(assessment, review.BlockingIssues, options)
+		nextCommand := continueNextCommandForBlocked(assessment, review.BlockingIssues, options, phase.ID)
+		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
+			emitLoopBreakEvent("recovery_redirect",
+				fmt.Sprintf("recovery command differs from last invocation for phase %d", phase.ID),
+				fmt.Sprintf("redirected to %s to break potential loop", nextCommand),
+				"aether-continue")
+		}
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
 			Phase:              phase.ID,
 			GeneratedAt:        now.Format(time.RFC3339),
@@ -518,6 +666,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			Advanced:           false,
 			Completed:          false,
 			Next:               nextCommand,
+			LastContinueOptions: continueOptionsToJSON(options),
 		})
 		blockedState, flowErr := recordBlockedContinueWorkerFlow(state, now, workerFlow)
 		if flowErr != nil {
@@ -582,7 +731,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
 		}
 		updated.BuildStartedAt = nil
-			updated.GateResults = nil
+		updated.GateResults = nil
 
 		final = currentIdx == len(updated.Plan.Phases)-1
 		nextCommand = "aether seal"
@@ -620,6 +769,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	housekeeping, housekeepingErr := continueSignalHousekeeper(now, updated)
 	if housekeepingErr != nil {
 		return nil, state, phase, nil, nil, false, housekeepingErr
+	}
+	if progress != nil {
+		progress.Advance("Housekeeping")
 	}
 	if err := continueContextUpdater(phase, manifest, closedWorkerDetails, now); err != nil {
 		return nil, state, phase, nil, nil, false, err
@@ -663,11 +815,16 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		Advanced:           true,
 		Completed:          final,
 		Next:               nextCommand,
+		LastContinueOptions: continueOptionsToJSON(options),
 	}); err != nil {
 		return nil, state, phase, nextPhase, &housekeeping, final, fmt.Errorf("failed to write continue report: %w", err)
 	}
 
 	updateSessionSummary("continue", nextCommand, summary)
+	if progress != nil {
+		progress.Advance("Advance")
+		progress.Finish()
+	}
 	result := map[string]interface{}{
 		"advanced":            true,
 		"completed":           final,
@@ -825,11 +982,11 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 	},
 	{
 		Caste: "probe",
-		Task: "Probe the verification evidence for missing edge cases, weak tests, or unexercised behavior. Return blocked if test evidence is too weak to trust advancement.",
+		Task:  "Probe the verification evidence for missing edge cases, weak tests, or unexercised behavior. Return blocked if test evidence is too weak to trust advancement.",
 	},
 }
 
-func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth ReviewDepth) codexContinueReviewReport {
+func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -913,13 +1070,21 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 	return report
 }
 
-func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth ReviewDepth) []codex.WorkerDispatch {
+func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codex.WorkerDispatch {
 	capsule := resolveCodexWorkerContext()
 	pheromoneSection := resolvePheromoneSection()
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
-	specs := codexContinueReviewSpecs
-	if reviewDepth == ReviewDepthLight {
+	var specs []codexContinueReviewSpec
+	switch reviewDepth {
+	case colony.VerificationDepthLight:
 		specs = []codexContinueReviewSpec{}
+	case colony.VerificationDepthStandard:
+		// Probe only (index 2 in codexContinueReviewSpecs)
+		specs = codexContinueReviewSpecs[2:]
+	case colony.VerificationDepthHeavy:
+		specs = codexContinueReviewSpecs
+	default:
+		specs = codexContinueReviewSpecs
 	}
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
@@ -1001,49 +1166,103 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	return b.String()
 }
 
-func runCodexContinueVerification(root string, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
+// isCodexWorkerAvailable checks whether the Codex CLI worker invoker is
+// available for spawning watcher/review agents.
+func isCodexWorkerAvailable() bool {
+	invoker := newCodexWorkerInvoker()
+	if _, ok := invoker.(*codex.FakeInvoker); ok {
+		return true
+	}
+	return invoker.IsAvailable(context.Background())
+}
+
+func runCodexContinueVerification(root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
 	now := time.Now().UTC()
+	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
 	commands := resolveCodexVerificationCommands(root)
 	steps := []codexVerificationStep{
-		runVerificationStep(root, "build", commands.Build),
-		runVerificationStep(root, "types", commands.Type),
-		runVerificationStep(root, "lint", commands.Lint),
-		runVerificationStep(root, "tests", commands.Test),
+		runVerificationStep(root, "build", commands.Build, verificationTimeout),
+		runVerificationStep(root, "types", commands.Type, verificationTimeout),
+		runVerificationStep(root, "lint", commands.Lint, verificationTimeout),
+		runVerificationStep(root, "tests", commands.Test, verificationTimeout),
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
-	continueWatcher, watcherFlow := runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+
+	// Compute shell verification pass/fail before deciding whether to spawn watcher.
+	shellChecksPassed := true
+	for _, step := range steps {
+		if !step.Passed && !step.Skipped {
+			shellChecksPassed = false
+		}
+	}
+
+	var continueWatcher codexWatcherVerification
+	var watcherFlow *codexContinueWorkerFlowStep
+	if skipWatchers {
+		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
+	} else if shellChecksPassed && !isCodexWorkerAvailable() {
+		// Auto-skip: shell verification passed but Codex CLI is unavailable.
+		// No point spawning a watcher that will immediately fail.
+		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; Codex CLI unavailable but runtime verification passed"}
+	} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
+		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
+		emitLoopBreakEvent("watcher_skip",
+			fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
+			"auto-skipped watcher, advancing on runtime verification",
+			"aether-continue")
+		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
+	} else {
+		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+	}
 	watcher := continueWatcher
 	if !watcher.Present {
 		watcher = buildWatcher
 	}
 
-	checksPassed := true
+	checksPassed := shellChecksPassed
 	blockers := []string{}
-	for _, step := range steps {
-		if !step.Passed && !step.Skipped {
-			checksPassed = false
-			blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
+	if !shellChecksPassed {
+		for _, step := range steps {
+			if !step.Passed && !step.Skipped {
+				blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
+			}
 		}
 	}
-	if watcher.Present && !watcher.Passed {
-		checksPassed = false
+	if watcher.Present && !watcher.Passed && watcher.Status != "skipped" {
 		summary := strings.TrimSpace(watcher.Summary)
 		if summary == "" {
 			summary = "watcher verification did not complete cleanly"
 		}
-		blockers = append(blockers, summary)
+		if watcher.Status == "timeout" && checksPassed {
+			// Advisory: watcher timed out but runtime verification (build, types, lint, tests)
+			// passed independently. Treat as warning, not a hard block.
+			blockers = append(blockers, fmt.Sprintf(
+				"watcher %s timed out; runtime verification passed independently", watcher.Worker))
+		} else {
+			checksPassed = false
+			blockers = append(blockers, summary)
+		}
+	}
+
+	// LOOP-01: Update watcher failure counter based on watcher outcome.
+	if continueWatcher.Present && !continueWatcher.Passed && continueWatcher.Status == "failed" {
+		_ = incrementWatcherFailureCount(phase.ID)
+	} else if continueWatcher.Passed && continueWatcher.Status != "skipped" {
+		// Only reset on actual pass, not on skip (preserve count for diagnostic purposes).
+		_ = resetWatcherFailureCount(phase.ID)
 	}
 
 	return codexContinueVerificationReport{
-		Phase:          phase.ID,
-		GeneratedAt:    now.Format(time.RFC3339),
-		Steps:          steps,
-		Claims:         claims,
-		Watcher:        watcher,
-		ChecksPassed:   checksPassed,
-		Passed:         checksPassed,
-		BlockingIssues: blockers,
+		Phase:                      phase.ID,
+		GeneratedAt:                now.Format(time.RFC3339),
+		VerificationTimeoutSeconds: int(verificationTimeout / time.Second),
+		Steps:                      steps,
+		Claims:                     claims,
+		Watcher:                    watcher,
+		ChecksPassed:               checksPassed,
+		Passed:                     checksPassed,
+		BlockingIssues:             blockers,
 	}, watcherFlow
 }
 
@@ -1087,10 +1306,14 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 		if summary == "" {
 			summary = "continue watcher verification dispatch failed"
 		}
+		status := "failed"
+		if errors.Is(err, context.DeadlineExceeded) {
+			status = "timeout"
+		}
 		return codexWatcherVerification{
 				Present: true,
 				Passed:  false,
-				Status:  "failed",
+				Status:  status,
 				Worker:  dispatch.WorkerName,
 				Summary: summary,
 			}, &codexContinueWorkerFlowStep{
@@ -1098,8 +1321,8 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 				Caste:   "watcher",
 				Name:    dispatch.WorkerName,
 				Task:    "Independent verification before advancement",
-				Status:  "failed",
-				Summary: continueWatcherFlowSummary(dispatch.WorkerName, "failed", summary),
+				Status:  status,
+				Summary: continueWatcherFlowSummary(dispatch.WorkerName, status, summary),
 			}
 	}
 
@@ -1123,6 +1346,9 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 
 	result := results[0]
 	status := normalizeRuntimeDispatchStatus(result.Status)
+	if status == "failed" && result.Error != nil && errors.Is(result.Error, context.DeadlineExceeded) {
+		status = "timeout"
+	}
 	if status == "" {
 		status = "failed"
 	}
@@ -1365,6 +1591,9 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	recovery := codexContinueRecoveryPlan{
 		ReverifyCommand: "aether continue",
 	}
+	if continueVerificationTimedOut(verification) {
+		recovery.ReverifyCommand = buildContinueVerificationTimeoutRecoveryCommand(options, nil)
+	}
 	if len(options.ReconcileTaskIDs) == 0 {
 		recovery.ReconcileTasks = tasksNeedingRecovery(tasks)
 		if len(recovery.ReconcileTasks) > 0 {
@@ -1510,13 +1739,27 @@ func buildSkipPhaseCommand(phaseID int) string {
 	return fmt.Sprintf("aether skip-phase %d --force", phaseID)
 }
 
-func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers []string, options codexContinueOptions) string {
+func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers []string, options codexContinueOptions, phaseID int) string {
+	lastOptions := loadLastContinueOptions(phaseID)
+
+	if continueBlockersContainVerificationTimeout(blockers) {
+		cmd := buildContinueVerificationTimeoutRecoveryCommand(options, lastOptions)
+		// If the generated command matches current options exactly, fall back to build --force (D-10).
+		if continueOptionsMatchCurrent(options, lastOptions) {
+			return buildForceRedispatchCommand(phaseID)
+		}
+		return cmd
+	}
 	if continueBlockersContainWorkerTimeout(blockers) {
-		return buildContinueTimeoutRecoveryCommand(options)
+		cmd := buildContinueTimeoutRecoveryCommand(options, lastOptions)
+		if continueOptionsMatchCurrent(options, lastOptions) {
+			return buildForceRedispatchCommand(phaseID)
+		}
+		return cmd
 	}
 	next := strings.TrimSpace(continueNextCommandForAssessment(assessment))
 	if next == "aether continue" && len(blockers) > 0 {
-		return ""
+		return "" // Don't suggest looping back to continue with blockers (D-08 preserved).
 	}
 	return next
 }
@@ -1537,6 +1780,16 @@ func continueNextCommandForAssessment(assessment codexContinueAssessment) string
 	return "aether continue"
 }
 
+func continueBlockersContainVerificationTimeout(blockers []string) bool {
+	for _, blocker := range blockers {
+		lower := strings.ToLower(strings.TrimSpace(blocker))
+		if strings.Contains(lower, "verification command timed out") || strings.Contains(lower, "--verification-timeout") {
+			return true
+		}
+	}
+	return false
+}
+
 func continueBlockersContainWorkerTimeout(blockers []string) bool {
 	for _, blocker := range blockers {
 		lower := strings.ToLower(strings.TrimSpace(blocker))
@@ -1551,8 +1804,34 @@ func continueBlockersContainWorkerTimeout(blockers []string) bool {
 	return false
 }
 
-func buildContinueTimeoutRecoveryCommand(options codexContinueOptions) string {
+func buildContinueVerificationTimeoutRecoveryCommand(options codexContinueOptions, lastOptions *codexContinueOptionsJSON) string {
+	timeout := recommendedContinueVerificationRecoveryTimeout(options.VerificationTimeout)
+	// Ensure the suggested timeout differs from the last invocation.
+	if lastOptions != nil && lastOptions.VerificationTimeoutSec > 0 {
+		lastTimeout := time.Duration(lastOptions.VerificationTimeoutSec) * time.Second
+		if timeout <= lastTimeout {
+			timeout = lastTimeout * 2
+		}
+	}
+	var b strings.Builder
+	b.WriteString("aether continue --verification-timeout ")
+	b.WriteString(formatDurationForCLI(timeout))
+	for _, taskID := range uniqueSortedStrings(options.ReconcileTaskIDs) {
+		b.WriteString(" --reconcile-task ")
+		b.WriteString(taskID)
+	}
+	return b.String()
+}
+
+func buildContinueTimeoutRecoveryCommand(options codexContinueOptions, lastOptions *codexContinueOptionsJSON) string {
 	timeout := recommendedContinueRecoveryTimeout(options.WorkerTimeout)
+	// Ensure the suggested timeout differs from the last invocation.
+	if lastOptions != nil && lastOptions.WorkerTimeoutSec > 0 {
+		lastTimeout := time.Duration(lastOptions.WorkerTimeoutSec) * time.Second
+		if timeout <= lastTimeout {
+			timeout = lastTimeout * 2
+		}
+	}
 	var b strings.Builder
 	b.WriteString("aether continue --worker-timeout ")
 	b.WriteString(formatDurationForCLI(timeout))
@@ -1563,6 +1842,16 @@ func buildContinueTimeoutRecoveryCommand(options codexContinueOptions) string {
 	return b.String()
 }
 
+func recommendedContinueVerificationRecoveryTimeout(current time.Duration) time.Duration {
+	effective := effectiveContinueVerificationTimeout(current)
+	recommended := effective * 2
+	minimum := 30 * time.Minute
+	if recommended < minimum {
+		return minimum
+	}
+	return recommended
+}
+
 func recommendedContinueRecoveryTimeout(current time.Duration) time.Duration {
 	effective := effectiveContinueReviewTimeout(current)
 	recommended := effective * 2
@@ -1571,6 +1860,15 @@ func recommendedContinueRecoveryTimeout(current time.Duration) time.Duration {
 		return minimum
 	}
 	return recommended
+}
+
+func continueVerificationTimedOut(verification codexContinueVerificationReport) bool {
+	for _, step := range verification.Steps {
+		if step.TimedOut {
+			return true
+		}
+	}
+	return false
 }
 
 func formatDurationForCLI(duration time.Duration) string {
@@ -1953,7 +2251,7 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 	}
 }
 
-func runVerificationStep(root, name, command string) codexVerificationStep {
+func runVerificationStep(root, name, command string, timeout time.Duration) codexVerificationStep {
 	if strings.TrimSpace(command) == "" {
 		return codexVerificationStep{
 			Name:    name,
@@ -1963,17 +2261,20 @@ func runVerificationStep(root, name, command string) codexVerificationStep {
 		}
 	}
 
-	output, exitCode, err := runShellCommand(root, command, 5*time.Minute)
+	timeout = effectiveContinueVerificationTimeout(timeout)
+	output, exitCode, timedOut, err := runShellCommand(root, command, timeout)
 	step := codexVerificationStep{
-		Name:     name,
-		Command:  command,
-		Passed:   err == nil,
-		ExitCode: exitCode,
-		Summary:  successSummaryForStep(name, exitCode, err),
-		Output:   output,
+		Name:           name,
+		Command:        command,
+		Passed:         err == nil,
+		TimedOut:       timedOut,
+		TimeoutSeconds: int(timeout / time.Second),
+		ExitCode:       exitCode,
+		Summary:        successSummaryForStep(name, exitCode, err),
+		Output:         output,
 	}
 	if err != nil {
-		step.Summary = failureSummaryForStep(name, exitCode, output, err)
+		step.Summary = failureSummaryForStep(name, exitCode, output, err, timedOut, timeout)
 	}
 	return step
 }
@@ -2502,7 +2803,7 @@ func updateCodexContinueContext(phase colony.Phase, manifest codexContinueManife
 	return writeContextDocument(content)
 }
 
-func runShellCommand(root, command string, timeout time.Duration) (string, int, error) {
+func runShellCommand(root, command string, timeout time.Duration) (string, int, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -2521,7 +2822,7 @@ func runShellCommand(root, command string, timeout time.Duration) (string, int, 
 	if cmd.ProcessState != nil {
 		exitCode = cmd.ProcessState.ExitCode()
 	}
-	return trimmed, exitCode, err
+	return trimmed, exitCode, ctx.Err() == context.DeadlineExceeded, err
 }
 
 func trimCommandOutput(output string) string {
@@ -2550,7 +2851,10 @@ func successSummaryForStep(name string, exitCode int, err error) string {
 	}
 }
 
-func failureSummaryForStep(name string, exitCode int, output string, err error) string {
+func failureSummaryForStep(name string, exitCode int, output string, err error, timedOut bool, timeout time.Duration) string {
+	if timedOut {
+		return fmt.Sprintf("verification command timed out after %s; increase with --verification-timeout or narrow the repo verification command", formatDurationForCLI(timeout))
+	}
 	if strings.TrimSpace(output) != "" {
 		lines := strings.Split(strings.TrimSpace(output), "\n")
 		return fmt.Sprintf("%s failed (exit %d): %s", name, exitCode, strings.TrimSpace(lines[len(lines)-1]))

@@ -30,12 +30,20 @@ var continueFinalizeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		skipMissing, _ := cmd.Flags().GetBool("skip-missing")
+		verificationTimeout, verificationTimeoutExplicit, err := resolveContinueVerificationTimeoutFlag(cmd)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		if !verificationTimeoutExplicit {
+			verificationTimeout = 0
+		}
 		completion, err := loadExternalContinueCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
 		}
-		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing)
+		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -44,9 +52,9 @@ var continueFinalizeCmd = &cobra.Command{
 			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))
 			return nil
 		}
-		reviewDepthFinalize := ReviewDepthLight
-		if rd, ok := result["review_depth"].(string); ok && rd == "heavy" {
-			reviewDepthFinalize = ReviewDepthHeavy
+		reviewDepthFinalize := colony.VerificationDepthLight
+		if rd, ok := result["review_depth"].(string); ok {
+			reviewDepthFinalize = colony.NormalizeVerificationDepth(rd)
 		}
 		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthFinalize))
 		return nil
@@ -104,7 +112,7 @@ func (c codexExternalContinueCompletion) workerResults() []codexContinueExternal
 	return results
 }
 
-func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool, verificationTimeoutOverride time.Duration) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
@@ -115,7 +123,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if plan.DispatchMode != "plan-only" || !plan.RequiresFinalizer {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue_manifest must come from `aether continue --plan-only`")
 	}
-	if len(plan.Dispatches) == 0 {
+	if len(plan.Dispatches) == 0 && !(plan.SkipWatchers && plan.ReviewDepth == string(colony.VerificationDepthLight)) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue_manifest contains no dispatches")
 	}
 
@@ -144,12 +152,18 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, err
 	}
 
-	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now)
-	verification, watcherFlow := attachExternalContinueWatcher(verification, workerFlow)
-	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs}, now)
+	verificationTimeout := continueFinalizeVerificationTimeout(plan, verificationTimeoutOverride)
+	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, plan.SkipWatchers)
+	var watcherFlow *codexContinueWorkerFlowStep
+	if plan.SkipWatchers {
+		verification.Watcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on runtime-owned verification commands"}
+	} else {
+		verification, watcherFlow = attachExternalContinueWatcher(verification, workerFlow)
+	}
+	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults := gateResultsRead()
-		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
 	gateReportRel := continuePlanArtifactsPath(phase.ID, "gates.json")
@@ -159,6 +173,18 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := store.SaveJSON(gateReportRel, gates); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write gate report: %w", err)
 	}
+
+	// Persist gate results after gate run
+	var gateResultEntries []colony.GateResultEntry
+	for _, c := range gates.Checks {
+		gateResultEntries = append(gateResultEntries, colony.GateResultEntry{
+			Name:      c.Name,
+			Passed:    c.Passed,
+			Timestamp: now.Format(time.RFC3339),
+			Detail:    c.Detail,
+		})
+	}
+	_ = gateResultsWrite(gateResultEntries)
 
 	if err := writeCodexContinueWorkerOutcomeReports(root, phase, workerFlow, now); err != nil {
 		return nil, state, phase, nil, nil, false, err
@@ -173,9 +199,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	finalizeReviewDepth := ReviewDepthLight
-	if plan.ReviewDepth == string(ReviewDepthHeavy) {
-		finalizeReviewDepth = ReviewDepthHeavy
+	finalizeReviewDepth := colony.VerificationDepthLight
+	if plan.ReviewDepth != "" {
+		finalizeReviewDepth = colony.NormalizeVerificationDepth(plan.ReviewDepth)
 	}
 	review := externalContinueReviewReport(phase.ID, workerFlow, now, skipMissing, finalizeReviewDepth)
 	reviewReportRel := continuePlanArtifactsPath(phase.ID, "review.json")
@@ -228,6 +254,16 @@ func validateExternalContinueState(plan *codexContinuePlanManifest) (colony.Colo
 		return state, phase, manifest, fmt.Errorf("No active build packet found. Run `aether build <phase>` first.")
 	}
 	return state, phase, manifest, nil
+}
+
+func continueFinalizeVerificationTimeout(plan *codexContinuePlanManifest, override time.Duration) time.Duration {
+	if override > 0 {
+		return override
+	}
+	if plan != nil && plan.VerificationTimeout > 0 {
+		return time.Duration(plan.VerificationTimeout) * time.Second
+	}
+	return continueVerificationTimeout
 }
 
 func mergeExternalContinueResults(plan codexContinuePlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {
@@ -342,7 +378,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 	return verification, nil
 }
 
-func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth ReviewDepth) codexContinueReviewReport {
+func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth colony.VerificationDepth) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phaseID,
 		GeneratedAt: now.Format(time.RFC3339),
@@ -373,7 +409,7 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", step.Name, summary))
 		}
 	}
-	if !skipMissing && reviewDepth != ReviewDepthLight && len(report.Workers) != len(codexContinueReviewSpecs) {
+	if !skipMissing && reviewDepth != colony.VerificationDepthLight && len(report.Workers) != len(codexContinueReviewSpecs) {
 		report.Passed = false
 		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", len(codexContinueReviewSpecs), len(report.Workers)))
 	}
@@ -476,6 +512,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 			updated.Plan.Phases[currentIdx].Tasks[i].Status = colony.TaskCompleted
 		}
 		updated.BuildStartedAt = nil
+		updated.GateResults = nil
 
 		final = currentIdx == len(updated.Plan.Phases)-1
 		nextCommand = "aether seal"

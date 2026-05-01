@@ -330,7 +330,9 @@ func TestContinueEmitsLifecycleCeremonyEvents(t *testing.T) {
 		Task:   "Emit continue ceremony events",
 		Status: "completed",
 	}})
-	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &continueUnavailableInvoker{} }
+	newCodexWorkerInvoker = func() codex.WorkerInvoker {
+		return &continueWatcherTestInvoker{watcherStatus: "completed", watcherSummary: "Continue watcher emitted ceremony events"}
+	}
 
 	if _, _, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{}); err != nil {
 		t.Fatalf("continue returned error: %v", err)

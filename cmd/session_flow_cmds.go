@@ -121,6 +121,45 @@ var pauseColonyCmd = &cobra.Command{
 	},
 }
 
+// staleSignalInfo represents a stale FOCUS signal for wrapper consumption.
+type staleSignalInfo struct {
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Content      string `json:"content"`
+	SourcePhase  int    `json:"source_phase"`
+	CurrentPhase int    `json:"current_phase"`
+}
+
+// detectStaleFocusSignals finds active FOCUS signals whose source_phase
+// is less than the current colony phase. Signals without source_phase are
+// NOT flagged (backward compatible with signals created before this feature).
+// Only FOCUS signals are checked per D-07.
+func detectStaleFocusSignals(s *storage.Store, currentPhase int) []staleSignalInfo {
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		return nil
+	}
+	var stale []staleSignalInfo
+	for _, sig := range pf.Signals {
+		if !sig.Active || sig.Type != "FOCUS" {
+			continue
+		}
+		if sig.SourcePhase == nil {
+			continue // Unknown phase -- backward compat, don't flag
+		}
+		if *sig.SourcePhase < currentPhase {
+			stale = append(stale, staleSignalInfo{
+				ID:           sig.ID,
+				Type:         sig.Type,
+				Content:      extractContentText(sig.Content),
+				SourcePhase:  *sig.SourcePhase,
+				CurrentPhase: currentPhase,
+			})
+		}
+	}
+	return stale
+}
+
 var resumeColonyCmd = &cobra.Command{
 	Use:     "resume-colony",
 	Short:   "Restore colony context from handoff and mark the session resumed",
@@ -154,7 +193,7 @@ var resumeColonyCmd = &cobra.Command{
 				state.State = colony.StateREADY
 			}
 			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-				outputError(2, fmt.Sprintf("failed to restore runnable colony state: %v", err), nil)
+				renderRecoveryMenu("resume", fmt.Sprintf("failed to restore runnable colony state: %v", err), nil)
 				return nil
 			}
 			if state.State != colony.StateEXECUTING || state.BuildStartedAt == nil {
@@ -167,7 +206,7 @@ var resumeColonyCmd = &cobra.Command{
 				newRunID := fmt.Sprintf("resume_%d_%s", now.Unix(), randomHex(4))
 				state.RunID = &newRunID
 				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-					outputError(2, fmt.Sprintf("failed to clear stale spawn state: %v", err), nil)
+					renderRecoveryMenu("resume", fmt.Sprintf("failed to clear stale spawn state: %v", err), nil)
 					return nil
 				}
 				if tracer != nil && state.RunID != nil {
@@ -203,6 +242,14 @@ var resumeColonyCmd = &cobra.Command{
 		// Clean up any orphaned worktrees before resuming
 		gcCleaned, gcOrphaned, gcErr := gcOrphanedWorktrees()
 
+		// Detect stale FOCUS pheromones (D-07, D-08)
+		var staleSignalsList []staleSignalInfo
+		var freshState colony.ColonyState
+		if stateLoadErr := store.LoadJSON("COLONY_STATE.json", &freshState); stateLoadErr == nil {
+			ns := normalizeLegacyColonyState(freshState)
+			staleSignalsList = detectStaleFocusSignals(store, ns.CurrentPhase)
+		}
+
 		result := buildResumeDashboardResult()
 		result["resumed"] = true
 		result["freshness"] = map[string]interface{}{
@@ -222,6 +269,19 @@ var resumeColonyCmd = &cobra.Command{
 				"cleaned":  gcCleaned,
 				"orphaned": gcOrphaned,
 			}
+		}
+		if len(staleSignalsList) > 0 {
+			staleData := make([]map[string]interface{}, 0, len(staleSignalsList))
+			for _, ss := range staleSignalsList {
+				staleData = append(staleData, map[string]interface{}{
+					"id":            ss.ID,
+					"type":          ss.Type,
+					"content":       ss.Content,
+					"source_phase":  ss.SourcePhase,
+					"current_phase": ss.CurrentPhase,
+				})
+			}
+			result["stale_signals"] = staleData
 		}
 
 		if handoffText != "" {

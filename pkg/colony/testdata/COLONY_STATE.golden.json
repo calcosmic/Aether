@@ -521,5 +521,14 @@
   "colony_depth": "standard",
   "plan_granularity": "milestone",
   "milestone": "Crowned Anthill",
-  "milestone_updated_at": "2026-04-01T17:41:13Z"
+  "milestone_updated_at": "2026-04-01T17:41:13Z",
+  "charter": {
+    "intent": "Review the last 15 commits (3019dec to d1754ea) for correctness, then implement Aether Structural Learning Stack",
+    "vision": "A go project with golangci-lint, GitHub Actions, and Prettier",
+    "governance": "No formal governance detected -- colony should establish conventions",
+    "goals": "Goal: Review the last 15 commits (3019dec to d1754ea) for correctness, then implement Aether Structural Learning Stack. Focus on quality, maintainability, and shipping working software.",
+    "tech_stack": "Languages: go. Frameworks/Tools: cobra",
+    "key_risks": "No significant risks detected from initial scan",
+    "constraints": "No formal constraints detected -- colony should establish conventions"
+  }
 }

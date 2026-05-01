@@ -1,9 +1,0 @@
-Progress
-========
-
-[                    ] 0%
-
-Target: 80% confidence
-
-Iteration: 0/4
-Gaps: (analyzing...)

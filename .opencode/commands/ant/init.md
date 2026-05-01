@@ -29,6 +29,9 @@ Present the charter for user review:
 **Vision:** {charter.vision}
 **Governance:** {charter.governance}
 **Goals:** {charter.goals}
+**Tech Stack:** {charter.tech_stack}
+**Key Risks:** {charter.key_risks}
+**Constraints:** {charter.constraints}
 ```
 
 ## Pheromone Suggestions
@@ -45,11 +48,33 @@ The scan detected {N} patterns. Review and approve:
 
 Show each suggestion and let the user approve or skip individually.
 
+## Shelf Backlog
+
+After the colony goal is established and BEFORE colony state creation:
+
+1. Run `AETHER_OUTPUT_MODE=json aether init "$ARGUMENTS"` and parse the JSON output.
+2. Check `result.shelf_backlog_count`.
+3. If `shelf_backlog_count > 0`:
+   - Display: `## Shelf Backlog — {N} ideas from prior colonies`
+   - Show numbered list using the `formatShelfForInit` output from `result.shelf_backlog`
+   - For each item, present options:
+     ```
+     1. Promote to this colony
+     2. Keep on shelf
+     3. Delete permanently
+     ```
+   - Collect user choices
+   - If any promoted: run `aether shelf-promote-batch --ids "id1,id2" --colony "{goal}"`
+   - If any dismissed: run `aether shelf-dismiss-batch --ids "id1,id2"`
+   - Promoted items become todos: append `[shelf:{category}] {text}` to `active_todos` in the session file or colony state
+4. If `shelf_backlog_count == 0`:
+   - Skip silently (no prompt)
+
 ## Approval
 
 - Ask with 3 options: proceed, revise goal, cancel.
 - After approval, for each approved pheromone suggestion, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-research"`.
-- Then run `AETHER_OUTPUT_MODE=visual aether init "$ARGUMENTS"`.
+- Then run `AETHER_OUTPUT_MODE=visual aether init --charter-json '<charter JSON>' "$ARGUMENTS"`, where `<charter JSON>` is the JSON-serialized charter object from the init-research output.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
 - If setup is missing, relay the runtime guidance exactly.
 - If docs and runtime disagree, runtime wins.

@@ -293,6 +293,7 @@ func init() {
 	pheromoneSnapshotInjectCmd.Flags().String("target-root", "", "Repo or worktree root to inject active pheromones into")
 	pheromoneMergeBackCmd.Flags().String("source-root", "", "Repo or worktree root to merge pheromones from")
 	pheromoneMergeBackCmd.Flags().String("target-root", "", "Repo or worktree root to merge pheromones into (default current AETHER_ROOT)")
+	pheromoneMergeBackCmd.Flags().String("export-file", "", "Export merged pheromones to this file path")
 
 	rootCmd.AddCommand(pheromonePrimeCmd)
 	rootCmd.AddCommand(colonyPrimeCmd)

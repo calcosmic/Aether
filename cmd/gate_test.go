@@ -407,14 +407,182 @@ func TestGateResultsWriteAndRead(t *testing.T) {
 	if len(readBack) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(readBack))
 	}
-	if readBack[0].Name != "spawn_gate" || !readBack[0].Passed {
-		t.Errorf("first entry mismatch: %+v", readBack[0])
+	// Build lookup by name (merge logic uses map, order not guaranteed)
+	byName := make(map[string]colony.GateResultEntry, len(readBack))
+	for _, e := range readBack {
+		byName[e.Name] = e
 	}
-	if readBack[1].Name != "tests_pass" || readBack[1].Passed {
-		t.Errorf("second entry mismatch: %+v", readBack[1])
+	if e, ok := byName["spawn_gate"]; !ok || !e.Passed {
+		t.Errorf("spawn_gate entry missing or not passed: %+v", e)
 	}
-	if readBack[1].Detail != "2 tests failed" {
-		t.Errorf("detail mismatch: got %q", readBack[1].Detail)
+	if e, ok := byName["tests_pass"]; !ok || e.Passed {
+		t.Errorf("tests_pass entry missing or passed: %+v", e)
+	}
+	if e, ok := byName["tests_pass"]; !ok || e.Detail != "2 tests failed" {
+		t.Errorf("detail mismatch: got %q", e.Detail)
+	}
+}
+
+// TestGateResultsWrite_MergesEntries verifies that sequential gateResultsWrite
+// calls accumulate entries instead of replacing them (CR-01 fix).
+func TestGateResultsWrite_MergesEntries(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Create a minimal COLONY_STATE.json
+	state := map[string]interface{}{
+		"version": "3.0",
+		"goal":    "test merge",
+		"state":   "READY",
+	}
+	stateData, _ := json.Marshal(state)
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	ts := time.Now().UTC().Format(time.RFC3339)
+
+	// Write first entry
+	if err := gateResultsWrite([]colony.GateResultEntry{
+		{Name: "spawn_gate", Passed: true, Timestamp: ts},
+	}); err != nil {
+		t.Fatalf("first write failed: %v", err)
+	}
+
+	// Write second entry (different gate name)
+	if err := gateResultsWrite([]colony.GateResultEntry{
+		{Name: "tests_pass", Passed: false, Timestamp: ts, Detail: "1 test failed"},
+	}); err != nil {
+		t.Fatalf("second write failed: %v", err)
+	}
+
+	readBack := gateResultsRead()
+	if len(readBack) != 2 {
+		t.Fatalf("expected 2 entries after sequential writes, got %d", len(readBack))
+	}
+
+	var foundSpawn, foundTests bool
+	for _, r := range readBack {
+		if r.Name == "spawn_gate" && r.Passed {
+			foundSpawn = true
+		}
+		if r.Name == "tests_pass" && !r.Passed && r.Detail == "1 test failed" {
+			foundTests = true
+		}
+	}
+	if !foundSpawn {
+		t.Error("spawn_gate entry not found or incorrect")
+	}
+	if !foundTests {
+		t.Error("tests_pass entry not found or incorrect")
+	}
+}
+
+// TestGateResultsWrite_UpsertsExistingEntry verifies that writing a gate result
+// with the same name updates (upserts) the existing entry instead of duplicating.
+func TestGateResultsWrite_UpsertsExistingEntry(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	state := map[string]interface{}{
+		"version": "3.0",
+		"goal":    "test upsert",
+		"state":   "READY",
+	}
+	stateData, _ := json.Marshal(state)
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	ts := time.Now().UTC().Format(time.RFC3339)
+
+	// Write gate A as passed
+	if err := gateResultsWrite([]colony.GateResultEntry{
+		{Name: "tests_pass", Passed: true, Timestamp: ts},
+	}); err != nil {
+		t.Fatalf("first write failed: %v", err)
+	}
+
+	// Write gate A again as failed with detail (upsert)
+	if err := gateResultsWrite([]colony.GateResultEntry{
+		{Name: "tests_pass", Passed: false, Timestamp: ts, Detail: "3 tests failed"},
+	}); err != nil {
+		t.Fatalf("second write failed: %v", err)
+	}
+
+	readBack := gateResultsRead()
+	if len(readBack) != 1 {
+		t.Fatalf("expected 1 entry after upsert, got %d", len(readBack))
+	}
+	if readBack[0].Name != "tests_pass" {
+		t.Errorf("expected name tests_pass, got %s", readBack[0].Name)
+	}
+	if readBack[0].Passed {
+		t.Error("expected Passed=false after upsert")
+	}
+	if readBack[0].Detail != "3 tests failed" {
+		t.Errorf("expected detail '3 tests failed', got %q", readBack[0].Detail)
+	}
+}
+
+// TestGateResultsWrite_MergesMultipleEntriesAtOnce verifies that batch writes
+// merge correctly with existing entries.
+func TestGateResultsWrite_MergesMultipleEntriesAtOnce(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	state := map[string]interface{}{
+		"version": "3.0",
+		"goal":    "test batch merge",
+		"state":   "READY",
+	}
+	stateData, _ := json.Marshal(state)
+	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
+
+	ts := time.Now().UTC().Format(time.RFC3339)
+
+	// Write batch 1: A and B
+	if err := gateResultsWrite([]colony.GateResultEntry{
+		{Name: "gate_a", Passed: true, Timestamp: ts},
+		{Name: "gate_b", Passed: true, Timestamp: ts},
+	}); err != nil {
+		t.Fatalf("batch 1 failed: %v", err)
+	}
+
+	// Write batch 2: B (updated) and C (new)
+	if err := gateResultsWrite([]colony.GateResultEntry{
+		{Name: "gate_b", Passed: false, Timestamp: ts, Detail: "now failing"},
+		{Name: "gate_c", Passed: true, Timestamp: ts},
+	}); err != nil {
+		t.Fatalf("batch 2 failed: %v", err)
+	}
+
+	readBack := gateResultsRead()
+	if len(readBack) != 3 {
+		t.Fatalf("expected 3 entries after batch merge, got %d", len(readBack))
+	}
+
+	names := make(map[string]colony.GateResultEntry)
+	for _, r := range readBack {
+		names[r.Name] = r
+	}
+
+	if names["gate_a"].Passed != true {
+		t.Error("gate_a should still be passed")
+	}
+	if names["gate_b"].Passed != false || names["gate_b"].Detail != "now failing" {
+		t.Error("gate_b should be updated to failed with detail")
+	}
+	if names["gate_c"].Passed != true {
+		t.Error("gate_c should be passed")
 	}
 }
 
@@ -682,5 +850,41 @@ func TestGateRecoveryTemplateCmd_UnknownGate(t *testing.T) {
 	output := strings.TrimSpace(buf.String())
 	if !strings.Contains(output, "No specific recovery instructions") {
 		t.Errorf("expected fallback message, got %q", output)
+	}
+}
+
+// TestIncrementalGateChecking_SkipsPriorPassed verifies the full incremental
+// gate checking flow: passed non-test gates are skipped, failed gates are
+// re-checked, and tests_pass is never skipped regardless of prior results.
+func TestIncrementalGateChecking_SkipsPriorPassed(t *testing.T) {
+	ts := time.Now().UTC().Format(time.RFC3339)
+	prior := []colony.GateResultEntry{
+		{Name: "spawn_gate", Passed: true, Timestamp: ts},
+		{Name: "state_gate", Passed: true, Timestamp: ts},
+		{Name: "build_gate", Passed: false, Timestamp: ts},
+		{Name: "tests_pass", Passed: true, Timestamp: ts},
+	}
+
+	// Passed non-test gates should be skipped
+	if !shouldSkipGate(prior, "spawn_gate") {
+		t.Error("expected spawn_gate (passed) to be skipped")
+	}
+	if !shouldSkipGate(prior, "state_gate") {
+		t.Error("expected state_gate (passed) to be skipped")
+	}
+
+	// Failed gate should NOT be skipped (must re-check)
+	if shouldSkipGate(prior, "build_gate") {
+		t.Error("expected build_gate (failed) to NOT be skipped")
+	}
+
+	// tests_pass is NEVER skipped even when previously passed
+	if shouldSkipGate(prior, "tests_pass") {
+		t.Error("expected tests_pass to never be skipped even when previously passed")
+	}
+
+	// Unknown gate (not in prior results) should NOT be skipped
+	if shouldSkipGate(prior, "unknown_gate") {
+		t.Error("expected unknown_gate to NOT be skipped")
 	}
 }

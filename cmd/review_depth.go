@@ -32,8 +32,9 @@ func resolveReviewDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFla
 	if heavyFlag {
 		return ReviewDepthHeavy
 	}
-	// Keyword auto-detection triggers heavy review.
-	if phaseHasHeavyKeywords(phase.Name) {
+	// Keyword auto-detection triggers heavy review, BUT explicit light flag
+	// overrides keyword match (user intent takes priority).
+	if phaseHasHeavyKeywords(phase.Name) && !lightFlag {
 		return ReviewDepthHeavy
 	}
 	// Default to light for intermediate phases.
@@ -56,4 +57,181 @@ func phaseHasHeavyKeywords(name string) bool {
 // Phase IDs where phaseID % 10 < 3 (i.e. ending in 0, 1, 2) get chaos runs.
 func chaosShouldRunInLightMode(phaseID int) bool {
 	return phaseID%10 < 3
+}
+
+// resolveVerificationDepth determines the 3-level verification depth for a phase.
+// Priority: final phase -> heavyFlag -> heavy keyword match (unless lightFlag) -> lightFlag -> explicit --verification-depth string -> default standard.
+func resolveVerificationDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFlag bool, verificationDepthStr string) colony.VerificationDepth {
+	// Final phase is always heavy regardless of flags.
+	if phase.ID == totalPhases {
+		return colony.VerificationDepthHeavy
+	}
+	// Explicit heavy flag overrides everything else.
+	if heavyFlag {
+		return colony.VerificationDepthHeavy
+	}
+	// Keyword auto-detection triggers heavy review, BUT explicit light flag
+	// overrides keyword match (user intent takes priority).
+	if phaseHasHeavyKeywords(phase.Name) && !lightFlag {
+		return colony.VerificationDepthHeavy
+	}
+	// Explicit light flag.
+	if lightFlag {
+		return colony.VerificationDepthLight
+	}
+	// Explicit --verification-depth string (normalized).
+	if verificationDepthStr != "" {
+		return colony.NormalizeVerificationDepth(verificationDepthStr)
+	}
+	// Smart default based on phase position + code change risk.
+	return resolveSmartVerificationDepth(phase, totalPhases)
+}
+
+// resolveVerificationDepthFlag returns the effective depth string for flag resolution.
+// Boolean flags take priority: --heavy returns "heavy", --light returns "light".
+// When both are set, heavy wins (heavier is safer).
+// Otherwise returns the --verification-depth string value (may be empty for auto-detect).
+func resolveVerificationDepthFlag(lightFlag, heavyFlag bool, verificationDepthStr string) string {
+	if heavyFlag {
+		return "heavy"
+	}
+	if lightFlag {
+		return "light"
+	}
+	return verificationDepthStr
+}
+
+// resolveEffectiveContinueDepth resolves the verification depth for continue paths.
+// It combines CLI flags (boolean and string) with persisted state depth, then
+// passes the original boolean flags through to resolveVerificationDepth so that
+// keyword-guard behavior (lightFlag blocking keyword-based heavy override) is
+// preserved -- matching the aether build behavior.
+func resolveEffectiveContinueDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFlag bool, verificationDepthStr string, stateDepth string) colony.VerificationDepth {
+	effectiveDepthStr := resolveVerificationDepthFlag(lightFlag, heavyFlag, verificationDepthStr)
+	if effectiveDepthStr == "" {
+		effectiveDepthStr = strings.TrimSpace(stateDepth)
+	}
+	return resolveVerificationDepth(phase, totalPhases, lightFlag, heavyFlag, effectiveDepthStr)
+}
+
+// --- Smart depth default functions (Phase 85) ---
+
+// securityRiskKeywords lists substrings that trigger "high" risk classification.
+var securityRiskKeywords = []string{
+	"security", "auth", "crypto", "secrets", "permissions",
+	"compliance", "audit", "token", "session", "password",
+}
+
+// blastRadiusKeywords lists substrings that trigger "medium" risk classification.
+var blastRadiusKeywords = []string{
+	"core runtime", "state mutation", "colony state", "state machine",
+	"phase transition", "dispatch", "build command", "continue command",
+	"verification depth", "planning depth",
+}
+
+// phasePositionLevel classifies a phase by its position within the plan.
+// Returns "final", "early", "late", or "intermediate".
+func phasePositionLevel(phaseID, totalPhases int) string {
+	if phaseID == totalPhases || totalPhases <= 1 {
+		return "final"
+	}
+	threshold25 := float64(totalPhases) * 0.25
+	threshold75 := float64(totalPhases) * 0.75
+	if float64(phaseID) <= threshold25 {
+		return "early"
+	}
+	if float64(phaseID) >= threshold75 {
+		return "late"
+	}
+	return "intermediate"
+}
+
+// collectPhaseText concatenates all analyzable text from a phase into a
+// single lowercased string for risk keyword matching.
+func collectPhaseText(phase colony.Phase) string {
+	var parts []string
+	parts = append(parts, phase.Name)
+	parts = append(parts, phase.Description)
+	parts = append(parts, phase.SuccessCriteria...)
+	for _, task := range phase.Tasks {
+		parts = append(parts, task.Goal)
+		parts = append(parts, task.Constraints...)
+		parts = append(parts, task.Hints...)
+		parts = append(parts, task.SuccessCriteria...)
+	}
+	return strings.ToLower(strings.Join(parts, " "))
+}
+
+// matchesAnyKeyword returns true if any keyword appears as a substring in text.
+// The caller is responsible for ensuring text is lowercased.
+func matchesAnyKeyword(text string, keywords []string) bool {
+	for _, kw := range keywords {
+		if strings.Contains(text, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// phaseRiskLevel classifies a phase's risk as "high", "medium", or "low"
+// based on keyword matching against phase name only (not description or task text)
+// to avoid false positives from common words like "session", "token", "password".
+func phaseRiskLevel(phase colony.Phase) string {
+	nameLower := strings.ToLower(phase.Name)
+	if matchesAnyKeyword(nameLower, securityRiskKeywords) {
+		return "high"
+	}
+	if matchesAnyKeyword(nameLower, blastRadiusKeywords) {
+		return "medium"
+	}
+	return "low"
+}
+
+// resolveSmartPlanningDepth combines position and risk signals to select
+// planning depth. Uses the "safer principle": higher depth wins when
+// signals disagree.
+func resolveSmartPlanningDepth(phase colony.Phase, totalPhases int) colony.PlanningDepth {
+	risk := phaseRiskLevel(phase)
+	position := phasePositionLevel(phase.ID, totalPhases)
+
+	if risk == "high" || position == "final" {
+		return colony.PlanningDepthDeep
+	}
+	if risk == "medium" || position == "late" {
+		return colony.PlanningDepthStandard
+	}
+	if position == "early" {
+		return colony.PlanningDepthLight
+	}
+	return colony.PlanningDepthStandard
+}
+
+// resolveSmartVerificationDepth combines position and risk signals to select
+// verification depth. Same logic as resolveSmartPlanningDepth but returns
+// verification depth values (heavy instead of deep).
+func resolveSmartVerificationDepth(phase colony.Phase, totalPhases int) colony.VerificationDepth {
+	risk := phaseRiskLevel(phase)
+	position := phasePositionLevel(phase.ID, totalPhases)
+
+	if risk == "high" || position == "final" {
+		return colony.VerificationDepthHeavy
+	}
+	if risk == "medium" || position == "late" {
+		return colony.VerificationDepthStandard
+	}
+	if position == "early" {
+		return colony.VerificationDepthLight
+	}
+	return colony.VerificationDepthStandard
+}
+
+// resolveVerificationDepthSmart wraps NormalizeVerificationDepth with smart defaults.
+// When depth is empty (no explicit user flag), it uses resolveSmartVerificationDepth
+// to auto-select based on phase position and risk signals.
+func resolveVerificationDepthSmart(depth string, phase colony.Phase, totalPhases int) (string, error) {
+	normalized := colony.NormalizeVerificationDepth(depth)
+	if depth != "" {
+		return string(normalized), nil
+	}
+	return string(resolveSmartVerificationDepth(phase, totalPhases)), nil
 }

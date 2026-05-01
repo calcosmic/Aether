@@ -7,3 +7,6 @@ guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "There is no single `aether council` command; route through `council-budget-check`, `council-deliberate`, `council-advocate`, `council-challenger`, `council-sage`, and `council-history`."
   - "If docs and runtime disagree, runtime wins."
+follow_up:
+  analyze: "aether discuss-analyze --target ."
+  analyze_purpose: "Run before council deliberation for codebase inventory context."

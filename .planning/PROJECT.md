@@ -12,6 +12,12 @@ Aether is a biomimetic AI colony framework: a Go runtime in `cmd/` and `pkg/` th
 
 `v1.9` added the review persistence system: 7-domain review ledgers accumulate findings across phases, agents persist findings via CLI, colony-prime injects prior reviews into worker context, and full lifecycle integration (seal/entomb/status/init).
 
+`v1.10` completed the colony polish: smart review depth (light/heavy), gate failure recovery with skip logic, Porter ant (26th caste), full lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol), Oracle loop fix with research formulation, idea shelving system, QUEEN.md pipeline fix, and Hive Brain wiring into seal.
+
+`v1.11` unified Aether: removed self-hosting artifacts (stale agents, duplicate commands, orphaned companion files), restored lost Smart Init intelligence (charter ceremony, rich init-research, suggest-analyze), hardened the 3-platform experience, and improved user-facing flows.
+
+`v1.12` made Aether loop-proof and depth-aware: 6 loop safety requirements (watcher auto-skip, recovery redirect, circuit breaker, cycle detection, lifecycle exclusion, telemetry), independent 3-level planning and verification depth with smart defaults, depth persistence across plan→build→continue, and a unified depth selection UI.
+
 ## Core Value
 
 **Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.**
@@ -29,13 +35,21 @@ That means:
 ## Current State
 
 - Go runtime is healthy, v1.0.24 shipped
-- All 10 milestones complete (56 phases, 128 plans)
-- 2910+ tests passing, full E2E regression coverage
+- Milestone v1.11 Aether Unification complete (shipped 2026-04-30)
+- 2900+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
-- Plan recovery pipeline hardened (`--force` always recovers)
-- Colony recovery system shipped: `aether recover` + `--apply` for stuck-state rescue
-- Review persistence system shipped: 7-domain ledger CRUD, colony-prime injection, agent Write tools, lifecycle integration
+- Colony recovery system: `aether recover` + `--apply` for stuck-state rescue
+- Review persistence system: 7-domain ledger CRUD, colony-prime injection, lifecycle integration
+- Idea shelving: persistent colony backlog, auto-shelve at seal, surface at init, survive entomb
+- Hive Brain: seal auto-promotes high-confidence instincts to cross-colony wisdom
+- Planning depth system (light/standard/deep) with smart defaults -- Phase 83
+- Verification depth system (light/standard/heavy) with smart defaults -- Phase 84
+- Depth selection UI with ColonyState persistence and build manifest propagation -- Phase 86
+- Planning depth system: light/standard/deep task decomposition via --planning-depth flag (Phase 83)
+- Smart review depth: light/heavy modes, final phase always heavy, `--light` flag
+- Porter ant: 26th caste, wired into seal lifecycle with interactive publishing
 - All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
+- Smart Init intelligence: charter ceremony, rich init-research, suggest-analyze
 
 <details>
 <summary>Prior State History</summary>
@@ -75,7 +89,9 @@ That means:
 - [x] v1.7 Planning Pipeline Recovery -- Phases 47-48 (completed 2026-04-24)
 - [x] v1.8 Colony Recovery -- Phases 49-51 (completed 2026-04-25)
 - [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
-- [ ] v1.10 Colony Polish -- Phases 57+
+- [x] v1.10 Colony Polish -- Phases 57-69 (shipped 2026-04-28)
+- [x] v1.11 Aether Unification -- Phases 70-79 (shipped 2026-04-30)
+- [ ] v1.12 Safe Colony -- Phases 80+
 
 ## Requirements
 
@@ -93,16 +109,21 @@ That means:
 - 7-domain review ledger CRUD with colony-prime injection -- v1.9
 - Review agent Write tools with scoped guardrails (28 files, 4 surfaces) -- v1.9
 - Full review lifecycle (seal/entomb/status/init) -- v1.9
+- Smart review depth (auto/light/heavy, `--light` flag, final phase always heavy) -- v1.10
+- Gate failure recovery (recovery templates, per-gate skip, Watcher Veto) -- v1.10
+- Porter ant (26th caste, interactive delivery, wired into seal) -- v1.10
+- Lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol) -- v1.10
+- Oracle loop fix (research formulation, depth selection, state persistence) -- v1.10
+- Idea shelving (persistent backlog, auto-shelve, init surfacing, entomb survival) -- v1.10
+- QUEEN.md pipeline fix (dedup, global wisdom injection, auto-promotion) -- v1.10
+- Hive Brain wiring (seal auto-promotes high-confidence instincts) -- v1.10
+- Independent planning depth and verification depth controls -- v1.12 (Phase 83 & 84)
+- Smart depth defaults based on phase position and code change risk -- v1.12 (Phase 83 & 84)
+- User depth override UI at plan start with persistence -- v1.12 (Phase 86)
 
 ### Active
 
-- Smart review depth (auto/light/heavy) -- v1.10
-- Gate failure recovery -- v1.10
-- Porter ant (26th caste, interactive delivery) -- v1.10
-- Lifecycle ceremony (seal, init, status, entomb, resume, discuss, chaos, oracle, patrol) -- v1.10
-- Oracle loop fix (research formulation + depth selection) -- v1.10
-- Idea shelving system (persistent colony backlog) -- v1.10
-- QUEEN.md pipeline fix (dedup, wiring, auto-promotion) -- v1.10
+- Full loop audit across all Aether commands (continue, build, plan, seal, etc.) -- v1.12
 
 ### Out of Scope
 
@@ -127,9 +148,9 @@ That means:
 
 ## Context
 
-Shipped v1.9 with 104 files changed, +9,713 / -300 lines of Go.
+Shipped v1.10 with 452 files changed, +53,409 / -562 lines across 204 commits.
 Tech stack: Go 1.24, Cobra CLI, pkg/storage file locking.
-58+ tests added across milestone. All passing.
+34 plans across 14 phases (57-69). All verified.
 
 ## Explicit Deferrals
 
@@ -140,27 +161,47 @@ These remain promising but are not the next best move:
 - federation / inter-colony coordination
 - self-mutating agents / evolution engine
 
-## Current Milestone: v1.10 Colony Polish
-
-**Goal:** Make every colony interaction feel complete and self-sustaining — review depth is smart, gate failures are recoverable, lifecycle commands have real ceremony, delivery has an interactive ant, the Oracle has proper research formulation, ideas get shelved for future colonies, and QUEEN.md is fully wired.
-
-**Target features:**
-- Smart review depth — auto/light/heavy modes, `--light` flag, final phase always heavy
-- Gate failure recovery — clear, actionable recovery paths when verification gates fail
-- Porter ant — 26th caste, wired into lifecycle (especially seal), interactive publishing prompts
-- Lifecycle ceremony — seal (flags, midden, wisdom, pheromone cleanup), init (deeper analysis), status (version info), entomb (wisdom extraction), resume (staleness), discuss/council (codebase-aware comprehensive questioning), chaos/oracle/patrol (signal integration)
-- Oracle loop fix — fix callback URL AND restore research formulation with depth selection
-- Idea shelving — persistent backlog, auto-shelve at seal, surface at init
-- QUEEN.md full fix — dedup explosion, pipeline wiring (global wisdom not injected, sections ignored, auto-promotion missing)
-
-**Design context:** Full plan detail preserved in `.planning/research/v1.10-PLANS-CONTEXT.md`
-
 ## Next Move
 
-Plan next milestone with `/gsd-new-milestone`.
+Execute v1.11 with `/gsd-discuss-phase 70`.
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-04-26 after starting v1.10 milestone*
+## Current Milestone: v1.11 Aether Unification
+
+**Goal:** Make Aether clean, canonical, and intelligent again — remove self-hosting artifacts, restore lost Smart Init intelligence, harden the 3-platform experience, and improve user-facing flows.
+
+**Target features:**
+- Self-hosting cleanup — audit and remove all artifacts that exist because Aether was used to develop itself
+- Smart Init ceremony — re-port charter approval flow, repo scanning, governance detection to Go
+- Rich init-research — port deep codebase analysis (colony context, governance, pheromone suggestions, complexity)
+- Suggest-analyze — restore automatic pheromone suggestions during builds
+- Platform hardening — fix OpenCode parity gaps, harden error handling, cross-platform consistency
+- User experience — better onboarding, clearer feedback, smoother flows
+
+**Known losses from shell-to-Go migration (April 2026):**
+- Colony charter ceremony (scan.sh → charter-write → approval flow)
+- Rich init-research (tech stack, directory analysis, colony context, governance detection, 10 pheromone patterns)
+- Suggest-analyze (618 lines of automatic pattern detection)
+- Bayesian confidence scoring (40/35/25 weighted, 60-day half-life decay, 7 trust tiers)
+- Circuit breaker (cascade failure protection)
+- State machine transitions (explicit validation, pheromone-triggered, checkpoints)
+- Council system (deliberation framework)
+- Curation ant pipeline (8-ant orchestrated pipeline)
+- Consolidation pipeline (phase-end knowledge compression)
+
+*Last updated: 2026-04-30 after v1.11 Aether Unification milestone shipped*
+
+## Current Milestone: v1.12 Safe Colony
+
+**Goal:** Make Aether loop-proof and give users independent control over planning depth and verification depth, with smart defaults that adapt to phase position and code change risk.
+
+**Target features:**
+- Full loop audit — scan every Aether command for potential infinite loops, add circuit breakers
+- Independent depth controls — separate planning depth from verification depth, both user-settable
+- Smart depth defaults — auto-select depth from phase position + code change risk signals
+- User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
+
+*Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*

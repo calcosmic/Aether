@@ -110,6 +110,18 @@ var runCompatibilityCmd = &cobra.Command{
 	},
 }
 
+var versionsCmd = &cobra.Command{
+	Use:   "versions",
+	Short: "Show version information for binary, hub, and repo",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		outputOK(map[string]interface{}{
+			"binary": resolveVersion(),
+			"hub":    readInstalledHubVersion(),
+		})
+		return nil
+	},
+}
+
 func init() {
 	watchCmd.Flags().Bool("once", false, "Render a single watch snapshot even in visual TTY mode")
 	watchCmd.Flags().Duration("interval", 2*time.Second, "Refresh interval for live watch output")
@@ -127,6 +139,7 @@ func init() {
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)
 	rootCmd.AddCommand(runCompatibilityCmd)
+	rootCmd.AddCommand(versionsCmd)
 }
 
 func writeWatchArtifacts(result map[string]interface{}, visual string) error {

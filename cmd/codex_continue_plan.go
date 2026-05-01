@@ -32,20 +32,22 @@ type codexContinueExternalDispatch struct {
 }
 
 type codexContinuePlanManifest struct {
-	Phase             int                             `json:"phase"`
-	PhaseName         string                          `json:"phase_name"`
-	Root              string                          `json:"root"`
-	GeneratedAt       string                          `json:"generated_at"`
-	BuildManifest     string                          `json:"build_manifest,omitempty"`
-	Verification      codexContinueVerificationReport `json:"verification"`
-	Assessment        codexContinueAssessment         `json:"assessment"`
-	ReconcileTaskIDs  []string                        `json:"reconcile_task_ids,omitempty"`
-	WorkerTimeout     int                             `json:"worker_timeout_seconds,omitempty"`
-	Dispatches        []codexContinueExternalDispatch `json:"dispatches"`
-	DispatchMode      string                          `json:"dispatch_mode"`
-	FinalizeSurface   string                          `json:"finalize_surface"`
-	RequiresFinalizer bool                            `json:"requires_finalizer"`
-	ReviewDepth       string                          `json:"review_depth,omitempty"`
+	Phase               int                             `json:"phase"`
+	PhaseName           string                          `json:"phase_name"`
+	Root                string                          `json:"root"`
+	GeneratedAt         string                          `json:"generated_at"`
+	BuildManifest       string                          `json:"build_manifest,omitempty"`
+	Verification        codexContinueVerificationReport `json:"verification"`
+	Assessment          codexContinueAssessment         `json:"assessment"`
+	ReconcileTaskIDs    []string                        `json:"reconcile_task_ids,omitempty"`
+	WorkerTimeout       int                             `json:"worker_timeout_seconds,omitempty"`
+	VerificationTimeout int                             `json:"verification_timeout_seconds,omitempty"`
+	SkipWatchers        bool                            `json:"skip_watchers,omitempty"`
+	Dispatches          []codexContinueExternalDispatch `json:"dispatches"`
+	DispatchMode        string                          `json:"dispatch_mode"`
+	FinalizeSurface     string                          `json:"finalize_surface"`
+	RequiresFinalizer   bool                            `json:"requires_finalizer"`
+	ReviewDepth         string                          `json:"review_depth,omitempty"`
 }
 
 func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexContinueExternalDispatch, error) {
@@ -84,64 +86,73 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	}
 
 	now := time.Now().UTC()
-	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now)
+	verificationTimeout := effectiveContinueVerificationTimeout(options.VerificationTimeout)
+	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	reviewDepth := resolveReviewDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag)
-	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth)
+	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
 	plan := codexContinuePlanManifest{
-		Phase:             phase.ID,
-		PhaseName:         phase.Name,
-		Root:              root,
-		GeneratedAt:       now.Format(time.RFC3339),
-		BuildManifest:     displayOptionalDataPath(manifest.Path),
-		Verification:      verification,
-		Assessment:        assessment,
-		ReconcileTaskIDs:  append([]string{}, options.ReconcileTaskIDs...),
-		WorkerTimeout:     int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
-		Dispatches:        dispatches,
-		DispatchMode:      "plan-only",
-		FinalizeSurface:   "awaiting_wrapper_completion",
-		RequiresFinalizer: true,
-		ReviewDepth:       string(reviewDepth),
+		Phase:               phase.ID,
+		PhaseName:           phase.Name,
+		Root:                root,
+		GeneratedAt:         now.Format(time.RFC3339),
+		BuildManifest:       displayOptionalDataPath(manifest.Path),
+		Verification:        verification,
+		Assessment:          assessment,
+		ReconcileTaskIDs:    append([]string{}, options.ReconcileTaskIDs...),
+		WorkerTimeout:       int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
+		VerificationTimeout: int(verificationTimeout / time.Second),
+		SkipWatchers:        options.SkipWatchers,
+		Dispatches:          dispatches,
+		DispatchMode:        "plan-only",
+		FinalizeSurface:     "awaiting_wrapper_completion",
+		RequiresFinalizer:   true,
+		ReviewDepth:         string(reviewDepth),
 	}
 
 	result := map[string]interface{}{
-		"plan_only":         true,
-		"phase":             phase.ID,
-		"phase_name":        phase.Name,
-		"state":             state.State,
-		"continue_manifest": plan,
-		"verification":      verification,
-		"assessment":        assessment,
-		"dispatches":        dispatches,
-		"dispatch_count":    len(dispatches),
-		"wave_count":        countContinueExternalWaves(dispatches),
-		"dispatch_mode":     "plan-only",
-		"next":              "spawn wrapper continue agents, then record completion",
-"review_depth":     string(reviewDepth),
+		"plan_only":                    true,
+		"phase":                        phase.ID,
+		"phase_name":                   phase.Name,
+		"state":                        state.State,
+		"continue_manifest":            plan,
+		"verification":                 verification,
+		"assessment":                   assessment,
+		"dispatches":                   dispatches,
+		"dispatch_count":               len(dispatches),
+		"wave_count":                   countContinueExternalWaves(dispatches),
+		"dispatch_mode":                "plan-only",
+		"next":                         "spawn wrapper continue agents, then record completion",
+		"review_depth":                 string(reviewDepth),
+		"skip_watchers":                options.SkipWatchers,
+		"verification_timeout_seconds": int(verificationTimeout / time.Second),
 		"wrapper_contract": map[string]interface{}{
-			"source_command":            "AETHER_OUTPUT_MODE=json aether continue --plan-only",
-			"spawn_log_required":        true,
-			"spawn_complete_required":   true,
-			"worker_timeout_seconds":    int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
-			"finalize_surface":          "awaiting_wrapper_completion",
-			"runtime_verification_only": true,
+			"source_command":               "AETHER_OUTPUT_MODE=json aether continue --plan-only --skip-watchers --light $ARGUMENTS",
+			"spawn_log_required":           true,
+			"spawn_complete_required":      true,
+			"worker_timeout_seconds":       int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
+			"verification_timeout_seconds": int(verificationTimeout / time.Second),
+			"finalize_surface":             "awaiting_wrapper_completion",
+			"runtime_verification_only":    true,
 		},
 	}
 	return result, state, phase, dispatches, nil
 }
 
-func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manifest codexContinueManifest, now time.Time) codexContinueVerificationReport {
+func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manifest codexContinueManifest, now time.Time, verificationTimeout time.Duration, skipWatchers bool) codexContinueVerificationReport {
 	commands := resolveCodexVerificationCommands(root)
 	steps := []codexVerificationStep{
-		runVerificationStep(root, "build", commands.Build),
-		runVerificationStep(root, "types", commands.Type),
-		runVerificationStep(root, "lint", commands.Lint),
-		runVerificationStep(root, "tests", commands.Test),
+		runVerificationStep(root, "build", commands.Build, verificationTimeout),
+		runVerificationStep(root, "types", commands.Type, verificationTimeout),
+		runVerificationStep(root, "lint", commands.Lint, verificationTimeout),
+		runVerificationStep(root, "tests", commands.Test, verificationTimeout),
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	watcher := evaluateContinueWatcherVerification(manifest)
+	if skipWatchers {
+		watcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on runtime-owned verification commands"}
+	}
 
 	checksPassed := true
 	blockers := []string{}
@@ -161,22 +172,24 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 	}
 
 	return codexContinueVerificationReport{
-		Phase:          phase.ID,
-		GeneratedAt:    now.Format(time.RFC3339),
-		Steps:          steps,
-		Claims:         claims,
-		Watcher:        watcher,
-		ChecksPassed:   checksPassed,
-		Passed:         checksPassed,
-		BlockingIssues: blockers,
+		Phase:                      phase.ID,
+		GeneratedAt:                now.Format(time.RFC3339),
+		VerificationTimeoutSeconds: int(verificationTimeout / time.Second),
+		Steps:                      steps,
+		Claims:                     claims,
+		Watcher:                    watcher,
+		ChecksPassed:               checksPassed,
+		Passed:                     checksPassed,
+		BlockingIssues:             blockers,
 	}
 }
 
-func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth ReviewDepth) []codexContinueExternalDispatch {
+func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
-	watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
-	dispatches := []codexContinueExternalDispatch{
-		{
+	dispatches := []codexContinueExternalDispatch{}
+	if !skipWatchers {
+		watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
+		dispatches = append(dispatches, codexContinueExternalDispatch{
 			Stage:         "verification",
 			Wave:          1,
 			Caste:         "watcher",
@@ -192,17 +205,24 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			ColonySkills:  watcherSkillAssignment.ColonyCount,
 			DomainSkills:  watcherSkillAssignment.DomainCount,
 			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
-		},
+		})
 	}
-reviewSpecs := codexContinueReviewSpecs
-	if reviewDepth == ReviewDepthLight {
+	reviewSpecs := codexContinueReviewSpecs
+	switch reviewDepth {
+	case colony.VerificationDepthLight:
 		reviewSpecs = []codexContinueReviewSpec{}
+	case colony.VerificationDepthStandard:
+		reviewSpecs = codexContinueReviewSpecs[2:] // probe only
+	}
+	reviewWave := 2
+	if skipWatchers {
+		reviewWave = 1
 	}
 	for _, spec := range reviewSpecs {
 		assignment := resolveWorkerSkillAssignmentForWorkflow("continue", spec.Caste, spec.Task)
 		dispatches = append(dispatches, codexContinueExternalDispatch{
 			Stage:         "review",
-			Wave:          2,
+			Wave:          reviewWave,
 			Caste:         spec.Caste,
 			AgentName:     codexAgentNameForCaste(spec.Caste),
 			Name:          deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste)),

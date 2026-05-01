@@ -878,6 +878,144 @@ func TestTransitionErrorIs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// PlanningDepth.Valid() tests
+// ---------------------------------------------------------------------------
+
+func TestPlanningDepthValid(t *testing.T) {
+	tests := []struct {
+		d    PlanningDepth
+		want bool
+	}{
+		{PlanningDepthLight, true},
+		{PlanningDepthStandard, true},
+		{PlanningDepthDeep, true},
+		{"", false},
+		{"invalid", false},
+		{"SPRINT", false},
+		{"banana", false},
+	}
+	for _, tt := range tests {
+		name := string(tt.d)
+		if name == "" {
+			name = "(empty)"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := tt.d.Valid(); got != tt.want {
+				t.Errorf("PlanningDepth(%q).Valid() = %v, want %v", tt.d, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NormalizePlanningDepth tests
+// ---------------------------------------------------------------------------
+
+func TestNormalizePlanningDepth(t *testing.T) {
+	tests := []struct {
+		input string
+		want  PlanningDepth
+	}{
+		// light aliases
+		{"light", PlanningDepthLight},
+		{"minimal", PlanningDepthLight},
+		{"coarse", PlanningDepthLight},
+		// deep aliases
+		{"deep", PlanningDepthDeep},
+		{"granular", PlanningDepthDeep},
+		{"thorough", PlanningDepthDeep},
+		// standard / default
+		{"", PlanningDepthStandard},
+		{"standard", PlanningDepthStandard},
+		{"default", PlanningDepthStandard},
+		// case insensitivity
+		{"DEEP", PlanningDepthDeep},
+		{"LIGHT", PlanningDepthLight},
+		// whitespace trimming
+		{"  deep  ", PlanningDepthDeep},
+	}
+	for _, tt := range tests {
+		name := tt.input
+		if name == "" {
+			name = "(empty)"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := NormalizePlanningDepth(tt.input); got != tt.want {
+				t.Errorf("NormalizePlanningDepth(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// VerificationDepth tests
+// ---------------------------------------------------------------------------
+
+func TestVerificationDepthValid(t *testing.T) {
+	tests := []struct {
+		d    VerificationDepth
+		want bool
+	}{
+		{VerificationDepthLight, true},
+		{VerificationDepthStandard, true},
+		{VerificationDepthHeavy, true},
+		{"", false},
+		{"invalid", false},
+		{"SPRINT", false},
+		{"banana", false},
+	}
+	for _, tt := range tests {
+		name := string(tt.d)
+		if name == "" {
+			name = "(empty)"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := tt.d.Valid(); got != tt.want {
+				t.Errorf("VerificationDepth(%q).Valid() = %v, want %v", tt.d, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeVerificationDepth(t *testing.T) {
+	tests := []struct {
+		input string
+		want  VerificationDepth
+	}{
+		// light aliases
+		{"light", VerificationDepthLight},
+		{"minimal", VerificationDepthLight},
+		{"coarse", VerificationDepthLight},
+		// heavy aliases
+		{"heavy", VerificationDepthHeavy},
+		{"full", VerificationDepthHeavy},
+		{"thorough", VerificationDepthHeavy},
+		// standard / default
+		{"", VerificationDepthStandard},
+		{"standard", VerificationDepthStandard},
+		// case insensitivity
+		{"HEAVY", VerificationDepthHeavy},
+		{"LIGHT", VerificationDepthLight},
+		// whitespace trimming
+		{"  heavy  ", VerificationDepthHeavy},
+		// unknown defaults to standard
+		{"unknown", VerificationDepthStandard},
+		{"banana", VerificationDepthStandard},
+	}
+	for _, tt := range tests {
+		name := tt.input
+		if name == "" {
+			name = "(empty)"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := NormalizeVerificationDepth(tt.input); got != tt.want {
+				t.Errorf("NormalizeVerificationDepth(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

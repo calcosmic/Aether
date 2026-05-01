@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
@@ -579,5 +580,466 @@ func TestResumeVisualWorktreeCleanup(t *testing.T) {
 	}
 	if !strings.Contains(output, "1 worktree(s) could not be cleaned") {
 		t.Errorf("missing orphaned worktree message\n%s", output)
+	}
+}
+
+// --- Stale FOCUS Pherrmone Detection Tests (Phase 63, Plan 03) ---
+
+func TestResumeDetectsStaleFocusSignals(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume with stale pheromones"
+	sourcePhase := 2
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 5,
+		Milestone:    "Open Chambers",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	// Create pheromones with a stale FOCUS signal from phase 2
+	contentJSON, _ := json.Marshal(map[string]string{"text": "pay attention to auth"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-stale-focus",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("seed pheromones: %v", err)
+	}
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID: "stale-test",
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"stale_signals"`) {
+		t.Fatalf("expected stale_signals in resume output\n%s", output)
+	}
+	if !strings.Contains(output, `"source_phase":2`) {
+		t.Fatalf("expected source_phase:2 in stale signal data\n%s", output)
+	}
+	if !strings.Contains(output, `"current_phase":5`) {
+		t.Fatalf("expected current_phase:5 in stale signal data\n%s", output)
+	}
+}
+
+func TestResumeNoStaleWhenSourcePhaseMatchesCurrent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume with current pheromones"
+	sourcePhase := 3
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 3,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 3, Name: "Current", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	contentJSON, _ := json.Marshal(map[string]string{"text": "current focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-current-focus",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("seed pheromones: %v", err)
+	}
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID: "no-stale-test",
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, `"stale_signals"`) {
+		t.Fatalf("expected no stale_signals when source_phase matches current_phase\n%s", output)
+	}
+}
+
+func TestResumeNilSourcePhaseNotFlagged(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume with old pheromone without source_phase"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 5,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	// FOCUS signal with nil SourcePhase (backward compat)
+	contentJSON, _ := json.Marshal(map[string]string{"text": "old focus without phase"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-no-phase",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: nil, // nil = backward compat, should NOT be flagged
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("seed pheromones: %v", err)
+	}
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID: "nil-phase-test",
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, `"stale_signals"`) {
+		t.Fatalf("expected no stale_signals for nil SourcePhase (backward compat)\n%s", output)
+	}
+}
+
+func TestResumeOnlyFocusFlaggedNotRedirect(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume with stale redirect"
+	stalePhase := 1
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 5,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	contentJSON, _ := json.Marshal(map[string]string{"text": "avoid this"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-stale-redirect",
+				Type:        "REDIRECT",
+				Priority:    "high",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &stalePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("seed pheromones: %v", err)
+	}
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID: "redirect-test",
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, `"stale_signals"`) {
+		t.Fatalf("expected no stale_signals for REDIRECT signals (only FOCUS checked)\n%s", output)
+	}
+}
+
+func TestResumeInactiveFocusNotFlagged(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Resume with inactive stale focus"
+	stalePhase := 1
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 5,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	contentJSON, _ := json.Marshal(map[string]string{"text": "inactive focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-inactive-focus",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      false, // inactive -- should NOT be flagged
+				Content:     contentJSON,
+				SourcePhase: &stalePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("seed pheromones: %v", err)
+	}
+
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID: "inactive-test",
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, `"stale_signals"`) {
+		t.Fatalf("expected no stale_signals for inactive FOCUS signals\n%s", output)
+	}
+}
+
+func TestResumeVisualStaleWarning(t *testing.T) {
+	result := map[string]interface{}{
+		"freshness": map[string]interface{}{
+			"fresh":     true,
+			"age_hours": "1.0",
+		},
+		"current": map[string]interface{}{
+			"goal":         "Test",
+			"state":        "ready",
+			"phase":        5,
+			"total_phases": 10,
+		},
+		"stale_signals": []map[string]interface{}{
+			{"id": "sig-1", "type": "FOCUS", "content": "pay attention to auth", "source_phase": 2, "current_phase": 5},
+		},
+		"blockers": []string{},
+		"signals":  map[string]interface{}{"items": []string{}, "count": 0},
+	}
+
+	output := renderResumeVisual(result, "", true)
+	if !strings.Contains(output, "stale FOCUS") {
+		t.Errorf("expected stale FOCUS warning in visual output\n%s", output)
+	}
+	if !strings.Contains(output, "Phase 2") {
+		t.Errorf("expected source phase in visual output\n%s", output)
+	}
+	if !strings.Contains(output, "pay attention to auth") {
+		t.Errorf("expected signal content in visual output\n%s", output)
+	}
+}
+
+func TestResumeVisualNoWarningWhenNoStale(t *testing.T) {
+	result := map[string]interface{}{
+		"freshness": map[string]interface{}{
+			"fresh":     true,
+			"age_hours": "1.0",
+		},
+		"current": map[string]interface{}{
+			"goal":         "Test",
+			"state":        "ready",
+			"phase":        3,
+			"total_phases": 5,
+		},
+		"blockers": []string{},
+		"signals":  map[string]interface{}{"items": []string{}, "count": 0},
+	}
+
+	output := renderResumeVisual(result, "", true)
+	if strings.Contains(output, "stale FOCUS") {
+		t.Errorf("expected no stale FOCUS warning when no stale signals\n%s", output)
+	}
+}
+
+// --- Direct unit tests for detectStaleFocusSignals (Phase 66, Plan 02) ---
+
+func TestDetectStaleFocusSignals_EqualPhaseNotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	origStore := store
+	store = s
+	defer func() { store = origStore }()
+
+	sourcePhase := 3
+	contentJSON, _ := json.Marshal(map[string]string{"text": "current phase focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-equal-phase",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	stale := detectStaleFocusSignals(store, 3)
+	if len(stale) != 0 {
+		t.Errorf("expected 0 stale signals when SourcePhase == currentPhase, got %d: %+v", len(stale), stale)
+	}
+}
+
+func TestDetectStaleFocusSignals_FuturePhaseNotFlagged(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	origStore := store
+	store = s
+	defer func() { store = origStore }()
+
+	sourcePhase := 5
+	contentJSON, _ := json.Marshal(map[string]string{"text": "future phase focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-future-phase",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	stale := detectStaleFocusSignals(store, 3)
+	if len(stale) != 0 {
+		t.Errorf("expected 0 stale signals when SourcePhase > currentPhase, got %d: %+v", len(stale), stale)
+	}
+}
+
+func TestDetectStaleFocusSignals_PastPhaseFlagged(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	origStore := store
+	store = s
+	defer func() { store = origStore }()
+
+	sourcePhase := 1
+	contentJSON, _ := json.Marshal(map[string]string{"text": "old focus"})
+	pf := colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{
+				ID:          "sig-past-phase",
+				Type:        "FOCUS",
+				Priority:    "normal",
+				Active:      true,
+				Content:     contentJSON,
+				SourcePhase: &sourcePhase,
+			},
+		},
+	}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("save pheromones: %v", err)
+	}
+
+	stale := detectStaleFocusSignals(store, 3)
+	if len(stale) != 1 {
+		t.Fatalf("expected 1 stale signal when SourcePhase < currentPhase, got %d", len(stale))
+	}
+	if stale[0].ID != "sig-past-phase" {
+		t.Errorf("expected stale signal ID 'sig-past-phase', got '%s'", stale[0].ID)
+	}
+	if stale[0].SourcePhase != 1 {
+		t.Errorf("expected SourcePhase 1, got %d", stale[0].SourcePhase)
+	}
+	if stale[0].CurrentPhase != 3 {
+		t.Errorf("expected CurrentPhase 3, got %d", stale[0].CurrentPhase)
 	}
 }
