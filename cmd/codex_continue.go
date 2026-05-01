@@ -389,6 +389,10 @@ type codexContinueReviewReport struct {
 
 var continueContextUpdater = updateCodexContinueContext
 
+// circuitBreaker is the package-level circuit breaker for gate retry tracking.
+// It is initialized when the continue flow starts and checked for nil before use.
+var circuitBreaker *CircuitBreaker
+
 var continueSignalHousekeeper = func(now time.Time, state colony.ColonyState) (signalHousekeepingResult, error) {
 	return runSignalHousekeepingWithState(now, false, &state)
 }
@@ -2383,6 +2387,22 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 	checks := []gateCheck{}
 	blockers := []string{}
 
+	// Circuit breaker integration (LOOP-01): check if any gate has exceeded retry threshold
+	for _, prior := range priorGateResults {
+		if prior.Status == "failed" {
+			key := gateRetryKey(phase.ID, prior.Name)
+			if circuitBreaker != nil && !circuitBreaker.Allow(key) {
+				return codexContinueGateReport{
+					Phase:          phase.ID,
+					GeneratedAt:    now.Format(time.RFC3339),
+					Checks:         checks,
+					Passed:         false,
+					BlockingIssues: []string{fmt.Sprintf("circuit breaker tripped for gate %q after %d failed retries -- manual intervention required", prior.Name, circuitBreaker.FailureCount(key))},
+				}
+			}
+		}
+	}
+
 	// manifest_present gate
 	if shouldSkipGate(priorGateResults, "manifest_present") {
 		checks = append(checks, gateCheck{Name: "manifest_present", Passed: true, Detail: "skipped: previously passed"})
@@ -2390,6 +2410,11 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		manifestCheck := gateCheck{Name: "manifest_present", Passed: manifest.Present, Detail: "build manifest present"}
 		if !manifest.Present {
 			manifestCheck.Detail = fmt.Sprintf("build manifest is missing for phase %d", phase.ID)
+			manifestCheck.FixHint = "Ensure the build completed successfully and produced a manifest.json"
+			manifestCheck.RecoveryOptions = []string{
+				"Fix the build issue and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 			blockers = append(blockers, manifestCheck.Detail)
 		}
 		checks = append(checks, manifestCheck)
@@ -2405,6 +2430,11 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 			Detail: continueVerificationDetail(verification),
 		}
 		if !verification.ChecksPassed {
+			verifCheck.FixHint = gateRecoveryTemplate("verification_loop")
+			verifCheck.RecoveryOptions = []string{
+				"Fix manually and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 			blockers = append(blockers, verification.BlockingIssues...)
 		}
 		checks = append(checks, verifCheck)
@@ -2417,6 +2447,11 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		evidenceCheck := gateCheck{Name: "implementation_evidence", Passed: assessment.PositiveEvidence, Detail: "task or claim evidence recorded for the verified phase"}
 		if !assessment.PositiveEvidence {
 			evidenceCheck.Detail = "verification passed but no implementation evidence or reconciliation was recorded"
+			evidenceCheck.FixHint = "Ensure workers reported task completion or claims were filed"
+			evidenceCheck.RecoveryOptions = []string{
+				"Fix manually and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 			blockers = append(blockers, assessment.BlockingIssues...)
 		}
 		checks = append(checks, evidenceCheck)
@@ -2429,15 +2464,39 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		operationalCheck := gateCheck{Name: "operational_evidence", Passed: true, Detail: "no operational worker issues were recorded"}
 		if len(assessment.OperationalIssues) > 0 {
 			operationalCheck.Detail = fmt.Sprintf("%d operational worker issues recorded; continue is using verification-led truth instead", len(assessment.OperationalIssues))
+			operationalCheck.FixHint = "Review worker output for operational issues"
+			operationalCheck.RecoveryOptions = []string{
+				"Fix manually and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 		}
 		checks = append(checks, operationalCheck)
 	}
 
 	// flags gate (no_critical_flags) — runs every time for safety
 	flagCheck := checkNoCriticalFlags()
-	checks = append(checks, flagCheck)
 	if !flagCheck.Passed {
+		flagCheck.FixHint = "Resolve critical flags before continuing"
+		flagCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
 		blockers = append(blockers, flagCheck.Detail)
+	}
+	checks = append(checks, flagCheck)
+
+	// Record failures/successes in circuit breaker (LOOP-01)
+	for _, c := range checks {
+		key := gateRetryKey(phase.ID, c.Name)
+		if !c.Passed {
+			if circuitBreaker != nil {
+				circuitBreaker.RecordFailure(key)
+			}
+		} else {
+			if circuitBreaker != nil {
+				circuitBreaker.RecordSuccess(key)
+			}
+		}
 	}
 
 	return codexContinueGateReport{
