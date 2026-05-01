@@ -480,10 +480,10 @@ func TestResolveVerificationDepth_KeywordPhaseAlwaysHeavy(t *testing.T) {
 	if got != colony.VerificationDepthHeavy {
 		t.Errorf("keyword phase no flags: got %q, want %q", got, colony.VerificationDepthHeavy)
 	}
-	// light flag on keyword phase still heavy
+	// light flag on keyword phase overrides to light (user intent takes priority)
 	got = resolveVerificationDepth(phase, 5, true, false, "")
-	if got != colony.VerificationDepthHeavy {
-		t.Errorf("keyword phase with lightFlag=true: got %q, want %q", got, colony.VerificationDepthHeavy)
+	if got != colony.VerificationDepthLight {
+		t.Errorf("keyword phase with lightFlag=true: got %q, want %q", got, colony.VerificationDepthLight)
 	}
 }
 

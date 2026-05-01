@@ -60,7 +60,7 @@ func chaosShouldRunInLightMode(phaseID int) bool {
 }
 
 // resolveVerificationDepth determines the 3-level verification depth for a phase.
-// Priority: final phase -> heavyFlag -> heavy keyword match -> lightFlag -> explicit --verification-depth string -> default standard.
+// Priority: final phase -> heavyFlag -> heavy keyword match (unless lightFlag) -> lightFlag -> explicit --verification-depth string -> default standard.
 func resolveVerificationDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFlag bool, verificationDepthStr string) colony.VerificationDepth {
 	// Final phase is always heavy regardless of flags.
 	if phase.ID == totalPhases {
@@ -70,8 +70,9 @@ func resolveVerificationDepth(phase colony.Phase, totalPhases int, lightFlag, he
 	if heavyFlag {
 		return colony.VerificationDepthHeavy
 	}
-	// Keyword auto-detection triggers heavy review.
-	if phaseHasHeavyKeywords(phase.Name) {
+	// Keyword auto-detection triggers heavy review, BUT explicit light flag
+	// overrides keyword match (user intent takes priority).
+	if phaseHasHeavyKeywords(phase.Name) && !lightFlag {
 		return colony.VerificationDepthHeavy
 	}
 	// Explicit light flag.
