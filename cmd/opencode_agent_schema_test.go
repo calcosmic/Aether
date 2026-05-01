@@ -58,8 +58,8 @@ func TestOpenCodeAgentSchema(t *testing.T) {
 	if len(agentFiles) == 0 {
 		t.Fatal("no aether-*.md files found in .opencode/agents/")
 	}
-	if len(agentFiles) != 26 {
-		t.Errorf("expected 26 agent files, found %d", len(agentFiles))
+	if len(agentFiles) != 27 {
+		t.Errorf("expected 27 agent files, found %d", len(agentFiles))
 	}
 
 	hexColorRe := regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

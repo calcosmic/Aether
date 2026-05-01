@@ -13,8 +13,9 @@ var unblockCmd = &cobra.Command{
 	Use:   "unblock",
 	Short: "Show gate failure summary and recovery options for the current phase",
 	Long: `Reads gate-results-{N}.json for the current phase and renders a Gate Recovery Summary
-showing which gates failed, why, and how to fix them. Provides two recovery options:
-(1) fix manually and run /ant-continue, or (2) view specific fix hints for each failed gate.`,
+showing which gates failed, why, and how to fix them. Provides three recovery options:
+(1) fix manually and run /ant-continue, (2) view specific fix hints for each failed gate,
+or (3) dispatch the Fixer agent to investigate and apply fixes.`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -41,6 +42,17 @@ showing which gates failed, why, and how to fix them. Provides two recovery opti
 		results, err := gateResultsReadPhase(phaseNum)
 		if err != nil || len(results) == 0 {
 			outputOK(fmt.Sprintf("No gate results found for phase %d. Run /ant-continue to run gates.", phaseNum))
+			return nil
+		}
+
+		// Check if --dispatch flag is set
+		dispatch, _ := cmd.Flags().GetBool("dispatch")
+		if dispatch {
+			fixerMode, _ := cmd.Flags().GetString("fixer-mode")
+			if err := dispatchFixer(phaseNum, fixerMode); err != nil {
+				outputError(1, fmt.Sprintf("Fixer dispatch failed: %s", err.Error()), nil)
+				return nil
+			}
 			return nil
 		}
 
@@ -109,11 +121,14 @@ func buildGateRecoverySummary(phaseNum int, results []GateCheckResult) string {
 	b.WriteString("\nRecovery Options:\n")
 	b.WriteString("  1. Fix the issues above manually, then run /ant-continue\n")
 	b.WriteString("  2. View detailed fix hints for each gate above\n")
+	b.WriteString("  3. Run /ant-unblock --dispatch to dispatch Fixer (propose mode by default)\n")
 
 	return b.String()
 }
 
 func init() {
 	unblockCmd.Flags().Int("phase", 0, "Phase number (default: current phase)")
+	unblockCmd.Flags().String("fixer-mode", "propose", "Fixer autonomy mode: full, propose, or advise (default: propose)")
+	unblockCmd.Flags().Bool("dispatch", false, "Dispatch the Fixer agent to investigate and fix failed gates")
 	rootCmd.AddCommand(unblockCmd)
 }

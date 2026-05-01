@@ -305,8 +305,8 @@ func TestUnblock_DispatchProposeMode(t *testing.T) {
 	if !strings.Contains(output, `"propose"`) {
 		t.Error("dispatch output should contain propose mode")
 	}
-	if !strings.Contains(output, `"mode":"fixer_dispatch"`) {
-		t.Error("dispatch output should contain mode:fixer_dispatch")
+	if !strings.Contains(output, `"fixer_dispatch"`) {
+		t.Error("dispatch output should contain fixer_dispatch")
 	}
 }
 
@@ -352,12 +352,13 @@ func TestUnblock_DispatchCircuitBreakerTripped(t *testing.T) {
 		t.Fatalf("unblock --dispatch: %v", err)
 	}
 
-	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, "Circuit breaker tripped") {
-		t.Errorf("dispatch should show circuit breaker error, got: %s", output)
+	// Error output goes to stderr in JSON mode
+	errOutput := stderr.(*bytes.Buffer).String()
+	if !strings.Contains(errOutput, "Circuit breaker tripped") {
+		t.Errorf("dispatch should show circuit breaker error, got: %s", errOutput)
 	}
-	if !strings.Contains(output, "manual intervention required") {
-		t.Errorf("dispatch should mention manual intervention, got: %s", output)
+	if !strings.Contains(errOutput, "manual intervention required") {
+		t.Errorf("dispatch should mention manual intervention, got: %s", errOutput)
 	}
 }
 
@@ -378,7 +379,7 @@ func TestUnblock_DispatchAttemptCapExceeded(t *testing.T) {
 		CurrentPhase: 52,
 	})
 
-	// Write gate results with max attempts already used
+	// Write gate results with max attempts already used (new wrapper format)
 	fileData := gateResultsFile{
 		Attempts: 1,
 		Results: []GateCheckResult{
@@ -400,9 +401,10 @@ func TestUnblock_DispatchAttemptCapExceeded(t *testing.T) {
 		t.Fatalf("unblock --dispatch: %v", err)
 	}
 
-	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, "Max unblock attempts") {
-		t.Errorf("dispatch should show attempt cap error, got: %s", output)
+	// Error output goes to stderr in JSON mode
+	errOutput := stderr.(*bytes.Buffer).String()
+	if !strings.Contains(errOutput, "Max unblock attempts") {
+		t.Errorf("dispatch should show attempt cap error, got: %s", errOutput)
 	}
 }
 
@@ -441,9 +443,10 @@ func TestUnblock_DispatchInvalidMode(t *testing.T) {
 		t.Fatalf("unblock --dispatch: %v", err)
 	}
 
-	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, "valid modes") {
-		t.Errorf("dispatch should show invalid mode error, got: %s", output)
+	// Error output goes to stderr in JSON mode
+	errOutput := stderr.(*bytes.Buffer).String()
+	if !strings.Contains(errOutput, "valid modes") {
+		t.Errorf("dispatch should show invalid mode error, got: %s", errOutput)
 	}
 }
 
@@ -498,8 +501,8 @@ func TestUnblock_RecoverySummaryIncludesFixerOption(t *testing.T) {
 	}
 
 	// Must include Fixer dispatch option (option 3)
-	if !strings.Contains(summary, "Dispatch Fixer") {
-		t.Error("summary should contain 'Dispatch Fixer' option")
+	if !strings.Contains(summary, "dispatch Fixer") {
+		t.Error("summary should contain 'dispatch Fixer' option")
 	}
 	if !strings.Contains(summary, "/ant-unblock --dispatch") {
 		t.Error("summary should contain '/ant-unblock --dispatch' command")

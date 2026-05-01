@@ -608,11 +608,30 @@ func gateResultsWritePhase(phaseNum int, entries []GateCheckResult) error {
 }
 
 // gateResultsReadPhase reads gate results from a per-phase file gate-results-{N}.json.
+// Supports both the legacy plain array format and the newer gateResultsFile wrapper format.
 // Returns an error if the file does not exist or cannot be read.
 func gateResultsReadPhase(phaseNum int) ([]GateCheckResult, error) {
 	rel := fmt.Sprintf("gate-results-%d.json", phaseNum)
+
+	// Read raw content to detect format
+	raw, err := store.LoadRawJSON(rel)
+	if err != nil {
+		return nil, err
+	}
+
+	// Try wrapper format first (newer format with unblock_attempts)
+	// The wrapper is a JSON object, while the legacy format is a JSON array.
+	if len(raw) > 0 && raw[0] == '{' {
+		var wrapped gateResultsFile
+		if err := json.Unmarshal(raw, &wrapped); err != nil {
+			return nil, err
+		}
+		return wrapped.Results, nil
+	}
+
+	// Fall back to plain array format (legacy)
 	var results []GateCheckResult
-	if err := store.LoadJSON(rel, &results); err != nil {
+	if err := json.Unmarshal(raw, &results); err != nil {
 		return nil, err
 	}
 	return results, nil

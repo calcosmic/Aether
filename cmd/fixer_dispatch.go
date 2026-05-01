@@ -39,13 +39,32 @@ func readUnblockAttempts(phaseNum int) int {
 }
 
 // readGateResultsPhase reads the full gate results file including attempt metadata.
+// Supports both the legacy plain array format and the newer gateResultsFile wrapper format.
 func readGateResultsPhase(phaseNum int) (*gateResultsFile, error) {
 	rel := fmt.Sprintf("gate-results-%d.json", phaseNum)
-	var fileData gateResultsFile
-	if err := store.LoadJSON(rel, &fileData); err != nil {
+
+	// Read raw content to detect format
+	raw, err := store.LoadRawJSON(rel)
+	if err != nil {
 		return nil, err
 	}
-	return &fileData, nil
+
+	// Try wrapper format first (newer format with unblock_attempts)
+	// The wrapper is a JSON object, while the legacy format is a JSON array.
+	if len(raw) > 0 && raw[0] == '{' {
+		var wrapped gateResultsFile
+		if err := json.Unmarshal(raw, &wrapped); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal gate results file: %w", err)
+		}
+		return &wrapped, nil
+	}
+
+	// Fall back to plain array format (legacy) -- wrap with zero attempts
+	var results []GateCheckResult
+	if err := json.Unmarshal(raw, &results); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal gate results array: %w", err)
+	}
+	return &gateResultsFile{Results: results}, nil
 }
 
 // incrementUnblockAttempts increments the unblock attempt count for a phase.

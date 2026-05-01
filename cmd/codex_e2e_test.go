@@ -861,8 +861,8 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 	codexNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
 	agentsCodexNames := listShippedAetherCodexAgentBaseNames(t, agentsCodexMirrorDir)
 
-	// Verify each directory has exactly 25 entries.
-	const expectedCount = 26
+	// Verify each directory has exactly 27 entries (25 original + medic + fixer).
+	const expectedCount = 27
 	if len(claudeNames) != expectedCount {
 		t.Errorf("Claude agents: expected %d, got %d", expectedCount, len(claudeNames))
 	}
@@ -1062,8 +1062,8 @@ func TestE2EOpenCodeAgentLoad(t *testing.T) {
 	if len(agentFiles) == 0 {
 		t.Fatal("no aether-*.md files found to copy")
 	}
-	if len(agentFiles) != 26 {
-		t.Errorf("expected 26 agent files, found %d", len(agentFiles))
+	if len(agentFiles) != 27 {
+		t.Errorf("expected 27 agent files, found %d", len(agentFiles))
 	}
 
 	// 3-4. Parse and validate each file
