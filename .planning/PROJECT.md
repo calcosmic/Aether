@@ -16,6 +16,8 @@ Aether is a biomimetic AI colony framework: a Go runtime in `cmd/` and `pkg/` th
 
 `v1.11` unified Aether: removed self-hosting artifacts (stale agents, duplicate commands, orphaned companion files), restored lost Smart Init intelligence (charter ceremony, rich init-research, suggest-analyze), hardened the 3-platform experience, and improved user-facing flows.
 
+`v1.12` made Aether loop-proof and depth-aware: 6 loop safety requirements (watcher auto-skip, recovery redirect, circuit breaker, cycle detection, lifecycle exclusion, telemetry), independent 3-level planning and verification depth with smart defaults, depth persistence across plan→build→continue, and a unified depth selection UI.
+
 ## Core Value
 
 **Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.**
@@ -202,4 +204,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Smart depth defaults — auto-select depth from phase position + code change risk signals
 - User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
 
-*Last updated: 2026-04-30 — v1.12 Safe Colony milestone started*
+*Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*

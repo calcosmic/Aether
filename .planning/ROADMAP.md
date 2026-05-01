@@ -14,7 +14,7 @@
 - **v1.9 Review Persistence** - Phases 52-56 (shipped 2026-04-26)
 - **v1.10 Colony Polish** - Phases 57-69 (shipped 2026-04-28)
 - **v1.11 Aether Unification** - Phases 70-79 (shipped 2026-04-30)
-- **v1.12 Safe Colony** - Phases 80-86 (in progress)
+- ✅ **v1.12 Safe Colony** - Phases 80-87 (shipped 2026-05-01)
 
 ## Phases
 
@@ -177,18 +177,19 @@
 
 </details>
 
-### v1.12 Safe Colony (In Progress)
-
-**Milestone Goal:** Make Aether loop-proof and give users independent control over planning depth and verification depth, with smart defaults that adapt to phase position and code change risk.
+<details>
+<summary>✅ v1.12 Safe Colony (Phases 80-87) — SHIPPED 2026-05-01</summary>
 
 - [x] **Phase 80: Build/Continue Loop Prevention** - Prevent infinite watcher respawns, recovery loops, and build wave retry loops
-- [ ] **Phase 81: Plan and Lifecycle Loop Safety** - Block circular phase dependencies and ensure lifecycle commands suggest different recovery steps
-- [ ] **Phase 82: Loop Detection Telemetry** - Log all loop-breaking events to the event bus and surface them in status
-- [ ] **Phase 83: Planning Depth System** - Add light/standard/deep planning depth that controls task decomposition granularity
-- [ ] **Phase 84: Verification Depth Extension** - Extend verification depth from 2 levels (light/heavy) to 3 levels (light/standard/heavy)
-- [ ] **Phase 85: Smart Depth Defaults** - Auto-select planning and verification depth from phase position and code change risk
-- [ ] **Phase 86: Depth Selection UI and Persistence** - Present smart defaults to user at plan time and persist depths in the build packet
-- [ ] **Phase 87: Fix Continue Depth Persistence** - Close DEPTH-05 gap: continue reads persisted verification depth and honors --verification-depth flag
+- [x] **Phase 81: Plan and Lifecycle Loop Safety** - Block circular phase dependencies and ensure lifecycle commands suggest different recovery steps
+- [x] **Phase 82: Loop Detection Telemetry** - Log all loop-breaking events to the event bus and surface them in status
+- [x] **Phase 83: Planning Depth System** - Add light/standard/deep planning depth that controls task decomposition granularity
+- [x] **Phase 84: Verification Depth Extension** - Extend verification depth from 2 levels (light/heavy) to 3 levels (light/standard/heavy)
+- [x] **Phase 85: Smart Depth Defaults** - Auto-select planning and verification depth from phase position and code change risk
+- [x] **Phase 86: Depth Selection UI and Persistence** - Present smart defaults to user at plan time and persist depths in the build packet
+- [x] **Phase 87: Fix Continue Depth Persistence** - Close DEPTH-05 gap: continue reads persisted verification depth and honors --verification-depth flag
+
+</details>
 
 ## Phase Details
 
@@ -199,115 +200,14 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
 
 </details>
 
-### Phase 80: Build/Continue Loop Prevention
-**Goal**: Build and continue commands never enter infinite retry cycles -- failed watchers are auto-skipped, recovery suggestions don't loop back, and build wave retries are tracked and escalated
-**Depends on**: Nothing (first phase of v1.12)
-**Requirements**: LOOP-01, LOOP-02, LOOP-03
-**Success Criteria** (what must be TRUE):
-  1. When `/ant-continue` spawns a watcher that fails N consecutive times (not timeouts), the watcher is auto-skipped on subsequent continue runs with a clear message
-  2. When `/ant-continue` suggests a recovery command, running that recovery command does not loop back to `/ant-continue` with identical blocking state
-  3. When `/ant-build` dispatches a worker that fails, the failure is tracked and the worker is escalated (not silently re-dispatched in the same wave)
-**Plans**: 3 plans
+### Phase Details
 
-Plans:
-- [x] 80-01-PLAN.md -- Watcher failure tracking with auto-skip (LOOP-01) and recovery command loop prevention (LOOP-02)
-- [x] 80-02-PLAN.md -- Circuit breaker edge-case validation tests (LOOP-03)
+<details>
+<summary>v1.0 through v1.12 Phase Details (archived)</summary>
 
-### Phase 81: Plan and Lifecycle Loop Safety
-**Goal**: Plans cannot contain circular dependencies, and lifecycle commands always suggest a different recovery action than the command that just failed
-**Depends on**: Phase 80 (loop prevention patterns established)
-**Requirements**: LOOP-04, LOOP-05
-**Success Criteria** (what must be TRUE):
-  1. When `/ant-plan` generates a phase plan, circular dependency chains (A depends on B, B depends on A) are detected and rejected with an error
-  2. When `/ant-seal`, `/ant-entomb`, `/ant-status`, or `/ant-resume` encounters an error, the suggested next step is a different command -- never "re-run the same command"
-**Plans**: 3 plans
+All prior milestone phase details are archived. See MILESTONES.md for accomplishment summaries.
 
-Plans:
-- [x] 81-01-PLAN.md -- Cycle detection on task dependency graphs with plan validation gate (LOOP-04)
-- [x] 81-02-PLAN.md -- Recovery engine for lifecycle commands with command exclusion filter (LOOP-05)
-
-### Phase 82: Loop Detection Telemetry
-**Goal**: All loop-breaking events are logged to the colony event bus and visible in `/ant-status`, so users can see when and why the system intervened
-**Depends on**: Phase 80, Phase 81 (loop breakers must exist before they can emit telemetry)
-**Requirements**: LOOP-06
-**Success Criteria** (what must be TRUE):
-  1. When a loop is detected and broken (watcher skip, recovery redirect, worker escalation, circular dep rejection, lifecycle recovery), an event is published to the colony event bus with loop type, detection signal, and action taken
-  2. `/ant-status` surfaces recent loop-break events in a dedicated section
-**Plans**: 3 plans
-
-Plans:
-- [x] 82-01-PLAN.md -- Event infrastructure: extend CeremonyPayload, add CeremonyTopicLoopBreak, create emitLoopBreakEvent, update trimCeremonyPayload
-- [x] 82-02-PLAN.md -- Wire five emission calls and add Loop Safety section to /ant-status
-
-### Phase 83: Planning Depth System
-**Goal**: `/ant-plan` supports a planning depth setting (light/standard/deep) that controls how thoroughly tasks are decomposed
-**Depends on**: Phase 81 (plan command must be loop-safe before adding new features)
-**Requirements**: DEPTH-01
-**Success Criteria** (what must be TRUE):
-  1. When `/ant-plan` runs with `--planning-depth light`, the generated plan contains minimal tasks (coarse decomposition)
-  2. When `/ant-plan` runs with `--planning-depth standard`, the generated plan has normal task breakdown
-  3. When `/ant-plan` runs with `--planning-depth deep`, the generated plan has granular subtasks including edge cases
-**Plans**: 3 plans
-
-Plans:
-- [x] 83-01-PLAN.md -- PlanningDepth type, CLI flag, manifest integration, visual output, and runtime tests
-- [x] 83-02-PLAN.md -- YAML source and wrapper markdown updates for planning depth ceremony
-
-### Phase 84: Verification Depth Extension
-**Goal**: Verification depth expands from two levels (light/heavy) to three levels (light/standard/heavy), independent of planning depth
-**Depends on**: Phase 80 (continue must be loop-safe before extending verification)
-**Requirements**: DEPTH-02
-**Success Criteria** (what must be TRUE):
-  1. `/ant-continue` honors a `--verification-depth light` flag that produces a minimal review
-  2. `/ant-continue` honors a `--verification-depth standard` flag that produces a normal review
-  3. `/ant-continue` honors a `--verification-depth heavy` flag that produces a thorough review (same as the old `--heavy` behavior)
-  4. The new 3-level system is backward-compatible: existing light/heavy behavior is preserved
-**Plans**: 3 plans
-
-Plans:
-- [x] 84-01-PLAN.md -- VerificationDepth type, CLI flag, 3-level dispatch, visual rendering, colony-prime context, and tests
-- [x] 84-02-PLAN.md -- YAML source and wrapper markdown updates for verification depth ceremony
-
-### Phase 85: Smart Depth Defaults
-**Goal**: The system auto-selects planning depth and verification depth based on phase position and code change risk, without requiring user input
-**Depends on**: Phase 83 (planning depth exists), Phase 84 (verification depth extended)
-**Requirements**: DEPTH-03
-**Success Criteria** (what must be TRUE):
-  1. The final phase in a milestone automatically gets heavier planning and verification depth than intermediate phases
-  2. Phases touching security-critical paths (auth, secrets, permissions) automatically get heavier depth
-  3. Phases touching high-blast-radius files (cmd/ core runtime, state mutations) automatically get heavier depth
-  4. Early phases in a milestone default to lighter depths
-**Plans**: TBD
-
-### Phase 86: Depth Selection UI and Persistence
-**Goal**: At `/ant-plan` start, users see the smart default for both depths and can accept or override either, and the selected verification depth persists into the build packet for `/ant-continue`
-**Depends on**: Phase 85 (smart defaults exist to present)
-**Requirements**: DEPTH-04, DEPTH-05
-**Success Criteria** (what must be TRUE):
-  1. When `/ant-plan` runs, the user is shown the smart defaults for planning depth and verification depth before plan generation
-  2. The user can accept both defaults with a single confirmation, or override either depth individually
-  3. The verification depth selected at plan time is stored in the build packet JSON
-  4. `/ant-continue` reads the verification depth from the build packet and uses it without requiring the user to re-specify
-**Plans**: 3 plans
-
-Plans:
-- [x] 86-01-PLAN.md -- Verification depth flag, smart resolver, depth selection banner, and plan result map enrichment (DEPTH-04)
-- [x] 86-02-PLAN.md -- Build manifest ReviewDepth persistence and build stage marker depth display (DEPTH-04, DEPTH-05)
-- [x] 86-03-PLAN.md -- Gap closure: add missing depth keys to fresh plan generation result map (DEPTH-04)
-
-### Phase 87: Fix Continue Depth Persistence (Gap Closure)
-**Goal**: Continue command reads persisted verification depth from ColonyState and honors --verification-depth flag, closing DEPTH-05 gap
-**Depends on**: Phase 86 (depth persistence infrastructure exists but is incomplete in continue)
-**Requirements**: DEPTH-05
-**Gap Closure**: Closes DEPTH-05 unsatisfied requirement and plan->continue flow gap from v1.12 audit
-**Success Criteria** (what must be TRUE):
-  1. When `/ant-continue` runs, it reads `state.VerificationDepth` (persisted by plan) and passes it to `resolveVerificationDepth`
-  2. When user sets `--verification-depth heavy` at plan time, continue dispatches the same heavy review workers (not smart default)
-  3. The `--verification-depth` flag on the continue command is either wired (read in RunE) or removed if superseded by state persistence
-**Plans**: 1 plan
-
-Plans:
-- [x] 87-01-PLAN.md -- Wire persisted verification depth into continue flow with tests (DEPTH-05)
+</details>
 
 ## Progress
 
