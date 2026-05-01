@@ -54,9 +54,9 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 
 ### Hive Learning Foundation
 
-- [ ] **HIVE-01**: Aether-native learning concepts mapped from Hermes, with MIT notice if code is referenced (AAC-019)
-- [ ] **HIVE-02**: Colony memory store supports add, replace, remove, compact with configurable character/token budgets (AAC-020)
-- [ ] **HIVE-03**: Colony memory injected into init/oracle/worker prompts as frozen snapshot; failed/empty builds never create durable memory (AAC-020)
+- [x] **HIVE-01**: Aether-native learning concepts mapped from Hermes, with MIT notice if code is referenced (AAC-019)
+- [x] **HIVE-02**: Colony memory store supports add, replace, remove, compact with configurable character/token budgets (AAC-020)
+- [x] **HIVE-03**: Colony memory injected into init/oracle/worker prompts as frozen snapshot; failed/empty builds never create durable memory (AAC-020)
 - [ ] **HIVE-04**: SQLite colony.db (WAL mode) with tables for runs, workers, gates, memories, skills, decisions, trajectories, and schema_version (AAC-021)
 - [ ] **HIVE-05**: FTS5 search indexes for worker summaries, gate failures, decisions, and memory text via aether hive search (AAC-021)
 - [ ] **HIVE-06**: Schema migrations are versioned, idempotent, and migration-safe (AAC-021)
@@ -72,20 +72,20 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 
 ### Learning Pipeline
 
-- [ ] **LRN-01**: Post-run learning triggered only after verified successful outcomes; failed/empty/phantom runs logged as transient only (AAC-024)
-- [ ] **LRN-02**: Every durable learning entry includes evidence: source run ID, worker, files touched, tests/gates passed, confidence, scope (AAC-024)
-- [ ] **LRN-03**: Promotion from repo to hive requires privacy scan and explicit user approval (AAC-024)
-- [ ] **LRN-04**: Learned context injected into init/oracle/worker prompts ranked by phase, caste, file path, recency, confidence (AAC-025)
-- [ ] **LRN-05**: Repo isolation — two repos do not see each other's repo-local memory; hive entries are generic and redacted (AAC-026)
-- [ ] **LRN-06**: Export/import of repo learning packs with manifest, redaction report, and preview-before-apply (AAC-026)
+- [x] **LRN-01**: Post-run learning triggered only after verified successful outcomes; failed/empty/phantom runs logged as transient only (AAC-024)
+- [x] **LRN-02**: Every durable learning entry includes evidence: source run ID, worker, files touched, tests/gates passed, confidence, scope (AAC-024)
+- [x] **LRN-03**: Promotion from repo to hive requires privacy scan and explicit user approval (AAC-024)
+- [x] **LRN-04**: Learned context injected into init/oracle/worker prompts ranked by phase, caste, file path, recency, confidence (AAC-025)
+- [x] **LRN-05**: Repo isolation — two repos do not see each other's repo-local memory; hive entries are generic and redacted (AAC-026)
+- [x] **LRN-06**: Export/import of repo learning packs with manifest, redaction report, and preview-before-apply (AAC-026)
 
 ### Privacy & Auto-Skills
 
 - [x] **PRIV-01**: Privacy/secret scan runs before any memory, skill, trajectory, or promotion write (AAC-029)
 - [x] **PRIV-02**: Common credential files, API keys, tokens, SSH keys, env files, and local user paths are blocked or redacted (AAC-029)
-- [ ] **PRIV-03**: Learning entries classified as repo-local, hive-shareable, blocked, or needs-user-approval (AAC-029)
-- [ ] **PRIV-04**: Trajectory records stored locally with strict redaction; export requires approval and redaction report (AAC-028)
-- [ ] **PRIV-05**: Learning writes can be disabled by config and by per-command flag (AAC-029)
+- [x] **PRIV-03**: Learning entries classified as repo-local, hive-shareable, blocked, or needs-user-approval (AAC-029)
+- [x] **PRIV-04**: Trajectory records stored locally with strict redaction; export requires approval and redaction report (AAC-028)
+- [x] **PRIV-05**: Learning writes can be disabled by config and by per-command flag (AAC-029)
 - [ ] **AUTO-01**: Auto-created repo-local skills after difficult verified tasks (configurable: off/propose/auto, default propose) (AAC-031)
 - [ ] **AUTO-02**: Hard rejection rules prevent skill creation from failed, zero-modification, phantom, unresolved vetoed, or secret-containing runs (AAC-031)
 - [ ] **AUTO-03**: Auto-created skills include source evidence, verification steps, confidence score, privacy scan result, and repo fingerprint (AAC-031)
@@ -155,9 +155,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAT-04 | Phase 92 | Pending |
 | PLAT-05 | Phase 92 | Pending |
 | PLAT-06 | Phase 92 | Pending |
-| HIVE-01 | Phase 90 | Pending |
-| HIVE-02 | Phase 90 | Pending |
-| HIVE-03 | Phase 90 | Pending |
+| HIVE-01 | Phase 90 | Complete |
+| HIVE-02 | Phase 90 | Complete |
+| HIVE-03 | Phase 90 | Complete |
 | HIVE-04 | Phase 91 | Pending |
 | HIVE-05 | Phase 91 | Pending |
 | HIVE-06 | Phase 91 | Pending |
@@ -167,17 +167,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SKIL-04 | Phase 91 | Pending |
 | SKIL-05 | Phase 91 | Pending |
 | SKIL-06 | Phase 91 | Pending |
-| LRN-01 | Phase 90 | Pending |
-| LRN-02 | Phase 90 | Pending |
-| LRN-03 | Phase 90 | Pending |
-| LRN-04 | Phase 90 | Pending |
-| LRN-05 | Phase 90 | Pending |
-| LRN-06 | Phase 90 | Pending |
+| LRN-01 | Phase 90 | Complete |
+| LRN-02 | Phase 90 | Complete |
+| LRN-03 | Phase 90 | Complete |
+| LRN-04 | Phase 90 | Complete |
+| LRN-05 | Phase 90 | Complete |
+| LRN-06 | Phase 90 | Complete |
 | PRIV-01 | Phase 88 | Complete |
 | PRIV-02 | Phase 88 | Complete |
-| PRIV-03 | Phase 90 | Pending |
-| PRIV-04 | Phase 90 | Pending |
-| PRIV-05 | Phase 90 | Pending |
+| PRIV-03 | Phase 90 | Complete |
+| PRIV-04 | Phase 90 | Complete |
+| PRIV-05 | Phase 90 | Complete |
 | AUTO-01 | Phase 91 | Pending |
 | AUTO-02 | Phase 91 | Pending |
 | AUTO-03 | Phase 91 | Pending |
