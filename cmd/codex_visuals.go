@@ -1160,7 +1160,7 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	b.WriteString("Phase: ")
 	b.WriteString(phase.Name)
 	b.WriteString("\n")
-	b.WriteString(renderReviewDepthLineWithReason(reviewDepth, phase.ID, len(state.Plan.Phases), phase, true))
+	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("Objective: ")
@@ -1214,7 +1214,7 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 	b.WriteString("Phase: ")
 	b.WriteString(phase.Name)
 	b.WriteString("\n")
-	b.WriteString(renderReviewDepthLineWithReason(reviewDepth, phase.ID, len(state.Plan.Phases), phase, true))
+	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("Objective: ")
