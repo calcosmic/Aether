@@ -8,11 +8,11 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent/curation"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/graph"
-	"github.com/calcosmic/Aether/pkg/memory"
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/spf13/cobra"
 )
 
-func pipelineConfigForStore() memory.PipelineConfig {
+func pipelineConfigForStore() learn.PipelineConfig {
 	colonyName := "unknown"
 	if store != nil {
 		var state struct {
@@ -22,7 +22,7 @@ func pipelineConfigForStore() memory.PipelineConfig {
 			colonyName = state.ColonyName
 		}
 	}
-	return memory.PipelineConfig{
+	return learn.PipelineConfig{
 		ColonyName: colonyName,
 		QueenPath:  "QUEEN.md",
 	}
@@ -214,17 +214,17 @@ var consolidationPhaseEndCmd = &cobra.Command{
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 		bus := events.NewBus(store, events.DefaultConfig())
-		pipeline := memory.NewPipeline(store, bus, pipelineConfigForStore())
+		pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
 
 		ctx, cancel := timeoutCtx(cmd)
 		defer cancel()
 
 		var (
-			result *memory.ConsolidationResult
+			result *learn.ConsolidationResult
 			err    error
 		)
 		if dryRun {
-			service := memory.NewConsolidationService(store, bus, "QUEEN.md", pipelineConfigForStore().ColonyName)
+			service := learn.NewConsolidationService(store, bus, "QUEEN.md", pipelineConfigForStore().ColonyName)
 			result, err = service.Run(ctx)
 		} else {
 			result, err = pipeline.RunConsolidation(ctx)
@@ -300,7 +300,7 @@ var consolidationSealCmd = &cobra.Command{
 		}
 
 		// Step 2: Run consolidation (decay + archive)
-		pipeline := memory.NewPipeline(store, bus, pipelineConfigForStore())
+		pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
 		consResult, err := pipeline.RunConsolidation(ctx)
 		if err != nil {
 			steps = append(steps, stepInfo{Name: "consolidation", Success: false, Summary: err.Error()})
