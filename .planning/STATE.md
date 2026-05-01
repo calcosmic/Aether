@@ -4,14 +4,14 @@ milestone: v1.12
 milestone_name: Safe Colony
 status: executing
 stopped_at: Phase 86 context gathered
-last_updated: "2026-05-01T11:39:35.613Z"
+last_updated: "2026-05-01T12:33:18.390Z"
 last_activity: 2026-05-01 -- Phase 86 execution started
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 14
+  total_plans: 15
   completed_plans: 9
-  percent: 64
+  percent: 60
 ---
 
 # Project State
@@ -78,4 +78,4 @@ Last session: --stopped-at
 Stopped at: Phase 86 context gathered
 Resume file: --resume-file
 
-**Planned Phase:** 86 (Depth Selection UI and Persistence) — 2 plans — 2026-05-01T11:38:24.977Z
+**Planned Phase:** 86 (depth-selection-ui-and-persistence) — 3 plans — 2026-05-01T12:33:18.382Z
