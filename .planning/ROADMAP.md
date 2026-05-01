@@ -290,9 +290,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 86-01-PLAN.md -- Verification depth flag, smart resolver, depth selection banner, and plan result map enrichment (DEPTH-04)
-- [ ] 86-02-PLAN.md -- Build manifest ReviewDepth persistence and build stage marker depth display (DEPTH-04, DEPTH-05)
-- [ ] 86-03-PLAN.md -- Gap closure: add missing depth keys to fresh plan generation result map (DEPTH-04)
+- [x] 86-01-PLAN.md -- Verification depth flag, smart resolver, depth selection banner, and plan result map enrichment (DEPTH-04)
+- [x] 86-02-PLAN.md -- Build manifest ReviewDepth persistence and build stage marker depth display (DEPTH-04, DEPTH-05)
+- [x] 86-03-PLAN.md -- Gap closure: add missing depth keys to fresh plan generation result map (DEPTH-04)
 
 ## Progress
 
@@ -317,4 +317,4 @@ Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86
 | 83. Planning Depth System | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
 | 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
-| 86. Depth Selection UI and Persistence | v1.12 | 0/2 | Not started | - |
+| 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete    | 2026-05-01 |
