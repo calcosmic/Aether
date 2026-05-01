@@ -1,188 +1,416 @@
 # Technology Stack
 
-**Project:** Aether v1.11 -- Self-Hosting Cleanup, Smart Init Restoration, Platform Hardening, UX Improvements
-**Researched:** 2026-04-28
-**Confidence:** HIGH (all findings from direct source code inspection)
+**Project:** Aether v1.13 -- Recovery Hardening & Hive Learning
+**Researched:** 2026-05-01
+**Confidence:** HIGH (all findings from source code inspection, Context7 docs, and verified web sources)
 
 ## Executive Summary
 
-v1.11 requires zero new external Go dependencies. All four feature areas -- self-hosting cleanup, Smart Init restoration, platform hardening, and UX improvements -- build on patterns that already exist in the codebase. The Go runtime (`cmd/`) already has `init-research` with 10 pheromone suggestion patterns, governance detection, charter generation, and git history analysis. The publish/update pipeline already handles companion file sync across 3 platforms with stale-publish detection. The gap is integration: `suggest-analyze` exists only as a documented-but-unimplemented command, and the init ceremony in the wrappers calls `init-research` but the Go runtime `init` command does not invoke it directly.
+v1.13 requires exactly **one new external dependency**: `modernc.org/sqlite` for the hive learning layer. Everything else -- process groups, confidence scoring, privacy scanning, skill lifecycle, trajectory compression, and the learning policy engine -- builds on existing Go stdlib patterns already proven in the codebase. The process group infrastructure already exists in `pkg/codex/process_group_unix.go` and `cmd/verification_process_group_unix.go`. The confidence scoring engine already exists in `pkg/memory/trust.go` with 40/35/25 weighted rubrics, 7 trust tiers, and half-life decay. The skill system already has parse, diff, index, detect, match, and inject -- missing only create/patch/archive/promote lifecycle operations. The privacy gate can extend the existing `check-antipattern` command in `cmd/security_cmds.go` rather than importing gitleaks or trufflehog.
 
-## Recommended Stack
+## New Dependencies
 
-### Core Framework (No Changes)
+| Dependency | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `modernc.org/sqlite` | v1.42.1 | Colony memory store with FTS5 recall | Pure Go (no CGO), supports FTS5 out of the box, standard `database/sql` interface. Only new dependency needed for v1.13. |
+| `modernc.org/libc` | (matched to sqlite) | Transitive dependency of modernc.org/sqlite | Must match the exact version in modernc.org/sqlite's own go.mod. |
+
+**Why modernc.org/sqlite over alternatives:**
+
+| Criterion | modernc.org/sqlite | mattn/go-sqlite3 | zombiezen/go-sqlite |
+|-----------|-------------------|-------------------|---------------------|
+| CGO required | No | Yes | No |
+| FTS5 support | Built-in | Build tag needed | No (low-level wrapper) |
+| database/sql | Yes | Yes | No (custom API) |
+| Cross-compile | Trivial | Hard | Trivial |
+| Maintenance | Active (v1.42.1, Feb 2026) | Active | Active |
+| Aether fit | Single binary, no C toolchain | Requires gcc/clang | Different API surface |
+
+**Confidence: HIGH** -- FTS5 support confirmed via Context7 documentation and multiple web sources. The driver imports as `_ "modernc.org/sqlite"` and uses `sql.Open("sqlite", path)`.
+
+## No-Change Stack (Existing)
+
+### Core Framework
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| Go | 1.26.1 | Runtime language | Existing `go.mod` target. No version change needed. |
-| `github.com/spf13/cobra` | v1.10.2 | CLI subcommand registration | All new commands (`aether audit`, `aether suggest-analyze`, `aether suggest-approve`) register via `rootCmd.AddCommand()` in `init()`. |
-| `pkg/storage.Store` | existing | File-locked JSON persistence | All state mutations use `SaveJSON`/`LoadJSON`/`AtomicWrite` with cross-process file locking. |
-| `encoding/json` | stdlib | Marshal/unmarshal | Standard pattern across every command. |
-| `os` / `path/filepath` / `io/fs` | stdlib | Directory walking, file operations | Already used by `init_research.go` for the same directory scanning patterns needed for audit. |
+| Go | 1.26.1 | Runtime language | Existing go.mod target. No version change needed. |
+| `github.com/spf13/cobra` | v1.10.2 | CLI subcommand registration | All new hive/learning commands register via `rootCmd.AddCommand()`. |
+| `pkg/storage.Store` | existing | File-locked JSON persistence | Colony state, pheromones, and session data remain on JSON. SQLite is only for the hive learning store, not a replacement. |
+| `pkg/events.Bus` | existing | Typed event bus with JSONL persistence | Learning events publish through existing bus. New topics (`hive.learn`, `hive.promote`) extend the existing pattern. |
+| `pkg/memory` | existing | Trust scoring, promotion pipeline, instinct storage | Confidence engine already has 40/35/25 weighted rubrics, 7 tiers, half-life decay. Extended, not replaced. |
 
-### No New Dependencies
+### Existing Pattern Reuse by Feature
 
-| Category | Existing Coverage | New Dependency Needed |
-|----------|-------------------|----------------------|
-| Directory scanning | `init_research.go` `filepath.WalkDir` with skip lists | No |
-| File fingerprinting | `pheromone_write.go` `sha256Sum` content hashing | No |
-| CLI output | `helpers.go` `outputOK`/`outputError`/`outputWorkflow` | No |
-| Visual rendering | `codex_visuals.go` ANSI caste colors, stage markers | No |
-| JSON structured output | All commands use `map[string]interface{}` payloads | No |
-| File locking | `pkg/storage/store.go` `FileLocker` | No |
+| New Feature | Existing Code to Extend | What's New |
+|-------------|------------------------|------------|
+| Process groups | `pkg/codex/process_group_unix.go`, `cmd/verification_process_group_unix.go` | Heartbeat tracking, PID registry, stale worker detection. Infrastructure already has `Setpgid: true`, SIGTERM/SIGKILL escalation, process existence checks. |
+| Confidence scoring | `pkg/memory/trust.go` (Calculate, Decay, Tier), `pkg/memory/promote.go` | Oracle confidence target loop. The 40/35/25 weighted rubric (source/evidence/activity) already produces scores 0.2-1.0 with 7 named tiers. The Oracle loop just iterates until target threshold is met. |
+| Privacy/secret scanning | `cmd/security_cmds.go` (check-antipattern, 6 patterns) | Extend existing regex scanner with ~15 additional patterns (API key prefixes, tokens, credentials). No new library needed -- the existing scanner already does per-line regex matching with critical/warning classification. |
+| Skill lifecycle | `cmd/skills.go` (parse, index, detect, match, inject, diff) | Add create (write SKILL.md with frontmatter), patch (update existing), archive (move to `.aether/skills/archive/`), promote (user domain to shipped). All file operations, no new deps. |
+| Trajectory recording | `pkg/events/event.go` (Event struct, JSONL persistence), `cmd/recovery_snapshot.go` | Trajectory is an ordered sequence of phase snapshots stored in SQLite. Compression is time-based: merge consecutive identical-state snapshots, keep state-change boundaries. Uses stdlib only. |
+| Learning policy engine | `pkg/memory/promote.go` (PromoteService), `pkg/memory/consolidate.go` | Evidence validation rules are Go structs with thresholds, not a separate rule engine library. The policy is: observation must have trust score >= threshold, evidence type must be test_verified or multi_phase, and content must pass dedup. All implementable in ~100 lines of Go. |
 
-### Feature 1: Self-Hosting Cleanup (`aether audit`)
+## Feature 1: SQLite Colony Memory Store with FTS5
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| New command: `cmd/audit.go` | new | Scan repo for stale self-hosting artifacts | New cobra subcommand following `cmd/autofix.go` pattern (~100-150 lines). Walks known artifact locations, reports findings as structured JSON. |
-| `filepath.WalkDir` | stdlib | Recursive directory scanning | Same pattern as `init_research.go` lines 495-530. Extended skip list to avoid `node_modules`, `.git`, etc. |
-| `os.Stat` + size checks | stdlib | Detect stale/oversized artifacts | Compare file sizes and ages against thresholds (e.g., chambers > 6 months, oracle archives, stale build data). |
-| `os.RemoveAll` (with confirmation) | stdlib | Remove identified artifacts | Follows `autofix.go` checkpoint-then-remove pattern. Audit reports, `aether audit --clean` removes with backup. |
-| `cmd/autofix.go` checkpoint pattern | existing | Safety net before destructive cleanup | Already has `autofix-checkpoint` / `autofix-rollback` for COLONY_STATE.json. Audit cleanup can use same pattern for any files it removes. |
+### Schema Design
 
-**Artifact locations to scan (from direct inspection):**
+```sql
+-- Colony-scoped memory entries
+CREATE TABLE IF NOT EXISTS memories (
+    id          TEXT PRIMARY KEY,         -- mem_{unix}_{6hex}
+    colony_id   TEXT NOT NULL,            -- repo-scoped
+    category    TEXT NOT NULL,            -- learning | instinct | pheromone_skill | trajectory
+    content     TEXT NOT NULL,
+    metadata    TEXT DEFAULT '{}',        -- JSON blob for domain, confidence, provenance
+    trust_score REAL DEFAULT 0.0,
+    confidence  REAL DEFAULT 0.0,
+    source_type TEXT DEFAULT '',
+    evidence    TEXT DEFAULT '',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    expires_at  TEXT                     -- NULL = never expires
+);
 
-| Location | Size | Description | Action |
-|----------|------|-------------|--------|
-| `.aether/chambers/` | 6.3M | 18 entombed colony archives | Report age, offer selective removal |
-| `.aether/data/build/` | varies | Build artifacts from old phases | Report, safe to clean if colony not active |
-| `.aether/data/backups/` | varies | COLONY_STATE backups | Report age, offer removal |
-| `.aether/data/*.bak*` | small | Rotated backup files | Safe to remove |
-| `.aether/data/spawn-tree-archive/` | varies | Old spawn tree snapshots | Report, offer removal |
-| `.aether/data/learning-observations.json.bak.*` | small | Old observation backups | Safe to remove |
-| `.aether/data/session.json.bak*` | small | Session backups | Safe to remove |
-| `.aether/data/pr-context-cache.json` | small | Stale context cache | Safe to remove |
-| `.aether/data/watch-progress.txt` / `watch-status.txt` | small | Stale watch output | Safe to remove |
-| `.aether/dreams/` | small | Local session notes | Never remove (user content) |
-| `.aether/oracle/archive/` | 1.6M | Deep research archives | Report, offer selective removal |
+CREATE INDEX IF NOT EXISTS idx_memories_colony ON memories(colony_id);
+CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(colony_id, category);
+CREATE INDEX IF NOT EXISTS idx_memories_confidence ON memories(colony_id, confidence);
+CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(colony_id, created_at);
 
-### Feature 2: Smart Init Restoration
+-- FTS5 for content recall
+CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+    content,
+    category,
+    content=memories,
+    content_rowid=rowid
+);
 
-The Go runtime already has most of the Smart Init intelligence. The gap is that `aether init` does not call `init-research` internally, and `suggest-analyze` / `suggest-approve` commands do not exist.
+-- Triggers to keep FTS in sync
+CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
+    INSERT INTO memories_fts(rowid, content, category) VALUES (new.rowid, new.content, new.category);
+END;
+CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
+    INSERT INTO memories_fts(memories_fts, rowid, content, category) VALUES('delete', old.rowid, old.content, old.category);
+END;
+CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
+    INSERT INTO memories_fts(memories_fts, rowid, content, category) VALUES('delete', old.rowid, old.content, old.category);
+    INSERT INTO memories_fts(rowid, content, category) VALUES (new.rowid, new.content, new.category);
+END;
+```
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `cmd/init_cmd.go` (modify) | existing | Add `--smart` flag that invokes init-research before state creation | Currently `init` creates COLONY_STATE.json directly. With `--smart`, it first runs `initResearchCmd` logic internally, outputs charter for approval, then creates state. |
-| `cmd/init_research.go` (modify) | existing | Export scan functions as reusable Go functions (not just CLI command) | `detectGovernance()`, `analyzeGitHistory()`, `generatePheromoneSuggestions()`, `generateCharter()` already exist as internal functions. They need to be callable from `init_cmd.go` without going through the cobra command. Currently they are -- they are package-level functions, not methods on a struct. **No code change needed.** |
-| New command: `cmd/suggest.go` | new | `aether suggest-analyze` and `aether suggest-approve` subcommands | ~200-300 lines. `suggest-analyze` reuses `generatePheromoneSuggestions()` from `init_research.go` plus adds build-specific patterns. `suggest-approve` reads suggestions and calls `pheromone-write` for approved ones. |
-| `.claude/commands/ant/build-context.md` (modify) | existing | Uncomment suggest-analyze step in build playbook | Currently lines 149-181 deprecate suggest-analyze. Remove deprecation guard and call the real command. |
+### Integration Pattern
 
-**Smart Init ceremony flow (Go-side):**
+```go
+// pkg/hive/store.go
+package hive
+
+import (
+    "database/sql"
+    _ "modernc.org/sqlite"
+)
+
+type Store struct {
+    db *sql.DB
+}
+
+func Open(dbPath string) (*Store, error) {
+    db, err := sql.Open("sqlite",
+        dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
+    // ...
+}
+```
+
+**Key design decisions:**
+- **WAL mode** for concurrent read access (build workers read, continue writes)
+- **busy_timeout(5000)** to handle concurrent write contention gracefully
+- **External content FTS5** (`content=memories`) to avoid data duplication -- the content table is authoritative, FTS is an index
+- **Repo-scoped** via `colony_id` column -- each colony gets isolated recall, no cross-colony leakage
+- **DB location**: `~/.aether/hive/colony-memory.db` (hub-level, shared across colonies on same machine)
+
+### Query Patterns
+
+```sql
+-- Full-text recall
+SELECT m.* FROM memories m
+JOIN memories_fts f ON m.rowid = f.rowid
+WHERE f.memories_fts MATCH ? AND m.colony_id = ?
+ORDER BY bm25(memories_fts) LIMIT 20;
+
+-- High-confidence instincts for a colony
+SELECT * FROM memories
+WHERE colony_id = ? AND category = 'instinct' AND confidence >= 0.8
+ORDER BY confidence DESC, updated_at DESC;
+
+-- Recent learning observations
+SELECT * FROM memories
+WHERE colony_id = ? AND category = 'learning'
+ORDER BY created_at DESC LIMIT 50;
+```
+
+**Confidence: HIGH** -- FTS5 syntax verified via Context7 docs and SQLite official documentation. External content pattern verified.
+
+## Feature 2: Process Group Management
+
+### Existing Infrastructure (No Changes Needed)
+
+The codebase already has complete process group management:
+
+| File | What It Does |
+|------|-------------|
+| `pkg/codex/process_group_unix.go` | `workerSysProcAttr()` returns `Setpgid: true`, `terminateWorkerProcess()` sends SIGTERM to process group, `killWorkerProcess()` sends SIGKILL, `workerProcessExists()` checks via `ps`, `workerProcessCommandLine()` reads command line |
+| `pkg/codex/process_group_windows.go` | Windows stubs (no-op, correct for Windows) |
+| `cmd/verification_process_group_unix.go` | `configureVerificationCommandProcessGroup()` and `terminateVerificationCommandProcessGroup()` for verification subprocess isolation |
+| `pkg/codex/process_group_unix_test.go` | Test verifying `Setpgid: true` is set |
+
+### What to Add
+
+| Component | Location | Pattern |
+|-----------|----------|---------|
+| PID registry | `pkg/codex/pid_registry.go` (new) | Map of worker name to PID, persisted to `worker-pids.json` via existing `pkg/storage.Store` |
+| Heartbeat checker | `pkg/codex/heartbeat.go` (new) | Goroutine that polls `workerProcessExists()` every N seconds, marks workers as stale if not responding |
+| Stale cleanup | `cmd/` (extend existing recover or add new subcommand) | On colony start, check PID registry against running processes, clean orphaned entries |
+| Graceful shutdown | Extend existing `terminateWorkerProcess()` | Add timeout: SIGTERM, wait 5s, then SIGKILL. Already has the two-signal pattern conceptually. |
+
+**Confidence: HIGH** -- All primitives exist. This is assembly work, not new infrastructure.
+
+## Feature 3: Confidence Scoring with Weighted Rubrics
+
+### Existing Engine (No Changes to Core)
+
+`pkg/memory/trust.go` already implements the full scoring system:
 
 ```
-aether init --smart "Build feature X"
-  |
-  +-- Run init-research scan (reuse existing functions)
-  |   |-- detectGovernance() -> linters, CI, tests, formatters
-  |   |-- analyzeGitHistory() -> commits, contributors, branch
-  |   |-- generatePheromoneSuggestions() -> 10 patterns
-  |   |-- generateCharter() -> intent, vision, governance, goals
-  |   +-- detectPriorColonies() -> archived colony count
-  |
-  +-- Output charter + suggestions as structured JSON
-  |
-  +-- Wait for approval (interactive or --auto-approve flag)
-  |
-  +-- Write approved pheromones via pheromone-write
-  |
-  +-- Create COLONY_STATE.json (existing init logic)
+raw_score = 0.4 * source_score + 0.35 * evidence_score + 0.25 * activity_score
+score = max(0.2, raw_score)
+
+Source weights:  user_feedback=1.0, error_resolution=0.9, success_pattern=0.8, observation=0.6, heuristic=0.4
+Evidence weights: test_verified=1.0, multi_phase=0.9, single_phase=0.7, anecdotal=0.4
+Activity: 0.5^(days/60)  -- 60-day half-life
+
+Tiers: canonical(>=0.9), trusted(>=0.8), established(>=0.7), emerging(>=0.6), provisional(>=0.45), suspect(>=0.3), dormant(<0.3)
 ```
 
-### Feature 3: Platform Hardening
+### Oracle Confidence Target Loop
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `cmd/platform_sync.go` (modify) | existing | Add parity validation to `aether publish` | Already has `repoSyncPairs()` defining 9 sync pairs. Add a validation pass that compares command/agent counts across Claude, OpenCode, and Codex after publish. Same counting logic as `checkStalePublish()` in `update_cmd.go` lines 403-472. |
-| `cmd/command_parity_test.go` (existing) | existing | Already tests command count parity | Verify this test covers all 3 platforms, not just Claude. Currently tests `expectedClaudeCommandCount = 50` and `expectedOpenCodeCommandCount = 50`. |
-| Error wrapping with `fmt.Errorf` | stdlib | Consistent error messages across platforms | Some commands use bare `outputError`, others use `fmt.Errorf`. Standardize on wrapping chain with `%w` for debugging. |
-| `cmd/codex_worker_artifacts.go` (existing) | existing | Codex worker cleanup | Already handles Codex-specific worker artifact management. Verify it handles all error cases gracefully. |
+The Oracle loop (AAC-003) iterates research until confidence meets a user-settable target:
 
-**Current parity status (verified by direct inspection):**
+```go
+// cmd/oracle_loop.go -- extend existing
+func runOracleWithTarget(ctx context.Context, query string, target float64, maxIterations int) (OracleResult, error) {
+    for i := 0; i < maxIterations; i++ {
+        result := runSingleOraclePass(ctx, query)
+        if result.Confidence >= target {
+            return result, nil
+        }
+        // Refine query based on gaps
+        query = refineQuery(query, result.Gaps)
+    }
+    return result, fmt.Errorf("confidence target %.2f not met after %d iterations", target, maxIterations)
+}
+```
 
-| Surface | Claude Code | OpenCode | Codex CLI | Status |
-|---------|-------------|----------|-----------|--------|
-| Slash commands | 50 | 50 | N/A (uses `aether` CLI) | PARITY |
-| Agent definitions | 26 | 26 | 26 | PARITY |
-| Build command | 125 lines (identical) | 125 lines (identical) | Go runtime | PARITY |
-| Continue command | identical | identical | Go runtime | PARITY |
-| Init command | calls `init-research` | calls `init-research` | needs `--smart` flag | GAP (Codex) |
-| suggest-analyze | documented but no Go impl | documented but no Go impl | no Go impl | MISSING |
-| Error format | `outputError` JSON | `outputError` JSON | Go runtime | CONSISTENT |
+**Confidence: HIGH** -- Core scoring engine exists and is battle-tested (2900+ tests). Oracle loop is new orchestration on top of existing primitives.
 
-### Feature 4: UX Improvements
+## Feature 4: Learning Policy Engine
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `cmd/codex_visuals.go` (modify) | existing | Add ANSI visual output for audit, smart-init, and suggest commands | Already has `casteColorMap`, `casteEmojiMap`, `casteLabelMap`, `casteIdentity()`, stage markers. New commands follow the same `render*Visual()` function pattern. |
-| `cmd/colony_prime_context.go` (modify) | existing | Add init-research findings as a colony-prime section | The section system supports arbitrary sections with priority ordering. An `init_context` section at low priority would inject detected governance and pheromone suggestions into worker prompts during the first build. |
-| Structured JSON output | existing | All commands use `outputOK`/`outputError`/`outputWorkflow` | New commands must use the same output contract for wrapper compatibility. |
+### Approach: Struct-Based Rules, Not a Rule Engine Library
 
-## New Files to Create
+No external rule engine library needed. The learning policy is a set of Go structs with threshold checks:
 
-| File | Purpose | Estimated Size | Pattern Source |
-|------|---------|----------------|----------------|
-| `cmd/audit.go` | `aether audit` + `aether audit --clean` commands for stale artifact detection and removal | ~200 lines | `cmd/autofix.go` (checkpoint pattern) + `cmd/init_research.go` (directory walking) |
-| `cmd/suggest.go` | `aether suggest-analyze` and `aether suggest-approve` subcommands | ~250 lines | `cmd/midden_cmds.go` (subcommand registration) + `cmd/init_research.go` (suggestion generation) |
+```go
+// pkg/hive/policy.go
+type LearningPolicy struct {
+    rules []LearningRule
+}
 
-## Files to Modify
+type LearningRule struct {
+    Name        string
+    Category    string  // "instinct" | "pheromone_skill" | "trajectory"
+    MinTrust    float64 // Minimum trust score to promote
+    MinEvidence string  // Required evidence type (test_verified, multi_phase, etc.)
+    MinObsCount int     // Minimum observation count
+    AutoPromote bool    // Whether promotion happens automatically
+}
 
-| File | Change | Risk |
-|------|--------|------|
-| `cmd/init_cmd.go` | Add `--smart` flag that runs init-research scan before state creation; output charter for approval; write approved pheromones | Medium -- modifies the init hot path, needs careful idempotency handling |
-| `cmd/init_research.go` | Add build-specific pheromone patterns to `generatePheromoneSuggestions()` (e.g., test coverage gaps, TODO density, large file detection) | Low -- additive function, no existing callers affected |
-| `.claude/commands/ant/build-context.md` | Remove suggest-analyze deprecation guard (lines 149-181), replace with real `aether suggest-analyze` call | Low -- already documented as the intended flow |
-| `.opencode/commands/ant/build-context.md` | Same as above | Low |
-| `cmd/codex_visuals.go` | Add `renderAuditVisual()`, `renderSmartInitVisual()`, `renderSuggestVisual()` functions | Low -- additive rendering functions, no existing callers affected |
-| `cmd/platform_sync.go` | Add post-publish parity validation (command count, agent count across all 3 platforms) | Low -- additive validation pass |
-| `cmd/command_parity_test.go` | Extend to cover Codex agent count (26) and Codex skill count (83) | Low -- additive test cases |
+// Default policies matching the existing system
+var DefaultPolicies = []LearningRule{
+    {Name: "instinct-promote", Category: "instinct", MinTrust: 0.6, MinEvidence: "single_phase", MinObsCount: 2, AutoPromote: true},
+    {Name: "hive-promote", Category: "instinct", MinTrust: 0.8, MinEvidence: "multi_phase", MinObsCount: 3, AutoPromote: true},
+    {Name: "skill-auto-create", Category: "pheromone_skill", MinTrust: 0.7, MinEvidence: "test_verified", MinObsCount: 4, AutoPromote: false},
+}
+```
+
+**Why not a rule engine library (Cedar, govaluate, etc.):**
+- Only 3-5 rules, all structurally identical (threshold checks)
+- Rules change infrequently (milestone boundaries, not runtime)
+- A rule engine adds complexity, binary size, and a new abstraction to learn
+- Go if-statements with struct-based rules are debuggable and testable
+
+**Confidence: HIGH** -- Pattern already used in `pkg/memory/promote.go` (capacity check, dedup check, trust threshold).
+
+## Feature 5: Privacy/Secret Scanning
+
+### Extend Existing Scanner
+
+The existing `cmd/security_cmds.go` has `check-antipattern` with 6 patterns across Swift, TypeScript, and shell. The hive learning store needs a privacy gate that prevents secrets from being stored as learning content.
+
+### Additional Patterns to Add
+
+| Pattern | Purpose | Severity |
+|---------|---------|----------|
+| `AKIA[0-9A-Z]{16}` | AWS access key | critical |
+| `ghp_[a-zA-Z0-9]{36}` | GitHub personal access token | critical |
+| `gho_[a-zA-Z0-9]{36}` | GitHub OAuth token | critical |
+| `ghs_[a-zA-Z0-9]{36}` | GitHub app token | critical |
+| `ghu_[a-zA-Z0-9]{36}` | GitHub user token | critical |
+| `sk-[a-zA-Z0-9]{48}` | OpenAI API key | critical |
+| `sk-ant-[a-zA-Z0-9-]{80}` | Anthropic API key | critical |
+| `xox[bposa]-[0-9]{10,13}-[a-zA-Z0-9]{24,}` | Slack token | critical |
+| `-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----` | Private key block | critical |
+| `password\s*[:=]\s*["'][^"']{8,}["']` | Hardcoded password | critical |
+| `(token|secret|api_key|apikey)\s*[:=]\s*["'][a-zA-Z0-9_-]{20,}["']` | Generic credential | warning |
+
+**Why not import gitleaks/trufflehog:**
+- Adding gitleaks as a dependency brings in 150+ transitive dependencies
+- The hive learning privacy gate only scans content being stored, not entire repos
+- A simple regex pass over learning content (a few KB per observation) is sufficient
+- False positives on learning content are acceptable (conservative: reject on match)
+
+**Confidence: HIGH** -- Pattern established in existing code. Extensions are well-known regex patterns from the secret scanning community.
+
+## Feature 6: Skill Lifecycle Management
+
+### Existing Operations (No Changes)
+
+| Operation | Command | Location |
+|-----------|---------|----------|
+| Parse frontmatter | `skill-parse-frontmatter` | `cmd/skills.go` |
+| Build index | `skill-index` | `cmd/skills.go` |
+| Detect matches | `skill-detect` | `cmd/skills.go` |
+| Match to worker | `skill-match` | `cmd/skills.go` |
+| Inject into prompt | `skill-inject` | `cmd/skills.go` |
+| Diff user vs shipped | `skill-diff` | `cmd/skills.go` |
+| Check if user-created | `skill-is-user-created` | `cmd/skills.go` |
+| Cache rebuild | `skill-cache-rebuild` | `cmd/skills.go` |
+
+### New Operations
+
+| Operation | Command | Implementation |
+|-----------|---------|----------------|
+| Create skill | `skill-create` | Write SKILL.md with YAML frontmatter to `~/.aether/skills/domain/{name}/SKILL.md`. Follow existing `skillFrontmatter` struct format. ~50 lines. |
+| Patch skill | `skill-patch` | Read existing SKILL.md, update specific frontmatter fields, preserve body content. ~40 lines. |
+| Archive skill | `skill-archive` | Move SKILL.md from active location to `.aether/skills/archive/{name}/SKILL.md`. Remove from index. ~30 lines. |
+| Promote skill | `skill-promote` | Copy from `~/.aether/skills/domain/` to `.aether/skills/domain/` (shipped). Update index and manifest. ~40 lines. |
+| List versions | `skill-versions` | Show shipped vs user vs hub versions with timestamps. Extend existing index. ~30 lines. |
+
+All use `os.ReadFile`/`os.WriteFile`/`os.MkdirAll` from stdlib. The `skillManifestEntry` struct (name, version, checksum) already exists for tracking.
+
+**Confidence: HIGH** -- All primitives exist. Assembly work on existing patterns.
+
+## Feature 7: Trajectory Recording and Compression
+
+### Approach: SQLite Table + Time-Based Compression
+
+Trajectories are phase-level state snapshots stored in the hive SQLite database:
+
+```sql
+CREATE TABLE IF NOT EXISTS trajectories (
+    id          TEXT PRIMARY KEY,
+    colony_id   TEXT NOT NULL,
+    phase       INTEGER NOT NULL,
+    snapshot    TEXT NOT NULL,       -- JSON blob of colony state at phase boundary
+    metrics     TEXT DEFAULT '{}',   -- JSON blob of metrics (tests, coverage, etc.)
+    created_at  TEXT NOT NULL,
+    UNIQUE(colony_id, phase)
+);
+```
+
+### Compression Strategy
+
+No external compression library needed. Two approaches, both using stdlib:
+
+**1. Delta encoding** (preferred): Store only the diff between consecutive snapshots.
+
+```go
+// pkg/hive/trajectory.go
+func compressTrajectory(prev, curr []byte) ([]byte, error) {
+    // If previous snapshot exists, store only changed fields
+    var prevMap, currMap map[string]interface{}
+    json.Unmarshal(prev, &prevMap)
+    json.Unmarshal(curr, &currMap)
+
+    delta := make(map[string]interface{})
+    for k, v := range currMap {
+        if prevVal, ok := prevMap[k]; !ok || !reflect.DeepEqual(prevVal, v) {
+            delta[k] = v
+        }
+    }
+    return json.Marshal(delta)
+}
+```
+
+**2. TTL pruning**: Old trajectory entries (older than colony lifetime + 30 days) are deleted on colony seal. This is a simple `DELETE FROM trajectories WHERE created_at < ?` query.
+
+**3. Aggregation**: On colony seal, compress the full trajectory into a summary: phase count, average confidence trend, total learning count. Stored as a single summary row.
+
+**Confidence: HIGH** -- SQLite handles this naturally. Delta encoding is ~30 lines of Go with `encoding/json`. No external dependencies.
+
+## Package Structure
+
+### New Package: `pkg/hive/`
+
+All hive learning functionality goes in a single new package to keep concerns isolated:
+
+```
+pkg/hive/
+├── store.go          # SQLite connection, schema migration, CRUD
+├── fts.go            # FTS5 query helpers (search, rank, snippet)
+├── policy.go         # Learning rules and evidence validation
+├── trajectory.go     # Trajectory recording and delta compression
+├── privacy.go        # Secret scanning for content before storage
+├── skill_lifecycle.go # Create/patch/archive/promote operations
+├── store_test.go
+├── fts_test.go
+├── policy_test.go
+├── trajectory_test.go
+└── privacy_test.go
+```
+
+### Extended Packages
+
+| Package | Extension |
+|---------|-----------|
+| `pkg/codex/` | `pid_registry.go`, `heartbeat.go` (process lifecycle) |
+| `pkg/memory/` | No changes -- called from `pkg/hive/policy.go` |
+| `cmd/` | New cobra commands for hive operations, heartbeats, skill lifecycle |
+
+## Installation
+
+```bash
+# Core (one new dependency)
+go get modernc.org/sqlite@latest
+
+# The libc dependency is pulled automatically by Go module resolution.
+# Verify it matches: check modernc.org/sqlite's go.mod for the required version.
+```
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Artifact cleanup approach | New `aether audit` command with `--clean` flag | Shell script one-liner (`find .aether -type f -mtime +30 -delete`) | A Go command integrates with the existing checkpoint/rollback safety net, produces structured JSON output for wrapper consumption, and follows the "runtime is authoritative" principle. Shell scripts break the wrapper-runtime contract. |
-| Smart Init integration | `--smart` flag on existing `aether init` | Separate `aether smart-init` command | A flag on the existing command avoids duplicating the idempotency logic, sealed-colony detection, worktree cleanup, and session creation that `init_cmd.go` already handles. The flag simply inserts the research-approval step before state creation. |
-| suggest-analyze implementation | New `cmd/suggest.go` reusing `generatePheromoneSuggestions()` | LLM-based analysis in wrapper markdown | The original shell `suggest-analyze` was 300 lines of deterministic file pattern detection -- not LLM analysis. The Go port should match this: deterministic checks that produce reproducible suggestions. The 10 patterns already in `init_research.go` plus build-specific additions cover the original shell script's scope. |
-| Parity validation | Add to `aether publish` | Separate `aether verify-parity` command | Validation at publish time catches parity breaks before they reach downstream repos. A separate command would require developers to remember to run it manually. |
-| Audit scope | Walk known `.aether/` subdirectories | Full repo scan for any Aether-managed file | A targeted scan of known locations is faster, produces actionable results, and avoids false positives from user-created files that happen to be in `.aether/` but are not self-hosting artifacts (e.g., `dreams/`). |
-
-## What NOT to Add
-
-| Technology | Why Avoid |
-|------------|-----------|
-| Any new `go.mod` dependency | All four feature areas are covered by existing patterns. `go mod tidy` should produce no changes. The entire v1.11 scope is additive Go code using stdlib + cobra + existing `pkg/` packages. |
-| SQLite or any database | Artifact metadata is trivially small (file paths, sizes, timestamps). JSON files and in-memory maps are sufficient. Adding a database for a one-time audit tool is massive over-engineering. |
-| LLM API calls for suggest-analyze | The original shell script was deterministic pattern matching, not LLM analysis. Porting it as Go code that checks file patterns preserves the original behavior and avoids API costs, latency, and non-determinism. |
-| Configuration file for audit rules | The artifact locations are well-known and few (11 locations identified). Hard-coding them in `audit.go` with clear constants is simpler, more auditable, and avoids a config file that needs to be kept in sync. |
-| Watchdog or cron-based cleanup | `aether audit` is a manual command. Self-hosting cleanup is a one-time event, not an ongoing process. Automated cleanup risks deleting active colony data. Manual execution with `--clean` flag gives the user control. |
-| New agent definitions | No new worker castes are needed. Audit, suggest-analyze, and smart-init are CLI operations, not colony worker tasks. |
-
-## Installation
-
-No installation needed. All dependencies already exist in `go.mod`.
-
-```bash
-# Verify existing dependencies are sufficient
-go mod tidy  # should show no changes
-go build ./cmd/aether  # should compile cleanly
-
-# Run existing tests to establish baseline before starting
-go test ./... -race
-```
+| SQLite driver | modernc.org/sqlite | mattn/go-sqlite3 | Requires CGO, breaks cross-compilation and single-binary distribution |
+| SQLite driver | modernc.org/sqlite | zombiezen/go-sqlite | Not a database/sql driver, custom API, would need to rewrite all query code |
+| Secret scanning | Extend existing regex | gitleaks (library) | 150+ transitive deps, overkill for content-level scanning |
+| Rule engine | Go structs | Cedar (AWS) | Authorization-focused, not learning policies; adds AWS SDK dependency |
+| Rule engine | Go structs | govaluate | Expression parser adds complexity for simple threshold checks |
+| Compression | Delta encoding + TTL | gzip/zlib | Trajectory data is structured JSON; delta encoding is more semantically useful than binary compression |
+| FTS | SQLite FTS5 | Meilisearch/Typesense | Separate service, overkill for single-user colony recall |
+| FTS | SQLite FTS5 | Bleve (Go native) | Good but adds another dependency; SQLite FTS5 already covers the use case |
 
 ## Sources
 
-- `/Users/callumcowie/repos/Aether/go.mod` -- Existing dependency inventory (Go 1.26.1, cobra v1.10.2, no database drivers)
-- `/Users/callumcowie/repos/Aether/cmd/init_cmd.go` -- Current `aether init` implementation (222 lines), idempotency checks, sealed-colony detection
-- `/Users/callumcowie/repos/Aether/cmd/init_research.go` -- Existing `init-research` command (598 lines) with `detectGovernance()`, `analyzeGitHistory()`, `generatePheromoneSuggestions()`, `generateCharter()`, `detectPriorColonies()`, 10 pheromone patterns, 12 project type detectors, 23 governance detectors
-- `/Users/callumcowie/repos/Aether/cmd/autofix.go` -- Checkpoint/rollback pattern for safe state mutation (105 lines)
-- `/Users/callumcowie/repos/Aether/cmd/midden_cmds.go` -- CRUD subcommand registration pattern (10 subcommands)
-- `/Users/callumcowie/repos/Aether/cmd/update_cmd.go` -- Publish/update pipeline with stale-publish detection (533 lines), `checkStalePublish()` parity checks
-- `/Users/callumcowie/repos/Aether/cmd/platform_sync.go` -- `repoSyncPairs()` defining 9 sync pairs across 3 platforms
-- `/Users/callumcowie/repos/Aether/cmd/codex_visuals.go` -- ANSI rendering infrastructure for caste identity, stage markers
-- `/Users/callumcowie/repos/Aether/cmd/colony_prime_context.go` -- Section-based context injection with priority ordering
-- `/Users/callumcowie/repos/Aether/cmd/pheromone_write.go` -- Pheromone write with SHA-256 deduplication
-- `/Users/callumcowie/repos/Aether/.claude/commands/ant/init.md` -- Wrapper init command calling `aether init-research` then `aether init`
-- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/build-context.md` -- Build playbook with suggest-analyze deprecation guard (lines 149-181)
-- `/Users/callumcowie/repos/Aether/pkg/storage/storage.go` -- Store API with `AtomicWrite`, `SaveJSON`, `LoadJSON`, file locking
+- modernc.org/sqlite FTS5 support: Context7 `/modernc-org/sqlite` docs, SQLite official FTS5 documentation (https://www.sqlite.org/fts5.html), pkg.go.dev/modernc.org/sqlite
+- modernc.org/sqlite version: pkg.go.dev (v1.42.1), Reddit r/golang discussion Feb 2026
+- Process group management: Go syscall package docs (https://pkg.go.dev/syscall), HackerNoon process management guide (https://hackernoon.com/everything-you-need-to-know-about-managing-go-processes), Felix Geisendorfer child process article (https://medium.com/@felixge/killing-a-child-process-and-all-of-its-children-in-go-54079af94773)
+- Secret scanning patterns: Gitleaks (https://github.com/gitleaks/gitleaks), TruffleHog (https://github.com/trufflesecurity/trufflehog)
+- Existing codebase inspection: `pkg/memory/trust.go`, `pkg/memory/promote.go`, `pkg/codex/process_group_unix.go`, `cmd/security_cmds.go`, `cmd/skills.go`, `pkg/events/event.go`, `cmd/recovery_snapshot.go`

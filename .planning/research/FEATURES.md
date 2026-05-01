@@ -1,352 +1,561 @@
-# Feature Landscape: Aether v1.11 Unification
+# Feature Landscape: Aether v1.13 Recovery Hardening & Hive Learning
 
-**Domain:** Lost intelligence restoration, self-hosting cleanup, platform hardening
-**Researched:** 2026-04-28
-**Confidence:** HIGH (all findings verified against source code in `cmd/`, `pkg/`, `.claude/`, `.opencode/`, `.codex/`)
+**Domain:** Recovery hardening, gate resilience, worker lifecycle, hive learning system
+**Researched:** 2026-05-01
+**Confidence:** HIGH (all findings verified against source code in `cmd/`, `pkg/colony/`, `pkg/memory/`)
 
 ## Executive Summary
 
-v1.11 targets three categories: (1) restoring lost intelligence features from the April 2026 shell-to-Go migration, (2) removing self-hosting artifacts that exist because Aether develops itself, and (3) hardening the 3-platform experience. The lost features are already partially ported -- `init-research` exists with 10 pheromone suggestion patterns and charter generation, the curation pipeline has all 8 ants implemented in `pkg/agent/curation/`, the council system has CRUD commands, and trust scoring has `compute`/`decay`/`tier` subcommands. What is missing is wiring these components into the lifecycle flows where they were originally active, and restoring the suggest-analyze build-step analysis that was never ported from the original 618-line shell script.
+v1.13 adds two major capability layers to Aether. The first is **recovery hardening**: making build/continue gates bulletproof against phantom advancement (builds that claim success but produced nothing), adding confidence-targeted Oracle planning with approval gates, converting raw init prompts into approval-ready briefs, and replacing STOP-wall gate failures with fix/unblock paths plus a new Fixer caste. The second is **hive learning**: a repo-scoped colony memory store with SQLite-backed FTS recall, pheromone skills (auto-created procedural memory from verified difficult tasks), Keeper curator with usage tracking and stale detection, and evidence-gated learning triggers that only promote verified successful work into durable wisdom.
 
-The self-hosting artifacts are minimal -- the agent mirrors (`.aether/agents-claude/`, `.aether/agents-codex/`, `.aether/skills-codex/`) appear byte-identical with their source counterparts and the command parity test passes. The real cleanup is identifying and removing stale wrapper commands, orphaned companion files, and ensuring the publish pipeline does not re-introduce artifacts. Platform hardening is mostly about OpenCode command parity and error handling consistency across the three platforms.
+The recovery hardening features extend existing infrastructure that is already well-proven: the gate system (`gate.go` with 8 gates, `shouldSkipGate` logic, `gateResultsWrite`/`Read`), the Oracle RALF loop (`compatibility_cmds.go`), the build claims system (`codex_build.go` with `last-build-claims.json`), and the recovery scanner (`recover_scanner.go` with 7 stuck-state detectors). The hive learning features are more architecturally novel -- they introduce SQLite (the first non-stdlib dependency in the Go runtime) and a full procedural memory pipeline. However, the existing memory infrastructure (`pkg/memory/` with observation capture, trust scoring, instinct management, queen promotion, hive promotion) provides the provenance and evidence framework that the new system builds on.
 
 ## Feature Categories
 
-### Category A: Lost Intelligence Restoration
+### Category A: Recovery Hardening
 
-These features existed in the shell-based Aether and were lost during the Go migration. Some have been partially ported; others were never ported.
+#### A1. Build Provenance Validation (AAC-001, AAC-002)
 
-#### A1. Smart Init Ceremony (Charter Approval Flow)
-
-**Current state:** `init-research` command exists at `cmd/init_research.go` with full codebase scanning, governance detection, pheromone suggestion generation (10 patterns), and charter generation. The init wrapper at `.claude/commands/ant/init.md` already calls `aether init-research` and presents charter for approval. However, the Go `aether init` command itself does not call `init-research` internally -- the ceremony only happens when the wrapper orchestrates it.
+**Current state:** Build complete (`codex_build_finalize.go`) records worker outcomes and writes `last-build-claims.json` with file lists and task claims. Continue gates (`codex_continue.go:2361`) check `manifest_present`, `verification_steps_passed`, `implementation_evidence`, `operational_evidence`, and `no_critical_flags`. However, the continue `implementation_evidence` gate only checks whether evidence was *recorded*, not whether it *matches* what the build claimed. A build can report 5 files created, but if only 2 actually exist in the working tree, continue still advances.
 
 **What's missing:**
-- The Go runtime `aether init` does not integrate `init-research` as part of its flow. It creates colony state directly without the scanning step.
-- No charter data is persisted in `COLONY_STATE.json` or a separate charter file.
-- The pheromone suggestions are presented by the wrapper but the approval flow only works on Claude Code. OpenCode and Codex have no charter ceremony.
-- Charter data (intent, vision, governance, goals) is computed but never stored for downstream reference.
-
-**Expected behavior (Go CLI standard):**
-1. User runs `aether init "Build a web app"`
-2. Go runtime scans the codebase (languages, frameworks, governance, git history, complexity)
-3. Generates charter data and pheromone suggestions
-4. Outputs both for the wrapper to present
-5. Wrapper shows charter, user approves/revises/cancels
-6. Approved pheromone suggestions are written via `pheromone-write`
-7. Colony state is created with charter metadata attached
-
-**Complexity:** LOW-MEDIUM. The scanning logic exists. The wiring is missing.
-
-#### A2. Suggest-Analyze (Build-Step Pheromone Suggestions)
-
-**Current state:** The build playbook at `.aether/docs/command-playbooks/build-prep.md` references `--no-suggest` as a flag and mentions "the colony analyzes the codebase for patterns that might benefit from pheromone signals." However, no `suggest-analyze` subcommand exists in the Go runtime. The original was a 618-line shell script that analyzed files for patterns (TODO comments, debug artifacts, complex files, etc.) and produced pheromone suggestions.
-
-**What's missing entirely:**
-- No `aether suggest-analyze` subcommand in Go
-- No build-wave integration point that calls suggest-analyze
-- The `init-research` pheromone suggestions only cover 10 static patterns. The original suggest-analyze had dynamic codebase analysis (file complexity, TODO density, debug artifact detection, stale file detection, etc.)
+- No filesystem verification that claimed files actually exist after build
+- No reconciliation between `last-build-claims.json` and actual git diff
+- Build-complete does not reject zero-modification or all-failed builds
+- Continue does not validate provenance (that claims trace to actual worker results)
+- Phantom advancement: a build can report "completed" with all dispatches marked `completed` but no actual file changes
 
 **Expected behavior:**
-1. At build start (before worker dispatch), colony scans the codebase for actionable patterns
-2. Patterns are scored and presented as FOCUS pheromone suggestions
-3. User approves/dismisses each suggestion
-4. Approved suggestions are written as active pheromone signals
-5. Workers receive these signals in their context
+1. At build-complete, verify that claimed files exist in the working tree
+2. At build-complete, reject builds where all dispatches failed or no files were modified
+3. At continue, reconcile claims against actual git diff (files added/modified/deleted)
+4. Surface mismatches as blocking gate failures with specific file-level detail
+5. Store provenance data for audit trail
 
-**Analysis patterns that should be restored:**
-- TODO/FIXME/HACK comment density (files with many TODOs may need attention)
-- Debug artifact detection (console.log, fmt.Println, debug-only code)
-- Large file detection (files exceeding complexity thresholds)
-- Stale file detection (files not modified in N months)
-- Test coverage gaps (source files without corresponding test files)
-- Dependency health (outdated or vulnerable dependencies if lockfile available)
-- Duplicate code patterns (similar file names in different directories)
+**Complexity:** MEDIUM. The claim verification logic already partially exists in `codex_build_finalize.go:404-457` (filesystem fallback discovery). Extending it to validate rather than just discover requires checking claimed paths against `os.Stat` and `git diff --name-only`.
 
-**Complexity:** MEDIUM-HIGH. The original was 618 lines. The analysis logic is non-trivial and needs to handle multiple languages. However, it can be simplified by reusing the file-walking infrastructure from `init-research.go`.
+**Dependency:** Extends `codex_build_finalize.go` and `runCodexContinueGates()`.
 
-#### A3. Circuit Breaker (Cascade Failure Protection)
+#### A2. Confidence-Targeted Iterative Planning -- Oracle (AAC-003)
 
-**Current state:** The immune system at `cmd/immune.go` provides `trophallaxis-diagnose` (error classification), `trophallaxis-retry` (exponential backoff), `scar-add`/`scar-list`/`scar-check` (failure pattern tracking), and `immune-auto-scar` (midden-based pattern detection). This is a retry/immune system but NOT a circuit breaker.
+**Current state:** Oracle runs as a RALF (Research, Analyze, Learn, Formulate) loop via `compatibility_cmds.go:52`. It accepts a topic, runs a research depth (`quick`, `balanced`, `deep`, `exhaustive`), and produces a result. The loop runs to completion without confidence targets or approval gates. Oracle state is stored in `oracle/state.json` and `oracle/plan.json`.
 
 **What's missing:**
-- No circuit breaker pattern that prevents cascading failures across workers
-- No threshold-based failure detection that halts a build wave when failures exceed a limit
-- No automatic phase rollback or pause when consecutive failures suggest systemic issues
+- No user-settable confidence target (e.g., "research until 85% confidence")
+- No iterative loop that re-researches based on confidence gaps
+- No approval gate between research iterations (Oracle runs to completion)
+- No confidence scoring of research outputs
 
 **Expected behavior:**
-1. During build waves, track failure rate per-wave and per-phase
-2. If failure rate exceeds threshold (e.g., 3 failures in a row, or 50% of tasks in a wave), open the circuit
-3. Open circuit stops dispatching new workers and surfaces the failure pattern
-4. After a cooldown period or manual intervention, close the circuit
-5. Failure patterns are recorded as scars for future avoidance
+1. User sets a confidence target: `aether oracle --confidence 0.85 "topic"`
+2. Oracle runs first research iteration
+3. Each iteration produces a confidence score (based on source quality, evidence count, cross-verification)
+4. If confidence < target, Oracle identifies gaps and runs targeted re-research
+5. Loop continues until target met, max iterations reached, or user approves early
+6. Each iteration checkpoint is persisted for resume capability
 
-**Complexity:** MEDIUM. The scar/immune infrastructure exists. The circuit breaker logic needs to be added to the build-wave dispatch path and the continue-gate path.
+**Complexity:** MEDIUM-HIGH. Requires designing a confidence scoring model for research outputs. The loop infrastructure exists (Oracle already loops), but the scoring and gap identification logic is new.
 
-#### A4. Consolidation Pipeline (Phase-End Knowledge Compression)
+**Dependency:** Extends `compatibility_cmds.go` Oracle flow. Requires new confidence model.
 
-**Current state:** `cmd/graph_consolidation_cmds.go` exists with graph commands (link, unlink, nodes, edges, shortest-path, cluster). The `pkg/agent/curation/` package has all 8 curation ants (archivist, critic, herald, janitor, librarian, nurse, scribe, sentinel) with an orchestrator. `cmd/curation_cmds.go` exposes CLI subcommands for running individual curation ants.
+#### A3. Init Synthesis (AAC-004)
+
+**Current state:** `init-research` (`init_research.go`, 598 lines) scans the codebase for tech stack, governance, git history, pheromone suggestions (10 patterns), and charter data. The init wrapper (`.claude/commands/ant/init.md`) calls `init-research` and presents charter for approval. However, the output is raw research data, not a synthesized brief. The user sees 10 separate data points and must mentally synthesize them into a launch decision.
 
 **What's missing:**
-- The consolidation pipeline is not wired into the continue lifecycle. After a phase completes and `/ant-continue` runs, the curation pipeline should automatically run to compress phase learnings, detect contradictions, and promote high-confidence instincts.
-- The curation orchestrator exists but is not called from any lifecycle command.
+- No synthesis of raw research data into an approval-ready brief
+- No risk assessment or complexity estimate
+- No recommended phase structure based on codebase analysis
+- No "ready to launch" / "needs discussion" signal
 
 **Expected behavior:**
-1. At phase end (during continue), the consolidation pipeline runs automatically
-2. Phase learnings are compressed (redundant observations merged, contradictions flagged)
-3. Trust scores are recalculated with decay
-4. High-confidence instincts are promoted to QUEEN.md
-5. Curation results are included in the continue report
+1. Init-research produces raw data (existing)
+2. New synthesis step converts raw data into a structured brief: goal alignment, scope assessment, risk flags, recommended approach, estimated complexity
+3. Brief includes a launch-readiness signal (green/yellow/red)
+4. User reviews brief and approves/adjusts before colony creation
+5. Approved brief is stored as charter metadata for downstream reference
 
-**Complexity:** LOW. The infrastructure is all there. The wiring is missing -- a single call to the curation orchestrator from the continue flow.
+**Complexity:** MEDIUM. The data collection exists. The synthesis is new but bounded (it transforms known inputs into a structured output format).
 
-### Category B: Self-Hosting Cleanup
+**Dependency:** Extends `init_research.go` output. Minor changes to `init_cmd.go` for brief storage.
 
-These are artifacts that exist because Aether was used to develop itself.
+#### A4. Recoverable Gate Failures with /ant-unblock (AAC-006 through AAC-011)
 
-#### B1. Agent Mirror Verification and Cleanup
+**Current state:** When continue gates fail, the output includes `blocking_issues` and per-gate recovery templates (`gate.go:490-521`). The recovery templates provide text instructions ("Run `go test ./...` to see failures"). However, the failure is a STOP wall -- the user must manually investigate, fix, and re-run `/ant-continue`. There is no structured unblock path, no state persistence for gate failures, and no automatic retry with selective re-checking.
 
-**Current state:** 26 agents across 4 surfaces:
-- `.claude/agents/ant/` (26 files, canonical source)
-- `.aether/agents-claude/` (26 files, packaging mirror for npm distribution)
-- `.opencode/agents/` (26 files, OpenCode surface)
-- `.codex/agents/` (26 TOML files, Codex surface)
+**What's missing:**
+- No `/ant-unblock` command that reads gate failure context and offers structured fix paths
+- No `gate-results.json` file that persists gate failure state across sessions
+- No smart retry that re-runs only failed gates (currently `shouldSkipGate` handles this, but only for gates that previously passed)
+- No Fixer caste agent that can investigate and fix gate failures
+- Gate failure banners are text-only with no actionable CLI integration
 
-The `command_parity_test.go` and `command_source_hygiene_test.go` verify agent count parity. The agent mirrors appear to be byte-identical with their source counterparts based on the listing.
+**Expected behavior:**
+1. When gates fail, persist detailed failure state to `gate-results.json` (per-phase)
+2. Display structured failure banner with: which gates failed, why, and what to do
+3. `/ant-unblock` reads failure state, identifies which gates can be auto-retried vs need manual fix
+4. Smart retry re-runs only failed gates (tests_pass always re-runs per existing rule)
+5. Fixer caste agent reads gate context, investigates root cause, applies fix, verifies, reports
 
-**What to verify:**
-- Are `.aether/agents-claude/` files truly byte-identical with `.claude/agents/ant/`? If not, what drifted?
-- Are there any agents defined in mirrors but not in the source, or vice versa?
-- Is the publish pipeline correctly syncing agent mirrors?
+**Complexity:** MEDIUM. Gate failure persistence and smart retry build on existing `shouldSkipGate` and `gateResultsWrite`/`Read`. The Fixer caste is the largest new piece.
 
-**Expected outcome:** Confirm mirrors are in sync, add a byte-identity test, fix any drift.
+**Dependency:** Extends `gate.go`, `codex_continue.go`. New agent caste (Fixer).
 
-**Complexity:** LOW. Mostly verification and a test addition.
+#### A5. Smart Gate Retry with State Persistence (gate-results.json)
 
-#### B2. Stale Companion Files
+**Current state:** Gate results are stored in `COLONY_STATE.json` via `gateResultsWrite()` (`gate.go:548-571`). Results are merged by name key (upsert). `gateResultsRead()` returns all results. The `shouldSkipGate()` function skips previously-passed gates (except `tests_pass` which always re-runs).
 
-**What to audit:**
-- `.aether/skills/` (29 skills) -- are all referenced by the skill-index system?
-- `.aether/skills-codex/` -- is this a byte-identical mirror?
-- `.aether/templates/` (12 templates) -- are all used by the runtime?
-- `.aether/docs/` -- are there stale or orphaned documentation files?
-- `.aether/exchange/` -- XML exchange modules -- still used?
-- `.aether/utils/` -- runtime utilities -- still referenced?
+**What's missing:**
+- Gate results are only in COLONY_STATE.json -- they are not in a standalone file that survives colony state mutations
+- No per-phase gate result history (results are global, not scoped to phase)
+- No retry count tracking (how many times a gate has been retried)
+- No exponential backoff or cooldown for repeated gate failures
+- No distinction between "soft fail" (retryable) and "hard fail" (needs manual fix)
 
-**Expected outcome:** Remove unreferenced files, verify mirrors are in sync.
+**Expected behavior:**
+1. Gate results persist to a standalone `gate-results.json` per phase
+2. Each result tracks: gate name, pass/fail, detail, retry count, last retried at, cooldown until
+3. Soft-fail gates auto-retry after cooldown (e.g., tests_pass after 30s)
+4. Hard-fail gates require manual intervention or Fixer agent
+5. `/ant-status` shows gate result summary for current phase
 
-**Complexity:** LOW. Audit and delete.
+**Complexity:** LOW-MEDIUM. Extends existing gate result storage with richer metadata.
 
-#### B3. Duplicate or Stale Wrapper Commands
+**Dependency:** Extends `gate.go`. Read by `/ant-status`.
 
-**Current state:** 50 commands on Claude Code, 50 on OpenCode, 50 YAML source definitions. The `command_count_test.go` verifies command counts.
+#### A6. Fixer Caste (27th Agent)
 
-**What to verify:**
-- Are there commands in `.claude/commands/ant/` or `.opencode/commands/ant/` that have no corresponding YAML source?
-- Are there YAML sources that have no generated wrapper?
-- Are there commands that reference deleted subcommands?
+**Current state:** Aether has 26 agent castes. The Medic caste handles colony health diagnosis and repair. The Tracker caste investigates bugs. Neither is designed specifically for gate failure investigation and resolution. Gate failures currently require manual user intervention.
 
-**Complexity:** LOW.
+**What's missing:**
+- No agent caste whose primary role is reading gate failure context, investigating root cause, applying a fix, verifying the fix, and reporting
+- No gate-specific investigation skills or patterns
+- No integration between gate failure state and agent dispatch
 
-### Category C: Platform Hardening
+**Expected behavior:**
+1. Fixer caste receives gate failure context (which gate failed, detail, phase, manifest)
+2. Fixer investigates: reads relevant files, checks test output, examines build claims
+3. Fixer applies targeted fix (e.g., fixes failing test, removes broken import)
+4. Fixer verifies: re-runs the specific gate check
+5. Fixer reports: what was wrong, what was fixed, verification result
+6. If Fixer cannot resolve, reports with diagnosis for user
 
-#### C1. OpenCode Parity Gaps
+**Complexity:** MEDIUM. New agent definition following established patterns. Gate context assembly is the main new logic.
 
-**Current state:** OpenCode has 50 commands matching Claude Code's 50. The agent count matches (26 on each surface). However, there may be behavioral differences in how commands execute.
+**Dependency:** Requires A4 (gate failure persistence) to provide context. New agent files across 4 surfaces.
 
-**What to verify:**
-- Do all OpenCode commands produce the same JSON output format as Claude Code equivalents?
-- Do OpenCode commands handle errors consistently with Claude Code?
-- Are there commands that work on Claude Code but fail silently on OpenCode?
+#### A7. Worker Process Lifecycle (AAC-014 through AAC-017)
 
-**Expected behavior:** All 50 commands work identically across Claude Code and OpenCode. Same JSON output, same error handling, same flags.
+**Current state:** Workers are dispatched as external processes via `codex.NewWorkerInvoker` (`codex_build.go:109`). The build pipeline tracks dispatch status but does not track process lifecycle. `cleanupStaleWorkersBeforeDispatch()` (`codex_worker_cleanup.go`) terminates stale workers before new dispatches. The Oracle loop has process tree termination (`oracle_process_unix.go`). But there is no heartbeat system, no PID tracking in colony state, and no process group management for build workers.
 
-**Complexity:** MEDIUM. Requires testing each command on both platforms.
+**What's missing:**
+- No worker heartbeats (periodic liveness check)
+- No PID tracking in colony state (cannot correlate a stuck worker with its OS process)
+- No process group management for build workers (Oracle has this, build does not)
+- No stale worker detection during execution (only cleanup before next dispatch)
+- No worker timeout with graceful degradation (current timeout is wall-clock only)
 
-#### C2. Error Handling Consistency
+**Expected behavior:**
+1. Each dispatched worker records its PID in colony state
+2. Workers emit periodic heartbeats (timestamp file or state update)
+3. Colony runtime monitors heartbeats and detects stalled workers
+4. Stalled workers are terminated via process group (SIGTERM, then SIGKILL)
+5. Worker cleanup runs periodically during execution, not just before next dispatch
+6. `/ant-status` shows worker process health (PID, heartbeat age, status)
 
-**What to verify:**
-- All Go subcommands use consistent error patterns (`outputError` with codes, `outputErrorMessage` for no-store, proper JSON error responses)
-- Wrapper commands handle Go runtime errors gracefully (parse error JSON, surface to user)
-- No subcommands panic or return nil errors when they should return structured errors
+**Complexity:** MEDIUM-HIGH. Process lifecycle management across platforms (Unix/Windows) is non-trivial. The Oracle process tree code provides a template, but build workers may run in different process contexts.
 
-**Complexity:** LOW-MEDIUM. Mostly audit and fixes.
+**Dependency:** New subsystem in `cmd/`. Extends `codex_build.go` dispatch flow.
 
-#### C3. Cross-Platform Consistency (Codex)
+### Category B: Hive Learning System
 
-**Current state:** Codex CLI has runtime-native UX (no wrapper markdown). It uses the Go runtime directly. The `.codex/agents/` directory has 26 TOML definitions and `CODEX.md` documents commands and rules.
+#### B1. Colony Memory Store (AAC-019 through AAC-021)
 
-**What to verify:**
-- Are all 26 Codex agents structurally equivalent to their Claude/OpenCode counterparts?
-- Does `CODEX.md` accurately reflect current command capabilities?
-- Are there Codex-specific commands that reference removed or changed subcommands?
+**Current state:** Colony memory is distributed across multiple JSON files: `learning-observations.json` (observations), `instincts.json` (instincts), `pheromones.json` (signals), `midden/midden.json` (failures), `reviews/{domain}/ledger.json` (findings). Each file has its own read/write patterns via `pkg/storage.Store`. The memory health system (`memory_health.go`) aggregates metrics from all files. There is no unified query interface -- each file must be read separately.
 
-**Complexity:** LOW-MEDIUM.
+**What's missing:**
+- No unified colony memory store (currently fragmented across 7+ JSON files)
+- No query capability (cannot search across memory types)
+- No budgeting (memory can grow unbounded)
+- No session-injectable memory context (colony-prime reads individual files, not a unified memory view)
 
-#### C4. User Experience Improvements
+**Expected behavior:**
+1. Colony memory store provides a unified API for reading/writing all memory types
+2. Memory is budgeted (total size cap, per-type caps)
+3. Colony-prime injects a memory summary section into worker context
+4. Memory queries can cross-reference (e.g., "what instincts relate to recent failures?")
+5. Memory persists across sessions and survives `/clear`
 
-**What to improve:**
-- Init ceremony should feel like a guided onboarding, not a dry JSON dump
-- Build feedback should be more actionable (what failed, what to do next)
-- Status command should be scannable at a glance
-- Error messages should suggest recovery actions, not just report failures
+**Complexity:** HIGH. This is the foundational piece for the entire hive learning system. Unifying fragmented JSON stores into a coherent API while maintaining backward compatibility is the core challenge.
 
-**Complexity:** MEDIUM. Requires UX design decisions.
+**Dependency:** Foundation for B3-B8. Must come first.
+
+#### B2. SQLite Colony State with FTS Recall (AAC-022 through AAC-024)
+
+**Current state:** All colony state is stored as JSON files in `.aether/data/`. There is no database. Searching across memory requires loading individual JSON files and scanning in-memory. FTS (full-text search) does not exist.
+
+**What's missing:**
+- No SQLite database for structured queries
+- No FTS5 for searching memory content (observations, instincts, findings, failures)
+- No efficient recall of "all memories related to X"
+- No temporal queries ("what happened in the last 5 phases?")
+
+**Expected behavior:**
+1. SQLite database at `.aether/data/colony.db` (or `.aether/data/memory.db`)
+2. Tables for observations, instincts, pheromone signals, review findings, midden entries, gate results
+3. FTS5 virtual table for full-text search across all memory content
+4. CLI subcommands: `memory-search`, `memory-query`, `memory-stats`
+5. Colony-prime uses FTS to find relevant memories for worker context injection
+6. Database is a secondary index -- JSON files remain authoritative (zero migration risk)
+
+**Complexity:** HIGH. First introduction of a non-stdlib dependency (`modernc.org/sqlite` or `mattn/go-sqlite3`). Schema design, migration strategy, and index maintenance are all new concerns. However, using SQLite as a secondary index (JSON files remain authoritative) eliminates migration risk.
+
+**Dependency:** Requires B1 (unified memory API). Go dependency decision needed.
+
+#### B3. Pheromone Skills (AAC-025 through AAC-027)
+
+**Current state:** Skills are static markdown files in `.aether/skills/` with frontmatter metadata (name, category, detect patterns, roles). They are matched to workers via `skill-match` and injected via `skill-inject`. Skills are created manually (`/ant-skill-create`) or shipped with Aether. There is no automatic skill creation from colony work.
+
+**What's missing:**
+- No automatic skill creation from verified difficult tasks
+- No "procedural memory" -- skills that capture how the colony solved a specific type of problem
+- No usage tracking (which skills were actually helpful)
+- No connection between skills and learning (instincts that become skills)
+
+**Expected behavior:**
+1. When a task is completed successfully after difficulty (multiple retries, gate failures resolved by Fixer, high complexity), the system proposes a procedural memory skill
+2. Skill captures: what the problem was, how it was solved, what patterns to watch for, what actions to take
+3. Skill is auto-created as a draft in `~/.aether/skills/domain/`
+4. Skill is associated with the pheromone that triggered the learning
+5. Future workers encountering similar patterns get the skill injected automatically
+6. Skills have usage tracking: times injected, times applied, success rate
+
+**Complexity:** MEDIUM. Skill creation from task context is bounded (transform known data into a markdown template). Usage tracking requires instrumenting `skill-inject`.
+
+**Dependency:** Requires B1 (memory store for tracking). Extends existing skill system.
+
+#### B4. Keeper Curator (AAC-028 through AAC-029)
+
+**Current state:** There is a Keeper agent caste (listed in CLAUDE.md as "Preserves knowledge"). However, there is no `cmd/keeper*.go` file -- the Keeper caste has no runtime commands. The curation pipeline (`pkg/agent/curation/`) has 8 curation ants (archivist, critic, herald, janitor, librarian, nurse, scribe, sentinel) with CLI subcommands in `cmd/curation_cmds.go`, but the curation pipeline is not wired into the colony lifecycle (identified as a gap in v1.11 research).
+
+**What's missing:**
+- No Keeper runtime commands ( caste exists in agent definitions but not in Go runtime)
+- No usage tracking for instincts, skills, or pheromone signals
+- No stale detection (instincts that haven't been applied in N days, skills never injected)
+- No archival pipeline (moving stale memories to cold storage)
+- No Keeper integration with the hive learning system
+
+**Expected behavior:**
+1. Keeper tracks usage of each instinct, skill, and signal (last used, use count, success rate)
+2. Keeper detects stale memories (not used in 30+ days, low confidence, superseded by newer learning)
+3. Keeper proposes archival for stale memories (move to `~/.aether/eternal/` or mark as archived)
+4. Keeper runs periodically (at continue, at seal) as a maintenance step
+5. `/ant-status` shows memory health metrics from Keeper
+
+**Complexity:** MEDIUM. Usage tracking requires instrumenting existing read paths. Stale detection is a query over existing timestamps. Archival follows existing `eternal` patterns.
+
+**Dependency:** Requires B1 (unified memory). Extends existing curation pipeline.
+
+#### B5. Learning Triggers with Evidence Rules (AAC-030)
+
+**Current state:** Learning observations are captured via `learning-observe` (`learning.go`) with a trust scoring system (`pkg/memory/trust.go`). The promotion pipeline (`pkg/memory/promote.go`) checks if observations are eligible for instinct promotion based on trust score and observation count. However, the trigger for learning capture is manual -- agents call `learning-observe` explicitly. There is no evidence rule that gates learning creation on verified success.
+
+**What's missing:**
+- No evidence rules that prevent unverified work from creating durable learning
+- No automatic learning triggers tied to build/continue outcomes
+- No distinction between "observed" learning (raw note) and "verified" learning (backed by successful implementation)
+- No privacy gate that prevents sensitive content from being written to learning
+
+**Expected behavior:**
+1. Learning triggers fire automatically at build-complete and continue-complete
+2. Evidence rules gate learning creation: only create durable learning when:
+   - Build verification passed (tests green, gates passed)
+   - Implementation evidence exists (files created/modified match claims)
+   - The learning is corroborated (multiple workers or phases agree)
+3. Privacy gate: scan learning content for secrets, API keys, credentials before writing
+4. Learning quality tier: raw observation (low) -> verified observation (medium) -> instinct (high) -> hive wisdom (highest)
+5. Unverified learning stays as transient observations, never promoted to instincts
+
+**Complexity:** MEDIUM. Evidence rules are boolean checks on existing gate/claim data. Privacy gate reuses existing sanitization patterns (`pkg/colony/sanitize.go`).
+
+**Dependency:** Requires A1 (provenance validation for evidence). Extends `pkg/memory/`.
+
+#### B6. Privacy/Secret Gate for Learning Writes
+
+**Current state:** Content sanitization exists in `pkg/colony/sanitize.go` for pheromone signals (XML tag rejection, angle bracket escaping, shell injection blocking, LLM instruction override detection). Content is capped at 500 characters. However, this sanitization is specific to pheromones and is not applied to learning observations or instincts.
+
+**What's missing:**
+- No secret/key/credential detection in learning content
+- No sanitization of learning observations before persistence
+- No privacy gate that prevents sensitive content from entering the learning pipeline
+- No scanning of file content referenced by learning (e.g., a learning that says "use the API key in config.yaml")
+
+**Expected behavior:**
+1. All learning content passes through a privacy gate before writing
+2. Privacy gate detects: API keys, passwords, tokens, private keys, secrets, PII patterns
+3. Detected secrets are redacted (replaced with `[REDACTED]`) or the learning is rejected
+4. File references in learning content are scanned for secrets
+5. Privacy gate runs at `learning-observe`, `instinct-create`, `hive-store`, and `hive-promote`
+
+**Complexity:** LOW-MEDIUM. Pattern matching for secrets is well-understood. The infrastructure exists (`sanitize.go`). Extending it to cover learning content is additive.
+
+**Dependency:** Standalone. Can be built independently.
+
+#### B7. Repo Isolation with Optional Hive Promotion
+
+**Current state:** Hive Brain (`cmd/hive.go`) stores cross-colony wisdom at `~/.aether/hive/wisdom.json` with 200-entry LRU cap. Instincts are promoted to hive at seal if confidence >= 0.8. However, there is no explicit repo isolation boundary -- any colony can read any hive entry. There is no opt-in/opt-out for hive promotion at the colony level.
+
+**What's missing:**
+- No repo isolation boundary for colony memory (all memories in a colony are equally accessible)
+- No user control over which learnings get promoted to hive
+- No colony-level opt-out from hive promotion ("keep my learnings local")
+- No sensitivity labeling (some learnings should never leave the repo)
+
+**Expected behavior:**
+1. Colony memory is repo-scoped by default (only accessible within the colony)
+2. Hive promotion is opt-in per learning or per category
+3. User can set `hive_promotion: false` in colony config to disable all hive promotion
+4. Sensitive learnings (containing project-specific secrets, internal URLs, etc.) are automatically excluded from hive promotion
+5. Hive-promoted wisdom is generalized (repo-specific details stripped) before storage
+
+**Complexity:** LOW. Mostly configuration and filtering logic. The promotion pipeline already exists.
+
+**Dependency:** Extends existing hive promotion at seal.
 
 ## Feature Dependencies
 
 ```
-A1. Smart Init Ceremony
+A1. Build Provenance Validation
     |
-    +---> Charter persistence in COLONY_STATE.json
-    |         |
-    |         v
-    |     Charter data available to colony-prime context
+    +---> Evidence rules for learning triggers (B5)
     |
-    +---> Pheromone suggestion approval flow
-    |         |
-    |         v
-    |     Approved suggestions written via pheromone-write
-    |
-    +---> OpenCode/Codex ceremony parity
-              |
-              v
-          All 3 platforms have consistent init experience
+    +---> Build-complete rejects phantom claims
 
-A2. Suggest-Analyze
+A2. Oracle Confidence-Targeted Planning
     |
-    +---> suggest-analyze subcommand (Go runtime)
-    |         |
-    |         v
-    |     Pattern analysis engine (file walking, detection)
+    +---> Iterative loop with approval gates
     |
-    +---> Build-wave integration
-    |         |
-    |         v
-    |     suggest-analyze called before worker dispatch
-    |
-    +---> Tick-to-approve UI in wrappers
-              |
-              v
-          Suggestions presented, approved, written as pheromones
+    +---> Confidence model for research outputs
 
-A3. Circuit Breaker
+A3. Init Synthesis
     |
-    +---> Failure tracking in build-wave
+    +---> Synthesized brief from raw research data
+    |
+    +---> Charter metadata for downstream reference
+
+A4. Recoverable Gate Failures + /ant-unblock
+    |
+    +---> Gate failure persistence (A5)
     |         |
     |         v
-    |     Threshold detection, circuit open/close
+    |     gate-results.json per phase
     |
-    +---> Continue-gate integration
+    +---> Fixer caste context (A6)
     |         |
     |         v
-    |     Circuit state checked during continue gates
+    |     Fixer reads gate context, investigates, fixes, verifies
     |
-    +---> Scar recording for future avoidance
-              |
-              v
-          Failure patterns become immune system data
+    +---> Smart retry (A5)
 
-A4. Consolidation Pipeline Wiring
+A5. Smart Gate Retry + State Persistence
     |
-    +---> Curation orchestrator called from continue
-    |         |
-    |         v
-    |     Phase learnings compressed, instincts promoted
+    +---> Extends gate.go with richer metadata
     |
-    +---> Trust score recalculation
-              |
-              v
-          Decay applied, scores updated
+    +---> Per-phase gate results
+    |
+    +---> Retry counts, cooldowns, soft/hard fail distinction
 
-B1-B3. Self-Hosting Cleanup (independent of A features)
+A6. Fixer Caste (27th Agent)
+    |
+    +---> Requires A4 for gate failure context
+    |
+    +---> New agent definition across 4 surfaces
 
-C1-C4. Platform Hardening (independent of A and B features)
+A7. Worker Process Lifecycle
+    |
+    +---> Heartbeats, PID tracking, process groups
+    |
+    +---> Stale worker detection during execution
+    |
+    +---> Independent of A1-A6
+
+B1. Colony Memory Store
+    |
+    +---> Foundation for all B features
+    |
+    +---> Unified API, budgeting, session injection
+
+B2. SQLite + FTS Recall
+    |
+    +---> Requires B1 (unified memory API)
+    |
+    +---> Secondary index, JSON remains authoritative
+    |
+    +---> New Go dependency
+
+B3. Pheromone Skills
+    |
+    +---> Requires B1 (usage tracking)
+    |
+    +---> Auto-created from verified difficult tasks
+    |
+    +---> Procedural memory pipeline
+
+B4. Keeper Curator
+    |
+    +---> Requires B1 (unified memory for stale detection)
+    |
+    +---> Usage tracking, stale detection, archival
+    |
+    +---> Wires existing curation pipeline into lifecycle
+
+B5. Learning Triggers with Evidence Rules
+    |
+    +---> Requires A1 (provenance for evidence)
+    |
+    +---> Auto-triggers at build/continue complete
+    |
+    +---> Evidence-gated promotion pipeline
+
+B6. Privacy/Secret Gate
+    |
+    +---> Standalone, extends sanitize.go
+    |
+    +---> Applied at all learning write points
+
+B7. Repo Isolation + Hive Promotion
+    |
+    +---> Extends existing hive promotion
+    |
+    +---> Opt-in/opt-out, sensitivity labeling
+    |
+    +---> Generalization before hive storage
 ```
 
-## MVP Definition
+## Table Stakes
 
-### Launch With (v1.11 Minimum)
+Features that users expect. Missing = product feels incomplete.
 
-The minimum that makes v1.11 feel like a meaningful release:
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| A1: Build provenance validation | Without it, builds can claim success and advance phases with zero actual changes | Medium | Core trust issue -- phantom advancement undermines the entire build/continue contract |
+| A4: Recoverable gate failures | Current STOP walls with text instructions are a poor UX for an otherwise automated system | Medium | Users expect structured recovery paths, not "go figure it out" messages |
+| A5: Gate state persistence | Gate results already persist in COLONY_STATE.json, but lack per-phase scoping and retry metadata | Low-Medium | Users expect gate state to survive sessions and support smart retry |
+| B5: Evidence-gated learning | Learning from unverified work creates noise in instincts and hive wisdom | Medium | Without evidence gates, the learning system degrades trust in instincts |
+| B6: Privacy gate for learning | Writing secrets to learning files is a security risk | Low-MEDIUM | Users expect their secrets to never appear in colony memory or hive wisdom |
 
-- [ ] **A1: Charter persistence** -- Store charter data in COLONY_STATE.json so downstream flows can reference it. This is the cheapest win because `init-research` already generates charter data.
-- [ ] **A2: suggest-analyze subcommand** -- Restore the build-step analysis. Even a simplified version (5-7 patterns instead of the original 618-line full scan) provides immediate value during builds.
-- [ ] **A4: Curation pipeline wiring** -- Single integration point. Call the orchestrator from continue. All 8 ants are already implemented.
-- [ ] **B1-B3: Self-hosting cleanup audit** -- Verify mirrors, remove orphans, add byte-identity test.
-- [ ] **C1: OpenCode parity verification** -- Ensure commands work identically.
+## Differentiators
 
-### Add After Validation (v1.11.x)
+Features that set Aether apart. Not expected, but valued.
 
-- [ ] **A1: OpenCode/Codex ceremony parity** -- The init ceremony currently only works fully on Claude Code.
-- [ ] **A3: Circuit breaker** -- More complex, builds on the immune system.
-- [ ] **C2-C4: Error handling and UX improvements** -- Polish pass after core features land.
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| A2: Confidence-targeted Oracle | Iterative research that quantifies confidence and targets a threshold | Medium-High | No other AI colony framework has confidence-gated research loops |
+| A6: Fixer caste | Self-healing gate failures -- the colony fixes its own blockers | Medium | Autonomous recovery from gate failures is a strong differentiator |
+| A7: Worker process lifecycle | Heartbeats and PID tracking make worker health observable | Medium-HIGH | Enterprise-grade process management for AI workers |
+| B2: SQLite with FTS recall | Searchable memory across the entire colony history | HIGH | Full-text search over colony memory is a novel capability |
+| B3: Pheromone skills | Procedural memory that auto-creates skills from verified difficult tasks | Medium | Turns colony experience into reusable knowledge automatically |
+| B4: Keeper curator | Automated memory hygiene -- stale detection, archival, usage tracking | Medium | Prevents memory bloat without manual maintenance |
 
-### Future Consideration (v2+)
+## Anti-Features
 
-- [ ] **A2: Full 618-line suggest-analyze** -- The original had more patterns than needed. Start simple, expand based on usage.
-- [ ] **A3: Adaptive circuit breaker** -- Thresholds that adjust based on project complexity and historical failure rates.
-- [ ] **C4: Interactive ceremony improvements** -- Rich terminal UI for init ceremony, build progress, etc.
+Features to explicitly NOT build.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| Machine learning for confidence scoring | Requires training data Aether does not have. Adds unpredictable behavior. | Use deterministic confidence model based on evidence count, source quality, cross-verification (weighted scoring similar to existing trust scoring) |
+| Real-time memory sync across concurrent agents | YAGNI -- agents write during build/continue, not concurrently. Would add massive complexity. | Sequential memory writes via file locking (existing pattern) |
+| Auto-promotion of all learnings to hive | Would flood hive with low-quality, repo-specific observations | Evidence-gated promotion (B5) with user opt-in (B7) |
+| Web UI for memory/learning management | CLI-only for now. A web dashboard is a future consideration (listed in existing out-of-scope). | CLI subcommands for memory search, query, stats |
+| Automatic Fixer execution without user awareness | Fixer making changes without the user knowing is dangerous | Fixer proposes fix, user approves before application (or Fixer runs in a dry-run mode first) |
+| SQLite as primary state store | Replacing JSON with SQLite for COLONY_STATE.json breaks backward compatibility and the existing wrapper-runtime contract | SQLite as secondary index only. JSON files remain authoritative |
+| Worker heartbeat over network | Workers run as local processes, not network services. Network heartbeats add unnecessary complexity. | File-based heartbeat (timestamp file or state update) |
+| Learning from failed work | Failed work teaches what not to do, but the midden system already handles failure patterns | Midden tracks failures. Learning pipeline only creates durable instincts from verified successes |
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| A1: Charter persistence in COLONY_STATE | HIGH | LOW | P1 |
-| A2: suggest-analyze subcommand (simplified) | HIGH | MEDIUM | P1 |
-| A4: Curation pipeline wiring into continue | HIGH | LOW | P1 |
-| B1: Agent mirror byte-identity test | MEDIUM | LOW | P1 |
-| B2-B3: Stale file audit and cleanup | MEDIUM | LOW | P1 |
-| C1: OpenCode command parity verification | MEDIUM | MEDIUM | P1 |
-| A1: OpenCode/Codex ceremony parity | MEDIUM | MEDIUM | P2 |
-| A3: Circuit breaker (basic) | MEDIUM | MEDIUM | P2 |
-| C2: Error handling consistency | MEDIUM | LOW | P2 |
-| C3: Codex agent/commands audit | LOW | LOW | P2 |
-| C4: UX improvements (init, build, status) | MEDIUM | MEDIUM | P2 |
-| A3: Adaptive circuit breaker | LOW | HIGH | P3 |
-| A2: Full suggest-analyze expansion | LOW | MEDIUM | P3 |
+| Feature | User Value | Implementation Cost | Priority | Dependency |
+|---------|------------|---------------------|----------|------------|
+| A1: Build provenance validation | CRITICAL | MEDIUM | P0 | None |
+| A4: Recoverable gate failures | HIGH | MEDIUM | P0 | None |
+| A5: Gate state persistence | HIGH | LOW-MEDIUM | P0 | None |
+| B6: Privacy gate for learning | HIGH | LOW-MEDIUM | P0 | None |
+| B5: Evidence-gated learning | HIGH | MEDIUM | P1 | A1 |
+| A6: Fixer caste | HIGH | MEDIUM | P1 | A4, A5 |
+| A3: Init synthesis | MEDIUM | MEDIUM | P1 | None |
+| B1: Colony memory store | MEDIUM | HIGH | P1 | None |
+| B7: Repo isolation + hive opt | MEDIUM | LOW | P1 | None |
+| A2: Oracle confidence target | MEDIUM | MEDIUM-HIGH | P2 | None |
+| B4: Keeper curator | MEDIUM | MEDIUM | P2 | B1 |
+| B3: Pheromone skills | MEDIUM | MEDIUM | P2 | B1 |
+| A7: Worker process lifecycle | LOW-MEDIUM | MEDIUM-HIGH | P2 | None |
+| B2: SQLite + FTS recall | LOW-MEDIUM | HIGH | P3 | B1 |
+
+## MVP Recommendation
+
+### Phase 1 (Must Have)
+1. **A1: Build provenance validation** -- Prevents phantom advancement. Core trust issue.
+2. **A5: Gate state persistence** -- Extends existing gate results with retry metadata.
+3. **A4: Recoverable gate failures + /ant-unblock** -- Structured recovery paths.
+4. **B6: Privacy gate for learning** -- Security baseline before any learning features.
+
+### Phase 2 (Should Have)
+5. **B5: Evidence-gated learning triggers** -- Requires A1 provenance for evidence.
+6. **A6: Fixer caste** -- Requires A4/A5 for gate failure context.
+7. **A3: Init synthesis** -- Independent, improves onboarding UX.
+8. **B7: Repo isolation + hive opt** -- Low cost, extends existing hive promotion.
+
+### Phase 3 (Add After Validation)
+9. **B1: Colony memory store** -- Foundation for remaining B features.
+10. **B4: Keeper curator** -- Requires B1.
+11. **A2: Oracle confidence target** -- Independent but complex.
+12. **B3: Pheromone skills** -- Requires B1.
+
+### Defer
+- **A7: Worker process lifecycle** -- High cost, moderate value. Heartbeats are nice-to-have until workers run long enough to stall. Current wall-clock timeout is sufficient for most use cases.
+- **B2: SQLite + FTS recall** -- High cost, requires new dependency. JSON file scanning is adequate until memory volumes justify a database. Defer until B1 proves the memory API and volume justifies the index.
 
 ## Existing System Integration Points
 
 | Feature | Integration Point | File | What Changes |
 |---------|-------------------|------|-------------|
-| Charter persistence | `ColonyState` struct | `pkg/colony/colony.go` | Add `Charter *charterData` field with `omitempty` |
-| Charter generation | `initCmd.RunE` | `cmd/init_cmd.go` | Call `init-research` logic, store charter in state |
-| Charter in context | `buildColonyPrimeOutput()` | `cmd/colony_prime_context.go` | Add charter section to colony-prime prompt |
-| suggest-analyze | New subcommand | `cmd/suggest_analyze.go` | Pattern analysis, pheromone suggestion output |
-| suggest-analyze build integration | Build-wave playbook | `.aether/docs/command-playbooks/build-wave.md` | Call `aether suggest-analyze` before dispatch |
-| Curation wiring | Continue finalize | `cmd/codex_continue_finalize.go` | Call curation orchestrator after phase completion |
-| Curation wiring | Continue wrapper | `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md` | Add curation step |
-| Circuit breaker | Build-wave dispatch | `cmd/codex_build.go` | Add failure threshold tracking |
-| Circuit breaker | Continue gates | `cmd/codex_continue.go` | Check circuit state before advancing |
-| Agent mirror test | Test file | `cmd/command_parity_test.go` or new test | Byte-identity comparison for agent files |
-| OpenCode parity | Platform doc hygiene | `cmd/platform_doc_hygiene_test.go` | Add OpenCode command output format tests |
-
-## Anti-Features
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| Full 618-line suggest-analyze re-port | The original was a monolithic shell script with redundant patterns. Re-porting all 618 lines introduces unmaintainable complexity. | Start with 5-7 high-value patterns. Expand based on real usage data. |
-| Charter as a separate file system | Charters stored in separate files create sync issues with colony state. If the charter file drifts from state, workers get conflicting information. | Store charter as a field in COLONY_STATE.json. Single source of truth. |
-| Circuit breaker with machine learning thresholds | Adaptive thresholds sound smart but require significant training data and add unpredictable behavior. | Start with fixed thresholds (e.g., 3 consecutive failures). Tune based on real colony data. |
-| Cross-platform ceremony via markdown generation | Generating markdown ceremony files that all three platforms must parse creates fragile coupling. | Each platform calls the same Go CLI and parses the same JSON output. Platform-specific presentation is the wrapper's job. |
-| Stale file auto-deletion during cleanup | Automatically deleting files the audit identifies as stale is dangerous. A file might look unreferenced but be loaded dynamically or referenced by name in a config file. | List stale candidates, require explicit confirmation before deletion. |
+| A1: Provenance validation | `runCodexContinueGates()` | `cmd/codex_continue.go:2361` | Add provenance gate check that validates claims against filesystem |
+| A1: Provenance validation | Build complete | `cmd/codex_build_finalize.go` | Add filesystem verification of claimed files, reject empty builds |
+| A4: Recoverable failures | Gate failure output | `cmd/gate.go:490-531` | Add structured recovery actions, persist to `gate-results.json` |
+| A4: /ant-unblock | New command | New `cmd/unblock.go` | Read gate failure state, offer retry/fix paths |
+| A5: Gate persistence | `gateResultsWrite()` | `cmd/gate.go:548-571` | Add retry count, cooldown, soft/hard fail fields |
+| A6: Fixer caste | Agent definitions | `.claude/agents/ant/aether-fixer.md` (new) | New agent across 4 surfaces |
+| A3: Init synthesis | `init-research` output | `cmd/init_research.go` | Add synthesis step that produces approval-ready brief |
+| B5: Learning triggers | Build/continue complete | `cmd/codex_build_finalize.go`, `cmd/codex_continue_finalize.go` | Add evidence-gated learning capture |
+| B6: Privacy gate | `learning-observe`, `instinct-create` | `cmd/learning.go`, `cmd/instinct.go` | Add privacy scanning before write |
+| B7: Hive opt | `hive-promote` at seal | `cmd/hive.go` | Add colony-level opt-out, sensitivity filtering |
+| B1: Memory store | New unified API | New `cmd/memory_store.go` | Unified read/write/query for all memory types |
+| B4: Keeper curator | New commands | New `cmd/keeper.go` | Usage tracking, stale detection, archival |
+| B3: Pheromone skills | `skill-inject` | `cmd/skills.go` | Auto-create from verified difficult tasks, usage tracking |
 
 ## Sources
 
-- `cmd/init_research.go` -- existing codebase scanning, governance detection, pheromone suggestions (10 patterns), charter generation
-- `cmd/init_cmd.go` -- current init flow (no research integration)
-- `cmd/immune.go` -- immune system (diagnose, retry, scar tracking)
-- `cmd/council.go` -- council deliberation system (already ported)
-- `cmd/trust.go` -- trust scoring (compute, decay, tier)
-- `cmd/curation_cmds.go` -- curation ant CLI subcommands
-- `pkg/agent/curation/` -- all 8 curation ants implemented
-- `cmd/graph_consolidation_cmds.go` -- graph commands and consolidation
-- `cmd/pheromone_write.go` -- pheromone creation with dedup, sanitization, TTL
-- `.claude/commands/ant/init.md` -- current init wrapper ceremony flow
-- `.aether/docs/command-playbooks/build-prep.md` -- build prep with suggest-analyze reference
-- `.aether/docs/command-playbooks/build-wave.md` -- build-wave dispatch flow
-- `.planning/PROJECT.md` -- milestone requirements and known losses
+- `cmd/codex_build.go` -- Build dispatch, claims, manifest (lines 22-199)
+- `cmd/codex_build_finalize.go` -- Build complete flow, filesystem fallback discovery (lines 194-457)
+- `cmd/codex_continue.go` -- Continue gates, provenance check, gate report (lines 60-2429)
+- `cmd/gate.go` -- Gate checking, recovery templates, skip logic, persistence (lines 1-700)
+- `cmd/compatibility_cmds.go` -- Oracle RALF loop, autopilot (lines 52-140)
+- `cmd/recover_scanner.go` -- 7 stuck-state detectors (lines 1-100)
+- `cmd/codex_worker_cleanup.go` -- Stale worker termination (lines 1-32)
+- `cmd/oracle_process_unix.go` -- Process tree termination (lines 1-63)
+- `cmd/init_research.go` -- Codebase scanning, charter generation (598 lines)
+- `cmd/init_cmd.go` -- Colony initialization (lines 1-80)
+- `cmd/hive.go` -- Hive Brain wisdom storage, LRU cap, promotion (lines 1-80)
+- `cmd/learning.go` -- Observation capture, trust scoring (lines 1-66)
+- `cmd/instinct.go` -- Instinct CRUD, duplicate detection, confidence reinforcement (lines 1-80)
+- `cmd/memory_health.go` -- Memory health aggregation from multiple JSON files (lines 1-80)
+- `pkg/memory/` -- Observation, pipeline, promote, queen, trust, consolidate packages
+- `pkg/colony/colony.go` -- ColonyState struct, GateResultEntry, Charter, PendingSuggestion (lines 220-302)
+- `pkg/colony/instincts.go` -- InstinctEntry, InstinctsFile types (lines 1-35)
+- `pkg/colony/sanitize.go` -- Content sanitization for pheromone signals
+- `pkg/storage/storage.go` -- Atomic write, file locking, JSON persistence
+- `.planning/PROJECT.md` -- v1.13 milestone requirements (AAC-001 through AAC-031, REC-LOOP-01)
 
 ---
-*Feature research for: Aether v1.11 Unification*
-*Researched: 2026-04-28*
+*Feature research for: Aether v1.13 Recovery Hardening & Hive Learning*
+*Researched: 2026-05-01*

@@ -1,160 +1,165 @@
 # Project Research Summary
 
-**Project:** Aether v1.9 -- Review Findings Persistence and Domain-Ledger System
-**Domain:** Internal feature integration (extending an existing Go CLI framework with file-based state management)
-**Researched:** 2026-04-26
+**Project:** Aether v1.13 -- Recovery Hardening & Hive Learning
+**Domain:** AI colony framework -- build/continue gate hardening, confidence-targeted research loops, SQLite-backed procedural memory
+**Researched:** 2026-05-01
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether v1.9 adds a review findings persistence layer to an established Go runtime with 2900+ passing tests. The system needs two things: per-worker outcome reports for continue-review workers (mirroring what build workers already have), and a domain-ledger system where seven review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) persist structured findings that survive `/clear` and accumulate across phases. Colony-prime then injects open findings into downstream worker prompts, closing the loop so Phase N+1 builders see what Phase N reviewers found.
+v1.13 adds two capability layers to Aether's existing Go CLI colony runtime. The first is **recovery hardening**: preventing phantom build advancement (builds that claim success but produced nothing), adding confidence-targeted Oracle planning, converting raw init research into approval-ready briefs, and replacing STOP-wall gate failures with fix/unblock paths plus a new Fixer caste. The second is **hive learning**: a repo-scoped colony memory store with SQLite-backed FTS5 recall, pheromone skills (auto-created procedural memory from verified difficult tasks), Keeper curator with usage tracking and stale detection, and evidence-gated learning triggers that only promote verified successful work into durable wisdom.
 
-The recommended approach requires zero new external dependencies. Every capability -- JSON persistence with file locking, CLI subcommand registration, deterministic ID generation, colony-prime context injection -- already exists as an established pattern in `cmd/` and `pkg/`. The work is two new files (one types file at ~80 lines, one commands file at ~350 lines) plus targeted modifications to six existing files and 28 agent definition mirrors. The closest analog is the midden system (`pkg/colony/midden.go` + `cmd/midden_cmds.go`), which solves the same problem (structured CRUD over JSON files with atomic writes) and provides a proven template.
-
-The key risks are token budget blowout from the new colony-prime section (mitigated by priority 8 ranking and a hard character cap), agent write-scope escape (mitigated by write-scope guardrails restricting writes to `.aether/data/reviews/` only), and a race condition between concurrent review writes and colony-prime reads (mitigated by using `UpdateJSONAtomically` for writes and a cached summary file for reads). All three risks have straightforward prevention strategies documented in the pitfalls research.
+The recommended approach is **maximally additive** -- all 31 work packages extend existing infrastructure rather than replacing it. The only new external dependency is `modernc.org/sqlite` (pure Go, no CGO), which means zero impact on cross-compilation or single-binary distribution. JSON files remain authoritative for colony state; SQLite serves purely as a secondary search index for accumulated learning. Every new field uses `omitempty` for backward compatibility. The key risks are provenance validation producing false negatives in worktree mode, Oracle confidence gaming by LLM workers, and the Fixer caste creating infinite gate-recovery loops. All three have concrete prevention strategies documented below.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new dependencies. The entire v1.9 milestone is built from existing Go standard library packages and the established `pkg/storage.Store`, `github.com/spf13/cobra`, and `pkg/colony` type system already in `go.mod`.
+v1.13 requires exactly one new external dependency. Everything else builds on existing Go stdlib patterns already proven in the codebase (2900+ tests).
 
 **Core technologies:**
-- `pkg/storage.Store` (existing): Atomic JSON read/write with per-file locking -- the foundation for all 7 domain ledger files
-- `github.com/spf13/cobra` v1.10.2 (existing): CLI subcommand registration for 4 new ledger commands, following the `midden_cmds.go` pattern
-- `cmd/colony_prime_context.go` section system (existing): Additive context sections with priority-based budget trimming, proven by the `medic_health` section
-- `crypto/sha256` + `encoding/json` (stdlib): Content-hash deduplication and structured types for ledger entries
-- `store.AtomicWrite` (existing): Per-worker `.md` report files, mirroring `writeCodexBuildOutcomeReports()`
+- `modernc.org/sqlite` v1.42.1: Colony memory store with FTS5 recall -- pure Go (no CGO), standard `database/sql` interface, FTS5 built-in, trivial cross-compilation. The only new dep.
+- Existing `pkg/storage.Store`: JSON persistence for colony state -- remains authoritative, SQLite is secondary index only.
+- Existing `pkg/events.Bus`: Event bus with JSONL persistence -- learning hooks subscribe to new lifecycle topics (`phase.completed`, `seal.completed`, `gate.passed`).
+- Existing `pkg/memory` trust scoring: 40/35/25 weighted rubric, 7 trust tiers, 60-day half-life -- extended for evidence-gated learning, not replaced.
 
 ### Expected Features
 
-**Must have (table stakes) -- P1:**
-- Continue-review worker outcome reports -- review workers currently produce rich findings with no file output; this is an asymmetric gap with build workers
-- `Report` field on `codexContinueExternalDispatch` and `codexContinueWorkerFlowStep` -- the structural enabler for report data flow
-- `review-ledger-write` / `read` / `summary` subcommands -- programmatic access to ledger data
-- Colony-prime `prior-reviews` section at priority 8 -- the primary user-facing value; persistence without injection is pointless
-- Agent Write tool for 7 review agents -- agents need to persist findings through the CLI
-- Wrapper completion packet `report` field -- documents the data contract between wrappers and runtime
-- Agent mirror sync across all 4 surfaces (Claude, OpenCode, Codex, packaging)
+**Must have (table stakes):**
+- Build provenance validation (A1) -- prevents phantom advancement where builds claim success but produce zero changes. Core trust issue.
+- Recoverable gate failures + /ant-unblock (A4/A5) -- current STOP walls with text instructions are poor UX for an automated system.
+- Evidence-gated learning (B5) -- learning from unverified work creates noise that degrades trust in instincts.
+- Privacy gate for learning writes (B6) -- writing secrets to colony memory is a security risk.
 
-**Should have -- P2:**
-- `review-ledger-resolve` subcommand -- marking entries as resolved (valuable but not needed for the core loop)
-- Status command review findings display -- open finding counts in `aether status`
-- Seal/entomb ledger lifecycle -- archiving and cleanup at colony end
+**Should have (competitive):**
+- Fixer caste (A6) -- self-healing gate failures where the colony fixes its own blockers. Strong differentiator.
+- Confidence-targeted Oracle (A2) -- iterative research that quantifies confidence and targets a threshold. No other AI colony framework does this.
+- Init synthesis (A3) -- converts raw scouting data into an approval-ready launch brief.
+- Pheromone skills (B3) -- auto-created procedural memory from verified difficult tasks.
+- Keeper curator (B4) -- automated memory hygiene with stale detection and archival.
 
 **Defer (v2+):**
-- Cross-colony ledger sharing via Hive Brain -- findings contain code-specific paths that go stale across repos
-- Auto-block on critical findings -- would create conflicting signals with the existing continue-review blocking
-- Automatic finding-to-pheromone promotion -- the mapping between "finding" and "action" requires judgment
+- Worker process lifecycle with heartbeats (A7) -- high cost, moderate value. Current wall-clock timeout suffices until workers run long enough to stall.
+- SQLite + FTS recall (B2) as standalone feature -- defer until B1 (unified memory API) proves the volume justifies a database index.
 
 ### Architecture Approach
 
-Review persistence extends four established subsystems without introducing new ones: continue-flow report writing, CLI subcommand registration, colony-prime context injection, and agent tool definitions. The data flow is: review agents call `aether review-ledger-write` per finding; the runtime validates, assigns deterministic IDs (`sec-2-001`), and writes atomically to `reviews/{domain}/ledger.json`; colony-prime reads open findings and injects a compact markdown section into worker prompts at priority 8.
+The architecture is additive across three well-defined integration surfaces. Recovery hardening modifies two critical paths: build-finalize (between `applyCodexBuildState` and manifest write) and continue-finalize (between `assessCodexContinue` and gate run). A new `cmd/provenance.go` provides validation logic that both paths call. The Oracle loop is extended in-place with a `--confidence-target` flag and iterative refinement that re-opens low-confidence questions. Hive learning introduces a new `pkg/hive/` package with 6 files (store, recall, hooks, privacy, skill, curator), connected to the existing memory pipeline via event bus subscriptions. The privacy gate intercepts all writes to SQLite before data is stored.
 
 **Major components:**
-1. `cmd/review_ledger.go` (NEW): Four cobra subcommands for CRUD operations on domain-ledger entries, plus `pkg/colony/review_ledger.go` for shared types
-2. `cmd/codex_continue_finalize.go` (MODIFIED): Two new functions (`writeCodexContinueOutcomeReports`, `renderCodexContinueWorkerOutcomeReport`) plus struct field preservation in `mergeExternalContinueResults`
-3. `cmd/colony_prime_context.go` (MODIFIED): New `buildPriorReviewsSection()` function producing a priority-8 section from open ledger entries
-4. Agent definitions across 4 surfaces (MODIFIED): 7 agents gain Write tool, findings instructions, and write-scope guardrails
+1. `cmd/provenance.go` (new) -- Build provenance validation that checks claimed files exist and git diff matches. Called by both build-finalize and continue-finalize.
+2. `cmd/unblock_cmd.go` (new) + gate-results.json mirror -- Structured gate recovery with /ant-unblock command, per-phase gate results with retry metadata.
+3. Fixer caste (new agent, 27th) -- Reads gate failure context, investigates root cause, applies fix, verifies, reports. Dispatched by continue-finalize when gates fail with fixable recovery templates.
+4. `pkg/hive/` (new package) -- SQLite-backed learning store with FTS5 recall, privacy gate on all writes, event bus hooks for automatic learning capture, skill lifecycle management, and Keeper curator for memory hygiene.
+5. Oracle confidence loop (extended) -- User-settable confidence target, iterative refinement, context capsule cap, external validation requirements for high confidence scores.
 
 ### Critical Pitfalls
 
-1. **Token budget blowout from prior-review injection** -- Cap the section at 800 chars (normal) / 400 (compact), summarize at domain level not individual findings, set priority to 8 so reviews trim before pheromones and blockers
-2. **Agent write-scope escape** -- Review agents are currently read-only by design; adding Write requires hook enforcement restricting writes to `.aether/data/reviews/` only, shipped in the same phase as the tool addition
-3. **JSON backward compatibility break in merge function** -- `mergeExternalContinueResults` must explicitly copy every new field from dispatch to flow step; add a round-trip test that verifies all fields survive the merge
-4. **File locking contention between writes and reads** -- Use `UpdateJSONAtomically` for writes, cache a `summary.json` for colony-prime reads (one file instead of seven), never hold locks on multiple files simultaneously
-5. **Stale review data accumulation** -- Seal must archive `reviews/` to chambers; `/ant-init` must clear existing reviews for the new colony; this cannot be deferred
+1. **Build provenance false negatives in worktree mode** -- Workers write to isolated worktrees, but provenance validation resolves paths against the main root. Fix: validate against the worktree root during execution, re-validate after sync-back. Use `git ls-files --others --exclude-standard` for untracked files.
+2. **Oracle confidence gaming by LLM workers** -- Self-reported confidence scores are unreliable because LLMs optimize for task completion. Fix: add external validation (finding diversity, code-level evidence requirements), confidence decay when no progress across iterations, context capsule cap at 4000 chars.
+3. **Fixer caste creating infinite gate-recovery loops** -- Circuit breaker tracks worker names, but Fixer gets a new deterministic name each spawn so it never trips. Fix: add gate-level circuit breaker (not worker-level), cap Fixer at 2 attempts per gate, require Fixer to run ALL gates after its fix.
+4. **SQLite coexistence with JSON file storage** -- WAL mode creates auxiliary files that could be committed to git. Fix: store DB in `.aether/data/hive/` with its own `.gitignore` excluding all files. Use `SetMaxOpenConns(1)` for writes. Never use `FileLocker` on SQLite files.
+5. **False learning confidence from lucky passes** -- Gates passing does not mean work is correct, only that tests pass and no critical flags exist. Fix: require multi-repo confirmation for confidence above 0.7, add privacy gate to learning injection that strips cross-repo specifics.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure (5 phases):
+Based on research, suggested phase structure:
 
-### Phase 1: Continue-Review Worker Outcome Reports
-**Rationale:** Simplest change -- extends an existing flow with a pattern that already exists for builds. No new CLI commands, no new data formats. Just struct fields and two functions. Must come first because later phases depend on the `Report` field existing in the continue pipeline.
-**Delivers:** Per-worker `.md` files at `build/phase-N/worker-reports/{name}.md` for review workers, matching the build report UX
-**Addresses:** Continue-review outcome reports, `Report` field on structs, wrapper completion packet
-**Avoids:** JSON backward compatibility break (Pitfall 3) -- round-trip test validates field survival in merge
+### Phase 1: Recovery Foundation
+**Rationale:** Build provenance is the most critical trust issue -- without it, phantom advancement undermines the entire build/continue contract. Gate state persistence and /ant-unblock are low-cost extensions of existing gate.go logic. Privacy gate is a security baseline needed before any learning features write data.
+**Delivers:** Provenance validation at build-complete and continue-verify, gate-results.json mirror with per-phase scoping, /ant-unblock command, privacy/secret scanning for learning writes.
+**Addresses:** A1 (provenance), A4/A5 (recoverable gates), B6 (privacy gate).
+**Avoids:** Pitfall 1 (provenance false negatives) by implementing checkpoint-based diff and timestamp validation.
 
-### Phase 2: Domain-Ledger CRUD Subcommands
-**Rationale:** Independent infrastructure that downstream phases (colony-prime injection, agent writes) depend on. Getting CRUD right and tested first means consumers have a stable API.
-**Delivers:** `review-ledger-write`, `review-ledger-read`, `review-ledger-summary`, `review-ledger-resolve` subcommands with deterministic IDs, domain validation, and atomic writes
-**Uses:** `pkg/storage.Store` for atomic JSON, `crypto/sha256` for dedup, `pkg/colony/review_ledger.go` for types
-**Implements:** Domain-ledger storage layer
-**Avoids:** File locking contention (Pitfall 4) -- uses `UpdateJSONAtomically` and sequential domain processing
+### Phase 2: Gate Self-Healing
+**Rationale:** The Fixer caste and smart gate retry build directly on Phase 1's gate persistence. The Fixer needs gate failure context (from /ant-unblock infrastructure) to function. Oracle confidence targeting is independent and can build in parallel. Init synthesis is independent and improves onboarding UX.
+**Delivers:** Fixer caste (27th agent) across all 4 surfaces, smart gate retry with cooldowns, confidence-targeted Oracle loop, init synthesis step.
+**Addresses:** A6 (Fixer), A2 (Oracle), A3 (init synthesis).
+**Uses:** Gate state persistence from Phase 1 for Fixer context.
+**Avoids:** Pitfall 3 (Fixer infinite loops) by implementing gate-level circuit breaker and Fixer attempt cap.
 
-### Phase 3: Colony-Prime Prior-Reviews Section
-**Rationale:** Depends on Phase 2 (must be able to read ledger files). This is the primary user-facing value -- the moment when persisted findings actually inform downstream workers.
-**Delivers:** `buildPriorReviewsSection()` at priority 8, reading open findings from all domain ledgers, compact markdown injection into worker context
-**Avoids:** Token budget blowout (Pitfall 1) -- character cap, domain-level summary, priority-based trimming
+### Phase 3: Learning Foundation
+**Rationale:** Evidence-gated learning triggers depend on Phase 1 provenance validation for evidence. The unified memory API is the foundation for all remaining B features. Repo isolation is low-cost and extends existing hive promotion.
+**Delivers:** Evidence-gated learning triggers at build/continue complete, unified colony memory API, repo isolation with hive opt-in/opt-out, learning hooks connected to event bus.
+**Addresses:** B5 (evidence rules), B1 (unified memory), B7 (repo isolation).
+**Uses:** Provenance validation from Phase 1 for evidence verification.
+**Avoids:** Pitfall 5 (false learning confidence) by requiring multi-repo confirmation and implementing semantic dedup.
 
-### Phase 4: Agent Definition Updates
-**Rationale:** Depends on Phase 2 (agents need `review-ledger-write` to exist as a target). Highest-touch change at 28 file edits (7 agents x 4 surfaces), but low-risk mechanically.
-**Delivers:** Write tool added to 7 review agents, findings instructions, write-scope guardrails, mirror sync verified
-**Avoids:** Agent write-scope escape (Pitfall 2) -- guardrails and hook enforcement ship in this phase; mirror sync drift (Pitfall 6) -- parity verified as acceptance criteria
+### Phase 4: Hive Intelligence
+**Rationale:** SQLite integration, FTS5 recall, pheromone skills, and Keeper curator all depend on Phase 3's unified memory API. This is the highest-complexity phase and should come last when the foundation is stable.
+**Delivers:** SQLite colony.db with WAL mode and FTS5, full-text recall for worker context injection, auto-created pheromone skills from verified difficult tasks, Keeper curator with usage tracking and stale detection.
+**Addresses:** B2 (SQLite + FTS), B3 (pheromone skills), B4 (Keeper curator).
+**Uses:** Unified memory API from Phase 3, privacy gate from Phase 1.
+**Avoids:** Pitfall 4 (SQLite coexistence) by using dedicated `.aether/data/hive/` directory with proper gitignore, single-writer pattern, and FTS health check in patrol.
 
-### Phase 5: Lifecycle Integration
-**Rationale:** Touches existing lifecycle commands (seal, entomb, status) that already work. Must come last because it handles cleanup of data created by earlier phases.
-**Delivers:** Seal archives `reviews/` to chambers, `/ant-init` clears stale reviews, `aether status` shows open finding counts
-**Avoids:** Stale review data accumulation (Pitfall 5) -- archive and cleanup prevent cross-colony contamination
+### Phase 5: System Hardening (optional/deferrable)
+**Rationale:** Worker process lifecycle (heartbeats, PID tracking, stale detection) is the only feature with no strong dependency chain. It can be deferred entirely (recommended) or built after Phase 4 if worker stalls become a real problem in practice.
+**Delivers:** Worker heartbeat monitoring, PID tracking in colony state, stale worker cleanup during execution.
+**Addresses:** A7 (worker lifecycle).
+**Avoids:** Pitfall 6 (PID recycling) by using process groups instead of individual PIDs.
 
 ### Phase Ordering Rationale
 
-- Phase 1 is first because it adds struct fields that Phase 2-5 all depend on indirectly (the `Report` field on continue dispatch structs)
-- Phase 2 is second because Phases 3 and 4 both need ledger subcommands to exist before they can consume or target them
-- Phase 3 and Phase 4 are independent of each other (colony-prime reads ledgers; agents write to ledgers), but both need Phase 2 complete. Phase 3 is ordered first because it delivers user value sooner
-- Phase 5 is last because it handles lifecycle cleanup of data produced by Phases 1-4
-- The grouping separates: struct changes (Phase 1), new infrastructure (Phase 2), read-side integration (Phase 3), write-side integration (Phase 4), lifecycle cleanup (Phase 5)
+- Phase 1 first because provenance validation is the trust foundation everything else builds on, and privacy gate is a security prerequisite.
+- Phase 2 groups gate self-healing and Oracle/init improvements -- they are independent of each other but both depend on Phase 1 gate infrastructure.
+- Phase 3 introduces the learning pipeline foundation -- evidence rules need provenance, unified memory is the API layer for all B features.
+- Phase 4 is the SQLite heavy-lift -- deferred as late as possible because it introduces the only new dependency and has the highest complexity.
+- Phase 5 is explicitly optional/deferrable because current wall-clock timeouts are adequate for most use cases.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3:** Colony-prime budget tuning -- the 800-char cap and priority 8 placement need empirical validation with real finding volumes; consider a budget test as part of acceptance criteria
-- **Phase 4:** Codex TOML agent translation -- the Codex mirror is a different format; verify the TOML `tools` field supports Write the same way markdown frontmatter does
+- **Phase 2 (Fixer caste):** Agent prompt design for gate investigation is novel -- no existing agent does root-cause analysis on gate failures. Needs prompt engineering research.
+- **Phase 4 (SQLite integration):** FTS5 external content pattern with sync triggers needs validation against modernc.org/sqlite specifics. Schema migration strategy across Aether versions needs design.
+- **Phase 4 (Pheromone skills):** Auto-creating skills from task context requires a template design for procedural memory. No existing pattern in the codebase for this.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** Exact structural mirror of `writeCodexBuildOutcomeReports` -- well-documented, line numbers verified
-- **Phase 2:** Exact structural mirror of `midden_cmds.go` -- CRUD over JSON with cobra, proven by 10 existing subcommands
-- **Phase 5:** Minor additions to existing lifecycle commands -- straightforward archival and display
+- **Phase 1 (Recovery foundation):** Provenance validation, gate persistence, and privacy scanning all extend existing patterns with well-understood implementations.
+- **Phase 3 (Learning foundation):** Evidence rules are threshold checks on existing gate/claim data. Unified memory API is CRUD over existing JSON files.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All patterns verified by reading source code directly. Zero new dependencies confirmed via `go.mod` review. Every capability (atomic write, file locking, CLI registration, section injection) has a proven template in the existing codebase. |
-| Features | HIGH | Feature list derived from PROJECT.md v1.9 specification. Dependency chain between features is clear and verified against actual code locations (struct fields, function signatures, file paths). Anti-features well-documented with clear reasoning. |
-| Architecture | HIGH | Data flow mapped end-to-end. Integration points verified at specific line numbers. Component responsibility matrix complete. Anti-patterns identified with correct alternatives. |
-| Pitfalls | HIGH | All 7 pitfalls derived from direct codebase analysis with specific file/line references. Prevention strategies are concrete (character caps, hook enforcement, merge function updates). Recovery costs estimated. Pitfall-to-phase mapping provided. |
+| Stack | HIGH | `modernc.org/sqlite` v1.42.1 verified via Context7 docs, pkg.go.dev, and community sources. FTS5 support confirmed. Pure Go eliminates CGO concerns. |
+| Features | HIGH | All 31 work packages mapped to existing code with specific integration points (file paths, line numbers). No feature requires unknown technology. |
+| Architecture | HIGH | Based on direct analysis of 316 cmd/*.go files and 12 pkg/ packages. All integration surfaces identified with specific hook points. Additive pattern verified. |
+| Pitfalls | HIGH | All 15 pitfalls derived from direct codebase analysis. False negatives in provenance validation, Oracle confidence gaming, and Fixer loops are verified risks with concrete reproduction paths. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Finalize-vs-agent write ownership:** The architecture research recommends making finalize own persistence (agents return findings in completion payload, finalize writes to ledger). The pitfalls research notes that agents could write directly via CLI invocation. This decision must be settled before Phase 4 planning. Recommendation: finalize owns writes (single source of truth, no race conditions).
-- **Codex TOML tool field format:** The architecture research assumes the Codex TOML `tools` field accepts `Write` in a comma-separated list matching markdown frontmatter. This needs verification against `pkg/llm/config.go` Codex parsing during Phase 4.
-- **Summary caching strategy:** The pitfalls research recommends a cached `summary.json` for colony-prime reads. The architecture research does not include this file in the data model. This should be added to Phase 2 (ledger subcommands) as an optimization, or deferred to Phase 5 if performance proves acceptable with 7 direct reads.
-- **Hook system extension:** Write-scope enforcement for review agents requires either extending `protectedHookWriteReason` or adding a new scope-check function. The exact implementation path needs a brief investigation during Phase 4.
+- **SQLite FTS5 with modernc.org/sqlite specifically:** FTS5 is confirmed for SQLite generally, but the exact behavior of external content tables and sync triggers with the modernc.org/sqlite pure-Go driver should be validated with a quick spike in Phase 4 planning.
+- **Fixer caste prompt design:** No existing agent performs automated gate failure investigation. The prompt engineering for root-cause analysis, fix proposal, and verification is uncharted territory for Aether. Prototype during Phase 2 planning.
+- **Context capsule size under triple injection:** Colony-prime (8K) + skills (8K) + learned context (proposed 2K) = 18K chars of injected context. Research recommends a 20K total budget, but the actual impact on worker quality needs validation during Phase 4 when hive recall is wired into colony-prime.
+- **Worktree mode provenance:** All four research files identify worktree parallel mode as a provenance risk. The fix (validate against worktree root, re-validate after sync-back) is straightforward but needs explicit test coverage.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis of `cmd/codex_build.go:1125-1219` -- build outcome report pattern (template for continue reports)
-- Direct codebase analysis of `cmd/midden_cmds.go` -- CRUD subcommand registration pattern (template for ledger commands)
-- Direct codebase analysis of `cmd/colony_prime_context.go:123-527` -- section assembly, priorities, budget system
-- Direct codebase analysis of `pkg/storage/storage.go` -- `AtomicWrite`, `SaveJSON`, `LoadJSON`, file locking
-- Direct codebase analysis of `cmd/codex_continue_finalize.go` -- continue finalize flow, `mergeExternalContinueResults`
-- Direct codebase analysis of `cmd/hive.go` -- LRU eviction, directory creation, hub-scoped storage
-- Direct codebase analysis of `.claude/agents/ant/aether-gatekeeper.md` -- agent definition structure, read-only constraints
-- `.planning/PROJECT.md` -- v1.9 milestone specification and feature requirements
+- Direct codebase analysis: 316 `cmd/*.go` files, 12 `pkg/` packages (2026-05-01)
+- `pkg/memory/trust.go` -- Trust scoring engine (40/35/25 weighted, 7 tiers, half-life)
+- `cmd/codex_build_finalize.go` -- Build-finalize path (lines 144-457)
+- `cmd/codex_continue_finalize.go` -- Continue-finalize path (lines 115-226)
+- `cmd/oracle_loop.go` -- Oracle RALF loop with confidence tracking
+- `cmd/gate.go` -- Gate system with recovery templates (lines 1-700)
+- `cmd/circuit_breaker.go` -- Circuit breaker with per-worker tracking
+- `cmd/hive.go` -- Existing Hive Brain (cross-colony wisdom in JSON)
+- `pkg/events/bus.go` -- Event bus with pub/sub and JSONL persistence
+- `pkg/codex/process_tracker.go` -- Worker process tracking
+- `pkg/storage/storage.go` -- Atomic file operations and file locking
+- `pkg/codex/process_group_unix.go` -- Process group management (Setpgid, SIGTERM/SIGKILL)
+- `cmd/security_cmds.go` -- Existing check-antipattern scanner (6 patterns)
+- `cmd/skills.go` -- Skill system (parse, index, detect, match, inject, diff)
+- `.planning/PROJECT.md` -- v1.13 requirements (AAC-001 through AAC-031, REC-LOOP-01)
 
 ### Secondary (MEDIUM confidence)
-- `pkg/colony/context_ranking.go` -- ranking algorithm details (priority and budget trimming behavior)
-- `cmd/hook_cmds.go` -- write protection and path normalization (for write-scope enforcement)
-- `pkg/colony/sanitize.go` -- content sanitization patterns (for finding description safety)
-
-### Tertiary (LOW confidence)
-- Codex TOML agent format specifics -- assumed to support comma-separated `tools` field matching markdown; needs verification
-- Colony-prime budget behavior with large prior-reviews sections -- theoretical analysis; needs empirical testing at Phase 3
+- modernc.org/sqlite: Context7 `/modernc-org/sqlite` docs, pkg.go.dev (v1.42.1)
+- SQLite FTS5 documentation: https://www.sqlite.org/fts5.html
+- Secret scanning patterns: Gitleaks (https://github.com/gitleaks/gitleaks), TruffleHog
+- SQLite WAL mode concurrency: Reddit r/sqlite, Stack Overflow, Tessl Registry best practices
 
 ---
-*Research completed: 2026-04-26*
+*Research completed: 2026-05-01*
 *Ready for roadmap: yes*
