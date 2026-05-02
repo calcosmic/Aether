@@ -987,8 +987,9 @@ type oracleCompletingInvoker struct{}
 
 func (i *oracleCompletingInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
-		Confidence: 90,
+		Confidence: 99,
 		Summary:    "Autonomous oracle loop produced a source-backed answer.",
 		Findings: []oracleWorkerFinding{{
 			Text: "Autonomous oracle loop produced a source-backed answer.",
@@ -1168,8 +1169,9 @@ func (i *oracleRetryInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig)
 	}
 
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
-		Confidence: 88,
+		Confidence: 99,
 		Summary:    "Retry path completed the oracle iteration successfully.",
 		Findings: []oracleWorkerFinding{{
 			Text: "Retry path completed the oracle iteration successfully.",
@@ -1201,8 +1203,9 @@ type oracleResponseFirstInvoker struct {
 
 func (i *oracleResponseFirstInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
-		Confidence: 85,
+		Confidence: 99,
 		Summary:    "Response file was written before the worker finished its normal final message path.",
 		Findings: []oracleWorkerFinding{{
 			Text: "The controller can consume a valid response file before the nested worker emits its final claims JSON.",
@@ -1242,6 +1245,20 @@ func writeOracleTestResponse(cfg codex.WorkerConfig, response oracleWorkerRespon
 		return err
 	}
 	return os.WriteFile(cfg.ResponsePath, append(data, '\n'), 0644)
+}
+
+
+func oracleTestActiveQuestionID(root string) string {
+	data, err := os.ReadFile(filepath.Join(root, ".aether", "oracle", "state.json"))
+	if err != nil {
+		return ""
+	}
+	var state map[string]interface{}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return ""
+	}
+	id, _ := state["active_question_id"].(string)
+	return id
 }
 
 func TestRunCompatibilityDryRunPlansLifecycle(t *testing.T) {

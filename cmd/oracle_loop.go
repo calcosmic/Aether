@@ -2113,19 +2113,7 @@ func containsOracleIteration(items []int, target int) bool {
 }
 
 func oracleReadyForCompletion(plan oraclePlanFile, state oracleStateFile) bool {
-	return state.OverallConfidence >= state.TargetConfidence || (oracleAllQuestionsAnswered(plan) && state.OverallConfidence >= state.TargetConfidence/2)
-}
-
-func oracleAllQuestionsAnswered(plan oraclePlanFile) bool {
-	if len(plan.Questions) == 0 {
-		return false
-	}
-	for _, q := range plan.Questions {
-		if !strings.EqualFold(strings.TrimSpace(q.Status), "answered") {
-			return false
-		}
-	}
-	return true
+	return state.OverallConfidence >= state.TargetConfidence
 }
 
 func oracleOverallConfidence(plan oraclePlanFile) int {
