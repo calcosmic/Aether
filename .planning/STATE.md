@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.13
 milestone_name: Recovery Hardening & Hive Learning
-status: milestone_complete
+status: executing
 stopped_at: Phase 92 context gathered
-last_updated: "2026-05-02T15:45:19.158Z"
-last_activity: 2026-05-02 -- Phase 92 execution started
+last_updated: "2026-05-02T16:40:44.736Z"
+last_activity: 2026-05-02
 progress:
   total_phases: 5
-  completed_phases: 5
-  total_plans: 22
-  completed_plans: 20
-  percent: 100
+  completed_phases: 3
+  total_plans: 25
+  completed_plans: 21
+  percent: 84
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 92 — system-hardening-validation
+**Current focus:** Phase 89 — gate-self-healing-smart-planning
 
 ## Current Position
 
-Phase: 92
-Plan: Not started
-Status: Milestone complete
+Phase: 89 (gate-self-healing-smart-planning) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
 Last activity: 2026-05-02
 
-Progress: [          ] 0% (0/5 phases complete in this milestone)
+Progress: [████████░░] 84%
 
 ## Performance Metrics
 
@@ -52,6 +52,9 @@ Recent decisions affecting current work:
 - v1.13: 5-phase roadmap following research-driven build order (Recovery Foundation -> Gate Self-Healing -> Learning Foundation -> Hive Intelligence -> System Hardening)
 - v1.13: LOOP requirements woven into gate recovery phases (88, 89), not isolated
 - v1.13: SAFE-05/06 (full-context path, refresh-before-spawn) deferred to Phase 92 (System Hardening) since they are worker lifecycle concerns
+- [Phase ?]: CONF-01/02: --confidence-target overrides depth presets only when explicitly set
+- [Phase ?]: defaultOracleTargetConfidence changed from 85 to 95 per D-08
+- [Phase ?]: approved/blocked/max_iterations/below_target per D-09
 
 ### Pending Todos
 
@@ -81,6 +84,6 @@ Items acknowledged and carried forward from previous milestones:
 
 ## Session Continuity
 
-Last session: 2026-05-02T13:23:12.060Z
+Last session: 2026-05-02T16:40:44.732Z
 Stopped at: Phase 92 context gathered
-Resume file: .planning/phases/92-system-hardening-validation/92-CONTEXT.md
+Resume file: None
