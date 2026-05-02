@@ -325,10 +325,13 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 92-01-PLAN.md -- TBD (to be planned)
-- [ ] 92-02-PLAN.md -- TBD (to be planned)
-- [ ] 92-03-PLAN.md -- TBD (to be planned)
-- [ ] 92-04-PLAN.md -- TBD (to be planned)
+**Wave 1** *(parallel -- no dependencies between plans)*
+- [ ] 92-01-PLAN.md -- Heartbeat monitor goroutine + prompt instruction + lifecycle integration (PLAT-03)
+- [ ] 92-02-PLAN.md -- AAC-005 context audit + freshness test + process lifecycle verification (SAFE-05/06, PLAT-04/05/06)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 92-03-PLAN.md -- Full v1.13 E2E smoke test + update round-trip integrity test (VAL-01/02)
+- [ ] 92-04-PLAN.md -- File format validation with actionable error messages (VAL-03)
 
 ## Progress
 
