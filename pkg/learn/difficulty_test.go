@@ -15,7 +15,8 @@ func TestAssessDifficulty_WorkerFailures(t *testing.T) {
 		Phase:   5,
 		Workers: []WorkerEvidence{
 			{Name: "Builder-1", Caste: "builder", Status: "failed"},
-			{Name: "Builder-2", Caste: "builder", Status: "completed"},
+			{Name: "Builder-2", Caste: "builder", Status: "failed"},
+			{Name: "Builder-3", Caste: "builder", Status: "completed"},
 		},
 		GatesPassed: 2,
 		GatesTotal:  3,
