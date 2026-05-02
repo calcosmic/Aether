@@ -404,3 +404,112 @@ func TestSkillGetNotFound(t *testing.T) {
 		t.Error("GetSkill should return nil for nonexistent skill")
 	}
 }
+
+// TestSkillPromote verifies promoting an active skill copies it to hive domain dir.
+func TestSkillPromote(t *testing.T) {
+	// Override HOME so HiveDomainSkillsDir writes to temp dir
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	store, dir := newTestSQLiteStore(t)
+	defer store.Close()
+
+	svc := NewSkillService(store.DB(), dir)
+	meta := SkillMetadata{
+		Name:       "promote-test",
+		Confidence: 0.9,
+	}
+	content := "This skill should be promoted to hive domain"
+
+	if err := svc.CreateSkill(meta, content); err != nil {
+		t.Fatalf("CreateSkill: %v", err)
+	}
+
+	// Promote the skill
+	targetPath, err := svc.PromoteSkill("promote-test")
+	if err != nil {
+		t.Fatalf("PromoteSkill: %v", err)
+	}
+
+	// Verify target path
+	expectedPath := filepath.Join(tmpDir, ".aether", "skills", "domain", "promote-test", "SKILL.md")
+	if targetPath != expectedPath {
+		t.Errorf("targetPath = %q, want %q", targetPath, expectedPath)
+	}
+
+	// Verify promoted file exists
+	if _, err := os.Stat(targetPath); err != nil {
+		t.Fatalf("promoted SKILL.md not found: %v", err)
+	}
+
+	// Verify repo-local copy still exists
+	localPath := filepath.Join(dir, ".aether", "hive", "skills", "active", "promote-test", "SKILL.md")
+	localData, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("repo-local SKILL.md not found: %v", err)
+	}
+
+	// Verify byte-identical content
+	promotedData, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("promoted SKILL.md not readable: %v", err)
+	}
+	if string(promotedData) != string(localData) {
+		t.Error("promoted content differs from repo-local copy")
+	}
+}
+
+// TestSkillPromote_NotFound verifies promoting a nonexistent skill returns an error.
+func TestSkillPromote_NotFound(t *testing.T) {
+	store, dir := newTestSQLiteStore(t)
+	defer store.Close()
+
+	svc := NewSkillService(store.DB(), dir)
+	_, err := svc.PromoteSkill("nonexistent")
+	if err == nil {
+		t.Fatal("PromoteSkill should fail for nonexistent skill")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error = %q, should contain 'not found'", err.Error())
+	}
+}
+
+// TestSkillPromote_NotActive verifies promoting a non-active skill returns an error.
+func TestSkillPromote_NotActive(t *testing.T) {
+	store, dir := newTestSQLiteStore(t)
+	defer store.Close()
+
+	svc := NewSkillService(store.DB(), dir)
+	meta := SkillMetadata{Name: "archive-promote-test", Confidence: 0.6}
+
+	if err := svc.CreateSkill(meta, "to be archived then promoted"); err != nil {
+		t.Fatalf("CreateSkill: %v", err)
+	}
+
+	if err := svc.ArchiveSkill("archive-promote-test"); err != nil {
+		t.Fatalf("ArchiveSkill: %v", err)
+	}
+
+	_, err := svc.PromoteSkill("archive-promote-test")
+	if err == nil {
+		t.Fatal("PromoteSkill should fail for archived skill")
+	}
+	if !strings.Contains(err.Error(), "not active") {
+		t.Errorf("error = %q, should contain 'not active'", err.Error())
+	}
+}
+
+// TestSkillPromote_InvalidName verifies promoting with an invalid skill name returns a validation error.
+func TestSkillPromote_InvalidName(t *testing.T) {
+	store, dir := newTestSQLiteStore(t)
+	defer store.Close()
+
+	svc := NewSkillService(store.DB(), dir)
+	_, err := svc.PromoteSkill("bad/name")
+	if err == nil {
+		t.Fatal("PromoteSkill should fail for invalid name")
+	}
+	if !strings.Contains(err.Error(), "path separators") {
+		t.Errorf("error = %q, should mention path separators", err.Error())
+	}
+}
