@@ -296,7 +296,7 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 91-01-PLAN.md -- SQLite ColonyStore with schema migrations and FTS5 full-text search (HIVE-04/05/06)
+- [x] 91-01-PLAN.md -- SQLite ColonyStore with schema migrations and FTS5 full-text search (HIVE-04/05/06)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 91-02-PLAN.md -- Skill lifecycle CRUD with progressive disclosure, promote, and CLI commands (SKIL-01/02/03)
@@ -345,5 +345,5 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 88. Recovery Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
 | 89. Gate Self-Healing & Smart Planning | v1.13 | 2/4 | Complete    | 2026-05-01 |
 | 90. Learning Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
-| 91. Hive Intelligence | v1.13 | 0 | Not started | - |
+| 91. Hive Intelligence | v1.13 | 1/4 | In Progress|  |
 | 92. System Hardening & Validation | v1.13 | 0 | Not started | - |
