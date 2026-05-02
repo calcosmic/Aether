@@ -299,7 +299,7 @@ Plans:
 - [x] 91-01-PLAN.md -- SQLite ColonyStore with schema migrations and FTS5 full-text search (HIVE-04/05/06)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 91-02-PLAN.md -- Skill lifecycle CRUD with progressive disclosure, promote, and CLI commands (SKIL-01/02/03)
+- [x] 91-02-PLAN.md -- Skill lifecycle CRUD with progressive disclosure, promote, and CLI commands (SKIL-01/02/03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 91-03-PLAN.md -- Keeper Curator lifecycle transitions, usage tracking, and pin immunity (SKIL-04/05/06)
@@ -308,7 +308,7 @@ Plans:
 - [x] 91-04-PLAN.md -- Auto-skill creation with difficulty detection and continue-finalize wiring (AUTO-01/02/03/04)
 
 **Wave 5** *(gap closure -- closes 91-02 gaps)*
-- [ ] 91-05-PLAN.md -- Gap closure: PromoteSkill, skill tests, hive-search CLI, skill lifecycle CLI (HIVE-05, SKIL-01/02/03)
+- [x] 91-05-PLAN.md -- Gap closure: PromoteSkill, skill tests, hive-search CLI, skill lifecycle CLI (HIVE-05, SKIL-01/02/03)
 
 ### Phase 92: System Hardening & Validation
 **Goal**: Worker lifecycle is managed with heartbeats and process groups, and the full system is validated end-to-end
@@ -348,5 +348,5 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 88. Recovery Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
 | 89. Gate Self-Healing & Smart Planning | v1.13 | 2/4 | Complete    | 2026-05-01 |
 | 90. Learning Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
-| 91. Hive Intelligence | v1.13 | 3/5 | In Progress|  |
+| 91. Hive Intelligence | v1.13 | 5/5 | Complete    | 2026-05-02 |
 | 92. System Hardening & Validation | v1.13 | 0 | Not started | - |

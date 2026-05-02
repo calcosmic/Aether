@@ -57,18 +57,18 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 - [x] **HIVE-01**: Aether-native learning concepts mapped from Hermes, with MIT notice if code is referenced (AAC-019)
 - [x] **HIVE-02**: Colony memory store supports add, replace, remove, compact with configurable character/token budgets (AAC-020)
 - [x] **HIVE-03**: Colony memory injected into init/oracle/worker prompts as frozen snapshot; failed/empty builds never create durable memory (AAC-020)
-- [ ] **HIVE-04**: SQLite colony.db (WAL mode) with tables for runs, workers, gates, memories, skills, decisions, trajectories, and schema_version (AAC-021)
-- [ ] **HIVE-05**: FTS5 search indexes for worker summaries, gate failures, decisions, and memory text via aether hive search (AAC-021)
-- [ ] **HIVE-06**: Schema migrations are versioned, idempotent, and migration-safe (AAC-021)
+- [x] **HIVE-04**: SQLite colony.db (WAL mode) with tables for runs, workers, gates, memories, skills, decisions, trajectories, and schema_version (AAC-021)
+- [x] **HIVE-05**: FTS5 search indexes for worker summaries, gate failures, decisions, and memory text via aether hive search (AAC-021)
+- [x] **HIVE-06**: Schema migrations are versioned, idempotent, and migration-safe (AAC-021)
 
 ### Pheromone Skills
 
-- [ ] **SKIL-01**: Repo-local pheromone skills stored in .aether/hive/skills/active/ with SKILL.md format including evidence frontmatter (AAC-022)
-- [ ] **SKIL-02**: Skills use progressive disclosure — prompt includes index only, full content loads only when matched (AAC-022)
-- [ ] **SKIL-03**: Skill actions: create, patch, edit, delete/archive, view, list, search, pin, promote (AAC-022)
-- [ ] **SKIL-04**: Keeper Curator tracks usage (view/use/patch counts), auto-transitions unused skills active -> stale -> archived (AAC-023)
-- [ ] **SKIL-05**: Pinned skills are immutable to both auto-transitions and agent writes (AAC-023)
-- [ ] **SKIL-06**: Archived skills are recoverable, never auto-deleted (AAC-023)
+- [x] **SKIL-01**: Repo-local pheromone skills stored in .aether/hive/skills/active/ with SKILL.md format including evidence frontmatter (AAC-022)
+- [x] **SKIL-02**: Skills use progressive disclosure — prompt includes index only, full content loads only when matched (AAC-022)
+- [x] **SKIL-03**: Skill actions: create, patch, edit, delete/archive, view, list, search, pin, promote (AAC-022)
+- [x] **SKIL-04**: Keeper Curator tracks usage (view/use/patch counts), auto-transitions unused skills active -> stale -> archived (AAC-023)
+- [x] **SKIL-05**: Pinned skills are immutable to both auto-transitions and agent writes (AAC-023)
+- [x] **SKIL-06**: Archived skills are recoverable, never auto-deleted (AAC-023)
 
 ### Learning Pipeline
 
@@ -86,10 +86,10 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 - [x] **PRIV-03**: Learning entries classified as repo-local, hive-shareable, blocked, or needs-user-approval (AAC-029)
 - [x] **PRIV-04**: Trajectory records stored locally with strict redaction; export requires approval and redaction report (AAC-028)
 - [x] **PRIV-05**: Learning writes can be disabled by config and by per-command flag (AAC-029)
-- [ ] **AUTO-01**: Auto-created repo-local skills after difficult verified tasks (configurable: off/propose/auto, default propose) (AAC-031)
-- [ ] **AUTO-02**: Hard rejection rules prevent skill creation from failed, zero-modification, phantom, unresolved vetoed, or secret-containing runs (AAC-031)
-- [ ] **AUTO-03**: Auto-created skills include source evidence, verification steps, confidence score, privacy scan result, and repo fingerprint (AAC-031)
-- [ ] **AUTO-04**: aether update never overwrites repo-local learned skills (AAC-031)
+- [x] **AUTO-01**: Auto-created repo-local skills after difficult verified tasks (configurable: off/propose/auto, default propose) (AAC-031)
+- [x] **AUTO-02**: Hard rejection rules prevent skill creation from failed, zero-modification, phantom, unresolved vetoed, or secret-containing runs (AAC-031)
+- [x] **AUTO-03**: Auto-created skills include source evidence, verification steps, confidence score, privacy scan result, and repo fingerprint (AAC-031)
+- [x] **AUTO-04**: aether update never overwrites repo-local learned skills (AAC-031)
 
 ### System Validation
 
@@ -158,15 +158,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HIVE-01 | Phase 90 | Complete |
 | HIVE-02 | Phase 90 | Complete |
 | HIVE-03 | Phase 90 | Complete |
-| HIVE-04 | Phase 91 | Pending |
-| HIVE-05 | Phase 91 | Pending |
-| HIVE-06 | Phase 91 | Pending |
-| SKIL-01 | Phase 91 | Pending |
-| SKIL-02 | Phase 91 | Pending |
-| SKIL-03 | Phase 91 | Pending |
-| SKIL-04 | Phase 91 | Pending |
-| SKIL-05 | Phase 91 | Pending |
-| SKIL-06 | Phase 91 | Pending |
+| HIVE-04 | Phase 91 | Complete |
+| HIVE-05 | Phase 91 | Complete |
+| HIVE-06 | Phase 91 | Complete |
+| SKIL-01 | Phase 91 | Complete |
+| SKIL-02 | Phase 91 | Complete |
+| SKIL-03 | Phase 91 | Complete |
+| SKIL-04 | Phase 91 | Complete |
+| SKIL-05 | Phase 91 | Complete |
+| SKIL-06 | Phase 91 | Complete |
 | LRN-01 | Phase 90 | Complete |
 | LRN-02 | Phase 90 | Complete |
 | LRN-03 | Phase 90 | Complete |
@@ -178,10 +178,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRIV-03 | Phase 90 | Complete |
 | PRIV-04 | Phase 90 | Complete |
 | PRIV-05 | Phase 90 | Complete |
-| AUTO-01 | Phase 91 | Pending |
-| AUTO-02 | Phase 91 | Pending |
-| AUTO-03 | Phase 91 | Pending |
-| AUTO-04 | Phase 91 | Pending |
+| AUTO-01 | Phase 91 | Complete |
+| AUTO-02 | Phase 91 | Complete |
+| AUTO-03 | Phase 91 | Complete |
+| AUTO-04 | Phase 91 | Complete |
 | VAL-01 | Phase 92 | Pending |
 | VAL-02 | Phase 92 | Pending |
 | VAL-03 | Phase 92 | Pending |
