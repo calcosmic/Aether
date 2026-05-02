@@ -326,12 +326,12 @@ Plans:
 
 Plans:
 **Wave 1** *(parallel -- no dependencies between plans)*
-- [ ] 92-01-PLAN.md -- Heartbeat monitor goroutine + prompt instruction + lifecycle integration (PLAT-03)
-- [ ] 92-02-PLAN.md -- AAC-005 context audit + freshness test + process lifecycle verification (SAFE-05/06, PLAT-04/05/06)
+- [x] 92-01-PLAN.md -- Heartbeat monitor goroutine + prompt instruction + lifecycle integration (PLAT-03)
+- [x] 92-02-PLAN.md -- AAC-005 context audit + freshness test + process lifecycle verification (SAFE-05/06, PLAT-04/05/06)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 92-03-PLAN.md -- Full v1.13 E2E smoke test + update round-trip integrity test (VAL-01/02)
-- [ ] 92-04-PLAN.md -- File format validation with actionable error messages (VAL-03)
+- [x] 92-03-PLAN.md -- Full v1.13 E2E smoke test + update round-trip integrity test (VAL-01/02)
+- [x] 92-04-PLAN.md -- File format validation with actionable error messages (VAL-03)
 
 ## Progress
 
@@ -352,4 +352,4 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 89. Gate Self-Healing & Smart Planning | v1.13 | 2/4 | Complete    | 2026-05-01 |
 | 90. Learning Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
 | 91. Hive Intelligence | v1.13 | 5/5 | Complete    | 2026-05-02 |
-| 92. System Hardening & Validation | v1.13 | 0 | Not started | - |
+| 92. System Hardening & Validation | v1.13 | 5/5 | Complete    | 2026-05-02 |

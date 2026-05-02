@@ -13,8 +13,8 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 - [x] **SAFE-02**: Build-complete rejects completion when every worker result reports files_modified: 0 for a build phase (AAC-001)
 - [x] **SAFE-03**: Continue verification traces every accepted build claim to a successful worker result with files_modified > 0 (AAC-002)
 - [x] **SAFE-04**: Continue verification records provenance (worker name, caste, run ID, phase, timestamp, status, files_modified) and rejects claims with missing or stale provenance (AAC-002)
-- [ ] **SAFE-05**: Worker prompts include all v5.4 context sections: colony-prime, prompt_section, survey context, phase research, matched skills, midden/graveyard cautions (AAC-005)
-- [ ] **SAFE-06**: Context is refreshed immediately before worker spawn, not cached from session start (AAC-005)
+- [x] **SAFE-05**: Worker prompts include all v5.4 context sections: colony-prime, prompt_section, survey context, phase research, matched skills, midden/graveyard cautions (AAC-005)
+- [x] **SAFE-06**: Context is refreshed immediately before worker spawn, not cached from session start (AAC-005)
 
 ### Confidence & Planning
 
@@ -47,10 +47,10 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 
 - [x] **PLAT-01**: OpenCode agent hub template generates valid name field; aether update preserves it (AAC-012)
 - [x] **PLAT-02**: LLM provider baseURL is separated from worker callback/messaging URL; missing callback fails before worker spawn with clear config error (AAC-013)
-- [ ] **PLAT-03**: Workers emit periodic heartbeats (first immediately, then throttled to ~30s intervals) (AAC-014)
-- [ ] **PLAT-04**: Workers spawn in managed process groups (Setpgid on Unix, stub on Windows) (AAC-015)
-- [ ] **PLAT-05**: Worker PIDs are tracked and killed on exit (SIGTERM then SIGKILL after ~2s) (AAC-016)
-- [ ] **PLAT-06**: Stale workers from previous sessions are detected and cleaned before new dispatch (AAC-017)
+- [x] **PLAT-03**: Workers emit periodic heartbeats (first immediately, then throttled to ~30s intervals) (AAC-014)
+- [x] **PLAT-04**: Workers spawn in managed process groups (Setpgid on Unix, stub on Windows) (AAC-015)
+- [x] **PLAT-05**: Worker PIDs are tracked and killed on exit (SIGTERM then SIGKILL after ~2s) (AAC-016)
+- [x] **PLAT-06**: Stale workers from previous sessions are detected and cleaned before new dispatch (AAC-017)
 
 ### Hive Learning Foundation
 
@@ -93,9 +93,9 @@ Requirements for v1.13. Each maps to roadmap phases. Source: PRD AAC-001 through
 
 ### System Validation
 
-- [ ] **VAL-01**: Full smoke test from init/oracle through phase advancement with gate failure, unblock, fixer, continue, and process cleanup (AAC-018)
-- [ ] **VAL-02**: All generated/mirrored files (agents, commands) survive aether update (AAC-018)
-- [ ] **VAL-03**: Every new command/file format has validation and actionable errors (AAC-018)
+- [x] **VAL-01**: Full smoke test from init/oracle through phase advancement with gate failure, unblock, fixer, continue, and process cleanup (AAC-018)
+- [x] **VAL-02**: All generated/mirrored files (agents, commands) survive aether update (AAC-018)
+- [x] **VAL-03**: Every new command/file format has validation and actionable errors (AAC-018)
 
 ## v2 Requirements
 
@@ -129,8 +129,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SAFE-02 | Phase 88 | Complete |
 | SAFE-03 | Phase 88 | Complete |
 | SAFE-04 | Phase 88 | Complete |
-| SAFE-05 | Phase 92 | Pending |
-| SAFE-06 | Phase 92 | Pending |
+| SAFE-05 | Phase 92 | Complete |
+| SAFE-06 | Phase 92 | Complete |
 | CONF-01 | Phase 89 | Complete |
 | CONF-02 | Phase 89 | Complete |
 | CONF-03 | Phase 89 | Complete |
@@ -151,10 +151,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOOP-04 | Phase 89 | Complete |
 | PLAT-01 | Phase 89 | Complete |
 | PLAT-02 | Phase 89 | Complete |
-| PLAT-03 | Phase 92 | Pending |
-| PLAT-04 | Phase 92 | Pending |
-| PLAT-05 | Phase 92 | Pending |
-| PLAT-06 | Phase 92 | Pending |
+| PLAT-03 | Phase 92 | Complete |
+| PLAT-04 | Phase 92 | Complete |
+| PLAT-05 | Phase 92 | Complete |
+| PLAT-06 | Phase 92 | Complete |
 | HIVE-01 | Phase 90 | Complete |
 | HIVE-02 | Phase 90 | Complete |
 | HIVE-03 | Phase 90 | Complete |
@@ -182,9 +182,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTO-02 | Phase 91 | Complete |
 | AUTO-03 | Phase 91 | Complete |
 | AUTO-04 | Phase 91 | Complete |
-| VAL-01 | Phase 92 | Pending |
-| VAL-02 | Phase 92 | Pending |
-| VAL-03 | Phase 92 | Pending |
+| VAL-01 | Phase 92 | Complete |
+| VAL-02 | Phase 92 | Complete |
+| VAL-03 | Phase 92 | Complete |
 
 **Coverage:**
 - v1 requirements: 60 total
