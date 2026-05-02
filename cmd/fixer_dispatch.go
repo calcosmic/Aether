@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // gateResultsFile wraps gate results with unblock attempt tracking.
@@ -153,24 +155,27 @@ func dispatchFixer(phaseNum int, fixerMode string) error {
 		return fmt.Errorf("failed to increment unblock attempts: %w", err)
 	}
 
-	// Build list of failed gates
+	// Build list of failed gates (sanitize content per T-89-01)
 	var failedGates []map[string]string
 	for _, r := range fileData.Results {
 		if r.Status == "failed" {
+			sanitizedDetail, _ := colony.SanitizeSignalContent(r.Detail)
+			sanitizedFixHint, _ := colony.SanitizeSignalContent(r.FixHint)
 			gate := map[string]string{
 				"name":     r.Name,
-				"detail":   r.Detail,
-				"fix_hint": r.FixHint,
+				"detail":   sanitizedDetail,
+				"fix_hint": sanitizedFixHint,
 			}
 			failedGates = append(failedGates, gate)
 		}
 	}
 
-	// Build fix hint summary
+	// Build fix hint summary (sanitized)
 	var hints []string
 	for _, r := range fileData.Results {
 		if r.Status == "failed" && r.FixHint != "" {
-			hints = append(hints, fmt.Sprintf("%s: %s", r.Name, r.FixHint))
+			sanitized, _ := colony.SanitizeSignalContent(r.FixHint)
+			hints = append(hints, fmt.Sprintf("%s: %s", r.Name, sanitized))
 		}
 	}
 	fixHint := strings.Join(hints, "; ")

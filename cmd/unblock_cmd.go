@@ -105,10 +105,12 @@ func buildGateRecoverySummary(phaseNum int, results []GateCheckResult) string {
 		}
 		b.WriteString(fmt.Sprintf("\n  Gate: %s\n", r.Name))
 		if r.Detail != "" {
-			b.WriteString(fmt.Sprintf("  Issue: %s\n", r.Detail))
+			sanitized, _ := colony.SanitizeSignalContent(r.Detail)
+			b.WriteString(fmt.Sprintf("  Issue: %s\n", sanitized))
 		}
 		if r.FixHint != "" {
-			b.WriteString(fmt.Sprintf("  Fix: %s\n", r.FixHint))
+			sanitized, _ := colony.SanitizeSignalContent(r.FixHint)
+			b.WriteString(fmt.Sprintf("  Fix: %s\n", sanitized))
 		}
 		if len(r.RecoveryOptions) > 0 {
 			b.WriteString("  Options:\n")
