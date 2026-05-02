@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -176,16 +177,89 @@ func (s *SQLiteColonyStore) Remove(id string) error {
 	return nil
 }
 
-// Compact removes lowest-confidence entries until total content fits budget.
-// Implemented in Task 1b -- stub returns nil.
+// Compact removes lowest-confidence entries until total content length fits
+// within the budget. Higher-confidence entries are kept. Budget is measured in
+// characters of Content.
 func (s *SQLiteColonyStore) Compact(budget int) error {
-	return nil
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("learn: compact begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Get IDs of entries to keep (highest confidence first, within budget)
+	rows, err := tx.Query(`SELECT id, LENGTH(content) as clen FROM memories ORDER BY confidence DESC`)
+	if err != nil {
+		return fmt.Errorf("learn: compact query: %w", err)
+	}
+	defer rows.Close()
+
+	var toKeep []string
+	var totalLen int
+	for rows.Next() {
+		var id string
+		var clen int
+		if err := rows.Scan(&id, &clen); err != nil {
+			return fmt.Errorf("learn: compact scan: %w", err)
+		}
+		if totalLen+clen <= budget {
+			toKeep = append(toKeep, id)
+			totalLen += clen
+		}
+	}
+
+	if len(toKeep) == 0 {
+		// Nothing to keep -- delete all entries
+		if budget <= 0 {
+			if _, err := tx.Exec(`DELETE FROM memories`); err != nil {
+				return fmt.Errorf("learn: compact delete all: %w", err)
+			}
+			return tx.Commit()
+		}
+		return tx.Commit() // No entries to delete
+	}
+
+	// Delete entries not in toKeep
+	placeholders := make([]string, len(toKeep))
+	args := make([]interface{}, len(toKeep))
+	for i, id := range toKeep {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf("DELETE FROM memories WHERE id NOT IN (%s)", strings.Join(placeholders, ","))
+	_, err = tx.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("learn: compact delete: %w", err)
+	}
+	return tx.Commit()
 }
 
 // MigrateFromJSON reads entries from the Phase 90 JSON format and inserts into SQLite.
-// Implemented in Task 1b -- stub returns nil.
 func (s *SQLiteColonyStore) MigrateFromJSON(jsonDir string) (int, error) {
-	return 0, nil
+	data, err := os.ReadFile(filepath.Join(jsonDir, "entries.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil // No JSON file = nothing to migrate
+		}
+		return 0, fmt.Errorf("learn: read JSON entries: %w", err)
+	}
+
+	var entries []Entry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return 0, fmt.Errorf("learn: parse JSON entries: %w", err)
+	}
+
+	imported := 0
+	for _, entry := range entries {
+		if entry.ID == "" {
+			entry.ID = s.generateID()
+		}
+		if err := s.Add(entry); err != nil {
+			return imported, fmt.Errorf("learn: migrate entry %s: %w", entry.ID, err)
+		}
+		imported++
+	}
+	return imported, nil
 }
 
 // DBPath returns the database file path (for tests and CLI commands).

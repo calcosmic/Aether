@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // newTestSQLiteStore creates a SQLiteColonyStore in a temp directory for testing.
@@ -391,5 +393,146 @@ func TestSQLiteColonyStoreRedactedField(t *testing.T) {
 	}
 	if !got.Redacted {
 		t.Error("Redacted should be true")
+	}
+}
+
+func TestCompactRemovesLowestConfidence(t *testing.T) {
+	store, _ := newTestSQLiteStore(t)
+	defer store.Close()
+
+	// Add 5 entries with different confidences, each with 100-char content
+	for i, conf := range []float64{0.1, 0.3, 0.5, 0.7, 0.9} {
+		entry := makeEntry("", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", conf)
+		entry.Phase = i
+		store.Add(entry)
+	}
+
+	// Budget of 250 chars -- should keep top 2 highest confidence entries
+	if err := store.Compact(250); err != nil {
+		t.Fatalf("Compact: %v", err)
+	}
+
+	entries, err := store.List(EntryFilter{})
+	if err != nil {
+		t.Fatalf("List after compact: %v", err)
+	}
+	if len(entries) > 3 {
+		t.Errorf("Compact should remove lowest-confidence entries, got %d entries", len(entries))
+	}
+
+	// Verify highest-confidence entry survives
+	foundHigh := false
+	for _, e := range entries {
+		if e.Confidence == 0.9 {
+			foundHigh = true
+		}
+	}
+	if !foundHigh {
+		t.Error("highest-confidence entry (0.9) should survive Compact")
+	}
+
+	// Verify lowest-confidence entry removed
+	for _, e := range entries {
+		if e.Confidence == 0.1 {
+			t.Error("lowest-confidence entry (0.1) should have been removed by Compact")
+		}
+	}
+}
+
+func TestCompactNoOpWhenUnderBudget(t *testing.T) {
+	store, _ := newTestSQLiteStore(t)
+	defer store.Close()
+
+	store.Add(makeEntry("", "small", 0.5))
+	store.Add(makeEntry("", "entry", 0.7))
+
+	if err := store.Compact(10000); err != nil {
+		t.Fatalf("Compact large budget: %v", err)
+	}
+
+	entries, err := store.List(EntryFilter{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("expected 2 entries after large-budget compact, got %d", len(entries))
+	}
+}
+
+func TestCompactZeroBudgetRemovesAll(t *testing.T) {
+	store, _ := newTestSQLiteStore(t)
+	defer store.Close()
+
+	store.Add(makeEntry("", "first entry content", 0.5))
+	store.Add(makeEntry("", "second entry content", 0.7))
+	store.Add(makeEntry("", "third entry content", 0.9))
+
+	if err := store.Compact(0); err != nil {
+		t.Fatalf("Compact zero budget: %v", err)
+	}
+
+	entries, err := store.List(EntryFilter{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries after zero-budget compact, got %d", len(entries))
+	}
+}
+
+func TestMigrateFromJSON(t *testing.T) {
+	// Create a temp directory with a JSON ColonyStore, add 3 entries
+	jsonDir := t.TempDir()
+	dataDir := filepath.Join(jsonDir, ".aether", "data", "learn")
+	st, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create json store: %v", err)
+	}
+	jsonCS := NewColonyStore(st)
+
+	jsonCS.Add(makeEntry("json-1", "first json entry", 0.8))
+	jsonCS.Add(makeEntry("json-2", "second json entry", 0.9))
+	jsonCS.Add(makeEntry("json-3", "third json entry", 0.7))
+
+	// Create SQLite store and migrate from JSON
+	sqliteDir := t.TempDir()
+	sqlitePath := filepath.Join(sqliteDir, "colony.db")
+	sqliteStore, err := NewSQLiteColonyStore(sqlitePath)
+	if err != nil {
+		t.Fatalf("create sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	imported, err := sqliteStore.MigrateFromJSON(dataDir)
+	if err != nil {
+		t.Fatalf("MigrateFromJSON: %v", err)
+	}
+	if imported != 3 {
+		t.Errorf("expected 3 entries imported, got %d", imported)
+	}
+
+	// Verify all 3 entries exist in SQLite
+	for _, id := range []string{"json-1", "json-2", "json-3"} {
+		got, err := sqliteStore.Get(id)
+		if err != nil {
+			t.Fatalf("Get %s: %v", id, err)
+		}
+		if got == nil {
+			t.Errorf("entry %q not found in SQLite after migration", id)
+		}
+	}
+}
+
+func TestMigrateFromJSON_NoFile(t *testing.T) {
+	store, _ := newTestSQLiteStore(t)
+	defer store.Close()
+
+	// Point at a directory with no entries.json
+	imported, err := store.MigrateFromJSON(t.TempDir())
+	if err != nil {
+		t.Fatalf("MigrateFromJSON with no file: %v", err)
+	}
+	if imported != 0 {
+		t.Errorf("expected 0 entries imported, got %d", imported)
 	}
 }
