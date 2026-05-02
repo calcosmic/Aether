@@ -58,20 +58,21 @@ func (c WorkerConfig) effectiveTimeout() time.Duration {
 // WorkerResult captures the outcome of a worker invocation.
 // Field names match the documented codexWorkerResult in doc.go.
 type WorkerResult struct {
-	WorkerName    string        // The worker's assigned name
-	Caste         string        // Worker caste
-	TaskID        string        // Task identifier
-	Status        string        // "completed", "failed", "blocked", or "timeout"
-	Summary       string        // Worker's self-reported summary
-	FilesCreated  []string      // Files the worker claims to have created
-	FilesModified []string      // Files the worker claims to have modified
-	TestsWritten  []string      // Test files the worker created
-	ToolCount     int           // Number of tool calls reported
-	Blockers      []string      // Blocking issues reported
-	Spawns        []string      // Sub-workers spawned
-	Duration      time.Duration // Wall-clock time of the invocation
-	RawOutput     string        // Full stdout from the subprocess
-	Error         error         // Invocation error (if any)
+	WorkerName    string                     // The worker's assigned name
+	Caste         string                     // Worker caste
+	TaskID        string                     // Task identifier
+	Status        string                     // "completed", "failed", "blocked", or "timeout"
+	Summary       string                     // Worker's self-reported summary
+	FilesCreated  []string                   // Files the worker claims to have created
+	FilesModified []string                   // Files the worker claims to have modified
+	TestsWritten  []string                   // Test files the worker created
+	Artifacts     map[string]json.RawMessage // Optional structured artifacts requested by task-specific briefs
+	ToolCount     int                        // Number of tool calls reported
+	Blockers      []string                   // Blocking issues reported
+	Spawns        []string                   // Sub-workers spawned
+	Duration      time.Duration              // Wall-clock time of the invocation
+	RawOutput     string                     // Full stdout from the subprocess
+	Error         error                      // Invocation error (if any)
 }
 
 type jsonSchema struct {
@@ -83,17 +84,18 @@ type jsonSchema struct {
 
 // workerClaims represents the trailing JSON block returned by a Codex worker.
 type workerClaims struct {
-	AntName       string   `json:"ant_name"`
-	Caste         string   `json:"caste"`
-	TaskID        string   `json:"task_id"`
-	Status        string   `json:"status"`
-	Summary       string   `json:"summary"`
-	FilesCreated  []string `json:"files_created"`
-	FilesModified []string `json:"files_modified"`
-	TestsWritten  []string `json:"tests_written"`
-	ToolCount     int      `json:"tool_count"`
-	Blockers      []string `json:"blockers"`
-	Spawns        []string `json:"spawns"`
+	AntName       string                     `json:"ant_name"`
+	Caste         string                     `json:"caste"`
+	TaskID        string                     `json:"task_id"`
+	Status        string                     `json:"status"`
+	Summary       string                     `json:"summary"`
+	FilesCreated  []string                   `json:"files_created"`
+	FilesModified []string                   `json:"files_modified"`
+	TestsWritten  []string                   `json:"tests_written"`
+	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ToolCount     int                        `json:"tool_count"`
+	Blockers      []string                   `json:"blockers"`
+	Spawns        []string                   `json:"spawns"`
 }
 
 // agentTOML represents the required fields from a Codex agent TOML file.
@@ -197,6 +199,7 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		FilesCreated:  claims.FilesCreated,
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
+		Artifacts:     claims.Artifacts,
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
@@ -408,6 +411,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		cmd.Dir = config.Root
 	}
 	cmd.Stdin = strings.NewReader(prompt)
+	cmd.SysProcAttr = workerSysProcAttr()
 
 	var stdout, stderr bytes.Buffer
 	running := newWorkerRunningSignal(observer)
@@ -433,6 +437,14 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 			Error:      startupErr,
 		}, startupErr
 	}
+
+	GlobalProcessTracker().TrackProcess(cmd.Process.Pid, TrackedProcess{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		Platform:   "codex",
+		Root:       config.Root,
+	})
+	defer GlobalProcessTracker().UntrackProcess(cmd.Process.Pid)
 
 	waitCh := make(chan error, 1)
 	go func() {
@@ -520,6 +532,7 @@ waitLoop:
 		FilesCreated:  claims.FilesCreated,
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
+		Artifacts:     claims.Artifacts,
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
@@ -713,6 +726,7 @@ Return ONLY a single JSON object as your final response.
 - Set status to one of: %s.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Keep summary concise and concrete.
+- Include artifacts only when the task brief explicitly asks for a named structured artifact.
 `, filepath.Clean(root), statusLine))
 }
 
@@ -751,6 +765,10 @@ func workerClaimsSchema() jsonSchema {
 			"files_created":  stringArray,
 			"files_modified": stringArray,
 			"tests_written":  stringArray,
+			"artifacts": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": true,
+			},
 			"tool_count": map[string]interface{}{
 				"type":    "integer",
 				"minimum": 0,
