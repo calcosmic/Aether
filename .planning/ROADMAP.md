@@ -292,7 +292,7 @@ Plans:
   9. Auto-created repo-local skills are generated after difficult verified tasks (configurable: off/propose/auto) with hard rejection rules preventing creation from failed, zero-modification, phantom, or secret-containing runs
   10. Auto-created skills include source evidence, verification steps, confidence score, privacy scan result, and repo fingerprint
   11. `aether update` never overwrites repo-local learned skills
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
 **Wave 1**
@@ -306,6 +306,9 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 91-04-PLAN.md -- Auto-skill creation with difficulty detection and continue-finalize wiring (AUTO-01/02/03/04)
+
+**Wave 5** *(gap closure -- closes 91-02 gaps)*
+- [ ] 91-05-PLAN.md -- Gap closure: PromoteSkill, skill tests, hive-search CLI, skill lifecycle CLI (HIVE-05, SKIL-01/02/03)
 
 ### Phase 92: System Hardening & Validation
 **Goal**: Worker lifecycle is managed with heartbeats and process groups, and the full system is validated end-to-end
@@ -345,5 +348,5 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 88. Recovery Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
 | 89. Gate Self-Healing & Smart Planning | v1.13 | 2/4 | Complete    | 2026-05-01 |
 | 90. Learning Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
-| 91. Hive Intelligence | v1.13 | 3/4 | In Progress|  |
+| 91. Hive Intelligence | v1.13 | 3/5 | In Progress|  |
 | 92. System Hardening & Validation | v1.13 | 0 | Not started | - |
