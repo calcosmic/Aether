@@ -578,3 +578,34 @@ func TestFinalizeOracleLoopBlocked(t *testing.T) {
 		t.Errorf("approval_status = %v, want 'blocked'", result["approval_status"])
 	}
 }
+
+func TestOracleReadyForCompletion(t *testing.T) {
+	tests := []struct {
+		name      string
+		overall   int
+		target    int
+		questions []oracleQuestion
+		expected  bool
+	}{
+		{"meets target", 95, 95, nil, true},
+		{"exceeds target", 98, 95, nil, true},
+		{"below target", 94, 95, nil, false},
+		{"below target at half with all answered", 47, 95, []oracleQuestion{
+			{Status: "answered"},
+			{Status: "answered"},
+		}, false},
+		{"below target by one", 94, 95, nil, false},
+		{"zero confidence", 0, 95, nil, false},
+		{"zero target", 50, 0, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plan := oraclePlanFile{Questions: tt.questions}
+			state := oracleStateFile{OverallConfidence: tt.overall, TargetConfidence: tt.target}
+			got := oracleReadyForCompletion(plan, state)
+			if got != tt.expected {
+				t.Errorf("oracleReadyForCompletion() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
