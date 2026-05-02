@@ -929,6 +929,8 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	defer monitorCancel()
 	defer cleanupAllHeartbeatFiles(dataDir)
 
+	cleanupStaleWorkersBeforeDispatch(root)
+
 	pheromoneSection := resolvePheromoneSection()
 	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
 	indexByName := make(map[string]int, len(dispatches))
