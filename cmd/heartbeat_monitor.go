@@ -122,10 +122,31 @@ func cleanupAllHeartbeatFiles(dataDir string) {
 	}
 }
 
-// ValidateHeartbeatFile validates heartbeat file JSON data.
-// Stub: returns HeartbeatFile to fail TDD RED phase.
+// ValidateHeartbeatFile validates heartbeat file JSON data, returning an
+// actionable error message when the format is invalid. Error messages
+// include: format name ("heartbeat file"), field name, expected value,
+// and actual value.
 func ValidateHeartbeatFile(data []byte) (HeartbeatFile, error) {
-	return HeartbeatFile{}, nil
+	var hf HeartbeatFile
+	if err := json.Unmarshal(data, &hf); err != nil {
+		return HeartbeatFile{}, fmt.Errorf("heartbeat file: invalid JSON: %v", err)
+	}
+	if strings.TrimSpace(hf.WorkerID) == "" {
+		return HeartbeatFile{}, fmt.Errorf("heartbeat file: missing required field 'worker_id'")
+	}
+	if strings.TrimSpace(hf.Timestamp) == "" {
+		return HeartbeatFile{}, fmt.Errorf("heartbeat file: missing required field 'timestamp'")
+	}
+	if _, err := time.Parse(time.RFC3339, hf.Timestamp); err != nil {
+		return HeartbeatFile{}, fmt.Errorf(
+			"heartbeat file: invalid timestamp %q, expected RFC3339 format (e.g., 2026-05-02T14:30:00Z)",
+			hf.Timestamp,
+		)
+	}
+	if hf.Phase < 0 {
+		return HeartbeatFile{}, fmt.Errorf("heartbeat file: phase must be >= 0, got %d", hf.Phase)
+	}
+	return hf, nil
 }
 
 // formatDuration returns a human-readable duration string (e.g., "2m30s").
