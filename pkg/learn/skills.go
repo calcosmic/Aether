@@ -76,6 +76,16 @@ func skillDirForStage(baseDir, stage string) string {
 	return filepath.Join(SkillDir(baseDir), stage)
 }
 
+// HiveDomainSkillsDir returns the hive-shareable domain skills directory.
+// This is where promoted skills land: ~/.aether/skills/domain/
+func HiveDomainSkillsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".aether", "skills", "domain")
+}
+
 // validateSkillName rejects names with path traversal or invalid characters.
 func validateSkillName(name string) error {
 	if name == "" {
@@ -254,6 +264,48 @@ func (svc *SkillService) UnpinSkill(name string) error {
 		return fmt.Errorf("learn: unpin skill: %w", err)
 	}
 	return nil
+}
+
+// PromoteSkill copies a repo-local skill to the hive-shareable domain skills directory (SKIL-03 promote).
+// The skill SKILL.md is copied (not moved) from .aether/hive/skills/active/{name}/SKILL.md
+// to ~/.aether/skills/domain/{name}/SKILL.md. The repo-local copy is preserved.
+// Only active skills can be promoted. Returns an error if the skill is not found or not active.
+func (svc *SkillService) PromoteSkill(name string) (string, error) {
+	if err := validateSkillName(name); err != nil {
+		return "", err
+	}
+
+	meta, err := svc.GetSkill(name)
+	if err != nil {
+		return "", fmt.Errorf("learn: promote skill: %w", err)
+	}
+	if meta == nil {
+		return "", fmt.Errorf("learn: skill %q not found", name)
+	}
+	if meta.Stage != SkillStageActive {
+		return "", fmt.Errorf("learn: skill %q is not active (stage=%s), only active skills can be promoted", name, meta.Stage)
+	}
+
+	// Read source SKILL.md
+	sourceContent, err := os.ReadFile(meta.FilePath)
+	if err != nil {
+		return "", fmt.Errorf("learn: read skill file for promote: %w", err)
+	}
+
+	// Determine target directory: ~/.aether/skills/domain/{name}/SKILL.md
+	targetDir := filepath.Join(HiveDomainSkillsDir(), name)
+	targetPath := filepath.Join(targetDir, "SKILL.md")
+
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return "", fmt.Errorf("learn: create domain skill dir: %w", err)
+	}
+
+	// Byte-identical copy to hive-shareable directory
+	if err := os.WriteFile(targetPath, sourceContent, 0644); err != nil {
+		return "", fmt.Errorf("learn: write promoted skill: %w", err)
+	}
+
+	return targetPath, nil
 }
 
 // ListSkills returns skills matching the optional stage filter.
