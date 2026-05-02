@@ -282,11 +282,13 @@ func TestSkillBuildIndex(t *testing.T) {
 
 	svc := NewSkillService(store.DB(), dir)
 
-	// Create 2 skills with full content
-	if err := svc.CreateSkill(SkillMetadata{Name: "idx-a", Confidence: 0.8}, "Long detailed content about skill A that should not appear in the index"); err != nil {
+	// Create 2 skills with content longer than 200 chars (progressive disclosure truncates description)
+	longContentA := strings.Repeat("Detailed content about skill A. ", 15) // ~360 chars
+	longContentB := strings.Repeat("Detailed content about skill B. ", 15)
+	if err := svc.CreateSkill(SkillMetadata{Name: "idx-a", Confidence: 0.8}, longContentA); err != nil {
 		t.Fatalf("CreateSkill: %v", err)
 	}
-	if err := svc.CreateSkill(SkillMetadata{Name: "idx-b", Confidence: 0.7}, "Long detailed content about skill B that should not appear in the index"); err != nil {
+	if err := svc.CreateSkill(SkillMetadata{Name: "idx-b", Confidence: 0.7}, longContentB); err != nil {
 		t.Fatalf("CreateSkill: %v", err)
 	}
 
@@ -308,10 +310,10 @@ func TestSkillBuildIndex(t *testing.T) {
 		}
 	}
 
-	// Verify full content is NOT in the index entries
+	// Verify full content is NOT in the index entries (description truncated to 200 chars)
 	for _, entry := range entries {
-		if strings.Contains(entry.Description, "Long detailed content") {
-			t.Errorf("Description should be truncated, got: %q", entry.Description)
+		if len(entry.Description) > 200 {
+			t.Errorf("Description should be <= 200 chars, got %d: %q", len(entry.Description), entry.Description)
 		}
 	}
 }
