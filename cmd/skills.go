@@ -569,6 +569,7 @@ func skillScanRoots(hub string) []skillScanRoot {
 		{Path: ".agents/skills/aether", Source: "repo-agents", IsUserCreated: false},
 		{Path: ".aether/skills-codex", Source: "repo-aether-codex", IsUserCreated: false},
 		{Path: ".aether/skills", Source: "repo-aether", IsUserCreated: false},
+		{Path: ".aether/hive/skills", Source: "repo-learned", IsUserCreated: false},
 		{Path: filepath.Join(hub, "skills"), Source: "hub-aether", IsUserCreated: true},
 		{Path: filepath.Join(hub, "skills-codex"), Source: "hub-aether-codex", IsUserCreated: false},
 	}
