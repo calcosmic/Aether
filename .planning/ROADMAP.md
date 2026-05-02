@@ -243,7 +243,7 @@ All prior milestone phase details are archived. See MILESTONES.md for accomplish
 Plans:
 - [x] 89-01-PLAN.md -- Fixer caste agent + unblock dispatch with circuit breaker and attempt caps (GATE-06/07/08, LOOP-02/03/04)
 - [x] 89-02-PLAN.md -- Oracle confidence targeting with rubric output (CONF-01/02/03)
-- [ ] 89-03-PLAN.md -- Init launch brief synthesis + status gate display (CONF-04/05, GATE-09)
+- [x] 89-03-PLAN.md -- Init launch brief synthesis + status gate display (CONF-04/05, GATE-09)
 - [x] 89-04-PLAN.md -- Platform fixes: OpenCode agent name + callback URL separation (PLAT-01/02)
 
 ### Phase 90: Learning Foundation
