@@ -146,6 +146,36 @@ var skillListLifecycleCmd = &cobra.Command{
 	},
 }
 
+var skillPromoteCmd = &cobra.Command{
+	Use:   "skill-promote [name]",
+	Short: "Promote a repo-local skill to hive-shareable domain skills",
+	Long:  "Copies the skill from .aether/hive/skills/active/ to ~/.aether/skills/domain/ making it available across colonies. Only active skills can be promoted. The repo-local copy is preserved.",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+		dbPath := resolveColonyDBPath()
+		sqliteStore, err := learn.NewSQLiteColonyStore(dbPath)
+		if err != nil {
+			outputError(2, fmt.Sprintf("database: %v", err), nil)
+			return nil
+		}
+		defer sqliteStore.Close()
+
+		svc := learn.NewSkillService(sqliteStore.DB(), resolveSkillBaseDir())
+		targetPath, err := svc.PromoteSkill(name)
+		if err != nil {
+			outputError(2, fmt.Sprintf("failed to promote skill: %v", err), nil)
+			return nil
+		}
+		outputOK(map[string]interface{}{
+			"promoted":    true,
+			"name":        name,
+			"target_path": targetPath,
+		})
+		return nil
+	},
+}
+
 var skillViewCmd = &cobra.Command{
 	Use:   "skill-view [name]",
 	Short: "View a skill's full content",
@@ -196,5 +226,6 @@ func init() {
 	rootCmd.AddCommand(skillArchiveCmd)
 	rootCmd.AddCommand(skillPinCmd)
 	rootCmd.AddCommand(skillListLifecycleCmd)
+	rootCmd.AddCommand(skillPromoteCmd)
 	rootCmd.AddCommand(skillViewCmd)
 }
