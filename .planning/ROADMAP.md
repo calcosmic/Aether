@@ -302,7 +302,7 @@ Plans:
 - [ ] 91-02-PLAN.md -- Skill lifecycle CRUD with progressive disclosure, promote, and CLI commands (SKIL-01/02/03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 91-03-PLAN.md -- Keeper Curator lifecycle transitions, usage tracking, and pin immunity (SKIL-04/05/06)
+- [x] 91-03-PLAN.md -- Keeper Curator lifecycle transitions, usage tracking, and pin immunity (SKIL-04/05/06)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 91-04-PLAN.md -- Auto-skill creation with difficulty detection and continue-finalize wiring (AUTO-01/02/03/04)
@@ -345,5 +345,5 @@ Phases execute in numeric order: 88 -> 89 -> 90 -> 91 -> 92
 | 88. Recovery Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
 | 89. Gate Self-Healing & Smart Planning | v1.13 | 2/4 | Complete    | 2026-05-01 |
 | 90. Learning Foundation | v1.13 | 4/4 | Complete    | 2026-05-01 |
-| 91. Hive Intelligence | v1.13 | 1/4 | In Progress|  |
+| 91. Hive Intelligence | v1.13 | 2/4 | In Progress|  |
 | 92. System Hardening & Validation | v1.13 | 0 | Not started | - |
