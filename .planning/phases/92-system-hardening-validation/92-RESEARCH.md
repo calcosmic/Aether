@@ -443,22 +443,19 @@ func resolveCodexWorkerContext() string {
 
 **If this table is empty:** All claims in this research were verified or cited -- no user confirmation needed.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **AAC-005 section delivery path**
+1. **AAC-005 section delivery path** — RESOLVED: Audit test in 92-02 Task 1 verifies the combined assembly path (colony-prime + context capsule + skill-inject + task brief) includes all AAC-005 required sections.
    - What we know: Colony-prime assembles 15 sections. Survey context, phase research, matched skills, and midden/graveyard cautions are delivered through separate paths (context capsule, skill-inject, build brief).
-   - What's unclear: Does AAC-005 require all sections in colony-prime specifically, or in the combined worker prompt?
-   - Recommendation: Verify by reading `renderCodexBuildWorkerBrief()` and the task brief assembly to confirm the combined prompt includes all required sections.
+   - Resolution: Verify combined prompt, not just colony-prime. Plan 92-02 Task 1 tests this explicitly.
 
-2. **Heartbeat staleness threshold**
+2. **Heartbeat staleness threshold** — RESOLVED: 90s warning threshold (3x interval), configurable. Implemented in 92-01 Task 1.
    - What we know: Workers should write every ~30s. LLM agents may not follow precisely.
-   - What's unclear: What staleness threshold triggers a warning vs. auto-cleanup?
-   - Recommendation: 90s warning threshold (3x interval), 5min auto-cleanup threshold. Make both configurable.
+   - Resolution: 90s warning, auto-cleanup integrated into existing worker cleanup flow. Both configurable via constants.
 
-3. **E2E test scope vs. runtime**
+3. **E2E test scope vs. runtime** — RESOLVED: Single test with FakeInvoker per 92-03 Task 1.
    - What we know: Full v1.13 flow involves init, build, gate-fail, unblock, fixer, continue, learn, hive-search, skill, seal. Some of these require external tooling.
-   - What's unclear: Can the full flow be tested with FakeInvoker in a single test, or does it need to be split?
-   - Recommendation: Single test with FakeInvoker. Mock all external dependencies.
+   - Resolution: Single `TestE2EV113FullFlow` with FakeInvoker mocking all external dependencies.
 
 ## Environment Availability
 
