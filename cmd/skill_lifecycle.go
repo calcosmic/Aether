@@ -1,25 +1,12 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/calcosmic/Aether/pkg/learn"
-	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
-
-// resolveColonyDBPath returns the path to colony.db using the store's base path.
-func resolveColonyDBPath() string {
-	return filepath.Join(store.BasePath(), "colony.db")
-}
-
-// resolveSkillBaseDir returns the project root for skill file storage.
-func resolveSkillBaseDir() string {
-	return storage.ResolveAetherRoot(context.Background())
-}
 
 var skillCreateCmd = &cobra.Command{
 	Use:   "skill-create [name]",
