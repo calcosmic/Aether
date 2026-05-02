@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/learn"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -324,6 +326,20 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		if err := learnStore.Add(entry); err != nil {
 			// Non-blocking: learning failure must not prevent phase advancement
 			fmt.Fprintf(os.Stderr, "warning: failed to capture learning: %v\n", err)
+		} else {
+			// Phase 91: Auto-skill creation hook (AUTO-01)
+			// Only fires after successful learning capture for difficult verified tasks.
+			// Reads auto_skill_mode config to determine behavior (off/propose/auto, default propose).
+			sqliteStore, sqliteErr := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
+			if sqliteErr == nil {
+				defer sqliteStore.Close()
+				aetherRoot := storage.ResolveAetherRoot(context.Background())
+				mode := learn.LoadAutoSkillMode(store.BasePath())
+				if err := learn.AutoCreateSkillIfDifficult(entry, sqliteStore, aetherRoot, mode); err != nil {
+					// Non-blocking: auto-skill failure must not prevent phase advancement
+					fmt.Fprintf(os.Stderr, "warning: failed to auto-create skill: %v\n", err)
+				}
+			}
 		}
 	}
 	captureLearning()
