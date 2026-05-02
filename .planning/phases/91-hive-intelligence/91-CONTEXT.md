@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Colony learning is backed by SQLite with full-text search recall, pheromone skills are auto-created from verified difficult tasks, and the Keeper curator maintains memory hygiene across the lifecycle. This phase swaps the JSON-based ColonyStore from Phase 90 into SQLite, adds FTS5 search, implements the full skill lifecycle (create/patch/edit/delete/archive/pin/promote), auto-creates skills from evidence-based difficulty detection, and runs the Keeper curator to transition unused skills through active → stale → archived stages.
+Colony learning is backed by SQLite with full-text search recall, pheromone skills are auto-created from verified difficult tasks, and the Keeper curator maintains memory hygiene across the lifecycle. This phase swaps the JSON-based ColonyStore from Phase 90 into SQLite, adds FTS5 search, implements the full skill lifecycle (create/patch/edit/delete/archive/pin/promote), auto-creates skills from evidence-based difficulty detection, and runs the Keeper curator to transition unused skills through active -> stale -> archived stages.
 
 </domain>
 
@@ -15,7 +15,7 @@ Colony learning is backed by SQLite with full-text search recall, pheromone skil
 
 ### SQLite Schema & Migration
 - **D-01:** Single colony.db in .aether/data/ with all tables (runs, workers, gates, memories, skills, decisions, trajectories, schema_version). One database, one WAL mode, one migration file. Interconnected tables need to talk to each other.
-- **D-02:** Go migration runner — no third-party dependencies. Map of version number to migration function, runs on startup, idempotent by checking schema_version. ~50 lines of Go.
+- **D-02:** Go migration runner -- no third-party dependencies. Map of version number to migration function, runs on startup, idempotent by checking schema_version. ~50 lines of Go.
 
 ### FTS5 Search
 - **D-03:** Unified FTS5 virtual table indexing all searchable content (memories, worker summaries, decisions, gate failures). One index, simpler queries, good enough for colony-scale data.
@@ -23,11 +23,11 @@ Colony learning is backed by SQLite with full-text search recall, pheromone skil
 
 ### Auto-Skill Creation
 - **D-05:** Evidence-based difficulty detection. A task is "difficult" if: it required retry/replan, took significantly longer than estimated, or had multiple worker failures before success. Phase 90's learning entries already capture this evidence data.
-- **D-06:** Auto mode is the default. After a difficult task, skills are created and immediately active. Off and propose modes remain available as config options for users who want more control.
+- **D-06:** Auto-skill mode controls creation behavior after difficult tasks. Three modes available: off (no creation), propose (identify candidates but require approval -- this is the default per REQUIREMENTS.md AUTO-01), and auto (create immediately). Default is "propose".
 - **D-07:** Hard rejection rules prevent skill creation from: failed runs, zero-modification runs, phantom builds, and runs containing secrets. These are non-negotiable safety gates.
 
 ### Keeper Curator Lifecycle
-- **D-08:** 14 days per lifecycle stage. Active → stale after 14 days unused, stale → archived after another 14 days. Skills get a full month before archival.
+- **D-08:** 14 days per lifecycle stage. Active -> stale after 14 days unused, stale -> archived after another 14 days. Skills get a full month before archival.
 - **D-09:** Pinned skills are fully exempt from auto-transitions. They stay active forever unless the user explicitly unpins or archives them. Immutable to both auto-transitions and agent writes.
 
 ### Claude's Discretion

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.13
 milestone_name: Recovery Hardening & Hive Learning
-status: planning
+status: executing
 stopped_at: Phase 91 context gathered
-last_updated: "2026-05-02T09:59:40.551Z"
-last_activity: 2026-05-01
+last_updated: "2026-05-02T11:10:41.134Z"
+last_activity: 2026-05-02 -- Phase 91 execution started
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 12
+  total_plans: 16
   completed_plans: 10
-  percent: 83
+  percent: 63
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-01)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 90 — learning-foundation
+**Current focus:** Phase 91 — hive-intelligence
 
 ## Current Position
 
-Phase: 91
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-01
+Phase: 91 (hive-intelligence) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 91
+Last activity: 2026-05-02 -- Phase 91 execution started
 
 Progress: [          ] 0% (0/5 phases complete in this milestone)
 

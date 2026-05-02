@@ -292,7 +292,20 @@ Plans:
   9. Auto-created repo-local skills are generated after difficult verified tasks (configurable: off/propose/auto) with hard rejection rules preventing creation from failed, zero-modification, phantom, or secret-containing runs
   10. Auto-created skills include source evidence, verification steps, confidence score, privacy scan result, and repo fingerprint
   11. `aether update` never overwrites repo-local learned skills
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+- [ ] 91-01-PLAN.md -- SQLite ColonyStore with schema migrations and FTS5 full-text search (HIVE-04/05/06)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 91-02-PLAN.md -- Skill lifecycle CRUD with progressive disclosure, promote, and CLI commands (SKIL-01/02/03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 91-03-PLAN.md -- Keeper Curator lifecycle transitions, usage tracking, and pin immunity (SKIL-04/05/06)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 91-04-PLAN.md -- Auto-skill creation with difficulty detection and continue-finalize wiring (AUTO-01/02/03/04)
 
 ### Phase 92: System Hardening & Validation
 **Goal**: Worker lifecycle is managed with heartbeats and process groups, and the full system is validated end-to-end
@@ -306,7 +319,13 @@ Plans:
   5. Full smoke test passes from init/oracle through phase advancement with gate failure, unblock, fixer, continue, and process cleanup
   6. All generated/mirrored files (agents, commands) survive `aether update` without corruption
   7. Every new command and file format has validation and actionable error messages
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 92-01-PLAN.md -- TBD (to be planned)
+- [ ] 92-02-PLAN.md -- TBD (to be planned)
+- [ ] 92-03-PLAN.md -- TBD (to be planned)
+- [ ] 92-04-PLAN.md -- TBD (to be planned)
 
 ## Progress
 
