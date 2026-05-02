@@ -122,6 +122,12 @@ func cleanupAllHeartbeatFiles(dataDir string) {
 	}
 }
 
+// ValidateHeartbeatFile validates heartbeat file JSON data.
+// Stub: returns HeartbeatFile to fail TDD RED phase.
+func ValidateHeartbeatFile(data []byte) (HeartbeatFile, error) {
+	return HeartbeatFile{}, nil
+}
+
 // formatDuration returns a human-readable duration string (e.g., "2m30s").
 func formatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
