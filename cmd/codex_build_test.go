@@ -1656,3 +1656,74 @@ func TestDispatchManifestAllCastes(t *testing.T) {
 		t.Errorf("expected %d unique files, got %d", len(castes), len(seenFiles))
 	}
 }
+
+func TestBuildWorkerBriefContainsHeartbeat(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-23",
+		Caste: "builder",
+		Task:  "Implement feature X",
+	}
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Test Phase",
+		Description: "Testing heartbeat brief",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+
+	if !strings.Contains(brief, "Heartbeat Protocol") {
+		t.Error("worker brief missing 'Heartbeat Protocol' section")
+	}
+	if !strings.Contains(brief, "heartbeat-") {
+		t.Error("worker brief missing 'heartbeat-' file reference")
+	}
+	if !strings.Contains(brief, "Hammer-23") {
+		t.Error("worker brief missing worker name in heartbeat section")
+	}
+	if !strings.Contains(brief, "builder") {
+		t.Error("worker brief missing caste in heartbeat section")
+	}
+}
+
+func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
+	saveGlobals(t)
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("create data dir: %v", err)
+	}
+
+	taskID := "1.1"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Test Phase",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &taskID, Goal: "Test task", Status: colony.TaskPending},
+		},
+	}
+
+	dispatches := []codexBuildDispatch{
+		{Name: "Hammer-23", Caste: "builder", Task: "Test task", TaskID: taskID},
+	}
+
+	invoker := &codex.FakeInvoker{}
+	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3)
+	if err != nil {
+		t.Fatalf("execute dispatches: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	// After dispatch completes, heartbeat files should be cleaned up
+	matches, _ := filepath.Glob(filepath.Join(dataDir, "heartbeat-*.json"))
+	if len(matches) > 0 {
+		t.Errorf("expected heartbeat files cleaned up after dispatch, found: %v", matches)
+	}
+}

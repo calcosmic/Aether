@@ -924,6 +924,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 
 	capsule := resolveCodexWorkerContext()
+	dataDir := filepath.Join(root, ".aether", "data")
+	monitorCancel := StartHeartbeatMonitor(ctx, dataDir)
+	defer monitorCancel()
+	defer cleanupAllHeartbeatFiles(dataDir)
+
 	pheromoneSection := resolvePheromoneSection()
 	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
 	indexByName := make(map[string]int, len(dispatches))
@@ -1507,6 +1512,14 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	b.WriteString("- ")
 	b.WriteString(expectedDispatchOutcome(dispatch))
 	b.WriteString("\n")
+
+	b.WriteString("\n## Heartbeat Protocol\n\n")
+	b.WriteString("You MUST write a heartbeat file every ~30 seconds while working:\n")
+	b.WriteString("1. Write to `.aether/data/heartbeat-" + dispatch.Name + ".json` immediately upon starting\n")
+	b.WriteString("2. Continue writing every ~30 seconds during your work\n")
+	b.WriteString("3. The file must contain valid JSON: `{\"worker_id\":\"" + dispatch.Name + "\",\"caste\":\"" + dispatch.Caste + "\",\"timestamp\":\"<ISO-8601-UTC>\",\"phase\":" + strconv.Itoa(phase.ID) + "}`\n")
+	b.WriteString("\nExample: `echo '{\"worker_id\":\"" + dispatch.Name + "\",\"caste\":\"" + dispatch.Caste + "\",\"timestamp\":\"2026-05-02T14:30:00Z\",\"phase\":" + strconv.Itoa(phase.ID) + "}' > .aether/data/heartbeat-" + dispatch.Name + ".json`\n")
+
 	return b.String()
 }
 
