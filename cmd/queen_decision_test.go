@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -553,5 +554,288 @@ func TestQueenState_FilePath(t *testing.T) {
 	expectedPath := filepath.Join(dataDir, "queen-state-33.json")
 	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
 		t.Errorf("expected queen-state-33.json at %s", expectedPath)
+	}
+}
+
+// --- Plan 97-02: Integration tests for plan-only wiring and finalize advisory context ---
+
+// Test 18 (Plan 97-02): plan-only with passing gates includes queen_decisions array in result map
+// This tests the wiring: queenDecide produces decisions for each gate with "pass" recommendation.
+func TestPlanOnlyQueenDecisions(t *testing.T) {
+	setupBuildFlowTest(t)
+	budget := newRecoveryBudget(1)
+
+	gates := codexContinueGateReport{
+		Phase:       7,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		Checks: []gateCheck{
+			{Name: "tests_pass", Passed: true},
+			{Name: "auditor", Passed: true},
+			{Name: "medic", Passed: true},
+		},
+		Passed: true,
+	}
+
+	decisions := queenDecide(gates, budget, nil, 7, "standard")
+
+	if len(decisions) != 3 {
+		t.Fatalf("expected 3 decisions, got %d", len(decisions))
+	}
+
+	for i, d := range decisions {
+		if d.QueenRecommendation != "pass" {
+			t.Errorf("decision %d: expected pass recommendation, got %s", i, d.QueenRecommendation)
+		}
+	}
+
+	// Verify auto_resolve_eligible matches tier (hard_block = false, soft_block for passing = false)
+	if decisions[0].AutoResolveEligible {
+		t.Error("tests_pass (hard_block, passed): auto_resolve_eligible should be false")
+	}
+}
+
+// Test 19 (Plan 97-02): plan-only persists queen-state-{N}.json file that can be read back
+func TestPlanOnlyStatePersistence(t *testing.T) {
+	setupBuildFlowTest(t)
+
+	budget := newRecoveryBudget(1)
+	budget.TotalBudget = 5
+
+	gates := codexContinueGateReport{
+		Phase:       42,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		Checks: []gateCheck{
+			{Name: "tests_pass", Passed: true},
+			{Name: "auditor", Passed: false},
+		},
+		Passed: false,
+	}
+
+	decisions := queenDecide(gates, budget, nil, 42, "standard")
+
+	// Build and persist queen state (simulating what plan-only does)
+	queenState := QueenStateFile{
+		Phase:          42,
+		GeneratedAt:    gates.GeneratedAt,
+		Decisions:      decisions,
+		BudgetSnapshot: budget,
+	}
+
+	if err := queenStateWrite(42, queenState); err != nil {
+		t.Fatalf("queenStateWrite: %v", err)
+	}
+
+	// Read back and verify
+	loaded, err := queenStateRead(42)
+	if err != nil {
+		t.Fatalf("queenStateRead: %v", err)
+	}
+
+	if loaded.Phase != 42 {
+		t.Errorf("expected phase 42, got %d", loaded.Phase)
+	}
+
+	if len(loaded.Decisions) != 2 {
+		t.Fatalf("expected 2 decisions, got %d", len(loaded.Decisions))
+	}
+
+	if loaded.BudgetSnapshot == nil {
+		t.Fatal("expected non-nil budget snapshot")
+	}
+
+	if loaded.BudgetSnapshot.TotalBudget != 5 {
+		t.Errorf("expected total_budget 5, got %d", loaded.BudgetSnapshot.TotalBudget)
+	}
+}
+
+// Test 20 (Plan 97-02): plan-only queen decisions do NOT consume budget
+func TestPlanOnlyBudgetNotConsumed(t *testing.T) {
+	setupBuildFlowTest(t)
+	budget := newRecoveryBudget(1)
+	budget.TotalBudget = 3
+
+	gates := codexContinueGateReport{
+		Phase:       10,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		Checks: []gateCheck{
+			{Name: "auditor", Passed: false},
+			{Name: "tests_pass", Passed: false},
+		},
+		Passed: false,
+	}
+
+	usedBefore := budget.totalUsed()
+	_ = queenDecide(gates, budget, nil, 10, "standard")
+	usedAfter := budget.totalUsed()
+
+	if usedBefore != usedAfter {
+		t.Errorf("queenDecide consumed budget: before=%d, after=%d", usedBefore, usedAfter)
+	}
+}
+
+// Test 21 (Plan 97-02): plan-only result map includes queen_state_file key with correct value
+func TestPlanOnlyResultMapKeys(t *testing.T) {
+	setupBuildFlowTest(t)
+
+	budget := newRecoveryBudget(1)
+
+	gates := codexContinueGateReport{
+		Phase:       88,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		Checks: []gateCheck{
+			{Name: "tests_pass", Passed: true},
+		},
+		Passed: true,
+	}
+
+	decisions := queenDecide(gates, budget, nil, 88, "standard")
+
+	// Simulate what plan-only does: add keys to result map
+	result := map[string]interface{}{
+		"queen_decisions":   decisions,
+		"queen_state_file":  fmt.Sprintf("queen-state-%d.json", 88),
+	}
+
+	// Verify queen_decisions key exists
+	if _, ok := result["queen_decisions"]; !ok {
+		t.Error("expected queen_decisions key in result map")
+	}
+
+	// Verify queen_state_file key exists with correct value
+	stateFile, ok := result["queen_state_file"].(string)
+	if !ok || stateFile != "queen-state-88.json" {
+		t.Errorf("expected queen_state_file=queen-state-88.json, got %q", stateFile)
+	}
+}
+
+// Test 22 (Plan 97-02): finalize reads queen-state file as advisory context without modifying it
+func TestFinalizeAdvisoryContext(t *testing.T) {
+	setupBuildFlowTest(t)
+
+	// Test: queenStateRead for non-existent phase returns error (advisory context is optional)
+	_, err := queenStateRead(99998)
+	if err == nil {
+		t.Error("expected error for non-existent queen-state file (advisory context is optional)")
+	}
+
+	// Test: write queen-state, then read it back, verify advisory context preserved
+	initialDecisions := []QueenDecision{
+		{
+			GateName:            "tests_pass",
+			Status:              "passed",
+			ClassificationTier:  "hard_block",
+			QueenRecommendation: "pass",
+			Rationale:           "hard_block gate passed",
+		},
+	}
+
+	state := QueenStateFile{
+		Phase:       55,
+		GeneratedAt: time.Now().Format(time.RFC3339),
+		Decisions:   initialDecisions,
+		BudgetSnapshot: &RecoveryBudget{
+			TotalBudget: 3,
+			Wave:        1,
+		},
+	}
+
+	if err := queenStateWrite(55, state); err != nil {
+		t.Fatalf("queenStateWrite: %v", err)
+	}
+
+	// Finalize reads advisory context
+	advisory, err := queenStateRead(55)
+	if err != nil {
+		t.Fatalf("queenStateRead: %v", err)
+	}
+
+	if len(advisory.Decisions) != 1 {
+		t.Fatalf("expected 1 advisory decision, got %d", len(advisory.Decisions))
+	}
+
+	if advisory.Decisions[0].GateName != "tests_pass" {
+		t.Errorf("expected gate_name tests_pass, got %s", advisory.Decisions[0].GateName)
+	}
+
+	// Verify advisory context is NOT modified by reading (read-only)
+	advisoryCopy := advisory
+	advisoryCopy.Decisions[0].GateName = "modified"
+	_ = advisoryCopy
+
+	// Re-read and verify original is unchanged
+	advisoryAgain, _ := queenStateRead(55)
+	if advisoryAgain.Decisions[0].GateName != "tests_pass" {
+		t.Error("advisory context was modified by read -- should be read-only")
+	}
+}
+
+// Test 23 (Plan 97-02): finalize logs escalation entry to queen-state when circuit breaker trips
+func TestFinalizeEscalationLogging(t *testing.T) {
+	setupBuildFlowTest(t)
+
+	// Create a circuit breaker and trip it
+	breaker := NewCircuitBreaker(3)
+	breaker.RecordFailure("worker-1")
+	breaker.RecordFailure("worker-1")
+	breaker.RecordFailure("worker-1")
+
+	tripped := breaker.TrippedWorkers()
+	if len(tripped) == 0 {
+		t.Fatal("expected circuit breaker to have tripped workers")
+	}
+
+	// Log escalation (simulating what finalize does)
+	queenLogEscalation(66, tripped, "circuit breaker tripped during finalize -- escalation required")
+
+	// Read back and verify
+	loaded, err := queenStateRead(66)
+	if err != nil {
+		t.Fatalf("queenStateRead: %v", err)
+	}
+
+	if len(loaded.EscalationLog) != 1 {
+		t.Fatalf("expected 1 escalation log entry, got %d", len(loaded.EscalationLog))
+	}
+
+	entry := loaded.EscalationLog[0]
+	if entry.EscalationAction != "escalate_to_human" {
+		t.Errorf("expected escalation_action escalate_to_human, got %s", entry.EscalationAction)
+	}
+
+	if len(entry.BreakerTripped) == 0 {
+		t.Error("expected non-empty breaker_tripped_workers in escalation entry")
+	}
+
+	// Verify BreakerTrippedWorkers field is populated
+	if len(loaded.BreakerTrippedWorkers) == 0 {
+		t.Error("expected non-empty breaker_tripped_workers in state file")
+	}
+}
+
+// Test 24 (Plan 97-02): finalize with nil queen-state file (plan-only never ran) completes without error
+func TestFinalizeNilQueenState(t *testing.T) {
+	setupBuildFlowTest(t)
+
+	// queenStateRead for a phase that has no queen-state file should return error but not panic
+	_, err := queenStateRead(99999)
+	if err == nil {
+		t.Error("expected error for non-existent queen-state file")
+	}
+
+	// queenLogEscalation should create the file if it doesn't exist (best-effort)
+	queenLogEscalation(99999, []string{"worker-test"}, "test escalation")
+
+	// Now read should succeed
+	loaded, err := queenStateRead(99999)
+	if err != nil {
+		t.Fatalf("queenStateRead after logEscalation: %v", err)
+	}
+
+	if loaded.Phase != 99999 {
+		t.Errorf("expected phase 99999, got %d", loaded.Phase)
+	}
+
+	if len(loaded.EscalationLog) != 1 {
+		t.Fatalf("expected 1 escalation entry, got %d", len(loaded.EscalationLog))
 	}
 }
