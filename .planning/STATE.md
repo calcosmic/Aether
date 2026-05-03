@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.14
 milestone_name: Queen Authority
-status: ready_to_execute
-stopped_at: Phase 95 planned
-last_updated: "2026-05-03T17:25:00Z"
-last_activity: 2026-05-03 -- Phase 95 planned (2 plans, 2 waves)
+status: executing
+stopped_at: Phase 95 Plan 01 complete
+last_updated: "2026-05-03T16:13:51Z"
+last_activity: 2026-05-03 -- Phase 95 Plan 01 complete (auto-resolve engine)
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 3
-  completed_plans: 3
-  percent: 29
+  completed_plans: 4
+  percent: 36
 ---
 
 # Project State
@@ -25,21 +25,21 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Current Position
 
-Phase: 95 (smart-gate-pipeline) — planned
+Phase: 95 (smart-gate-pipeline) -- executing
 Next phase: 95 (smart-gate-pipeline)
-Plan: 0 of 2
-Status: Ready to execute
-Last activity: 2026-05-03 -- Phase 95 planned (2 plans, 2 waves)
+Plan: 1 of 2
+Status: Plan 01 complete, Plan 02 next
+Last activity: 2026-05-03 -- Phase 95 Plan 01 complete (auto-resolve engine)
 
-Progress: [===       ] 29%
+Progress: [====      ] 36%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3 (v1.14)
+- Total plans completed: 4 (v1.14)
 - Average duration: ~10 min
-- Total execution time: 0.5 hours
+- Total execution time: 0.7 hours
 
 *Updated after each plan completion*
 
@@ -53,7 +53,8 @@ Recent decisions affecting current work:
 - v1.14: 7-phase roadmap: infrastructure first (gate classification + recovery data model), then core value (smart gates + auto-recovery), then integration (queen-led continue + wave lifecycle), then polish (output filtering)
 - v1.14: Phase 93 and 94 are independent infrastructure phases but executed sequentially for simplicity
 - v1.14: Gate classification (GATE-01) is the foundation -- everything else depends on knowing which gates are hard_block vs soft_block vs advisory
-- v1.13: 5-phase roadmap following research-driven build order
+- v1.14: Heavy depth multiplier is 0.0 (no auto-resolve) -- user asked for thorough checking, soft_block gates stay blocked
+- v1.14: Binary gates auto-resolve based on depth multiplier only (not numeric threshold); threshold 0.0 is normal for pass/fail gates
 - v1.13: LOOP requirements woven into gate recovery phases, not isolated
 
 ### Pending Todos
@@ -89,6 +90,6 @@ Items acknowledged and carried forward from previous milestones:
 
 ## Session Continuity
 
-Last session: 2026-05-03T14:39:31Z
-Stopped at: Phase 94 Plan 02 complete
-Resume file: .planning/phases/94-recovery-data-model/94-02-SUMMARY.md
+Last session: 2026-05-03T16:13:51Z
+Stopped at: Phase 95 Plan 01 complete
+Resume file: .planning/phases/95-smart-gate-pipeline/95-01-SUMMARY.md
