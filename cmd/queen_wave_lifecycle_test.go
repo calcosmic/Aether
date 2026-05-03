@@ -424,8 +424,8 @@ func TestQueenWaveLifecycle_SummaryTable(t *testing.T) {
 	renderWaveSummaryTable(summary)
 
 	out := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(out, "Wave") {
-		t.Error("expected table output to contain 'Wave' header")
+	if !strings.Contains(out, "WAVE") {
+		t.Error("expected table output to contain 'WAVE' header")
 	}
 	if !strings.Contains(out, "Total") {
 		t.Error("expected table output to contain 'Total' row")
