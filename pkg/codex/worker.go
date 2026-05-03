@@ -73,6 +73,7 @@ type WorkerResult struct {
 	Duration      time.Duration              // Wall-clock time of the invocation
 	RawOutput     string                     // Full stdout from the subprocess
 	Error         error                      // Invocation error (if any)
+	Handoff       WorkerHandoff              // Worker handoff relay data
 }
 
 type jsonSchema struct {

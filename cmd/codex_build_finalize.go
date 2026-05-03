@@ -14,6 +14,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +46,8 @@ type codexExternalBuildWorkerResult struct {
 	ToolCount     int      `json:"tool_count,omitempty"`
 	FilesCreated  []string `json:"files_created,omitempty"`
 	FilesModified []string `json:"files_modified,omitempty"`
-	TestsWritten  []string `json:"tests_written,omitempty"`
+	TestsWritten  []string             `json:"tests_written,omitempty"`
+	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 // effectiveName returns the worker name, falling back to AntName when Name is empty.
@@ -72,7 +74,7 @@ var buildFinalizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
-		result, state, phase, dispatches, err := runCodexBuildFinalize(skillWorkspaceRoot(), phaseNum, completion)
+		result, state, phase, dispatches, err := runCodexBuildFinalize(skillWorkspaceRoot(), phaseNum, completion, false)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -141,7 +143,7 @@ func (c codexExternalBuildCompletion) workerResults() []codexExternalBuildWorker
 	return results
 }
 
-func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBuildCompletion) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
 	}

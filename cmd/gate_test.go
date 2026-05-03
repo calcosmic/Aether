@@ -1376,7 +1376,7 @@ func TestEffectiveGateAutoResolveThresholds_ConfigOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Set up directory structure matching production: .aether/data is store base, .planning/ is config
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
-	s, err := storage.NewFileStore(dataDir)
+	s, err := storage.NewStore(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1416,7 +1416,7 @@ func TestEffectiveGateAutoResolveThresholds_InvalidOverride(t *testing.T) {
 	saveGlobals(t)
 	tmpDir := t.TempDir()
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
-	s, err := storage.NewFileStore(dataDir)
+	s, err := storage.NewStore(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1448,7 +1448,7 @@ func TestEffectiveGateAutoResolveThresholds_NoConfig(t *testing.T) {
 	saveGlobals(t)
 	tmpDir := t.TempDir()
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
-	s, err := storage.NewFileStore(dataDir)
+	s, err := storage.NewStore(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}

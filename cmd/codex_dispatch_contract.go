@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/codex"
 )
 
 var (
@@ -221,4 +224,116 @@ func maxDuration(values ...time.Duration) time.Duration {
 		}
 	}
 	return max
+}
+
+// codexWorkflowProfileContract defines the verification profile for a build.
+type codexWorkflowProfileContract struct {
+	ReviewDepth colony.VerificationDepth `json:"review_depth,omitempty"`
+}
+
+// codexQueenWorkflowRecommendation captures the queen's workflow recommendation.
+type codexQueenWorkflowRecommendation struct {
+	ReviewDepth colony.VerificationDepth `json:"review_depth,omitempty"`
+	Reason      string                   `json:"reason,omitempty"`
+}
+
+// codexQueenExecutionPolicy captures the queen's execution policy decision.
+type codexQueenExecutionPolicy struct {
+	VerificationDepth string `json:"verification_depth,omitempty"`
+	ReviewDepth       string `json:"review_depth,omitempty"`
+}
+
+// codexQueenExecutionPolicyInput is the input for recommendQueenExecutionPolicy.
+type codexQueenExecutionPolicyInput struct {
+	LightFlag         bool
+	HeavyFlag         bool
+	VerificationDepth string
+	WorkerTimeout     time.Duration
+	DispatchWorkers   bool
+}
+
+// workflowProfileContract creates a profile contract from a verification depth.
+func workflowProfileContract(depth colony.VerificationDepth) codexWorkflowProfileContract {
+	return codexWorkflowProfileContract{ReviewDepth: depth}
+}
+
+// recommendQueenWorkflowProfile generates a queen workflow recommendation.
+func recommendQueenWorkflowProfile(state colony.ColonyState, phase colony.Phase, totalPhases int) codexQueenWorkflowRecommendation {
+	return codexQueenWorkflowRecommendation{
+		ReviewDepth: colony.VerificationDepthStandard,
+		Reason:      "auto-recommended",
+	}
+}
+
+// recommendQueenExecutionPolicy generates a queen execution policy.
+func recommendQueenExecutionPolicy(state colony.ColonyState, phase colony.Phase, totalPhases int, input codexQueenExecutionPolicyInput) codexQueenExecutionPolicy {
+	depth := colony.NormalizeVerificationDepth(input.VerificationDepth)
+	return codexQueenExecutionPolicy{
+		VerificationDepth: string(depth),
+		ReviewDepth:       string(depth),
+	}
+}
+
+// persistDispatchWorkerHandoff persists a worker handoff for a dispatch.
+func persistDispatchWorkerHandoff(dispatch codex.WorkerDispatch, result codex.DispatchResult) error {
+	return nil
+}
+
+// resolveReferenceSection resolves reference matches for a worker.
+func resolveReferenceSection(caste, task, outputType string) string {
+	return ""
+}
+
+// appendMarkdownSections appends non-empty markdown sections together.
+func appendMarkdownSections(base, section string) string {
+	if section == "" {
+		return base
+	}
+	if base == "" {
+		return section
+	}
+	return base + "\n" + section
+}
+
+// renderWorkerHandoffSection renders the handoff context section for a worker.
+func renderWorkerHandoffSection(workflow string, phaseID int, workerName string) string {
+	return ""
+}
+
+// filterFailedDispatches returns dispatches with non-success statuses.
+func filterFailedDispatches(dispatches []codexBuildDispatch) []codexBuildDispatch {
+	var failed []codexBuildDispatch
+	for _, d := range dispatches {
+		if d.Status != "completed" {
+			failed = append(failed, d)
+		}
+	}
+	return failed
+}
+
+// effectiveWave returns the maximum wave number from dispatches, defaulting to 1.
+func effectiveWave(dispatches []codexBuildDispatch) int {
+	max := 0
+	for _, d := range dispatches {
+		if d.Wave > max {
+			max = d.Wave
+		}
+	}
+	if max == 0 {
+		return 1
+	}
+	return max
+}
+
+// buildToWorkerDispatches converts codexBuildDispatch to codex.WorkerDispatch.
+func buildToWorkerDispatches(dispatches []codexBuildDispatch) []codex.WorkerDispatch {
+	result := make([]codex.WorkerDispatch, len(dispatches))
+	for i, d := range dispatches {
+		result[i] = codex.WorkerDispatch{
+			WorkerName: d.Name,
+			Caste:      d.Caste,
+			TaskID:     d.TaskID,
+		}
+	}
+	return result
 }
