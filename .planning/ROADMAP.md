@@ -16,6 +16,7 @@
 - **v1.11 Aether Unification** - Phases 70-79 (shipped 2026-04-30)
 - **v1.12 Safe Colony** - Phases 80-87 (shipped 2026-05-01)
 - **v1.13 Recovery Hardening & Hive Learning** - Phases 88-92 (shipped 2026-05-03)
+- [ ] v1.14 Queen Authority - Phases 93-99 (in progress)
 
 ## Phases
 
@@ -203,6 +204,18 @@
 
 </details>
 
+### v1.14 Queen Authority (In Progress)
+
+**Milestone Goal:** The queen coordinates phases autonomously -- she dispatches workers, monitors progress, auto-recovers from failures, and only escalates to you when she's genuinely stuck.
+
+- [ ] **Phase 93: Gate Classification Infrastructure** - Classify all 11 gates as hard_block/soft_block/advisory with audit trail preservation
+- [ ] **Phase 94: Recovery Data Model** - Create failure classification types and recovery logging structures
+- [ ] **Phase 95: Smart Gate Pipeline** - Auto-resolve soft_block gates, configurable thresholds, never auto-resolve hard blocks
+- [ ] **Phase 96: Auto-Recovery Orchestrator** - Bounded retry, peer redistribution, automatic Fixer dispatch
+- [ ] **Phase 97: Queen-Led Continue** - Split continue into plan-only and finalize, single-invocation queen model
+- [ ] **Phase 98: Queen Wave Lifecycle** - End-to-end wave management with failure handling and advancement
+- [ ] **Phase 99: Output Filtering & Phase Summary** - Filtered build output, queen activity audit, phase-end summaries
+
 ## Phase Details
 
 <details>
@@ -219,6 +232,77 @@ See `.planning/milestones/v1.13-ROADMAP.md` for full phase details.
 
 </details>
 
+### Phase 93: Gate Classification Infrastructure
+**Goal**: Every gate has a deterministic classification (hard_block, soft_block, advisory) and every auto-resolution preserves the original finding in an audit trail -- the foundation all smart gate behavior builds on.
+**Depends on**: Nothing (first phase of milestone)
+**Requirements**: GATE-01, GATE-02, GATE-05
+**Success Criteria** (what must be TRUE):
+  1. Running `aether gate-classify` (or equivalent subcommand) prints all 11 gates with their classification and a brief rationale
+  2. Security gates (gatekeeper) and watcher veto are hardcoded as hard_block and no configuration can change that classification
+  3. When a gate finding is annotated with a queen decision, the original finding text, fix hint, and recovery options remain intact in the audit trail
+**Plans**: TBD
+
+### Phase 94: Recovery Data Model
+**Goal**: Worker failures have a deterministic classification system (recoverable, requires-attempt, blocking), transient failures are distinguished from systemic failures, and every recovery action is logged to a phase-scoped file.
+**Depends on**: Nothing (parallel to Phase 93, no shared dependencies)
+**Requirements**: RECV-01, RECV-05, RECV-06
+**Success Criteria** (what must be TRUE):
+  1. A worker failure produces a structured failure record containing classification (recoverable/requires-attempt/blocking), failure type (transient/systemic), original error, and timestamp
+  2. Transient failures (timeout, context overflow) and systemic failures (bad task spec, missing dependency) are classified by deterministic rules, not by LLM inference
+  3. After a phase with recovery activity, a phase-scoped recovery log file exists containing every auto-recovery action with original error, action taken, and outcome
+**Plans**: TBD
+
+### Phase 95: Smart Gate Pipeline
+**Goal**: Soft_block gates auto-resolve when the queen verifies the finding is non-critical, with configurable severity thresholds and documented safe defaults -- hard_block gates remain untouched.
+**Depends on**: Phase 93 (gate classifications must exist before the pipeline can use them)
+**Requirements**: GATE-03, GATE-04
+**Success Criteria** (what must be TRUE):
+  1. When a soft_block gate fails during continue, the queen evaluates the finding and either auto-resolves it (with logged rationale) or escalates to the user -- the user is never blocked by a soft_block gate without the queen attempting resolution first
+  2. Running `aether gate-thresholds` (or equivalent) shows the current watcher veto score threshold, auditor minimum score, and other configurable values with their documented safe defaults
+  3. Hard_block gates (security, watcher veto) continue to block advancement exactly as they do today -- no behavioral change for hard blocks
+**Plans**: TBD
+
+### Phase 96: Auto-Recovery Orchestrator
+**Goal**: Failed workers are automatically retried within a per-phase budget, tasks are redistributed to peer workers before spawning new ones, and the Fixer agent is dispatched automatically on gate failures -- all bounded and logged.
+**Depends on**: Phase 93 (gate classification for deciding which gates trigger Fixer), Phase 94 (recovery data model for failure records and logging)
+**Requirements**: RECV-02, RECV-03, RECV-04
+**Success Criteria** (what must be TRUE):
+  1. When a worker fails with a recoverable classification, the queen automatically retries up to the per-phase budget (default 3) before escalating to the user
+  2. On worker failure, the failed task is reassigned to a same-caste peer with available capacity before a new worker is created
+  3. When a gate failure occurs during continue, the Fixer agent is dispatched automatically to attempt repair -- the user sees the Fixer was dispatched and the outcome, without being asked to trigger it manually
+**Plans**: TBD
+
+### Phase 97: Queen-Led Continue
+**Goal**: The continue command splits into a read-only plan-only phase (queen evaluates gates, decides actions) and a finalize phase (queen executes approved actions), with the queen operating as a single-invocation coordinator that respects the circuit breaker.
+**Depends on**: Phase 95 (smart gate pipeline for evaluation), Phase 96 (auto-recovery for action execution)
+**Requirements**: COORD-02, COORD-03, COORD-04
+**Success Criteria** (what must be TRUE):
+  1. Running `aether continue --plan-only` evaluates all gates and produces a decision list (auto-resolve, escalate, fix) without mutating colony state
+  2. Running `aether continue --finalize` executes the approved actions from the plan-only phase, including any recovery context from auto-recovery
+  3. When the circuit breaker trips, the queen logs the escalation and returns control to the user -- she never overrides or resets breaker state
+**Plans**: TBD
+
+### Phase 98: Queen Wave Lifecycle
+**Goal**: The queen manages the full wave lifecycle end-to-end within a phase -- dispatching waves, monitoring worker progress, handling failures within waves, and advancing to the next wave when ready.
+**Depends on**: Phase 96 (auto-recovery for failure handling), Phase 97 (queen-led continue for advancement decisions)
+**Requirements**: COORD-01
+**Success Criteria** (what must be TRUE):
+  1. During a build phase, the queen dispatches a wave, monitors worker completion, and when all workers finish (or fail with recovery), she decides whether to advance to the next wave or escalate -- the user sees a summary of wave status between waves
+  2. When a worker fails mid-wave, the queen handles the failure (retry, reassign, or skip) without waiting for user input, and the wave continues with remaining workers
+  3. After all waves in a phase complete, the queen produces a wave lifecycle summary showing waves dispatched, workers per wave, failures encountered, and recovery actions taken
+**Plans**: TBD
+
+### Phase 99: Output Filtering & Phase Summary
+**Goal**: Build output defaults to filtered summary mode showing only what matters, queen decisions are logged to a persistent audit file, and phase-end summaries replace raw worker noise with actionable information.
+**Depends on**: Phase 96 (recovery activity to summarize), Phase 98 (wave lifecycle data for summaries)
+**Requirements**: OUT-01, OUT-02, OUT-03
+**Success Criteria** (what must be TRUE):
+  1. Running `aether build` without `--verbose` shows a concise summary of what was attempted, what succeeded, what failed and how it was recovered, and what needs human attention -- raw worker output is suppressed
+  2. Running `aether build --verbose` shows full worker output for debugging or trust calibration
+  3. A queen activity audit file (JSON) exists after any phase with queen decisions, containing timestamp, decision type, input finding, action taken, and rationale for every autonomous decision
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -228,3 +312,10 @@ See `.planning/milestones/v1.13-ROADMAP.md` for full phase details.
 | 90. Learning Foundation | v1.13 | 4/4 | Complete | 2026-05-01 |
 | 91. Hive Intelligence | v1.13 | 5/5 | Complete | 2026-05-03 |
 | 92. System Hardening & Validation | v1.13 | 5/5 | Complete | 2026-05-03 |
+| 93. Gate Classification Infrastructure | v1.14 | 0 | Not started | - |
+| 94. Recovery Data Model | v1.14 | 0 | Not started | - |
+| 95. Smart Gate Pipeline | v1.14 | 0 | Not started | - |
+| 96. Auto-Recovery Orchestrator | v1.14 | 0 | Not started | - |
+| 97. Queen-Led Continue | v1.14 | 0 | Not started | - |
+| 98. Queen Wave Lifecycle | v1.14 | 0 | Not started | - |
+| 99. Output Filtering & Phase Summary | v1.14 | 0 | Not started | - |

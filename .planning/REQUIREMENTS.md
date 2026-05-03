@@ -61,30 +61,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RECV-01 | — | Pending |
-| RECV-02 | — | Pending |
-| RECV-03 | — | Pending |
-| RECV-04 | — | Pending |
-| RECV-05 | — | Pending |
-| RECV-06 | — | Pending |
-| GATE-01 | — | Pending |
-| GATE-02 | — | Pending |
-| GATE-03 | — | Pending |
-| GATE-04 | — | Pending |
-| GATE-05 | — | Pending |
-| OUT-01 | — | Pending |
-| OUT-02 | — | Pending |
-| OUT-03 | — | Pending |
-| COORD-01 | — | Pending |
-| COORD-02 | — | Pending |
-| COORD-03 | — | Pending |
-| COORD-04 | — | Pending |
+| RECV-01 | Phase 94 | Pending |
+| RECV-02 | Phase 96 | Pending |
+| RECV-03 | Phase 96 | Pending |
+| RECV-04 | Phase 96 | Pending |
+| RECV-05 | Phase 94 | Pending |
+| RECV-06 | Phase 94 | Pending |
+| GATE-01 | Phase 93 | Pending |
+| GATE-02 | Phase 93 | Pending |
+| GATE-03 | Phase 95 | Pending |
+| GATE-04 | Phase 95 | Pending |
+| GATE-05 | Phase 93 | Pending |
+| OUT-01 | Phase 99 | Pending |
+| OUT-02 | Phase 99 | Pending |
+| OUT-03 | Phase 99 | Pending |
+| COORD-01 | Phase 98 | Pending |
+| COORD-02 | Phase 97 | Pending |
+| COORD-03 | Phase 97 | Pending |
+| COORD-04 | Phase 97 | Pending |
 
 **Coverage:**
 - v1.14 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-03*
-*Last updated: 2026-05-03 after initial definition*
+*Last updated: 2026-05-03 after roadmap creation*
