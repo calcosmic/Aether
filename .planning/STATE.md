@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.14
 milestone_name: Queen Authority
 status: executing
-stopped_at: Phase 96 complete
-last_updated: "2026-05-03T20:30:00Z"
-last_activity: 2026-05-03 -- Phase 96 complete (auto-recovery orchestrator)
+stopped_at: Phase 97 context gathered
+last_updated: "2026-05-03T21:00:00Z"
+last_activity: 2026-05-03 -- Phase 97 context gathered (queen-led continue)
 progress:
   total_phases: 7
   completed_phases: 4
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Current Position
 
-Phase: 96 (auto-recovery-orchestrator) -- COMPLETE
+Phase: 97 (queen-led-continue) -- context gathered
 Next phase: 97 (queen-led-continue)
-Plan: 2 of 2
-Status: Phase 96 verified and complete
-Last activity: 2026-05-03 -- Phase 96 complete (auto-recovery orchestrator, 10/10 must-haves)
+Plan: 0 of TBD
+Status: Ready to plan
+Last activity: 2026-05-03 -- Phase 97 context gathered (queen-led continue)
 
 Progress: [======    ] 57%
 
@@ -98,4 +98,4 @@ Items acknowledged and carried forward from previous milestones:
 
 Last session: 2026-05-03T19:16:00Z
 Stopped at: Phase 96 Plan 02 complete
-Resume file: .planning/phases/96-auto-recovery-orchestrator/96-02-SUMMARY.md
+Resume file: .planning/phases/97-queen-led-continue/97-CONTEXT.md
