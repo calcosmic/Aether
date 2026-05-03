@@ -253,7 +253,11 @@ Plans:
   1. A worker failure produces a structured failure record containing classification (recoverable/requires-attempt/blocking), failure type (transient/systemic), original error, and timestamp
   2. Transient failures (timeout, context overflow) and systemic failures (bad task spec, missing dependency) are classified by deterministic rules, not by LLM inference
   3. After a phase with recovery activity, a phase-scoped recovery log file exists containing every auto-recovery action with original error, action taken, and outcome
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 94-01-PLAN.md -- Failure classification types, registry, classifyWorkerFailure function, persistence, and CLI commands
+- [ ] 94-02-PLAN.md -- Comprehensive tests for classification rules, JSON roundtrips, backward compatibility, and CLI commands
 
 ### Phase 95: Smart Gate Pipeline
 **Goal**: Soft_block gates auto-resolve when the queen verifies the finding is non-critical, with configurable severity thresholds and documented safe defaults -- hard_block gates remain untouched.
@@ -316,7 +320,7 @@ Plans:
 | 91. Hive Intelligence | v1.13 | 5/5 | Complete | 2026-05-03 |
 | 92. System Hardening & Validation | v1.13 | 5/5 | Complete | 2026-05-03 |
 | 93. Gate Classification Infrastructure | v1.14 | 1 plan | Planning complete | - |
-| 94. Recovery Data Model | v1.14 | 0 | Not started | - |
+| 94. Recovery Data Model | v1.14 | 2 plans | Planning complete | - |
 | 95. Smart Gate Pipeline | v1.14 | 0 | Not started | - |
 | 96. Auto-Recovery Orchestrator | v1.14 | 0 | Not started | - |
 | 97. Queen-Led Continue | v1.14 | 0 | Not started | - |
