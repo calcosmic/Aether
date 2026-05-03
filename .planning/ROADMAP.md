@@ -211,7 +211,7 @@
 - [x] **Phase 93: Gate Classification Infrastructure** - Classify all 11 gates as hard_block/soft_block/advisory with audit trail preservation (completed 2026-05-03)
 - [x] **Phase 94: Recovery Data Model** - Create failure classification types and recovery logging structures (completed 2026-05-03)
 - [x] **Phase 95: Smart Gate Pipeline** - Auto-resolve soft_block gates, configurable thresholds, never auto-resolve hard blocks
-- [ ] **Phase 96: Auto-Recovery Orchestrator** - Bounded retry, peer redistribution, automatic Fixer dispatch
+- [x] **Phase 96: Auto-Recovery Orchestrator** - Bounded retry, peer redistribution, automatic Fixer dispatch (completed 2026-05-03)
 - [ ] **Phase 97: Queen-Led Continue** - Split continue into plan-only and finalize, single-invocation queen model
 - [ ] **Phase 98: Queen Wave Lifecycle** - End-to-end wave management with failure handling and advancement
 - [ ] **Phase 99: Output Filtering & Phase Summary** - Filtered build output, queen activity audit, phase-end summaries
@@ -285,7 +285,7 @@ Plans:
 
 Plans:
 - [x] 96-01-PLAN.md -- Core orchestrator function with classification-dependent sequences, RecoveryBudget, and comprehensive unit tests
-- [ ] 96-02-PLAN.md -- Wire orchestrator into build finalize and continue finalize with integration tests
+- [x] 96-02-PLAN.md -- Wire orchestrator into build finalize and continue finalize with integration tests
 
 ### Phase 97: Queen-Led Continue
 **Goal**: The continue command splits into a read-only plan-only phase (queen evaluates gates, decides actions) and a finalize phase (queen executes approved actions), with the queen operating as a single-invocation coordinator that respects the circuit breaker.
