@@ -256,7 +256,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 94-01-PLAN.md -- Failure classification types, registry, classifyWorkerFailure function, persistence, and CLI commands
+- [x] 94-01-PLAN.md -- Failure classification types, registry, classifyWorkerFailure function, persistence, and CLI commands
 - [ ] 94-02-PLAN.md -- Comprehensive tests for classification rules, JSON roundtrips, backward compatibility, and CLI commands
 
 ### Phase 95: Smart Gate Pipeline
