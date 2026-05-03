@@ -65,6 +65,23 @@ func validateOracleConfidenceTarget(value string) string {
 var newOracleWorkerInvoker = codex.NewWorkerInvoker
 var oracleAttemptPolicyForPhase = defaultOracleAttemptPolicy
 
+// oracleDetectedPlatform returns the active platform string for Oracle state fields.
+// It uses the detected platform from environment and process tree — no invoker needed.
+func oracleDetectedPlatform() string {
+	if p := codex.DetectActivePlatform(); p != codex.PlatformUnknown {
+		return string(p)
+	}
+	return string(codex.PlatformCodex)
+}
+
+// oracleInvokerPlatform returns the platform from the invoker, falling back to detection.
+func oracleInvokerPlatform(invoker codex.WorkerInvoker) string {
+	if p := codex.PlatformFromInvoker(invoker); p != codex.PlatformUnknown {
+		return string(p)
+	}
+	return oracleDetectedPlatform()
+}
+
 type oracleStateFile struct {
 	Version            string   `json:"version,omitempty"`
 	Topic              string   `json:"topic,omitempty"`
@@ -234,7 +251,7 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 		"active":             active,
 		"status":             emptyFallback(strings.TrimSpace(state.Status), "idle"),
 		"topic":              strings.TrimSpace(state.Topic),
-		"platform":           emptyFallback(strings.TrimSpace(state.Platform), "codex"),
+		"platform":           emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
 		"phase":              emptyFallback(strings.TrimSpace(state.Phase), "idle"),
 		"iteration":          state.Iteration,
 		"max_iterations":     state.MaxIterations,
@@ -285,7 +302,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 		state.StartedAt = now
 	}
 	state.Version = "1.1"
-	state.Platform = "codex"
+	state.Platform = oracleDetectedPlatform()
 	state.Status = "stopped"
 	state.StopReason = "manual_stop"
 	state.LastUpdated = now
@@ -367,7 +384,7 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		Status:            "active",
 		Strategy:          defaultOracleStrategy,
 		FocusAreas:        currentOracleFocusAreas(),
-		Platform:          "codex",
+		Platform:          oracleDetectedPlatform(),
 		ControllerPID:     os.Getpid(),
 		Depth:             depthCfg.Label,
 	}
@@ -569,7 +586,7 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 		state.Iteration = iterationsRun
 		state.OverallConfidence = oracleOverallConfidence(plan)
-		state.Platform = "codex"
+		state.Platform = oracleInvokerPlatform(invoker)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
 		state.ActiveTimeoutSec = 0
@@ -807,7 +824,7 @@ func collectEvidence(plan oraclePlanFile, state oracleStateFile) []oracleEvidenc
 
 func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, iterationsRun int, status, stopReason, next string) (map[string]interface{}, error) {
 	state.Status = status
-	state.Platform = "codex"
+	state.Platform = oracleDetectedPlatform()
 	state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
 	if strings.TrimSpace(stopReason) != "" {
 		state.StopReason = stopReason
@@ -1832,7 +1849,7 @@ func writeOracleStateFile(path string, state oracleStateFile) error {
 		state.Version = "1.1"
 	}
 	if strings.TrimSpace(state.Platform) == "" {
-		state.Platform = "codex"
+		state.Platform = oracleDetectedPlatform()
 	}
 	if strings.TrimSpace(state.LastUpdated) == "" {
 		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
@@ -1869,7 +1886,7 @@ func loadOracleStateFile(path string) (oracleStateFile, error) {
 		state.Strategy = defaultOracleStrategy
 	}
 	if strings.TrimSpace(state.Platform) == "" {
-		state.Platform = "codex"
+		state.Platform = oracleDetectedPlatform()
 	}
 	return state, nil
 }

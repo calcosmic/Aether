@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.14
 milestone_name: Queen Authority
-status: ready_to_plan
-stopped_at: Phase 96 context gathered
-last_updated: "2026-05-03T19:30:00Z"
-last_activity: 2026-05-03 -- Phase 96 context gathered (auto-recovery orchestrator)
+status: executing
+stopped_at: Phase 96 Plan 01 complete
+last_updated: "2026-05-03T18:27:04Z"
+last_activity: 2026-05-03 -- Phase 96 Plan 01 complete (recovery orchestrator)
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 5
-  completed_plans: 5
-  percent: 43
+  completed_plans: 6
+  percent: 46
 ---
 
 # Project State
@@ -25,21 +25,21 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Current Position
 
-Phase: 96 (auto-recovery-orchestrator) -- context gathered
+Phase: 96 (auto-recovery-orchestrator) -- Plan 01 complete
 Next phase: 96 (auto-recovery-orchestrator)
-Plan: 0 of TBD
-Status: Ready to plan
-Last activity: 2026-05-03 -- Phase 96 context gathered (auto-recovery orchestrator)
+Plan: 1 of 2
+Status: Plan 01 complete
+Last activity: 2026-05-03 -- Phase 96 Plan 01 complete (recovery orchestrator)
 
-Progress: [====      ] 43%
+Progress: [=====     ] 46%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 5 (v1.14)
+- Total plans completed: 6 (v1.14)
 - Average duration: ~9 min
-- Total execution time: 0.8 hours
+- Total execution time: 1.0 hours
 
 *Updated after each plan completion*
 
@@ -50,6 +50,9 @@ Progress: [====      ] 43%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- 96-01: Orchestrator is a pure function (classify, decide, log, return) -- no goroutine or daemon
+- 96-01: Budget uses total-used counter (retries + reassigns + fixer) against total_budget, not per-type limits
+- 96-01: RecoveryLogFile.RecoveryBudget uses omitempty for backward compatibility with Phase 94 files
 - v1.14: 7-phase roadmap: infrastructure first (gate classification + recovery data model), then core value (smart gates + auto-recovery), then integration (queen-led continue + wave lifecycle), then polish (output filtering)
 - v1.14: Phase 93 and 94 are independent infrastructure phases but executed sequentially for simplicity
 - v1.14: Gate classification (GATE-01) is the foundation -- everything else depends on knowing which gates are hard_block vs soft_block vs advisory
@@ -90,6 +93,6 @@ Items acknowledged and carried forward from previous milestones:
 
 ## Session Continuity
 
-Last session: 2026-05-03T19:30:00Z
-Stopped at: Phase 96 context gathered
-Resume file: .planning/phases/96-auto-recovery-orchestrator/96-CONTEXT.md
+Last session: 2026-05-03T18:27:04Z
+Stopped at: Phase 96 Plan 01 complete
+Resume file: .planning/phases/96-auto-recovery-orchestrator/96-01-SUMMARY.md
