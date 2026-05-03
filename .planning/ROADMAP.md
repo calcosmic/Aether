@@ -299,7 +299,7 @@ Plans:
 
 Plans:
 - [x] 97-01-PLAN.md -- Queen decision types, pure function, state persistence, and escalation logging
-- [ ] 97-02-PLAN.md -- Wire queen decisions into plan-only output and finalize advisory context
+- [x] 97-02-PLAN.md -- Wire queen decisions into plan-only output and finalize advisory context
 
 ### Phase 98: Queen Wave Lifecycle
 **Goal**: The queen manages the full wave lifecycle end-to-end within a phase -- dispatching waves, monitoring worker progress, handling failures within waves, and advancing to the next wave when ready.
@@ -335,6 +335,6 @@ Plans:
 | 94. Recovery Data Model | v1.14 | 2 plans | Planning complete | - |
 | 95. Smart Gate Pipeline | v1.14 | 2 plans + gap closure | Complete | 2026-05-03 |
 | 96. Auto-Recovery Orchestrator | v1.14 | 2 plans | Complete | 2026-05-03 |
-| 97. Queen-Led Continue | v1.14 | 1/2 | In Progress|  |
+| 97. Queen-Led Continue | v1.14 | 2/2 | Complete   | 2026-05-03 |
 | 98. Queen Wave Lifecycle | v1.14 | 0 | Not started | - |
 | 99. Output Filtering & Phase Summary | v1.14 | 0 | Not started | - |
