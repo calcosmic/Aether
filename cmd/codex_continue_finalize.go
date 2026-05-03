@@ -325,7 +325,70 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 				_ = dispatchFixer(phase.ID, "propose")
 			}
 
-			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel)
+			// --- Phase 96: Auto-recovery orchestrator for gate failures (RECV-04) ---
+			// Per D-09: this is a NEW trigger path, distinct from Phase 95's auto-resolve.
+			// The orchestrator evaluates whether retry/peer/fixer strategies apply to gate failures.
+			// This runs AFTER auto-resolve attempt, AFTER Phase 95's dispatchFixer call.
+			// Per D-05: both build and continue call orchestrateRecovery for their failure types.
+			var gateRecoveryInstructions []map[string]interface{}
+			if !gates.Passed {
+				budget := budgetFromRecoveryLog(phase.ID, 1) // continue uses wave 1
+				if budget == nil {
+					budget = newRecoveryBudget(1)
+				}
+
+				for _, c := range gates.Checks {
+					if c.Passed {
+						continue
+					}
+					tier, _ := gateClassify(c.Name)
+					// Per D-04: blocking failures escalate immediately, no orchestrator
+					if tier == hardBlock {
+						gateRecoveryInstructions = append(gateRecoveryInstructions, map[string]interface{}{
+							"gate":           c.Name,
+							"classification": "hard_block",
+							"action":         "escalate",
+							"detail":         "hard_block gate failure requires human intervention",
+						})
+						continue
+					}
+
+					// Build recovery context from gate failure
+					ctx := RecoveryContext{
+						Phase:          phase.ID,
+						Wave:           1,
+						WorkerName:     fmt.Sprintf("gate-%s", c.Name),
+						Caste:          "watcher",
+						Status:         "failed",
+						ErrorMessage:   c.Detail,
+						Budget:         budget,
+						CircuitBreaker: globalCircuitBreaker,
+					}
+					outcome := orchestrateRecovery(ctx)
+
+					// Persist recovery log entries
+					if len(outcome.LogEntries) > 0 {
+						existingLog, _ := recoveryLogReadPhase(phase.ID)
+						existingLog.Entries = append(existingLog.Entries, outcome.LogEntries...)
+						existingLog.Phase = phase.ID
+						_ = recoveryLogWritePhase(phase.ID, existingLog.Entries)
+					}
+
+					gateRecoveryInstructions = append(gateRecoveryInstructions, map[string]interface{}{
+						"gate":           c.Name,
+						"classification": string(outcome.Classification),
+						"action":         outcome.Action.Type,
+						"detail":         outcome.Action.Detail,
+						"exhausted":      outcome.Exhausted,
+						"rationale":      outcome.Rationale,
+					})
+				}
+
+				// Persist updated budget
+				_ = persistBudgetToRecoveryLog(phase.ID, budget)
+			}
+
+			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel, gateRecoveryInstructions)
 			if err != nil {
 				return nil, state, phase, nil, nil, false, err
 			}
@@ -344,7 +407,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
 	if !review.Passed {
-		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, workerFlow, now, verificationReportRel, gateReportRel)
+		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, workerFlow, now, verificationReportRel, gateReportRel, nil)
 		if err != nil {
 			return nil, state, phase, nil, nil, false, err
 		}
@@ -713,7 +776,7 @@ func expectedContinueReviewWorkerCount(reviewDepth colony.VerificationDepth) int
 	}
 }
 
-func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review *codexContinueReviewReport, reviewReportRel string, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string) (map[string]interface{}, colony.ColonyState, error) {
+func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review *codexContinueReviewReport, reviewReportRel string, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string, gateRecoveryInstructions []map[string]interface{}) (map[string]interface{}, colony.ColonyState, error) {
 	blockers := append([]string{}, gates.BlockingIssues...)
 	if review != nil {
 		blockers = append(blockers, review.BlockingIssues...)
@@ -776,6 +839,9 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	if review != nil {
 		result["review"] = *review
 		result["review_report"] = displayDataPath(reviewReportRel)
+	}
+	if len(gateRecoveryInstructions) > 0 {
+		result["recovery_instructions"] = gateRecoveryInstructions
 	}
 	return result, blockedState, nil
 }

@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -901,5 +903,294 @@ func TestRecoveryLogFile_BackwardCompatibility(t *testing.T) {
 	}
 	if file.RecoveryBudget != nil {
 		t.Error("expected nil RecoveryBudget for legacy file")
+	}
+}
+
+// --- Task 2: Continue finalize gate recovery wiring tests ---
+
+// evaluateGateRecovery simulates the continue finalize gate recovery evaluation.
+// This mirrors the logic that will be wired into runCodexContinueFinalize.
+func evaluateGateRecovery(phaseNum int, gates codexContinueGateReport, cb *CircuitBreaker) []map[string]interface{} {
+	var instructions []map[string]interface{}
+	budget := budgetFromRecoveryLog(phaseNum, 1)
+	if budget == nil {
+		budget = newRecoveryBudget(1)
+	}
+
+	for _, c := range gates.Checks {
+		if c.Passed {
+			continue
+		}
+		tier, _ := gateClassify(c.Name)
+		// Per D-04: blocking failures escalate immediately, no orchestrator
+		if tier == hardBlock {
+			instructions = append(instructions, map[string]interface{}{
+				"gate":           c.Name,
+				"classification": "hard_block",
+				"action":         "escalate",
+				"detail":         "hard_block gate failure requires human intervention",
+			})
+			continue
+		}
+
+		// Build recovery context from gate failure
+		ctx := RecoveryContext{
+			Phase:          phaseNum,
+			Wave:           1,
+			WorkerName:     fmt.Sprintf("gate-%s", c.Name),
+			Caste:          "watcher",
+			Status:         "failed",
+			ErrorMessage:   c.Detail,
+			Budget:         budget,
+			CircuitBreaker: cb,
+		}
+		outcome := orchestrateRecovery(ctx)
+
+		// Persist recovery log entries
+		if len(outcome.LogEntries) > 0 {
+			existingLog, _ := recoveryLogReadPhase(phaseNum)
+			existingLog.Entries = append(existingLog.Entries, outcome.LogEntries...)
+			existingLog.Phase = phaseNum
+			_ = recoveryLogWritePhase(phaseNum, existingLog.Entries)
+		}
+
+		instructions = append(instructions, map[string]interface{}{
+			"gate":           c.Name,
+			"classification": string(outcome.Classification),
+			"action":         outcome.Action.Type,
+			"detail":         outcome.Action.Detail,
+			"exhausted":      outcome.Exhausted,
+			"rationale":      outcome.Rationale,
+		})
+	}
+
+	_ = persistBudgetToRecoveryLog(phaseNum, budget)
+	return instructions
+}
+
+func TestContinueFinalize_GateRecovery_HardBlockSkipsOrchestrator(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	cb := NewCircuitBreaker(3)
+
+	gates := codexContinueGateReport{
+		Passed: false,
+		Checks: []gateCheck{
+			{Name: "tests_pass", Passed: false, Detail: "2 tests failed"},
+			{Name: "gatekeeper", Passed: false, Detail: "CVE-2024-1234 found"},
+		},
+	}
+
+	instructions := evaluateGateRecovery(1, gates, cb)
+
+	if len(instructions) != 2 {
+		t.Fatalf("expected 2 instructions, got %d", len(instructions))
+	}
+
+	// Both are hard_block gates -- should escalate immediately
+	for _, inst := range instructions {
+		if inst["action"] != "escalate" {
+			t.Errorf("expected action 'escalate' for hard_block gate %v, got %v", inst["gate"], inst["action"])
+		}
+		if inst["classification"] != "hard_block" {
+			t.Errorf("expected classification 'hard_block', got %v", inst["classification"])
+		}
+	}
+}
+
+func TestContinueFinalize_GateRecovery_SoftBlockAfterAutoResolve(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	cb := NewCircuitBreaker(3)
+
+	gates := codexContinueGateReport{
+		Passed: false,
+		Checks: []gateCheck{
+			{Name: "auditor", Passed: false, Detail: "code quality issues found"},
+			{Name: "complexity", Passed: false, Detail: "high complexity in module X"},
+		},
+	}
+
+	instructions := evaluateGateRecovery(1, gates, cb)
+
+	if len(instructions) != 2 {
+		t.Fatalf("expected 2 instructions, got %d", len(instructions))
+	}
+
+	// Soft block gates should go through orchestrator and get a recovery action
+	for _, inst := range instructions {
+		action, ok := inst["action"].(string)
+		if !ok {
+			t.Fatalf("expected action to be string, got %T", inst["action"])
+		}
+		// Gate failures use status "failed" which maps to RequiresAttempt -> first action is "retry"
+		if action != "retry" {
+			t.Errorf("expected action 'retry' for soft_block gate %v, got %v", inst["gate"], action)
+		}
+		classification, ok := inst["classification"].(string)
+		if !ok {
+			t.Fatalf("expected classification to be string, got %T", inst["classification"])
+		}
+		if classification != "requires-attempt" {
+			t.Errorf("expected classification 'requires-attempt' for soft_block gate, got %v", classification)
+		}
+	}
+}
+
+func TestContinueFinalize_GateRecovery_MixedGates(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	cb := NewCircuitBreaker(3)
+
+	gates := codexContinueGateReport{
+		Passed: false,
+		Checks: []gateCheck{
+			{Name: "tests_pass", Passed: false, Detail: "tests failed"},
+			{Name: "auditor", Passed: false, Detail: "quality issues"},
+			{Name: "verification_loop", Passed: true, Detail: ""},
+		},
+	}
+
+	instructions := evaluateGateRecovery(1, gates, cb)
+
+	if len(instructions) != 2 {
+		t.Fatalf("expected 2 instructions (only failed gates), got %d", len(instructions))
+	}
+
+	// First: hard_block gate (tests_pass)
+	if instructions[0]["gate"] != "tests_pass" {
+		t.Errorf("expected first gate 'tests_pass', got %v", instructions[0]["gate"])
+	}
+	if instructions[0]["action"] != "escalate" {
+		t.Errorf("expected 'escalate' for hard_block gate, got %v", instructions[0]["action"])
+	}
+
+	// Second: soft_block gate (auditor) -- goes through orchestrator
+	if instructions[1]["gate"] != "auditor" {
+		t.Errorf("expected second gate 'auditor', got %v", instructions[1]["gate"])
+	}
+	if instructions[1]["action"] != "retry" {
+		t.Errorf("expected 'retry' for soft_block gate, got %v", instructions[1]["action"])
+	}
+}
+
+func TestContinueFinalize_GateRecovery_RecoveryInstructionsInOutput(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	state := colony.ColonyState{
+		Goal:         strPtr("Test goal"),
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+				}},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	// Create the continue manifest so validation passes
+	manifest := codexContinueManifest{
+		Present: true,
+		Path:    "build/phase-1/manifest.json",
+		Data: codexBuildManifest{
+			Dispatches: []codexBuildDispatch{
+				{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Status: "completed", Outputs: []string{"cmd/test.go"}},
+			},
+		},
+	}
+	if err := os.MkdirAll(filepath.Join(dataDir, "build", "phase-1"), 0755); err != nil {
+		t.Fatalf("failed to create manifest dir: %v", err)
+	}
+	manifestData, _ := json.Marshal(manifest)
+	if err := os.WriteFile(filepath.Join(dataDir, "build", "phase-1", "manifest.json"), manifestData, 0644); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	// Set up gates that will fail
+	gates := codexContinueGateReport{
+		Passed: false,
+		Checks: []gateCheck{
+			{Name: "auditor", Passed: false, Detail: "quality issues found"},
+		},
+		BlockingIssues: []string{"auditor gate failed"},
+	}
+
+	// Test that finalizeBlockedExternalContinue includes recovery_instructions
+	// when passed gate recovery instructions
+	gateRecoveryInstructions := []map[string]interface{}{
+		{
+			"gate":           "auditor",
+			"classification": "recoverable",
+			"action":         "retry",
+			"detail":         "recoverable: retrying worker",
+			"exhausted":      false,
+			"rationale":      "gate failure classified as recoverable",
+		},
+	}
+
+	now := time.Now().UTC()
+	result, _, err := finalizeBlockedExternalContinue(
+		state,
+		state.Plan.Phases[0],
+		manifest,
+		codexContinueVerificationReport{},
+		codexContinueAssessment{},
+		gates,
+		nil,
+		"",
+		nil,
+		now,
+		"build/phase-1/verification.json",
+		"build/phase-1/gates.json",
+		gateRecoveryInstructions,
+	)
+	if err != nil {
+		t.Fatalf("finalizeBlockedExternalContinue failed: %v", err)
+	}
+
+	// Verify recovery_instructions appear in the result
+	recoveryRaw, ok := result["recovery_instructions"]
+	if !ok {
+		t.Fatal("expected 'recovery_instructions' in blocked result")
+	}
+	recoveryInstructions, ok := recoveryRaw.([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected []map[string]interface{}, got %T", recoveryRaw)
+	}
+	if len(recoveryInstructions) != 1 {
+		t.Fatalf("expected 1 recovery instruction, got %d", len(recoveryInstructions))
+	}
+	if recoveryInstructions[0]["gate"] != "auditor" {
+		t.Errorf("expected gate 'auditor', got %v", recoveryInstructions[0]["gate"])
+	}
+	if recoveryInstructions[0]["action"] != "retry" {
+		t.Errorf("expected action 'retry', got %v", recoveryInstructions[0]["action"])
 	}
 }
