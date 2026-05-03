@@ -179,6 +179,11 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := traceContinueProvenance(manifest.Data.Dispatches); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	// Phase 97: Read queen-state as advisory context (D-09, D-11)
+	queenAdvisory, _ := queenStateRead(phase.ID)
+	// queenAdvisory.Decisions provides advisory context for logging -- finalize re-evaluates gates live
+	// queenAdvisory is NOT used to skip or alter gate evaluation -- it is purely informational
+	_ = queenAdvisory
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
@@ -386,6 +391,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 
 				// Persist updated budget
 				_ = persistBudgetToRecoveryLog(phase.ID, budget)
+
+				// Phase 97: Log circuit breaker escalation events (D-12, COORD-04)
+				if globalCircuitBreaker != nil {
+					tripped := globalCircuitBreaker.TrippedWorkers()
+					if len(tripped) > 0 {
+						queenLogEscalation(phase.ID, tripped, "circuit breaker tripped during finalize -- escalation required")
+					}
+				}
 			}
 
 			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel, gateRecoveryInstructions)

@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/codex"
 )
 
 type codexContinueExternalDispatch struct {
@@ -29,6 +31,7 @@ type codexContinueExternalDispatch struct {
 	ColonySkills  int      `json:"colony_skill_count,omitempty"`
 	DomainSkills  int      `json:"domain_skill_count,omitempty"`
 	MatchedSkills []string `json:"matched_skills,omitempty"`
+	Handoff      codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 type codexContinuePlanManifest struct {
@@ -91,6 +94,28 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
+
+	// Phase 97: Queen decision layer for plan-only gate evaluation (D-09, D-11)
+	priorGateResults, _ := gateResultsReadPhase(phase.ID)
+	if priorGateResults == nil {
+		priorGateResults = []GateCheckResult{}
+	}
+	planGates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	budget := budgetFromRecoveryLog(phase.ID, 1)
+	if budget == nil {
+		budget = newRecoveryBudget(1)
+	}
+	queenDecisions := queenDecide(planGates, budget, circuitBreaker, phase.ID, string(reviewDepth))
+	queenState := QueenStateFile{
+		Phase:          phase.ID,
+		GeneratedAt:    now.Format(time.RFC3339),
+		Decisions:      queenDecisions,
+		BudgetSnapshot: budget,
+	}
+	if err := queenStateWrite(phase.ID, queenState); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to persist queen state: %v\n", err)
+	}
+
 	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
 	plan := codexContinuePlanManifest{
 		Phase:               phase.ID,
@@ -127,6 +152,8 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		"review_depth":                 string(reviewDepth),
 		"skip_watchers":                options.SkipWatchers,
 		"verification_timeout_seconds": int(verificationTimeout / time.Second),
+		"queen_decisions":              queenDecisions,
+		"queen_state_file":             fmt.Sprintf("queen-state-%d.json", phase.ID),
 		"wrapper_contract": map[string]interface{}{
 			"source_command":               "AETHER_OUTPUT_MODE=json aether continue --plan-only --skip-watchers --light $ARGUMENTS",
 			"spawn_log_required":           true,
