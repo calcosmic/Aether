@@ -1,7 +1,7 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.20
-> **Last Updated:** 2026-04-22
+> **Current Version:** v1.0.27
+> **Last Updated:** 2026-05-03
 
 ---
 
@@ -9,10 +9,10 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.20 |
-| Slash commands | 50 (Claude) + 50 (OpenCode); Codex uses native CLI + 25 TOML agents |
-| Agent definitions | 25 |
-| Skills | 29 (11 colony + 18 domain) |
+| Version | v1.0.27 |
+| Slash commands | 56 (Claude) + 56 (OpenCode); Codex uses native CLI + 27 TOML agents |
+| Agent definitions | 27 |
+| Skills | 83 (52 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Tests | 2900+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
@@ -22,6 +22,12 @@
 - **Primary platforms:** Claude Code and OpenCode. These are the main maintained user surfaces.
 - **Secondary platform:** Codex CLI. Codex has best-effort support for the direct `aether` workflow.
 - **Expectation:** keep Claude/OpenCode command and agent UX aligned first. Keep Codex safe, usable, and accurate about its native CLI capabilities.
+
+## Communication Style
+
+- Always include a short plain-English, "for dummies" explanation alongside technical details when explaining work to the user.
+- Explain what changed, why it matters, and what it means for the user before going deep on implementation details.
+- Translate jargon the first time it appears. Summarize command output and error logs unless exact lines are needed for the next action.
 
 ## UX Architecture
 
@@ -69,6 +75,22 @@ Full contract documented in `.aether/docs/wrapper-runtime-ux-contract.md`. Key r
 - Wrappers must not duplicate verification or gating logic
 - Codex gets UX improvements through the runtime renderer only
 
+### Queen-Owned Orchestration
+
+The Queen chooses execution and review depth autonomously by default. Users
+should not need to remember `--skip-watchers`, `--verification-depth`, or timeout
+flag combinations.
+
+- `fast`: low-risk work; light continue verification, watcher subprocess skipped,
+  no continue review subprocesses.
+- `standard`: moderate-risk/refactor work; standard verification, watcher
+  subprocess skipped, focused Probe review allowed.
+- `final-review`: final, release, security, or core runtime/state/dispatch work;
+  heavy verification with Watcher and specialist review enabled.
+
+Wrappers should explain the Queen's choice briefly in plain English and reserve
+manual depth flags for advanced overrides.
+
 ---
 
 ## Architecture Overview
@@ -94,7 +116,7 @@ Full contract documented in `.aether/docs/wrapper-runtime-ux-contract.md`. Key r
 │   ├── commands/*.yaml   Slash command source definitions        │
 │   ├── agents-claude/    Agent definition mirror (Claude, packaging)│
 │   ├── agents-codex/     Agent definition mirror (Codex, packaging)│
-│   ├── skills/           colony/ (11) + domain/ (18)            │
+│   ├── skills/           colony/ (52) + domain/ (31)           │
 │   ├── skills-codex/     Codex skill mirror (packaging)          │
 │   ├── docs/             Distributed documentation              │
 │   └── templates/        Colony state, pheromones, etc.          │
@@ -123,6 +145,20 @@ Colony-prime assembles worker context from: QUEEN.md wisdom, eternal memory,
 pheromone signals, phase learnings, key decisions, blocker flags, user preferences,
 clarified intent, parallel mode, and context capsule — all within a token budget
 (see Token Budget below).
+
+### Worker Handoff Context Transfer
+
+Build, plan, colonize, and continue dispatches now carry forward a structured
+worker handoff in addition to colony-prime context and skill injection. Each
+worker result must include a `handoff` object with changed files, commands run,
+verification status, known failures, open decisions, assumptions, next-worker
+instructions, things not to repeat, and freshness. The runtime stores recent
+handoffs in `.aether/data/handoffs/worker-handoffs.json` and injects relevant
+entries into later worker prompts as `Previous Worker Handoffs`.
+
+For dummies: this is the short relay note passed from one worker to the next.
+It lets faster or smaller models start with the useful facts instead of spending
+their first turn rediscovering what the previous worker already learned.
 
 **See `RUNTIME UPDATE ARCHITECTURE.md` for complete distribution flow.**
 
@@ -228,7 +264,7 @@ Runtime note:
 ├── utils/               # Runtime utilities
 │   ├── oracle/oracle.md # Oracle loop instructions (loaded by /ant-oracle)
 │   └── queen-to-md.xsl  # XSL transform for queen wisdom export
-├── skills/              # colony/ (11) + domain/ (18) skill definitions
+├── skills/              # colony/ (52) + domain/ (31) skill definitions
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
@@ -316,7 +352,7 @@ Consolidated guidelines in `.claude/rules/`:
 
 ---
 
-## The 25 Agents
+## The 27 Agents
 
 | Tier | Agent | Role |
 |------|-------|------|
@@ -332,19 +368,21 @@ Consolidated guidelines in `.claude/rules/`:
 | Surveyor | surveyor-provisions | Maps dependencies |
 | Specialist | Keeper | Preserves knowledge |
 | Specialist | Tracker | Investigates bugs |
-| Specialist | Probe | Coverage analysis (NEW) |
+| Specialist | Probe | Coverage analysis |
 | Specialist | Weaver | Refactoring specialist |
-| Specialist | Auditor | Quality gate (NEW) |
+| Specialist | Auditor | Quality gate |
+| Specialist | Fixer | Autonomous repair |
+| Specialist | Medic | Colony health diagnosis and repair |
 | Niche | Chaos | Resilience testing |
 | Niche | Archaeologist | Excavates git history |
-| Niche | Gatekeeper | Security gate (NEW) |
+| Niche | Gatekeeper | Security gate |
 | Niche | Includer | Accessibility audits |
-| Niche | Measurer | Performance analysis (NEW) |
+| Niche | Measurer | Performance analysis |
 | Niche | Sage | Wisdom synthesis |
 | Niche | Oracle | Deep research, actionable recommendations |
 | Niche | Ambassador | External integrations |
 | Niche | Chronicler | Documentation |
-| Specialist | Medic | Colony health diagnosis and repair |
+| Niche | Porter | Post-seal publish and deploy |
 
 ---
 
@@ -843,4 +881,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.20 — 2026-04-23*
+*Updated for Aether v1.0.27 — 2026-05-03*

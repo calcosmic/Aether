@@ -448,4 +448,4 @@ Runtime note:
 
 ---
 
-*Updated for Aether v1.0.19 -- 2026-04-22*
+*Updated for Aether v1.0.27 -- 2026-05-03*
