@@ -138,7 +138,7 @@
 - [x] Phase 52: Continue Review Worker Outcome Reports
 - [x] Phase 53: Domain Ledger CRUD Subcommands
 - [x] Phase 54: Colony-Prime Prior Reviews Section
-- [x] Phase 55: Agent Definition Updates
+- [x] Phase 55: Agent Definition Reviews
 - [x] Phase 56: Lifecycle Integration
 
 </details>
@@ -212,7 +212,7 @@
 - [x] **Phase 94: Recovery Data Model** - Create failure classification types and recovery logging structures (completed 2026-05-03)
 - [x] **Phase 95: Smart Gate Pipeline** - Auto-resolve soft_block gates, configurable thresholds, never auto-resolve hard blocks
 - [x] **Phase 96: Auto-Recovery Orchestrator** - Bounded retry, peer redistribution, automatic Fixer dispatch (completed 2026-05-03)
-- [ ] **Phase 97: Queen-Led Continue** - Split continue into plan-only and finalize, single-invocation queen model
+- [x] **Phase 97: Queen-Led Continue** - Split continue into plan-only and finalize, single-invocation queen model (completed 2026-05-03)
 - [ ] **Phase 98: Queen Wave Lifecycle** - End-to-end wave management with failure handling and advancement
 - [ ] **Phase 99: Output Filtering & Phase Summary** - Filtered build output, queen activity audit, phase-end summaries
 
@@ -243,7 +243,7 @@ See `.planning/milestones/v1.13-ROADMAP.md` for full phase details.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 93-01-PLAN.md -- Classification registry, QueenAnnotation struct, gate-classify CLI command, and tests
+- [x] 93-01-PLAN.md -- Classification registry, QueenAnnotation struct, gate-classify CLI command, and tests
 
 ### Phase 94: Recovery Data Model
 **Goal**: Worker failures have a deterministic classification system (recoverable, requires-attempt, blocking), transient failures are distinguished from systemic failures, and every recovery action is logged to a phase-scoped file.
@@ -309,7 +309,11 @@ Plans:
   1. During a build phase, the queen dispatches a wave, monitors worker completion, and when all workers finish (or fail with recovery), she decides whether to advance to the next wave or escalate -- the user sees a summary of wave status between waves
   2. When a worker fails mid-wave, the queen handles the failure (retry, reassign, or skip) without waiting for user input, and the wave continues with remaining workers
   3. After all waves in a phase complete, the queen produces a wave lifecycle summary showing waves dispatched, workers per wave, failures encountered, and recovery actions taken
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [x] 98-01-PLAN.md -- Queen wave lifecycle function with always-advance policy, between-wave recovery, ceremony events, and wave summary (TDD)
+- [x] 98-02-PLAN.md -- Wire queen wave lifecycle into build command with integration tests
 
 ### Phase 99: Output Filtering & Phase Summary
 **Goal**: Build output defaults to filtered summary mode showing only what matters, queen decisions are logged to a persistent audit file, and phase-end summaries replace raw worker noise with actionable information.
@@ -319,8 +323,12 @@ Plans:
   1. Running `aether build` without `--verbose` shows a concise summary of what was attempted, what succeeded, what failed and how it was recovered, and what needs human attention -- raw worker output is suppressed
   2. Running `aether build --verbose` shows full worker output for debugging or trust calibration
   3. A queen activity audit file (JSON) exists after any phase with queen decisions, containing timestamp, decision type, input finding, action taken, and rationale for every autonomous decision
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 3 plans
+
+Plans:
+- [ ] 99-01-PLAN.md -- Output filter with --verbose flag, filteredPrintln/filteredFprintf functions, and build command wiring (OUT-03)
+- [ ] 99-02-PLAN.md -- Queen audit consolidation from 3 source files with QueenAuditFile schema (OUT-02)
+- [ ] 99-03-PLAN.md -- Phase-end summary renderer with actions-needed section and build command wiring (OUT-01)
 
 ## Progress
 
@@ -336,5 +344,5 @@ Plans:
 | 95. Smart Gate Pipeline | v1.14 | 2 plans + gap closure | Complete | 2026-05-03 |
 | 96. Auto-Recovery Orchestrator | v1.14 | 2 plans | Complete | 2026-05-03 |
 | 97. Queen-Led Continue | v1.14 | 2/2 | Complete   | 2026-05-03 |
-| 98. Queen Wave Lifecycle | v1.14 | 0 | Not started | - |
-| 99. Output Filtering & Phase Summary | v1.14 | 0 | Not started | - |
+| 98. Queen Wave Lifecycle | v1.14 | 2/2 | Complete | 2026-05-04 |
+| 99. Output Filtering & Phase Summary | v1.14 | 3 plans | Planning complete | - |
