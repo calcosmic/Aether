@@ -1,7 +1,13 @@
 package cmd
 
 import (
+	"fmt"
+	"sort"
 	"strings"
+	"time"
+
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/spf13/cobra"
 )
 
 // FailureClassification represents how a worker failure should be handled.
@@ -111,4 +117,186 @@ type RecoveryLogEntry struct {
 type RecoveryLogFile struct {
 	Phase   int                `json:"phase"`
 	Entries []RecoveryLogEntry `json:"entries"`
+}
+
+// recoveryLogWritePhase persists recovery log entries to recovery-log-{N}.json.
+func recoveryLogWritePhase(phaseNum int, entries []RecoveryLogEntry) error {
+	rel := fmt.Sprintf("recovery-log-%d.json", phaseNum)
+	file := RecoveryLogFile{
+		Phase:   phaseNum,
+		Entries: entries,
+	}
+	return store.SaveJSON(rel, file)
+}
+
+// recoveryLogReadPhase reads recovery log entries from recovery-log-{N}.json.
+func recoveryLogReadPhase(phaseNum int) (RecoveryLogFile, error) {
+	rel := fmt.Sprintf("recovery-log-%d.json", phaseNum)
+	var file RecoveryLogFile
+	if err := store.LoadJSON(rel, &file); err != nil {
+		return RecoveryLogFile{}, err
+	}
+	return file, nil
+}
+
+// --- Cobra CLI subcommands for failure classification and recovery logs ---
+
+var failureClassifyCmd = &cobra.Command{
+	Use:          "failure-classify",
+	Short:        "Show failure classification rules and rationale",
+	Long:         "Display all failure classifications (recoverable, requires-attempt, blocking) with rationale.\nUse --json for structured output.",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		if jsonOutput {
+			outputOK(failureClassifications)
+			return nil
+		}
+		renderFailureClassifyTable()
+		return nil
+	},
+}
+
+func renderFailureClassifyTable() {
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Pattern", "Classification", "Failure Type", "Rationale"})
+
+	type entry struct {
+		pattern string
+		failureClassificationEntry
+	}
+	var entries []entry
+	for pattern, e := range failureClassifications {
+		entries = append(entries, entry{pattern, e})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Classification != entries[j].Classification {
+			return entries[i].Classification < entries[j].Classification
+		}
+		return entries[i].pattern < entries[j].pattern
+	})
+
+	for _, e := range entries {
+		t.AppendRow(table.Row{e.pattern, string(e.Classification), string(e.FailureType), e.Rationale})
+	}
+	fmt.Fprintln(stdout, t.Render())
+}
+
+var recoveryLogReadCmd = &cobra.Command{
+	Use:          "recovery-log-read",
+	Short:        "Read the recovery log for a phase",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+		phaseNum, _ := cmd.Flags().GetInt("phase")
+		if phaseNum <= 0 {
+			outputErrorMessage("--phase is required")
+			return nil
+		}
+		file, err := recoveryLogReadPhase(phaseNum)
+		if err != nil {
+			outputOK(map[string]interface{}{"entries": []RecoveryLogEntry{}, "phase": phaseNum, "total": 0})
+			return nil
+		}
+		outputOK(map[string]interface{}{
+			"entries": file.Entries,
+			"phase":   file.Phase,
+			"total":   len(file.Entries),
+		})
+		return nil
+	},
+}
+
+var recoveryLogWriteCmd = &cobra.Command{
+	Use:          "recovery-log-write",
+	Short:        "Write a recovery log entry for a phase",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+		phaseNum, _ := cmd.Flags().GetInt("phase")
+		if phaseNum <= 0 {
+			outputErrorMessage("--phase is required")
+			return nil
+		}
+		worker := mustGetString(cmd, "worker")
+		if worker == "" {
+			outputErrorMessage("--worker is required")
+			return nil
+		}
+		status := mustGetString(cmd, "status")
+		if status == "" {
+			outputErrorMessage("--status is required")
+			return nil
+		}
+		errMsg, _ := cmd.Flags().GetString("error")
+		action := mustGetString(cmd, "action")
+		if action == "" {
+			outputErrorMessage("--action is required")
+			return nil
+		}
+		outcome := mustGetString(cmd, "outcome")
+		if outcome == "" {
+			outputErrorMessage("--outcome is required")
+			return nil
+		}
+		attempt, _ := cmd.Flags().GetInt("attempt")
+
+		classification, failureType, rationale := classifyWorkerFailure(status, errMsg)
+
+		entry := RecoveryLogEntry{
+			ID: fmt.Sprintf("rl_%d", time.Now().UnixNano()),
+			Failure: FailureRecord{
+				WorkerName:     worker,
+				Phase:          phaseNum,
+				Status:         status,
+				Classification: classification,
+				FailureType:    failureType,
+				ErrorMessage:   errMsg,
+				Timestamp:      time.Now().UTC().Format(time.RFC3339),
+			},
+			ActionTaken:   action,
+			Outcome:       outcome,
+			AttemptNumber: attempt,
+			Timestamp:     time.Now().UTC().Format(time.RFC3339),
+			Detail:        rationale,
+		}
+
+		// Read existing log and append
+		existing, _ := recoveryLogReadPhase(phaseNum)
+		entries := append(existing.Entries, entry)
+
+		if err := recoveryLogWritePhase(phaseNum, entries); err != nil {
+			outputError(1, "failed to write recovery log entry", err)
+			return nil
+		}
+
+		outputOK(entry)
+		return nil
+	},
+}
+
+func init() {
+	failureClassifyCmd.Flags().Bool("json", false, "Output as JSON")
+	rootCmd.AddCommand(failureClassifyCmd)
+
+	recoveryLogReadCmd.Flags().Int("phase", 0, "Phase number")
+	rootCmd.AddCommand(recoveryLogReadCmd)
+
+	recoveryLogWriteCmd.Flags().Int("phase", 0, "Phase number")
+	recoveryLogWriteCmd.Flags().String("worker", "", "Worker name")
+	recoveryLogWriteCmd.Flags().String("status", "", "Worker status")
+	recoveryLogWriteCmd.Flags().String("error", "", "Error message")
+	recoveryLogWriteCmd.Flags().String("action", "", "Action taken")
+	recoveryLogWriteCmd.Flags().String("outcome", "", "Outcome")
+	recoveryLogWriteCmd.Flags().Int("attempt", 1, "Attempt number")
+	rootCmd.AddCommand(recoveryLogWriteCmd)
 }
