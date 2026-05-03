@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -33,16 +35,27 @@ type gateResult struct {
 	Checks  []gateCheck `json:"checks"`
 }
 
+// QueenAnnotation records a queen decision about a gate finding.
+// This is appended to the gate result without modifying the original finding.
+// Per D-07: original Detail, FixHint, and RecoveryOptions are never touched.
+type QueenAnnotation struct {
+	Decision     string `json:"decision"`      // "auto-resolved", "escalated", "skipped"
+	Rationale    string `json:"rationale"`     // Why the queen made this decision
+	Timestamp    string `json:"timestamp"`     // RFC3339
+	QueenVersion string `json:"queen_version"` // Runtime version for traceability
+}
+
 // GateCheckResult records a gate result for per-phase persistence.
 // This is the richer format stored in gate-results-{N}.json files.
 type GateCheckResult struct {
-	Name            string   `json:"name"`
-	Status          string   `json:"status"` // "passed", "failed", "skipped", "not-reached"
-	Detail          string   `json:"detail,omitempty"`
-	FixHint         string   `json:"fix_hint,omitempty"`
-	RecoveryOptions []string `json:"recovery_options,omitempty"`
-	Timestamp       string   `json:"timestamp"`
-	RetryCount      int      `json:"retry_count"`
+	Name            string           `json:"name"`
+	Status          string           `json:"status"` // "passed", "failed", "skipped", "not-reached"
+	Detail          string           `json:"detail,omitempty"`
+	FixHint         string           `json:"fix_hint,omitempty"`
+	RecoveryOptions []string         `json:"recovery_options,omitempty"`
+	Timestamp       string           `json:"timestamp"`
+	RetryCount      int              `json:"retry_count"`
+	QueenAnnotation *QueenAnnotation `json:"queen_annotation,omitempty"` // Optional queen decision trail
 }
 
 var gateCheckCmd = &cobra.Command{
@@ -552,6 +565,61 @@ var alwaysRunGates = map[string]bool{
 	"no_critical_flags": true,
 }
 
+// GateClassificationTier represents the severity tier of a gate.
+// Classification is deterministic and code-level -- never user-configurable.
+type GateClassificationTier string
+
+const (
+	hardBlock GateClassificationTier = "hard_block"
+	softBlock GateClassificationTier = "soft_block"
+	advisory  GateClassificationTier = "advisory"
+)
+
+// gateClassificationEntry records a gate's tier and why it has that tier.
+type gateClassificationEntry struct {
+	Tier      GateClassificationTier
+	Rationale string
+}
+
+// gateClassifications maps every named gate to its classification tier.
+// This is a read-only constant -- no configuration can change these values.
+// Gatekeeper and watcher_veto are compile-time hard_block per D-06.
+var gateClassifications = map[string]gateClassificationEntry{
+	// hard_block gates (5): security, quality veto, human escalation, and pre-checks
+	"gatekeeper":        {hardBlock, "Security CVE findings require human judgment"},
+	"watcher_veto":      {hardBlock, "Watcher has final say by colony design"},
+	"flags":             {hardBlock, "Flags represent intentional human escalation"},
+	"tests_pass":        {hardBlock, "Broken build is always a hard block"},
+	"no_critical_flags": {hardBlock, "Critical errors existing is always a hard block"},
+	// soft_block gates (6): quality findings that auto-resolve when non-critical
+	"auditor":           {softBlock, "Quality findings auto-resolve when non-critical"},
+	"complexity":        {softBlock, "Maintainability thresholds are advisory until verified"},
+	"tdd_evidence":      {softBlock, "Missing test claims can be fulfilled by re-build"},
+	"anti_pattern":      {softBlock, "Critical patterns are actionable but non-blocking when addressed"},
+	"verification_loop": {softBlock, "Build failures are transient and retriable"},
+	"spawn_gate":        {softBlock, "Missing spawns are recoverable by re-dispatch"},
+	// advisory gates (2): diagnostic/logging only
+	"medic":   {advisory, "Health diagnostics are informational only"},
+	"runtime": {advisory, "User-reported issues are logged but never gate advancement"},
+}
+
+// gateClassify returns the classification tier and rationale for a gate name.
+// Returns ("", "") for unknown gates -- caller decides how to handle unclassified gates.
+// Unknown gates (like continue-flow structural gates) are intentionally unclassified.
+func gateClassify(gateName string) (GateClassificationTier, string) {
+	if entry, ok := gateClassifications[gateName]; ok {
+		return entry.Tier, entry.Rationale
+	}
+	return "", ""
+}
+
+// isHardBlockGate returns true if the gate is classified as hard_block.
+// Returns false for unknown gates (fail-open for unclassified structural gates).
+func isHardBlockGate(gateName string) bool {
+	tier, _ := gateClassify(gateName)
+	return tier == hardBlock
+}
+
 // shouldSkipGate determines whether a gate should be skipped based on prior results.
 // Gates in alwaysRunGates never skip. Other gates with Status "passed" or "skipped" are skipped.
 func shouldSkipGate(priorResults []GateCheckResult, gateName string) bool {
@@ -746,6 +814,48 @@ var gateRecoveryTemplateCmd = &cobra.Command{
 	},
 }
 
+var gateClassifyCmd = &cobra.Command{
+	Use:          "gate-classify",
+	Short:        "Show gate classification tiers and rationale",
+	Long:         "Display all gate classifications (hard_block, soft_block, advisory) with rationale.\nUse --json for structured output.",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		if jsonOutput {
+			outputOK(gateClassifications)
+			return nil
+		}
+		renderGateClassifyTable()
+		return nil
+	},
+}
+
+func renderGateClassifyTable() {
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Gate", "Classification", "Rationale"})
+
+	type entry struct {
+		name string
+		gateClassificationEntry
+	}
+	var entries []entry
+	for name, e := range gateClassifications {
+		entries = append(entries, entry{name, e})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Tier != entries[j].Tier {
+			return entries[i].Tier < entries[j].Tier
+		}
+		return entries[i].name < entries[j].name
+	})
+
+	for _, e := range entries {
+		t.AppendRow(table.Row{e.name, string(e.Tier), e.Rationale})
+	}
+	fmt.Fprintln(stdout, t.Render())
+}
+
 func init() {
 	gateCheckCmd.Flags().String("action", "", "Action to check: task-complete or phase-advance (required)")
 	gateCheckCmd.Flags().String("task", "", "Task ID for task-complete action (e.g., 1.1)")
@@ -765,4 +875,7 @@ func init() {
 
 	gateRecoveryTemplateCmd.Flags().String("name", "", "Gate name (required)")
 	rootCmd.AddCommand(gateRecoveryTemplateCmd)
+
+	gateClassifyCmd.Flags().Bool("json", false, "Output as JSON")
+	rootCmd.AddCommand(gateClassifyCmd)
 }
