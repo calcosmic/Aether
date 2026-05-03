@@ -1314,16 +1314,22 @@ func TestGateAutoResolveCmdJSON(t *testing.T) {
 
 	output := buf.String()
 
-	// Parse JSON output
-	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &result); err != nil {
+	// Parse JSON output (wrapped in {"ok":true,"result":...})
+	var wrapper struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(output), &wrapper); err != nil {
 		t.Fatalf("failed to parse JSON output: %v\noutput: %s", err, output)
+	}
+	if !wrapper.OK {
+		t.Fatalf("expected ok=true, got output: %s", output)
 	}
 
 	// All 6 soft_block gates should be present
 	expectedGates := []string{"auditor", "complexity", "tdd_evidence", "anti_pattern", "verification_loop", "spawn_gate"}
 	for _, gate := range expectedGates {
-		if _, ok := result[gate]; !ok {
+		if _, ok := wrapper.Result[gate]; !ok {
 			t.Errorf("expected gate %q in JSON output, not found", gate)
 		}
 	}

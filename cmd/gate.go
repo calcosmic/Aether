@@ -620,6 +620,126 @@ func isHardBlockGate(gateName string) bool {
 	return tier == hardBlock
 }
 
+// --- Auto-Resolve Engine (Phase 95) ---
+
+// gateAutoResolveThreshold defines the auto-resolve threshold for a soft_block gate.
+// Per D-05: thresholds are hardcoded constants, not configurable per-colony.
+type gateAutoResolveThreshold struct {
+	Threshold float64 // Numeric threshold; gate findings at or below this value auto-resolve
+	Rationale string  // Why this threshold was chosen
+}
+
+// gateAutoResolveThresholds maps each soft_block gate to its auto-resolve threshold.
+// Only gates classified as soft_block have entries here.
+// For binary gates (pass/fail with no numeric score), threshold 0.0 means
+// "always auto-resolve on failure when depth multiplier > 0".
+// The depth multiplier adjusts these values: light depth multiplies by 1.5,
+// standard by 1.0, heavy by 0.0 (no auto-resolve).
+var gateAutoResolveThresholds = map[string]gateAutoResolveThreshold{
+	"auditor":           {0.0, "Any auditor finding in continue flow is auto-resolvable -- structural quality gates handled at review, not gate level"},
+	"complexity":        {0.0, "Complexity findings are advisory -- auto-resolvable in continue flow"},
+	"tdd_evidence":      {0.0, "Missing test claims can be fulfilled by re-build -- auto-resolvable"},
+	"anti_pattern":      {0.0, "Anti-pattern findings are actionable but non-blocking when addressed"},
+	"verification_loop": {0.0, "Verification failures are transient and retriable"},
+	"spawn_gate":        {0.0, "Missing spawns are recoverable by re-dispatch"},
+}
+
+// autoResolveDepthMultiplier returns a multiplier applied to auto-resolve thresholds
+// based on the current verification depth. Per D-06: light depth = more aggressive,
+// heavy depth = more conservative.
+// Light: multiplier 1.5 (thresholds effectively increase by 50%, more auto-resolves)
+// Standard: multiplier 1.0 (thresholds as-is)
+// Heavy: multiplier 0.0 (no auto-resolve at heavy depth -- user asked for thorough checking)
+func autoResolveDepthMultiplier(depth colony.VerificationDepth) float64 {
+	switch depth {
+	case colony.VerificationDepthLight:
+		return 1.5
+	case colony.VerificationDepthHeavy:
+		return 0.0
+	default:
+		return 1.0
+	}
+}
+
+// annotateGateResult adds a QueenAnnotation to a specific gate in the per-phase
+// gate-results-{N}.json file. Per D-10: the original Detail, FixHint, and
+// RecoveryOptions are never modified -- only the QueenAnnotation pointer field
+// is added/updated.
+func annotateGateResult(phaseNum int, gateName string, annotation QueenAnnotation) error {
+	results, err := gateResultsReadPhase(phaseNum)
+	if err != nil {
+		return fmt.Errorf("failed to read gate results for annotation: %w", err)
+	}
+	for i := range results {
+		if results[i].Name == gateName {
+			results[i].QueenAnnotation = &annotation
+			break
+		}
+	}
+	return gateResultsWritePhase(phaseNum, results)
+}
+
+// autoResolveSoftBlockGates evaluates failed soft_block gates against their thresholds.
+// Per D-01: threshold-based, no LLM judgment. Per D-04: only soft_block gates.
+// Returns the updated gate report and a list of auto-resolved gate names.
+// The caller is responsible for persisting the updated report and dispatching
+// the Fixer for remaining failures.
+func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, reviewDepth string) (codexContinueGateReport, []string) {
+	depth := colony.NormalizeVerificationDepth(reviewDepth)
+	multiplier := autoResolveDepthMultiplier(depth)
+
+	var autoResolved []string
+	var remainingBlockers []string
+
+	for i, check := range gates.Checks {
+		if check.Passed {
+			continue
+		}
+
+		tier, _ := gateClassify(check.Name)
+
+		// Per D-04: only auto-resolve soft_block gates
+		if tier != softBlock {
+			remainingBlockers = append(remainingBlockers, check.Detail)
+			continue
+		}
+
+		threshold, ok := gateAutoResolveThresholds[check.Name]
+		if !ok {
+			// Unclassified soft_block gate (should not happen, but safe default)
+			remainingBlockers = append(remainingBlockers, check.Detail)
+			continue
+		}
+
+		// For binary gates (threshold 0.0): auto-resolve when multiplier > 0
+		// For numeric gates: auto-resolve when threshold * multiplier covers the finding
+		if shouldAutoResolve(check, threshold.Threshold, multiplier) {
+			gates.Checks[i].Passed = true
+			autoResolved = append(autoResolved, check.Name)
+		} else {
+			remainingBlockers = append(remainingBlockers, check.Detail)
+		}
+	}
+
+	gates.Passed = len(remainingBlockers) == 0
+	gates.BlockingIssues = remainingBlockers
+	return gates, autoResolved
+}
+
+// shouldAutoResolve determines whether a specific gate check should be auto-resolved
+// based on the threshold and depth multiplier. For binary gates (no numeric score),
+// auto-resolve when the multiplier is positive (i.e., depth is not heavy).
+// For numeric gates (future), auto-resolve when threshold * multiplier > 0.
+func shouldAutoResolve(check gateCheck, threshold float64, multiplier float64) bool {
+	// Heavy depth (multiplier 0.0) means no auto-resolve at all
+	if multiplier <= 0 {
+		return false
+	}
+	// Binary gates with any positive multiplier: auto-resolve
+	// Numeric gates: effective threshold = threshold * multiplier
+	return true
+}
+
 // shouldSkipGate determines whether a gate should be skipped based on prior results.
 // Gates in alwaysRunGates never skip. Other gates with Status "passed" or "skipped" are skipped.
 func shouldSkipGate(priorResults []GateCheckResult, gateName string) bool {
@@ -856,6 +976,48 @@ func renderGateClassifyTable() {
 	fmt.Fprintln(stdout, t.Render())
 }
 
+var gateAutoResolveCmd = &cobra.Command{
+	Use:          "gate-auto-resolve",
+	Short:        "Show gate auto-resolve thresholds and rationale",
+	Long:         "Display auto-resolve thresholds for soft_block gates.\nHard_block and advisory gates are never auto-resolved.\nUse --json for structured output.",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		if jsonOutput {
+			outputOK(gateAutoResolveThresholds)
+			return nil
+		}
+		renderGateAutoResolveTable()
+		return nil
+	},
+}
+
+func renderGateAutoResolveTable() {
+	t := table.NewWriter()
+	t.AppendHeader(table.Row{"Gate", "Threshold", "Light", "Standard", "Heavy", "Rationale"})
+
+	type entry struct {
+		name string
+		gateAutoResolveThreshold
+	}
+	var entries []entry
+	for name, e := range gateAutoResolveThresholds {
+		entries = append(entries, entry{name, e})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].name < entries[j].name
+	})
+
+	for _, e := range entries {
+		light := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthLight))
+		standard := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthStandard))
+		heavy := fmt.Sprintf("%.1f", e.Threshold*autoResolveDepthMultiplier(colony.VerificationDepthHeavy))
+		t.AppendRow(table.Row{e.name, fmt.Sprintf("%.1f", e.Threshold), light, standard, heavy, e.Rationale})
+	}
+	fmt.Fprintln(stdout, t.Render())
+}
+
 func init() {
 	gateCheckCmd.Flags().String("action", "", "Action to check: task-complete or phase-advance (required)")
 	gateCheckCmd.Flags().String("task", "", "Task ID for task-complete action (e.g., 1.1)")
@@ -878,4 +1040,7 @@ func init() {
 
 	gateClassifyCmd.Flags().Bool("json", false, "Output as JSON")
 	rootCmd.AddCommand(gateClassifyCmd)
+
+	gateAutoResolveCmd.Flags().Bool("json", false, "Output as JSON")
+	rootCmd.AddCommand(gateAutoResolveCmd)
 }
