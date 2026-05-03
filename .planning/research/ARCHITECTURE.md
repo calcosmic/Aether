@@ -1,833 +1,571 @@
-# Architecture Research: v1.13 Recovery Hardening & Hive Learning
+# Architecture Research: v1.14 Queen Authority
 
-**Domain:** Build/continue gate hardening, confidence-targeted Oracle loop, init synthesis, worker lifecycle tracking, hive learning layer with SQLite
-**Researched:** 2026-05-01
-**Overall confidence:** HIGH (based on direct source code analysis of 316 cmd/*.go files, 12 pkg/ packages, and existing colony state types)
+**Domain:** Autonomous queen coordination, auto-recovery, smart gating, output filtering
+**Researched:** 2026-05-03
+**Overall confidence:** HIGH (based on direct source code analysis of `cmd/codex_build.go`, `cmd/codex_continue.go`, `cmd/gate.go`, `cmd/autopilot.go`, `cmd/codex_dispatch_contract.go`, `.claude/agents/ant/aether-queen.md`, and playbook files)
 
 ## Executive Summary
 
-v1.13 adds three distinct feature streams that touch well-defined integration surfaces in the existing Go runtime. Recovery hardening modifies two critical paths (build-finalize and continue-finalize) to validate provenance before allowing phase advancement. Hive learning adds a new `pkg/hive/` package backed by SQLite with FTS5, connected to the existing `pkg/memory/` pipeline via event bus subscriptions. Worker lifecycle tracking extends the existing `pkg/codex/process_tracker.go` with heartbeat monitoring and stale cleanup.
+v1.14 wires the Queen into existing infrastructure so she can drive builds autonomously instead of just narrating them. The architecture has three distinct surfaces: (1) auto-recovery logic that intercepts worker failures during build waves and continues through the existing 4-tier escalation chain without pausing for human input, (2) smart gating that modifies the 11-gate continue pipeline to auto-resolve non-critical findings and only block on genuine problems, and (3) output filtering that collapses raw worker noise into structured summaries surfaced to the user.
 
-The architecture is additive, not disruptive. No existing data structures need breaking changes -- all new fields use `omitempty`. The SQLite colony.db coexists with JSON files because it serves a different purpose: JSON files hold colony state (authoritative, human-readable, git-trackable), while SQLite holds learned procedural memory (searchable, accumulated, privacy-gated).
+The key insight is that the Go runtime already has most of the infrastructure -- `codexBuildDispatch` structs carry status/summary/blockers, `gateCheck` structs carry passed/detail/fix-hint, the circuit breaker pattern exists for loop prevention, and `runCodexContinueGates()` already has skip logic for previously-passed gates. Queen authority layers on top of these existing surfaces rather than replacing them.
 
-**Key risk:** The build-provenance validation (AAC-001, AAC-002) must reject phantom builds without breaking legitimate partial-success scenarios. The existing `assessCodexContinue()` function in `cmd/codex_continue.go` already distinguishes partial success from full failure -- provenance validation layers on top of this, not replacing it.
+**Critical design constraint:** The Go runtime owns state mutations (per CLAUDE.md architecture rules). The Queen is a wrapper-layer agent on Claude/OpenCode. This means auto-recovery decisions that mutate colony state must go through the Go runtime (`aether build-finalize`, `aether continue`), not through direct state file manipulation by the Queen agent.
 
-## Integration Architecture
+## Current Architecture (What Exists)
 
-### Component Map
-
-```
-EXISTING                                           NEW (v1.13)
-========                                           ============
-
-RECOVERY HARDENING
-cmd/codex_build_finalize.go ........... cmd/provenance.go (new)
-cmd/codex_continue_finalize.go ......... cmd/provenance.go (new)
-cmd/codex_continue.go .................. cmd/provenance.go (new -- provenance gate)
-cmd/gate.go ............................ cmd/gate.go (gate-results.json persistence)
-cmd/circuit_breaker.go ................ cmd/circuit_breaker.go (REC-LOOP-01 inheritance)
-pkg/colony/colony.go .................. pkg/colony/colony.go (BuildProvenance field)
-
-ORACLE LOOP
-cmd/oracle_loop.go .................... cmd/oracle_loop.go (confidence target param)
-cmd/oracle_loop.go .................... cmd/oracle_loop.go (iterative refinement)
-.aether/oracle/state.json .............. (already has TargetConfidence field)
-
-INIT SYNTHESIS
-cmd/init_cmd.go ....................... cmd/init_cmd.go (synthesis subcommand)
-cmd/init_research.go .................. cmd/init_research.go (brief assembly)
-cmd/colony_prime_context.go ........... (reads Charter from COLONY_STATE.json)
-
-GATE RECOVERY
-cmd/gate.go ............................ cmd/gate.go (gate-results.json)
-cmd/codex_continue_finalize.go ......... cmd/unblock_cmd.go (new -- /ant-unblock)
-cmd/codex_build.go .................... (Fixer caste dispatch)
-
-WORKER LIFECYCLE
-pkg/codex/process_tracker.go ........... pkg/codex/process_tracker.go (heartbeat fields)
-pkg/codex/process_tracker.go ........... cmd/heartbeat_monitor.go (new)
-cmd/worker_cleanup_signal_*.go ......... cmd/heartbeat_monitor.go (stale cleanup)
-
-HIVE LEARNING
-pkg/memory/pipeline.go ................. pkg/hive/ (new package)
-pkg/events/bus.go ..................... pkg/hive/store.go (event subscriber)
-cmd/hive.go ........................... pkg/hive/ (refactored from cmd/)
-pkg/storage/storage.go ................. pkg/hive/store.go (SQLite alongside Store)
-cmd/colony_prime_context.go ........... pkg/hive/recall.go (FTS5 retrieval)
-cmd/codex_build.go .................... pkg/hive/hooks.go (learning triggers)
-cmd/codex_continue_finalize.go ......... pkg/hive/hooks.go (learning triggers)
-```
-
----
-
-## Question 1: Build Provenance Validation in Build-Finalize and Continue-Verify
-
-### Where It Hooks
-
-**Build-finalize path** (`cmd/codex_build_finalize.go`):
-
-The provenance gate inserts between line 203 (`applyCodexBuildState`) and line 220 (`buildCodexBuildManifest`), which is the existing state-mutation-to-manifest-write window. Currently this window has no validation that the build actually produced meaningful output. The hook point is:
-
-```
-runCodexBuildFinalize():
-  1. Load completion data (existing)
-  2. Merge external build results (existing)
-  3. >>> NEW: validateBuildProvenance(dispatches, claims, phase) <<<
-  4. applyCodexBuildState (existing)
-  5. write manifest (existing)
-  6. atomic commit (existing)
-```
-
-**Continue-verify path** (`cmd/codex_continue_finalize.go`):
-
-The provenance gate inserts at line 163-166, between `assessCodexContinue()` and `runCodexContinueGates()`. Currently `assessCodexContinue()` produces a `codexContinueAssessment` that already has `PartialSuccess` and `Tasks` fields. The provenance validator enriches this assessment with filesystem-grounded evidence:
-
-```
-runCodexContinueFinalize():
-  1. validateExternalContinueState (existing)
-  2. runCodexContinueVerificationSnapshot (existing)
-  3. assessCodexContinue (existing)
-  4. >>> NEW: validateContinueProvenance(assessment, manifest, phase) <<<
-  5. runCodexContinueGates (existing -- receives enriched assessment)
-```
-
-### New Component: `cmd/provenance.go`
-
-```go
-// BuildProvenance holds evidence that a build actually occurred.
-type BuildProvenance struct {
-    BuildPhase       int       `json:"build_phase"`
-    DispatchesTotal  int       `json:"dispatches_total"`
-    DispatchesPassed int       `json:"dispatches_passed"`
-    FilesCreated     int       `json:"files_created"`
-    FilesModified    int       `json:"files_modified"`
-    TestsWritten     int       `json:"tests_written"`
-    GitDiffFiles     int       `json:"git_diff_files"`
-    ZeroModFlag      bool      `json:"zero_modification"`
-    AllFailedFlag    bool      `json:"all_failed"`
-    ValidatedAt      time.Time `json:"validated_at"`
-}
-
-// validateBuildProvenance checks that a build produced real output.
-// Returns error if build should be rejected (AAC-001).
-func validateBuildProvenance(dispatches []codexBuildDispatch, claims codexBuildClaims, phase colony.Phase) (BuildProvenance, error)
-
-// validateContinueProvenance checks that continue claims match reality.
-// Returns enriched assessment with provenance evidence (AAC-002).
-func validateContinueProvenance(assessment codexContinueAssessment, manifest codexContinueManifest, phase colony.Phase) (BuildProvenance, error)
-```
-
-### Data Flow
-
-```
-Build-Finalize:
-  codexExternalBuildCompletion
-    -> mergeExternalBuildResults()
-    -> validateBuildProvenance()  // NEW: rejects zero-mod or all-failed builds
-    -> applyCodexBuildState()
-    -> BuildProvenance stored in manifest metadata
-
-Continue-Finalize:
-  codexContinueAssessment (from assessCodexContinue)
-    -> validateContinueProvenance()  // NEW: cross-checks claims vs filesystem
-    -> codexContinueGateReport (gates receive provenance data)
-    -> gate-results.json includes provenance_validation check
-```
-
-### State Changes
-
-Add to `colony.ColonyState`:
-```go
-BuildProvenance *BuildProvenance `json:"build_provenance,omitempty"`
-```
-
-This field is populated during build-finalize and cleared during phase advance. The `omitempty` ensures backward compatibility with existing colonies.
-
----
-
-## Question 2: Confidence-Targeted Oracle Loop
-
-### Where It Integrates
-
-The Oracle loop already has confidence tracking. `oracleStateFile` has `TargetConfidence` and `OverallConfidence` fields. `oracleReadyForCompletion()` already checks `state.OverallConfidence >= state.TargetConfidence`. The `oracleDepthLevels` map already maps depth names to `(MaxIterations, TargetConfidence)` pairs.
-
-The integration point is in `startOracleCompatibility()` (line 298-371). Currently the depth is resolved from the `--depth` flag or defaults to "balanced" (85% target). The new feature adds:
-
-1. **User-settable confidence target** via `--confidence-target` flag (e.g., `--confidence-target 95`)
-2. **Iterative refinement** when confidence is below target but all questions are answered -- the loop re-opens questions for deeper investigation rather than stopping
-3. **Phase-aware depth** -- Oracle respects colony `PlanningDepth` from COLONY_STATE.json
-
-### Changes to `cmd/oracle_loop.go`
-
-```go
-// In startOracleCompatibility():
-// NEW: --confidence-target flag overrides depth-based default
-confidenceTarget, _ := cmd.Flags().GetInt("confidence-target")
-if confidenceTarget > 0 {
-    depthCfg.TargetConfidence = confidenceTarget
-}
-
-// In oracleReadyForCompletion():
-// NEW: if all answered but below target, re-open lowest-confidence questions
-func oracleReadyForCompletion(plan oraclePlanFile, state oracleStateFile) bool {
-    if state.OverallConfidence >= state.TargetConfidence {
-        return true
-    }
-    if oracleAllQuestionsAnswered(plan) && state.OverallConfidence >= state.TargetConfidence-10 {
-        return true // close enough
-    }
-    return false
-}
-
-// NEW: oracleReopenForDeepening re-opens answered questions below target
-func oracleReopenForDeepening(plan *oraclePlanFile, state oracleStateFile) int {
-    reopened := 0
-    for i := range plan.Questions {
-        if plan.Questions[i].Status == "answered" && plan.Questions[i].Confidence < state.TargetConfidence-10 {
-            plan.Questions[i].Status = "partial"
-            plan.Questions[i].Confidence = plan.Questions[i].Confidence // preserve
-            reopened++
-        }
-    }
-    return reopened
-}
-```
-
-### Where in the Loop
-
-```
-runOracleLoop():
-  for state.Iteration < state.MaxIterations {
-    ...existing iteration logic...
-    oracleReadyForCompletion(plan, state)  // ENHANCED: lower threshold
-    >>> NEW: if all answered but below target, oracleReopenForDeepening() <<<
-    ...existing max_iterations_reached...
-  }
-```
-
-### Integration with Colony State
-
-Oracle depth selection reads from colony state:
-```go
-// In startOracleCompatibility():
-state, _ := loadActiveColonyState()
-if state.VerificationDepth != "" {
-    switch colony.NormalizeVerificationDepth(state.VerificationDepth) {
-    case colony.VerificationDepthHeavy:
-        depthCfg.MaxIterations = 8
-        depthCfg.TargetConfidence = 95
-    case colony.VerificationDepthLight:
-        depthCfg.MaxIterations = 2
-        depthCfg.TargetConfidence = 60
-    }
-}
-```
-
----
-
-## Question 3: Init Synthesis
-
-### Where It Fits
-
-Init synthesis is a new subcommand `aether init-synthesize` that assembles an approval-ready launch brief from codebase scouting data. It fits **between** `aether init-research` and `aether init` in the ceremony flow:
-
-```
-Current flow:
-  aether init-research --goal "..."   (scouting)
-  aether init "..."                   (colony creation)
-
-New flow:
-  aether init-research --goal "..."   (scouting -- unchanged)
-  aether init-synthesize --goal "..." (NEW: brief assembly)
-  aether init "..." --charter-json "..." (colony creation -- already supports --charter-json)
-```
-
-### Relationship to Colony-Prime
-
-Colony-prime (`cmd/colony_prime_context.go`) already reads the `Charter` field from `COLONY_STATE.json` and injects it into worker context as a section. The synthesis output feeds into the charter, which colony-prime already handles. No changes to colony-prime are needed.
-
-### New Component
-
-```go
-// cmd/init_synthesize.go
-type LaunchBrief struct {
-    Goal            string            `json:"goal"`
-    Vision          string            `json:"vision"`
-    TechStack       string            `json:"tech_stack"`
-    KeyRisks        []string          `json:"key_risks"`
-    Constraints     []string          `json:"constraints"`
-    SuggestedPhases int               `json:"suggested_phases"`
-    Complexity      string            `json:"complexity"` // low/medium/high
-    Charter         colony.Charter    `json:"charter"`
-}
-```
-
-The synthesis reads from `init-research` output (which already produces tech stack, governance, pheromone suggestions, directory analysis) and assembles them into a structured charter.
-
----
-
-## Question 4: gate-results.json and Flag/Blocker System
-
-### Current State
-
-Gate results are currently stored **inline** in `COLONY_STATE.json` as `GateResults []GateResultEntry`. The `gateResultsWrite()` function (cmd/gate.go:552) does an atomic upsert-merge into the state file. The `gateResultsRead()` function reads from state.
-
-The PRD mentions `gate-results.json` as a separate file. This is a **separation concern** -- gate results are currently tightly coupled to colony state mutations.
-
-### Recommended Architecture
-
-Keep gate results in `COLONY_STATE.json` for atomic consistency (the continue-finalize path already does `store.UpdateJSONAtomically`), but add a **mirror write** to `gate-results.json` for independent inspection:
-
-```go
-// In runCodexContinueFinalize(), after gate run (line 166):
-gates := runCodexContinueGates(...)
-
-// Existing: write to COLONY_STATE.json (atomic)
-_ = gateResultsWrite(gateResultEntries)
-
-// NEW: write standalone copy for /ant-status and /ant-unblock
-if err := store.SaveJSON("gate-results.json", gates); err != nil {
-    // non-blocking -- gate results in state are authoritative
-}
-```
-
-### Interaction with Loop Safety Circuit Breaker
-
-The circuit breaker (`cmd/circuit_breaker.go`) already emits `emitLoopBreakEvent()` which calls `emitLifecycleCeremony()`. Gate results interact with the circuit breaker through `shouldSkipGate()` (line 536): previously passed gates are skipped on re-run.
-
-For REC-LOOP-01 (all new gates inherit loop safety):
-- Every new gate check function must call `shouldSkipGate(priorResults, gateName)` before executing
-- Every gate failure must call `emitLoopBreakEvent()` if it is a repeated failure
-- The `gateRecoveryTemplates` map (line 473) needs entries for new gate types
-
-### /ant-unblock Command
-
-```go
-// cmd/unblock_cmd.go
-var unblockCmd = &cobra.Command{
-    Use:   "unblock [gate-name]",
-    Short: "Acknowledge and clear a gate blocker",
-}
-
-// Reads gate-results.json, marks the named gate as acknowledged,
-// clears the GateResultEntry from COLONY_STATE.json,
-// and returns recovery instructions.
-```
-
-This interacts with the flag system (`pkg/colony/flags.go`) by creating a `FlagEntry` when a gate blocks, and resolving it when `/ant-unblock` runs.
-
----
-
-## Question 5: Fixer Caste
-
-### Where It Fits in the Caste System
-
-The existing caste system has 26 castes (25 agents + Porter added in v1.10). The Fixer is the 27th caste. It fits into the dispatch manifest as a new caste value:
-
-```go
-// In pkg/codex/dispatch.go or equivalent:
-// Existing castes: builder, watcher, scout, oracle, chaos, architect, ...
-// NEW: "fixer"
-
-// In cmd/codex_visuals.go casteColorMap:
-"fixer": "\033[38;5;208m",  // orange -- distinct from builder yellow
-```
-
-### Dispatch Integration
-
-The Fixer caste is dispatched by the continue-finalize path when gates fail. In `runCodexContinueFinalize()`, after gates fail (line 193-199):
-
-```go
-if !gates.Passed {
-    // NEW: if recovery template suggests fixable issue, dispatch Fixer
-    if fixableGates := identifyFixableGates(gates); len(fixableGates) > 0 {
-        fixerDispatch := codexContinueWorkerFlowStep{
-            Stage:   "recovery",
-            Caste:   "fixer",
-            Name:    deterministicAntName("fixer", phase.Name),
-            Task:    fmt.Sprintf("Fix gate failures: %s", strings.Join(fixableGates, ", ")),
-            Status:  "pending",
-        }
-        // Add to worker flow but do not auto-execute -- user runs /ant-continue again
-    }
-    // ...existing blocked continue path...
-}
-```
-
-### Agent Definition
-
-New files needed (mirroring existing pattern):
-- `.claude/agents/ant/aether-fixer.md` -- Claude Code agent
-- `.opencode/agents/aether-fixer.md` -- OpenCode agent
-- `.codex/agents/aether-fixer.toml` -- Codex agent
-- `.aether/agents-claude/aether-fixer.md` -- packaging mirror
-
----
-
-## Question 6: Worker Heartbeat / Process Tracking
-
-### Existing Foundation
-
-`pkg/codex/process_tracker.go` already has:
-- `TrackedProcess` struct with PID, WorkerName, Caste, Platform, Root, SpawnedAt
-- `GlobalProcessTracker()` singleton
-- `TrackProcess()` / `UntrackProcess()` / `KillProcess()` / `KillAll()`
-- `DetectStaleWorkers()` -- finds processes still running but not tracked by current process
-- `CleanupStaleWorkers()` -- detects and kills stale workers
-- `isKnownWorkerProcess()` -- checks if a PID is a codex/claude/opencode process
-- `workerProcessRegistryRel = ".aether/data/worker-processes.json"` -- persistent registry
-
-### Integration Points
-
-The heartbeat system extends `TrackedProcess`:
-
-```go
-type TrackedProcess struct {
-    PID           int       `json:"pid"`
-    WorkerName    string    `json:"worker_name,omitempty"`
-    Caste         string    `json:"caste,omitempty"`
-    Platform      string    `json:"platform,omitempty"`
-    Root          string    `json:"root,omitempty"`
-    SpawnedAt     time.Time `json:"spawned_at"`
-    // NEW fields:
-    LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
-    TaskID        string    `json:"task_id,omitempty"`
-    Phase         int       `json:"phase,omitempty"`
-    Status        string    `json:"status,omitempty"` // "running", "completed", "failed", "timed_out"
-}
-```
-
-### Heartbeat Monitor
-
-```go
-// cmd/heartbeat_monitor.go
-type HeartbeatMonitor struct {
-    tracker    *codex.ProcessTracker
-    interval   time.Duration
-    timeout    time.Duration // 2x interval for warning, 4x for stale
-    onStale    func(process codex.TrackedProcess) // callback for stale detection
-}
-```
-
-The monitor runs as a goroutine during build waves. It checks `LastHeartbeat` on each tracked process and emits events via the ceremony bus when workers go stale. The observer chain in `pkg/codex/worker.go` calls `TrackProcess()` at spawn and `UntrackProcess()` at completion -- the heartbeat fields are updated by the worker wrapper environment variables (`AETHER_WORKER_NAME`, `AETHER_WORKER_CASTE`) which already exist.
-
-### Integration with Existing Worker Flow
+### Build Flow
 
 ```
 cmd/codex_build.go:
-  executeCodexBuildDispatches()
-    -> for each dispatch:
-      invoker.Invoke(ctx, config)
-        -> TrackProcess(pid, process)  // EXISTING
-        -> heartbeatMonitor.Watch(pid) // NEW: register for monitoring
-        -> ...worker runs...
-        -> UntrackProcess(pid)          // EXISTING
-        -> heartbeatMonitor.Unwatch(pid) // NEW: stop monitoring
+  runCodexBuildWithOptions()
+    -> validateCodexBuildState()          (state machine check)
+    -> beginRuntimeSpawnRun()             (trace)
+    -> writeCodexBuildArtifacts()         (worker briefs, manifest)
+    -> executeCodexBuildDispatches()      (dispatch workers via invoker)
+    -> reconcileCompletedBuildTasks()     (update task statuses)
+    -> atomic state commit                (StateBUILT)
+
+  runCodexBuildQueenLed()                (plan-only variant with queen metadata)
+    -> runCodexBuildPlanOnlyWithOptions() (produces dispatch_manifest)
+    -> sets dispatch_mode="queen-led"     (tells wrapper to drive)
+    -> wrapper spawns agents              (Claude/OpenCode Task tool)
+    -> aether build-finalize              (wrapper sends results back to Go)
 ```
+
+### Continue Flow
+
+```
+cmd/codex_continue.go:
+  runCodexContinue()
+    -> loadActiveColonyState()
+    -> loadCodexContinueManifest()        (build manifest from build phase)
+    -> detectAbandonedBuild()             (stale detection)
+    -> runCodexContinueVerification()     (build/lint/test steps)
+    -> assessCodexContinue()              (task evidence, partial success)
+    -> runCodexContinueGates()           (11 gate checks)
+    -> runCodexContinueReview()           (reviewer agents)
+    -> atomic state commit                (PhaseCompleted, next phase)
+    -> signal housekeeping                (pheromone decay, etc.)
+```
+
+### The 11 Gates (in `runCodexContinueGates()`)
+
+| Gate | Name | Blocking? | Auto-Skippable? |
+|------|------|-----------|-----------------|
+| 1 | `manifest_present` | Yes | Yes (if previously passed) |
+| 2 | `verification_steps_passed` | Yes | Yes (if previously passed) |
+| 3 | `implementation_evidence` | Yes | Yes (if previously passed) |
+| 4 | `operational_evidence` | No (informational) | Yes |
+| 5 | `partial_success` | No (advisory) | No |
+| 6 | `tests_pass` | Yes | No (always runs) |
+| 7 | `flags` | Yes | No (always runs) |
+| 8 | `watcher_veto` | Yes | No (always runs) |
+| 9 | `no_critical_flags` | Yes | No (always runs) |
+| 10 | `loop_detection` | Yes | No (always runs) |
+| 11 | `parameter_loop` | Yes | No (always runs) |
+
+Plus the playbook gates (Steps 1.6-1.14) that run in wrapper layer:
+- spawn_gate (MANDATORY)
+- anti_pattern (conditional)
+- complexity (conditional, non-blocking)
+- gatekeeper (conditional)
+- auditor (MANDATORY)
+- tdd_evidence (MANDATORY)
+- runtime (MANDATORY)
+- flags (MANDATORY)
+- watcher_veto (MANDATORY)
+- medic (conditional auto-spawn)
+
+### Queen Agent (Current State)
+
+The Queen agent (`.claude/agents/ant/aether-queen.md`) currently:
+- Selects workflow patterns (SPBV, Investigate-Fix, etc.)
+- Spawns workers via Task tool
+- Processes results and synthesizes
+- Escalates through 4 tiers (retry -> parent reassign -> queen reassigns -> user)
+- Does NOT make state mutations directly
+- Does NOT auto-recover from continue gate failures
+- Does NOT filter output
+
+### Workflow Profile Contract
+
+`cmd/codex_dispatch_contract.go` already defines:
+- `codexQueenWorkflowRecommendation` -- intent/profile/depth recommendation
+- `codexWorkflowProfileContract` -- profiles with blocking/advisory check lists
+- `codexDispatchContract` -- execution model, timeout, fallback behavior
+- `recommendQueenWorkflowProfile()` -- intent-matching logic
+
+This contract was designed for queen-led builds but is currently only used for metadata, not decision-making.
 
 ---
 
-## Question 7: Hive Learning Layer (pkg/hive/)
+## Question 1: Where Should Auto-Recovery Logic Live?
 
-### New Package: `pkg/hive/`
+### Answer: Two layers -- wrapper-layer recovery during build, runtime-layer recovery during continue.
 
-This is the largest new component. It introduces a `pkg/hive/` package with SQLite-backed storage, connected to the existing memory pipeline.
+**During build waves (wrapper layer):**
 
-### Package Structure
+The Queen agent already has a 4-tier escalation chain defined in her agent markdown. The problem is that tiers 1-3 are described as instructions but not wired into the Go runtime. The solution:
 
-```
-pkg/hive/
-  store.go       -- SQLite database management, schema, CRUD
-  recall.go      -- FTS5 full-text search and recall
-  hooks.go       -- Learning trigger points (phase-end, seal, difficulty detection)
-  privacy.go     -- Privacy gate that intercepts all write paths
-  skill.go       -- Auto-created skills from verified difficult tasks
-  curator.go     -- Keeper curator logic for wisdom maintenance
-```
+1. **Go runtime provides recovery metadata** -- `codexBuildDispatch` already carries `Status`, `Summary`, `Blockers`, and `Duration`. Add a `RecoveryAttempts` counter and `LastFailureReason` field.
 
-### SQLite Schema
+2. **Wrapper layer executes recovery** -- The Queen agent, during `build-wave.md` Step 5.2 (Process Wave Results), interprets the failure metadata and decides:
+   - Tier 1: Re-spawn same worker (no state mutation needed -- just another Task call)
+   - Tier 2: Re-spawn with modified brief (inject prior failure context into prompt)
+   - Tier 3: Spawn different caste (builder fails -> tracker investigates -> builder retries)
+   - Tier 4: Surface to user (create flag, pause)
 
-```sql
-CREATE TABLE IF NOT EXISTS memories (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    repo_id     TEXT NOT NULL,          -- repo root hash for isolation
-    domain      TEXT NOT NULL,          -- go, react, general, etc.
-    trigger     TEXT NOT NULL,          -- what situation triggers this
-    action      TEXT NOT NULL,          -- what to do
-    evidence    TEXT,                   -- what evidence supports this
-    confidence  REAL DEFAULT 0.5,
-    source      TEXT,                   -- phase-N, seal, manual
-    created_at  TEXT DEFAULT (datetime('now')),
-    accessed_at TEXT DEFAULT (datetime('now')),
-    access_count INTEGER DEFAULT 0,
-    verified    INTEGER DEFAULT 0,      -- 1 = survived verification
-    skill_id    TEXT                    -- link to auto-created skill
-);
+3. **Go runtime records recovery state** -- Add `aether recovery-record` subcommand that writes recovery attempt metadata to the build manifest. This is read by subsequent continue runs to understand what happened.
 
-CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-    trigger, action, evidence, domain,
-    content=memories,
-    content_rowid=id
-);
+**During continue gates (Go runtime layer):**
 
--- Triggers to keep FTS in sync
-CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
-    INSERT INTO memories_fts(rowid, trigger, action, evidence, domain)
-    VALUES (new.id, new.trigger, new.action, new.evidence, new.domain);
-END;
+Continue gate failures currently return `blocked: true` and stop. Auto-recovery here means the Go runtime can attempt self-healing before blocking:
 
-CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
-    INSERT INTO memories_fts(memories_fts, rowid, trigger, action, evidence, domain)
-    VALUES ('delete', old.id, old.trigger, old.action, old.evidence, old.domain);
-END;
-
-CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
-    INSERT INTO memories_fts(memories_fts, rowid, trigger, action, evidence, domain)
-    VALUES ('delete', old.id, old.trigger, old.action, old.evidence, old.domain);
-    INSERT INTO memories_fts(rowid, trigger, action, evidence, domain)
-    VALUES (new.id, new.trigger, new.action, new.evidence, new.domain);
-END;
-```
-
-### Connection to Existing Memory Pipeline
-
-The existing pipeline is in `pkg/memory/pipeline.go`:
-
-```
-Observation -> Trust Score -> Event Bus -> Auto-Promote -> Instinct -> QUEEN.md -> Hive
-```
-
-The hive learning layer connects at **two points**:
-
-1. **Write path** (learning hooks): New trigger points in `pkg/hive/hooks.go` subscribe to event bus topics and write to SQLite when colony work is verified:
+1. **New: `cmd/recovery.go`** -- Recovery orchestrator that runs between gate failure and blocking:
    ```
-   events.Bus.Subscribe("phase.completed")    -> hive.StoreMemory()
-   events.Bus.Subscribe("seal.completed")     -> hive.StoreMemory()
-   events.Bus.Subscribe("gate.passed")        -> hive.StoreMemory()
-   events.Bus.Subscribe("learning.observe")   -> hive.StoreMemory() (with privacy gate)
+   runCodexContinue()
+     -> runCodexContinueGates()
+     -> if !gates.Passed:
+       -> attemptAutoRecovery(gates, phase, manifest)  // NEW
+       -> if recovery succeeded: re-run gates
+       -> if recovery failed: block as before
    ```
 
-2. **Read path** (recall): Colony-prime context assembly (`cmd/colony_prime_context.go`) adds a new section that queries the hive via FTS5:
-   ```
-   colonyPrimeSections:
-     ...existing sections...
-     hive_wisdom: hive.Recall(domain, query, limit)  // NEW section, low priority
-   ```
+2. **Recovery strategies per gate:**
+   - `verification_steps_passed` failed: Re-run failed steps with increased timeout
+   - `spawn_gate` failed: Skip if in queen-led mode (queen already spawned)
+   - `implementation_evidence` failed: Attempt task reconciliation from build artifacts
+   - `tests_pass` failed: Run tests once more with fresh state (race condition catch)
+   - `watcher_veto` failed: Cannot auto-recover (requires judgment) -- escalate
 
-### Privacy Gate
+3. **Circuit breaker integration** -- `cmd/circuit_breaker.go` already exists. Recovery attempts go through the circuit breaker to prevent infinite recovery loops.
 
-The privacy gate intercepts all write paths before data reaches SQLite:
+### Component Map: Auto-Recovery
 
-```go
-// pkg/hive/privacy.go
-type PrivacyGate struct {
-    blockedPatterns []string  // e.g., file paths, API keys, user names
-    maxEntrySize   int       // character limit per memory entry
-}
+```
+EXISTING                                           NEW (v1.14)
+========                                           ============
 
-func (g *PrivacyGate) Screen(memory Memory) (Memory, error) {
-    // 1. Check for blocked patterns (file paths with usernames, API keys, etc.)
-    // 2. Strip repo-specific identifiers
-    // 3. Truncate oversized entries
-    // 4. Sanitize prompt injection patterns (reuse pkg/colony/sanitize.go patterns)
-    return memory, nil
-}
+cmd/codex_build.go (dispatch structs) ....... cmd/codex_build.go (RecoveryAttempts field)
+.aether/docs/command-playbooks/build-wave.md  build-wave.md (recovery wiring in Step 5.2)
+cmd/codex_continue.go (gate pipeline) ....... cmd/recovery.go (autoRecovery orchestrator)
+cmd/circuit_breaker.go .................... cmd/recovery.go (uses existing breaker)
+cmd/gate.go (gateCheck struct) ............. cmd/gate.go (AutoRecoverable bool field)
+cmd/autopilot.go .......................... cmd/autopilot.go (recovery-aware pause)
 ```
 
-All write methods in `pkg/hive/store.go` call `privacyGate.Screen()` before INSERT.
+### New vs Modified
 
-### Refactoring cmd/hive.go
-
-The existing `cmd/hive.go` implements Hive Brain as a flat-file system (`~/.aether/hive/wisdom.json`). The new `pkg/hive/` package does NOT replace this -- it adds a repo-scoped layer alongside it:
-
-| Layer | Location | Scope | Storage |
-|-------|----------|-------|---------|
-| Hive Brain (existing) | `~/.aether/hive/wisdom.json` | Cross-colony | JSON file, 200-entry cap |
-| Hive Learning (new) | `.aether/data/colony.db` | Per-repo | SQLite with FTS5 |
-
-The two layers interact: Hive Learning feeds into Hive Brain at seal time (confidence >= 0.8), same as the existing instinct promotion path.
+| Component | Change Type | What Changes |
+|-----------|-------------|-------------|
+| `cmd/codex_build.go` | Modified | Add `RecoveryAttempts int` and `LastFailureReason string` to `codexBuildDispatch` |
+| `cmd/gate.go` | Modified | Add `AutoRecoverable bool` to `gateCheck`; add `maxRecoveryAttempts int` |
+| `cmd/recovery.go` | New | Recovery orchestrator: `attemptAutoRecovery()`, `recoverVerificationSteps()`, `recoverSpawnGate()`, `recoverTestsPass()` |
+| `build-wave.md` | Modified | Step 5.2 reads `RecoveryAttempts` from dispatch metadata, executes tiers 1-3 automatically |
+| `cmd/autopilot.go` | Modified | Autopilot respects recovery state -- does not advance past unrecovered phases |
+| `colony.go` types | Modified | Add `RecoveryLog []RecoveryEntry` to `ColonyState` |
 
 ---
 
-## Question 8: SQLite colony.db Coexistence with JSON Files
+## Question 2: How Should Smart Gating Modify the Existing 11-Gate Pipeline?
 
-### Architecture Decision
+### Answer: Add a "severity classification" layer that demotes non-critical failures to advisory, and an "auto-resolve" layer that fixes recoverable issues before blocking.
 
-SQLite does NOT replace JSON files. They serve different purposes:
+### Gate Severity Classification
 
-| Concern | JSON Files (.aether/data/) | SQLite (.aether/data/colony.db) |
-|---------|---------------------------|--------------------------------|
-| Colony state | COLONY_STATE.json | Not stored |
-| Phase plan | COLONY_STATE.json (plan field) | Not stored |
-| Pheromones | pheromones.json | Not stored |
-| Gate results | COLONY_STATE.json (gate_results field) | Not stored |
-| Session | session.json | Not stored |
-| **Learned memories** | instincts (in COLONY_STATE.json) | memories table (searchable) |
-| **FTS recall** | Not possible | memories_fts (FTS5) |
-| **Auto-skills** | Not stored | skills table |
+Currently all gate failures are equal -- any failure blocks advancement. Smart gating introduces three tiers:
 
-### Coexistence Pattern
+| Tier | Behavior | Example |
+|------|----------|---------|
+| **Hard block** | Always blocks, no auto-recovery | `watcher_veto` with critical issues, `loop_detection` tripped |
+| **Soft block** | Blocks but auto-recoverable | `verification_steps_passed` (re-run), `tests_pass` (retry), `spawn_gate` (queen-led skip) |
+| **Advisory** | Never blocks, logs to midden | `operational_evidence`, `partial_success`, non-critical `auditor` findings |
 
-```go
-// pkg/hive/store.go
-func Open(dbPath string) (*Store, error) {
-    // dbPath = ".aether/data/colony.db"
-    // Uses a SINGLE connection with WAL mode for concurrent reads
-    db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
-    if err != nil {
-        return nil, err
-    }
-    return &Store{db: db, privacy: NewPrivacyGate()}, nil
-}
-```
+### Implementation: Gate Classification Table
 
-The SQLite store uses `pkg/storage/Store` for file-level locking on the `.db` file itself, ensuring no concurrent writes from multiple Aether processes. The existing `FileLocker` in `pkg/storage/lock.go` handles this.
-
-### File Locking Integration
+Add to `cmd/gate.go`:
 
 ```go
-func (s *Store) WriteMemory(ctx context.Context, mem Memory) error {
-    // Acquire file lock via storage.Store
-    return s.fileStore.UpdateFile("colony.db.lock", func(existing []byte) ([]byte, error) {
-        // Actual SQLite write happens inside the lock
-        return s.insertMemory(ctx, mem)
-    })
-}
-```
+// gateClassification determines how a gate failure should be handled.
+type gateClassification string
 
-Wait -- this is wrong. SQLite has its own locking via WAL mode. The `FileLocker` from `pkg/storage/` is for JSON file atomicity. For SQLite, we rely on:
-
-1. `PRAGMA journal_mode=WAL` -- allows concurrent reads during writes
-2. `PRAGMA busy_timeout=5000` -- retries on lock contention
-3. Single-writer pattern -- only the main Aether process writes; worker subprocesses never touch colony.db directly
-
----
-
-## Question 9: Learning Hooks and Event Bus
-
-### Phase Lifecycle Events
-
-The event bus (`pkg/events/bus.go`) already supports topic-pattern subscriptions. Learning hooks subscribe to lifecycle topics:
-
-```go
-// pkg/hive/hooks.go
-func (h *HookManager) Start(ctx context.Context, bus *events.Bus) error {
-    // Phase completed -- extract learnings from phase work
-    ch1, err := bus.Subscribe("lifecycle.phase_completed")
-    // Seal completed -- promote high-confidence memories
-    ch2, err := bus.Subscribe("lifecycle.seal_completed")
-    // Gate passed -- record what worked
-    ch3, err := bus.Subscribe("lifecycle.gate_passed")
-    // Learning observation -- capture with privacy gate
-    ch4, err := bus.Subscribe("learning.observe")
-    // ...
-}
-```
-
-### Where Events Are Emitted
-
-Currently, lifecycle events are emitted via `emitLifecycleCeremony()` in `cmd/ceremony_emitter.go`. These events go to the ceremony event bus (separate from the `pkg/events.Bus`). The learning hooks need to connect to the **same bus** that the `pkg/memory/pipeline.go` uses.
-
-The ceremony emitter uses `events.CeremonyTopic*` constants. The memory pipeline subscribes to `"learning.observe"` and `"consolidation.*"`. These are the same bus instance -- the ceremony topics and learning topics coexist.
-
-### New Event Topics Needed
-
-```go
-// In pkg/events/ceremony.go (or a new events/topics.go)
 const (
-    TopicPhaseCompleted  = "lifecycle.phase_completed"
-    TopicSealCompleted   = "lifecycle.seal_completed"
-    TopicGatePassed      = "lifecycle.gate_passed"
-    TopicGateFailed      = "lifecycle.gate_failed"
-    TopicDifficultyDetected = "learning.difficulty_detected"
+    gateHardBlock   gateClassification = "hard_block"   // always blocks
+    gateSoftBlock   gateClassification = "soft_block"   // blocks, but auto-recoverable
+    gateAdvisory    gateClassification = "advisory"      // never blocks
 )
+
+// gateClassifications maps gate names to their severity tier.
+// Gates not in this map default to "hard_block".
+var gateClassifications = map[string]gateClassification{
+    "manifest_present":          "hard_block",
+    "verification_steps_passed": "soft_block",  // can re-run steps
+    "implementation_evidence":   "soft_block",  // can reconcile
+    "operational_evidence":      "advisory",    // informational only
+    "partial_success":           "advisory",    // advisory only
+    "tests_pass":                "soft_block",  // can retry
+    "flags":                     "hard_block",  // requires user judgment
+    "watcher_veto":              "hard_block",  // requires judgment
+    "no_critical_flags":         "hard_block",
+    "loop_detection":            "hard_block",  // safety mechanism
+    "parameter_loop":            "hard_block",  // safety mechanism
+}
 ```
 
-### Evidence Rules
+### Smart Gate Pipeline
 
-Learning hooks only fire when evidence rules are met (AAC-024):
+Modify `runCodexContinueGates()` to add classification-aware processing:
+
+```
+runCodexContinueGates():
+  1. Run all gates (existing logic)
+  2. NEW: Classify each failure by severity
+  3. NEW: For soft_block failures, attempt auto-recovery
+  4. NEW: For advisory failures, log to midden but don't block
+  5. Return gate report with:
+     - hard_blocks: gates that genuinely block
+     - soft_blocks_resolved: gates that failed but were auto-recovered
+     - advisory findings: gates that produced findings but don't block
+```
+
+### Playbook Gate Smartening
+
+The playbook gates (Steps 1.6-1.14) run in the wrapper layer and already have conditional skip logic. Smart gating for these means:
+
+| Playbook Gate | Current | Smart Behavior |
+|---------------|---------|----------------|
+| spawn_gate | HARD REJECT if no spawns | Skip in queen-led mode (queen already spawned workers) |
+| anti_pattern | HARD REJECT if critical | Demote "warnings" to advisory; keep "critical" as hard block |
+| complexity | Non-blocking | Keep as-is (already non-blocking) |
+| gatekeeper | Conditional on package.json | Demote "high" from soft-block to advisory in queen-led mode |
+| auditor | Hard block if critical or score < 60 | In queen-led mode: auto-accept score >= 50 (lower threshold), log findings to midden |
+| tdd_evidence | Hard reject if fabricated | Keep as-is (fabrication is a trust violation) |
+| runtime | Hard block if user says no | In queen-led/autopilot mode: auto-skip (no human to ask) |
+| flags | Hard block if blockers | Keep as-is (blockers require resolution) |
+| watcher_veto | Hard block + user choice | In queen-led mode: auto-accept if score >= 5 (lower threshold from 7) |
+| medic | Conditional auto-spawn | Keep as-is (already auto-spawns) |
+
+### Component Map: Smart Gating
+
+```
+EXISTING                                           NEW (v1.14)
+========                                           ============
+
+cmd/gate.go (gateCheck) ................... cmd/gate.go (Classification, AutoRecoverable)
+cmd/gate.go (runCodexContinueGates) ........ cmd/gate.go (classification-aware processing)
+cmd/codex_continue.go ..................... cmd/codex_continue.go (reads smart gate report)
+cmd/codex_dispatch_contract.go (profiles) .. cmd/codex_dispatch_contract.go (queen-led thresholds)
+build-wave.md (Step 5.2) ................. build-wave.md (auto-recovery wiring)
+continue-gates.md (Steps 1.6-1.14) ........ continue-gates.md (queen-led conditionals)
+```
+
+### New vs Modified
+
+| Component | Change Type | What Changes |
+|-----------|-------------|-------------|
+| `cmd/gate.go` | Modified | Add `gateClassification`, `gateClassifications` map, classification-aware `runCodexContinueGates()` |
+| `cmd/codex_continue.go` | Modified | Read smart gate report; advisory findings go to midden instead of blockers |
+| `cmd/codex_dispatch_contract.go` | Modified | Queen-led workflow profiles get relaxed thresholds |
+| `continue-gates.md` | Modified | Each gate step adds queen-led conditional branch |
+| `cmd/codex_build.go` | Modified | `codexBuildManifest` includes `QueenLed bool` for gate threshold selection |
+
+---
+
+## Question 3: Where Should Output Filtering Happen?
+
+### Answer: Three-layer filtering -- Go runtime filters raw dispatch data, Queen agent synthesizes summaries, wrapper presents filtered output.
+
+### Layer 1: Go Runtime (Structural Filtering)
+
+The Go runtime already produces structured JSON output with `map[string]interface{}` envelopes. Output filtering here means:
+
+1. **Gate report simplification** -- Instead of returning all 11 gate check details, return a summary:
+   ```go
+   type codexSmartGateSummary struct {
+       HardBlocks       int      `json:"hard_blocks"`
+       SoftBlocksResolved int    `json:"soft_blocks_resolved"`
+       AdvisoryFindings int      `json:"advisory_findings"`
+       BlockingGates    []string `json:"blocking_gates,omitempty"`
+       ResolvedGates    []string `json:"resolved_gates,omitempty"`
+   }
+   ```
+
+2. **Dispatch result compression** -- Instead of returning full dispatch details (skill sections, pheromone sections), return only:
+   - Worker name, caste, status, summary, blockers
+   - Skip: full skill assignment, pheromone injection, worker brief content
+
+3. **Continue report streamlining** -- `codexContinueReport` currently has 20+ fields. Add a `codexContinueSummary` that collapses to:
+   - Phase, passed/failed, blocking issues (if any), next command
+   - Skip: full worker flow, operational issues, task assessments (available on demand)
+
+### Layer 2: Queen Agent (Synthesis)
+
+The Queen agent, as the coordinator, produces a single synthesis per phase:
+
+```
+Phase N: {name}
+  Workers: {completed}/{total} succeeded
+  Gates: {passed}/{total} passed ({N} auto-resolved)
+  Duration: {elapsed}
+
+  Key findings:
+  - {finding 1} (advisory)
+  - {finding 2} (advisory)
+
+  Blockers:
+  - {blocker 1} (hard -- needs attention)
+
+  Next: {command}
+```
+
+This replaces the current firehose of per-worker completion lines, per-gate pass/fail, and raw verification output.
+
+### Layer 3: Wrapper Presentation (Visual Filtering)
+
+The wrapper markdown (`.claude/commands/ant/build.md`, `.claude/commands/ant/continue.md`) controls what the user sees. Changes:
+
+1. **Build wrapper** -- Instead of showing every worker spawn/result:
+   - Show wave header: "Wave 1: 3 builders dispatched"
+   - Show summary: "Wave 1: 2/3 succeeded, 1 auto-recovered"
+   - Show only failures (not successes) in detail
+
+2. **Continue wrapper** -- Instead of showing every gate:
+   - Show summary: "11 gates: 9 passed, 1 auto-resolved, 1 advisory"
+   - Show only hard blocks in detail
+   - Skip advisory findings entirely (available via `/ant-status`)
+
+### Component Map: Output Filtering
+
+```
+EXISTING                                           NEW (v1.14)
+========                                           ============
+
+cmd/codex_build.go (dispatch maps) ......... cmd/codex_build.go (filtered dispatch maps)
+cmd/codex_continue.go (report) ............ cmd/codex_continue.go (summary struct)
+cmd/codex_visuals.go ...................... cmd/codex_visuals.go (summary rendering)
+cmd/gate.go (gate report) ................. cmd/gate.go (smart summary struct)
+.claude/commands/ant/build.md ............. build.md (filtered presentation)
+.claude/commands/ant/continue.md ........... continue.md (filtered presentation)
+```
+
+### New vs Modified
+
+| Component | Change Type | What Changes |
+|-----------|-------------|-------------|
+| `cmd/codex_visuals.go` | Modified | Add `renderSmartGateSummary()`, `renderPhaseSummary()` functions |
+| `cmd/codex_continue.go` | Modified | Add `codexContinueSummary` struct alongside full report |
+| `cmd/codex_build.go` | Modified | Add `codexBuildSummary` struct alongside full dispatch maps |
+| `cmd/gate.go` | Modified | Add `codexSmartGateSummary` struct |
+| `.claude/commands/ant/build.md` | Modified | Use summary output instead of full dispatch list |
+| `.claude/commands/ant/continue.md` | Modified | Use summary output instead of full gate list |
+
+---
+
+## Question 4: How Should Queen Authority Integrate With Existing Go Runtime?
+
+### Answer: Queen authority is a coordination layer, not a state mutation layer. The Queen makes decisions; the Go runtime executes them.
+
+### The Authority Model
+
+```
+Queen (wrapper layer)                    Go Runtime (authoritative)
+=====================                    =========================
+
+Decides:                                 Executes:
+- Which workers to spawn                 - aether build --plan-only (dispatch plan)
+- When to retry/skip/reassign            - aether build-finalize (commit results)
+- Which gates to auto-resolve            - aether continue (verification + gates)
+- What to surface to user                - aether state-mutate (task status)
+- How to summarize output                - aether pheromone-write (signals)
+                                         - aether gate-results-write (gate state)
+                                         - aether recovery-record (recovery log)
+
+Cannot:
+- Write COLONY_STATE.json directly       (violates wrapper-runtime contract)
+- Skip hard-block gates                  (safety mechanism)
+- Force phase advance without verification
+```
+
+### Queen-Led Build Path (Existing + Enhanced)
+
+The existing `runCodexBuildQueenLed()` already produces a `dispatch_manifest` with `dispatch_mode: "queen-led"`. The wrapper then:
+1. Reads the manifest
+2. Spawns agents via Task tool
+3. Calls `aether build-finalize` to commit
+
+**Enhancement:** The manifest includes recovery metadata so the Queen can make informed decisions:
 
 ```go
-type EvidenceRule struct {
-    MinPhaseNumber    int     // Don't learn from phase 1 (too noisy)
-    MinConfidence     float64 // 0.7 minimum for auto-capture
-    RequireVerification bool  // Only learn from verified (gate-passed) phases
-    RequireTests      bool    // Only learn if tests existed before the phase
-    MaxEntriesPerPhase int    // Cap per-phase learning to prevent noise
+// Add to codexBuildManifest
+RecoveryPolicy  codexRecoveryPolicy `json:"recovery_policy,omitempty"`
+
+type codexRecoveryPolicy struct {
+    MaxWorkerRetries     int `json:"max_worker_retries"`      // default: 2
+    MaxCasteReassignments int `json:"max_caste_reassignments"` // default: 1
+    AutoSkipThreshold     int `json:"auto_skip_threshold"`     // default: 3 (failures before skip)
+    QueenLedGates         bool `json:"queen_led_gates"`        // relaxed gate thresholds
 }
+```
+
+### Queen-Led Continue Path (New)
+
+Currently continue is a single `aether continue` call. Queen-led continue adds a pre-check and post-check:
+
+```
+Queen-led continue flow:
+  1. Queen calls: aether continue --plan-only    (NEW -- produces gate plan without executing)
+  2. Queen evaluates: which gates can auto-resolve
+  3. Queen executes: recovery actions for soft-block gates
+  4. Queen calls: aether continue --finalize     (NEW -- commits with recovery context)
+  5. Queen summarizes: filtered output to user
+```
+
+**New Go runtime entry points:**
+
+| Command | Purpose | Returns |
+|---------|---------|---------|
+| `aether continue --plan-only` | Run verification and gates, return report without mutating state | Gate plan with classifications |
+| `aether continue --finalize` | Commit phase advancement with recovery context | Same as current `aether continue` but accepts recovery metadata |
+
+### Integration Points Summary
+
+```
+                    QUEEN AUTHORITY INTEGRATION MAP
+                    ================================
+
+BUILD PHASE:
+  cmd/codex_build.go
+    runCodexBuildQueenLed() -----> dispatch_manifest (already exists)
+    NEW: recovery_policy field ----> wrapper reads and respects
+    build-wave.md Step 5.2 --------> recovery logic (wrapper executes)
+    aether build-finalize ---------> wrapper commits (already exists)
+    NEW: aether recovery-record ----> wrapper logs recovery attempts
+
+CONTINUE PHASE:
+  cmd/codex_continue.go
+    NEW: runCodexContinuePlanOnly() -> gate plan without state mutation
+    cmd/recovery.go
+      attemptAutoRecovery() ---------> auto-fixes soft-block gates
+    cmd/gate.go
+      gateClassification ------------> determines block vs advisory
+    NEW: runCodexContinueFinalize() -> commits with recovery context
+    continue-gates.md --------------> queen-led conditionals per gate
+
+OUTPUT:
+  cmd/codex_visuals.go
+    NEW: renderPhaseSummary() ------> collapsed phase view
+    NEW: renderSmartGateSummary() --> collapsed gate view
+  wrapper markdown
+    build.md / continue.md ---------> filtered presentation
+
+STATE:
+  pkg/colony/colony.go
+    NEW: RecoveryLog field ---------> tracks recovery attempts
+    NEW: QueenLedMode field ---------> enables relaxed thresholds
 ```
 
 ---
 
-## Question 10: Privacy Gate Interception
+## Recommended Build Order
 
-### All Write Paths
+The phases should build in this order based on dependency analysis:
 
-The privacy gate intercepts every write to `pkg/hive/store.go`:
+### Phase 1: Gate Classification Infrastructure
+**What:** Add `gateClassification` to `gate.go`, update `gateCheck` struct, add classification map.
+**Why first:** Everything else depends on knowing which gates are hard-block vs soft-block vs advisory.
+**Modifies:** `cmd/gate.go`
+**Risk:** Low -- additive changes, no existing behavior changes until consumers are added.
 
-```go
-// pkg/hive/store.go
-type Store struct {
-    db       *sql.DB
-    privacy  *PrivacyGate
-    repoID   string  // repo root hash for isolation
-}
+### Phase 2: Recovery Data Model
+**What:** Add `RecoveryAttempts`, `LastFailureReason` to `codexBuildDispatch`; add `RecoveryLog` to `ColonyState`; add `codexRecoveryPolicy` to manifest; add `aether recovery-record` subcommand.
+**Why second:** Auto-recovery logic needs somewhere to store its state.
+**Modifies:** `cmd/codex_build.go`, `pkg/colony/colony.go`, new `cmd/recovery.go`
+**Risk:** Low -- `omitempty` fields, backward compatible.
 
-func (s *Store) WriteMemory(ctx context.Context, mem Memory) (int64, error) {
-    // 1. Apply privacy gate
-    screened, err := s.privacy.Screen(mem)
-    if err != nil {
-        return 0, fmt.Errorf("privacy gate rejected: %w", err)
-    }
+### Phase 3: Smart Gate Pipeline
+**What:** Modify `runCodexContinueGates()` to use classification; add `attemptAutoRecovery()` in `cmd/recovery.go`; add `codexSmartGateSummary` struct.
+**Why third:** Needs Phase 1 (classifications) and Phase 2 (recovery data model).
+**Modifies:** `cmd/codex_continue.go`, `cmd/recovery.go`, `cmd/gate.go`
+**Risk:** Medium -- changes gate evaluation logic, must preserve existing hard-block behavior.
 
-    // 2. Set repo isolation
-    screened.RepoID = s.repoID
+### Phase 4: Continue Plan-Only and Finalize
+**What:** Add `aether continue --plan-only` (verification + gates without state mutation) and `aether continue --finalize` (commit with recovery context).
+**Why fourth:** Enables queen-led continue flow; depends on Phase 3 (smart gates).
+**Modifies:** `cmd/codex_continue.go`, new cobra flags
+**Risk:** Medium -- new code paths but isolated behind flags.
 
-    // 3. Write to SQLite
-    result, err := s.db.ExecContext(ctx, insertMemorySQL, ...)
-    return result.LastInsertId()
-}
+### Phase 5: Queen-Led Build Recovery
+**What:** Modify `build-wave.md` Step 5.2 to read recovery metadata and execute tiers 1-3 automatically; update Queen agent to use recovery-aware spawning.
+**Why fifth:** Wrapper-layer changes that consume the infrastructure from Phases 1-4.
+**Modifies:** `build-wave.md`, `.claude/agents/ant/aether-queen.md`, `.opencode/agents/aether-queen.md`
+**Risk:** Medium -- changes wrapper behavior, but Go runtime is the safety net.
 
-func (s *Store) BulkWriteMemories(ctx context.Context, mems []Memory) ([]int64, error) {
-    var ids []int64
-    for _, mem := range mems {
-        id, err := s.WriteMemory(ctx, mem) // each goes through privacy gate
-        if err != nil {
-            continue // skip rejected entries, don't block batch
-        }
-        ids = append(ids, id)
-    }
-    return ids, nil
-}
-```
+### Phase 6: Queen-Led Continue Integration
+**What:** Update `continue-gates.md` to add queen-led conditional branches (relaxed thresholds, auto-skip runtime gate, lower watcher veto threshold).
+**Why sixth:** Builds on all prior phases.
+**Modifies:** `continue-gates.md`, `.claude/commands/ant/continue.md`, `.opencode/commands/ant/continue.md`
+**Risk:** Medium -- must ensure queen-led mode is opt-in and doesn't affect normal flow.
 
-### Privacy Gate Rules
-
-```go
-// pkg/hive/privacy.go
-type PrivacyGate struct {
-    maxEntrySize    int      // default: 2000 chars
-    blockedPatterns []string // regex patterns for sensitive content
-}
-
-func NewPrivacyGate() *PrivacyGate {
-    return &PrivacyGate{
-        maxEntrySize: 2000,
-        blockedPatterns: []string{
-            `api[_-]?key`,           // API keys
-            `secret[_-]?key`,        // Secret keys
-            `password`,              // Passwords
-            `Bearer\s+[A-Za-z0-9]+`, // Bearer tokens
-            `-----BEGIN.*PRIVATE`,   // Private keys
-            `\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`, // Email addresses
-            `/home/[^/]+/`,         // Home directory paths with usernames
-            `/Users/[^/]+/`,        // macOS user paths
-        },
-    }
-}
-
-func (g *PrivacyGate) Screen(mem Memory) (Memory, error) {
-    // 1. Check each field against blocked patterns
-    // 2. Replace home directory paths with generic equivalents
-    // 3. Truncate fields exceeding maxEntrySize
-    // 4. Reuse pkg/colony/sanitize.go patterns for prompt injection detection
-    // 5. Return error if critical content is blocked (e.g., API key detected)
-    return mem, nil
-}
-```
+### Phase 7: Output Filtering
+**What:** Add summary rendering functions to `cmd/codex_visuals.go`; add summary structs to build and continue outputs; update wrapper markdown to use summaries.
+**Why last:** Pure presentation layer, no dependencies on recovery/gating logic.
+**Modifies:** `cmd/codex_visuals.go`, `cmd/codex_build.go`, `cmd/codex_continue.go`, wrapper markdown files
+**Risk:** Low -- additive, existing detailed output remains available.
 
 ---
 
-## Suggested Build Order
+## Anti-Patterns
 
-Based on dependency analysis of the integration points:
+### Anti-Pattern 1: Queen Mutates State Directly
+**What:** Queen agent writes to COLONY_STATE.json via file manipulation.
+**Why bad:** Violates wrapper-runtime contract; can corrupt state; bypasses atomic write and file locking.
+**Instead:** All state mutations go through `aether` CLI subcommands.
 
-### Phase Group A: Recovery Hardening (AAC-001 through AAC-007)
-**Order:** Provenance validation first, then gate recovery, then /ant-unblock
+### Anti-Pattern 2: Auto-Recovery Without Circuit Breaker
+**What:** Recovery logic retries indefinitely.
+**Why bad:** Creates infinite loops, wastes tokens, can corrupt state.
+**Instead:** Every recovery attempt goes through the existing `CircuitBreaker` in `cmd/circuit_breaker.go`.
 
-1. **Provenance validation** (`cmd/provenance.go`) -- no dependencies on other new features
-2. **gate-results.json mirror** -- extends existing `gate.go`, no new deps
-3. **/ant-unblock command** (`cmd/unblock_cmd.go`) -- depends on gate-results.json
-4. **Fixer caste** -- depends on gate recovery templates being in place
-5. **REC-LOOP-01 inheritance** -- applies loop safety to all new gate paths
+### Anti-Pattern 3: Relaxed Gates in Normal Mode
+**What:** Queen-led gate thresholds (lower watcher veto, auto-skip runtime) apply to non-queen-led builds.
+**Why bad:** Removes safety net from manual builds.
+**Instead:** Relaxed thresholds only activate when `QueenLedMode` is true in colony state.
 
-### Phase Group B: Oracle & Init Enhancements (AAC-003, AAC-004)
-**Order:** Independent of Group A, can build in parallel
+### Anti-Pattern 4: Output Filtering Hides Failures
+**What:** Summary view omits hard-block information.
+**Why bad:** User cannot diagnose why a phase is stuck.
+**Instead:** Summary always shows hard blocks; details available via `/ant-status` or `--verbose` flag.
 
-1. **Confidence-targeted Oracle** -- modifies existing `cmd/oracle_loop.go`
-2. **Init synthesis** (`cmd/init_synthesize.go`) -- independent new command
-
-### Phase Group C: Worker Lifecycle (AAC-014 through AAC-017)
-**Order:** Depends on nothing new, but should complete before Group D
-
-1. **Heartbeat fields** -- extend `TrackedProcess` (backward compatible)
-2. **Heartbeat monitor** (`cmd/heartbeat_monitor.go`) -- new goroutine
-3. **Stale cleanup integration** -- extend existing `CleanupStaleWorkers()`
-
-### Phase Group D: Hive Learning (AAC-019 through AAC-031)
-**Order:** Largest feature group, builds on everything above
-
-1. **pkg/hive/store.go** -- SQLite schema and CRUD (no external deps)
-2. **pkg/hive/privacy.go** -- Privacy gate (needed before any writes)
-3. **pkg/hive/recall.go** -- FTS5 recall (needed for colony-prime integration)
-4. **pkg/hive/hooks.go** -- Event bus subscriptions (needs events from Group A)
-5. **pkg/hive/skill.go** -- Auto-created skills (needs privacy gate)
-6. **pkg/hive/curator.go** -- Keeper curator (needs recall and store)
-7. **Colony-prime integration** -- add hive_wisdom section to context assembly
-
-### Phase Group E: Full System Hardening (AAC-018)
-**Order:** Last, validates everything works together
-
-1. **E2E flow validation** -- test complete build-verify-advance with all new gates
-2. **Cross-platform consistency** -- verify Claude, OpenCode, Codex all work
-
----
-
-## Anti-Patterns to Avoid
-
-### 1. Don't Put Colony State in SQLite
-Colony state (COLONY_STATE.json) is authoritative, human-readable, and git-trackable. SQLite is for accumulated learning that benefits from search. Mixing them creates a nightmare for debugging and recovery.
-
-### 2. Don't Block the Build Pipeline on Hive Writes
-Hive learning is fire-and-forget. If SQLite is locked or the write fails, log and continue. Never let a learning write failure block phase advancement.
-
-### 3. Don't Duplicate the Existing Gate Check Logic
-`runCodexContinueGates()` already has a rich gate system. Provenance validation adds a NEW check, not a replacement. The provenance check is one more entry in the gate report, not a parallel gate system.
-
-### 4. Don't Make the Privacy Gate Overly Aggressive
-The privacy gate should catch API keys and credentials, not block legitimate learning about error patterns that happen to contain file paths. Use blocklist patterns, not allowlist.
-
-### 5. Don't Break Existing Oracle State Format
-`oracleStateFile` has a `Depth` field (added in v1.12). New fields must use `omitempty`. The existing `oracleReadyForCompletion()` function must remain the primary completion check -- confidence-targeted refinement is additive.
+### Anti-Pattern 5: Recovery Changes Build Intent
+**What:** Auto-recovery modifies the task goal or phase description.
+**Why bad:** Changes what was planned without user consent.
+**Instead:** Recovery only changes execution approach (different caste, retry with context), never changes the task itself.
 
 ---
 
 ## Scalability Considerations
 
-| Concern | Current (JSON files) | With SQLite |
-|---------|---------------------|-------------|
-| Learning entries | Limited by JSON file size / memory array | SQLite handles millions of rows |
-| FTS search | Not possible (linear scan of JSON) | FTS5 with ranking in <10ms |
-| Cross-repo learning | Hive Brain (200-entry cap) | Per-repo DB + Hive Brain promotion |
-| Privacy enforcement | Manual (pheromone sanitization) | Automated privacy gate on all writes |
-| Concurrent access | File locking (adequate for JSON) | WAL mode + busy timeout |
+| Concern | At Phase 1 (1 phase) | At Phase 5 (5 phases) | At Phase 10+ |
+|---------|---------------------|----------------------|--------------|
+| Recovery log size | Negligible (1-2 entries) | Small (5-10 entries) | Cap at 50 entries per phase, LRU eviction |
+| Gate classification overhead | None (static map lookup) | None | None |
+| Summary rendering | Fast (struct formatting) | Fast | Fast |
+| Queen-led continue plan-only | 1 extra CLI call | 1 extra CLI call | 1 extra CLI call |
+| Circuit breaker state | 1-2 keys | 5-10 keys | Existing cap handles this |
 
 ---
 
 ## Sources
 
-- Direct source code analysis: 316 cmd/*.go files, 12 pkg/ packages (2026-05-01)
-- `pkg/colony/colony.go` -- ColonyState struct, state machine, depth types
-- `cmd/codex_build_finalize.go` -- Build-finalize path (lines 144-257)
-- `cmd/codex_continue_finalize.go` -- Continue-finalize path (lines 115-226)
-- `cmd/oracle_loop.go` -- Oracle RALF loop with confidence tracking
-- `cmd/gate.go` -- Gate check system with recovery templates
-- `cmd/circuit_breaker.go` -- Circuit breaker with per-worker tracking
-- `pkg/events/bus.go` -- Event bus with pub/sub and JSONL persistence
-- `pkg/memory/pipeline.go` -- Wisdom pipeline (observe -> promote -> queen)
-- `pkg/codex/process_tracker.go` -- Worker process tracking and cleanup
-- `cmd/colony_prime_context.go` -- Colony-prime context assembly
-- `cmd/hive.go` -- Existing Hive Brain (cross-colony wisdom in JSON)
-- `pkg/storage/storage.go` -- Atomic file operations and file locking
-- `cmd/init_cmd.go` -- Colony initialization with charter support
-- PROJECT.md -- v1.13 requirements (AAC-001 through AAC-031, REC-LOOP-01)
+- `cmd/codex_build.go` (direct source analysis, 1943 lines) -- HIGH confidence
+- `cmd/codex_continue.go` (direct source analysis, 2800+ lines) -- HIGH confidence
+- `cmd/gate.go` (direct source analysis, 769 lines) -- HIGH confidence
+- `cmd/autopilot.go` (direct source analysis, 150+ lines) -- HIGH confidence
+- `cmd/codex_dispatch_contract.go` (direct source analysis, 360+ lines) -- HIGH confidence
+- `cmd/codex_build_finalize.go` (direct source analysis) -- HIGH confidence
+- `.claude/agents/ant/aether-queen.md` (direct source analysis, 332 lines) -- HIGH confidence
+- `.aether/docs/command-playbooks/build-wave.md` (direct source analysis, 1050 lines) -- HIGH confidence
+- `.aether/docs/command-playbooks/continue-gates.md` (direct source analysis, 1099 lines) -- HIGH confidence
+- `.aether/docs/wrapper-runtime-ux-contract.md` (direct source analysis) -- HIGH confidence
+- `.planning/PROJECT.md` (project context) -- HIGH confidence

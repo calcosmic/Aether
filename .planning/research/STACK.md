@@ -1,416 +1,384 @@
-# Technology Stack
+# Technology Stack: Queen Authority
 
-**Project:** Aether v1.13 -- Recovery Hardening & Hive Learning
-**Researched:** 2026-05-01
-**Confidence:** HIGH (all findings from source code inspection, Context7 docs, and verified web sources)
+**Project:** Aether v1.14 -- Queen Authority
+**Researched:** 2026-05-03
+**Confidence:** HIGH (all findings from source code inspection of existing Aether runtime)
 
 ## Executive Summary
 
-v1.13 requires exactly **one new external dependency**: `modernc.org/sqlite` for the hive learning layer. Everything else -- process groups, confidence scoring, privacy scanning, skill lifecycle, trajectory compression, and the learning policy engine -- builds on existing Go stdlib patterns already proven in the codebase. The process group infrastructure already exists in `pkg/codex/process_group_unix.go` and `cmd/verification_process_group_unix.go`. The confidence scoring engine already exists in `pkg/memory/trust.go` with 40/35/25 weighted rubrics, 7 trust tiers, and half-life decay. The skill system already has parse, diff, index, detect, match, and inject -- missing only create/patch/archive/promote lifecycle operations. The privacy gate can extend the existing `check-antipattern` command in `cmd/security_cmds.go` rather than importing gitleaks or trufflehog.
+The queen authority milestone requires **zero new external dependencies**. Every capability the queen needs -- worker dispatch, failure detection, circuit breaking, retry with backoff, gate evaluation, output aggregation, and process lifecycle management -- already exists as discrete components in the Go runtime. The work is entirely about wiring these existing pieces into a coordinator loop inside the Go binary, not about importing new libraries.
 
-## New Dependencies
+The queen becomes an autonomous coordinator by reading existing infrastructure that is currently driven externally by wrapper markdown (Claude/OpenCode) or by manual user invocation:
 
-| Dependency | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `modernc.org/sqlite` | v1.42.1 | Colony memory store with FTS5 recall | Pure Go (no CGO), supports FTS5 out of the box, standard `database/sql` interface. Only new dependency needed for v1.13. |
-| `modernc.org/libc` | (matched to sqlite) | Transitive dependency of modernc.org/sqlite | Must match the exact version in modernc.org/sqlite's own go.mod. |
+| Current Driver | Queen Authority Change |
+|---------------|----------------------|
+| Wrapper markdown calls `aether build`, `aether continue` | Go runtime runs build/continue in a loop internally |
+| User manually runs `/ant-unblock` when gates fail | Go runtime evaluates gates and dispatches Fixer automatically |
+| User reads raw worker output | Go runtime filters/summarizes output before surfacing |
+| User decides whether to re-dispatch a failed worker | Go runtime applies circuit breaker + retry policy |
+| User manages wave progression | Go runtime manages wave lifecycle end-to-end |
 
-**Why modernc.org/sqlite over alternatives:**
+## Existing Infrastructure Already Available
 
-| Criterion | modernc.org/sqlite | mattn/go-sqlite3 | zombiezen/go-sqlite |
-|-----------|-------------------|-------------------|---------------------|
-| CGO required | No | Yes | No |
-| FTS5 support | Built-in | Build tag needed | No (low-level wrapper) |
-| database/sql | Yes | Yes | No (custom API) |
-| Cross-compile | Trivial | Hard | Trivial |
-| Maintenance | Active (v1.42.1, Feb 2026) | Active | Active |
-| Aether fit | Single binary, no C toolchain | Requires gcc/clang | Different API surface |
+The following components exist and are production-tested. The queen coordinator assembles them into an autonomous loop.
 
-**Confidence: HIGH** -- FTS5 support confirmed via Context7 documentation and multiple web sources. The driver imports as `_ "modernc.org/sqlite"` and uses `sql.Open("sqlite", path)`.
+### 1. Worker Dispatch (`pkg/codex/dispatch.go`)
 
-## No-Change Stack (Existing)
+Already has wave-based dependency ordering, lifecycle events, parallel execution, and result aggregation.
 
-### Core Framework
+| Component | Location | Status |
+|-----------|----------|--------|
+| `DispatchBatchWithObserver` | `pkg/codex/dispatch.go:92` | Production, tested |
+| `DispatchWaveWithObserver` | `pkg/codex/dispatch.go:124` | Production, tested |
+| `DispatchObserver` callback | `pkg/codex/dispatch.go:50` | Production, tested |
+| `ExtractClaims` aggregation | `pkg/codex/dispatch.go:228` | Production, tested |
+| `WorkerInvoker` interface | `pkg/codex/worker.go:125` | Production, tested |
+| `ProgressAwareWorkerInvoker` | `pkg/codex/worker.go:120` | Production, tested |
+| `WorkerResult` struct | `pkg/codex/worker.go:60` | Production, tested |
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Go | 1.26.1 | Runtime language | Existing go.mod target. No version change needed. |
-| `github.com/spf13/cobra` | v1.10.2 | CLI subcommand registration | All new hive/learning commands register via `rootCmd.AddCommand()`. |
-| `pkg/storage.Store` | existing | File-locked JSON persistence | Colony state, pheromones, and session data remain on JSON. SQLite is only for the hive learning store, not a replacement. |
-| `pkg/events.Bus` | existing | Typed event bus with JSONL persistence | Learning events publish through existing bus. New topics (`hive.learn`, `hive.promote`) extend the existing pattern. |
-| `pkg/memory` | existing | Trust scoring, promotion pipeline, instinct storage | Confidence engine already has 40/35/25 weighted rubrics, 7 tiers, half-life decay. Extended, not replaced. |
+**What this means for queen:** The queen does not need to spawn workers herself. She calls `DispatchBatchWithObserver` with a `DispatchObserver` callback that feeds her lifecycle events (starting, running, completed, failed, timeout). The observer is the queen's sensory input.
 
-### Existing Pattern Reuse by Feature
+### 2. Circuit Breaker (`cmd/circuit_breaker.go`)
 
-| New Feature | Existing Code to Extend | What's New |
-|-------------|------------------------|------------|
-| Process groups | `pkg/codex/process_group_unix.go`, `cmd/verification_process_group_unix.go` | Heartbeat tracking, PID registry, stale worker detection. Infrastructure already has `Setpgid: true`, SIGTERM/SIGKILL escalation, process existence checks. |
-| Confidence scoring | `pkg/memory/trust.go` (Calculate, Decay, Tier), `pkg/memory/promote.go` | Oracle confidence target loop. The 40/35/25 weighted rubric (source/evidence/activity) already produces scores 0.2-1.0 with 7 named tiers. The Oracle loop just iterates until target threshold is met. |
-| Privacy/secret scanning | `cmd/security_cmds.go` (check-antipattern, 6 patterns) | Extend existing regex scanner with ~15 additional patterns (API key prefixes, tokens, credentials). No new library needed -- the existing scanner already does per-line regex matching with critical/warning classification. |
-| Skill lifecycle | `cmd/skills.go` (parse, index, detect, match, inject, diff) | Add create (write SKILL.md with frontmatter), patch (update existing), archive (move to `.aether/skills/archive/`), promote (user domain to shipped). All file operations, no new deps. |
-| Trajectory recording | `pkg/events/event.go` (Event struct, JSONL persistence), `cmd/recovery_snapshot.go` | Trajectory is an ordered sequence of phase snapshots stored in SQLite. Compression is time-based: merge consecutive identical-state snapshots, keep state-change boundaries. Uses stdlib only. |
-| Learning policy engine | `pkg/memory/promote.go` (PromoteService), `pkg/memory/consolidate.go` | Evidence validation rules are Go structs with thresholds, not a separate rule engine library. The policy is: observation must have trust score >= threshold, evidence type must be test_verified or multi_phase, and content must pass dedup. All implementable in ~100 lines of Go. |
+Already has per-worker failure tracking, threshold-based tripping, same-caste peer redistribution, and ceremony event emission.
 
-## Feature 1: SQLite Colony Memory Store with FTS5
+| Component | Location | Status |
+|-----------|----------|--------|
+| `CircuitBreaker` struct | `cmd/circuit_breaker.go:23` | Production, tested |
+| `Allow/RecordSuccess/RecordFailure` | `cmd/circuit_breaker.go:44-68` | Production, tested |
+| `findSameCastePeer` | `cmd/circuit_breaker.go:102` | Production, tested |
+| `Reset` (per-wave) | `cmd/circuit_breaker.go:71` | Production, tested |
+| `TrippedWorkers` | `cmd/circuit_breaker.go:86` | Production, tested |
+| Ceremony events | `cmd/circuit_breaker.go:120-155` | Production, tested |
 
-### Schema Design
+**What this means for queen:** The queen already has a circuit breaker. She resets it at wave boundaries, records failures/successes from `DispatchObserver` events, checks `Allow()` before dispatching, and calls `findSameCastePeer` when a worker is tripped.
 
-```sql
--- Colony-scoped memory entries
-CREATE TABLE IF NOT EXISTS memories (
-    id          TEXT PRIMARY KEY,         -- mem_{unix}_{6hex}
-    colony_id   TEXT NOT NULL,            -- repo-scoped
-    category    TEXT NOT NULL,            -- learning | instinct | pheromone_skill | trajectory
-    content     TEXT NOT NULL,
-    metadata    TEXT DEFAULT '{}',        -- JSON blob for domain, confidence, provenance
-    trust_score REAL DEFAULT 0.0,
-    confidence  REAL DEFAULT 0.0,
-    source_type TEXT DEFAULT '',
-    evidence    TEXT DEFAULT '',
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL,
-    expires_at  TEXT                     -- NULL = never expires
-);
+### 3. Gate System (`cmd/gate.go`, `cmd/fixer_dispatch.go`)
 
-CREATE INDEX IF NOT EXISTS idx_memories_colony ON memories(colony_id);
-CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(colony_id, category);
-CREATE INDEX IF NOT EXISTS idx_memories_confidence ON memories(colony_id, confidence);
-CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(colony_id, created_at);
+Already has 11 named gates, per-phase persistence, incremental re-check (skip passed), recovery templates, and Fixer dispatch with attempt caps.
 
--- FTS5 for content recall
-CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-    content,
-    category,
-    content=memories,
-    content_rowid=rowid
-);
+| Component | Location | Status |
+|-----------|----------|--------|
+| `gateCheck` struct | `cmd/gate.go:22` | Production, tested |
+| `shouldSkipGate` | `cmd/gate.go:557` | Production, tested |
+| `gateResultsWritePhase` | `cmd/gate.go:605` | Production, tested |
+| `gateResultsReadPhase` | `cmd/gate.go:613` | Production, tested |
+| `gateRecoveryTemplates` | `cmd/gate.go:487-536` | Production, tested |
+| `dispatchFixer` | `cmd/fixer_dispatch.go:131` | Production, tested |
+| `resolveFixedGates` | `cmd/fixer_dispatch.go:217` | Production, tested |
+| `checkAttemptCap` | `cmd/fixer_dispatch.go:92` | Production, tested |
+| `isFixerDispatchBlocked` | `cmd/fixer_dispatch.go:105` | Production, tested |
+| 11 gate recovery templates | `cmd/gate.go:487-536` | Production, tested |
 
--- Triggers to keep FTS in sync
-CREATE TRIGGER memories_ai AFTER INSERT ON memories BEGIN
-    INSERT INTO memories_fts(rowid, content, category) VALUES (new.rowid, new.content, new.category);
-END;
-CREATE TRIGGER memories_ad AFTER DELETE ON memories BEGIN
-    INSERT INTO memories_fts(memories_fts, rowid, content, category) VALUES('delete', old.rowid, old.content, old.category);
-END;
-CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
-    INSERT INTO memories_fts(memories_fts, rowid, content, category) VALUES('delete', old.rowid, old.content, old.category);
-    INSERT INTO memories_fts(rowid, content, category) VALUES (new.rowid, new.content, new.category);
-END;
+**What this means for queen:** Smart gating is mostly wiring. The queen reads gate results after continue, classifies failures as auto-resolvable vs. human-escalation, dispatches Fixer for auto-resolvable ones, and surfaces only genuine blockers to the user. The classification logic is the new part -- the infrastructure for dispatching Fixer and tracking attempts already exists.
+
+### 4. Process Tracking (`pkg/codex/process_tracker.go`)
+
+Already has PID registry, stale worker detection, graceful termination with SIGTERM/SIGKILL escalation, and cleanup.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `ProcessTracker` | `pkg/codex/process_tracker.go:45` | Production, tested |
+| `TrackProcess/UntrackProcess` | `pkg/codex/process_tracker.go:68-106` | Production, tested |
+| `KillAll` (per-root) | `pkg/codex/process_tracker.go:128` | Production, tested |
+| `DetectStaleWorkers` | `pkg/codex/process_tracker.go:144` | Production, tested |
+| `CleanupStaleWorkers` | `pkg/codex/process_tracker.go:185` | Production, tested |
+
+**What this means for queen:** The queen can check `DetectStaleWorkers` at wave boundaries and call `KillAll` for cleanup. She does not need to build process management from scratch.
+
+### 5. Immune System / Retry (`cmd/immune.go`)
+
+Already has error diagnosis, exponential backoff retry, scar recording, and auto-scar detection from midden failures.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `diagnoseError` | `cmd/immune.go:46` | Production, tested |
+| `trophallaxisRetryCmd` (backoff) | `cmd/immune.go:91` | Production, tested |
+| `scarAdd/scarCheck` | `cmd/immune.go:126-238` | Production, tested |
+| `immuneAutoScar` | `cmd/immune.go:240` | Production, tested |
+
+**What this means for queen:** The queen calls `diagnoseError` on worker failures to determine retryability, then uses the existing backoff formula (`2^attempt * 2` seconds) for retry delays. She records failures as scars for future avoidance.
+
+### 6. Autopilot State (`cmd/autopilot.go`)
+
+Already has phase tracking, replan interval checking, headless mode, and stop/init commands.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `autopilotState` struct | `cmd/autopilot.go:20` | Production, tested |
+| `autopilot-update` | `cmd/autopilot.go:85` | Production, tested |
+| `autopilot-check-replan` | `cmd/autopilot.go:223` | Production, tested |
+| `autopilot-set-headless` | `cmd/autopilot.go:277` | Production, tested |
+
+**What this means for queen:** The autopilot state machine already tracks multi-phase progress. The queen authority loop extends this from "track and report" to "decide and act."
+
+### 7. Workflow Profile System (`cmd/codex_dispatch_contract.go`)
+
+Already has three profiles (fast, standard, final-review), queen recommendation engine, depth flags, and lifecycle command contracts.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `recommendQueenWorkflowProfile` | `cmd/codex_dispatch_contract.go:329` | Production, tested |
+| `workflowProfiles` | `cmd/codex_dispatch_contract.go:138` | Production, tested |
+| `codexWorkflowProfileContract` | `cmd/codex_dispatch_contract.go:62` | Production, tested |
+
+**What this means for queen:** The queen already recommends profiles. In autonomous mode, she applies her recommendation directly instead of emitting it as advice.
+
+### 8. Colony State (`pkg/colony/colony.go`)
+
+Already has state machine transitions, phase advancement, worktree tracking, gate results, and charter data.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `ColonyState` struct | `pkg/colony/colony.go:272` | Production, tested |
+| `Transition` (state machine) | `pkg/colony/state_machine.go:7` | Production, tested |
+| `AdvancePhase` | `pkg/colony/state_machine.go:23` | Production, tested |
+| `GateResultEntry` | `pkg/colony/colony.go:227` | Production, tested |
+| `WorktreeEntry` | `pkg/colony/colony.go:214` | Production, tested |
+
+**What this means for queen:** All state mutations go through `store.UpdateJSONAtomically`, which is file-locked and atomic. The queen reads state, makes decisions, writes state -- all through existing safe patterns.
+
+## New Code Needed (No New Dependencies)
+
+### Queen Coordinator Loop
+
+A single new package `pkg/queen/` that assembles the existing components into an autonomous decision loop.
+
+```
+pkg/queen/
+├── coordinator.go      # Main loop: dispatch -> monitor -> recover -> advance
+├── gate_classifier.go  # Classifies gate failures as auto-resolvable vs. escalate
+├── output_filter.go    # Filters and summarizes worker output for clean display
+├── retry_policy.go     # Retry decisions using existing immune.go backoff
+├── wave_manager.go     # Wave lifecycle: allocate, execute, collect, cleanup
+├── coordinator_test.go
+├── gate_classifier_test.go
+├── output_filter_test.go
+├── retry_policy_test.go
+└── wave_manager_test.go
 ```
 
-### Integration Pattern
+### cmd/ Additions
+
+| New Command | Purpose | Pattern |
+|-------------|---------|---------|
+| `queen-coordinator` | Run the autonomous coordinator loop (replaces wrapper-driven build/continue) | Extends `cmd/autopilot.go` pattern |
+| `queen-gate-classify` | Classify a gate failure as auto-resolvable or human-escalation | New, uses existing gate data |
+| `queen-output-filter` | Filter and summarize worker output | New, pure text processing |
+| `queen-retry-decide` | Decide whether to retry a failed worker | Uses existing `diagnoseError` + `trophallaxisRetryCmd` logic |
+| `queen-wave-status` | Current wave status and worker health | Aggregates existing dispatch + process tracker data |
+
+### Gate Classification Logic (New)
+
+The core new intellectual work: deciding which gate failures the queen can auto-resolve and which require human intervention.
 
 ```go
-// pkg/hive/store.go
-package hive
-
-import (
-    "database/sql"
-    _ "modernc.org/sqlite"
-)
-
-type Store struct {
-    db *sql.DB
+// pkg/queen/gate_classifier.go
+type GateClassification struct {
+    Name         string
+    Severity     string // "auto", "retry", "escalate"
+    Reason       string
+    RecoveryHint string
 }
 
-func Open(dbPath string) (*Store, error) {
-    db, err := sql.Open("sqlite",
-        dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
-    // ...
+// Auto-resolvable gates: the queen can dispatch Fixer and verify
+var autoResolvableGates = map[string]bool{
+    "tests_pass":       true,  // Fixer re-runs tests, fixes failures
+    "watcher_veto":     true,  // Fixer addresses quality issues
+    "tdd_evidence":     true,  // Fixer writes missing tests
+    "anti_pattern":     true,  // Fixer removes critical patterns
+    "complexity":       true,  // Fixer refactors complex code
+    "medic":            true,  // Fixer applies medic repairs
+}
+
+// Escalation gates: require human judgment
+var escalationGates = map[string]bool{
+    "gatekeeper":    true,  // Security CVEs need human review
+    "auditor":       true,  // Quality below threshold needs human review
+    "runtime":       true,  // User-reported issues need human confirmation
+    "flags":         true,  // Blocker flags represent user decisions
 }
 ```
 
-**Key design decisions:**
-- **WAL mode** for concurrent read access (build workers read, continue writes)
-- **busy_timeout(5000)** to handle concurrent write contention gracefully
-- **External content FTS5** (`content=memories`) to avoid data duplication -- the content table is authoritative, FTS is an index
-- **Repo-scoped** via `colony_id` column -- each colony gets isolated recall, no cross-colony leakage
-- **DB location**: `~/.aether/hive/colony-memory.db` (hub-level, shared across colonies on same machine)
+**Confidence: HIGH** -- The gate names and recovery templates already exist in `cmd/gate.go:487-536`. Classification is a mapping from existing data to new behavior.
 
-### Query Patterns
+### Output Filtering Logic (New)
 
-```sql
--- Full-text recall
-SELECT m.* FROM memories m
-JOIN memories_fts f ON m.rowid = f.rowid
-WHERE f.memories_fts MATCH ? AND m.colony_id = ?
-ORDER BY bm25(memories_fts) LIMIT 20;
-
--- High-confidence instincts for a colony
-SELECT * FROM memories
-WHERE colony_id = ? AND category = 'instinct' AND confidence >= 0.8
-ORDER BY confidence DESC, updated_at DESC;
-
--- Recent learning observations
-SELECT * FROM memories
-WHERE colony_id = ? AND category = 'learning'
-ORDER BY created_at DESC LIMIT 50;
-```
-
-**Confidence: HIGH** -- FTS5 syntax verified via Context7 docs and SQLite official documentation. External content pattern verified.
-
-## Feature 2: Process Group Management
-
-### Existing Infrastructure (No Changes Needed)
-
-The codebase already has complete process group management:
-
-| File | What It Does |
-|------|-------------|
-| `pkg/codex/process_group_unix.go` | `workerSysProcAttr()` returns `Setpgid: true`, `terminateWorkerProcess()` sends SIGTERM to process group, `killWorkerProcess()` sends SIGKILL, `workerProcessExists()` checks via `ps`, `workerProcessCommandLine()` reads command line |
-| `pkg/codex/process_group_windows.go` | Windows stubs (no-op, correct for Windows) |
-| `cmd/verification_process_group_unix.go` | `configureVerificationCommandProcessGroup()` and `terminateVerificationCommandProcessGroup()` for verification subprocess isolation |
-| `pkg/codex/process_group_unix_test.go` | Test verifying `Setpgid: true` is set |
-
-### What to Add
-
-| Component | Location | Pattern |
-|-----------|----------|---------|
-| PID registry | `pkg/codex/pid_registry.go` (new) | Map of worker name to PID, persisted to `worker-pids.json` via existing `pkg/storage.Store` |
-| Heartbeat checker | `pkg/codex/heartbeat.go` (new) | Goroutine that polls `workerProcessExists()` every N seconds, marks workers as stale if not responding |
-| Stale cleanup | `cmd/` (extend existing recover or add new subcommand) | On colony start, check PID registry against running processes, clean orphaned entries |
-| Graceful shutdown | Extend existing `terminateWorkerProcess()` | Add timeout: SIGTERM, wait 5s, then SIGKILL. Already has the two-signal pattern conceptually. |
-
-**Confidence: HIGH** -- All primitives exist. This is assembly work, not new infrastructure.
-
-## Feature 3: Confidence Scoring with Weighted Rubrics
-
-### Existing Engine (No Changes to Core)
-
-`pkg/memory/trust.go` already implements the full scoring system:
-
-```
-raw_score = 0.4 * source_score + 0.35 * evidence_score + 0.25 * activity_score
-score = max(0.2, raw_score)
-
-Source weights:  user_feedback=1.0, error_resolution=0.9, success_pattern=0.8, observation=0.6, heuristic=0.4
-Evidence weights: test_verified=1.0, multi_phase=0.9, single_phase=0.7, anecdotal=0.4
-Activity: 0.5^(days/60)  -- 60-day half-life
-
-Tiers: canonical(>=0.9), trusted(>=0.8), established(>=0.7), emerging(>=0.6), provisional(>=0.45), suspect(>=0.3), dormant(<0.3)
-```
-
-### Oracle Confidence Target Loop
-
-The Oracle loop (AAC-003) iterates research until confidence meets a user-settable target:
+The queen needs to suppress raw worker noise and surface only actionable summaries.
 
 ```go
-// cmd/oracle_loop.go -- extend existing
-func runOracleWithTarget(ctx context.Context, query string, target float64, maxIterations int) (OracleResult, error) {
-    for i := 0; i < maxIterations; i++ {
-        result := runSingleOraclePass(ctx, query)
-        if result.Confidence >= target {
-            return result, nil
-        }
-        // Refine query based on gaps
-        query = refineQuery(query, result.Gaps)
+// pkg/queen/output_filter.go
+type FilteredOutput struct {
+    Summary    string            // Human-readable phase summary
+    Workers    []WorkerSummary   // Per-worker status line
+    Warnings   []string          // Notable but non-blocking items
+    Blockers   []string          // Items requiring human attention
+    Artifacts  map[string]string // Key outputs (test results, coverage, etc.)
+}
+
+type WorkerSummary struct {
+    Name    string
+    Caste   string
+    Status  string // "completed", "failed", "retried", "skipped"
+    Summary string // Worker's self-reported summary (from WorkerResult.Summary)
+    Files   int    // Count of files created/modified
+    Duration string
+}
+```
+
+**Approach:** The queen reads `WorkerResult.Summary` (already a concise self-report), `WorkerResult.RawOutput` (full stdout, only surfaced on failure), and `DispatchResult.Error` (invocation errors). Normal-path output shows one line per worker. Failure-path output shows the worker's summary plus the last 20 lines of raw output.
+
+**Confidence: HIGH** -- All data structures already exist. This is formatting logic, not new infrastructure.
+
+### Retry Policy (New, Wraps Existing)
+
+```go
+// pkg/queen/retry_policy.go
+type RetryDecision struct {
+    Retry      bool
+    Attempt    int
+    BackoffSec int
+    Reason     string
+}
+
+func DecideRetry(err error, workerName string, attempt int, cb *CircuitBreaker) RetryDecision {
+    // 1. Check circuit breaker
+    if !cb.Allow(workerName) {
+        return RetryDecision{Retry: false, Reason: "circuit breaker tripped"}
     }
-    return result, fmt.Errorf("confidence target %.2f not met after %d iterations", target, maxIterations)
-}
-```
 
-**Confidence: HIGH** -- Core scoring engine exists and is battle-tested (2900+ tests). Oracle loop is new orchestration on top of existing primitives.
+    // 2. Diagnose error using existing immune system
+    diagnosis := diagnoseError(err.Error())
 
-## Feature 4: Learning Policy Engine
-
-### Approach: Struct-Based Rules, Not a Rule Engine Library
-
-No external rule engine library needed. The learning policy is a set of Go structs with threshold checks:
-
-```go
-// pkg/hive/policy.go
-type LearningPolicy struct {
-    rules []LearningRule
-}
-
-type LearningRule struct {
-    Name        string
-    Category    string  // "instinct" | "pheromone_skill" | "trajectory"
-    MinTrust    float64 // Minimum trust score to promote
-    MinEvidence string  // Required evidence type (test_verified, multi_phase, etc.)
-    MinObsCount int     // Minimum observation count
-    AutoPromote bool    // Whether promotion happens automatically
-}
-
-// Default policies matching the existing system
-var DefaultPolicies = []LearningRule{
-    {Name: "instinct-promote", Category: "instinct", MinTrust: 0.6, MinEvidence: "single_phase", MinObsCount: 2, AutoPromote: true},
-    {Name: "hive-promote", Category: "instinct", MinTrust: 0.8, MinEvidence: "multi_phase", MinObsCount: 3, AutoPromote: true},
-    {Name: "skill-auto-create", Category: "pheromone_skill", MinTrust: 0.7, MinEvidence: "test_verified", MinObsCount: 4, AutoPromote: false},
-}
-```
-
-**Why not a rule engine library (Cedar, govaluate, etc.):**
-- Only 3-5 rules, all structurally identical (threshold checks)
-- Rules change infrequently (milestone boundaries, not runtime)
-- A rule engine adds complexity, binary size, and a new abstraction to learn
-- Go if-statements with struct-based rules are debuggable and testable
-
-**Confidence: HIGH** -- Pattern already used in `pkg/memory/promote.go` (capacity check, dedup check, trust threshold).
-
-## Feature 5: Privacy/Secret Scanning
-
-### Extend Existing Scanner
-
-The existing `cmd/security_cmds.go` has `check-antipattern` with 6 patterns across Swift, TypeScript, and shell. The hive learning store needs a privacy gate that prevents secrets from being stored as learning content.
-
-### Additional Patterns to Add
-
-| Pattern | Purpose | Severity |
-|---------|---------|----------|
-| `AKIA[0-9A-Z]{16}` | AWS access key | critical |
-| `ghp_[a-zA-Z0-9]{36}` | GitHub personal access token | critical |
-| `gho_[a-zA-Z0-9]{36}` | GitHub OAuth token | critical |
-| `ghs_[a-zA-Z0-9]{36}` | GitHub app token | critical |
-| `ghu_[a-zA-Z0-9]{36}` | GitHub user token | critical |
-| `sk-[a-zA-Z0-9]{48}` | OpenAI API key | critical |
-| `sk-ant-[a-zA-Z0-9-]{80}` | Anthropic API key | critical |
-| `xox[bposa]-[0-9]{10,13}-[a-zA-Z0-9]{24,}` | Slack token | critical |
-| `-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----` | Private key block | critical |
-| `password\s*[:=]\s*["'][^"']{8,}["']` | Hardcoded password | critical |
-| `(token|secret|api_key|apikey)\s*[:=]\s*["'][a-zA-Z0-9_-]{20,}["']` | Generic credential | warning |
-
-**Why not import gitleaks/trufflehog:**
-- Adding gitleaks as a dependency brings in 150+ transitive dependencies
-- The hive learning privacy gate only scans content being stored, not entire repos
-- A simple regex pass over learning content (a few KB per observation) is sufficient
-- False positives on learning content are acceptable (conservative: reject on match)
-
-**Confidence: HIGH** -- Pattern established in existing code. Extensions are well-known regex patterns from the secret scanning community.
-
-## Feature 6: Skill Lifecycle Management
-
-### Existing Operations (No Changes)
-
-| Operation | Command | Location |
-|-----------|---------|----------|
-| Parse frontmatter | `skill-parse-frontmatter` | `cmd/skills.go` |
-| Build index | `skill-index` | `cmd/skills.go` |
-| Detect matches | `skill-detect` | `cmd/skills.go` |
-| Match to worker | `skill-match` | `cmd/skills.go` |
-| Inject into prompt | `skill-inject` | `cmd/skills.go` |
-| Diff user vs shipped | `skill-diff` | `cmd/skills.go` |
-| Check if user-created | `skill-is-user-created` | `cmd/skills.go` |
-| Cache rebuild | `skill-cache-rebuild` | `cmd/skills.go` |
-
-### New Operations
-
-| Operation | Command | Implementation |
-|-----------|---------|----------------|
-| Create skill | `skill-create` | Write SKILL.md with YAML frontmatter to `~/.aether/skills/domain/{name}/SKILL.md`. Follow existing `skillFrontmatter` struct format. ~50 lines. |
-| Patch skill | `skill-patch` | Read existing SKILL.md, update specific frontmatter fields, preserve body content. ~40 lines. |
-| Archive skill | `skill-archive` | Move SKILL.md from active location to `.aether/skills/archive/{name}/SKILL.md`. Remove from index. ~30 lines. |
-| Promote skill | `skill-promote` | Copy from `~/.aether/skills/domain/` to `.aether/skills/domain/` (shipped). Update index and manifest. ~40 lines. |
-| List versions | `skill-versions` | Show shipped vs user vs hub versions with timestamps. Extend existing index. ~30 lines. |
-
-All use `os.ReadFile`/`os.WriteFile`/`os.MkdirAll` from stdlib. The `skillManifestEntry` struct (name, version, checksum) already exists for tracking.
-
-**Confidence: HIGH** -- All primitives exist. Assembly work on existing patterns.
-
-## Feature 7: Trajectory Recording and Compression
-
-### Approach: SQLite Table + Time-Based Compression
-
-Trajectories are phase-level state snapshots stored in the hive SQLite database:
-
-```sql
-CREATE TABLE IF NOT EXISTS trajectories (
-    id          TEXT PRIMARY KEY,
-    colony_id   TEXT NOT NULL,
-    phase       INTEGER NOT NULL,
-    snapshot    TEXT NOT NULL,       -- JSON blob of colony state at phase boundary
-    metrics     TEXT DEFAULT '{}',   -- JSON blob of metrics (tests, coverage, etc.)
-    created_at  TEXT NOT NULL,
-    UNIQUE(colony_id, phase)
-);
-```
-
-### Compression Strategy
-
-No external compression library needed. Two approaches, both using stdlib:
-
-**1. Delta encoding** (preferred): Store only the diff between consecutive snapshots.
-
-```go
-// pkg/hive/trajectory.go
-func compressTrajectory(prev, curr []byte) ([]byte, error) {
-    // If previous snapshot exists, store only changed fields
-    var prevMap, currMap map[string]interface{}
-    json.Unmarshal(prev, &prevMap)
-    json.Unmarshal(curr, &currMap)
-
-    delta := make(map[string]interface{})
-    for k, v := range currMap {
-        if prevVal, ok := prevMap[k]; !ok || !reflect.DeepEqual(prevVal, v) {
-            delta[k] = v
-        }
+    // 3. Check attempt cap (reuse existing trophallaxis logic)
+    if attempt >= 3 {
+        return RetryDecision{Retry: false, Reason: "max attempts reached"}
     }
-    return json.Marshal(delta)
+
+    // 4. Calculate backoff (existing formula: 2^attempt * 2)
+    backoff := int(math.Pow(2, float64(attempt)) * 2)
+
+    if !diagnosis["retryable"].(bool) {
+        return RetryDecision{Retry: false, Reason: fmt.Sprintf("non-retryable: %s", diagnosis["strategy"])}
+    }
+
+    return RetryDecision{
+        Retry:      true,
+        Attempt:    attempt + 1,
+        BackoffSec: backoff,
+        Reason:     diagnosis["strategy"].(string),
+    }
 }
 ```
 
-**2. TTL pruning**: Old trajectory entries (older than colony lifetime + 30 days) are deleted on colony seal. This is a simple `DELETE FROM trajectories WHERE created_at < ?` query.
+**Confidence: HIGH** -- `diagnoseError` and backoff formula already exist in `cmd/immune.go`. This is a thin orchestration layer.
 
-**3. Aggregation**: On colony seal, compress the full trajectory into a summary: phase count, average confidence trend, total learning count. Stored as a single summary row.
+## What NOT to Add
 
-**Confidence: HIGH** -- SQLite handles this naturally. Delta encoding is ~30 lines of Go with `encoding/json`. No external dependencies.
+| Rejected Addition | Why |
+|-------------------|-----|
+| `thejerf/suture` (supervisor trees) | Suture manages long-running service goroutines with restart semantics. Aether's workers are short-lived subprocess invocations (spawn, execute, collect result). The existing `DispatchBatchWithObserver` + `CircuitBreaker` + `ProcessTracker` already handle this. Suture would add an abstraction layer that duplicates existing behavior. |
+| `oklog/run` (actor group) | `oklog/run` orchestrates concurrent goroutines with graceful shutdown. The queen loop is sequential (dispatch wave, wait, evaluate, decide). Concurrency within a wave is already handled by `DispatchWaveWithObserver`. `oklog/run` solves a problem Aether does not have. |
+| `cenkalti/backoff` or `sethvargo/go-retry` | The existing immune system already implements exponential backoff (`2^attempt * 2` seconds) in `cmd/immune.go:114`. Adding a backoff library for a single formula is over-engineering. |
+| Event-driven architecture (channels, pub/sub) | The `DispatchObserver` callback pattern is already event-driven. Adding channels or a pub/sub system between dispatch and queen would add complexity without benefit -- the queen processes events synchronously in her loop. |
+| State machine library | The colony state machine already exists in `pkg/colony/state_machine.go`. Adding a library like `fsm` or `mergo` would duplicate existing, tested transitions. |
+| External queue (Redis, NATS) | Workers are local subprocesses, not distributed services. File-locked JSON persistence via `pkg/storage.Store` is the correct coordination mechanism for single-machine, single-user colonies. |
 
-## Package Structure
+## Existing Dependency Usage (No Version Changes)
 
-### New Package: `pkg/hive/`
+| Dependency | Current Version | Queen Authority Usage |
+|------------|----------------|----------------------|
+| `golang.org/x/sync` | v0.20.0 | Already used in `pkg/agent/pool.go` for `errgroup`. Wave parallel execution already uses `sync.WaitGroup` in `pkg/codex/dispatch.go`. No change needed. |
+| `github.com/spf13/cobra` | v1.10.2 | New queen commands register via `rootCmd.AddCommand()`. No version change. |
+| `github.com/BurntSushi/toml` | v1.5.0 | Agent TOML parsing unchanged. No version change. |
+| `modernc.org/sqlite` | v1.50.0 | Hive learning store unchanged. Queen reads colony state from JSON (not SQLite). No version change. |
+| `pkg/storage.Store` | existing | All state mutations via `UpdateJSONAtomically`. No change. |
 
-All hive learning functionality goes in a single new package to keep concerns isolated:
+## Architecture: Queen Coordinator Loop
+
+The queen coordinator is a sequential decision loop, not a concurrent service:
 
 ```
-pkg/hive/
-├── store.go          # SQLite connection, schema migration, CRUD
-├── fts.go            # FTS5 query helpers (search, rank, snippet)
-├── policy.go         # Learning rules and evidence validation
-├── trajectory.go     # Trajectory recording and delta compression
-├── privacy.go        # Secret scanning for content before storage
-├── skill_lifecycle.go # Create/patch/archive/promote operations
-├── store_test.go
-├── fts_test.go
-├── policy_test.go
-├── trajectory_test.go
-└── privacy_test.go
+┌──────────────────────────────────────────────────────┐
+│                QUEEN COORDINATOR                      │
+│                                                       │
+│  for each phase in plan:                              │
+│    1. SELECT PROFILE                                  │
+│       └─ recommendQueenWorkflowProfile() [existing]    │
+│                                                       │
+│    2. DISPATCH WAVE                                   │
+│       ├─ CircuitBreaker.Reset()                       │
+│       ├─ DispatchBatchWithObserver(observer)           │
+│       └─ observer -> queen event buffer               │
+│                                                       │
+│    3. EVALUATE WAVE RESULTS                           │
+│       ├─ For each failed worker:                      │
+│       │   ├─ CircuitBreaker.RecordFailure()            │
+│       │   ├─ DecideRetry() -> uses diagnoseError       │
+│       │   ├─ If retryable: re-dispatch (back to 2)     │
+│       │   └─ If tripped: findSameCastePeer or skip    │
+│       └─ ExtractClaims() for success summary          │
+│                                                       │
+│    4. RUN GATES                                       │
+│       ├─ Read gate results (gateResultsReadPhase)      │
+│       ├─ ClassifyGate() -> auto | retry | escalate     │
+│       ├─ Auto-resolvable: dispatchFixer() [existing]   │
+│       ├─ Re-verify fixed gates                        │
+│       └─ Escalate remaining to user                   │
+│                                                       │
+│    5. FILTER OUTPUT                                   │
+│       └─ Build FilteredOutput from WorkerResults       │
+│                                                       │
+│    6. ADVANCE OR ESCALATE                             │
+│       ├─ All gates passed: AdvancePhase() [existing]   │
+│       ├─ Some gates failed: surface blockers to user  │
+│       └─ Record scars, emit telemetry                 │
+│                                                       │
+│    7. CLEANUP                                         │
+│       ├─ DetectStaleWorkers() -> KillAll() [existing]  │
+│       └─ spawnTrackClear() [existing]                 │
+│                                                       │
+└──────────────────────────────────────────────────────┘
 ```
 
-### Extended Packages
+## Integration Points
 
-| Package | Extension |
-|---------|-----------|
-| `pkg/codex/` | `pid_registry.go`, `heartbeat.go` (process lifecycle) |
-| `pkg/memory/` | No changes -- called from `pkg/hive/policy.go` |
-| `cmd/` | New cobra commands for hive operations, heartbeats, skill lifecycle |
+| Queen Action | Calls Into | Package |
+|-------------|-----------|---------|
+| Select profile | `recommendQueenWorkflowProfile` | `cmd/codex_dispatch_contract.go` |
+| Dispatch workers | `DispatchBatchWithObserver` | `pkg/codex/dispatch.go` |
+| Track failures | `CircuitBreaker.RecordFailure` | `cmd/circuit_breaker.go` |
+| Check retryability | `diagnoseError` | `cmd/immune.go` |
+| Redistribute task | `findSameCastePeer` | `cmd/circuit_breaker.go` |
+| Evaluate gates | `gateResultsReadPhase`, `shouldSkipGate` | `cmd/gate.go` |
+| Dispatch fixer | `dispatchFixer` | `cmd/fixer_dispatch.go` |
+| Resolve fixed gates | `resolveFixedGates` | `cmd/fixer_dispatch.go` |
+| Check attempt cap | `checkAttemptCap` | `cmd/fixer_dispatch.go` |
+| Advance phase | `AdvancePhase` | `pkg/colony/state_machine.go` |
+| Mutate state | `store.UpdateJSONAtomically` | `pkg/storage/storage.go` |
+| Track processes | `ProcessTracker.TrackProcess` | `pkg/codex/process_tracker.go` |
+| Cleanup stale | `CleanupStaleWorkers` | `pkg/codex/process_tracker.go` |
+| Record scars | `scarAdd` logic (inline) | `cmd/immune.go` |
+| Update autopilot | `autopilot-update` logic (inline) | `cmd/autopilot.go` |
+| Emit telemetry | `emitLoopBreakEvent` | `cmd/` (existing ceremony) |
 
-## Installation
+## Estimated New Code
 
-```bash
-# Core (one new dependency)
-go get modernc.org/sqlite@latest
-
-# The libc dependency is pulled automatically by Go module resolution.
-# Verify it matches: check modernc.org/sqlite's go.mod for the required version.
-```
-
-## Alternatives Considered
-
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| SQLite driver | modernc.org/sqlite | mattn/go-sqlite3 | Requires CGO, breaks cross-compilation and single-binary distribution |
-| SQLite driver | modernc.org/sqlite | zombiezen/go-sqlite | Not a database/sql driver, custom API, would need to rewrite all query code |
-| Secret scanning | Extend existing regex | gitleaks (library) | 150+ transitive deps, overkill for content-level scanning |
-| Rule engine | Go structs | Cedar (AWS) | Authorization-focused, not learning policies; adds AWS SDK dependency |
-| Rule engine | Go structs | govaluate | Expression parser adds complexity for simple threshold checks |
-| Compression | Delta encoding + TTL | gzip/zlib | Trajectory data is structured JSON; delta encoding is more semantically useful than binary compression |
-| FTS | SQLite FTS5 | Meilisearch/Typesense | Separate service, overkill for single-user colony recall |
-| FTS | SQLite FTS5 | Bleve (Go native) | Good but adds another dependency; SQLite FTS5 already covers the use case |
+| Component | Lines (estimate) | Complexity |
+|-----------|-----------------|------------|
+| `pkg/queen/coordinator.go` | ~200 | Medium -- main loop orchestration |
+| `pkg/queen/gate_classifier.go` | ~80 | Low -- classification map + logic |
+| `pkg/queen/output_filter.go` | ~120 | Low -- text formatting |
+| `pkg/queen/retry_policy.go` | ~60 | Low -- wraps existing diagnoseError |
+| `pkg/queen/wave_manager.go` | ~150 | Medium -- wave lifecycle management |
+| `cmd/queen_*.go` (5 commands) | ~300 | Low -- cobra command wrappers |
+| Tests | ~400 | Standard |
+| **Total** | **~1,310** | |
 
 ## Sources
 
-- modernc.org/sqlite FTS5 support: Context7 `/modernc-org/sqlite` docs, SQLite official FTS5 documentation (https://www.sqlite.org/fts5.html), pkg.go.dev/modernc.org/sqlite
-- modernc.org/sqlite version: pkg.go.dev (v1.42.1), Reddit r/golang discussion Feb 2026
-- Process group management: Go syscall package docs (https://pkg.go.dev/syscall), HackerNoon process management guide (https://hackernoon.com/everything-you-need-to-know-about-managing-go-processes), Felix Geisendorfer child process article (https://medium.com/@felixge/killing-a-child-process-and-all-of-its-children-in-go-54079af94773)
-- Secret scanning patterns: Gitleaks (https://github.com/gitleaks/gitleaks), TruffleHog (https://github.com/trufflesecurity/trufflehog)
-- Existing codebase inspection: `pkg/memory/trust.go`, `pkg/memory/promote.go`, `pkg/codex/process_group_unix.go`, `cmd/security_cmds.go`, `cmd/skills.go`, `pkg/events/event.go`, `cmd/recovery_snapshot.go`
+- Source code inspection: `pkg/codex/dispatch.go`, `pkg/codex/worker.go`, `pkg/codex/process_tracker.go`, `cmd/circuit_breaker.go`, `cmd/gate.go`, `cmd/fixer_dispatch.go`, `cmd/immune.go`, `cmd/autopilot.go`, `cmd/codex_dispatch_contract.go`, `pkg/colony/colony.go`, `pkg/colony/state_machine.go`, `pkg/storage/storage.go`
+- Existing go.mod: `golang.org/x/sync v0.20.0`, `github.com/spf13/cobra v1.10.2`, `modernc.org/sqlite v1.50.0`
+- Suture supervisor trees: [github.com/thejerf/suture](https://github.com/thejerf/suture) -- evaluated and rejected (see "What NOT to Add")
+- oklog/run: [github.com/oklog/run](https://github.com/oklog/run) -- evaluated and rejected (see "What NOT to Add")
+- errgroup SetLimit: [pkg.go.dev/golang.org/x/sync/errgroup](https://pkg.go.dev/golang.org/x/sync/errgroup) -- already in project, no changes needed

@@ -1,165 +1,210 @@
 # Project Research Summary
 
-**Project:** Aether v1.13 -- Recovery Hardening & Hive Learning
-**Domain:** AI colony framework -- build/continue gate hardening, confidence-targeted research loops, SQLite-backed procedural memory
-**Researched:** 2026-05-01
+**Project:** Aether v1.14 -- Queen Authority
+**Domain:** Autonomous queen coordination for multi-agent colony framework
+**Researched:** 2026-05-03
 **Confidence:** HIGH
 
 ## Executive Summary
 
-v1.13 adds two capability layers to Aether's existing Go CLI colony runtime. The first is **recovery hardening**: preventing phantom build advancement (builds that claim success but produced nothing), adding confidence-targeted Oracle planning, converting raw init research into approval-ready briefs, and replacing STOP-wall gate failures with fix/unblock paths plus a new Fixer caste. The second is **hive learning**: a repo-scoped colony memory store with SQLite-backed FTS5 recall, pheromone skills (auto-created procedural memory from verified difficult tasks), Keeper curator with usage tracking and stale detection, and evidence-gated learning triggers that only promote verified successful work into durable wisdom.
+Queen Authority transforms the Aether queen from narrator into autonomous coordinator. The core insight from all four research streams is that the Go runtime already contains nearly every component needed -- circuit breaker, Fixer dispatch, gate evaluation, retry logic, wave management, and process tracking -- but these components require manual triggering. v1.14 wires them together into a self-driving coordination loop so the queen can detect failures, classify severity, apply bounded recovery, and escalate only when genuinely stuck.
 
-The recommended approach is **maximally additive** -- all 31 work packages extend existing infrastructure rather than replacing it. The only new external dependency is `modernc.org/sqlite` (pure Go, no CGO), which means zero impact on cross-compilation or single-binary distribution. JSON files remain authoritative for colony state; SQLite serves purely as a secondary search index for accumulated learning. Every new field uses `omitempty` for backward compatibility. The key risks are provenance validation producing false negatives in worktree mode, Oracle confidence gaming by LLM workers, and the Fixer caste creating infinite gate-recovery loops. All three have concrete prevention strategies documented below.
+The recommended approach is a phased build: start with gate classification and recovery data infrastructure (low risk, everything depends on it), then the smart gate pipeline and recovery orchestrator, then queen-led build/continue integration, and finally output filtering as the presentation layer. No new external dependencies are needed. The estimated new code is approximately 1,300 lines across a new `pkg/queen/` package plus modifications to existing `cmd/` files.
+
+The key risks are cascading fix-fail cycles (queen retries a fundamentally broken task endlessly), smart gates auto-resolving legitimate security findings, and output filtering hiding critical errors from the user. All three are mitigated by the same principle: the queen advises, the Go runtime decides. Hard-block gates (watcher_veto, gatekeeper, flags, loop_detection) must never be auto-resolved. Every queen decision must be logged to an audit trail. Recovery must be bounded by a per-phase budget with mandatory human escalation when exhausted.
 
 ## Key Findings
 
 ### Recommended Stack
 
-v1.13 requires exactly one new external dependency. Everything else builds on existing Go stdlib patterns already proven in the codebase (2900+ tests).
+Zero new external dependencies. Every capability the queen needs already exists in the Go runtime.
 
-**Core technologies:**
-- `modernc.org/sqlite` v1.42.1: Colony memory store with FTS5 recall -- pure Go (no CGO), standard `database/sql` interface, FTS5 built-in, trivial cross-compilation. The only new dep.
-- Existing `pkg/storage.Store`: JSON persistence for colony state -- remains authoritative, SQLite is secondary index only.
-- Existing `pkg/events.Bus`: Event bus with JSONL persistence -- learning hooks subscribe to new lifecycle topics (`phase.completed`, `seal.completed`, `gate.passed`).
-- Existing `pkg/memory` trust scoring: 40/35/25 weighted rubric, 7 trust tiers, 60-day half-life -- extended for evidence-gated learning, not replaced.
+**Core technologies (existing, no version changes):**
+- `pkg/codex/dispatch.go` (`DispatchBatchWithObserver`): wave-based worker dispatch with observer callbacks -- the queen's sensory input for lifecycle events
+- `cmd/codex_dispatch_contract.go` (`recommendQueenWorkflowProfile`): profile recommendation engine -- the queen applies her recommendation directly instead of emitting advice
+- `cmd/circuit_breaker.go`: per-worker failure tracking with threshold-based tripping and same-caste peer redistribution
+- `cmd/gate.go`: 11 named gates with per-phase persistence and recovery templates
+- `cmd/fixer_dispatch.go`: Fixer dispatch with attempt caps and circuit breaker integration
+- `cmd/immune.go`: error diagnosis and exponential backoff retry (`2^attempt * 2` seconds)
+- `pkg/codex/process_tracker.go`: PID registry, stale worker detection, graceful termination
+- `pkg/colony/state_machine.go`: state transitions and phase advancement
+- `pkg/storage.Store` (`UpdateJSONAtomically`): file-locked atomic state mutations
+
+**Rejected additions (and why):**
+- `thejerf/suture` (supervisor trees) -- workers are short-lived subprocesses, not long-running services; existing dispatch + circuit breaker already handles this
+- `oklog/run` (actor group) -- queen loop is sequential, not concurrent; wave-internal concurrency already handled by `DispatchWaveWithObserver`
+- External backoff libraries -- single formula (`2^attempt * 2`) already implemented in `cmd/immune.go`
+- State machine libraries -- `pkg/colony/state_machine.go` already exists and is tested
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Build provenance validation (A1) -- prevents phantom advancement where builds claim success but produce zero changes. Core trust issue.
-- Recoverable gate failures + /ant-unblock (A4/A5) -- current STOP walls with text instructions are poor UX for an automated system.
-- Evidence-gated learning (B5) -- learning from unverified work creates noise that degrades trust in instincts.
-- Privacy gate for learning writes (B6) -- writing secrets to colony memory is a security risk.
+**Must have (table stakes -- core recovery loop):**
+- A1: Failure Classification Engine -- distinguish recoverable vs non-recoverable before acting
+- A2: Bounded Auto-Retry with Exponential Backoff -- retry transient failures with MaxR/MaxT bounds
+- A3: Peer Redistribution on Worker Failure -- use `findSameCastePeer` automatically when circuit breaker trips
+- A4: Queen-Driven Fixer Dispatch -- call `dispatchFixer` automatically for `requires-attempt` failures
+- A5: Escalation Protocol with Human Handoff -- generate structured escalation summary when recovery exhausted
 
-**Should have (competitive):**
-- Fixer caste (A6) -- self-healing gate failures where the colony fixes its own blockers. Strong differentiator.
-- Confidence-targeted Oracle (A2) -- iterative research that quantifies confidence and targets a threshold. No other AI colony framework does this.
-- Init synthesis (A3) -- converts raw scouting data into an approval-ready launch brief.
-- Pheromone skills (B3) -- auto-created procedural memory from verified difficult tasks.
-- Keeper curator (B4) -- automated memory hygiene with stale detection and archival.
+**Should have (competitive differentiators):**
+- B1: Gate Severity Classification -- add `critical`/`high`/`medium`/`low`/`info` to `GateCheckResult`
+- B2: Non-Blocking Advisory Gates -- low/info severity findings logged but don't block advancement
+- B4: Gate Dependency Graph -- skip dependent gates when prerequisite fails (use existing `not-reached` status)
+- C1: Output Severity Filtering -- default display shows warnings and above; verbose shows everything
+- C2: Phase Completion Summary -- Go runtime generates structured summary (tasks, gates, duration, next action)
 
 **Defer (v2+):**
-- Worker process lifecycle with heartbeats (A7) -- high cost, moderate value. Current wall-clock timeout suffices until workers run long enough to stall.
-- SQLite + FTS recall (B2) as standalone feature -- defer until B1 (unified memory API) proves the volume justifies a database index.
+- B3: Auto-Resolution for Known Recoverable Patterns -- pattern matching logic needs careful safety bounds
+- C3: Progressive Disclosure -- UX refinement, not core functionality
+- D1-D3: Full Wave Lifecycle Ownership, Inter-Wave Decision Making, Phase Completion Decision -- highest architectural integration risk, prove the recovery loop first
+- Learned severity thresholds -- requires multi-colony data
+- Cross-phase pattern learning -- complexity not justified until core loop proven
+- User-defined recovery strategies -- YAGNI
+
+**Anti-features (never implement):**
+- Silent auto-recovery without logging -- destroys user visibility
+- Queen overriding circuit breaker thresholds -- defeats the safety mechanism
+- LLM-based failure classification -- non-deterministic, hard to debug; use rule-based classification
+- Auto-advance without confirmation in manual mode -- violates user expectations
+- Auto-resolving critical severity gates -- security/safety gates must always block
+- Queen modifying worker code directly -- breaks audit trail and worker autonomy
+- Infinite recovery loops -- Erlang/OTP lesson: bounded recovery with mandatory escalation
 
 ### Architecture Approach
 
-The architecture is additive across three well-defined integration surfaces. Recovery hardening modifies two critical paths: build-finalize (between `applyCodexBuildState` and manifest write) and continue-finalize (between `assessCodexContinue` and gate run). A new `cmd/provenance.go` provides validation logic that both paths call. The Oracle loop is extended in-place with a `--confidence-target` flag and iterative refinement that re-opens low-confidence questions. Hive learning introduces a new `pkg/hive/` package with 6 files (store, recall, hooks, privacy, skill, curator), connected to the existing memory pipeline via event bus subscriptions. The privacy gate intercepts all writes to SQLite before data is stored.
+The architecture follows a strict authority model: the Queen (wrapper layer) makes decisions, the Go runtime (authoritative) executes them. The Queen cannot write COLONY_STATE.json directly, cannot skip hard-block gates, and cannot force phase advance without verification. This preserves the existing wrapper-runtime contract.
 
 **Major components:**
-1. `cmd/provenance.go` (new) -- Build provenance validation that checks claimed files exist and git diff matches. Called by both build-finalize and continue-finalize.
-2. `cmd/unblock_cmd.go` (new) + gate-results.json mirror -- Structured gate recovery with /ant-unblock command, per-phase gate results with retry metadata.
-3. Fixer caste (new agent, 27th) -- Reads gate failure context, investigates root cause, applies fix, verifies, reports. Dispatched by continue-finalize when gates fail with fixable recovery templates.
-4. `pkg/hive/` (new package) -- SQLite-backed learning store with FTS5 recall, privacy gate on all writes, event bus hooks for automatic learning capture, skill lifecycle management, and Keeper curator for memory hygiene.
-5. Oracle confidence loop (extended) -- User-settable confidence target, iterative refinement, context capsule cap, external validation requirements for high confidence scores.
+
+1. **`pkg/queen/` (new package)** -- coordinator loop that assembles existing components into an autonomous decision chain: dispatch wave, monitor via `DispatchObserver`, evaluate results, run gates with classification, apply recovery, filter output, advance or escalate
+2. **`cmd/gate.go` (modified)** -- add `gateClassification` (hard_block/soft_block/advisory), `AutoRecoverable` field, classification-aware `runCodexContinueGates()` that processes soft-block and advisory failures differently from hard blocks
+3. **`cmd/recovery.go` (new file)** -- recovery orchestrator with `attemptAutoRecovery()` that runs between gate failure and blocking; strategy per gate (re-run verification, skip spawn in queen-led mode, retry tests)
+4. **`cmd/codex_build.go` (modified)** -- add `RecoveryAttempts`, `LastFailureReason` to `codexBuildDispatch`; add `codexRecoveryPolicy` to manifest
+5. **`cmd/codex_continue.go` (modified)** -- add `runCodexContinuePlanOnly()` (gates without state mutation) and `runCodexContinueFinalize()` (commit with recovery context); add `codexContinueSummary` struct
+6. **Wrapper playbooks (modified)** -- `build-wave.md` Step 5.2 reads recovery metadata and executes recovery tiers 1-3; `continue-gates.md` adds queen-led conditional branches per gate
 
 ### Critical Pitfalls
 
-1. **Build provenance false negatives in worktree mode** -- Workers write to isolated worktrees, but provenance validation resolves paths against the main root. Fix: validate against the worktree root during execution, re-validate after sync-back. Use `git ls-files --others --exclude-standard` for untracked files.
-2. **Oracle confidence gaming by LLM workers** -- Self-reported confidence scores are unreliable because LLMs optimize for task completion. Fix: add external validation (finding diversity, code-level evidence requirements), confidence decay when no progress across iterations, context capsule cap at 4000 chars.
-3. **Fixer caste creating infinite gate-recovery loops** -- Circuit breaker tracks worker names, but Fixer gets a new deterministic name each spawn so it never trips. Fix: add gate-level circuit breaker (not worker-level), cap Fixer at 2 attempts per gate, require Fixer to run ALL gates after its fix.
-4. **SQLite coexistence with JSON file storage** -- WAL mode creates auxiliary files that could be committed to git. Fix: store DB in `.aether/data/hive/` with its own `.gitignore` excluding all files. Use `SetMaxOpenConns(1)` for writes. Never use `FileLocker` on SQLite files.
-5. **False learning confidence from lucky passes** -- Gates passing does not mean work is correct, only that tests pass and no critical flags exist. Fix: require multi-repo confirmation for confidence above 0.7, add privacy gate to learning injection that strips cross-repo specifics.
+1. **Cascading fix-fail cycles** -- queen re-spawns a worker with a new name, circuit breaker sees a fresh worker, same underlying failure repeats. Prevention: classify failures as retryable vs non-retryable BEFORE recovery; track task-level attempt count (not just worker-level); per-phase recovery budget (max 3); when skipping a task, check downstream dependencies.
+2. **Smart gates auto-resolving legitimate findings** -- queen marks a real security/quality issue as "false positive." Prevention: NEVER auto-resolve security gates (gatekeeper, anti_pattern) or watcher_veto; preserve original failure detail in `queen_gate_decisions.json` audit log; require queen to read source code before auto-resolving; flag if auto-resolution rate exceeds 30%.
+3. **Output filtering hiding critical information** -- real errors suppressed as "noise." Prevention: two-tier output (summary + always-show errors); `--verbose` default for first phase; persist full output to `queen-output-{phase}.json`; never filter lines containing "error", "failed", "panic", "fatal", "blocked", "veto", "critical".
+4. **Queen as single point of failure** -- crash corrupts coordination state; decision loop becomes bottleneck. Prevention: queen ADVISES not COMMANDS (existing Go functions remain decision makers); persist coordination state to COLONY_STATE.json; separate 12K char context budget for queen (don't reuse colony-prime's 8K); write decision logic as pure functions for testability.
+5. **Silent failure mode** -- smooth auto-recovery masks real problems so user never knows anything went wrong. Prevention: log every queen decision to persistent file; phase-end activity summary ("Queen made 3 auto-recovery decisions -- review with `/ant-queen-log`"); transparency mode prints one line per autonomous decision by default; dual-flagged findings (two independent gates agree) always block.
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Recovery Foundation
-**Rationale:** Build provenance is the most critical trust issue -- without it, phantom advancement undermines the entire build/continue contract. Gate state persistence and /ant-unblock are low-cost extensions of existing gate.go logic. Privacy gate is a security baseline needed before any learning features write data.
-**Delivers:** Provenance validation at build-complete and continue-verify, gate-results.json mirror with per-phase scoping, /ant-unblock command, privacy/secret scanning for learning writes.
-**Addresses:** A1 (provenance), A4/A5 (recoverable gates), B6 (privacy gate).
-**Avoids:** Pitfall 1 (provenance false negatives) by implementing checkpoint-based diff and timestamp validation.
+### Phase 1: Gate Classification Infrastructure
+**Rationale:** Every subsequent phase depends on knowing which gates are hard-block vs soft-block vs advisory. This is the foundation everything else builds on. Additive changes only -- no existing behavior changes until consumers are added.
+**Delivers:** `gateClassification` type, `gateClassifications` map, `AutoRecoverable` field on `gateCheck`, `Severity` field on `GateCheckResult`
+**Addresses:** B1 (Gate Severity Classification), B4 (Gate Dependency Graph -- trivial since `not-reached` status already exists)
+**Avoids:** Pitfall 2 (smart gates auto-resolving) -- hard-block classification is defined here
+**Modifies:** `cmd/gate.go`
+**Risk:** Low
 
-### Phase 2: Gate Self-Healing
-**Rationale:** The Fixer caste and smart gate retry build directly on Phase 1's gate persistence. The Fixer needs gate failure context (from /ant-unblock infrastructure) to function. Oracle confidence targeting is independent and can build in parallel. Init synthesis is independent and improves onboarding UX.
-**Delivers:** Fixer caste (27th agent) across all 4 surfaces, smart gate retry with cooldowns, confidence-targeted Oracle loop, init synthesis step.
-**Addresses:** A6 (Fixer), A2 (Oracle), A3 (init synthesis).
-**Uses:** Gate state persistence from Phase 1 for Fixer context.
-**Avoids:** Pitfall 3 (Fixer infinite loops) by implementing gate-level circuit breaker and Fixer attempt cap.
+### Phase 2: Recovery Data Model
+**Rationale:** Auto-recovery logic needs somewhere to store state. Add recovery fields to existing structs and create the `aether recovery-record` subcommand. All changes are backward-compatible with `omitempty`.
+**Delivers:** `RecoveryAttempts` and `LastFailureReason` on `codexBuildDispatch`; `RecoveryLog` on `ColonyState`; `codexRecoveryPolicy` on manifest; `aether recovery-record` subcommand
+**Addresses:** A1 (Failure Classification -- data structures), A5 (Escalation Protocol -- persistence)
+**Avoids:** Pitfall 4 (single point of failure) -- recovery state persisted to COLONY_STATE.json via existing atomic writes
+**Modifies:** `cmd/codex_build.go`, `pkg/colony/colony.go`, new `cmd/recovery.go`
+**Risk:** Low
 
-### Phase 3: Learning Foundation
-**Rationale:** Evidence-gated learning triggers depend on Phase 1 provenance validation for evidence. The unified memory API is the foundation for all remaining B features. Repo isolation is low-cost and extends existing hive promotion.
-**Delivers:** Evidence-gated learning triggers at build/continue complete, unified colony memory API, repo isolation with hive opt-in/opt-out, learning hooks connected to event bus.
-**Addresses:** B5 (evidence rules), B1 (unified memory), B7 (repo isolation).
-**Uses:** Provenance validation from Phase 1 for evidence verification.
-**Avoids:** Pitfall 5 (false learning confidence) by requiring multi-repo confirmation and implementing semantic dedup.
+### Phase 3: Smart Gate Pipeline and Recovery Orchestrator
+**Rationale:** This is the core of queen authority. Combines gate classification (Phase 1) with recovery data (Phase 2) into an autonomous recovery loop. The queen can now auto-recover from soft-block gates before blocking.
+**Delivers:** `attemptAutoRecovery()` in `cmd/recovery.go`; classification-aware `runCodexContinueGates()`; `codexSmartGateSummary` struct; per-gate recovery strategies
+**Addresses:** A2 (Bounded Auto-Retry), A3 (Peer Redistribution), A4 (Queen-Driven Fixer), B2 (Non-Blocking Advisory Gates)
+**Avoids:** Pitfall 1 (cascading fix-fail) via circuit breaker integration; Pitfall 2 (auto-resolving) via hard-block preservation
+**Modifies:** `cmd/codex_continue.go`, `cmd/recovery.go`, `cmd/gate.go`
+**Risk:** Medium -- changes gate evaluation logic, must preserve existing hard-block behavior
 
-### Phase 4: Hive Intelligence
-**Rationale:** SQLite integration, FTS5 recall, pheromone skills, and Keeper curator all depend on Phase 3's unified memory API. This is the highest-complexity phase and should come last when the foundation is stable.
-**Delivers:** SQLite colony.db with WAL mode and FTS5, full-text recall for worker context injection, auto-created pheromone skills from verified difficult tasks, Keeper curator with usage tracking and stale detection.
-**Addresses:** B2 (SQLite + FTS), B3 (pheromone skills), B4 (Keeper curator).
-**Uses:** Unified memory API from Phase 3, privacy gate from Phase 1.
-**Avoids:** Pitfall 4 (SQLite coexistence) by using dedicated `.aether/data/hive/` directory with proper gitignore, single-writer pattern, and FTS health check in patrol.
+### Phase 4: Queen-Led Continue Integration
+**Rationale:** Enables the queen-led continue flow by splitting `aether continue` into `--plan-only` (evaluate without mutating) and `--finalize` (commit with recovery context). This gives the queen the information she needs to make recovery decisions without side effects.
+**Delivers:** `aether continue --plan-only`, `aether continue --finalize`, queen-led conditional branches in `continue-gates.md`
+**Addresses:** Queen-led mode activation for playbook gates (relaxed thresholds, auto-skip runtime, lower watcher veto threshold)
+**Avoids:** Pitfall 4 (queen mutating state directly) -- plan-only is read-only; Pitfall 3 (anti-pattern 3) -- relaxed thresholds only when `QueenLedMode` is true
+**Modifies:** `cmd/codex_continue.go`, `continue-gates.md`, `.claude/commands/ant/continue.md`
+**Risk:** Medium -- new code paths but isolated behind flags
 
-### Phase 5: System Hardening (optional/deferrable)
-**Rationale:** Worker process lifecycle (heartbeats, PID tracking, stale detection) is the only feature with no strong dependency chain. It can be deferred entirely (recommended) or built after Phase 4 if worker stalls become a real problem in practice.
-**Delivers:** Worker heartbeat monitoring, PID tracking in colony state, stale worker cleanup during execution.
-**Addresses:** A7 (worker lifecycle).
-**Avoids:** Pitfall 6 (PID recycling) by using process groups instead of individual PIDs.
+### Phase 5: Queen-Led Build Recovery
+**Rationale:** Wrapper-layer changes that consume the infrastructure from Phases 1-4. The Queen agent now reads recovery metadata from dispatch results and executes recovery tiers 1-3 (retry, reassign, escalate) automatically during build waves.
+**Delivers:** Modified `build-wave.md` Step 5.2 with recovery logic; updated Queen agent with recovery-aware spawning; `/ant-queen-log` command for reviewing decisions
+**Addresses:** Full Category A (Auto-Recovery Loop), queen Fixer coordination, transparency/audit trail
+**Avoids:** Pitfall 6 (queen vs Fixer conflict) -- queen is sole recovery coordinator, Fixer checks recovery lock
+**Modifies:** `build-wave.md`, `.claude/agents/ant/aether-queen.md`, `.opencode/agents/aether-queen.md`
+**Risk:** Medium -- changes wrapper behavior, but Go runtime is the safety net
+
+### Phase 6: Output Filtering and Phase Summary
+**Rationale:** Pure presentation layer, no dependencies on recovery/gating logic beyond reading their output. This is the polish phase that makes queen authority feel clean rather than noisy.
+**Delivers:** `renderPhaseSummary()` and `renderSmartGateSummary()` in `cmd/codex_visuals.go`; `codexContinueSummary` struct; `codexBuildSummary` struct; filtered wrapper markdown
+**Addresses:** C1 (Output Severity Filtering), C2 (Phase Completion Summary)
+**Avoids:** Pitfall 3 (hiding critical info) via two-tier output, `--verbose` default, never-filter keywords, persistent full output
+**Modifies:** `cmd/codex_visuals.go`, `cmd/codex_build.go`, `cmd/codex_continue.go`, wrapper markdown
+**Risk:** Low -- additive, existing detailed output remains available via `--verbose`
 
 ### Phase Ordering Rationale
 
-- Phase 1 first because provenance validation is the trust foundation everything else builds on, and privacy gate is a security prerequisite.
-- Phase 2 groups gate self-healing and Oracle/init improvements -- they are independent of each other but both depend on Phase 1 gate infrastructure.
-- Phase 3 introduces the learning pipeline foundation -- evidence rules need provenance, unified memory is the API layer for all B features.
-- Phase 4 is the SQLite heavy-lift -- deferred as late as possible because it introduces the only new dependency and has the highest complexity.
-- Phase 5 is explicitly optional/deferrable because current wall-clock timeouts are adequate for most use cases.
+- Phases 1 and 2 are pure infrastructure with no behavior changes -- they create the foundation
+- Phase 3 is the highest-value phase (autonomous recovery becomes real) but depends on 1 and 2
+- Phase 4 splits continue into plan/finalize, enabling the queen-led flow that Phase 5 consumes
+- Phase 5 wires everything together in the wrapper layer
+- Phase 6 is presentation polish that can ship anytime after Phase 3
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 2 (Fixer caste):** Agent prompt design for gate investigation is novel -- no existing agent does root-cause analysis on gate failures. Needs prompt engineering research.
-- **Phase 4 (SQLite integration):** FTS5 external content pattern with sync triggers needs validation against modernc.org/sqlite specifics. Schema migration strategy across Aether versions needs design.
-- **Phase 4 (Pheromone skills):** Auto-creating skills from task context requires a template design for procedural memory. No existing pattern in the codebase for this.
+- **Phase 3:** Gate recovery strategies need per-gate research -- what exactly constitutes "auto-recoverable" for each of the 11 gates requires understanding each gate's failure semantics in detail
+- **Phase 5:** Queen agent prompt engineering for recovery decisions -- how to give the queen enough context to make good recovery choices without exceeding her context budget
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Recovery foundation):** Provenance validation, gate persistence, and privacy scanning all extend existing patterns with well-understood implementations.
-- **Phase 3 (Learning foundation):** Evidence rules are threshold checks on existing gate/claim data. Unified memory API is CRUD over existing JSON files.
+- **Phase 1:** Struct field additions and static map lookups -- well-understood
+- **Phase 2:** Data model extensions with `omitempty` -- standard Go pattern
+- **Phase 4:** CLI flag additions and code path splitting -- standard cobra pattern
+- **Phase 6:** Output formatting and rendering -- standard visual system pattern
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | `modernc.org/sqlite` v1.42.1 verified via Context7 docs, pkg.go.dev, and community sources. FTS5 support confirmed. Pure Go eliminates CGO concerns. |
-| Features | HIGH | All 31 work packages mapped to existing code with specific integration points (file paths, line numbers). No feature requires unknown technology. |
-| Architecture | HIGH | Based on direct analysis of 316 cmd/*.go files and 12 pkg/ packages. All integration surfaces identified with specific hook points. Additive pattern verified. |
-| Pitfalls | HIGH | All 15 pitfalls derived from direct codebase analysis. False negatives in provenance validation, Oracle confidence gaming, and Fixer loops are verified risks with concrete reproduction paths. |
+| Stack | HIGH | All findings from direct source code inspection; zero new dependencies means no integration risk |
+| Features | HIGH | Every feature maps to existing infrastructure; confidence backed by Erlang/OTP, LangGraph, Google ADK, CrewAI patterns |
+| Architecture | HIGH | Authority model (queen advises, runtime decides) preserves existing wrapper-runtime contract; all integration points identified with line numbers |
+| Pitfalls | HIGH | All 12 pitfalls derived from direct codebase analysis of the actual files that will be modified; prevention strategies reference specific existing functions |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **SQLite FTS5 with modernc.org/sqlite specifically:** FTS5 is confirmed for SQLite generally, but the exact behavior of external content tables and sync triggers with the modernc.org/sqlite pure-Go driver should be validated with a quick spike in Phase 4 planning.
-- **Fixer caste prompt design:** No existing agent performs automated gate failure investigation. The prompt engineering for root-cause analysis, fix proposal, and verification is uncharted territory for Aether. Prototype during Phase 2 planning.
-- **Context capsule size under triple injection:** Colony-prime (8K) + skills (8K) + learned context (proposed 2K) = 18K chars of injected context. Research recommends a 20K total budget, but the actual impact on worker quality needs validation during Phase 4 when hive recall is wired into colony-prime.
-- **Worktree mode provenance:** All four research files identify worktree parallel mode as a provenance risk. The fix (validate against worktree root, re-validate after sync-back) is straightforward but needs explicit test coverage.
+- **Gate-specific recovery strategies (Phase 3):** Research identified that each gate has different failure semantics, but the exact recovery strategy per gate needs to be defined during Phase 3 planning. The classification map provides the framework, but "what does auto-recovery look like for `tests_pass` vs `implementation_evidence`?" needs phase-level detail.
+- **Queen context budget tuning (Phase 5):** Research recommends 12K chars for queen coordination context, but the exact contents and trim order need to be validated empirically during implementation.
+- **Recovery budget defaults (Phase 3):** Research suggests max 3 auto-recovery attempts per phase, but the right number depends on colony size and phase complexity. Should be configurable with sensible defaults.
+- **Watcher veto threshold in queen-led mode:** Research suggests lowering from 7 to 5, but this needs user testing. The threshold should be configurable via queen autonomy level.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis: 316 `cmd/*.go` files, 12 `pkg/` packages (2026-05-01)
-- `pkg/memory/trust.go` -- Trust scoring engine (40/35/25 weighted, 7 tiers, half-life)
-- `cmd/codex_build_finalize.go` -- Build-finalize path (lines 144-457)
-- `cmd/codex_continue_finalize.go` -- Continue-finalize path (lines 115-226)
-- `cmd/oracle_loop.go` -- Oracle RALF loop with confidence tracking
-- `cmd/gate.go` -- Gate system with recovery templates (lines 1-700)
-- `cmd/circuit_breaker.go` -- Circuit breaker with per-worker tracking
-- `cmd/hive.go` -- Existing Hive Brain (cross-colony wisdom in JSON)
-- `pkg/events/bus.go` -- Event bus with pub/sub and JSONL persistence
-- `pkg/codex/process_tracker.go` -- Worker process tracking
-- `pkg/storage/storage.go` -- Atomic file operations and file locking
-- `pkg/codex/process_group_unix.go` -- Process group management (Setpgid, SIGTERM/SIGKILL)
-- `cmd/security_cmds.go` -- Existing check-antipattern scanner (6 patterns)
-- `cmd/skills.go` -- Skill system (parse, index, detect, match, inject, diff)
-- `.planning/PROJECT.md` -- v1.13 requirements (AAC-001 through AAC-031, REC-LOOP-01)
+- Aether source code: `cmd/gate.go`, `cmd/circuit_breaker.go`, `cmd/fixer_dispatch.go`, `cmd/immune.go`, `cmd/autopilot.go`, `cmd/codex_dispatch_contract.go`, `cmd/codex_build.go`, `cmd/codex_continue.go`, `cmd/colony_prime_context.go`, `cmd/codex_visuals.go`, `cmd/recovery.go` (new)
+- Aether source code: `pkg/codex/dispatch.go`, `pkg/codex/worker.go`, `pkg/codex/process_tracker.go`, `pkg/colony/colony.go`, `pkg/colony/state_machine.go`, `pkg/storage/storage.go`
+- Aether playbooks: `.aether/docs/command-playbooks/build-wave.md`, `.aether/docs/command-playbooks/continue-gates.md`
+- Aether agents: `.claude/agents/ant/aether-queen.md`, `.claude/agents/ant/aether-fixer.md`
+- Erlang/OTP Supervisor Behaviour (erlang.org/doc/apps/stdlib/supervisor.html) -- bounded restart patterns
 
 ### Secondary (MEDIUM confidence)
-- modernc.org/sqlite: Context7 `/modernc-org/sqlite` docs, pkg.go.dev (v1.42.1)
-- SQLite FTS5 documentation: https://www.sqlite.org/fts5.html
-- Secret scanning patterns: Gitleaks (https://github.com/gitleaks/gitleaks), TruffleHog
-- SQLite WAL mode concurrency: Reddit r/sqlite, Stack Overflow, Tessl Registry best practices
+- Google ADK Multi-Agent Patterns (developers.googleblog.com, 2025-12-16) -- coordinator pattern, human-in-the-loop
+- LangGraph Multi-Agent Patterns (langchain-ai.github.io/langgraph/concepts/multi_agent/) -- retryable vs non-retryable exceptions
+- CrewAI Hierarchical Process (docs.crewai.com/en/learn/hierarchical-process) -- result validation
+- OpenAI Swarm Handoff Patterns (github.com/openai/swarm) -- experimental but relevant
+- AutoGen Error Handling (github.com/microsoft/autogen) -- typed state transitions
+- EAGER: Efficient Failure Management (arxiv.org/abs/2603.21522, IJCAI 2025) -- historical failure patterns
+- Error Cascades in Multi-Agent Systems (arxiv.org/html/2603.04474v1) -- noise amplification
+- RCAFlow: Hierarchical Planning (ojs.aaai.org, AAAI) -- multi-agent noise reduction
+- Agent Response Filtering -- Upsonic AI (upsonic.ai/lexicon/agent-response-filtering) -- over-filtering risks
+- Establishing Trust in AI Agents -- Medium -- monitoring, control layers
+- Agentic AI Security: Threats, Defenses, Evaluation -- arXiv 2510.23883v1 -- output filtering vs sandboxing
+
+### Tertiary (LOW confidence)
+- None -- all sources are either direct codebase analysis (HIGH) or established framework documentation/published research (MEDIUM)
 
 ---
-*Research completed: 2026-05-01*
+*Research completed: 2026-05-03*
 *Ready for roadmap: yes*
