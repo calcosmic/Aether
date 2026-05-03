@@ -281,7 +281,11 @@ Plans:
   1. When a worker fails with a recoverable classification, the queen automatically retries up to the per-phase budget (default 3) before escalating to the user
   2. On worker failure, the failed task is reassigned to a same-caste peer with available capacity before a new worker is created
   3. When a gate failure occurs during continue, the Fixer agent is dispatched automatically to attempt repair -- the user sees the Fixer was dispatched and the outcome, without being asked to trigger it manually
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 96-01-PLAN.md -- Core orchestrator function with classification-dependent sequences, RecoveryBudget, and comprehensive unit tests
+- [ ] 96-02-PLAN.md -- Wire orchestrator into build finalize and continue finalize with integration tests
 
 ### Phase 97: Queen-Led Continue
 **Goal**: The continue command splits into a read-only plan-only phase (queen evaluates gates, decides actions) and a finalize phase (queen executes approved actions), with the queen operating as a single-invocation coordinator that respects the circuit breaker.
@@ -326,7 +330,7 @@ Plans:
 | 93. Gate Classification Infrastructure | v1.14 | 1 plan | Planning complete | - |
 | 94. Recovery Data Model | v1.14 | 2 plans | Planning complete | - |
 | 95. Smart Gate Pipeline | v1.14 | 2 plans + gap closure | Complete | 2026-05-03 |
-| 96. Auto-Recovery Orchestrator | v1.14 | 0 | Not started | - |
+| 96. Auto-Recovery Orchestrator | v1.14 | 2 plans | Planning complete | - |
 | 97. Queen-Led Continue | v1.14 | 0 | Not started | - |
 | 98. Queen Wave Lifecycle | v1.14 | 0 | Not started | - |
 | 99. Output Filtering & Phase Summary | v1.14 | 0 | Not started | - |
