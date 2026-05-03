@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1353,5 +1354,320 @@ func TestGateAutoResolveCmdTable(t *testing.T) {
 	}
 	if !strings.Contains(output, "complexity") {
 		t.Errorf("expected table output to contain 'complexity', got: %s", output)
+	}
+}
+
+// --- Phase 95 Plan 02: Integration tests for auto-resolve in finalize flow ---
+
+// TestContinueFinalizeAutoResolve_AllSoftBlockResolved verifies that when all failed gates
+// are soft_block and auto-resolvable at standard depth, the finalize flow would advance.
+func TestContinueFinalizeAutoResolve_AllSoftBlockResolved(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "verification_steps_passed", Passed: true},
+			{Name: "implementation_evidence", Passed: true},
+			{Name: "operational_evidence", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed"},
+	}
+
+	// Write initial gate results (simulating finalize persistence before auto-resolve)
+	phaseGateResults := []GateCheckResult{
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "verification_steps_passed", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "implementation_evidence", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "operational_evidence", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "auditor", Status: "failed", Detail: "quality check failed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if err := gateResultsWritePhase(1, phaseGateResults); err != nil {
+		t.Fatalf("failed to write initial gate results: %v", err)
+	}
+
+	// Run auto-resolve at standard depth
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if !updated.Passed {
+		t.Error("expected report.Passed=true after auto-resolving all soft_block gates at standard depth")
+	}
+	if len(autoResolved) != 1 || autoResolved[0] != "auditor" {
+		t.Errorf("expected auditor resolved, got %v", autoResolved)
+	}
+	if len(updated.BlockingIssues) != 0 {
+		t.Errorf("expected no remaining blockers, got %v", updated.BlockingIssues)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_MixedHardBlockAndSoftBlock verifies that hard_block gates
+// still block even when soft_block gates are auto-resolved.
+func TestContinueFinalizeAutoResolve_MixedHardBlockAndSoftBlock(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "gatekeeper", Passed: false, Detail: "security CVE found"},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+			{Name: "complexity", Passed: false, Detail: "complexity threshold exceeded"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"security CVE found", "quality check failed", "complexity threshold exceeded"},
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	// Hard block gate should still block
+	if updated.Passed {
+		t.Error("expected report.Passed=false -- gatekeeper (hard_block) should remain")
+	}
+	// Soft block gates should be resolved
+	if len(autoResolved) != 2 {
+		t.Errorf("expected 2 soft_block gates resolved, got %v", autoResolved)
+	}
+	// Only hard_block issue should remain
+	if len(updated.BlockingIssues) != 1 {
+		t.Errorf("expected 1 remaining blocker (gatekeeper), got %v", updated.BlockingIssues)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_HeavyDepthBlocksAutoResolve verifies that at heavy depth,
+// no soft_block gates are auto-resolved (multiplier 0.0).
+func TestContinueFinalizeAutoResolve_HeavyDepthBlocksAutoResolve(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed"},
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "heavy")
+
+	if updated.Passed {
+		t.Error("expected report.Passed=false at heavy depth (no auto-resolve)")
+	}
+	if len(autoResolved) != 0 {
+		t.Errorf("expected no gates resolved at heavy depth, got %v", autoResolved)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_AnnotationPersisted verifies that auto-resolved gates
+// are annotated in the per-phase gate-results file.
+func TestContinueFinalizeAutoResolve_AnnotationPersisted(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Write initial gate results
+	phaseGateResults := []GateCheckResult{
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "auditor", Status: "failed", Detail: "quality check failed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if err := gateResultsWritePhase(1, phaseGateResults); err != nil {
+		t.Fatalf("failed to write initial gate results: %v", err)
+	}
+
+	// Run auto-resolve
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed"},
+	}
+	_, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if len(autoResolved) != 1 {
+		t.Fatalf("expected 1 gate resolved, got %v", autoResolved)
+	}
+
+	// Annotate the resolved gate (simulating what finalize does)
+	err = annotateGateResult(1, "auditor", QueenAnnotation{
+		Decision:     "auto-resolved",
+		Rationale:    "soft_block gate auto-resolved at standard depth",
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		QueenVersion: "1.0.27",
+	})
+	if err != nil {
+		t.Fatalf("failed to annotate gate result: %v", err)
+	}
+
+	// Read back and verify annotation persisted
+	results, err := gateResultsReadPhase(1)
+	if err != nil {
+		t.Fatalf("failed to read gate results: %v", err)
+	}
+
+	found := false
+	for _, r := range results {
+		if r.Name == "auditor" {
+			found = true
+			if r.QueenAnnotation == nil {
+				t.Fatal("expected QueenAnnotation on auditor gate, got nil")
+			}
+			if r.QueenAnnotation.Decision != "auto-resolved" {
+				t.Errorf("expected decision 'auto-resolved', got %q", r.QueenAnnotation.Decision)
+			}
+			// Verify original fields preserved
+			if r.Detail != "quality check failed" {
+				t.Errorf("expected original detail preserved, got %q", r.Detail)
+			}
+		}
+	}
+	if !found {
+		t.Error("auditor gate not found in results")
+	}
+}
+
+// TestContinueFinalizeAutoResolve_RecoveryLogWritten verifies that recovery log entries
+// can be written for auto-resolved gates (pattern verification).
+func TestContinueFinalizeAutoResolve_RecoveryLogWritten(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	now := time.Now().UTC()
+
+	// Simulate the finalize flow writing recovery entries after auto-resolve
+	entries := []RecoveryLogEntry{
+		{
+			ID: fmt.Sprintf("auto-resolve-%s-%d-%s", "auditor", 1, now.Format("20060102-150405")),
+			Failure: FailureRecord{
+				WorkerName:     "",
+				TaskID:         "",
+				Caste:          "",
+				Phase:          1,
+				Status:         "failed",
+				Classification: Recoverable,
+				FailureType:    Transient,
+				ErrorMessage:   "soft_block gate \"auditor\" failed",
+				Timestamp:      now.Format(time.RFC3339),
+			},
+			ActionTaken:   "auto-resolved",
+			Outcome:       "gate threshold met -- auto-resolved by queen",
+			AttemptNumber: 1,
+			Timestamp:     now.Format(time.RFC3339),
+			Detail:        "gate \"auditor\" auto-resolved at depth standard",
+		},
+	}
+
+	if err := recoveryLogWritePhase(1, entries); err != nil {
+		t.Fatalf("failed to write recovery log: %v", err)
+	}
+
+	// Read back and verify
+	file, err := recoveryLogReadPhase(1)
+	if err != nil {
+		t.Fatalf("failed to read recovery log: %v", err)
+	}
+
+	if len(file.Entries) != 1 {
+		t.Fatalf("expected 1 recovery log entry, got %d", len(file.Entries))
+	}
+	if file.Entries[0].ActionTaken != "auto-resolved" {
+		t.Errorf("expected action 'auto-resolved', got %q", file.Entries[0].ActionTaken)
+	}
+	if file.Entries[0].Failure.Classification != Recoverable {
+		t.Errorf("expected recoverable classification, got %s", file.Entries[0].Failure.Classification)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_AllPassNoAutoResolve verifies that when all gates pass,
+// auto-resolve is not invoked and behavior is unchanged.
+func TestContinueFinalizeAutoResolve_AllPassNoAutoResolve(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "verification_steps_passed", Passed: true},
+			{Name: "implementation_evidence", Passed: true},
+			{Name: "operational_evidence", Passed: true},
+		},
+		Passed:         true,
+		BlockingIssues: nil,
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if !updated.Passed {
+		t.Error("expected report.Passed=true when all gates already pass")
+	}
+	if len(autoResolved) != 0 {
+		t.Errorf("expected no auto-resolved gates when all pass, got %v", autoResolved)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_LightDepthMostAggressive verifies that light depth
+// resolves all 6 soft_block gates.
+func TestContinueFinalizeAutoResolve_LightDepthMostAggressive(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+			{Name: "complexity", Passed: false, Detail: "complexity exceeded"},
+			{Name: "tdd_evidence", Passed: false, Detail: "missing test"},
+			{Name: "anti_pattern", Passed: false, Detail: "anti-pattern found"},
+			{Name: "verification_loop", Passed: false, Detail: "verification failed"},
+			{Name: "spawn_gate", Passed: false, Detail: "spawn failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed", "complexity exceeded", "missing test", "anti-pattern found", "verification failed", "spawn failed"},
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "light")
+
+	if !updated.Passed {
+		t.Error("expected report.Passed=true at light depth with only soft_block gates")
+	}
+	if len(autoResolved) != 6 {
+		t.Errorf("expected 6 soft_block gates resolved at light depth, got %d: %v", len(autoResolved), autoResolved)
 	}
 }
