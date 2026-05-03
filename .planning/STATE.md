@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.13
-milestone_name: Recovery Hardening & Hive Learning
-status: ready_to_plan
-stopped_at: Phase 92 context gathered
-last_updated: "2026-05-02T17:02:40.911Z"
-last_activity: 2026-05-02
+milestone: v1.14
+milestone_name: Queen Authority
+status: planning
+last_updated: "2026-05-03T11:44:13.834Z"
+last_activity: 2026-05-03
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 25
-  completed_plans: 23
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,12 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-01)
 
 ## Current Position
 
-Phase: 90
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-02
-
-Progress: [█████████░] 92%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-03 — Milestone v1.14 started
 
 ## Performance Metrics
 
