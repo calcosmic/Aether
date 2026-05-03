@@ -240,7 +240,10 @@ See `.planning/milestones/v1.13-ROADMAP.md` for full phase details.
   1. Running `aether gate-classify` (or equivalent subcommand) prints all 11 gates with their classification and a brief rationale
   2. Security gates (gatekeeper) and watcher veto are hardcoded as hard_block and no configuration can change that classification
   3. When a gate finding is annotated with a queen decision, the original finding text, fix hint, and recovery options remain intact in the audit trail
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 93-01-PLAN.md -- Classification registry, QueenAnnotation struct, gate-classify CLI command, and tests
 
 ### Phase 94: Recovery Data Model
 **Goal**: Worker failures have a deterministic classification system (recoverable, requires-attempt, blocking), transient failures are distinguished from systemic failures, and every recovery action is logged to a phase-scoped file.
@@ -312,7 +315,7 @@ See `.planning/milestones/v1.13-ROADMAP.md` for full phase details.
 | 90. Learning Foundation | v1.13 | 4/4 | Complete | 2026-05-01 |
 | 91. Hive Intelligence | v1.13 | 5/5 | Complete | 2026-05-03 |
 | 92. System Hardening & Validation | v1.13 | 5/5 | Complete | 2026-05-03 |
-| 93. Gate Classification Infrastructure | v1.14 | 0 | Not started | - |
+| 93. Gate Classification Infrastructure | v1.14 | 1 plan | Planning complete | - |
 | 94. Recovery Data Model | v1.14 | 0 | Not started | - |
 | 95. Smart Gate Pipeline | v1.14 | 0 | Not started | - |
 | 96. Auto-Recovery Orchestrator | v1.14 | 0 | Not started | - |
