@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -155,6 +156,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	if err := persistExternalContinueHandoffs(root, phase.ID, plan.Dispatches, completion.workerResults()); err != nil {
+		return nil, state, phase, nil, nil, false, err
+	}
 
 	verificationTimeout := continueFinalizeVerificationTimeout(plan, verificationTimeoutOverride)
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, plan.SkipWatchers)
@@ -220,13 +224,114 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, err
 	}
 
+	// --- Auto-resolve soft_block gates (Phase 95, GATE-03) ---
+	// Per D-02: auto-resolve runs inside continue command, no new commands.
+	// Per D-04: only soft_block gates are auto-resolved.
 	if !gates.Passed {
-		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel)
-		if err != nil {
-			return nil, state, phase, nil, nil, false, err
+		resolveDepth := ""
+		if plan.ReviewDepth != "" {
+			resolveDepth = plan.ReviewDepth
 		}
-		runStatus = "blocked"
-		return result, blockedState, phase, nil, nil, false, nil
+		gates, autoResolved := autoResolveSoftBlockGates(phase.ID, gates, resolveDepth)
+
+		if len(autoResolved) > 0 {
+			// Re-persist gate results with auto-resolved annotations
+			phaseGateResults = nil
+			for _, c := range gates.Checks {
+				status := "passed"
+				if !c.Passed {
+					status = "failed"
+				}
+				entry := GateCheckResult{
+					Name:            c.Name,
+					Status:          status,
+					Detail:          c.Detail,
+					FixHint:         c.FixHint,
+					RecoveryOptions: c.RecoveryOptions,
+					Timestamp:       now.Format(time.RFC3339),
+				}
+				for _, resolved := range autoResolved {
+					if resolved == c.Name {
+						entry.QueenAnnotation = &QueenAnnotation{
+							Decision:     "auto-resolved",
+							Rationale:    fmt.Sprintf("soft_block gate %q auto-resolved at depth %s", c.Name, colony.NormalizeVerificationDepth(resolveDepth)),
+							Timestamp:    now.Format(time.RFC3339),
+							QueenVersion: "1.0.27",
+						}
+						break
+					}
+				}
+				phaseGateResults = append(phaseGateResults, entry)
+			}
+			_ = gateResultsWritePhase(phase.ID, phaseGateResults)
+
+			// Also update COLONY_STATE.json gate results
+			var updatedGateEntries []colony.GateResultEntry
+			for _, c := range gates.Checks {
+				updatedGateEntries = append(updatedGateEntries, colony.GateResultEntry{
+					Name:      c.Name,
+					Passed:    c.Passed,
+					Timestamp: now.Format(time.RFC3339),
+					Detail:    c.Detail,
+				})
+			}
+			_ = gateResultsWrite(updatedGateEntries)
+
+			// Log recovery actions (per RECV-06, using Phase 94 recovery log)
+			var recoveryEntries []RecoveryLogEntry
+			for idx, resolved := range autoResolved {
+				recoveryEntries = append(recoveryEntries, RecoveryLogEntry{
+					ID: fmt.Sprintf("auto-resolve-%s-%d-%s", resolved, phase.ID, now.Format("20060102-150405")),
+					Failure: FailureRecord{
+						WorkerName:     "",
+						TaskID:         "",
+						Caste:          "",
+						Phase:          phase.ID,
+						Status:         "failed",
+						Classification: Recoverable,
+						FailureType:    Transient,
+						ErrorMessage:   fmt.Sprintf("soft_block gate %q failed", resolved),
+						Timestamp:      now.Format(time.RFC3339),
+					},
+					ActionTaken:   "auto-resolved",
+					Outcome:       "gate threshold met -- auto-resolved by queen",
+					AttemptNumber: idx + 1,
+					Timestamp:     now.Format(time.RFC3339),
+					Detail:        fmt.Sprintf("gate %q auto-resolved at depth %s", resolved, colony.NormalizeVerificationDepth(resolveDepth)),
+				})
+			}
+			if len(recoveryEntries) > 0 {
+				existingLog, _ := recoveryLogReadPhase(phase.ID)
+				existingLog.Entries = append(existingLog.Entries, recoveryEntries...)
+				existingLog.Phase = phase.ID
+				_ = recoveryLogWritePhase(phase.ID, existingLog.Entries)
+			}
+		}
+
+		// Per D-03: if auto-resolve didn't clear all failures, dispatch Fixer for remaining soft_block gates
+		if !gates.Passed {
+			hasSoftBlockRemaining := false
+			for _, c := range gates.Checks {
+				if !c.Passed {
+					tier, _ := gateClassify(c.Name)
+					if tier == softBlock {
+						hasSoftBlockRemaining = true
+						break
+					}
+				}
+			}
+
+			if hasSoftBlockRemaining {
+				_ = dispatchFixer(phase.ID, "propose")
+			}
+
+			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel)
+			if err != nil {
+				return nil, state, phase, nil, nil, false, err
+			}
+			runStatus = "blocked"
+			return result, blockedState, phase, nil, nil, false, nil
+		}
 	}
 
 	finalizeReviewDepth := colony.VerificationDepthLight
@@ -427,6 +532,11 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		if !isTerminalExternalBuildStatus(status) {
 			return nil, fmt.Errorf("external continue result for %s has non-terminal status %q", dispatch.Name, result.Status)
 		}
+		if ok {
+			if err := codex.ValidateWorkerHandoff(result.Handoff); err != nil {
+				return nil, fmt.Errorf("external continue result for %s has invalid handoff: %w", dispatch.Name, err)
+			}
+		}
 		summary := strings.TrimSpace(result.Summary)
 		blockers := uniqueSortedStrings(result.Blockers)
 		if summary == "" && len(blockers) > 0 {
@@ -445,6 +555,47 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		})
 	}
 	return flow, nil
+}
+
+func persistExternalContinueHandoffs(root string, phaseNum int, dispatches []codexContinueExternalDispatch, results []codexContinueExternalDispatch) error {
+	resultByName := make(map[string]codexContinueExternalDispatch, len(results))
+	for _, result := range results {
+		if name := strings.TrimSpace(result.Name); name != "" {
+			resultByName[name] = result
+		}
+	}
+	for _, dispatch := range dispatches {
+		result, ok := resultByName[dispatch.Name]
+		if !ok {
+			continue
+		}
+		status := normalizeExternalBuildStatus(result.Status)
+		workerResult := &codex.WorkerResult{
+			WorkerName: dispatch.Name,
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			Status:     status,
+			Summary:    result.Summary,
+			Handoff:    codex.NormalizeWorkerHandoff(root, result.Handoff),
+			Blockers:   result.Blockers,
+		}
+		if err := persistDispatchWorkerHandoff(codex.WorkerDispatch{
+			WorkerName: dispatch.Name,
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			Workflow:   "continue",
+			Phase:      phaseNum,
+			Wave:       dispatch.Wave,
+			Root:       root,
+		}, codex.DispatchResult{
+			WorkerName:   dispatch.Name,
+			Status:       status,
+			WorkerResult: workerResult,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateExternalContinueIdentity(dispatch codexContinueExternalDispatch, result codexContinueExternalDispatch) error {
@@ -536,9 +687,10 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", step.Name, summary))
 		}
 	}
-	if !skipMissing && reviewDepth != colony.VerificationDepthLight && len(report.Workers) != len(codexContinueReviewSpecs) {
+	expectedReviewers := expectedContinueReviewWorkerCount(reviewDepth)
+	if !skipMissing && expectedReviewers > 0 && len(report.Workers) != expectedReviewers {
 		report.Passed = false
-		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", len(codexContinueReviewSpecs), len(report.Workers)))
+		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", expectedReviewers, len(report.Workers)))
 	}
 	report.BlockingIssues = uniqueSortedStrings(blockers)
 	report.Passed = report.Passed && len(report.BlockingIssues) == 0
@@ -548,6 +700,17 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 		report.BlockingIssues = uniqueSortedStrings(warnings)
 	}
 	return report
+}
+
+func expectedContinueReviewWorkerCount(reviewDepth colony.VerificationDepth) int {
+	switch colony.NormalizeVerificationDepth(string(reviewDepth)) {
+	case colony.VerificationDepthLight:
+		return 0
+	case colony.VerificationDepthStandard:
+		return 1
+	default:
+		return len(codexContinueReviewSpecs)
+	}
 }
 
 func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review *codexContinueReviewReport, reviewReportRel string, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string) (map[string]interface{}, colony.ColonyState, error) {
