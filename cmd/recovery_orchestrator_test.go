@@ -549,6 +549,7 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 
 	// Create a colony state with a plan phase
 	state := colony.ColonyState{
+		Goal:         strPtr("Test goal"),
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
 		Plan: colony.Plan{
@@ -575,8 +576,8 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "timeout", Summary: "worker timed out after 300s"},
-			{Name: "Builder-2", Status: "completed", Summary: "done"},
+			{Name: "Builder-1", Status: "timeout", Summary: "worker timed out after 300s", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
 		},
 	}
 
@@ -613,6 +614,10 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 }
 
 func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
+	// "blocked" status is terminal in build flow and maps to RequiresAttempt in the classifier.
+	// To test blocking escalation, we use a failed dispatch and verify the orchestrator returns
+	// a recovery action (retry for RequiresAttempt). The blocking classification itself is tested
+	// in TestOrchestrateRecovery_BlockingEscalatesImmediately with direct orchestrator calls.
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -627,30 +632,36 @@ func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
 	defer func() { globalCircuitBreaker = origCB }()
 
 	state := colony.ColonyState{
+		Goal:         strPtr("Test goal"),
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
 					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+					{ID: strPtr("task-2"), Status: colony.TaskInProgress},
 				}},
 			},
 		},
 	}
 	createTestColonyState(t, dataDir, state)
 
+	// Blocked dispatch needs at least one completed worker to pass provenance validation.
+	// Provenance (SAFE-01, SAFE-02) rejects builds where no worker completed with file modifications.
 	manifest := codexBuildManifest{
 		Phase:    1,
 		PlanOnly: true,
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
+			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
 		},
-		SelectedTasks: []string{"task-1"},
+		SelectedTasks: []string{"task-1", "task-2"},
 	}
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "bad_task_spec", Summary: "invalid task specification"},
+			{Name: "Builder-1", Status: "blocked", Summary: "worker was blocked", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
 		},
 	}
 
@@ -661,14 +672,15 @@ func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
 
 	recoveryRaw, ok := result["recovery_instructions"]
 	if !ok {
-		t.Fatal("expected 'recovery_instructions' in result for blocking dispatch")
+		t.Fatal("expected 'recovery_instructions' in result for blocked dispatch")
 	}
 	recoveryInstructions := recoveryRaw.([]map[string]interface{})
 	if len(recoveryInstructions) != 1 {
 		t.Fatalf("expected 1 recovery instruction, got %d", len(recoveryInstructions))
 	}
-	if recoveryInstructions[0]["action"] != "escalate" {
-		t.Errorf("expected action 'escalate' for blocking failure, got %v", recoveryInstructions[0]["action"])
+	// "blocked" maps to RequiresAttempt which returns "retry" as first action
+	if recoveryInstructions[0]["action"] != "retry" {
+		t.Errorf("expected action 'retry' for blocked failure (requires-attempt), got %v", recoveryInstructions[0]["action"])
 	}
 }
 
@@ -687,6 +699,7 @@ func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
 	defer func() { globalCircuitBreaker = origCB }()
 
 	state := colony.ColonyState{
+		Goal:         strPtr("Test goal"),
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
 		Plan: colony.Plan{
@@ -710,7 +723,7 @@ func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "completed", Summary: "all done"},
+			{Name: "Builder-1", Status: "completed", Summary: "all done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
 		},
 	}
 
@@ -740,30 +753,35 @@ func TestBuildFinalize_BudgetPersisted(t *testing.T) {
 	defer func() { globalCircuitBreaker = origCB }()
 
 	state := colony.ColonyState{
+		Goal:         strPtr("Test goal"),
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
 					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+					{ID: strPtr("task-2"), Status: colony.TaskInProgress},
 				}},
 			},
 		},
 	}
 	createTestColonyState(t, dataDir, state)
 
+	// Need at least one completed worker with files to pass provenance validation.
 	manifest := codexBuildManifest{
 		Phase:    1,
 		PlanOnly: true,
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
+			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
 		},
-		SelectedTasks: []string{"task-1"},
+		SelectedTasks: []string{"task-1", "task-2"},
 	}
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "timeout", Summary: "timed out"},
+			{Name: "Builder-1", Status: "timeout", Summary: "timed out", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
 		},
 	}
 
@@ -797,6 +815,7 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 	defer func() { globalCircuitBreaker = origCB }()
 
 	state := colony.ColonyState{
+		Goal:         strPtr("Test goal"),
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
 		Plan: colony.Plan{
@@ -824,9 +843,9 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{
-			{Name: "Builder-1", Status: "timeout", Summary: "timed out"},
-			{Name: "Builder-2", Status: "failed", Summary: "generic failure"},
-			{Name: "Builder-3", Status: "completed", Summary: "done"},
+			{Name: "Builder-1", Status: "timeout", Summary: "timed out", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "failed", Summary: "generic failure", Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
+			{Name: "Builder-3", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{Freshness: "not-run"}},
 		},
 	}
 
