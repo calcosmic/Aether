@@ -1713,7 +1713,7 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	}
 
 	invoker := &codex.FakeInvoker{}
-	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3)
+	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false)
 	if err != nil {
 		t.Fatalf("execute dispatches: %v", err)
 	}

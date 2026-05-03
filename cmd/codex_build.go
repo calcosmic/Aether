@@ -125,6 +125,7 @@ type codexBuildOptions struct {
 	VerificationDepth       string
 	DispatchWorkers         bool
 	CircuitBreakerThreshold int
+	Verbose                 bool
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -387,7 +388,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if progress != nil {
 		progress.Advance("Dispatch")
 	}
-	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold)
+	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, playbooks, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold, options.Verbose)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -992,7 +993,7 @@ func buildTaskID(task colony.Task, idx int) string {
 	return fmt.Sprintf("task-%d", idx+1)
 }
 
-func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration, circuitBreakerThreshold int) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
+func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, playbooks []string, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration, circuitBreakerThreshold int, verbose bool) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
 	}
@@ -1034,6 +1035,9 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 
 	cb := NewCircuitBreaker(circuitBreakerThreshold)
+	// Per D-02/D-04: set verbose flag before dispatch so filtered functions work correctly
+	setBuildVerbose(verbose)
+
 	// Per D-09/D-12: queen owns the wave loop. Build calls queen once.
 	waveDispatchFn := func(ctx context.Context, waveDispatches []codex.WorkerDispatch, waveNum int) ([]codex.DispatchResult, error) {
 		return dispatchCodexBuildWorkers(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb)
@@ -1069,6 +1073,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			dispatches[idx].Duration = result.WorkerResult.Duration.Seconds()
 			dispatches[idx].Outputs = buildDispatchClaimOutputs(*result.WorkerResult)
 		}
+			// Per D-02/D-04: print raw worker output only in verbose mode
+			if result.WorkerResult != nil && result.WorkerResult.RawOutput != "" {
+				filteredFprintln(stdout, result.WorkerResult.RawOutput)
+			}
+
 		if result.Error != nil && len(dispatches[idx].Blockers) == 0 {
 			dispatches[idx].Blockers = []string{result.Error.Error()}
 		}
