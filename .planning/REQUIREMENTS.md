@@ -7,12 +7,12 @@
 
 ### Auto-Recovery
 
-- [ ] **RECV-01**: Queen classifies worker failures as recoverable, requires-attempt, or blocking using deterministic rules (not LLM inference)
+- [x] **RECV-01**: Queen classifies worker failures as recoverable, requires-attempt, or blocking using deterministic rules (not LLM inference)
 - [ ] **RECV-02**: Failed workers are automatically retried up to a configurable per-phase budget (default: 3 retries per phase) before escalating to user
 - [ ] **RECV-03**: On worker failure, queen redistributes the failed task to a peer worker with available capacity before creating a new worker
 - [ ] **RECV-04**: On gate failure during continue, queen dispatches the Fixer agent automatically to attempt repair before blocking advancement
-- [ ] **RECV-05**: Queen distinguishes transient failures (timeout, context overflow) from systemic failures (bad task spec, missing dependency) — transient failures retry, systemic failures escalate immediately
-- [ ] **RECV-06**: All auto-recovery actions are logged to a phase-scoped recovery log with original error, recovery action taken, and outcome
+- [x] **RECV-05**: Queen distinguishes transient failures (timeout, context overflow) from systemic failures (bad task spec, missing dependency) — transient failures retry, systemic failures escalate immediately
+- [x] **RECV-06**: All auto-recovery actions are logged to a phase-scoped recovery log with original error, recovery action taken, and outcome
 
 ### Smart Gates
 
@@ -61,12 +61,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RECV-01 | Phase 94 | Pending |
+| RECV-01 | Phase 94 | Complete |
 | RECV-02 | Phase 96 | Pending |
 | RECV-03 | Phase 96 | Pending |
 | RECV-04 | Phase 96 | Pending |
-| RECV-05 | Phase 94 | Pending |
-| RECV-06 | Phase 94 | Pending |
+| RECV-05 | Phase 94 | Complete |
+| RECV-06 | Phase 94 | Complete |
 | GATE-01 | Phase 93 | Pending |
 | GATE-02 | Phase 93 | Pending |
 | GATE-03 | Phase 95 | Pending |

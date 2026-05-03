@@ -209,7 +209,7 @@
 **Milestone Goal:** The queen coordinates phases autonomously -- she dispatches workers, monitors progress, auto-recovers from failures, and only escalates to you when she's genuinely stuck.
 
 - [x] **Phase 93: Gate Classification Infrastructure** - Classify all 11 gates as hard_block/soft_block/advisory with audit trail preservation (completed 2026-05-03)
-- [ ] **Phase 94: Recovery Data Model** - Create failure classification types and recovery logging structures
+- [x] **Phase 94: Recovery Data Model** - Create failure classification types and recovery logging structures (completed 2026-05-03)
 - [ ] **Phase 95: Smart Gate Pipeline** - Auto-resolve soft_block gates, configurable thresholds, never auto-resolve hard blocks
 - [ ] **Phase 96: Auto-Recovery Orchestrator** - Bounded retry, peer redistribution, automatic Fixer dispatch
 - [ ] **Phase 97: Queen-Led Continue** - Split continue into plan-only and finalize, single-invocation queen model
