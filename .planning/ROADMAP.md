@@ -210,7 +210,7 @@
 
 - [x] **Phase 93: Gate Classification Infrastructure** - Classify all 11 gates as hard_block/soft_block/advisory with audit trail preservation (completed 2026-05-03)
 - [x] **Phase 94: Recovery Data Model** - Create failure classification types and recovery logging structures (completed 2026-05-03)
-- [ ] **Phase 95: Smart Gate Pipeline** - Auto-resolve soft_block gates, configurable thresholds, never auto-resolve hard blocks
+- [x] **Phase 95: Smart Gate Pipeline** - Auto-resolve soft_block gates, configurable thresholds, never auto-resolve hard blocks
 - [ ] **Phase 96: Auto-Recovery Orchestrator** - Bounded retry, peer redistribution, automatic Fixer dispatch
 - [ ] **Phase 97: Queen-Led Continue** - Split continue into plan-only and finalize, single-invocation queen model
 - [ ] **Phase 98: Queen Wave Lifecycle** - End-to-end wave management with failure handling and advancement
@@ -271,7 +271,7 @@ Plans:
 
 Plans:
 - [x] 95-01-PLAN.md -- Auto-resolve threshold map, evaluation function, depth multiplier, annotation, and gate-auto-resolve CLI command
-- [ ] 95-02-PLAN.md -- Wire auto-resolve into continue finalize flow with recovery logging and Fixer dispatch
+- [x] 95-02-PLAN.md -- Wire auto-resolve into continue finalize flow with recovery logging and Fixer dispatch
 
 ### Phase 96: Auto-Recovery Orchestrator
 **Goal**: Failed workers are automatically retried within a per-phase budget, tasks are redistributed to peer workers before spawning new ones, and the Fixer agent is dispatched automatically on gate failures -- all bounded and logged.

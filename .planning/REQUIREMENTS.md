@@ -18,7 +18,7 @@
 
 - [ ] **GATE-01**: All 11 existing gates are classified as hard_block, soft_block, or advisory — hard_block gates always require user intervention, soft_block gates auto-resolve when safe, advisory gates log but never block
 - [ ] **GATE-02**: Security gates (gatekeeper CVE findings) and watcher veto are classified as hard_block and are NEVER auto-resolved, regardless of severity or configuration
-- [ ] **GATE-03**: Soft_block gates (auditor score below threshold, complexity gate, TDD evidence) auto-resolve after queen verifies the finding is non-critical and logs the decision
+- [x] **GATE-03**: Soft_block gates (auditor score below threshold, complexity gate, TDD evidence) auto-resolve after queen verifies the finding is non-critical and logs the decision
 - [ ] **GATE-04**: Gate severity thresholds (watcher veto score, auditor minimum score) are configurable via colony config, with documented safe defaults
 - [ ] **GATE-05**: Every gate auto-resolution preserves the original finding in an audit trail — original detail, fix hint, and recovery options are never deleted, only annotated with queen's decision
 
@@ -69,7 +69,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RECV-06 | Phase 94 | Complete |
 | GATE-01 | Phase 93 | Pending |
 | GATE-02 | Phase 93 | Pending |
-| GATE-03 | Phase 95 | Pending |
+| GATE-03 | Phase 95 | Complete |
 | GATE-04 | Phase 95 | Pending |
 | GATE-05 | Phase 93 | Pending |
 | OUT-01 | Phase 99 | Pending |
