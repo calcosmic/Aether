@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -644,6 +645,49 @@ var gateAutoResolveThresholds = map[string]gateAutoResolveThreshold{
 	"spawn_gate":        {0.0, "Missing spawns are recoverable by re-dispatch"},
 }
 
+// effectiveGateAutoResolveThresholds returns the threshold map with any
+// per-colony overrides from .planning/config.json applied (GATE-04).
+// Config key: workflow.gate_auto_resolve_thresholds -- a map of gate name to float64 threshold.
+// Missing or invalid overrides are silently ignored (defaults win).
+func effectiveGateAutoResolveThresholds() map[string]gateAutoResolveThreshold {
+	result := make(map[string]gateAutoResolveThreshold, len(gateAutoResolveThresholds))
+	for k, v := range gateAutoResolveThresholds {
+		result[k] = v
+	}
+
+	if store == nil {
+		return result
+	}
+	configPath := filepath.Join(filepath.Dir(store.BasePath()), "..", ".planning", "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return result
+	}
+	var cfg map[string]interface{}
+	if json.Unmarshal(data, &cfg) != nil {
+		return result
+	}
+	workflow, ok := cfg["workflow"].(map[string]interface{})
+	if !ok {
+		return result
+	}
+	overrides, ok := workflow["gate_auto_resolve_thresholds"].(map[string]interface{})
+	if !ok {
+		return result
+	}
+	for gateName, val := range overrides {
+		if threshold, ok := val.(float64); ok {
+			if existing, ok := result[gateName]; ok {
+				result[gateName] = gateAutoResolveThreshold{
+					Threshold: threshold,
+					Rationale: existing.Rationale,
+				}
+			}
+		}
+	}
+	return result
+}
+
 // autoResolveDepthMultiplier returns a multiplier applied to auto-resolve thresholds
 // based on the current verification depth. Per D-06: light depth = more aggressive,
 // heavy depth = more conservative.
@@ -687,6 +731,7 @@ func annotateGateResult(phaseNum int, gateName string, annotation QueenAnnotatio
 func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, reviewDepth string) (codexContinueGateReport, []string) {
 	depth := colony.NormalizeVerificationDepth(reviewDepth)
 	multiplier := autoResolveDepthMultiplier(depth)
+	thresholds := effectiveGateAutoResolveThresholds()
 
 	var autoResolved []string
 	var remainingBlockers []string
@@ -704,7 +749,7 @@ func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, revi
 			continue
 		}
 
-		threshold, ok := gateAutoResolveThresholds[check.Name]
+			threshold, ok := thresholds[check.Name]
 		if !ok {
 			// Unclassified soft_block gate (should not happen, but safe default)
 			remainingBlockers = append(remainingBlockers, check.Detail)
@@ -979,21 +1024,26 @@ func renderGateClassifyTable() {
 var gateAutoResolveCmd = &cobra.Command{
 	Use:          "gate-auto-resolve",
 	Short:        "Show gate auto-resolve thresholds and rationale",
-	Long:         "Display auto-resolve thresholds for soft_block gates.\nHard_block and advisory gates are never auto-resolved.\nUse --json for structured output.",
+	Long:         "Display auto-resolve thresholds for soft_block gates.\nHard_block and advisory gates are never auto-resolved.\nUse --json for structured output.\nThresholds can be overridden via .planning/config.json workflow.gate_auto_resolve_thresholds.",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jsonOutput, _ := cmd.Flags().GetBool("json")
+		thresholds := effectiveGateAutoResolveThresholds()
 		if jsonOutput {
-			outputOK(gateAutoResolveThresholds)
+			outputOK(thresholds)
 			return nil
 		}
-		renderGateAutoResolveTable()
+		renderGateAutoResolveTableWith(thresholds)
 		return nil
 	},
 }
 
 func renderGateAutoResolveTable() {
+	renderGateAutoResolveTableWith(effectiveGateAutoResolveThresholds())
+}
+
+func renderGateAutoResolveTableWith(thresholds map[string]gateAutoResolveThreshold) {
 	t := table.NewWriter()
 	t.AppendHeader(table.Row{"Gate", "Threshold", "Light", "Standard", "Heavy", "Rationale"})
 
@@ -1002,7 +1052,7 @@ func renderGateAutoResolveTable() {
 		gateAutoResolveThreshold
 	}
 	var entries []entry
-	for name, e := range gateAutoResolveThresholds {
+	for name, e := range thresholds {
 		entries = append(entries, entry{name, e})
 	}
 	sort.Slice(entries, func(i, j int) bool {

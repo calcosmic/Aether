@@ -1357,6 +1357,110 @@ func TestGateAutoResolveCmdTable(t *testing.T) {
 	}
 }
 
+// --- GATE-04 gap closure: configurable thresholds via config.json ---
+
+func TestEffectiveGateAutoResolveThresholds_Defaults(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	thresholds := effectiveGateAutoResolveThresholds()
+	if len(thresholds) != 6 {
+		t.Fatalf("expected 6 default thresholds, got %d", len(thresholds))
+	}
+	if thresholds["auditor"].Threshold != 0.0 {
+		t.Errorf("expected auditor threshold 0.0, got %f", thresholds["auditor"].Threshold)
+	}
+}
+
+func TestEffectiveGateAutoResolveThresholds_ConfigOverride(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	// Set up directory structure matching production: .aether/data is store base, .planning/ is config
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	s, err := storage.NewFileStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = s
+
+	// Create .planning/config.json with threshold override
+	planningDir := filepath.Join(tmpDir, ".planning")
+	os.MkdirAll(planningDir, 0o755)
+	configPath := filepath.Join(planningDir, "config.json")
+	configData := `{"workflow": {"gate_auto_resolve_thresholds": {"auditor": 0.5, "complexity": 1.0}}}`
+	if err := os.WriteFile(configPath, []byte(configData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	thresholds := effectiveGateAutoResolveThresholds()
+
+	// Overridden gates
+	if thresholds["auditor"].Threshold != 0.5 {
+		t.Errorf("expected auditor override 0.5, got %f", thresholds["auditor"].Threshold)
+	}
+	if thresholds["complexity"].Threshold != 1.0 {
+		t.Errorf("expected complexity override 1.0, got %f", thresholds["complexity"].Threshold)
+	}
+
+	// Non-overridden gates keep defaults
+	if thresholds["tdd_evidence"].Threshold != 0.0 {
+		t.Errorf("expected tdd_evidence default 0.0, got %f", thresholds["tdd_evidence"].Threshold)
+	}
+
+	// Rationale preserved from defaults
+	if thresholds["auditor"].Rationale == "" {
+		t.Error("expected auditor rationale to be preserved from defaults")
+	}
+}
+
+func TestEffectiveGateAutoResolveThresholds_InvalidOverride(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	s, err := storage.NewFileStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = s
+
+	// Config with invalid types and unknown gate names
+	planningDir := filepath.Join(tmpDir, ".planning")
+	os.MkdirAll(planningDir, 0o755)
+	configPath := filepath.Join(planningDir, "config.json")
+	configData := `{"workflow": {"gate_auto_resolve_thresholds": {"auditor": "not-a-number", "unknown_gate": 5.0}}}`
+	if err := os.WriteFile(configPath, []byte(configData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	thresholds := effectiveGateAutoResolveThresholds()
+
+	// Invalid type ignored, defaults win
+	if thresholds["auditor"].Threshold != 0.0 {
+		t.Errorf("expected auditor default 0.0 (invalid override ignored), got %f", thresholds["auditor"].Threshold)
+	}
+
+	// Unknown gate names ignored
+	if _, ok := thresholds["unknown_gate"]; ok {
+		t.Error("expected unknown_gate to not appear in thresholds")
+	}
+}
+
+func TestEffectiveGateAutoResolveThresholds_NoConfig(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	s, err := storage.NewFileStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = s
+
+	// No config.json exists -- defaults returned
+	thresholds := effectiveGateAutoResolveThresholds()
+	if len(thresholds) != 6 {
+		t.Fatalf("expected 6 defaults when no config, got %d", len(thresholds))
+	}
+}
+
 // --- Phase 95 Plan 02: Integration tests for auto-resolve in finalize flow ---
 
 // TestContinueFinalizeAutoResolve_AllSoftBlockResolved verifies that when all failed gates
