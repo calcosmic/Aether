@@ -325,7 +325,7 @@ Plans:
 | 92. System Hardening & Validation | v1.13 | 5/5 | Complete | 2026-05-03 |
 | 93. Gate Classification Infrastructure | v1.14 | 1 plan | Planning complete | - |
 | 94. Recovery Data Model | v1.14 | 2 plans | Planning complete | - |
-| 95. Smart Gate Pipeline | v1.14 | 1/2 plans | Executing | - |
+| 95. Smart Gate Pipeline | v1.14 | 2 plans + gap closure | Complete | 2026-05-03 |
 | 96. Auto-Recovery Orchestrator | v1.14 | 0 | Not started | - |
 | 97. Queen-Led Continue | v1.14 | 0 | Not started | - |
 | 98. Queen Wave Lifecycle | v1.14 | 0 | Not started | - |
