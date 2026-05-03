@@ -114,9 +114,11 @@ type RecoveryLogEntry struct {
 }
 
 // RecoveryLogFile wraps per-phase recovery log entries for persistence.
+// Phase 96 adds optional RecoveryBudget tracking (omitempty for backward compatibility).
 type RecoveryLogFile struct {
-	Phase   int                `json:"phase"`
-	Entries []RecoveryLogEntry `json:"entries"`
+	Phase          int                `json:"phase"`
+	Entries        []RecoveryLogEntry `json:"entries"`
+	RecoveryBudget *RecoveryBudget    `json:"recovery_budget,omitempty"`
 }
 
 // recoveryLogWritePhase persists recovery log entries to recovery-log-{N}.json.

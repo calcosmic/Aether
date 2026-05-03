@@ -24,7 +24,10 @@ func TestRecoveryBudget_ConsumeRetry(t *testing.T) {
 
 func TestRecoveryBudget_ConsumeExhaustion(t *testing.T) {
 	budget := newRecoveryBudget(1)
-	budget.consume("retry")
+	budget.TotalBudget = 1 // Override to test exhaustion
+	if !budget.consume("retry") {
+		t.Error("first consume should succeed")
+	}
 	if budget.consume("retry") {
 		t.Error("second consume should fail -- budget exhausted")
 	}
@@ -122,7 +125,6 @@ func TestOrchestrateRecovery_RecoverableSequence(t *testing.T) {
 
 	// Second call: retry done, should return peer_reassignment
 	ctx.RecoveryHistory = []RecoveryAction{outcome.Action}
-	ctx.Budget.consume("retry")
 	outcome = orchestrateRecovery(ctx)
 	if outcome.Action.Type != "peer_reassignment" {
 		t.Errorf("expected second action 'peer_reassignment', got %q", outcome.Action.Type)
@@ -133,7 +135,6 @@ func TestOrchestrateRecovery_RecoverableSequence(t *testing.T) {
 
 	// Third call: peer done, should return fixer_dispatch
 	ctx.RecoveryHistory = append(ctx.RecoveryHistory, outcome.Action)
-	ctx.Budget.consume("peer_reassignment")
 	outcome = orchestrateRecovery(ctx)
 	if outcome.Action.Type != "fixer_dispatch" {
 		t.Errorf("expected third action 'fixer_dispatch', got %q", outcome.Action.Type)
@@ -141,7 +142,6 @@ func TestOrchestrateRecovery_RecoverableSequence(t *testing.T) {
 
 	// Fourth call: fixer done, should return escalate
 	ctx.RecoveryHistory = append(ctx.RecoveryHistory, outcome.Action)
-	ctx.Budget.consume("fixer_dispatch")
 	outcome = orchestrateRecovery(ctx)
 	if outcome.Action.Type != "escalate" {
 		t.Errorf("expected fourth action 'escalate', got %q", outcome.Action.Type)
@@ -216,7 +216,6 @@ func TestOrchestrateRecovery_RequiresAttemptSequence(t *testing.T) {
 
 	// Second call: retry done, should return fixer_dispatch (no peer for requires-attempt)
 	ctx.RecoveryHistory = []RecoveryAction{outcome.Action}
-	ctx.Budget.consume("retry")
 	outcome = orchestrateRecovery(ctx)
 	if outcome.Action.Type != "fixer_dispatch" {
 		t.Errorf("expected second action 'fixer_dispatch', got %q", outcome.Action.Type)
@@ -224,7 +223,6 @@ func TestOrchestrateRecovery_RequiresAttemptSequence(t *testing.T) {
 
 	// Third call: fixer done, should escalate
 	ctx.RecoveryHistory = append(ctx.RecoveryHistory, outcome.Action)
-	ctx.Budget.consume("fixer_dispatch")
 	outcome = orchestrateRecovery(ctx)
 	if outcome.Action.Type != "escalate" {
 		t.Errorf("expected third action 'escalate', got %q", outcome.Action.Type)
@@ -379,7 +377,7 @@ func TestOrchestrateRecovery_FixerContext(t *testing.T) {
 	if !strings.Contains(outcome.Action.Detail, "retry") {
 		t.Errorf("fixer dispatch detail should mention retry history, got: %q", outcome.Action.Detail)
 	}
-	if !strings.Contains(outcome.Action.Detail, "peer_reassignment") {
+	if !strings.Contains(outcome.Action.Detail, "peer reassignment") {
 		t.Errorf("fixer dispatch detail should mention peer reassignment history, got: %q", outcome.Action.Detail)
 	}
 }
