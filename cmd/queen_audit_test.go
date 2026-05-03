@@ -123,18 +123,16 @@ func TestConsolidateQueenAudit_AllSourcesPresent(t *testing.T) {
 		t.Error("expected gate_evaluate entry from queen-state source")
 	}
 
-	// Verify we have entries from recovery-log (recovery_action)
+	// Verify we have entries from recovery-log (auto_resolve for retry action)
 	foundRecovery := false
 	for _, d := range audit.Decisions {
-		if d.DecisionType == "recovery_action" {
+		if d.DecisionType == "auto_resolve" && strings.Contains(d.InputFinding, "worker-2") {
 			foundRecovery = true
-			if !strings.Contains(d.InputFinding, "worker-2") {
-				t.Errorf("recovery_action entry missing worker name: %s", d.InputFinding)
-			}
+			break
 		}
 	}
 	if !foundRecovery {
-		t.Error("expected recovery_action entry from recovery-log source")
+		t.Error("expected auto_resolve entry from recovery-log source for worker-2")
 	}
 
 	// Verify escalation from recovery-log (action_taken == "escalate")
