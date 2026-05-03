@@ -20,25 +20,26 @@ import (
 )
 
 type codexBuildDispatch struct {
-	Stage         string   `json:"stage"`
-	Wave          int      `json:"wave,omitempty"`
-	ExecutionWave int      `json:"execution_wave,omitempty"`
-	Caste         string   `json:"caste"`
-	Name          string   `json:"name"`
-	Task          string   `json:"task"`
-	Status        string   `json:"status"`
-	Summary       string   `json:"summary,omitempty"`
-	TaskID        string   `json:"task_id,omitempty"`
-	TaskIndex     int      `json:"task_index,omitempty"`
-	DependsOn     []string `json:"depends_on,omitempty"`
-	Outputs       []string `json:"outputs,omitempty"`
-	Blockers      []string `json:"blockers,omitempty"`
-	Duration      float64  `json:"duration,omitempty"`
-	SkillSection  string   `json:"skill_section,omitempty"`
-	SkillCount    int      `json:"skill_count,omitempty"`
-	ColonySkills  int      `json:"colony_skill_count,omitempty"`
-	DomainSkills  int      `json:"domain_skill_count,omitempty"`
-	MatchedSkills []string `json:"matched_skills,omitempty"`
+	Stage          string   `json:"stage"`
+	Wave           int      `json:"wave,omitempty"`
+	ExecutionWave  int      `json:"execution_wave,omitempty"`
+	Caste          string   `json:"caste"`
+	Name           string   `json:"name"`
+	Task           string   `json:"task"`
+	Status         string   `json:"status"`
+	Summary        string   `json:"summary,omitempty"`
+	TaskID         string   `json:"task_id,omitempty"`
+	TaskIndex      int      `json:"task_index,omitempty"`
+	DependsOn      []string `json:"depends_on,omitempty"`
+	Outputs        []string `json:"outputs,omitempty"`
+	Blockers       []string `json:"blockers,omitempty"`
+	Duration       float64  `json:"duration,omitempty"`
+	SkillSection   string   `json:"skill_section,omitempty"`
+	SkillCount     int      `json:"skill_count,omitempty"`
+	ColonySkills   int      `json:"colony_skill_count,omitempty"`
+	DomainSkills   int      `json:"domain_skill_count,omitempty"`
+	MatchedSkills  []string `json:"matched_skills,omitempty"`
+	HandoffSection string   `json:"handoff_section,omitempty"`
 }
 
 type codexBuildTaskPlan struct {
@@ -50,27 +51,33 @@ type codexBuildTaskPlan struct {
 }
 
 type codexBuildManifest struct {
-	Phase           int                       `json:"phase"`
-	PhaseName       string                    `json:"phase_name"`
-	Goal            string                    `json:"goal,omitempty"`
-	Root            string                    `json:"root"`
-	PlanOnly        bool                      `json:"plan_only,omitempty"`
-	ParallelMode    string                    `json:"parallel_mode,omitempty"`
-	WaveExecution   []codexWaveExecutionPlan  `json:"wave_execution,omitempty"`
-	ExecutionPlan   []codexBuildExecutionPlan `json:"execution_plan,omitempty"`
-	ColonyDepth     string                    `json:"colony_depth"`
-	DispatchMode    string                    `json:"dispatch_mode,omitempty"`
-	GeneratedAt     string                    `json:"generated_at"`
-	State           string                    `json:"state"`
-	Checkpoint      string                    `json:"checkpoint"`
-	ClaimsPath      string                    `json:"claims_path"`
-	Playbooks       []string                  `json:"playbooks"`
-	WorkerBriefs    []string                  `json:"worker_briefs"`
-	Dispatches      []codexBuildDispatch      `json:"dispatches"`
-	SelectedTasks   []string                  `json:"selected_tasks,omitempty"`
-	Tasks           []codexBuildTaskPlan      `json:"tasks"`
-	SuccessCriteria []string                  `json:"success_criteria"`
-	ReviewDepth     string                    `json:"review_depth,omitempty"`
+	Phase                int                              `json:"phase"`
+	PhaseName            string                           `json:"phase_name"`
+	Goal                 string                           `json:"goal,omitempty"`
+	Root                 string                           `json:"root"`
+	PlanOnly             bool                             `json:"plan_only,omitempty"`
+	ParallelMode         string                           `json:"parallel_mode,omitempty"`
+	WaveExecution        []codexWaveExecutionPlan         `json:"wave_execution,omitempty"`
+	ExecutionPlan        []codexBuildExecutionPlan        `json:"execution_plan,omitempty"`
+	ColonyDepth          string                           `json:"colony_depth"`
+	DispatchMode         string                           `json:"dispatch_mode,omitempty"`
+	HostPlatform         string                           `json:"host_platform,omitempty"`
+	ExecutionOwner       string                           `json:"execution_owner,omitempty"`
+	WorkerDispatchOptIn  bool                             `json:"worker_dispatch_opt_in,omitempty"`
+	GeneratedAt          string                           `json:"generated_at"`
+	State                string                           `json:"state"`
+	Checkpoint           string                           `json:"checkpoint"`
+	ClaimsPath           string                           `json:"claims_path"`
+	Playbooks            []string                         `json:"playbooks"`
+	WorkerBriefs         []string                         `json:"worker_briefs"`
+	Dispatches           []codexBuildDispatch             `json:"dispatches"`
+	SelectedTasks        []string                         `json:"selected_tasks,omitempty"`
+	Tasks                []codexBuildTaskPlan             `json:"tasks"`
+	SuccessCriteria      []string                         `json:"success_criteria"`
+	ReviewDepth          string                           `json:"review_depth,omitempty"`
+	ProfileContract      codexWorkflowProfileContract     `json:"profile_contract,omitempty"`
+	QueenRecommendation  codexQueenWorkflowRecommendation `json:"queen_recommendation,omitempty"`
+	QueenExecutionPolicy codexQueenExecutionPolicy        `json:"queen_execution_policy,omitempty"`
 }
 
 type codexWaveExecutionPlan struct {
@@ -115,10 +122,16 @@ type codexBuildOptions struct {
 	Force                   bool
 	LightFlag               bool
 	HeavyFlag               bool
+	VerificationDepth       string
+	DispatchWorkers         bool
 	CircuitBreakerThreshold int
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	return runCodexBuildPlanOnlyWithOptions(root, phaseNum, selectedTaskIDs, codexBuildOptions{})
+}
+
+func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs []string, options codexBuildOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
 	}
@@ -141,15 +154,21 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, false); err != nil {
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
 	generatedAt := time.Now().UTC()
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	playbooks := codexBuildPlaybooks()
-	storedDepthStr := strings.TrimSpace(state.VerificationDepth)
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), false, false, storedDepthStr)
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   options.DispatchWorkers,
+	})
+	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
@@ -158,36 +177,85 @@ func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) 
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	attachBuildDispatchSkillAssignments(dispatches)
+	attachBuildDispatchContext(phase.ID, dispatches)
 
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
 	manifest := buildCodexBuildManifest(root, state, phase, "", "", playbooks, dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
+	profileContract := workflowProfileContract(reviewDepth)
+	queenRecommendation := recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases))
+	manifest.QueenExecutionPolicy = policy
 
 	result := map[string]interface{}{
-		"plan_only":         true,
-		"phase":             phaseNum,
-		"review_depth":      string(reviewDepth),
-		"phase_name":        phase.Name,
-		"state":             state.State,
-		"playbooks":         playbooks,
-		"next":              "spawn wrapper agents from dispatches, then record completion",
-		"currentTask":       phase.Tasks,
-		"dispatches":        codexBuildDispatchMaps(dispatches),
-		"dispatch_manifest": manifest,
-		"dispatch_count":    len(dispatches),
-		"wave_count":        len(waveExecution),
-		"parallel_waves":    countParallelWaveExecutionPlans(waveExecution),
-		"parallel_mode":     string(parallelMode),
-		"wave_execution":    waveExecution,
-		"dispatch_mode":     "plan-only",
-		"selected_tasks":    selectedTaskIDs,
+		"plan_only":              true,
+		"phase":                  phaseNum,
+		"review_depth":           string(reviewDepth),
+		"phase_name":             phase.Name,
+		"state":                  state.State,
+		"playbooks":              playbooks,
+		"next":                   "spawn wrapper agents from dispatches, then record completion",
+		"currentTask":            phase.Tasks,
+		"dispatches":             codexBuildDispatchMaps(dispatches),
+		"dispatch_manifest":      manifest,
+		"dispatch_count":         len(dispatches),
+		"wave_count":             len(waveExecution),
+		"parallel_waves":         countParallelWaveExecutionPlans(waveExecution),
+		"parallel_mode":          string(parallelMode),
+		"wave_execution":         waveExecution,
+		"dispatch_mode":          "plan-only",
+		"host_platform":          string(codex.DetectActivePlatform()),
+		"execution_owner":        buildExecutionOwner("plan-only", true),
+		"profile_contract":       profileContract,
+		"queen_recommendation":   queenRecommendation,
+		"queen_execution_policy": policy,
+		"selected_tasks":         selectedTaskIDs,
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "awaiting_wrapper_completion",
 		},
+	}
+	return result, state, phase, dispatches, nil
+}
+
+func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, options codexBuildOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, phaseNum, selectedTaskIDs, options)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	reviewDepth := reviewDepthFromResult(result)
+	profileContract := workflowProfileContract(reviewDepth)
+	queenRecommendation := recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases))
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   false,
+	})
+
+	if manifest, ok := result["dispatch_manifest"].(codexBuildManifest); ok {
+		manifest.DispatchMode = "queen-led"
+		manifest.ExecutionOwner = buildExecutionOwner("queen-led", true)
+		manifest.ProfileContract = profileContract
+		manifest.QueenRecommendation = queenRecommendation
+		manifest.QueenExecutionPolicy = policy
+		result["dispatch_manifest"] = manifest
+	}
+	result["queen_led"] = true
+	result["dispatch_mode"] = "queen-led"
+	result["execution_owner"] = buildExecutionOwner("queen-led", true)
+	result["profile_contract"] = profileContract
+	result["queen_recommendation"] = queenRecommendation
+	result["queen_execution_policy"] = policy
+	result["next"] = "Queen/main agent executes dispatch_manifest, then runs aether build-finalize"
+	result["wrapper_contract"] = map[string]interface{}{
+		"source_command":          "aether build <phase>",
+		"spawn_log_required":      true,
+		"spawn_complete_required": true,
+		"finalize_surface":        "awaiting_queen_completion",
+		"worker_dispatch_opt_in":  "--dispatch-workers",
 	}
 	return result, state, phase, dispatches, nil
 }
@@ -242,8 +310,14 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if depth == "" {
 		depth = "standard"
 	}
-	storedDepthStr := strings.TrimSpace(state.VerificationDepth)
-	reviewDepth := resolveVerificationDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, storedDepthStr)
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   true,
+	})
+	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 	playbooks := codexBuildPlaybooks()
 	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
@@ -276,6 +350,8 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	claimsRel := "last-build-claims.json"
 
+	cleanupStaleBuildAttemptArtifacts(phaseNum)
+
 	if err := store.SaveJSON(checkpointRel, state); err != nil {
 		return nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
 	}
@@ -290,7 +366,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		progress.Advance("Prepare")
 	}
 
-	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, "", selectedTaskIDs, reviewDepth)
+	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, "", selectedTaskIDs, reviewDepth, policy)
 	if err != nil {
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -322,7 +398,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	updatedState.State = colony.StateBUILT
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
-	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth); err != nil {
+	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy); err != nil {
 		return nil, err
 	}
 
@@ -370,27 +446,28 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	dispatchMaps := codexBuildDispatchMaps(dispatches)
 
 	result := map[string]interface{}{
-		"phase":          phaseNum,
-		"review_depth":   string(reviewDepth),
-		"phase_name":     updatedPhase.Name,
-		"state":          updatedState.State,
-		"playbooks":      playbooks,
-		"next":           "aether continue",
-		"currentTask":    updatedPhase.Tasks,
-		"dispatches":     dispatchMaps,
-		"dispatch_count": len(dispatches),
-		"wave_count":     waveCount,
-		"parallel_waves": parallelWaves,
-		"parallel_mode":  string(parallelMode),
-		"wave_execution": waveExecution,
-		"dispatch_mode":  mode,
-		"force":          options.Force,
-		"selected_tasks": selectedTaskIDs,
-		"checkpoint":     displayDataPath(checkpointRel),
-		"build_dir":      displayDataPath(buildDirRel),
-		"manifest":       displayDataPath(manifestRel),
-		"worker_briefs":  briefPaths,
-		"claims_path":    displayDataPath(claimsRel),
+		"phase":                  phaseNum,
+		"review_depth":           string(reviewDepth),
+		"phase_name":             updatedPhase.Name,
+		"state":                  updatedState.State,
+		"playbooks":              playbooks,
+		"next":                   "aether continue",
+		"currentTask":            updatedPhase.Tasks,
+		"dispatches":             dispatchMaps,
+		"dispatch_count":         len(dispatches),
+		"wave_count":             waveCount,
+		"parallel_waves":         parallelWaves,
+		"parallel_mode":          string(parallelMode),
+		"wave_execution":         waveExecution,
+		"dispatch_mode":          mode,
+		"queen_execution_policy": policy,
+		"force":                  options.Force,
+		"selected_tasks":         selectedTaskIDs,
+		"checkpoint":             displayDataPath(checkpointRel),
+		"build_dir":              displayDataPath(buildDirRel),
+		"manifest":               displayDataPath(manifestRel),
+		"worker_briefs":          briefPaths,
+		"claims_path":            displayDataPath(claimsRel),
 	}
 	runStatus = dispatchRunStatus(dispatches)
 	return result, nil
@@ -923,12 +1000,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		return nil, nil, "", dispatchUnavailableError(invoker)
 	}
 
-	capsule := resolveCodexWorkerContext()
 	dataDir := filepath.Join(root, ".aether", "data")
-	monitorCancel := StartHeartbeatMonitor(ctx, dataDir)
-	defer monitorCancel()
+	cleanupAllHeartbeatFiles(dataDir)
 	defer cleanupAllHeartbeatFiles(dataDir)
 
+	capsule := resolveCodexWorkerContext()
 	cleanupStaleWorkersBeforeDispatch(root)
 
 	pheromoneSection := resolvePheromoneSection()
@@ -945,6 +1021,9 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			TaskID:           normalizedDispatchTaskID(dispatch),
 			TaskBrief:        renderCodexBuildWorkerBrief(root, phase, dispatch, playbooks, startedAt),
 			ContextCapsule:   capsule,
+			HandoffSection:   dispatch.HandoffSection,
+			Workflow:         "build",
+			Phase:            phase.ID,
 			SkillSection:     resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
@@ -955,7 +1034,13 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 
 	cb := NewCircuitBreaker(circuitBreakerThreshold)
-	results, err := dispatchCodexBuildWorkers(ctx, root, phase, workerDispatches, invoker, startedAt, parallelMode, cb)
+	// Per D-09/D-12: queen owns the wave loop. Build calls queen once.
+	waveDispatchFn := func(ctx context.Context, waveDispatches []codex.WorkerDispatch, waveNum int) ([]codex.DispatchResult, error) {
+		return dispatchCodexBuildWorkers(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb)
+	}
+	summary, results, err := queenWaveLifecycle(ctx, workerDispatches, waveDispatchFn, phase, cb, phase.ID)
+	// Persist wave summary JSON for Phase 99 consumption (D-07)
+	_ = writeWaveSummary(phase.ID, summary)
 	// Clean up any worktrees that weren't properly finalized during dispatch
 	cleaned, orphaned, _ := cleanupBuildWorktrees(phase.ID)
 	if cleaned > 0 || orphaned > 0 {
@@ -1034,27 +1119,69 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	}
 
 	return codexBuildManifest{
-		Phase:           phase.ID,
-		PhaseName:       phase.Name,
-		Goal:            goal,
-		Root:            root,
-		PlanOnly:        planOnly,
-		ParallelMode:    string(effectiveParallelMode(state)),
-		WaveExecution:   buildWaveExecutionPlans(dispatches, effectiveParallelMode(state)),
-		ExecutionPlan:   buildExecutionPlans(dispatches, effectiveParallelMode(state)),
-		ColonyDepth:     normalizedBuildDepth(state.ColonyDepth),
-		DispatchMode:    strings.TrimSpace(dispatchMode),
-		GeneratedAt:     startedAt.Format(time.RFC3339),
-		State:           string(state.State),
-		Checkpoint:      checkpoint,
-		ClaimsPath:      claimsPath,
-		Playbooks:       append([]string{}, playbooks...),
-		WorkerBriefs:    briefs,
-		Dispatches:      append([]codexBuildDispatch{}, dispatches...),
-		SelectedTasks:   append([]string{}, selectedTaskIDs...),
-		Tasks:           codexBuildTaskPlans(phase),
-		SuccessCriteria: append([]string{}, phase.SuccessCriteria...),
-		ReviewDepth:     string(reviewDepth),
+		Phase:               phase.ID,
+		PhaseName:           phase.Name,
+		Goal:                goal,
+		Root:                root,
+		PlanOnly:            planOnly,
+		ParallelMode:        string(effectiveParallelMode(state)),
+		WaveExecution:       buildWaveExecutionPlans(dispatches, effectiveParallelMode(state)),
+		ExecutionPlan:       buildExecutionPlans(dispatches, effectiveParallelMode(state)),
+		ColonyDepth:         normalizedBuildDepth(state.ColonyDepth),
+		DispatchMode:        strings.TrimSpace(dispatchMode),
+		HostPlatform:        buildHostPlatform(),
+		ExecutionOwner:      buildExecutionOwner(dispatchMode, planOnly),
+		WorkerDispatchOptIn: buildWorkerDispatchOptIn(dispatchMode),
+		GeneratedAt:         startedAt.Format(time.RFC3339),
+		State:               string(state.State),
+		Checkpoint:          checkpoint,
+		ClaimsPath:          claimsPath,
+		Playbooks:           append([]string{}, playbooks...),
+		WorkerBriefs:        briefs,
+		Dispatches:          append([]codexBuildDispatch{}, dispatches...),
+		SelectedTasks:       append([]string{}, selectedTaskIDs...),
+		Tasks:               codexBuildTaskPlans(phase),
+		SuccessCriteria:     append([]string{}, phase.SuccessCriteria...),
+		ReviewDepth:         string(reviewDepth),
+		ProfileContract:     workflowProfileContract(reviewDepth),
+		QueenRecommendation: recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases)),
+		QueenExecutionPolicy: recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+			VerificationDepth: string(reviewDepth),
+			DispatchWorkers:   buildWorkerDispatchOptIn(dispatchMode),
+		}),
+	}
+}
+
+func buildHostPlatform() string {
+	platform := codex.DetectActivePlatform()
+	if platform == codex.PlatformUnknown {
+		return ""
+	}
+	return string(platform)
+}
+
+func buildExecutionOwner(dispatchMode string, planOnly bool) string {
+	mode := strings.ToLower(strings.TrimSpace(dispatchMode))
+	switch mode {
+	case "real", "simulated":
+		return "runtime-worker-dispatch"
+	case "external-task":
+		return "platform-wrapper"
+	case "queen-led", "plan-only":
+		return "host-queen"
+	}
+	if planOnly {
+		return "host-queen"
+	}
+	return ""
+}
+
+func buildWorkerDispatchOptIn(dispatchMode string) bool {
+	switch strings.ToLower(strings.TrimSpace(dispatchMode)) {
+	case "real", "simulated":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -1089,6 +1216,9 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 			entry["matched_skills"] = append([]string{}, dispatch.MatchedSkills...)
 			entry["skill_section"] = dispatch.SkillSection
 		}
+		if strings.TrimSpace(dispatch.HandoffSection) != "" {
+			entry["handoff_section"] = dispatch.HandoffSection
+		}
 		if dispatch.Summary != "" {
 			entry["summary"] = dispatch.Summary
 		}
@@ -1103,7 +1233,7 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 	return dispatchMaps
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) ([]string, []codexBuildDispatch, error) {
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, playbooks []string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
 	briefPaths := make([]string, 0, len(dispatches))
 	briefOutputs := map[string]string{}
 	finalOutputs := map[string][]string{}
@@ -1139,6 +1269,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 	}
 
 	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, playbooks, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
+	manifest.QueenExecutionPolicy = policy
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	if err := store.SaveJSON(manifestRel, manifest); err != nil {
 		return nil, nil, fmt.Errorf("failed to write build manifest: %w", err)
@@ -1515,14 +1646,20 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	b.WriteString(expectedDispatchOutcome(dispatch))
 	b.WriteString("\n")
 
-	b.WriteString("\n## Heartbeat Protocol\n\n")
-	b.WriteString("You MUST write a heartbeat file every ~30 seconds while working:\n")
-	b.WriteString("1. Write to `.aether/data/heartbeat-" + dispatch.Name + ".json` immediately upon starting\n")
-	b.WriteString("2. Continue writing every ~30 seconds during your work\n")
-	b.WriteString("3. The file must contain valid JSON: `{\"worker_id\":\"" + dispatch.Name + "\",\"caste\":\"" + dispatch.Caste + "\",\"timestamp\":\"<ISO-8601-UTC>\",\"phase\":" + strconv.Itoa(phase.ID) + "}`\n")
-	b.WriteString("\nExample: `echo '{\"worker_id\":\"" + dispatch.Name + "\",\"caste\":\"" + dispatch.Caste + "\",\"timestamp\":\"2026-05-02T14:30:00Z\",\"phase\":" + strconv.Itoa(phase.ID) + "}' > .aether/data/heartbeat-" + dispatch.Name + ".json`\n")
-
 	return b.String()
+}
+
+func cleanupStaleBuildAttemptArtifacts(phaseNum int) {
+	if store == nil || phaseNum < 1 {
+		return
+	}
+	buildDir := filepath.Join(store.BasePath(), "build", fmt.Sprintf("phase-%d", phaseNum))
+	for _, name := range []string{"verification.json", "gates.json", "continue.json", "review.json"} {
+		_ = os.Remove(filepath.Join(buildDir, name))
+	}
+	for _, name := range []string{"worker-briefs", "worker-reports"} {
+		_ = os.RemoveAll(filepath.Join(buildDir, name))
+	}
 }
 
 func findDispatchTask(phase colony.Phase, dispatch codexBuildDispatch) *colony.Task {
@@ -1750,7 +1887,11 @@ func resolveSkillSectionResult(caste, task string) skillInjectResult {
 }
 
 func resolveSkillSectionResultForWorkflow(workflow, caste, task string) skillInjectResult {
-	return renderSkillInjectResult(matchSkillsForWorkflow(resolveHubPath(), workflow, caste, task))
+	result := renderSkillInjectResult(matchSkillsForWorkflow(resolveHubPath(), workflow, caste, task))
+	referenceSection := resolveReferenceSection(caste, task, "")
+	result.SkillSection = appendMarkdownSections(result.SkillSection, referenceSection)
+	result.Section = result.SkillSection
+	return result
 }
 
 type codexWorkerSkillAssignment struct {
@@ -1777,7 +1918,7 @@ func resolveWorkerSkillAssignmentForWorkflow(workflow, caste, task string) codex
 	}
 }
 
-func attachBuildDispatchSkillAssignments(dispatches []codexBuildDispatch) {
+func attachBuildDispatchContext(phaseID int, dispatches []codexBuildDispatch) {
 	for i := range dispatches {
 		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section
@@ -1785,6 +1926,7 @@ func attachBuildDispatchSkillAssignments(dispatches []codexBuildDispatch) {
 		dispatches[i].ColonySkills = assignment.ColonyCount
 		dispatches[i].DomainSkills = assignment.DomainCount
 		dispatches[i].MatchedSkills = append([]string{}, assignment.MatchedNames...)
+		dispatches[i].HandoffSection = renderWorkerHandoffSection("build", phaseID, dispatches[i].Name)
 	}
 }
 
