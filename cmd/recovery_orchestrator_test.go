@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // --- RecoveryBudget tests ---
@@ -156,16 +157,16 @@ func TestOrchestrateRecovery_BlockingEscalatesImmediately(t *testing.T) {
 	budget := newRecoveryBudget(1)
 
 	ctx := RecoveryContext{
-		Phase:        1,
-		Wave:         1,
-		WorkerName:   "Builder-1",
-		TaskID:       "task-1",
-		Caste:        "builder",
-		Status:       "bad_task_spec",
-		ErrorMessage: "invalid task specification",
-		Dispatches:   []codex.WorkerDispatch{},
+		Phase:          1,
+		Wave:           1,
+		WorkerName:     "Builder-1",
+		TaskID:         "task-1",
+		Caste:          "builder",
+		Status:         "bad_task_spec",
+		ErrorMessage:   "invalid task specification",
+		Dispatches:     []codex.WorkerDispatch{},
 		CircuitBreaker: cb,
-		Budget:       budget,
+		Budget:         budget,
 	}
 
 	outcome := orchestrateRecovery(ctx)
@@ -241,16 +242,16 @@ func TestOrchestrateRecovery_BudgetExhaustion(t *testing.T) {
 	budget.consume("retry")
 
 	ctx := RecoveryContext{
-		Phase:        1,
-		Wave:         1,
-		WorkerName:   "Builder-1",
-		TaskID:       "task-1",
-		Caste:        "builder",
-		Status:       "timeout",
-		ErrorMessage: "worker timed out",
-		Dispatches:   []codex.WorkerDispatch{},
+		Phase:          1,
+		Wave:           1,
+		WorkerName:     "Builder-1",
+		TaskID:         "task-1",
+		Caste:          "builder",
+		Status:         "timeout",
+		ErrorMessage:   "worker timed out",
+		Dispatches:     []codex.WorkerDispatch{},
 		CircuitBreaker: cb,
-		Budget:       budget,
+		Budget:         budget,
 	}
 
 	outcome := orchestrateRecovery(ctx)
@@ -309,16 +310,16 @@ func TestOrchestrateRecovery_RecoveryLogEntries(t *testing.T) {
 	budget := newRecoveryBudget(1)
 
 	ctx := RecoveryContext{
-		Phase:        1,
-		Wave:         1,
-		WorkerName:   "Builder-1",
-		TaskID:       "task-1",
-		Caste:        "builder",
-		Status:       "timeout",
-		ErrorMessage: "worker timed out",
-		Dispatches:   []codex.WorkerDispatch{},
+		Phase:          1,
+		Wave:           1,
+		WorkerName:     "Builder-1",
+		TaskID:         "task-1",
+		Caste:          "builder",
+		Status:         "timeout",
+		ErrorMessage:   "worker timed out",
+		Dispatches:     []codex.WorkerDispatch{},
 		CircuitBreaker: cb,
-		Budget:       budget,
+		Budget:         budget,
 	}
 
 	outcome := orchestrateRecovery(ctx)
@@ -356,14 +357,14 @@ func TestOrchestrateRecovery_FixerContext(t *testing.T) {
 	}
 
 	ctx := RecoveryContext{
-		Phase:        1,
-		Wave:         1,
-		WorkerName:   "Builder-1",
-		TaskID:       "task-1",
-		Caste:        "builder",
-		Status:       "timeout",
-		ErrorMessage: "worker timed out",
-		Dispatches:   []codex.WorkerDispatch{},
+		Phase:           1,
+		Wave:            1,
+		WorkerName:      "Builder-1",
+		TaskID:          "task-1",
+		Caste:           "builder",
+		Status:          "timeout",
+		ErrorMessage:    "worker timed out",
+		Dispatches:      []codex.WorkerDispatch{},
 		CircuitBreaker:  cb,
 		Budget:          budget,
 		RecoveryHistory: []RecoveryAction{retryAction, peerAction},
@@ -387,16 +388,16 @@ func TestOrchestrateRecovery_BudgetRemaining(t *testing.T) {
 	budget := newRecoveryBudget(1)
 
 	ctx := RecoveryContext{
-		Phase:        1,
-		Wave:         1,
-		WorkerName:   "Builder-1",
-		TaskID:       "task-1",
-		Caste:        "builder",
-		Status:       "timeout",
-		ErrorMessage: "worker timed out",
-		Dispatches:   []codex.WorkerDispatch{},
+		Phase:          1,
+		Wave:           1,
+		WorkerName:     "Builder-1",
+		TaskID:         "task-1",
+		Caste:          "builder",
+		Status:         "timeout",
+		ErrorMessage:   "worker timed out",
+		Dispatches:     []codex.WorkerDispatch{},
 		CircuitBreaker: cb,
-		Budget:       budget,
+		Budget:         budget,
 	}
 
 	outcome := orchestrateRecovery(ctx)
@@ -423,6 +424,432 @@ func TestBudgetFromRecoveryLog_NoExistingFile(t *testing.T) {
 	}
 	if budget.TotalBudget != 3 {
 		t.Errorf("expected total_budget=3, got %d", budget.TotalBudget)
+	}
+}
+
+// --- Task 1: Build finalize recovery wiring tests ---
+
+func TestFilterFailedDispatches(t *testing.T) {
+	dispatches := []codexBuildDispatch{
+		{Name: "Builder-1", Caste: "builder", Status: "completed", TaskID: "task-1"},
+		{Name: "Builder-2", Caste: "builder", Status: "timeout", TaskID: "task-2", Summary: "timed out"},
+		{Name: "Builder-3", Caste: "builder", Status: "failed", TaskID: "task-3", Summary: "generic failure"},
+		{Name: "Watcher-1", Caste: "watcher", Status: "completed", TaskID: "task-4"},
+	}
+
+	failed := filterFailedDispatches(dispatches)
+	if len(failed) != 2 {
+		t.Fatalf("expected 2 failed dispatches, got %d", len(failed))
+	}
+	if failed[0].Name != "Builder-2" {
+		t.Errorf("expected first failed dispatch 'Builder-2', got %q", failed[0].Name)
+	}
+	if failed[1].Name != "Builder-3" {
+		t.Errorf("expected second failed dispatch 'Builder-3', got %q", failed[1].Name)
+	}
+}
+
+func TestFilterFailedDispatches_AllCompleted(t *testing.T) {
+	dispatches := []codexBuildDispatch{
+		{Name: "Builder-1", Caste: "builder", Status: "completed", TaskID: "task-1"},
+		{Name: "Builder-2", Caste: "builder", Status: "completed", TaskID: "task-2"},
+	}
+
+	failed := filterFailedDispatches(dispatches)
+	if len(failed) != 0 {
+		t.Errorf("expected 0 failed dispatches, got %d", len(failed))
+	}
+}
+
+func TestEffectiveWave(t *testing.T) {
+	tests := []struct {
+		name       string
+		dispatches []codexBuildDispatch
+		want       int
+	}{
+		{
+			name: "wave from dispatches",
+			dispatches: []codexBuildDispatch{
+				{Name: "B-1", Wave: 2},
+				{Name: "B-2", Wave: 2},
+			},
+			want: 2,
+		},
+		{
+			name: "zero waves default to 1",
+			dispatches: []codexBuildDispatch{
+				{Name: "B-1", Wave: 0},
+				{Name: "B-2", Wave: 0},
+			},
+			want: 1,
+		},
+		{
+			name:       "empty dispatches default to 1",
+			dispatches: []codexBuildDispatch{},
+			want:       1,
+		},
+		{
+			name: "mixed waves picks first non-zero",
+			dispatches: []codexBuildDispatch{
+				{Name: "B-1", Wave: 0},
+				{Name: "B-2", Wave: 3},
+			},
+			want: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := effectiveWave(tt.dispatches)
+			if got != tt.want {
+				t.Errorf("effectiveWave() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildToWorkerDispatches(t *testing.T) {
+	dispatches := []codexBuildDispatch{
+		{Name: "Builder-1", Caste: "builder", TaskID: "task-1"},
+		{Name: "Watcher-1", Caste: "watcher", TaskID: "task-2"},
+	}
+
+	result := buildToWorkerDispatches(dispatches)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 worker dispatches, got %d", len(result))
+	}
+	if result[0].WorkerName != "Builder-1" {
+		t.Errorf("expected WorkerName 'Builder-1', got %q", result[0].WorkerName)
+	}
+	if result[0].Caste != "builder" {
+		t.Errorf("expected Caste 'builder', got %q", result[0].Caste)
+	}
+	if result[0].TaskID != "task-1" {
+		t.Errorf("expected TaskID 'task-1', got %q", result[0].TaskID)
+	}
+	if result[1].WorkerName != "Watcher-1" {
+		t.Errorf("expected WorkerName 'Watcher-1', got %q", result[1].WorkerName)
+	}
+}
+
+func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	// Set up circuit breaker
+	origCB := globalCircuitBreaker
+	cb := NewCircuitBreaker(3)
+	globalCircuitBreaker = cb
+	defer func() { globalCircuitBreaker = origCB }()
+
+	// Create a colony state with a plan phase
+	state := colony.ColonyState{
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+					{ID: strPtr("task-2"), Status: colony.TaskInProgress},
+				}},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	// Create completion with one failed (timeout) dispatch
+	manifest := codexBuildManifest{
+		Phase:    1,
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
+			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
+		},
+		SelectedTasks: []string{"task-1", "task-2"},
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Results: []codexExternalBuildWorkerResult{
+			{Name: "Builder-1", Status: "timeout", Summary: "worker timed out after 300s"},
+			{Name: "Builder-2", Status: "completed", Summary: "done"},
+		},
+	}
+
+	completionPath := filepath.Join(dataDir, "completion.json")
+	raw, _ := json.Marshal(completion)
+	if err := os.WriteFile(completionPath, raw, 0644); err != nil {
+		t.Fatalf("failed to write completion file: %v", err)
+	}
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("runCodexBuildFinalize failed: %v", err)
+	}
+
+	recoveryRaw, ok := result["recovery_instructions"]
+	if !ok {
+		t.Fatal("expected 'recovery_instructions' in result for failed dispatch")
+	}
+	recoveryInstructions, ok := recoveryRaw.([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected recovery_instructions to be []map[string]interface{}, got %T", recoveryRaw)
+	}
+	if len(recoveryInstructions) != 1 {
+		t.Fatalf("expected 1 recovery instruction, got %d", len(recoveryInstructions))
+	}
+	instruction := recoveryInstructions[0]
+	if instruction["worker"] != "Builder-1" {
+		t.Errorf("expected worker 'Builder-1', got %v", instruction["worker"])
+	}
+	// timeout is Recoverable, so first action is "retry"
+	if instruction["action"] != "retry" {
+		t.Errorf("expected action 'retry', got %v", instruction["action"])
+	}
+}
+
+func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	origCB := globalCircuitBreaker
+	cb := NewCircuitBreaker(3)
+	globalCircuitBreaker = cb
+	defer func() { globalCircuitBreaker = origCB }()
+
+	state := colony.ColonyState{
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+				}},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	manifest := codexBuildManifest{
+		Phase:    1,
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
+		},
+		SelectedTasks: []string{"task-1"},
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Results: []codexExternalBuildWorkerResult{
+			{Name: "Builder-1", Status: "bad_task_spec", Summary: "invalid task specification"},
+		},
+	}
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("runCodexBuildFinalize failed: %v", err)
+	}
+
+	recoveryRaw, ok := result["recovery_instructions"]
+	if !ok {
+		t.Fatal("expected 'recovery_instructions' in result for blocking dispatch")
+	}
+	recoveryInstructions := recoveryRaw.([]map[string]interface{})
+	if len(recoveryInstructions) != 1 {
+		t.Fatalf("expected 1 recovery instruction, got %d", len(recoveryInstructions))
+	}
+	if recoveryInstructions[0]["action"] != "escalate" {
+		t.Errorf("expected action 'escalate' for blocking failure, got %v", recoveryInstructions[0]["action"])
+	}
+}
+
+func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	origCB := globalCircuitBreaker
+	cb := NewCircuitBreaker(3)
+	globalCircuitBreaker = cb
+	defer func() { globalCircuitBreaker = origCB }()
+
+	state := colony.ColonyState{
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+				}},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	manifest := codexBuildManifest{
+		Phase:    1,
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
+		},
+		SelectedTasks: []string{"task-1"},
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Results: []codexExternalBuildWorkerResult{
+			{Name: "Builder-1", Status: "completed", Summary: "all done"},
+		},
+	}
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("runCodexBuildFinalize failed: %v", err)
+	}
+
+	_, ok := result["recovery_instructions"]
+	if ok {
+		t.Error("expected no 'recovery_instructions' when all dispatches completed")
+	}
+}
+
+func TestBuildFinalize_BudgetPersisted(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	origCB := globalCircuitBreaker
+	cb := NewCircuitBreaker(3)
+	globalCircuitBreaker = cb
+	defer func() { globalCircuitBreaker = origCB }()
+
+	state := colony.ColonyState{
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+				}},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	manifest := codexBuildManifest{
+		Phase:    1,
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
+		},
+		SelectedTasks: []string{"task-1"},
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Results: []codexExternalBuildWorkerResult{
+			{Name: "Builder-1", Status: "timeout", Summary: "timed out"},
+		},
+	}
+
+	_, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("runCodexBuildFinalize failed: %v", err)
+	}
+
+	// Verify budget was persisted to recovery-log file
+	budget := budgetFromRecoveryLog(1, 1)
+	if budget == nil {
+		t.Fatal("expected budget to be persisted in recovery-log file")
+	}
+	if budget.RetriesUsed != 1 {
+		t.Errorf("expected retries_used=1 after one failed dispatch, got %d", budget.RetriesUsed)
+	}
+}
+
+func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	origCB := globalCircuitBreaker
+	cb := NewCircuitBreaker(3)
+	globalCircuitBreaker = cb
+	defer func() { globalCircuitBreaker = origCB }()
+
+	state := colony.ColonyState{
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+					{ID: strPtr("task-2"), Status: colony.TaskInProgress},
+					{ID: strPtr("task-3"), Status: colony.TaskInProgress},
+				}},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	manifest := codexBuildManifest{
+		Phase:    1,
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature 1", Status: "pending", Wave: 1},
+			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
+			{Name: "Builder-3", Caste: "builder", TaskID: "task-3", Task: "Build feature 3", Status: "pending", Wave: 1},
+		},
+		SelectedTasks: []string{"task-1", "task-2", "task-3"},
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Results: []codexExternalBuildWorkerResult{
+			{Name: "Builder-1", Status: "timeout", Summary: "timed out"},
+			{Name: "Builder-2", Status: "failed", Summary: "generic failure"},
+			{Name: "Builder-3", Status: "completed", Summary: "done"},
+		},
+	}
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("runCodexBuildFinalize failed: %v", err)
+	}
+
+	recoveryRaw, ok := result["recovery_instructions"]
+	if !ok {
+		t.Fatal("expected 'recovery_instructions' in result")
+	}
+	recoveryInstructions := recoveryRaw.([]map[string]interface{})
+	if len(recoveryInstructions) != 2 {
+		t.Fatalf("expected 2 recovery instructions (2 failed dispatches), got %d", len(recoveryInstructions))
+	}
+	// Budget should be decremented for both
+	budget := budgetFromRecoveryLog(1, 1)
+	if budget == nil {
+		t.Fatal("expected budget to be persisted")
+	}
+	if budget.totalUsed() != 2 {
+		t.Errorf("expected total budget used=2, got %d", budget.totalUsed())
 	}
 }
 
