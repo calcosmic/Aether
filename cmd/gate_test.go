@@ -896,3 +896,165 @@ func TestIncrementalGateChecking_SkipsPriorPassed(t *testing.T) {
 		t.Error("expected unknown_gate to NOT be skipped")
 	}
 }
+
+// --- Gate Classification Tests (Phase 93, Plan 01) ---
+
+func TestGateClassifications_CoversAllNamedGates(t *testing.T) {
+	for name := range gateRecoveryTemplates {
+		tier, rationale := gateClassify(name)
+		if tier == "" {
+			t.Errorf("gateClassifications missing entry for %q", name)
+		}
+		if rationale == "" {
+			t.Errorf("gateClassifications has empty rationale for %q", name)
+		}
+	}
+}
+
+func TestGateClassifications_CoversAllAlwaysRunGates(t *testing.T) {
+	for name := range alwaysRunGates {
+		tier, _ := gateClassify(name)
+		if tier == "" {
+			t.Errorf("gateClassifications missing entry for always-run gate %q", name)
+		}
+	}
+}
+
+func TestGateClassifications_HardBlockImmutability(t *testing.T) {
+	hardBlockGates := []string{"gatekeeper", "watcher_veto", "flags", "tests_pass", "no_critical_flags"}
+	for _, name := range hardBlockGates {
+		tier, _ := gateClassify(name)
+		if tier != hardBlock {
+			t.Errorf("expected %q to be hard_block, got %q", name, tier)
+		}
+	}
+}
+
+func TestGateClassify_UnknownGate(t *testing.T) {
+	tier, rationale := gateClassify("nonexistent_gate")
+	if tier != "" {
+		t.Errorf("expected empty tier for unknown gate, got %q", tier)
+	}
+	if rationale != "" {
+		t.Errorf("expected empty rationale for unknown gate, got %q", rationale)
+	}
+}
+
+func TestIsHardBlockGate_HardGates(t *testing.T) {
+	hardGates := []string{"gatekeeper", "watcher_veto", "flags", "tests_pass", "no_critical_flags"}
+	for _, name := range hardGates {
+		if !isHardBlockGate(name) {
+			t.Errorf("expected isHardBlockGate(%q) to be true", name)
+		}
+	}
+}
+
+func TestIsHardBlockGate_SoftGates(t *testing.T) {
+	softGates := []string{"auditor", "complexity", "tdd_evidence"}
+	for _, name := range softGates {
+		if isHardBlockGate(name) {
+			t.Errorf("expected isHardBlockGate(%q) to be false", name)
+		}
+	}
+}
+
+func TestQueenAnnotation_JSONRoundtrip(t *testing.T) {
+	original := GateCheckResult{
+		Name:      "auditor",
+		Status:    "failed",
+		Detail:    "quality score below 60",
+		Timestamp: "2026-05-03T12:00:00Z",
+		QueenAnnotation: &QueenAnnotation{
+			Decision:     "auto-resolved",
+			Rationale:    "score 58 is within tolerance",
+			Timestamp:    "2026-05-03T12:00:00Z",
+			QueenVersion: "1.0.27",
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded GateCheckResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if decoded.QueenAnnotation == nil {
+		t.Fatal("expected QueenAnnotation to be non-nil after roundtrip")
+	}
+	if decoded.QueenAnnotation.Decision != "auto-resolved" {
+		t.Errorf("expected Decision 'auto-resolved', got %q", decoded.QueenAnnotation.Decision)
+	}
+	if decoded.QueenAnnotation.Rationale != "score 58 is within tolerance" {
+		t.Errorf("expected Rationale 'score 58 is within tolerance', got %q", decoded.QueenAnnotation.Rationale)
+	}
+	if decoded.QueenAnnotation.Timestamp != "2026-05-03T12:00:00Z" {
+		t.Errorf("expected Timestamp '2026-05-03T12:00:00Z', got %q", decoded.QueenAnnotation.Timestamp)
+	}
+	if decoded.QueenAnnotation.QueenVersion != "1.0.27" {
+		t.Errorf("expected QueenVersion '1.0.27', got %q", decoded.QueenAnnotation.QueenVersion)
+	}
+	if decoded.Detail != "quality score below 60" {
+		t.Errorf("expected Detail preserved, got %q", decoded.Detail)
+	}
+}
+
+func TestGateCheckResult_BackwardCompatible_NoAnnotation(t *testing.T) {
+	oldJSON := `{"name":"tests_pass","status":"failed","detail":"2 tests failed","timestamp":"2026-05-01T00:00:00Z","retry_count":0}`
+
+	var result GateCheckResult
+	if err := json.Unmarshal([]byte(oldJSON), &result); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if result.QueenAnnotation != nil {
+		t.Error("expected QueenAnnotation to be nil for old JSON without queen_annotation field")
+	}
+	if result.Detail != "2 tests failed" {
+		t.Errorf("expected Detail '2 tests failed', got %q", result.Detail)
+	}
+}
+
+func TestGateClassifyCmd_JSONOutput(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-classify", "--json"})
+	stdout = &buf
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"gatekeeper"`) {
+		t.Errorf("expected JSON output to contain 'gatekeeper', got: %s", output)
+	}
+	if !strings.Contains(output, `"auditor"`) {
+		t.Errorf("expected JSON output to contain 'auditor', got: %s", output)
+	}
+}
+
+func TestGateClassifyCmd_TableOutput(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-classify"})
+	stdout = &buf
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "gatekeeper") {
+		t.Errorf("expected table output to contain 'gatekeeper', got: %s", output)
+	}
+	if !strings.Contains(output, "hard_block") {
+		t.Errorf("expected table output to contain 'hard_block', got: %s", output)
+	}
+	if !strings.Contains(output, "soft_block") {
+		t.Errorf("expected table output to contain 'soft_block', got: %s", output)
+	}
+}
