@@ -257,7 +257,7 @@ Plans:
 
 Plans:
 - [x] 94-01-PLAN.md -- Failure classification types, registry, classifyWorkerFailure function, persistence, and CLI commands
-- [ ] 94-02-PLAN.md -- Comprehensive tests for classification rules, JSON roundtrips, backward compatibility, and CLI commands
+- [x] 94-02-PLAN.md -- Comprehensive tests for classification rules, JSON roundtrips, backward compatibility, and CLI commands
 
 ### Phase 95: Smart Gate Pipeline
 **Goal**: Soft_block gates auto-resolve when the queen verifies the finding is non-critical, with configurable severity thresholds and documented safe defaults -- hard_block gates remain untouched.

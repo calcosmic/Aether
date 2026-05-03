@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.14
 milestone_name: Queen Authority
-status: executing
-stopped_at: Phase 94 Plan 02 complete
-last_updated: "2026-05-03T14:39:31Z"
-last_activity: 2026-05-03 -- Phase 94 Plan 02 executed
+status: phase_complete
+stopped_at: Phase 94 complete — verified passed
+last_updated: "2026-05-03T14:45:00Z"
+last_activity: 2026-05-03 -- Phase 94 complete (verified passed)
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 3
   completed_plans: 3
-  percent: 43
+  percent: 29
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 94 — recovery-data-model (next up)
+**Current focus:** Phase 95 — smart-gate-pipeline (next up)
 
 ## Current Position
 
-Phase: 94 (recovery-data-model) — Plan 02 executed
+Phase: 95 (smart-gate-pipeline) — next up
 Next phase: 95 (smart-gate-pipeline)
-Plan: 2 of 2
-Status: Phase 94 complete
-Last activity: 2026-05-03 -- Phase 94 Plan 02 executed
+Plan: 0 of 0
+Status: Ready to plan
+Last activity: 2026-05-03 -- Phase 94 complete (verified passed)
 
-Progress: [====      ] 43%
+Progress: [===       ] 29%
 
 ## Performance Metrics
 
