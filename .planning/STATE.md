@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.14
 milestone_name: Queen Authority
-status: context_gathered
-stopped_at: Phase 95 context gathered
-last_updated: "2026-05-03T14:55:00Z"
-last_activity: 2026-05-03 -- Phase 95 context gathered
+status: ready_to_execute
+stopped_at: Phase 95 planned
+last_updated: "2026-05-03T17:25:00Z"
+last_activity: 2026-05-03 -- Phase 95 planned (2 plans, 2 waves)
 progress:
   total_phases: 7
   completed_phases: 2
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-05-03)
 
 ## Current Position
 
-Phase: 95 (smart-gate-pipeline) — next up
+Phase: 95 (smart-gate-pipeline) — planned
 Next phase: 95 (smart-gate-pipeline)
-Plan: 0 of 0
-Status: Ready to plan
-Last activity: 2026-05-03 -- Phase 94 complete (verified passed)
+Plan: 0 of 2
+Status: Ready to execute
+Last activity: 2026-05-03 -- Phase 95 planned (2 plans, 2 waves)
 
 Progress: [===       ] 29%
 
