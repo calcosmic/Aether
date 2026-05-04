@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -204,8 +205,27 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
+type renderedCommandError struct {
+	code int
+}
+
+func (e renderedCommandError) Error() string {
+	return fmt.Sprintf("command failed after rendering error output with code %d", e.code)
+}
+
+func renderedErrorExit(code int) error {
+	if code <= 0 {
+		code = 1
+	}
+	return renderedCommandError{code: code}
+}
+
 // ExitWithError prints the error to stderr and exits with code 1.
 func ExitWithError(err error) {
+	var renderedErr renderedCommandError
+	if errors.As(err, &renderedErr) {
+		os.Exit(renderedErr.code)
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, "Error:", err.Error())
 	}

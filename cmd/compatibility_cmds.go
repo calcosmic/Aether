@@ -32,7 +32,7 @@ var watchCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
-			return nil
+			return renderedErrorExit(1)
 		}
 
 		once, _ := cmd.Flags().GetBool("once")
@@ -66,7 +66,7 @@ var oracleCmd = &cobra.Command{
 		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget, scope, template)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderOracleCompatibilityVisual(result))
 		return nil
