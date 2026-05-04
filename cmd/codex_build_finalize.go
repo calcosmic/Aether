@@ -673,16 +673,17 @@ func normalizeClaimPathsToRoot(root string, paths []string) []string {
 }
 
 // findRepoRelativePath searches for a file in the repo that matches the claimed path.
-// Uses git ls-files for fast lookup. If git finds nothing, the file likely doesn't
-// exist in the repo (no unbounded filesystem walk fallback).
+// Uses git ls-files for fast lookup and includes untracked files so newly-created
+// files can satisfy basename-only worker claims before they are staged.
 func findRepoRelativePath(root, claimed string) string {
 	base := filepath.Base(claimed)
 	if base == "." || base == string(filepath.Separator) {
 		return ""
 	}
 
-	// Try git ls-files with basename pattern for fast lookup
-	out, err := exec.Command("git", "-C", root, "ls-files", "--", "*"+base).Output()
+	// Try git ls-files with basename pattern for fast lookup. Include untracked
+	// files because worker-created files are often not staged when continue runs.
+	out, err := exec.Command("git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "--", "*"+base).Output()
 	if err == nil {
 		candidates := parseGitNameOutput(out)
 		if len(candidates) == 1 {

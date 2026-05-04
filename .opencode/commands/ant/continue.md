@@ -43,8 +43,8 @@ Verification depth controls how thorough the continue review is:
 - **standard**: Probe-only review (default) -- watcher + probe coverage
 - **heavy**: Full quality gauntlet -- gatekeeper + auditor + probe
 
-The default is "standard" for intermediate phases. Final phases always get "heavy".
-Override with `--verification-depth <light|standard|heavy>`.
+The default is "standard" for intermediate phases. Final phases default to "heavy" when depth is automatic.
+Override any automatic depth, including final phases, with `--verification-depth <light|standard|heavy>`.
 The old `--light` and `--heavy` flags still work as backward-compatible aliases.
 
 ## Heavy External Review

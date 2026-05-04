@@ -142,10 +142,10 @@ func TestMergeExternalBuildResultsWithCodeWritten(t *testing.T) {
 
 	results := []codexExternalBuildWorkerResult{
 		{
-			Name:         "Mason-67",
-			Status:       "code_written",
-			Summary:      "Implemented task 1.1",
-			FilesCreated: []string{"src/main.go"},
+			Name:          "Mason-67",
+			Status:        "code_written",
+			Summary:       "Implemented task 1.1",
+			FilesCreated:  []string{"src/main.go"},
 			FilesModified: []string{"go.mod"},
 		},
 	}
@@ -395,6 +395,24 @@ func TestFindRepoRelativePath(t *testing.T) {
 			t.Errorf("findRepoRelativePath(%q, %q) = %q, want %q", tmp, claimed, got, "deep/nested/dir/target.go")
 		}
 	})
+}
+
+func TestFindRepoRelativePathIncludesUntrackedFiles(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "src", "components"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testFile := filepath.Join(tmp, "src", "components", "AddCardButton.test.tsx")
+	if err := os.WriteFile(testFile, []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	gitInitForTest(t, tmp)
+
+	got := findRepoRelativePath(tmp, "AddCardButton.test.tsx")
+	if got != "src/components/AddCardButton.test.tsx" {
+		t.Errorf("findRepoRelativePath() = %q, want %q", got, "src/components/AddCardButton.test.tsx")
+	}
 }
 
 func gitInitForTest(t *testing.T, dir string) {

@@ -21,7 +21,7 @@ AETHER_OUTPUT_MODE=visual aether status
 Then run the fast development continue path directly:
 
 ```
-AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --light $ARGUMENTS
+AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS
 ```
 
 This is the normal path. Do not ask for a plan-only manifest, spawn wrapper workers, or run `continue-finalize` for default continue.
@@ -36,12 +36,23 @@ The runtime owns deterministic verification and gates. Keep any framing short:
 
 Do not claim gate results before the CLI reports them.
 
+## Verification Depth
+
+Verification depth controls how thorough the continue review is:
+- **light**: Skip all review agents -- fastest, minimal safety net
+- **standard**: Probe-only review (default) -- watcher + probe coverage
+- **heavy**: Full quality gauntlet -- gatekeeper + auditor + probe
+
+The default is "standard" for intermediate phases. Final phases default to "heavy" when depth is automatic.
+Override any automatic depth, including final phases, with `--verification-depth <light|standard|heavy>`.
+The old `--light` and `--heavy` flags still work as backward-compatible aliases.
+
 ## Heavy External Review
 
-Only use this path when the user explicitly requests `--heavy` or when the runtime specifically asks for wrapper-spawned review workers.
+Only use this path when the user explicitly requests `--verification-depth heavy` (or `--heavy`) or when the runtime specifically asks for wrapper-spawned review workers.
 
 1. Run:
-   `AETHER_OUTPUT_MODE=json aether continue --plan-only --heavy $ARGUMENTS`
+   `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS`
 2. Parse `result.continue_manifest`; do not parse visual output.
 3. For each dispatch in `continue_manifest.dispatches`, run `AETHER_OUTPUT_MODE=json aether spawn-log`, spawn the matching platform agent using `subagent_type="{agent_name}"` or equivalent, then run `AETHER_OUTPUT_MODE=json aether spawn-complete`.
 4. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.

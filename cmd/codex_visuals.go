@@ -1098,7 +1098,7 @@ func renderReviewDepthLine(depth colony.VerificationDepth, phaseNum, totalPhases
 	case colony.VerificationDepthStandard:
 		return fmt.Sprintf("Review depth: standard (Phase %d of %d)", phaseNum, totalPhases)
 	default:
-		return fmt.Sprintf("Review depth: light (Phase %d of %d -- final phase gets full review)", phaseNum, totalPhases)
+		return fmt.Sprintf("Review depth: light (Phase %d of %d)", phaseNum, totalPhases)
 	}
 }
 
