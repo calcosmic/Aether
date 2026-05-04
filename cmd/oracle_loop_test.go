@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -160,6 +161,30 @@ func TestOracleConfidenceTargetRejectsOutOfRange(t *testing.T) {
 				t.Errorf("validateOracleConfidenceTarget(%q) = %q, want error message", tt.value, got)
 			}
 		})
+	}
+}
+
+func TestOracleCommandInvalidConfidenceReturnsRenderedError(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	withWorkingDir(t, root)
+
+	rootCmd.SetArgs([]string{"oracle", "--confidence-target", "0", "test topic"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected oracle command to return rendered error for invalid confidence target")
+	}
+	var rendered renderedCommandError
+	if !errors.As(err, &rendered) {
+		t.Fatalf("expected renderedCommandError, got %T: %v", err, err)
+	}
+	if rendered.code != 1 {
+		t.Fatalf("rendered error code = %d, want 1", rendered.code)
 	}
 }
 
