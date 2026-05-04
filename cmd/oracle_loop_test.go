@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -15,6 +16,152 @@ import (
 func TestDefaultOracleTargetConfidenceIs95(t *testing.T) {
 	if defaultOracleTargetConfidence != 95 {
 		t.Errorf("defaultOracleTargetConfidence = %d, want 95", defaultOracleTargetConfidence)
+	}
+}
+
+func TestResolveOracleDepthRestoresMarathonCaps(t *testing.T) {
+	tests := []struct {
+		depth string
+		want  int
+	}{
+		{"quick", 5},
+		{"balanced", 15},
+		{"standard", 15},
+		{"deep", 30},
+		{"exhaustive", 50},
+		{"marathon", 50},
+	}
+	for _, tt := range tests {
+		t.Run(tt.depth, func(t *testing.T) {
+			got := resolveOracleDepth(tt.depth)
+			if got.MaxIterations != tt.want {
+				t.Fatalf("resolveOracleDepth(%q).MaxIterations = %d, want %d", tt.depth, got.MaxIterations, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseOracleMaxIterations(t *testing.T) {
+	got, err := parseOracleMaxIterations("50")
+	if err != nil {
+		t.Fatalf("parseOracleMaxIterations returned error: %v", err)
+	}
+	if got != 50 {
+		t.Fatalf("parseOracleMaxIterations = %d, want 50", got)
+	}
+	for _, value := range []string{"0", "51", "abc"} {
+		if _, err := parseOracleMaxIterations(value); err == nil {
+			t.Fatalf("parseOracleMaxIterations(%q) returned nil error", value)
+		}
+	}
+}
+
+func TestDefaultOracleInvokerAvoidsOpenCodeInsideOpenCodeAgent(t *testing.T) {
+	t.Setenv("OPENCODE_AGENT", "1")
+	t.Setenv("AETHER_CODEX_REAL_DISPATCH", "1")
+	t.Setenv("AETHER_CODEX_PATH", "go")
+	t.Setenv("AETHER_CLAUDE_PATH", "missing-claude-binary-12345")
+	t.Setenv("AETHER_ORACLE_ALLOW_OPENCODE", "")
+	t.Setenv("AETHER_WORKER_PLATFORM", "")
+
+	invoker := newDefaultOracleWorkerInvoker()
+	if got := codex.PlatformFromInvoker(invoker); got != codex.PlatformCodex {
+		t.Fatalf("PlatformFromInvoker() = %s, want %s", got, codex.PlatformCodex)
+	}
+}
+
+func TestOracleBackgroundEnvMarksDetachedController(t *testing.T) {
+	env := oracleBackgroundEnv([]string{
+		"OPENCODE_AGENT=1",
+		"CLAUDE_CODE_SIMPLE=1",
+		"AETHER_AGENT_DELEGATE=1",
+		"AETHER_OUTPUT_MODE=visual",
+		"KEEP_ME=1",
+	})
+	joined := strings.Join(env, "\n")
+	for _, forbidden := range []string{"OPENCODE_AGENT=1", "CLAUDE_CODE_SIMPLE=1", "AETHER_AGENT_DELEGATE=1", "AETHER_OUTPUT_MODE=visual"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("oracleBackgroundEnv leaked %q in:\n%s", forbidden, joined)
+		}
+	}
+	for _, want := range []string{"AETHER_OUTPUT_MODE=json", "AETHER_ORACLE_AVOID_OPENCODE=1", "KEEP_ME=1"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("oracleBackgroundEnv missing %q in:\n%s", want, joined)
+		}
+	}
+}
+
+func TestOracleRunLoopModeResumesInitializedWorkspace(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/oracle-run-loop\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	agentsDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
+		t.Fatalf("write oracle agent: %v", err)
+	}
+
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		t.Fatalf("ensure oracle workspace: %v", err)
+	}
+	state := oracleStateFile{
+		Version:          "1.1",
+		Topic:            "run-loop topic",
+		Scope:            "repo",
+		Template:         "custom",
+		Phase:            "survey",
+		Iteration:        0,
+		MaxIterations:    1,
+		TargetConfidence: 60,
+		Status:           "active",
+		Strategy:         defaultOracleStrategy,
+		Platform:         "opencode",
+	}
+	plan := oraclePlanFile{
+		Version: "1.1",
+		Sources: map[string]oracleSource{},
+		Questions: []oracleQuestion{{
+			ID:          "q1",
+			Text:        "What should run-loop resume investigate?",
+			Status:      "open",
+			KeyFindings: []oracleFinding{},
+		}},
+	}
+	if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	if err := writeOraclePlanFile(paths.PlanPath, plan); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
+	defer func() { newOracleWorkerInvoker = originalInvoker }()
+
+	result, err := runOracleCompatibility(root, []string{"run-loop"}, "", "")
+	if err != nil {
+		t.Fatalf("run-loop returned error: %v", err)
+	}
+	if result["mode"] != "run" {
+		t.Fatalf("mode = %v, want run", result["mode"])
+	}
+	if result["status"] != "complete" {
+		t.Fatalf("status = %v, want complete", result["status"])
+	}
+	if result["iterations_run"] != 1 {
+		t.Fatalf("iterations_run = %v, want 1", result["iterations_run"])
 	}
 }
 

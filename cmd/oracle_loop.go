@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -16,7 +18,7 @@ import (
 )
 
 const (
-	defaultOracleMaxIterations    = 8
+	defaultOracleMaxIterations    = 15
 	defaultOracleTargetConfidence = 95
 	defaultOracleReasoningEffort  = "medium"
 	defaultOracleScope            = "auto"
@@ -46,10 +48,12 @@ type oracleScopeProfile struct {
 }
 
 var oracleDepthLevels = map[string]oracleDepthConfig{
-	"quick":      {2, 60, "Quick", "Fast overview, 1-2 questions"},
-	"balanced":   {4, 85, "Balanced", "Thorough investigation, 3-4 questions"},
-	"deep":       {6, 95, "Deep", "Comprehensive analysis, 5-6 questions"},
-	"exhaustive": {10, 99, "Exhaustive", "Full convergence, up to 10 iterations"},
+	"quick":      {5, 60, "Quick", "Fast overview, up to 5 iterations"},
+	"balanced":   {15, 85, "Balanced", "Standard research, up to 15 iterations"},
+	"standard":   {15, 85, "Balanced", "Standard research, up to 15 iterations"},
+	"deep":       {30, 95, "Deep", "Deep dive, up to 30 iterations"},
+	"exhaustive": {50, 99, "Exhaustive", "Marathon convergence, up to 50 iterations"},
+	"marathon":   {50, 99, "Exhaustive", "Marathon convergence, up to 50 iterations"},
 }
 
 func resolveOracleDepth(depth string) oracleDepthConfig {
@@ -206,8 +210,44 @@ func validateOracleConfidenceTarget(value string) string {
 	return ""
 }
 
-var newOracleWorkerInvoker = codex.NewWorkerInvoker
+var newOracleWorkerInvoker = newDefaultOracleWorkerInvoker
 var oracleAttemptPolicyForPhase = defaultOracleAttemptPolicy
+
+func newDefaultOracleWorkerInvoker() codex.WorkerInvoker {
+	if oracleAllowsOpenCodeDispatch() || strings.EqualFold(strings.TrimSpace(os.Getenv("AETHER_WORKER_PLATFORM")), "opencode") {
+		return codex.NewWorkerInvoker()
+	}
+	if codex.DetectActivePlatform() == codex.PlatformOpenCode || oracleTruthyEnv("AETHER_ORACLE_AVOID_OPENCODE") {
+		if invoker := firstAvailableOracleInvoker(codex.NewCodexDispatcher(), codex.NewClaudeDispatcher()); invoker != nil {
+			return invoker
+		}
+	}
+	return codex.NewWorkerInvoker()
+}
+
+func firstAvailableOracleInvoker(candidates ...codex.WorkerInvoker) codex.WorkerInvoker {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for _, invoker := range candidates {
+		if invoker != nil && invoker.IsAvailable(ctx) {
+			return invoker
+		}
+	}
+	return nil
+}
+
+func oracleAllowsOpenCodeDispatch() bool {
+	return oracleTruthyEnv("AETHER_ORACLE_ALLOW_OPENCODE")
+}
+
+func oracleTruthyEnv(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
 
 // oracleDetectedPlatform returns the active platform string for Oracle state fields.
 // It uses the detected platform from environment and process tree — no invoker needed.
@@ -372,14 +412,33 @@ func runOracleCompatibility(root string, args []string, depth string, confidence
 	if len(oracleOptions) > 1 {
 		template = oracleOptions[1]
 	}
+	maxIterations := ""
+	if len(oracleOptions) > 2 {
+		maxIterations = oracleOptions[2]
+	}
+	background := false
+	if len(oracleOptions) > 3 {
+		background = oracleTruthyValue(oracleOptions[3])
+	}
 
 	switch mode {
 	case "", "status":
 		return oracleStatusResult(root)
 	case "stop":
 		return stopOracleCompatibility(root)
+	case "run-loop":
+		return resumeOracleLoopCompatibility(root)
 	default:
-		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget, scope, template)
+		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget, scope, template, maxIterations, background)
+	}
+}
+
+func oracleTruthyValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -390,6 +449,15 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
 	active := strings.EqualFold(state.Status, "active") || strings.EqualFold(state.Status, "planned")
+	if active && state.ControllerPID > 0 && !oracleProcessExists(state.ControllerPID) {
+		state.Status = "blocked"
+		state.StopReason = "stale_controller"
+		state.Summary = fmt.Sprintf("Oracle controller PID %d is no longer running; saved research files are preserved.", state.ControllerPID)
+		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+		_ = writeOracleStateFile(paths.StatePath, state)
+		_ = os.Remove(paths.LoopPath)
+		active = false
+	}
 	next := "aether oracle \"research topic\""
 	switch {
 	case active:
@@ -483,7 +551,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func startOracleCompatibility(root, topic, depth string, confidenceTarget string, requestedScope string, requestedTemplate string) (map[string]interface{}, error) {
+func startOracleCompatibility(root, topic, depth string, confidenceTarget string, requestedScope string, requestedTemplate string, maxIterations string, background bool) (map[string]interface{}, error) {
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
@@ -491,7 +559,9 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	paths := oracleWorkspacePaths(root)
 	if fileExists(paths.LoopPath) {
 		if state, err := loadOracleStateFile(paths.StatePath); err == nil && strings.EqualFold(strings.TrimSpace(state.Status), "active") {
-			return nil, fmt.Errorf("Oracle loop already active. Run `aether oracle status` or `aether oracle stop` first.")
+			if !recoverStaleOracleController(paths, state) {
+				return nil, fmt.Errorf("Oracle loop already active. Run `aether oracle status` or `aether oracle stop` first.")
+			}
 		}
 	}
 	if err := ensureOracleWorkspace(paths); err != nil {
@@ -528,6 +598,15 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 			v = v*10 + int(ch-'0')
 		}
 		depthCfg.TargetConfidence = v
+	}
+	if strings.TrimSpace(maxIterations) != "" {
+		v, err := parseOracleMaxIterations(maxIterations)
+		if err != nil {
+			return nil, err
+		}
+		depthCfg.MaxIterations = v
+		depthCfg.Label = fmt.Sprintf("Custom (%d iterations)", v)
+		depthCfg.Description = fmt.Sprintf("Explicit max iteration override: %d", v)
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -571,12 +650,148 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		return nil, err
 	}
 
+	if background {
+		pid, logPath, err := startOracleBackgroundLoop(paths)
+		if err != nil {
+			return nil, err
+		}
+		state.ControllerPID = pid
+		state.Summary = fmt.Sprintf("Oracle loop is running in the background as PID %d.", pid)
+		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+		if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+			return nil, err
+		}
+		if err := writeOracleLoopMarker(paths.LoopPath, state); err != nil {
+			return nil, err
+		}
+		result, err := oracleStatusResult(root)
+		if err != nil {
+			return nil, err
+		}
+		result["mode"] = "run"
+		result["started"] = true
+		result["background"] = true
+		result["log_path"] = logPath
+		result["next"] = "aether oracle status"
+		return result, nil
+	}
+
 	result, err := runOracleLoop(paths, detectedType, languages, frameworks)
 	if err != nil {
 		return nil, err
 	}
 	result["started"] = true
 	return result, nil
+}
+
+func parseOracleMaxIterations(value string) (int, error) {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return 0, fmt.Errorf("--max-iterations requires a value")
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > 50 {
+		return 0, fmt.Errorf("--max-iterations must be an integer from 1 to 50, got %q", value)
+	}
+	return n, nil
+}
+
+func recoverStaleOracleController(paths oraclePaths, state oracleStateFile) bool {
+	if state.ControllerPID <= 0 || oracleProcessExists(state.ControllerPID) {
+		return false
+	}
+	state.Status = "blocked"
+	state.StopReason = "stale_controller"
+	state.Summary = fmt.Sprintf("Previous Oracle controller PID %d is no longer running; the saved workspace is preserved and can be archived by the next run.", state.ControllerPID)
+	state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+	_ = writeOracleStateFile(paths.StatePath, state)
+	_ = os.Remove(paths.LoopPath)
+	return true
+}
+
+func resumeOracleLoopCompatibility(root string) (map[string]interface{}, error) {
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		return nil, err
+	}
+	state, err := loadOracleStateFile(paths.StatePath)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(state.Topic) == "" {
+		return nil, fmt.Errorf("oracle run-loop requires an initialized oracle workspace")
+	}
+	detectedType, languages, frameworks := detectOracleProjectProfile(root)
+	state.Status = "active"
+	state.ControllerPID = os.Getpid()
+	state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+	if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+		return nil, err
+	}
+	if err := writeOracleLoopMarker(paths.LoopPath, state); err != nil {
+		return nil, err
+	}
+	return runOracleLoop(paths, detectedType, languages, frameworks)
+}
+
+func startOracleBackgroundLoop(paths oraclePaths) (int, string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return 0, "", fmt.Errorf("locate aether executable: %w", err)
+	}
+	logPath := filepath.Join(paths.Dir, "oracle.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return 0, "", fmt.Errorf("open oracle background log: %w", err)
+	}
+	defer logFile.Close()
+
+	cmd := exec.Command(exe, "oracle", "run-loop")
+	cmd.Dir = paths.Root
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.Env = oracleBackgroundEnv(os.Environ())
+	configureOracleBackgroundProcess(cmd)
+	if err := cmd.Start(); err != nil {
+		return 0, "", fmt.Errorf("start oracle background loop: %w", err)
+	}
+	return cmd.Process.Pid, logPath, nil
+}
+
+func oracleBackgroundEnv(env []string) []string {
+	blocked := map[string]bool{
+		"AETHER_AGENT_DELEGATE": true,
+		"CLAUDE_CODE_SIMPLE":    true,
+		"OPENCODE_AGENT":        true,
+	}
+	out := make([]string, 0, len(env)+2)
+	hasOutputMode := false
+	hasAvoidOpenCode := false
+	for _, entry := range env {
+		key := entry
+		if idx := strings.IndexByte(entry, '='); idx >= 0 {
+			key = entry[:idx]
+		}
+		if blocked[key] {
+			continue
+		}
+		if key == "AETHER_OUTPUT_MODE" {
+			hasOutputMode = true
+			out = append(out, "AETHER_OUTPUT_MODE=json")
+			continue
+		}
+		if key == "AETHER_ORACLE_AVOID_OPENCODE" {
+			hasAvoidOpenCode = true
+		}
+		out = append(out, entry)
+	}
+	if !hasOutputMode {
+		out = append(out, "AETHER_OUTPUT_MODE=json")
+	}
+	if !hasAvoidOpenCode {
+		out = append(out, "AETHER_ORACLE_AVOID_OPENCODE=1")
+	}
+	return out
 }
 
 func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks []string) (map[string]interface{}, error) {
@@ -764,7 +979,6 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "blocked", loopStopReason, "aether oracle status")
 		}
 
-		state.Iteration = iterationsRun
 		state.OverallConfidence = oracleOverallConfidence(plan)
 		state.Platform = oracleInvokerPlatform(invoker)
 		state.ActiveAttempt = 0
