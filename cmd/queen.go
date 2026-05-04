@@ -77,9 +77,8 @@ var queenInitCmd = &cobra.Command{
 
 		outputOK(map[string]interface{}{"created": globalCreated, "path": queenPath, "local_created": localCreated, "local_path": localPath})
 		return nil
-		},
-	}
-
+	},
+}
 
 // --- queen-read ---
 
@@ -452,6 +451,124 @@ var charterWriteCmd = &cobra.Command{
 	},
 }
 
+// --- queen-compose ---
+
+var queenComposeCmd = &cobra.Command{
+	Use:   "queen-compose [project]",
+	Short: "Create or improve the repo-local QUEEN.md project brain",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		project, _ := cmd.Flags().GetString("project")
+		if strings.TrimSpace(project) == "" && len(args) > 0 {
+			project = args[0]
+		}
+		currentWork, _ := cmd.Flags().GetString("current-work")
+		audience, _ := cmd.Flags().GetString("audience")
+		stack, _ := cmd.Flags().GetString("stack")
+		commands, _ := cmd.Flags().GetString("commands")
+		communication, _ := cmd.Flags().GetString("communication")
+		priorities, _ := cmd.Flags().GetString("priorities")
+		constraints, _ := cmd.Flags().GetString("constraints")
+		verification, _ := cmd.Flags().GetString("verification")
+		plainEnglish, _ := cmd.Flags().GetBool("plain-english")
+
+		localPath := localQueenPath()
+		if localPath == "" {
+			outputError(1, "no local store initialized", nil)
+			return nil
+		}
+
+		created := false
+		if _, err := os.Stat(localPath); os.IsNotExist(err) {
+			if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+				outputError(2, fmt.Sprintf("failed to create local .aether directory: %v", err), nil)
+				return nil
+			}
+			if err := os.WriteFile(localPath, []byte(queenDefaultContent), 0644); err != nil {
+				outputError(2, fmt.Sprintf("failed to create local QUEEN.md: %v", err), nil)
+				return nil
+			}
+			created = true
+		}
+
+		text, err := loadLocalQueenText()
+		if err != nil {
+			outputError(1, fmt.Sprintf("failed to load local QUEEN.md: %v", err), nil)
+			return nil
+		}
+
+		sections := []string{}
+		written := false
+
+		charterLines := buildQueenComposeCharterLines(project, currentWork, audience, stack)
+		if len(charterLines) > 0 {
+			text = replaceQueenSection(text, "Colony Charter", strings.Join(charterLines, "\n"))
+			sections = append(sections, "Colony Charter")
+			written = true
+		}
+
+		var patternEntries []string
+		if entry := queenComposeEntry("Commands", commands); entry != "" {
+			patternEntries = append(patternEntries, entry)
+		}
+		if len(patternEntries) > 0 {
+			text = appendEntriesToQueenSection(text, "Patterns", patternEntries)
+			sections = append(sections, "Patterns")
+			written = true
+		}
+
+		var preferenceEntries []string
+		if entry := queenComposeEntry("Communication", communication); entry != "" {
+			preferenceEntries = append(preferenceEntries, entry)
+		}
+		if hasQueenComposeInput(project, currentWork, audience, stack, commands, communication, priorities, constraints, verification) || cmd.Flags().Changed("plain-english") {
+			if plainEnglish {
+				preferenceEntries = append(preferenceEntries, "- Include short plain-English / for-dummies explanations alongside technical details")
+			} else if cmd.Flags().Changed("plain-english") {
+				preferenceEntries = append(preferenceEntries, "- Do not add beginner framing unless the user asks for it")
+			}
+		}
+		if entry := queenComposeEntry("Priorities", priorities); entry != "" {
+			preferenceEntries = append(preferenceEntries, entry)
+		}
+		if entry := queenComposeEntry("Verification", verification); entry != "" {
+			preferenceEntries = append(preferenceEntries, entry)
+		}
+		if len(preferenceEntries) > 0 {
+			text = appendEntriesToQueenSection(text, "User Preferences", preferenceEntries)
+			sections = append(sections, "User Preferences")
+			written = true
+		}
+
+		if entry := queenComposeEntry("Constraints", constraints); entry != "" {
+			text = appendEntriesToQueenSection(text, "Anti-Patterns", []string{entry})
+			sections = append(sections, "Anti-Patterns")
+			written = true
+		}
+
+		if written || created {
+			if err := writeLocalQueenText(text); err != nil {
+				outputError(2, fmt.Sprintf("failed to write local QUEEN.md: %v", err), nil)
+				return nil
+			}
+		}
+
+		result := map[string]interface{}{
+			"path":        localPath,
+			"target":      "local",
+			"created":     created,
+			"written":     written,
+			"sections":    sections,
+			"needs_input": !written,
+		}
+		if !written {
+			result["questions"] = queenComposeQuestions()
+		}
+		outputOK(result)
+		return nil
+	},
+}
+
 func init() {
 	queenPromoteCmd.Flags().String("content", "", "Content to promote (required)")
 	queenPromoteCmd.Flags().String("section", "", "Target section name (required)")
@@ -464,11 +581,21 @@ func init() {
 	charterWriteCmd.Flags().String("vision", "", "Legacy charter vision text")
 	charterWriteCmd.Flags().String("governance", "", "Legacy charter governance text")
 	charterWriteCmd.Flags().String("goals", "", "Legacy charter goals text")
+	queenComposeCmd.Flags().String("project", "", "What this repo is or should be")
+	queenComposeCmd.Flags().String("current-work", "", "What is being developed right now")
+	queenComposeCmd.Flags().String("audience", "", "Who this repo or product is for")
+	queenComposeCmd.Flags().String("stack", "", "Tech stack, tools, frameworks, and services that matter")
+	queenComposeCmd.Flags().String("commands", "", "Build, lint, test, run, or release commands agents should know")
+	queenComposeCmd.Flags().String("communication", "", "How agents should communicate with the user")
+	queenComposeCmd.Flags().Bool("plain-english", true, "Include short plain-English / for-dummies explanations")
+	queenComposeCmd.Flags().String("priorities", "", "What agents should prioritize in this repo")
+	queenComposeCmd.Flags().String("constraints", "", "What agents should avoid or treat as constraints")
+	queenComposeCmd.Flags().String("verification", "", "What good verification looks like for this repo")
 
 	for _, c := range []*cobra.Command{
 		queenInitCmd, queenReadCmd, queenPromoteCmd,
 		queenThresholdsCmd, queenWriteLearningsCmd, queenPromoteInstinctCmd,
-		queenSeedFromHiveCmd, queenMigrateCmd, charterWriteCmd,
+		queenSeedFromHiveCmd, queenMigrateCmd, charterWriteCmd, queenComposeCmd,
 	} {
 		rootCmd.AddCommand(c)
 	}
@@ -689,4 +816,52 @@ func buildCharterLines(name, goal, domains, intent, vision, governance, goals st
 		lines = append(lines, "- **Goals:** "+sanitizeQueenInline(goals))
 	}
 	return lines
+}
+
+func buildQueenComposeCharterLines(project, currentWork, audience, stack string) []string {
+	var lines []string
+	if project = sanitizeQueenInline(project); project != "" {
+		lines = append(lines, "- **Project:** "+project)
+	}
+	if currentWork = sanitizeQueenInline(currentWork); currentWork != "" {
+		lines = append(lines, "- **Current Work:** "+currentWork)
+	}
+	if audience = sanitizeQueenInline(audience); audience != "" {
+		lines = append(lines, "- **Audience:** "+audience)
+	}
+	if stack = sanitizeQueenInline(stack); stack != "" {
+		lines = append(lines, "- **Stack:** "+stack)
+	}
+	return lines
+}
+
+func queenComposeEntry(label, value string) string {
+	value = sanitizeQueenInline(value)
+	if value == "" {
+		return ""
+	}
+	return fmt.Sprintf("- **%s:** %s", label, value)
+}
+
+func hasQueenComposeInput(values ...string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func queenComposeQuestions() []string {
+	return []string{
+		"What do you want this repo to be?",
+		"What are you developing right now?",
+		"Who is this for?",
+		"What tech stack, tools, frameworks, or services matter?",
+		"What commands should agents know?",
+		"How should agents speak to you?",
+		"What should agents prioritize?",
+		"What should agents avoid?",
+		"What does good verification look like here?",
+	}
 }

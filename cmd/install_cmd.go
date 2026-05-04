@@ -36,7 +36,7 @@ var installCmd = &cobra.Command{
 		"  .opencode/commands/ant/ -> ~/.config/opencode/commands/ant/\n" +
 		"  .opencode/agents/      -> ~/.config/opencode/agents/\n" +
 		"  .codex/agents/         -> ~/.codex/agents/\n" +
-		"  .aether/skills-codex/  -> ~/.codex/skills/aether/\n\n" +
+		"  .aether/skills/        -> ~/.codex/skills/aether/\n\n" +
 		"Also creates the selected hub directory (~/.aether/ for stable, ~/.aether-dev/ for dev) for cross-repo coordination.",
 	Args: cobra.NoArgs,
 	RunE: runInstall,
@@ -595,20 +595,23 @@ func cleanEmptyDirs(baseDir string) {
 // These are private/local paths that belong to individual colonies and should
 // never be published into the shared hub.
 var hubExcludeDirs = map[string]bool{
-	"data":         true,
-	"dreams":       true,
-	"oracle":       true,
-	"checkpoints":  true,
-	"locks":        true,
-	"temp":         true,
-	"archive":      true,
-	"chambers":     true,
-	"backups":      true,
-	".aether":      true,
-	"agents":       true, // agents/ is opencode-only, agents-claude/ is the packaging mirror
-	"examples":     true,
-	"node_modules": true,
-	"__pycache__":  true,
+	"data":          true,
+	"dreams":        true,
+	"oracle":        true,
+	"checkpoints":   true,
+	"locks":         true,
+	"temp":          true,
+	"archive":       true,
+	"chambers":      true,
+	"backups":       true,
+	".aether":       true,
+	"agents":        true,
+	"agents-claude": true,
+	"agents-codex":  true,
+	"skills-codex":  true,
+	"examples":      true,
+	"node_modules":  true,
+	"__pycache__":   true,
 }
 
 // setupInstallHub creates the hub directory at ~/.aether/ and syncs companion files
@@ -664,6 +667,10 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 			destDir: filepath.Join(systemDir, "commands", "claude"),
 		},
 		{
+			srcDir:  filepath.Join(packageDir, ".claude", "agents", "ant"),
+			destDir: filepath.Join(systemDir, "agents-claude"),
+		},
+		{
 			srcDir:  filepath.Join(packageDir, ".claude"),
 			destDir: filepath.Join(systemDir, "settings", "claude"),
 			include: isClaudeSettingsFile,
@@ -686,6 +693,15 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 			existing, _ := result["errors"].([]string)
 			result["errors"] = append(existing, syncRes.errors...)
 		}
+	}
+
+	referenceSyncResult := syncDirToHubWithExclusion(filepath.Join(packageDir, ".aether", "references"), filepath.Join(hubDir, "references"), nil, nil, nil)
+	hubSyncResult.copied += referenceSyncResult.copied
+	hubSyncResult.skipped += referenceSyncResult.skipped
+	hubSyncResult.removed = append(hubSyncResult.removed, referenceSyncResult.removed...)
+	if len(referenceSyncResult.errors) > 0 {
+		existing, _ := result["errors"].([]string)
+		result["errors"] = append(existing, referenceSyncResult.errors...)
 	}
 
 	result["copied"] = hubSyncResult.copied

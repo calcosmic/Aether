@@ -280,15 +280,13 @@ primary platforms.
 ## 🏗️ Architecture
 
 ```
-.aether/                        Colony files (repo-local)
-├── commands/                   Slash-command mirrors and platform command docs
-├── agents-claude/               Claude agent definitions
-├── skills-codex/               Codex skill mirror
-├── skills/                     29 skills (11 colony + 18 domain)
-├── exchange/                   XML exchange modules
-├── docs/                       Documentation
-├── templates/                  12 templates
-└── data/                       Colony state (local only)
+.aether/                        Repo-local colony files
+├── data/                       Colony state (local only)
+├── dreams/                     Session notes (local only)
+├── oracle/                     Research artifacts (local only)
+├── locks/                      Runtime locks
+├── QUEEN.md                    Repo-specific wisdom
+└── skills/                     Custom repo skills only
 
 .codex/                         Codex CLI agent definitions
 └── agents/                     25 TOML agent files
@@ -551,7 +549,7 @@ Pheromones are the colony's guidance system. They inject signals that workers se
 | `/ant-redirect "<pattern>"` | Emit a REDIRECT signal to warn the colony away from a pattern. Priority: high. Strength: 0.9. Flag: `--ttl <value>` (default: `phase_end`). |
 | `/ant-feedback "<note>"` | Emit a FEEDBACK signal with gentle guidance. Priority: low. Strength: 0.7. Creates a colony instinct. Flag: `--ttl <value>` (default: `phase_end`). |
 | `/ant-pheromones [subcommand]` | View and manage active pheromone signals. Subcommands: `all` (default), `focus`, `redirect`, `feedback`, `clear`, `expire <id>`. Flag: `--no-visual`. |
-| `/ant-export-signals [path]` | Export colony pheromone signals to portable XML format. Default output: `.aether/exchange/pheromones.xml`. Requires `xmllint`. |
+| `/ant-export-signals [path]` | Export colony pheromone signals to portable XML format. Default output: `.aether/data/pheromones-export.xml`. Requires `xmllint`. |
 | `/ant-import-signals <file> [colony]` | Import pheromone signals from another colony's XML export. Second argument is an optional colony name prefix to prevent ID collisions. Requires `xmllint`. |
 
 ---
@@ -679,11 +677,10 @@ aether lay-eggs
 
 ```
 Colony nest initialized.
-  .aether/            Colony files (repo-local)
-  .claude/commands/ant + .opencode/commands/ant   46 slash commands each
-  .aether/agents-claude/   Agent definitions
-  .aether/skills/     28 skills loaded
-  .aether/data/       Colony state (local only)
+  .aether/            Repo-local state only
+  global platform homes   Agents and commands installed once
+  .aether/data/       Colony state
+  .aether/QUEEN.md    Repo-specific wisdom
 ```
 
 This creates the nest -- the directory structure the colony needs to operate. You only run this once per repo. Think of it as setting up an ant farm before the colony moves in.
@@ -1029,10 +1026,9 @@ Colony status: CROWNED
 
 </details>
 
-The colony ran a final curation pass. High-confidence instincts were promoted to
-QUEEN.md -- your personal wisdom file that primes future colonies. The
-highest-scoring instincts also flowed into the Hive Brain, making them
-available to other projects on your machine.
+The colony ran a final curation pass. Repo-specific lessons were preserved in
+the local QUEEN.md, and cross-colony wisdom can be promoted to the hub-global
+QUEEN.md and Hive Brain so other projects on your machine can reuse it.
 
 ---
 

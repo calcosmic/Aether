@@ -1,50 +1,84 @@
 <!-- Generated from .aether/commands/lay-eggs.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-lay-eggs
-description: "🥚 Set up Aether in this repo — creates .aether/ with all system files"
+description: "🥚 Set up Aether in this repo — creates repo-local Aether state"
 ---
 
 You are the **Queen**. Prepare this repository for Aether colony development.
 
 ## Instructions
 
-This command sets up the `.aether/` directory structure and copies all system files from the global hub. It does NOT start a colony — that's what `/ant-init "goal"` is for.
+This command sets up the repo-local `.aether/` state area. It does **not**
+start a colony — that is what `/ant-init "goal"` is for.
+
+For beginners: this is the step that makes the current project Aether-aware.
+The reusable Aether machinery stays installed globally; this repo only gets its
+own nest state, notes, locks, and project wisdom.
 
 <failure_modes>
 ### Hub Not Found
 If `~/.aether/version.json` does not exist:
 - The global hub is not installed
 - Tell the user to install the Aether Go binary and run `aether install` first
-- Stop — cannot proceed without hub
+- Stop — cannot proceed without the hub
 
-### Partial Copy Failure
-If some files fail to copy from hub:
-- Report which files succeeded and which failed
-- The user can re-run `/ant-lay-eggs` safely (idempotent)
+### Partial Setup Failure
+If the CLI reports setup errors:
+- Report which setup step failed
+- Do not hand-copy global assets into the repo to compensate
+- Tell the user the command is safe to re-run after the hub/runtime issue is fixed
+
+### Existing Repo State
+If `.aether/` already exists:
+- Treat the command as an idempotent repair/setup pass
+- Preserve existing local state and project wisdom
+- Do not overwrite colony state, dreams, oracle notes, or custom skills
 </failure_modes>
 
 <success_criteria>
 Command is complete when:
-- `.aether/` directory exists with all subdirectories
-- System files (workers.md, etc.) are present
-- Templates, docs, utils, schemas are populated
-- QUEEN.md is initialized
-- User sees confirmation and next steps
+- `.aether/` exists
+- repo-local state scaffolding exists as needed (`data/`, `locks/`, and related runtime directories)
+- `.aether/QUEEN.md` exists or is preserved
+- `.aether/.gitignore` protects local state from version control
+- reusable assets are **not** copied into repo-local `.aether/`
+- user sees confirmation and next steps
 </success_criteria>
 
 <read_only>
 Do not touch during lay-eggs:
 - .aether/data/COLONY_STATE.json (colony state belongs to init)
-- .aether/dreams/ contents (user notes — create dir but don't modify files)
-- .aether/chambers/ contents (archived colonies — create dir but don't modify files)
+- .aether/data/pheromones.json and other colony data files
+- .aether/dreams/ contents (user notes)
+- .aether/oracle/ contents (research artifacts)
+- .aether/locks/ active lock files
+- .aether/skills/ custom repo-specific skills
 - Source code files
 - .env* files
-- .claude/settings.json
+- User-owned platform settings
 </read_only>
+
+<global_assets>
+These assets must stay global after setup:
+- agents
+- commands
+- shipped skills
+- templates
+- docs
+- utils
+- workers.md
+- exchange modules
+- references
+
+Do not manually copy them into `.aether/`, `.claude/`, `.opencode/`, or
+`.codex/` inside this repo. `aether install` owns global installation, and
+`aether lay-eggs` owns only repo-local setup.
+</global_assets>
 
 ### Step 1: Check Hub Availability
 
-Check if the global hub exists by reading `~/.aether/version.json` (expand `~` to the user's home directory).
+Check if the global hub exists by reading `~/.aether/version.json` (expand `~`
+to the user's home directory).
 
 **If the hub does NOT exist:**
 ```
@@ -56,7 +90,7 @@ The global hub must be installed before setting up a repo.
   aether install
 
 This installs the Aether Go binary and populates the hub at ~/.aether/system/
-with all the system files your repo needs.
+with the shared agents, commands, skills, docs, templates, and utilities.
 
 After installing, run /ant-lay-eggs again.
 ```
@@ -64,128 +98,92 @@ Stop here.
 
 ### Step 2: Check Existing Setup
 
-
-Check if `.aether/workers.md` already exists using the Read tool.
-
-
+Check whether `.aether/` already exists.
 
 **If it exists:**
 ```
-Aether is already set up in this repo.
+Aether is already present in this repo.
 
-Refreshing system files from hub...
+Refreshing repo-local setup and preserving colony state...
 ```
-Proceed to Step 3 (this makes the command safe to re-run as an update/repair).
+Proceed to Step 3. This makes the command safe to re-run as a repair pass.
 
 **If it does NOT exist:**
 ```
-Setting up Aether in this repo...
+Setting up Aether local state in this repo...
 ```
 Proceed to Step 3.
 
-### Step 3: Create Directory Structure
+### Step 3: Run Runtime Setup
 
-
-Run using the Bash tool with description "Creating Aether directory structure...":
-
+Run using the Bash tool with description "Preparing Aether local state...":
 
 ```bash
-mkdir -p \
-  .aether/data \
-  .aether/data/midden \
-  .aether/data/backups \
-  .aether/data/survey \
-  .aether/dreams \
-  .aether/chambers \
-  .aether/locks \
-  .aether/temp \
-  .aether/docs \
-  .aether/utils \
-  .aether/templates \
-  .aether/schemas \
-  .aether/exchange \
-  .aether/rules \
-  .aether/scripts \
-  .claude/rules && \
-touch .aether/dreams/.gitkeep && \
-touch .aether/chambers/.gitkeep && \
-touch .aether/data/midden/.gitkeep
+AETHER_OUTPUT_MODE=visual aether lay-eggs $ARGUMENTS
 ```
 
-### Step 4: Copy System Files from Hub
+The Go runtime is the source of truth. Do not recreate the setup logic in the
+wrapper unless the runtime command is unavailable.
 
+### Step 4: Verify Local-Only Layout
 
-Run using the Bash tool with description "Copying system files from hub...":
-
-```bash
-aether setup
-```
-
-Parse the JSON result for the sync summary (copied/skipped counts).
-
-### Step 5: Initialize QUEEN.md
-
-
-Run using the Bash tool with description "Initializing QUEEN.md...":
-```bash
-aether queen-init
-```
-
-
-
-Parse the JSON result:
-- If `created` is true: note `QUEEN.md initialized`
-- If `created` is false: note `QUEEN.md already exists (preserved)`
-
-### Step 6: Register Repo (Silent)
-
-Attempt to register this repo in the global hub. Silent on failure — registry is optional.
-
-
-Run using the Bash tool with description "Registering repo..." (ignore errors):
-
+Run using the Bash tool with description "Verifying local-only Aether layout...":
 
 ```bash
-aether registry-add --path "$(pwd)" "$(jq -r '.version // "unknown"' ~/.aether/version.json 2>/dev/null || echo 'unknown')" 2>/dev/null || true
-```
-
-### Step 7: Verify Setup
-
-
-Run using the Bash tool with description "Verifying setup...":
-
-
-```bash
-# Count what was set up
 dirs=0
 files=0
-for d in .aether/data .aether/docs .aether/utils .aether/templates .aether/schemas .aether/exchange .aether/dreams .aether/chambers; do
+global_leaks=0
+
+for d in .aether .aether/data .aether/locks; do
   [ -d "$d" ] && dirs=$((dirs + 1))
 done
-[ -f .aether/workers.md ] && files=$((files + 1))
-[ -f .aether/QUEEN.md ] && files=$((files + 1))
-[ -f .aether/CONTEXT.md ] && files=$((files + 1))
-[ -d .aether/templates ] && templates=$(ls .aether/templates/*.template.* 2>/dev/null | wc -l | tr -d ' ') || templates=0
-[ -d .aether/utils ] && utils=$(ls .aether/utils/ 2>/dev/null | wc -l | tr -d ' ') || utils=0
 
-echo "{\"dirs\": $dirs, \"core_files\": $files, \"templates\": $templates, \"utils\": $utils}"
+[ -f .aether/QUEEN.md ] && files=$((files + 1))
+[ -f .aether/.gitignore ] && files=$((files + 1))
+
+if [ -d .aether ]; then
+  for p in .aether/*; do
+    case "$p" in
+      .aether/data|.aether/locks|.aether/dreams|.aether/oracle|.aether/QUEEN.md|.aether/skills)
+        ;;
+      *)
+        [ -e "$p" ] && global_leaks=$((global_leaks + 1))
+        ;;
+    esac
+  done
+fi
+
+echo "{\"dirs\": $dirs, \"core_files\": $files, \"global_asset_leaks\": $global_leaks}"
 ```
 
 Parse the JSON output for the display step.
 
-### Step 8: Display Result
+If `global_asset_leaks` is greater than zero, explain that old repo-local global
+assets are still present and should be cleaned by the runtime during the
+global-hub migration. Do not delete user-owned custom skills or local state by
+hand from this wrapper.
 
+### Step 5: Display Result
 
 ```
 🥚 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    A E T H E R   R E A D Y
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🥚
 
+   {dirs} local state directories ready
+   {core_files} local setup files ready
+   {global_asset_leaks} old global-asset paths detected
 
+Shared Aether assets now live globally:
+  ~/.aether/system/
 
-   {dirs} directories created
-   {core_files} core system files
-   {templates} templates ({utils} utils modules)
+This repo keeps only project-local state:
+  .aether/data/
+  .aether/dreams/
+  .aether/oracle/
+  .aether/locks/
+  .aether/QUEEN.md
+  .aether/skills/   (custom repo skills only)
 
 To start a colony:
   /ant-init "your goal here"

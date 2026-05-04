@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "library": "aether-references",
+  "description": "Global Aether reference library: templates, rubrics, contracts, playbooks, examples, and field guides injected into worker prompts when structurally relevant.",
+  "source_layout": ".aether/references/{category}/{id}.md",
+  "installed_layout": "~/.aether/references/{category}/{id}.md",
+  "target_repo_policy": "References are global-only in v1. Target project repos should not receive .aether/references.",
+  "reference_count": 71,
+  "categories": [
+    {"name": "contracts", "count": 14},
+    {"name": "examples", "count": 6},
+    {"name": "field-guides", "count": 15},
+    {"name": "playbooks", "count": 10},
+    {"name": "rubrics", "count": 13},
+    {"name": "templates", "count": 13}
+  ]
+}

@@ -1,0 +1,8 @@
+name: ant-reference-index
+description: "Build the global reference library index"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether reference-index $ARGUMENTS"
+guardrails:
+  - "Do not write reference index files by hand from this command spec."
+  - "If docs and runtime disagree, runtime wins."

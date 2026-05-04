@@ -19,7 +19,7 @@ If file missing or `goal: null` -> "No colony initialized. Run /ant-init first."
 
 Parse `$ARGUMENTS`:
 - If a path is provided, use it as the output path.
-- If empty, default to `.aether/exchange/pheromones.xml`.
+- If empty, default to `.aether/data/pheromones-export.xml`.
 
 ### Step 2: Export
 

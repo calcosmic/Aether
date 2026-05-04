@@ -25,18 +25,17 @@ reference for humans and agents working within the Codex platform. Think of AGEN
 
 ```
 +----------------------------------------------------------------+
-|  In the Aether repo, .aether/ IS the source of truth.           |
-|  Edit system files there and publish directly.                  |
+|  In the Aether repo, canonical source files are edited once.    |
+|  Publish/install writes those files to the global hub.           |
 |                                                                 |
-|  .aether/           -> SOURCE OF TRUTH (edit this, published)   |
+|  .aether/           -> SOURCE for workers, skills, docs, utils  |
 |  .aether/data/      -> LOCAL ONLY (never distributed)            |
 |  .aether/dreams/    -> LOCAL ONLY (never distributed)            |
 |                                                                 |
 |  .codex/agents/     -> SOURCE OF TRUTH (Codex agent TOML defs)  |
 |  AGENTS.md          -> SOURCE OF TRUTH (Codex system prompt)    |
 |                                                                 |
-|  `aether install --package-dir "$PWD"` refreshes hub files      |
-|  and Codex assets from this checkout.                           |
+|  `aether publish` refreshes hub files and global Codex assets.  |
 +----------------------------------------------------------------+
 ```
 
@@ -44,9 +43,9 @@ reference for humans and agents working within the Codex platform. Think of AGEN
 |---------------------|---------------|-----|
 | Agent definitions | `.codex/agents/*.toml` | Source of truth for Codex agents |
 | System prompt | `AGENTS.md` (project root) | Codex reads this automatically |
-| Colony rules | `.aether/workers.md` | Source of truth |
+| Colony rules | Aether repo `.aether/` `workers.md` | Source of truth, published to hub |
 | Aether CLI | `cmd/` (Go binary) | Platform-agnostic |
-| User docs | `.aether/docs/` | Synced via `aether install` / `aether update` |
+| User docs | `.aether/docs/` | Published to the global hub |
 
 **After editing:**
 ```bash
@@ -61,7 +60,7 @@ aether install --package-dir "$PWD"
 
 **`.aether/` + `.codex/` are the source of truth.** Release binaries embed the shipped
 companion files, and local development can publish directly from this checkout with
-`aether install --package-dir "$PWD"`. Codex agent TOML files live in `.codex/agents/`
+`aether publish` or `aether install --package-dir "$PWD"`. Codex agent TOML files live in `.codex/agents/`
 and sync to the hub alongside the other platform files.
 
 ```
@@ -77,9 +76,9 @@ Aether Repo (this repo)
 +-- AGENTS.md              Codex system prompt              |
                                                            v
                                                      ~/.aether/ (THE HUB)
-                                                     +-- system/      <- .aether/
+                                                     +-- system/      <- global Aether assets
                                                      |   +-- codex/   <- .codex/agents/
-                                                     |   +-- skills-codex/
+                                                     |   +-- shipped skills for Codex
                                                      +-- agents/      <- user-level Claude/OpenCode assets
                                                      +-- commands/
                                                      |     +-- claude/
@@ -90,10 +89,12 @@ Aether Repo (this repo)
   aether lay-eggs (initializes colony)
 
 v
-any-repo/.codex/ (WORKING COPY)
-+-- agents/          <- from hub system/codex/
-+-- skills/aether/   <- from hub system/skills-codex/
-+-- data/            <- LOCAL (never touched by updates)
+any-repo/.aether/ (LOCAL ONLY)
++-- data/            <- colony state
++-- dreams/          <- session notes
++-- locks/           <- runtime locks
++-- QUEEN.md         <- repo-specific wisdom
++-- skills/          <- custom repo skills only
 ```
 
 ---
@@ -105,8 +106,6 @@ any-repo/.codex/ (WORKING COPY)
 | `.codex/agents/` | Codex agent definitions (TOML) | -> `~/.aether/system/codex/` |
 | `AGENTS.md` | Codex system instructions | Template-generated at setup |
 | `.aether/` (system files) | Source of truth for workers, utils, docs | -> `~/.aether/system/` |
-| `.aether/agents-codex/` | Codex packaging mirror | Embedded alongside hub assets |
-| `.aether/skills-codex/` | Codex-installed skill mirror | -> `~/.aether/system/skills-codex/` |
 | `.aether/data/` | Colony state | **NEVER touched** |
 | `.aether/dreams/` | Session notes | **NEVER touched** |
 
@@ -171,8 +170,8 @@ You are a **Builder Ant** in the Aether Colony...
 
 ### Skills
 
-The shared skill sources live in `.aether/skills/` and `.aether/skills-codex/`.
-For Codex, installed skills are copied into `.codex/skills/aether/` and matched by
+The shared skill sources live in `.aether/skills/`.
+For Codex, installed skills are copied into the global Codex skills directory and matched by
 the `aether skill-*` commands against worker role, workspace files, and package manifests.
 
 Skills are not a separate Codex plugin bundle. Codex agent definitions remain in
@@ -331,7 +330,7 @@ All 25 agents are defined in `.codex/agents/*.toml`:
 |------|---------------|-------|
 | Codex agent defs | `.codex/agents/*.toml` | TOML format; `developer_instructions` field holds content |
 | System prompt | `AGENTS.md` | Project root; Codex reads this automatically |
-| Colony workers | `.aether/workers.md` | Shared across all platforms |
+| Colony workers | Aether repo `.aether/` `workers.md` | Shared across all platforms through the hub |
 | Go CLI | `cmd/` | Platform-agnostic; no changes needed for Codex |
 | Skills | `.aether/skills/` | Shared across all platforms |
 | Templates | `.aether/templates/` | Includes Codex template |
@@ -419,7 +418,7 @@ Runtime note:
 | Slash commands | Yes (50 commands) | Yes (50 commands) | **No** -- use `aether` CLI |
 | Command location | `.claude/commands/ant/` | `.opencode/commands/ant/` | N/A |
 | Agent metadata | In markdown header | In markdown header | TOML keys |
-| Hub sync path | `~/.aether/agents/` | `~/.aether/agents/` | `~/.aether/system/codex/` + `~/.aether/system/skills-codex/` |
+| Hub sync path | global Claude home + hub | global OpenCode home + hub | global Codex home + hub |
 | Worker runtime | `Task` tool | `Task` tool | `codex exec` driven by `aether` |
 | Rules file | `.claude/rules/` | Inline | `AGENTS.md` sections |
 

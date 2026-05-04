@@ -400,12 +400,12 @@ This step sets `$last_merged_branch` and `$last_merge_sha` which are consumed by
 > exported-file PR merge path is still design intent rather than the default
 > Codex runtime flow.
 
-If a `pheromone-branch-export.json` exists in `.aether/exchange/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This entire step is silent and non-blocking -- continue proceeds even if merge-back fails.
+If a `pheromone-branch-export.json` exists in `.aether/data/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This entire step is silent and non-blocking -- continue proceeds even if merge-back fails.
 
 Run using the Bash tool with description "Checking for pheromone merge-back file...":
 ```bash
 # Check if a branch pheromone export was merged into main
-export_file=".aether/exchange/pheromone-branch-export.json"
+export_file=".aether/data/pheromone-branch-export.json"
 if [[ -f "$export_file" ]]; then
   merge_result=$(aether pheromone-merge-back --export-file "$export_file" 2>/dev/null || echo '{"ok":false}')
   merge_ok=$(echo "$merge_result" | jq -r '.ok // false' 2>/dev/null)

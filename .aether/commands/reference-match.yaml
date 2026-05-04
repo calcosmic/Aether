@@ -1,0 +1,8 @@
+name: ant-reference-match
+description: "Match global references to a worker role, task, and optional output type"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether reference-match $ARGUMENTS"
+guardrails:
+  - "Do not invent reference matches by hand; use the runtime scorer."
+  - "If docs and runtime disagree, runtime wins."

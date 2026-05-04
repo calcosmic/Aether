@@ -122,7 +122,8 @@ never via `DATA_DIR` or `COLONY_DATA_DIR`.
     4. Pheromones: branch-local only
        -> Each branch has its own signal set
     5. Instincts: stored in branch-local COLONY_STATE.json
-       -> Different per branch; promoted to hub QUEEN.md on seal
+       -> Different per branch; promoted to local QUEEN.md first and hub
+          QUEEN.md when they become cross-colony wisdom
 ```
 
 ---
@@ -170,8 +171,10 @@ When an agent runs `/ant-build` or `/ant-continue` on a feature branch:
 ### Rule 5: Instincts are branch-local until promoted
 
 - Instincts live inside `COLONY_STATE.json` (branch-local)
-- They are promoted to hub `QUEEN.md` via `queen-promote` during `/ant-seal`
-- After promotion, they become visible to all branches via hub QUEEN.md
+- They are written to repo-local `QUEEN.md` for project memory first
+- Cross-colony promotions are written to hub `QUEEN.md` during seal or explicit
+  promotion flows
+- After hub promotion, they become visible to all branches via hub QUEEN.md
 
 ---
 

@@ -36,6 +36,7 @@ type repoSyncPair struct {
 	mapRelPath           syncRelPathMapper
 	cleanupInclude       syncFilter
 	cleanupLegacyClaude  bool
+	consumerOnly         bool
 }
 
 type syncValidator func(srcPath, relPath string, data []byte) error
@@ -56,22 +57,63 @@ func installSyncPairs() []installSyncPair {
 		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true},
 		{srcRel: ".opencode/agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
-		{srcRel: ".aether/skills-codex", destRel: ".codex/skills/aether", label: "Skills (codex)", cleanup: false, preserveLocalChanges: true},
+		{srcRel: ".aether/skills", destRel: ".codex/skills/aether", label: "Skills (codex)", cleanup: false, preserveLocalChanges: true},
 	}
 }
 
 func repoSyncPairs() []repoSyncPair {
 	return []repoSyncPair{
-		{hubRel: ".", destRel: ".", label: "System files"},
-		{hubRel: "commands/claude", destRel: "../.claude/commands", label: "Commands (claude)", mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
+		{
+			hubRel:         ".",
+			destRel:        ".",
+			label:          "Repo .aether cleanup",
+			cleanup:        true,
+			include:        neverSyncPath,
+			cleanupInclude: isManagedAetherSystemPath,
+			consumerOnly:   true,
+		},
 		{hubRel: "settings/claude", destRel: "../.claude", label: "Settings (claude)", preserveLocalChanges: true, include: isClaudeSettingsFile},
-		{hubRel: "commands/opencode", destRel: "../.opencode/commands/ant", label: "Commands (opencode)"},
-		{hubRel: "agents", destRel: "../.opencode/agents", label: "Agents (opencode)", validate: validateOpenCodeAgentFile},
-		{hubRel: "agents-claude", destRel: "../.claude/agents/ant", label: "Agents (claude)"},
-		{hubRel: "codex", destRel: "../.codex/agents", label: "Agents (codex)", preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
-		{hubRel: "skills-codex", destRel: "../.codex/skills/aether", label: "Skills (codex)", preserveLocalChanges: true},
 		{hubRel: "rules", destRel: "../.claude/rules", label: "Rules (claude)"},
 	}
+}
+
+func neverSyncPath(string) bool {
+	return false
+}
+
+var managedAetherSystemDirs = map[string]bool{
+	"agents":        true,
+	"agents-claude": true,
+	"agents-codex":  true,
+	"commands":      true,
+	"docs":          true,
+	"exchange":      true,
+	"references":    true,
+	"rules":         true,
+	"schemas":       true,
+	"skills-codex":  true,
+	"templates":     true,
+	"ts":            true,
+	"utils":         true,
+}
+
+var managedAetherSystemFiles = map[string]bool{
+	"workers.md": true,
+}
+
+func isManagedAetherSystemPath(relPath string) bool {
+	clean := filepath.ToSlash(filepath.Clean(relPath))
+	if clean == "." || clean == "" {
+		return false
+	}
+	first := clean
+	if idx := strings.Index(clean, "/"); idx >= 0 {
+		first = clean[:idx]
+	}
+	if managedAetherSystemDirs[first] {
+		return true
+	}
+	return managedAetherSystemFiles[filepath.Base(clean)]
 }
 
 func isShippedAetherCodexAgent(relPath string) bool {
@@ -151,6 +193,288 @@ func removeLegacyClaudeCommandNamespace(commandsDir string) ([]string, []string)
 	}
 
 	return removed, errs
+}
+
+func appendSyncResult(details *[]map[string]interface{}, totals *updateSyncResult, label string, result syncResult) {
+	entry := map[string]interface{}{
+		"label":   label,
+		"copied":  result.copied,
+		"skipped": result.skipped,
+		"removed": len(result.removed),
+	}
+	if len(result.errors) > 0 {
+		entry["errors"] = result.errors
+		totals.errors = append(totals.errors, result.errors...)
+	}
+	*details = append(*details, entry)
+	totals.copied += result.copied
+	totals.skipped += result.skipped
+}
+
+func pruneLegacyRepoPlatformAssets(repoDir string) syncResult {
+	result := syncResult{}
+	if isAetherSourceCheckout(repoDir) {
+		return result
+	}
+
+	pruners := []struct {
+		label string
+		fn    func() syncResult
+	}{
+		{
+			label: "claude commands",
+			fn: func() syncResult {
+				return pruneGeneratedCommandFiles(filepath.Join(repoDir, ".claude", "commands"))
+			},
+		},
+		{
+			label: "opencode commands",
+			fn: func() syncResult {
+				return pruneGeneratedCommandFiles(filepath.Join(repoDir, ".opencode", "commands", "ant"))
+			},
+		},
+		{
+			label: "claude agents",
+			fn: func() syncResult {
+				return pruneAetherNamedFiles(filepath.Join(repoDir, ".claude", "agents", "ant"), ".md")
+			},
+		},
+		{
+			label: "opencode agents",
+			fn: func() syncResult {
+				return pruneAetherNamedFiles(filepath.Join(repoDir, ".opencode", "agents"), ".md")
+			},
+		},
+		{
+			label: "codex agents",
+			fn: func() syncResult {
+				return pruneAetherNamedFiles(filepath.Join(repoDir, ".codex", "agents"), ".toml")
+			},
+		},
+		{
+			label: "codex skills",
+			fn: func() syncResult {
+				return pruneDirectoryTree(filepath.Join(repoDir, ".codex", "skills", "aether"))
+			},
+		},
+	}
+
+	for _, pruner := range pruners {
+		pruned := pruner.fn()
+		for _, removed := range pruned.removed {
+			result.removed = append(result.removed, filepath.ToSlash(filepath.Join(pruner.label, removed)))
+		}
+		result.errors = append(result.errors, pruned.errors...)
+	}
+	return result
+}
+
+func pruneGeneratedCommandFiles(dir string) syncResult {
+	result := syncResult{}
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", dir, err))
+		return result
+	}
+	if !info.IsDir() {
+		return result
+	}
+
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			result.errors = append(result.errors, fmt.Sprintf("read %s: %v", path, readErr))
+			return nil
+		}
+		if !isGeneratedAetherCommandWrapper(data) {
+			return nil
+		}
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", path, removeErr))
+			return nil
+		}
+		if rel, relErr := filepath.Rel(dir, path); relErr == nil {
+			result.removed = append(result.removed, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if len(result.removed) > 0 {
+		cleanEmptyDirs(dir)
+	}
+	return result
+}
+
+func pruneAetherNamedFiles(dir string, extensions ...string) syncResult {
+	result := syncResult{}
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", dir, err))
+		return result
+	}
+	if !info.IsDir() {
+		return result
+	}
+
+	allowed := map[string]bool{}
+	for _, ext := range extensions {
+		allowed[ext] = true
+	}
+
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		base := filepath.Base(path)
+		if !strings.HasPrefix(base, "aether-") {
+			return nil
+		}
+		if len(allowed) > 0 && !allowed[filepath.Ext(base)] {
+			return nil
+		}
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", path, removeErr))
+			return nil
+		}
+		if rel, relErr := filepath.Rel(dir, path); relErr == nil {
+			result.removed = append(result.removed, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if len(result.removed) > 0 {
+		cleanEmptyDirs(dir)
+	}
+	return result
+}
+
+func pruneDirectoryTree(dir string) syncResult {
+	result := syncResult{}
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", dir, err))
+		return result
+	}
+	if !info.IsDir() {
+		return result
+	}
+	if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+		result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", dir, err))
+		return result
+	}
+	result.removed = append(result.removed, filepath.Base(dir))
+	return result
+}
+
+func pruneShippedRepoSkills(hubSystem, localAether string, force bool) syncResult {
+	result := syncResult{}
+	if isAetherSourceCheckout(filepath.Dir(localAether)) {
+		return result
+	}
+
+	hubSkills := filepath.Join(hubSystem, "skills")
+	localSkills := filepath.Join(localAether, "skills")
+	info, err := os.Stat(localSkills)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", localSkills, err))
+		return result
+	}
+	if !info.IsDir() {
+		return result
+	}
+
+	for _, rel := range listFilesRecursive(localSkills) {
+		if syncPathIgnored(rel) {
+			continue
+		}
+		localPath := filepath.Join(localSkills, rel)
+		hubPath := filepath.Join(hubSkills, rel)
+		if _, err := os.Stat(hubPath); err != nil {
+			if !os.IsNotExist(err) {
+				result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", hubPath, err))
+			}
+			continue
+		}
+		remove := force
+		if !remove {
+			localHash, localErr := fileSHA256(localPath)
+			hubHash, hubErr := fileSHA256(hubPath)
+			remove = localErr == nil && hubErr == nil && localHash == hubHash
+		}
+		if !remove {
+			result.skipped++
+			continue
+		}
+		if err := os.Remove(localPath); err != nil && !os.IsNotExist(err) {
+			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", localPath, err))
+			continue
+		}
+		result.removed = append(result.removed, filepath.ToSlash(rel))
+	}
+	if len(result.removed) > 0 {
+		cleanEmptyDirs(localSkills)
+	}
+	return result
+}
+
+func ensureRepoLocalScaffold(localAether string) syncResult {
+	result := syncResult{}
+	for _, dir := range []string{"data", "dreams", "oracle", "checkpoints", "locks"} {
+		path := filepath.Join(localAether, dir)
+		if _, err := os.Stat(path); err == nil {
+			result.skipped++
+			continue
+		}
+		if err := os.MkdirAll(path, 0755); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", path, err))
+			continue
+		}
+		result.copied++
+	}
+
+	gitignorePath := filepath.Join(localAether, ".gitignore")
+	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+		content := "# Aether local state - not versioned\ndata/\ncheckpoints/\nlocks/\ndreams/\noracle/\n"
+		if writeErr := os.WriteFile(gitignorePath, []byte(content), 0644); writeErr != nil {
+			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", gitignorePath, writeErr))
+		} else {
+			result.copied++
+		}
+	} else if err == nil {
+		result.skipped++
+	} else {
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", gitignorePath, err))
+	}
+
+	queenPath := filepath.Join(localAether, "QUEEN.md")
+	if _, err := os.Stat(queenPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(queenPath), 0755); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", filepath.Dir(queenPath), err))
+		} else if err := os.WriteFile(queenPath, []byte(queenDefaultContent), 0644); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", queenPath, err))
+		} else {
+			result.copied++
+		}
+	} else if err == nil {
+		result.skipped++
+	} else {
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", queenPath, err))
+	}
+
+	return result
 }
 
 func validateCodexAgentFile(srcPath, relPath string, data []byte) error {

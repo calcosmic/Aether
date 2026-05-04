@@ -112,14 +112,13 @@ manual depth flags for advanced overrides.
 │   ├── memory/         Learning pipeline, instincts, promotion  │
 │   └── storage/        JSON store, file locking                 │
 │                                                                  │
-│   .aether/             ← Companion files (distributed via npm)  │
+│   .aether/             ← Source companion files for hub publish │
 │   ├── commands/*.yaml   Slash command source definitions        │
-│   ├── agents-claude/    Agent definition mirror (Claude, packaging)│
-│   ├── agents-codex/     Agent definition mirror (Codex, packaging)│
 │   ├── skills/           colony/ (52) + domain/ (31)           │
-│   ├── skills-codex/     Codex skill mirror (packaging)          │
 │   ├── docs/             Distributed documentation              │
-│   └── templates/        Colony state, pheromones, etc.          │
+│   ├── templates/        Colony state, pheromones, etc.          │
+│   ├── utils/            Runtime helper docs and transforms      │
+│   └── exchange/         XML exchange modules                    │
 │                                                                  │
 │   .aether/data/        ← LOCAL ONLY (gitignored)               │
 │   .aether/dreams/      ← LOCAL ONLY (gitignored)               │
@@ -132,7 +131,7 @@ manual depth flags for advanced overrides.
 │   .codex/CODEX.md       ← Codex commands + rules               │
 │                                                                  │
 │   ~/.aether/           ← HUB (cross-colony, user-level)        │
-│   ├── system/          Companion file source (populated by install)│
+│   ├── system/          Global agents, commands, skills, docs, templates│
 │   ├── QUEEN.md         (wisdom + user preferences)              │
 │   ├── hive/            (Hive Brain — cross-colony wisdom)       │
 │   │   └── wisdom.json  (200-entry cap, LRU eviction)           │
@@ -170,14 +169,12 @@ their first turn rediscovering what the previous worker already learned.
 
 | What you're changing | Where to edit | Why |
 |---------------------|---------------|-----|
-| workers.md | `.aether/workers.md` | Source of truth |
+| Worker definitions | Aether repo `.aether/` `workers.md` | Source of truth, published to hub |
 | Go commands | `cmd/` | Go source code |
 | User docs | `.aether/docs/` | Distributed directly |
 | Slash commands | `.claude/commands/ant/` | Claude Code commands |
 | OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
 | Agent definitions | `.claude/agents/ant/` | Claude Code agents |
-| Agent mirror (packaging) | `.aether/agents-claude/` | Must stay in sync with `.claude/agents/ant/` |
-| Agent mirror (Codex packaging) | `.aether/agents-codex/` | Must stay in sync with `.codex/agents/` |
 | OpenCode agents | `.opencode/agents/` | OpenCode worker definitions |
 | Codex agents | `.codex/agents/` | Codex worker definitions (TOML format) |
 | Your notes | `.aether/dreams/` | Never distributed |
@@ -225,8 +222,8 @@ Typical guided flow:
 Authoritative runbook: `.aether/docs/publish-update-runbook.md`
 
 ```bash
-# 1. Edit files in .aether/ or .claude/commands/ant/
-vim .aether/workers.md
+# 1. Edit canonical source files in the Aether repo
+vim .aether/commands/build.yaml
 
 # 2. Commit changes
 git add .
@@ -268,9 +265,6 @@ Runtime note:
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
-├── agents-claude/       # Claude agent mirror used for packaging
-├── agents-codex/        # Codex agent mirror used for packaging
-├── skills-codex/        # Codex skill mirror (colony/ + domain/)
 ├── commands/            # YAML source definitions for slash commands
 ├── data/                # LOCAL ONLY (never distributed)
 │   ├── COLONY_STATE.json  # Colony state with phase tracking + parallel_mode
@@ -339,7 +333,7 @@ Authority note:
 - In Claude Code, `.claude/commands/ant/build.md` and `.claude/commands/ant/continue.md` are orchestrators only.
 - Build/continue execution behavior is defined in `.aether/docs/command-playbooks/*.md`.
 - OpenCode maintains separate command specs in `.opencode/commands/ant/*.md`.
-- Agent parity model: `.claude/agents/ant/*.md` is canonical, `.aether/agents-claude/*.md` is a byte-identical packaging mirror, `.opencode/agents/*.md` maintains structural parity (same filenames/count), and `.codex/agents/*.toml` is a supported Codex translation plus packaging mirror maintained on a best-effort basis.
+- Agent parity model: `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, and `.codex/agents/*.toml` are canonical platform sources. `aether publish` installs those sources into the global hub; there are no repo-local packaging mirrors.
 
 ---
 
@@ -589,7 +583,9 @@ The older eternal memory system (`~/.aether/eternal/`) remains as a fallback:
 
 ## User Preferences
 
-User preferences are stored in the hub `~/.aether/QUEEN.md` under the `## User Preferences` section.
+`/ant-preferences` stores user preferences in the hub `~/.aether/QUEEN.md`
+under the `## User Preferences` section. Colony-prime also honors repo-local
+preferences from `.aether/QUEEN.md`.
 
 | Command | Purpose |
 |---------|---------|

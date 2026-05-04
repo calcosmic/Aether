@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -150,6 +151,7 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 	if err := writeSurveyCompatibilityJSON(surveyDir, facts); err != nil {
 		return nil, err
 	}
+	codegraphStats, codegraphWarning := runColonizeCodebaseGraph(root)
 
 	for i := range dispatches {
 		status := dispatches[i].Status
@@ -217,12 +219,35 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 		},
 		"next": "aether plan",
 	}
+	if codegraphStats != nil {
+		result["codebase_graph"] = map[string]interface{}{
+			"files_scanned": codegraphStats.FilesScanned,
+			"edges_found":   codegraphStats.EdgesFound,
+			"languages":     codegraphStats.Languages,
+			"output":        "codebase-graph.json",
+		}
+	}
+	if codegraphWarning != "" {
+		result["codebase_graph_warning"] = codegraphWarning
+	}
 	statuses := make([]string, 0, len(dispatches))
 	for _, dispatch := range dispatches {
 		statuses = append(statuses, dispatch.Status)
 	}
 	runStatus = summarizeRunStatus(statuses...)
 	return result, nil
+}
+
+func runColonizeCodebaseGraph(root string) (*codegraph.Stats, string) {
+	stats, err := runCodebaseScanFromColonize(root, nil)
+	if err != nil {
+		logActivity("colonize", fmt.Sprintf("codebase graph skipped: %v", err))
+		return nil, err.Error()
+	}
+	if stats != nil {
+		logActivity("colonize", fmt.Sprintf("codebase graph scanned %d files, %d edges", stats.FilesScanned, stats.EdgesFound))
+	}
+	return stats, ""
 }
 
 func surveyWorkspace(root string) (codexWorkspaceFacts, error) {

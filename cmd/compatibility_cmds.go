@@ -61,7 +61,8 @@ var oracleCmd = &cobra.Command{
 
 		depth, _ := cmd.Flags().GetString("depth")
 		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
-		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget)
+		scope, _ := cmd.Flags().GetString("scope")
+		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget, scope)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -137,6 +138,7 @@ func init() {
 
 	oracleCmd.Flags().String("depth", "", "Research depth: quick, balanced, deep, exhaustive (default: balanced)")
 	oracleCmd.Flags().String("confidence-target", "", "Target confidence percentage 1-100 (default: per depth level). Oracle will not finalize below this target unless a hard blocker is reported or max iterations are reached.")
+	oracleCmd.Flags().String("scope", defaultOracleScope, "Research scope: auto, repo, web, or both")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)

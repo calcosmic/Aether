@@ -53,14 +53,14 @@ If no active signals after filtering:
 
 ### Step 3: Spawn Archivist (Keeper-Ant)
 
-Read `.aether/workers.md` and extract the `## Keeper` section.
+Read `~/.aether/system/workers.md` (or the matching dev hub when using `aether-dev`) and extract the `## Keeper` section.
 
 Spawn via **Task tool** with `subagent_type="aether-keeper"`:
 # FALLBACK: If "Agent type not found", use general-purpose and inject role: "You are a Keeper Ant - curates knowledge and synthesizes patterns."
 
 ```
 --- WORKER SPEC ---
-{Architect section from .aether/workers.md}
+{Keeper section from installed hub workers.md}
 
 --- ACTIVE PHEROMONES ---
 {pheromone block from Step 2}

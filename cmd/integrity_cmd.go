@@ -285,7 +285,7 @@ func checkHubCompanionFiles(hubDir string) integrityCheck {
 		{"commands/opencode/", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil, false},
 		{"agents/opencode/", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil, false},
 		{"agents/codex/", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }, false},
-		{"skills/codex/", filepath.Join(hubSystem, "skills-codex"), expectedCodexSkillCount, nil, true},
+		{"skills/codex/", filepath.Join(hubSystem, "skills"), expectedCodexSkillCount, nil, true},
 	}
 
 	var discrepancies []string

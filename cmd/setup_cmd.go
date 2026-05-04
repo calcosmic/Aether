@@ -9,17 +9,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// setupCmd implements "aether setup" which copies hub system files from
-// ~/.aether/system/ to the local .aether/ directory.
+// setupCmd implements "aether setup" which prepares repo-local Aether state
+// while shared assets stay in the global hub/platform homes.
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Set up Aether in the current directory from hub",
-	Long: `Set up Aether in the current directory by copying system files
-from the selected distribution hub (~/.aether/system/ for stable, ~/.aether-dev/system/ for dev) to the local .aether/ directory.
+	Long: `Set up Aether in the current directory from the selected distribution
+hub (~/.aether/system/ for stable, ~/.aether-dev/system/ for dev).
 
-Creates required directories (data/, checkpoints/, locks/) and a .gitignore.
+Creates repo-local state directories (data/, dreams/, oracle/, checkpoints/, locks/),
+a repo-local .aether/QUEEN.md, and a .gitignore.
 Does NOT create COLONY_STATE.json (use "aether init" for that).
-Existing local files are preserved (user data takes precedence).`,
+Existing local files are preserved (user data takes precedence). Shared agents,
+commands, shipped skills, templates, docs, utils, workers, exchange files, and
+references stay global instead of being copied into this repo.`,
 	Args: cobra.NoArgs,
 	RunE: runSetup,
 }
@@ -139,28 +142,27 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		totalSkipped += result.skipped
 	}
 
-	// Create required directories
-	for _, dir := range []string{"data", "checkpoints", "locks"} {
-		if err := os.MkdirAll(filepath.Join(localAether, dir), 0755); err != nil {
-			// Non-fatal
-			results = append(results, map[string]interface{}{
-				"label": fmt.Sprintf("Directory %s", dir),
-				"error": err.Error(),
-			})
+	for _, entry := range []struct {
+		label string
+		res   syncResult
+	}{
+		{"Local state scaffold", ensureRepoLocalScaffold(localAether)},
+		{"Prune legacy repo platform assets", pruneLegacyRepoPlatformAssets(repoDir)},
+		{"Prune shipped repo skills", pruneShippedRepoSkills(hubSystem, localAether, false)},
+	} {
+		result := map[string]interface{}{
+			"label":   entry.label,
+			"copied":  entry.res.copied,
+			"skipped": entry.res.skipped,
+			"removed": len(entry.res.removed),
 		}
-	}
-
-	// Create .gitignore if it doesn't exist
-	gitignorePath := filepath.Join(localAether, ".gitignore")
-	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-		gitignoreContent := "# Aether local state - not versioned\ndata/\ncheckpoints/\nlocks/\n"
-		if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err == nil {
-			results = append(results, map[string]interface{}{
-				"label":  ".gitignore",
-				"copied": 1,
-			})
-			totalCopied++
+		if len(entry.res.errors) > 0 {
+			result["errors"] = entry.res.errors
+			syncErrors = append(syncErrors, entry.res.errors...)
 		}
+		results = append(results, result)
+		totalCopied += entry.res.copied
+		totalSkipped += entry.res.skipped
 	}
 
 	docResults, docCopied, docSkipped, docErrors := syncProjectDocs(hubSystem, repoDir)

@@ -10,8 +10,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/BurntSushi/toml"
 )
 
 // TestCodexInstallCopiesAgents verifies that install copies .codex/agents/
@@ -619,7 +617,7 @@ func TestCodexInstallPreservesModifiedHomeSkill(t *testing.T) {
 
 	packageDir := t.TempDir()
 	homeDir := t.TempDir()
-	srcDir := filepath.Join(packageDir, ".aether", "skills-codex", "colony", "build-discipline")
+	srcDir := filepath.Join(packageDir, ".aether", "skills", "colony", "build-discipline")
 
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create skill dir: %v", err)
@@ -717,9 +715,8 @@ type codexAgentTOML struct {
 	DeveloperInstructions string   `toml:"developer_instructions"`
 }
 
-// TestCodexInstallSetupUpdate_All24Agents verifies the full install -> setup
-// pipeline deploys all 24 Codex TOML agents correctly, and that each agent
-// file is valid TOML with all required fields.
+// TestCodexInstallSetupUpdate_All24Agents verifies install publishes Codex TOML
+// agents globally, while setup keeps target repos local-state-only.
 func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -774,7 +771,7 @@ func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 		}
 	})
 
-	// Step 3: Setup to sync from hub to repo.
+	// Step 3: Setup should not copy global Codex agents into the repo.
 	t.Run("setup", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
@@ -787,38 +784,17 @@ func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 			t.Fatalf("setup failed: %v", err)
 		}
 
-		// Verify all 24 agent TOML files exist in target .codex/agents/.
 		repoCodex := filepath.Join(repoDir, ".codex", "agents")
-		for _, agentName := range all25AgentNames {
-			f := filepath.Join(repoCodex, agentName+".toml")
-			if _, err := os.Stat(f); os.IsNotExist(err) {
-				t.Errorf("expected %s in repo after setup", f)
+		if _, err := os.Stat(repoCodex); err == nil {
+			entries, readErr := os.ReadDir(repoCodex)
+			if readErr != nil {
+				t.Fatalf("failed to read repo codex dir: %v", readErr)
 			}
-		}
-
-		// Verify each agent file is valid TOML with required fields.
-		for _, agentName := range all25AgentNames {
-			t.Run(agentName, func(t *testing.T) {
-				data, err := os.ReadFile(filepath.Join(repoCodex, agentName+".toml"))
-				if err != nil {
-					t.Fatalf("failed to read %s.toml: %v", agentName, err)
-				}
-
-				var agent codexAgentTOML
-				if _, err := toml.Decode(string(data), &agent); err != nil {
-					t.Fatalf("invalid TOML in %s.toml: %v", agentName, err)
-				}
-
-				if agent.Name == "" {
-					t.Errorf("%s: missing required field 'name'", agentName)
-				}
-				if agent.Description == "" {
-					t.Errorf("%s: missing required field 'description'", agentName)
-				}
-				if agent.DeveloperInstructions == "" {
-					t.Errorf("%s: missing required field 'developer_instructions'", agentName)
-				}
-			})
+			if len(entries) > 0 {
+				t.Fatalf("setup should not copy global Codex agents into repo, found %d files", len(entries))
+			}
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo codex dir: %v", err)
 		}
 	})
 }
@@ -842,8 +818,8 @@ func listShippedAetherCodexAgentBaseNames(t *testing.T, dir string) []string {
 	return names
 }
 
-// TestCrossPlatformAgentParity verifies that the shipped Aether Codex surface
-// stays in parity across Claude, OpenCode, Codex, and the packaged Codex mirror.
+// TestCrossPlatformAgentParity verifies that the shipped Aether agent surfaces
+// stay in parity across Claude, OpenCode, and Codex.
 func TestCrossPlatformAgentParity(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	if err != nil {
@@ -854,12 +830,10 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 	claudeDir := filepath.Join(repoRoot, ".claude", "agents", "ant")
 	opencodeDir := filepath.Join(repoRoot, ".opencode", "agents")
 	codexDir := filepath.Join(repoRoot, ".codex", "agents")
-	agentsCodexMirrorDir := filepath.Join(repoRoot, ".aether", "agents-codex")
 
 	claudeNames := listAgentBaseNames(t, claudeDir, ".md")
 	opencodeNames := listAgentBaseNames(t, opencodeDir, ".md")
 	codexNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
-	agentsCodexNames := listShippedAetherCodexAgentBaseNames(t, agentsCodexMirrorDir)
 
 	// Verify each directory has exactly 27 entries (25 original + medic + fixer).
 	const expectedCount = 27
@@ -872,21 +846,13 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 	if len(codexNames) != expectedCount {
 		t.Errorf("Codex agents: expected %d, got %d", expectedCount, len(codexNames))
 	}
-	if len(agentsCodexNames) != expectedCount {
-		t.Errorf("agents-codex mirror: expected %d, got %d", expectedCount, len(agentsCodexNames))
-	}
 
-	// Verify all four have matching base names.
+	// Verify all three have matching base names.
 	if !slicesEqual(claudeNames, opencodeNames) {
 		t.Errorf("Claude and OpenCode agent names do not match.\nClaude:  %v\nOpenCode: %v", claudeNames, opencodeNames)
 	}
 	if !slicesEqual(claudeNames, codexNames) {
 		t.Errorf("Claude and shipped Codex agent names do not match.\nClaude: %v\nCodex:  %v", claudeNames, codexNames)
-	}
-
-	// Verify the packaging mirror matches the shipped Codex surface exactly.
-	if !slicesEqual(codexNames, agentsCodexNames) {
-		t.Errorf("Shipped Codex agents and agents-codex mirror names do not match.\nCodex:        %v\nAgents-codex: %v", codexNames, agentsCodexNames)
 	}
 }
 
@@ -1164,14 +1130,14 @@ func TestCodexAgentCompleteness(t *testing.T) {
 		// Skip for read-only agents that don't implement code (archaeologist, chaos, measurer, etc.)
 		lower := strings.ToLower(content)
 		readOnlyAgents := map[string]bool{
-			"aether-archaeologist": true,
-			"aether-chaos":         true,
-			"aether-gatekeeper":    true,
-			"aether-includer":      true,
-			"aether-measurer":      true,
-			"aether-oracle":        true,
-			"aether-sage":          true,
-			"aether-scout":         true,
+			"aether-archaeologist":        true,
+			"aether-chaos":                true,
+			"aether-gatekeeper":           true,
+			"aether-includer":             true,
+			"aether-measurer":             true,
+			"aether-oracle":               true,
+			"aether-sage":                 true,
+			"aether-scout":                true,
 			"aether-surveyor-disciplines": true,
 			"aether-surveyor-nest":        true,
 			"aether-surveyor-pathogens":   true,

@@ -121,13 +121,13 @@ wrapper markdown.
 |   +-- memory/         Learning pipeline, instincts, promotion    |
 |   +-- storage/        JSON store, file locking                   |
 |                                                                   |
-|   .aether/             <- Companion files (embedded in release binaries) |
-|   +-- agents-claude/   Claude packaging mirror                  |
-|   +-- agents-codex/    Codex packaging mirror                   |
+|   .aether/             <- Source companion files for hub publish |
+|   +-- commands/        YAML command wrapper source               |
 |   +-- skills/          Shared skill source                       |
-|   +-- skills-codex/    Codex-installed skill mirror              |
 |   +-- docs/            Distributed documentation                 |
-|   +-- templates/       Colony state, pheromones, etc.           |
+|   +-- templates/       Colony state, pheromones, etc.            |
+|   +-- utils/           Runtime helper docs and transforms        |
+|   +-- exchange/        XML exchange modules                      |
 |                                                                   |
 |   .aether/data/        <- LOCAL ONLY (gitignored)                |
 |   .aether/dreams/      <- LOCAL ONLY (gitignored)                |
@@ -139,7 +139,7 @@ wrapper markdown.
 |   .codex/agents/        <- Agent definitions (Codex CLI)         |
 |                                                                   |
 |   ~/.aether/           <- HUB (cross-colony, user-level)         |
-|   +-- system/          Companion file source (populated by install)|
+|   +-- system/          Global agents, commands, skills, docs, templates |
 |   +-- QUEEN.md         (wisdom + user preferences)               |
 |   +-- hive/            (Hive Brain -- cross-colony wisdom)       |
 |   |   +-- wisdom.json  (200-entry cap, LRU eviction)            |
@@ -213,10 +213,10 @@ flowchart LR
 ```
 
 Verify: every node maps to a real artifact. `pheromones.json`, `COLONY_STATE.json`,
-`midden.json`, `instincts.json` live under `.aether/data/`. `QUEEN.md` and
-`hive/wisdom.json` live under `~/.aether/`. `skill-index`, `skill-match`, and
-`skill-inject` are real subcommands (see Skills System). Gate order matches the
-Quality Gates table.
+`midden.json`, `instincts.json` live under `.aether/data/`. Global Queen wisdom
+and `hive/wisdom.json` live under `~/.aether/`; repo-specific Queen wisdom lives
+in `.aether/QUEEN.md`. `skill-index`, `skill-match`, and `skill-inject` are real
+subcommands (see Skills System). Gate order matches the Quality Gates table.
 
 ---
 
@@ -226,16 +226,13 @@ Quality Gates table.
 
 | What you're changing | Where to edit | Why |
 |---------------------|---------------|-----|
-| workers.md | `.aether/workers.md` | Source of truth |
+| Worker definitions | Aether repo `.aether/` `workers.md` | Source of truth, published to hub |
 | Go commands | `cmd/` | Go source code |
 | User docs | `.aether/docs/` | Distributed directly |
 | Codex agent definitions | `.codex/agents/*.toml` | Codex CLI agent format |
-| Codex packaging mirror | `.aether/agents-codex/*.toml` | Must stay in sync with `.codex/agents/*.toml` |
-| Codex skill mirror | `.aether/skills-codex/` | Codex-installed skill bundle |
 | Claude Code commands | `.claude/commands/ant/` | Claude Code commands |
 | OpenCode commands | `.opencode/commands/ant/` | OpenCode commands |
 | Claude Code agents | `.claude/agents/ant/` | Claude Code agents |
-| Agent mirror (packaging) | `.aether/agents-claude/` | Must stay in sync with `.claude/agents/ant/` |
 | OpenCode agents | `.opencode/agents/` | OpenCode worker definitions |
 | Your notes | `.aether/dreams/` | Never distributed |
 | Dev docs | `.aether/docs/known-issues.md` | Distributed |
@@ -269,8 +266,8 @@ native CLI workflow, rather than strict mirrors of Claude/OpenCode slash-command
 Authoritative runbook: `.aether/docs/publish-update-runbook.md`
 
 ```bash
-# 1. Edit files in .aether/ or .codex/agents/
-vim .aether/workers.md
+# 1. Edit canonical source files in the Aether repo
+vim .aether/commands/build.yaml
 
 # 2. Commit changes
 git add .
@@ -428,9 +425,6 @@ and developer_instructions. Codex reads these for agent discovery.
 +-- templates/           # 12 templates (colony-state, pheromones, etc.)
 +-- docs/                # Distributed documentation
 +-- exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
-+-- agents-claude/       # Claude agent mirror used for packaging
-+-- agents-codex/        # Codex agent mirror used for packaging
-+-- skills-codex/        # Codex-installed skill mirror
 +-- data/                # LOCAL ONLY (never distributed)
 |   +-- COLONY_STATE.json  # Colony state with phase tracking + parallel_mode
 |   +-- pheromones.json
@@ -460,7 +454,7 @@ Authority note:
 - Build/continue execution behavior is defined in `.aether/docs/command-playbooks/*.md`.
 - OpenCode maintains separate command specs in `.opencode/commands/ant/*.md`.
 - Codex CLI uses the `aether` CLI binary directly (no slash command mechanism).
-- Agent parity model: `.claude/agents/ant/*.md` is canonical, `.aether/agents-claude/*.md` is a byte-identical packaging mirror, `.opencode/agents/*.md` maintains structural parity, and `.codex/agents/*.toml` is a supported Codex translation aligned on core role intent and maintained on a best-effort basis.
+- Agent parity model: `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, and `.codex/agents/*.toml` are canonical platform sources. `aether publish` installs those sources into the global hub; there are no repo-local packaging mirrors.
 
 ---
 
@@ -660,7 +654,9 @@ Confidence is never downgraded. During `aether seal`, instincts with confidence
 
 ## User Preferences
 
-Stored in the hub `~/.aether/QUEEN.md` under the `## User Preferences` section:
+Stored by `aether preferences` in the hub `~/.aether/QUEEN.md` under the
+`## User Preferences` section. Colony-prime also honors repo-local preferences
+from `.aether/QUEEN.md`.
 
 - `aether preferences "text"` -- Add a user preference
 - `aether preferences --list` -- List all user preferences

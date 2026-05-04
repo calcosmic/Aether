@@ -1,6 +1,11 @@
 # Queen Commands Reference
 
-The queen-* commands manage the QUEEN.md wisdom file — a persistent cross-colony knowledge base that accumulates philosophies, patterns, redirects, stack wisdom, and decrees across sessions.
+The queen-* commands manage Aether's QUEEN.md wisdom files.
+
+For dummies: Aether has a global brain and a project brain. The global file in
+the hub stores user preferences and cross-colony wisdom. The repo-local file
+stores project-specific charter and lessons for the current repo. Colony-prime
+reads both before workers run.
 
 For the QUEEN.md file format and wisdom feedback loop, see [QUEEN-SYSTEM.md](./QUEEN-SYSTEM.md).
 
@@ -8,7 +13,8 @@ For the QUEEN.md file format and wisdom feedback loop, see [QUEEN-SYSTEM.md](./Q
 
 ### queen-init
 
-**Purpose:** Initialize a new QUEEN.md from the system template.
+**Purpose:** Initialize the global and repo-local QUEEN.md files from the
+standard template when they do not already exist.
 
 **Usage:**
 ```bash
@@ -19,44 +25,46 @@ aether queen-init
 
 **Example output:**
 ```json
-{"ok":true,"result":{"created":true,"path":".aether/QUEEN.md","source":"~/.aether/system/templates/QUEEN.md.template"}}
+{"ok":true,"result":{"created":true,"path":"~/.aether/QUEEN.md","local_created":true,"local_path":".aether/QUEEN.md"}}
 ```
 
 **Behavior:**
-- If QUEEN.md already exists, returns `{"created":false}` without overwriting
-- Searches for template in: hub system path, then local .aether/templates/
-- Creates `.aether/` directory if it doesn't exist
+- If the global QUEEN.md already exists, returns `{"created":false}` without
+  overwriting it.
+- Also creates repo-local `.aether/QUEEN.md` if the current repo has Aether
+  state and no local Queen file yet.
+- Creates the needed local `.aether/` directories through the runtime setup
+  path, not by wrapper hand-edits.
 
 ---
 
 ### queen-read
 
-**Purpose:** Read QUEEN.md wisdom as structured JSON for worker priming.
+**Purpose:** Read the hub-global QUEEN.md content.
 
 **Usage:**
 ```bash
 aether queen-read
 ```
 
-**Returns:** JSON with metadata, wisdom sections, and priming flags.
+**Returns:** JSON with the global file path, size, and content.
 
 **Example output:**
 ```json
-{"ok":true,"result":{"metadata":{...},"wisdom":{"philosophies":"...","patterns":"...","redirects":"...","stack_wisdom":"...","decrees":"..."},"priming":{"has_philosophies":true,...}}}
+{"ok":true,"result":{"path":"~/.aether/QUEEN.md","size":1234,"content":"# QUEEN.md ..."}}
 ```
 
 **Behavior:**
-- Extracts METADATA JSON block from `<!-- METADATA ... -->` comment
-- Parses each wisdom section (Philosophies, Patterns, Redirects, Stack Wisdom, Decrees)
-- Returns priming flags indicating which sections have content
-- Returns E_JSON_INVALID if METADATA block contains malformed JSON
-- Returns E_FILE_NOT_FOUND if QUEEN.md doesn't exist
+- Reads the hub file only.
+- Worker priming uses colony-prime, which loads global wisdom first and then
+  repo-local wisdom from `.aether/QUEEN.md`.
+- User preferences are collected from both global and local Queen files.
 
 ---
 
 ### queen-promote
 
-**Purpose:** Promote a validated learning to QUEEN.md wisdom.
+**Purpose:** Promote a validated learning or preference to hub-global QUEEN.md.
 
 **Usage:**
 ```bash
@@ -74,9 +82,26 @@ aether queen-promote <type> <content> <colony_name>
 **Returns:** JSON confirming the promotion with details.
 
 **Behavior:**
-- Appends the wisdom entry to the appropriate section in QUEEN.md
+- Appends the wisdom entry to the appropriate section in the hub-global file.
 - Includes attribution (colony name) and timestamp
-- Updates the METADATA block's stats
+- Use `queen-write-learnings` for phase learnings that should remain
+  repo-local.
+
+---
+
+### queen-write-learnings
+
+**Purpose:** Write phase learning entries to the repo-local QUEEN.md.
+
+**Usage:**
+```bash
+aether queen-write-learnings --learnings '[{"claim":"..."}]'
+```
+
+**Behavior:**
+- Loads `.aether/QUEEN.md` from the current repo.
+- Appends learning claims to the local `Wisdom` section.
+- Does not overwrite hub-global user preferences.
 
 ---
 
@@ -84,9 +109,13 @@ aether queen-promote <type> <content> <colony_name>
 
 The queen commands are part of the colony lifecycle:
 
-1. **Colony startup:** `/ant-init` calls `queen-init` to ensure QUEEN.md exists
-2. **Worker priming:** `/ant-build` loads `colony-prime --compact`, which includes QUEEN wisdom + compact context capsule + top signals
-3. **Colony end:** `/ant-seal` can call `queen-promote` to persist learnings
+1. **Colony startup:** `/ant-init` calls `queen-init` to ensure global and
+   local Queen files exist.
+2. **Worker priming:** `/ant-build` loads `colony-prime --compact`, which
+   includes global Queen wisdom, local Queen wisdom, preferences, context
+   capsule, and top signals.
+3. **Learning writes:** phase learnings go to repo-local QUEEN.md; explicit
+   preferences and cross-colony promotions go to the hub-global QUEEN.md.
 
 ### Adding a New Queen Command
 

@@ -17,7 +17,7 @@ const (
 	defaultOracleMaxIterations    = 8
 	defaultOracleTargetConfidence = 95
 	defaultOracleReasoningEffort  = "medium"
-	defaultOracleScope            = "both"
+	defaultOracleScope            = "auto"
 	defaultOracleTemplate         = "custom"
 	defaultOracleMaxAttempts      = 2
 	defaultOracleStrategy         = "adaptive"
@@ -32,6 +32,17 @@ type oracleDepthConfig struct {
 	Description      string
 }
 
+type oracleScopeProfile struct {
+	Scope                  string
+	Label                  string
+	Description            string
+	EvidenceStrategy       string
+	IncludeRepoContext     bool
+	IncludeExternalContext bool
+	IncludeColonyGoal      bool
+	IncludeRecentLearnings bool
+}
+
 var oracleDepthLevels = map[string]oracleDepthConfig{
 	"quick":      {2, 60, "Quick", "Fast overview, 1-2 questions"},
 	"balanced":   {4, 85, "Balanced", "Thorough investigation, 3-4 questions"},
@@ -44,6 +55,100 @@ func resolveOracleDepth(depth string) oracleDepthConfig {
 		return cfg
 	}
 	return oracleDepthLevels["balanced"]
+}
+
+func resolveOracleScope(topic, requested string) (oracleScopeProfile, error) {
+	scope := strings.ToLower(strings.TrimSpace(requested))
+	if scope == "" {
+		scope = defaultOracleScope
+	}
+	if scope == "auto" {
+		scope = inferOracleAutoScope(topic)
+	}
+
+	switch scope {
+	case "repo":
+		return oracleScopeProfile{
+			Scope:                  "repo",
+			Label:                  "Repository",
+			Description:            "Research the current repository, local runtime behavior, and generated Aether surfaces.",
+			EvidenceStrategy:       "Use local code, docs, tests, generated artifacts, and real command behavior first. Use web sources only when local evidence cannot answer the question.",
+			IncludeRepoContext:     true,
+			IncludeExternalContext: false,
+			IncludeColonyGoal:      true,
+			IncludeRecentLearnings: true,
+		}, nil
+	case "web":
+		return oracleScopeProfile{
+			Scope:                  "web",
+			Label:                  "General Research",
+			Description:            "Research the user's topic without assuming the current repository is the subject.",
+			EvidenceStrategy:       "Use current primary sources, official documentation, repository metadata, papers, or reputable external sources. Inspect local files only if the topic explicitly asks about this repo.",
+			IncludeRepoContext:     false,
+			IncludeExternalContext: true,
+			IncludeColonyGoal:      false,
+			IncludeRecentLearnings: false,
+		}, nil
+	case "both":
+		return oracleScopeProfile{
+			Scope:                  "both",
+			Label:                  "Repo + External",
+			Description:            "Research both current repository evidence and relevant external sources.",
+			EvidenceStrategy:       "Start with the evidence source that best matches the target question: local files for repo claims, external primary sources for broad or current-world claims.",
+			IncludeRepoContext:     true,
+			IncludeExternalContext: true,
+			IncludeColonyGoal:      true,
+			IncludeRecentLearnings: true,
+		}, nil
+	default:
+		return oracleScopeProfile{}, fmt.Errorf("--scope must be auto, repo, web, or both, got %q", requested)
+	}
+}
+
+func inferOracleAutoScope(topic string) string {
+	lower := strings.ToLower(topic)
+	repoKeywords := []string{
+		"this repo", "this repository", "current repo", "current repository", "codebase", "aether", "colony",
+		"phase", "build", "continue", "seal", "codex", "claude", "opencode", "pheromone", "runtime", "cli",
+		"local", "source checkout",
+	}
+	externalKeywords := []string{
+		"latest", "current", "today", "at the moment", "top ", "github repo", "github repos", "market",
+		"library", "framework", "benchmark", "compare", "best", "news", "pricing", "paper", "standard",
+		"external", "web",
+	}
+	hasRepo := containsAnyOracleKeyword(lower, repoKeywords...)
+	hasExternal := containsAnyOracleKeyword(lower, externalKeywords...)
+	switch {
+	case hasRepo && hasExternal:
+		return "both"
+	case hasRepo:
+		return "repo"
+	case hasExternal:
+		return "web"
+	default:
+		return "both"
+	}
+}
+
+func oracleScopeFromOptional(topic string, profiles []oracleScopeProfile) oracleScopeProfile {
+	if len(profiles) > 0 && strings.TrimSpace(profiles[0].Scope) != "" {
+		return profiles[0]
+	}
+	profile, err := resolveOracleScope(topic, defaultOracleScope)
+	if err != nil {
+		profile, _ = resolveOracleScope(topic, "both")
+	}
+	return profile
+}
+
+func oracleEvidenceStrategyForScope(scope string) string {
+	profile, err := resolveOracleScope("", scope)
+	if err == nil {
+		return profile.EvidenceStrategy
+	}
+	profile, _ = resolveOracleScope("", "both")
+	return profile.EvidenceStrategy
 }
 
 // validateOracleConfidenceTarget returns an empty string if the value is valid (1-100),
@@ -215,10 +320,14 @@ type oracleWorkerEvidence struct {
 	Type     string `json:"type"`
 }
 
-func runOracleCompatibility(root string, args []string, depth string, confidenceTarget string) (map[string]interface{}, error) {
+func runOracleCompatibility(root string, args []string, depth string, confidenceTarget string, requestedScope ...string) (map[string]interface{}, error) {
 	mode := "status"
 	if len(args) > 0 {
 		mode = strings.ToLower(strings.TrimSpace(args[0]))
+	}
+	scope := ""
+	if len(requestedScope) > 0 {
+		scope = requestedScope[0]
 	}
 
 	switch mode {
@@ -227,7 +336,7 @@ func runOracleCompatibility(root string, args []string, depth string, confidence
 	case "stop":
 		return stopOracleCompatibility(root)
 	default:
-		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget)
+		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget, scope)
 	}
 }
 
@@ -251,6 +360,7 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 		"active":             active,
 		"status":             emptyFallback(strings.TrimSpace(state.Status), "idle"),
 		"topic":              strings.TrimSpace(state.Topic),
+		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
 		"platform":           emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
 		"phase":              emptyFallback(strings.TrimSpace(state.Phase), "idle"),
 		"iteration":          state.Iteration,
@@ -329,7 +439,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func startOracleCompatibility(root, topic, depth string, confidenceTarget string) (map[string]interface{}, error) {
+func startOracleCompatibility(root, topic, depth string, confidenceTarget string, requestedScope string) (map[string]interface{}, error) {
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
@@ -352,9 +462,13 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	_ = os.Remove(paths.StopPath)
 	_ = os.Remove(paths.LoopPath)
 
-	detectedType, languages, frameworks := detectOracleProjectProfile(root)
-	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks)
 	depthCfg := resolveOracleDepth(depth)
+	scopeProfile, err := resolveOracleScope(topic, requestedScope)
+	if err != nil {
+		return nil, err
+	}
+	detectedType, languages, frameworks := detectOracleProjectProfile(root)
+	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks, scopeProfile)
 
 	// Validate and apply explicit confidence target override (per D-08)
 	if strings.TrimSpace(confidenceTarget) != "" {
@@ -372,7 +486,7 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	state := oracleStateFile{
 		Version:           "1.1",
 		Topic:             topic,
-		Scope:             defaultOracleScope,
+		Scope:             scopeProfile.Scope,
 		Template:          defaultOracleTemplate,
 		Phase:             "survey",
 		Iteration:         0,
@@ -391,7 +505,7 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	plan := oraclePlanFile{
 		Version:     "1.1",
 		Sources:     map[string]oracleSource{},
-		Questions:   buildBriefInformedQuestions(topic, brief, detectedType),
+		Questions:   buildBriefInformedQuestions(topic, brief, detectedType, scopeProfile),
 		CreatedAt:   now,
 		LastUpdated: now,
 	}
@@ -848,6 +962,7 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"autonomous":         true,
 		"status":             status,
 		"topic":              state.Topic,
+		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
 		"phase":              state.Phase,
 		"iteration":          state.Iteration,
 		"iterations_run":     iterationsRun,
@@ -880,13 +995,13 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"stop_reason":        stopReason,
 		"summary":            strings.TrimSpace(state.Summary),
 		"next":               next,
-			// Rubric output per D-09
-			"rubric":          buildOracleRubric(plan, state),
-			"gaps":            identifyGaps(plan, state),
-			"evidence":        collectEvidence(plan, state),
-			"approval_status": mapApprovalStatus(status),
-			"original_prompt": strings.TrimSpace(state.Topic),
-			"synthesized_prompt": buildSynthesizedPrompt(plan, state),
+		// Rubric output per D-09
+		"rubric":             buildOracleRubric(plan, state),
+		"gaps":               identifyGaps(plan, state),
+		"evidence":           collectEvidence(plan, state),
+		"approval_status":    mapApprovalStatus(status),
+		"original_prompt":    strings.TrimSpace(state.Topic),
+		"synthesized_prompt": buildSynthesizedPrompt(plan, state),
 	}, nil
 }
 
@@ -976,7 +1091,8 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 			fmt.Sprintf("Languages: %s", renderCSV(languages, "unknown")),
 			fmt.Sprintf("Frameworks: %s", renderCSV(frameworks, "none detected")),
 			fmt.Sprintf("Target question text: %s", emptyFallback(strings.TrimSpace(target.Text), "select the lowest-confidence open question")),
-			"Prefer direct codebase, generated-artifact, and runtime-command evidence first; use web sources only when local evidence cannot answer the target question.",
+			fmt.Sprintf("Research scope: %s", emptyFallback(state.Scope, defaultOracleScope)),
+			oracleEvidenceStrategyForScope(state.Scope),
 			oraclePhaseDirective(state, plan),
 			"Return worker claims JSON normally, but put the actual research payload in the Oracle response file path provided above.",
 		},
@@ -1021,6 +1137,8 @@ func renderOracleContextCapsule(state oracleStateFile, plan oraclePlanFile, dete
 	fmt.Fprintf(&b, "- Attempt: %d of %d\n", attempt, defaultOracleMaxAttempts)
 	fmt.Fprintf(&b, "- Target Confidence: %d%%\n", state.TargetConfidence)
 	fmt.Fprintf(&b, "- Current Confidence: %d%%\n", state.OverallConfidence)
+	fmt.Fprintf(&b, "- Research Scope: %s\n", emptyFallback(state.Scope, defaultOracleScope))
+	fmt.Fprintf(&b, "- Evidence Strategy: %s\n", oracleEvidenceStrategyForScope(state.Scope))
 	fmt.Fprintf(&b, "- Project Type: %s\n", emptyFallback(detectedType, "unknown"))
 	fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "unknown"))
 	fmt.Fprintf(&b, "- Frameworks: %s\n", renderCSV(frameworks, "none detected"))
@@ -1349,7 +1467,8 @@ func loadColonyLearnings(root string) []string {
 	return learnings
 }
 
-func formulateOracleBrief(root, topic, detectedType string, languages, frameworks []string) string {
+func formulateOracleBrief(root, topic, detectedType string, languages, frameworks []string, profiles ...oracleScopeProfile) string {
+	scopeProfile := oracleScopeFromOptional(topic, profiles)
 	var b strings.Builder
 
 	b.WriteString("# Oracle Research Brief\n\n")
@@ -1357,32 +1476,47 @@ func formulateOracleBrief(root, topic, detectedType string, languages, framework
 	// Topic section
 	fmt.Fprintf(&b, "## Topic\n%s\n\n", topic)
 
-	// Project Profile section
-	b.WriteString("## Project Profile\n")
-	fmt.Fprintf(&b, "- Type: %s\n", detectedType)
-	fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "none detected"))
-	fmt.Fprintf(&b, "- Frameworks: %s\n", renderCSV(frameworks, "none detected"))
+	b.WriteString("## Research Scope\n")
+	fmt.Fprintf(&b, "- Scope: %s\n", scopeProfile.Scope)
+	fmt.Fprintf(&b, "- Description: %s\n", scopeProfile.Description)
+	fmt.Fprintf(&b, "- Evidence strategy: %s\n", scopeProfile.EvidenceStrategy)
 	b.WriteString("\n")
 
-	// Colony Goal section
-	b.WriteString("## Colony Goal\n")
-	colonyGoal := loadColonyGoal(root)
-	if colonyGoal != "" {
-		fmt.Fprintf(&b, "%s\n", colonyGoal)
-	} else {
-		b.WriteString("(no colony goal set)\n")
+	if note := oracleMedicBoundaryNote(topic); note != "" {
+		b.WriteString("## Boundary Note\n")
+		fmt.Fprintf(&b, "%s\n\n", note)
 	}
-	b.WriteString("\n")
 
-	// Codebase Structure section
-	b.WriteString("## Codebase Structure\n")
-	structure := scanCodebaseStructure(root)
-	if structure != "" {
-		fmt.Fprintf(&b, "%s\n", structure)
-	} else {
-		b.WriteString("(unable to scan)\n")
+	if scopeProfile.IncludeRepoContext {
+		// Project Profile section
+		b.WriteString("## Project Profile\n")
+		fmt.Fprintf(&b, "- Type: %s\n", detectedType)
+		fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "none detected"))
+		fmt.Fprintf(&b, "- Frameworks: %s\n", renderCSV(frameworks, "none detected"))
+		b.WriteString("\n")
+
+		// Colony Goal section
+		if scopeProfile.IncludeColonyGoal {
+			b.WriteString("## Colony Goal\n")
+			colonyGoal := loadColonyGoal(root)
+			if colonyGoal != "" {
+				fmt.Fprintf(&b, "%s\n", colonyGoal)
+			} else {
+				b.WriteString("(no colony goal set)\n")
+			}
+			b.WriteString("\n")
+		}
+
+		// Codebase Structure section
+		b.WriteString("## Codebase Structure\n")
+		structure := scanCodebaseStructure(root)
+		if structure != "" {
+			fmt.Fprintf(&b, "%s\n", structure)
+		} else {
+			b.WriteString("(unable to scan)\n")
+		}
+		b.WriteString("\n")
 	}
-	b.WriteString("\n")
 
 	// Active Signals section
 	b.WriteString("## Active Signals\n")
@@ -1400,14 +1534,16 @@ func formulateOracleBrief(root, topic, detectedType string, languages, framework
 	}
 	b.WriteString("\n")
 
-	// Recent Learnings section
-	b.WriteString("## Recent Learnings\n")
-	learnings := loadColonyLearnings(root)
-	if len(learnings) == 0 {
-		b.WriteString("(none)\n")
-	} else {
-		for _, l := range learnings {
-			fmt.Fprintf(&b, "- %s\n", l)
+	if scopeProfile.IncludeRecentLearnings {
+		// Recent Learnings section
+		b.WriteString("## Recent Learnings\n")
+		learnings := loadColonyLearnings(root)
+		if len(learnings) == 0 {
+			b.WriteString("(none)\n")
+		} else {
+			for _, l := range learnings {
+				fmt.Fprintf(&b, "- %s\n", l)
+			}
 		}
 	}
 
@@ -1487,7 +1623,8 @@ func scanCodebaseStructure(root string) string {
 	return strings.TrimSpace(b.String())
 }
 
-func buildBriefInformedQuestions(topic string, brief string, detectedType string) []oracleQuestion {
+func buildBriefInformedQuestions(topic string, brief string, detectedType string, profiles ...oracleScopeProfile) []oracleQuestion {
+	scopeProfile := oracleScopeFromOptional(topic, profiles)
 	var questions []oracleQuestion
 	qID := 0
 
@@ -1503,15 +1640,29 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 		})
 	}
 
-	// Always include 2 context-establishing questions
-	nextQ(fmt.Sprintf("What is the actual problem boundary for %s in the context of %s?", topic, detectedType))
-
-	// Extract key directories from brief for file relevance question
-	keyDirs := extractBriefSection(brief, "Codebase Structure")
-	if keyDirs != "" {
-		nextQ(fmt.Sprintf("Which specific files and modules in the following structure are most relevant to %s?\n%s", topic, keyDirs))
+	// Always include a user-intent boundary question.
+	if scopeProfile.IncludeRepoContext {
+		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s in the context of %s?", topic, detectedType))
 	} else {
-		nextQ(fmt.Sprintf("Which files, commands, or runtime surfaces matter most to investigating %s?", topic))
+		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s?", topic))
+	}
+
+	if scopeProfile.IncludeExternalContext {
+		nextQ(fmt.Sprintf("Which current external sources, repositories, documentation, or examples are authoritative for %s?", topic))
+	}
+
+	if scopeProfile.IncludeRepoContext {
+		// Extract key directories from brief for file relevance question
+		keyDirs := extractBriefSection(brief, "Codebase Structure")
+		if keyDirs != "" {
+			nextQ(fmt.Sprintf("Which specific files and modules in the following structure are most relevant to %s?\n%s", topic, keyDirs))
+		} else {
+			nextQ(fmt.Sprintf("Which files, commands, or runtime surfaces matter most to investigating %s?", topic))
+		}
+	}
+
+	if note := oracleMedicBoundaryNote(topic); note != "" {
+		nextQ(fmt.Sprintf("Where should Medic-owned diagnostics or readiness checks be used instead of Oracle research for %s?", topic))
 	}
 
 	// If signals exist, add a constraints question
@@ -1520,42 +1671,60 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 		nextQ(fmt.Sprintf("How do the following constraints affect the approach to %s?\n%s", topic, signals))
 	}
 
-	// If learnings exist, add a learning-relevance question
-	learnings := extractBriefSection(brief, "Recent Learnings")
-	if learnings != "" && !strings.Contains(learnings, "(none)") {
-		// Take first learning for question text
-		lines := strings.Split(learnings, "\n")
-		learningSummary := ""
-		if len(lines) > 0 {
-			learningSummary = strings.TrimPrefix(lines[0], "- ")
+	if scopeProfile.IncludeRecentLearnings {
+		// If learnings exist, add a learning-relevance question
+		learnings := extractBriefSection(brief, "Recent Learnings")
+		if learnings != "" && !strings.Contains(learnings, "(none)") {
+			// Take first learning for question text
+			lines := strings.Split(learnings, "\n")
+			learningSummary := ""
+			if len(lines) > 0 {
+				learningSummary = strings.TrimPrefix(lines[0], "- ")
+			}
+			if learningSummary != "" {
+				nextQ(fmt.Sprintf("Given that %s was previously observed, how does %s relate?", learningSummary, topic))
+			}
 		}
-		if learningSummary != "" {
-			nextQ(fmt.Sprintf("Given that %s was previously observed, how does %s relate?", learningSummary, topic))
+	}
+
+	if scopeProfile.IncludeRepoContext {
+		// If frameworks detected, add a framework-specific question
+		frameworks := extractBriefField(brief, "Frameworks")
+		if frameworks != "" && frameworks != "none detected" {
+			nextQ(fmt.Sprintf("What %s-specific patterns or pitfalls apply to %s?", frameworks, topic))
 		}
 	}
 
-	// If frameworks detected, add a framework-specific question
-	frameworks := extractBriefField(brief, "Frameworks")
-	if frameworks != "" && frameworks != "none detected" {
-		nextQ(fmt.Sprintf("What %s-specific patterns or pitfalls apply to %s?", frameworks, topic))
+	if scopeProfile.IncludeColonyGoal {
+		// Colony goal relevance question
+		goal := extractBriefSection(brief, "Colony Goal")
+		if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
+			nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topic, goal))
+		}
 	}
 
-	// Colony goal relevance question
-	goal := extractBriefSection(brief, "Colony Goal")
-	if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
-		nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topic, goal))
+	// Always include evidence and recommendation questions without assuming a
+	// repo-health or release-readiness frame.
+	nextQ(fmt.Sprintf("What evidence supports, contradicts, or limits the strongest answer to %s?", topic))
+	if scopeProfile.IncludeExternalContext {
+		nextQ(fmt.Sprintf("What options, tradeoffs, risks, or unknowns remain for %s?", topic))
 	}
+	nextQ(fmt.Sprintf("What concrete, actionable recommendation follows from investigating %s?", topic))
 
-  // Always include evidence and improvement questions
-  nextQ(fmt.Sprintf("What evidence currently supports or contradicts the expected behavior of %s?", topic))
-  nextQ(fmt.Sprintf("What changes would materially improve reliability or clarity for %s?", topic))
-
-  // Ensure minimum of 5 questions by adding recommendation if needed
-  if len(questions) < 5 {
-    nextQ(fmt.Sprintf("What concrete, actionable recommendation follows from investigating %s?", topic))
-  }
+	// Ensure minimum of 5 questions without padding with health/readiness checks.
+	if len(questions) < 5 {
+		nextQ(fmt.Sprintf("What remaining gaps should the user know before acting on %s?", topic))
+	}
 
 	return questions
+}
+
+func oracleMedicBoundaryNote(topic string) string {
+	lower := strings.ToLower(topic)
+	if !containsAnyOracleKeyword(lower, "health", "readiness", "ready", "release-ready", "shippable", "ship-ready", "integrity", "broken", "corruption") {
+		return ""
+	}
+	return "Medic owns colony health, repair, integrity, and readiness diagnostics. Oracle may research the topic and cite evidence, but it must not replace `aether medic` or present itself as the health checker."
 }
 
 // extractBriefSection returns the content after a "## Section Name" header until the next "## " or end of string.

@@ -1247,7 +1247,6 @@ func writeOracleTestResponse(cfg codex.WorkerConfig, response oracleWorkerRespon
 	return os.WriteFile(cfg.ResponsePath, append(data, '\n'), 0644)
 }
 
-
 func oracleTestActiveQuestionID(root string) string {
 	data, err := os.ReadFile(filepath.Join(root, ".aether", "oracle", "state.json"))
 	if err != nil {
@@ -1447,6 +1446,46 @@ func TestFormulateOracleBriefContainsRequiredSections(t *testing.T) {
 	}
 }
 
+func TestResolveOracleScopeAutoDetectsRepoAndWeb(t *testing.T) {
+	repoScope, err := resolveOracleScope("this repo runtime behavior", "auto")
+	if err != nil {
+		t.Fatalf("repo scope error: %v", err)
+	}
+	if repoScope.Scope != "repo" || !repoScope.IncludeRepoContext || repoScope.IncludeExternalContext {
+		t.Fatalf("unexpected repo scope: %+v", repoScope)
+	}
+
+	webScope, err := resolveOracleScope("latest framework pricing", "auto")
+	if err != nil {
+		t.Fatalf("web scope error: %v", err)
+	}
+	if webScope.Scope != "web" || webScope.IncludeRepoContext || !webScope.IncludeExternalContext {
+		t.Fatalf("unexpected web scope: %+v", webScope)
+	}
+
+	bothScope, err := resolveOracleScope("latest Aether runtime compatibility", "auto")
+	if err != nil {
+		t.Fatalf("both scope error: %v", err)
+	}
+	if bothScope.Scope != "both" || !bothScope.IncludeRepoContext || !bothScope.IncludeExternalContext {
+		t.Fatalf("unexpected both scope: %+v", bothScope)
+	}
+}
+
+func TestFormulateOracleBriefWebScopeOmitsRepoContext(t *testing.T) {
+	scope, err := resolveOracleScope("latest framework pricing", "web")
+	if err != nil {
+		t.Fatalf("scope error: %v", err)
+	}
+	brief := formulateOracleBrief(t.TempDir(), "latest framework pricing", "go", []string{"go"}, []string{"cobra"}, scope)
+	if !strings.Contains(brief, "## Research Scope") {
+		t.Fatalf("brief missing scope:\n%s", brief)
+	}
+	if strings.Contains(brief, "## Project Profile") || strings.Contains(brief, "## Codebase Structure") {
+		t.Fatalf("web scope should omit repo context:\n%s", brief)
+	}
+}
+
 func TestBuildBriefInformedQuestionsReferencesBriefContent(t *testing.T) {
 	brief := `## Topic
 release parity analysis
@@ -1582,8 +1621,8 @@ func TestLoadColonyLearningsReturnsRecentInstincts(t *testing.T) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := colony.ColonyState{
-		Version:    "3.0",
-		Goal:       ptrString("Build greatness"),
+		Version: "3.0",
+		Goal:    ptrString("Build greatness"),
 		Memory: colony.Memory{
 			Instincts: []colony.Instinct{
 				{ID: "i1", Trigger: "old trigger", Action: "old action", CreatedAt: "2020-01-01T00:00:00Z"},
@@ -1742,10 +1781,10 @@ func TestScoreQuestionImpact(t *testing.T) {
 		},
 	}
 	state := oracleStateFile{
-		OpenGaps:       []string{"authentication token validation is unclear", "authentication security configuration missing", "authentication flow has gaps"},
-		Contradictions: []string{"conflicting information about database indexing"},
+		OpenGaps:         []string{"authentication token validation is unclear", "authentication security configuration missing", "authentication flow has gaps"},
+		Contradictions:   []string{"conflicting information about database indexing"},
 		TargetConfidence: 85,
-		Iteration:       2,
+		Iteration:        2,
 	}
 
 	// Q1 should score higher than Q2 because Q1 has massive gap overlap (3 gaps mention "authentication")
@@ -1811,9 +1850,9 @@ func TestSelectOracleQuestionSmartGapOverlap(t *testing.T) {
 		},
 	}
 	state := oracleStateFile{
-		OpenGaps:        []string{"authentication token validation is unclear", "auth token expiry needs research"},
+		OpenGaps:         []string{"authentication token validation is unclear", "auth token expiry needs research"},
 		TargetConfidence: 85,
-		Iteration:       1,
+		Iteration:        1,
 	}
 
 	result := selectOracleQuestionSmart(plan, state)

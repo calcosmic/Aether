@@ -50,7 +50,7 @@ Parse `result.dispatch_manifest`. This manifest is the only source for worker na
 
 ## Playbook Procedure
 
-Load `.aether/docs/command-playbooks/build-wave.md` and use it as the spawning procedure. The runtime owns the dispatch manifest; the playbook owns the wrapper ceremony and prompt structure.
+Load the build-wave playbook from the installed hub (`~/.aether/system/docs/command-playbooks/build-wave.md`, or the matching dev hub when using `aether-dev`) and use it as the spawning procedure. The runtime owns the dispatch manifest; the playbook owns the wrapper ceremony and prompt structure.
 
 ## Wave Execution
 

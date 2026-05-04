@@ -1,0 +1,9 @@
+name: ant-shelf
+description: "Show shelved Aether backlog items"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether shelf-list $ARGUMENTS"
+guardrails:
+  - "Do not edit `.aether/data/shelf.json` by hand from this command spec."
+  - "Use the runtime help for `shelf-list` as the source of truth for flags and behavior."
+  - "If docs and runtime disagree, runtime wins."

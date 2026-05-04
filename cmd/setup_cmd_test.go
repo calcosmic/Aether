@@ -50,9 +50,9 @@ func TestSetupFailsWithoutHub(t *testing.T) {
 	}
 }
 
-// TestSetupCopiesSystemFiles verifies that setup copies hub system files
-// to the local .aether/ directory.
-func TestSetupCopiesSystemFiles(t *testing.T) {
+// TestSetupKeepsSystemFilesGlobal verifies setup creates local state without
+// copying hub system files into the repo.
+func TestSetupKeepsSystemFilesGlobal(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -83,10 +83,12 @@ func TestSetupCopiesSystemFiles(t *testing.T) {
 		t.Fatalf("setup command failed: %v", err)
 	}
 
-	// Verify system file was copied to .aether/
+	// Verify system file was not copied to .aether/
 	destFile := filepath.Join(repoDir, ".aether", "workers.md")
-	if _, err := os.Stat(destFile); os.IsNotExist(err) {
-		t.Errorf("expected %s to exist after setup", destFile)
+	if _, err := os.Stat(destFile); err == nil {
+		t.Errorf("expected %s to stay global, but setup copied it", destFile)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat %s: %v", destFile, err)
 	}
 }
 
@@ -164,10 +166,12 @@ func TestSetupIdempotent(t *testing.T) {
 		t.Fatalf("second setup failed: %v", err)
 	}
 
-	// File should still exist
+	// System file should still stay out of the repo.
 	destFile := filepath.Join(repoDir, ".aether", "workers.md")
-	if _, err := os.Stat(destFile); os.IsNotExist(err) {
-		t.Errorf("expected workers.md to still exist after second setup")
+	if _, err := os.Stat(destFile); err == nil {
+		t.Errorf("expected workers.md to stay global after second setup")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat workers.md: %v", err)
 	}
 }
 
@@ -442,9 +446,9 @@ func TestSetupCommandRespectsProtectedDirs(t *testing.T) {
 	}
 }
 
-// TestSetupSyncsCodexAgents verifies that setup syncs the Codex agents
-// directory from hub system/codex/ to the local .codex/agents/ directory.
-func TestSetupSyncsCodexAgents(t *testing.T) {
+// TestSetupDoesNotSyncCodexAgents verifies that setup leaves Codex agents in
+// the global home/hub instead of copying them into target repos.
+func TestSetupDoesNotSyncCodexAgents(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -475,16 +479,18 @@ func TestSetupSyncsCodexAgents(t *testing.T) {
 		t.Fatalf("setup command failed: %v", err)
 	}
 
-	// Verify codex agent file was copied to .codex/agents/
+	// Verify codex agent file was not copied to .codex/agents/
 	destFile := filepath.Join(repoDir, ".codex", "agents", "aether-builder.toml")
-	if _, err := os.Stat(destFile); os.IsNotExist(err) {
-		t.Errorf("expected %s to exist after setup (Codex sync pair missing)", destFile)
+	if _, err := os.Stat(destFile); err == nil {
+		t.Errorf("expected %s to stay global, but setup copied it", destFile)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat %s: %v", destFile, err)
 	}
 
-	// Verify output mentions the Codex sync
+	// Verify output does not report a Codex agent sync.
 	output := buf.String()
-	if !strings.Contains(output, "codex") && !strings.Contains(output, "Codex") {
-		t.Errorf("expected output to mention Codex agents, got: %s", output)
+	if strings.Contains(output, "Agents (codex)") {
+		t.Errorf("expected output not to mention Codex agents, got: %s", output)
 	}
 }
 

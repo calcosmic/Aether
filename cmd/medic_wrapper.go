@@ -8,14 +8,12 @@ import (
 
 // Expected file counts across Aether surfaces. Update when commands/agents are added or removed.
 const (
-	expectedYAMLCommands     = 50 // 49 existing + 1 medic
-	expectedClaudeCommands   = 50
-	expectedOpenCodeCommands = 50
-	expectedClaudeAgents     = 25 // 24 existing + 1 medic
-	expectedOpenCodeAgents   = 25
-	expectedCodexAgents      = 25
-	expectedClaudeMirror     = 25
-	expectedCodexMirror      = 25
+	expectedYAMLCommands     = 60
+	expectedClaudeCommands   = 60
+	expectedOpenCodeCommands = 60
+	expectedClaudeAgents     = 27
+	expectedOpenCodeAgents   = 27
+	expectedCodexAgents      = 27
 	expectedColonySkills     = 52
 	expectedDomainSkills     = 31
 	expectedCodexSkills      = expectedColonySkills + expectedDomainSkills
@@ -40,8 +38,6 @@ func scanWrapperParity(fc *fileChecker) []HealthIssue {
 		{"Codex agents", filepath.Join(fc.repoRoot, ".codex", "agents", "*.toml"), expectedCodexAgents},
 		{"Claude agents", filepath.Join(fc.repoRoot, ".claude", "agents", "ant", "*.md"), expectedClaudeAgents},
 		{"OpenCode agents", filepath.Join(fc.repoRoot, ".opencode", "agents", "*.md"), expectedOpenCodeAgents},
-		{"Claude mirror", filepath.Join(fc.repoRoot, ".aether", "agents-claude", "*.md"), expectedClaudeMirror},
-		{"Codex mirror", filepath.Join(fc.repoRoot, ".aether", "agents-codex", "*.toml"), expectedCodexMirror},
 	}
 
 	// Count each surface and check against expected
@@ -69,13 +65,10 @@ func scanWrapperParity(fc *fileChecker) []HealthIssue {
 	codexAgentCount := counts["Codex agents"]
 	claudeAgentCount := counts["Claude agents"]
 	opencodeAgentCount := counts["OpenCode agents"]
-	claudeMirrorCount := counts["Claude mirror"]
-	codexMirrorCount := counts["Codex mirror"]
-	if claudeAgentCount != codexAgentCount || claudeAgentCount != opencodeAgentCount ||
-		claudeAgentCount != claudeMirrorCount || claudeAgentCount != codexMirrorCount {
+	if claudeAgentCount != codexAgentCount || claudeAgentCount != opencodeAgentCount {
 		issues = append(issues, issueWarning("wrapper", "agents",
-			fmt.Sprintf("Agent count mismatch: Claude=%d, OpenCode=%d, Codex=%d, ClaudeMirror=%d, CodexMirror=%d",
-				claudeAgentCount, opencodeAgentCount, codexAgentCount, claudeMirrorCount, codexMirrorCount)))
+			fmt.Sprintf("Agent count mismatch: Claude=%d, OpenCode=%d, Codex=%d",
+				claudeAgentCount, opencodeAgentCount, codexAgentCount)))
 	}
 
 	// Colony skills count
@@ -120,7 +113,7 @@ func scanHubPublishIntegrity() []HealthIssue {
 		{"Hub OpenCode commands", filepath.Join(hubSystem, "commands", "opencode", "*.md"), expectedOpenCodeCommands},
 		{"Hub OpenCode agents", filepath.Join(hubSystem, "agents", "*.md"), expectedOpenCodeAgents},
 		{"Hub Codex agents", filepath.Join(hubSystem, "codex", "*.toml"), expectedCodexAgents},
-		{"Hub Codex skills", filepath.Join(hubSystem, "skills-codex", "*", "*", "SKILL.md"), expectedCodexSkills},
+		{"Hub Codex skills", filepath.Join(hubSystem, "skills", "*", "*", "SKILL.md"), expectedCodexSkills},
 	}
 
 	counts := make(map[string]int, len(surfaces))
