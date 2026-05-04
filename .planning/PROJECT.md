@@ -35,15 +35,12 @@ That means:
 ## Current State
 
 - Go runtime is healthy, v1.0.27 shipped
-- Milestone v1.13 Recovery Hardening & Hive Learning complete (shipped 2026-05-03)
+- Milestone v1.14 Queen Authority complete (shipped 2026-05-04)
 - 2900+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
-- Colony recovery system with Fixer caste, smart gate retry, and /ant-unblock
-- Hive learning layer with SQLite FTS recall and auto-created skills
-- Worker lifecycle hardening with heartbeats, process groups, PID tracking
+- Queen coordinates phases autonomously — gate classification, auto-recovery, wave lifecycle
 - 11 continue gates with watcher veto, auditor blocking, and runtime verification
-- Queen agent exists but functions as narrator, not autonomous coordinator
-- Core friction: too much manual intervention at gates, workers stall without auto-recovery
+- Reference library system with indexed, scored, matchable global references
 
 <details>
 <summary>Prior State History</summary>
@@ -87,7 +84,7 @@ That means:
 - [x] v1.11 Aether Unification -- Phases 70-79 (shipped 2026-04-30)
 - [x] v1.12 Safe Colony -- Phases 80-87 (shipped 2026-05-01)
 - [x] v1.13 Recovery Hardening & Hive Learning -- Phases 88-92 (shipped 2026-05-03)
-- [ ] v1.14 Queen Authority -- Phases 93+
+- [x] v1.14 Queen Authority -- Phases 93-99 (shipped 2026-05-04)
 
 ## Requirements
 
@@ -121,13 +118,16 @@ That means:
 - Gate self-healing (Fixer caste, smart gate retry, recoverable banners, /ant-unblock) -- v1.13
 - Hive learning (colony memory store, SQLite FTS recall, auto-created skills, privacy gate) -- v1.13
 - Worker lifecycle hardening (heartbeats, process groups, PID tracking, stale cleanup) -- v1.13
+- Gate classification (hard_block/soft_block/advisory) with audit trail -- v1.14
+- Auto-recovery orchestrator (bounded retry, peer redistribution, Fixer dispatch) -- v1.14
+- Queen decision layer (pure-function coordinator, plan-only + finalize) -- v1.14
+- Smart gates (depth-aware auto-resolve, hard blocks never auto-resolved) -- v1.14
+- Queen wave lifecycle (always-advance, dependency injection, recovery) -- v1.14
+- Output filtering (verbose-aware, phase-end summaries, queen audit) -- v1.14
 
 ### Active
 
-- Queen auto-recovery: workers that stall or fail get re-spawned, re-assigned, or skipped autonomously
-- Smart gates: non-critical findings auto-resolve, only genuine problems block advancement
-- Clean output: filtered and summarized status, you see what matters not raw worker noise
-- Queen phase coordination: within a phase, queen manages wave lifecycle end-to-end
+(None — start next milestone with /gsd-new-milestone)
 
 ### Out of Scope
 
@@ -222,4 +222,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 **Key context:** The infrastructure exists (4-tier escalation, 11 gates, wave dispatch). This milestone wires the queen into that infrastructure so she can actually drive it, not just narrate it.
 
-*Last updated: 2026-05-03 — v1.14 milestone started*
+*Last updated: 2026-05-04 after v1.14 Queen Authority milestone shipped*
