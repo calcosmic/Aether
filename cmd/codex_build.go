@@ -1045,6 +1045,14 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	summary, results, err := queenWaveLifecycle(ctx, workerDispatches, waveDispatchFn, phase, cb, phase.ID)
 	// Persist wave summary JSON for Phase 99 consumption (D-07)
 	_ = writeWaveSummary(phase.ID, summary)
+
+	// Per D-05: consolidate queen decisions into audit file (Phase 99 OUT-02)
+	audit := consolidateQueenAudit(phase.ID)
+	_ = writeAuditFile(phase.ID, audit)
+
+	// Per D-09: render phase-end summary with actions needed (Phase 99 OUT-01)
+	renderPhaseEndSummary(summary, phase.ID)
+
 	// Clean up any worktrees that weren't properly finalized during dispatch
 	cleaned, orphaned, _ := cleanupBuildWorktrees(phase.ID)
 	if cleaned > 0 || orphaned > 0 {
