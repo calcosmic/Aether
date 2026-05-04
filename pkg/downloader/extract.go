@@ -84,7 +84,7 @@ func findBinaryInDir(dir, bin string) string {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		if filepath.Base(path) == bin && found == "" {
+		if strings.EqualFold(filepath.Base(path), bin) && found == "" {
 			found = path
 		}
 		return nil
