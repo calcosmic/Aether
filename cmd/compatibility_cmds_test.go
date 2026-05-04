@@ -746,6 +746,95 @@ func TestOracleCompatibilityPersistsWorkerErrorReason(t *testing.T) {
 	}
 }
 
+func TestOracleCompatibilityAcceptsResponseFileDespiteWorkerClaimsParseError(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/oracle-response-parse-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	agentsDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
+		t.Fatalf("write oracle agent: %v", err)
+	}
+
+	invoker := &oracleResponseWithClaimsParseErrorInvoker{}
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	defer func() { newOracleWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "response file parse recovery"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("oracle start returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if result["status"] != "complete" {
+		t.Fatalf("status = %v, want complete", result["status"])
+	}
+	if invoker.calls == 0 {
+		t.Fatal("expected oracle worker to be invoked")
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".aether", "oracle", "discoveries", "iteration-01.json"))
+	if err != nil {
+		t.Fatalf("read discovery artifact: %v", err)
+	}
+	if strings.Contains(string(data), "parse worker output") {
+		t.Fatalf("valid response file should suppress final claims parse error, got:\n%s", string(data))
+	}
+}
+
+func TestOracleCompatibilityRecoversResponseFromMalformedFinalMessage(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/oracle-final-payload-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	agentsDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
+		t.Fatalf("write oracle agent: %v", err)
+	}
+
+	invoker := &oracleFinalPayloadParseErrorInvoker{}
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	defer func() { newOracleWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "final payload parse recovery"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("oracle start returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if result["status"] != "complete" {
+		t.Fatalf("status = %v, want complete", result["status"])
+	}
+	matches, err := filepath.Glob(filepath.Join(root, ".aether", "oracle", "responses", "iteration-01-attempt-*.json"))
+	if err != nil {
+		t.Fatalf("glob response files: %v", err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("expected recovered final payload to be persisted to the response file")
+	}
+}
+
 func TestOracleCompatibilityRetriesRecoverableWorkerFailure(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1072,6 +1161,82 @@ func (i *oracleErrorInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig)
 
 func (i *oracleErrorInvoker) IsAvailable(ctx context.Context) bool { return true }
 func (i *oracleErrorInvoker) ValidateAgent(path string) error      { return nil }
+
+type oracleResponseWithClaimsParseErrorInvoker struct {
+	calls int
+}
+
+func (i *oracleResponseWithClaimsParseErrorInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	i.calls++
+	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
+		Status:     "answered",
+		Confidence: 99,
+		Summary:    "Oracle response file survived a malformed final worker claims message.",
+		Findings: []oracleWorkerFinding{{
+			Text: "The Oracle response file is authoritative even when final worker claims cannot be parsed.",
+			Evidence: []oracleWorkerEvidence{{
+				Title:    "Oracle parse recovery test",
+				Location: "cmd/oracle_loop.go",
+				Type:     "codebase",
+			}},
+		}},
+	}); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return codex.WorkerResult{
+		WorkerName: cfg.WorkerName,
+		Caste:      cfg.Caste,
+		TaskID:     cfg.TaskID,
+		Status:     "failed",
+		RawOutput:  "worker emitted malformed final claims after writing a valid Oracle response",
+		Error:      fmt.Errorf("parse worker output: invalid JSON"),
+	}, nil
+}
+
+func (i *oracleResponseWithClaimsParseErrorInvoker) IsAvailable(ctx context.Context) bool {
+	return true
+}
+func (i *oracleResponseWithClaimsParseErrorInvoker) ValidateAgent(path string) error { return nil }
+
+type oracleFinalPayloadParseErrorInvoker struct {
+	calls int
+}
+
+func (i *oracleFinalPayloadParseErrorInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	i.calls++
+	response := oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
+		Status:     "answered",
+		Confidence: 99,
+		Summary:    "Oracle payload was recovered from the malformed final message path.",
+		Findings: []oracleWorkerFinding{{
+			Text: "The Oracle controller can recover a valid response object from worker output.",
+			Evidence: []oracleWorkerEvidence{{
+				Title:    "Oracle final payload recovery test",
+				Location: "cmd/oracle_loop.go",
+				Type:     "codebase",
+			}},
+		}},
+	}
+	data, err := json.Marshal(response)
+	if err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return codex.WorkerResult{
+		WorkerName: cfg.WorkerName,
+		Caste:      cfg.Caste,
+		TaskID:     cfg.TaskID,
+		Status:     "failed",
+		RawOutput:  "```json\n" + string(data) + "\n```",
+		Error:      fmt.Errorf("parse worker output: invalid JSON"),
+	}, nil
+}
+
+func (i *oracleFinalPayloadParseErrorInvoker) IsAvailable(ctx context.Context) bool {
+	return true
+}
+func (i *oracleFinalPayloadParseErrorInvoker) ValidateAgent(path string) error { return nil }
 
 type oracleCapturingInvoker struct {
 	configs []codex.WorkerConfig
