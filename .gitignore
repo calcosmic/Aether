@@ -78,7 +78,6 @@ logs/
 *.cache
 
 # Runtime generated files (should not be in public repo)
-.aether/version.json
 .aether/data/
 .aether/backups/
 .aether/locks/
