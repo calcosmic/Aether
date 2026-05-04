@@ -68,7 +68,11 @@ Run using the Bash tool with description "Checking colony version...": `aether v
 
 Check LiteLLM proxy status:
 ```bash
-curl -s http://localhost:4000/health 2>/dev/null | grep -q "healthy" && echo "✓ Proxy healthy" || echo "⚠ Proxy not running"
+if [ -n "$LITELLM_PROXY_URL" ]; then
+  curl -s "${LITELLM_PROXY_URL%/}/health" 2>/dev/null | grep -q "healthy" && echo "✓ Proxy healthy" || echo "⚠ Proxy not reachable at $LITELLM_PROXY_URL"
+else
+  echo "LiteLLM proxy check skipped (LITELLM_PROXY_URL not set)"
+fi
 ```
 
 ## Step 3: Show Current Model Configuration

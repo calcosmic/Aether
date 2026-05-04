@@ -69,6 +69,51 @@ func TestLoadActiveColonyStateNormalizesBrokenIdleStateWithGoal(t *testing.T) {
 	}
 }
 
+func TestNormalizeLegacyColonyStateHandlesCommonRuntimeValues(t *testing.T) {
+	goal := "Normalize production state drift"
+	phase := colony.Phase{ID: 1, Name: "Recover", Status: colony.PhaseReady}
+	cases := []struct {
+		name         string
+		rawState     colony.State
+		withGoal     bool
+		withPlan     bool
+		currentPhase int
+		want         colony.State
+	}{
+		{name: "lowercase ready", rawState: colony.State("ready"), withGoal: true, withPlan: true, currentPhase: 1, want: colony.StateREADY},
+		{name: "done", rawState: colony.State("done"), withGoal: true, withPlan: true, currentPhase: 1, want: colony.StateCOMPLETED},
+		{name: "complete", rawState: colony.State("COMPLETE"), withGoal: true, withPlan: true, currentPhase: 1, want: colony.StateCOMPLETED},
+		{name: "finished", rawState: colony.State("finished"), withGoal: true, withPlan: true, currentPhase: 1, want: colony.StateCOMPLETED},
+		{name: "active", rawState: colony.State("active"), withGoal: true, withPlan: true, currentPhase: 1, want: colony.StateEXECUTING},
+		{name: "running", rawState: colony.State("running"), withGoal: true, withPlan: true, currentPhase: 1, want: colony.StateEXECUTING},
+		{name: "build", rawState: colony.State("build"), withGoal: true, withPlan: true, currentPhase: 1, want: colony.StateBUILT},
+		{name: "empty with goal", rawState: colony.State(""), withGoal: true, want: colony.StateREADY},
+		{name: "empty without context", rawState: colony.State(""), want: colony.StateIDLE},
+		{name: "unknown with plan", rawState: colony.State("garbage"), withPlan: true, currentPhase: 1, want: colony.StateREADY},
+		{name: "unknown without context", rawState: colony.State("garbage"), want: colony.StateIDLE},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			state := colony.ColonyState{
+				Version:      "3.0",
+				State:        tc.rawState,
+				CurrentPhase: tc.currentPhase,
+			}
+			if tc.withGoal {
+				state.Goal = &goal
+			}
+			if tc.withPlan {
+				state.Plan = colony.Plan{Phases: []colony.Phase{phase}}
+			}
+			got := normalizeLegacyColonyState(state)
+			if got.State != tc.want {
+				t.Fatalf("normalized state = %q, want %q", got.State, tc.want)
+			}
+		})
+	}
+}
+
 func TestLoadActiveColonyStateRepairsMissingPlanFromPlanningArtifact(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

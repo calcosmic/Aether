@@ -12,27 +12,27 @@ import (
 
 // StreamState tracks the current state of a single agent's stream.
 type StreamState struct {
-	AgentName    string
-	Caste        Caste
-	Status       StreamStatus
-	Tokens       []string
-	TokenCount   int
-	StartedAt    time.Time
-	CompletedAt  *time.Time
-	Error        error
-	Result       *llm.StreamResult
-	mu           sync.RWMutex
+	AgentName   string
+	Caste       Caste
+	Status      StreamStatus
+	Tokens      []string
+	TokenCount  int
+	StartedAt   time.Time
+	CompletedAt *time.Time
+	Error       error
+	Result      *llm.StreamResult
+	mu          sync.RWMutex
 }
 
 // StreamStatus represents the lifecycle state of a stream.
 type StreamStatus string
 
 const (
-	StreamStatusPending    StreamStatus = "pending"
-	StreamStatusActive     StreamStatus = "active"
-	StreamStatusCompleted  StreamStatus = "completed"
-	StreamStatusFailed     StreamStatus = "failed"
-	StreamStatusCancelled  StreamStatus = "cancelled"
+	StreamStatusPending   StreamStatus = "pending"
+	StreamStatusActive    StreamStatus = "active"
+	StreamStatusCompleted StreamStatus = "completed"
+	StreamStatusFailed    StreamStatus = "failed"
+	StreamStatusCancelled StreamStatus = "cancelled"
 )
 
 // IsActive returns true if the stream is currently active.
@@ -135,10 +135,10 @@ func (s *StreamState) Duration() time.Duration {
 // StreamManager coordinates multiple concurrent agent streams.
 // It uses the spawn tree to track active agents and maps agent names to their stream states.
 type StreamManager struct {
-	spawnTree   *SpawnTree
-	streams     map[string]*StreamState
-	mu          sync.RWMutex
-	maxStreams  int
+	spawnTree  *SpawnTree
+	streams    map[string]*StreamState
+	mu         sync.RWMutex
+	maxStreams int
 }
 
 // NewStreamManager creates a new StreamManager with the given spawn tree.
@@ -171,11 +171,11 @@ func (sm *StreamManager) RegisterAgent(agent Agent) (*StreamState, error) {
 	}
 
 	state := &StreamState{
-		AgentName:  name,
-		Caste:      agent.Caste(),
-		Status:     StreamStatusPending,
-		Tokens:     make([]string, 0),
-		StartedAt:  time.Now(),
+		AgentName: name,
+		Caste:     agent.Caste(),
+		Status:    StreamStatusPending,
+		Tokens:    make([]string, 0),
+		StartedAt: time.Now(),
 	}
 
 	sm.streams[name] = state
@@ -264,14 +264,65 @@ func (sm *StreamManager) TotalCount() int {
 // WaitForAll blocks until all registered streams are complete.
 // Returns a map of agent names to their final states.
 func (sm *StreamManager) WaitForAll() map[string]*StreamState {
+	result, _ := sm.WaitForAllContext(context.Background())
+	return result
+}
+
+// WaitForAllContext blocks until all registered streams are complete or ctx is cancelled.
+// Returns a map of agent names to their latest states.
+func (sm *StreamManager) WaitForAllContext(ctx context.Context) (map[string]*StreamState, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		active := sm.ActiveCount()
 		if active == 0 {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return sm.snapshotStates(), ctx.Err()
+		case <-ticker.C:
+		}
 	}
 
+	return sm.snapshotStates(), nil
+}
+
+// WaitForAgent blocks until a specific agent's stream is complete.
+func (sm *StreamManager) WaitForAgent(agentName string) (*StreamState, bool) {
+	state, ok, _ := sm.WaitForAgentContext(context.Background(), agentName)
+	return state, ok
+}
+
+// WaitForAgentContext blocks until a specific agent's stream is complete or ctx is cancelled.
+func (sm *StreamManager) WaitForAgentContext(ctx context.Context, agentName string) (*StreamState, bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		state, ok := sm.GetStream(agentName)
+		if !ok {
+			return nil, false, nil
+		}
+		if state.IsComplete() {
+			return state, true, nil
+		}
+		select {
+		case <-ctx.Done():
+			return state, true, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (sm *StreamManager) snapshotStates() map[string]*StreamState {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 
@@ -280,20 +331,6 @@ func (sm *StreamManager) WaitForAll() map[string]*StreamState {
 		result[name] = state
 	}
 	return result
-}
-
-// WaitForAgent blocks until a specific agent's stream is complete.
-func (sm *StreamManager) WaitForAgent(agentName string) (*StreamState, bool) {
-	for {
-		state, ok := sm.GetStream(agentName)
-		if !ok {
-			return nil, false
-		}
-		if state.IsComplete() {
-			return state, true
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
 
 // agentStreamHandler wraps a StreamState to implement llm.StreamHandler.
@@ -356,6 +393,13 @@ func (sm *StreamManager) ExecuteStreamingWithAgent(ctx context.Context, agent St
 
 	// Execute with streaming
 	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				state.SetError(fmt.Errorf("streaming agent panic: %v", recovered))
+				state.SetStatus(StreamStatusFailed)
+			}
+		}()
+
 		err := agent.ExecuteStreaming(ctx, event, handler)
 		if err != nil && state.GetError() == nil {
 			state.SetError(err)
@@ -410,9 +454,9 @@ func (sm *StreamManager) GetStreamSummary() StreamSummary {
 	defer sm.mu.RUnlock()
 
 	summary := StreamSummary{
-		Total:     len(sm.streams),
-		ByStatus:  make(map[StreamStatus]int),
-		ByCaste:   make(map[Caste]int),
+		Total:    len(sm.streams),
+		ByStatus: make(map[StreamStatus]int),
+		ByCaste:  make(map[Caste]int),
 	}
 
 	for _, state := range sm.streams {

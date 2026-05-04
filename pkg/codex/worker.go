@@ -23,6 +23,8 @@ const defaultWorkerTimeout = DefaultWorkerTimeout
 const (
 	defaultWorkerHeartbeatInterval = 2 * time.Second
 	minWorkerHeartbeatInterval     = 250 * time.Millisecond
+	workerCancelKillDelay          = 2 * time.Second
+	workerCommandWaitDelay         = 5 * time.Second
 )
 
 // envRealDispatch is the environment variable that enables real codex CLI invocation.
@@ -420,7 +422,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		cmd.Dir = config.Root
 	}
 	cmd.Stdin = strings.NewReader(prompt)
-	cmd.SysProcAttr = workerSysProcAttr()
+	configureWorkerCommand(cmd)
 
 	var stdout, stderr bytes.Buffer
 	running := newWorkerRunningSignal(observer)
@@ -464,13 +466,17 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	defer heartbeat.Stop()
 
 	var waitErr error
+	ctxDone := ctx.Done()
 waitLoop:
 	for {
 		select {
 		case waitErr = <-waitCh:
 			break waitLoop
+		case <-ctxDone:
+			ctxDone = nil
+			running.Pulse("worker cancellation requested")
 		case <-heartbeat.C:
-			running.Report("worker heartbeat observed")
+			running.Pulse("worker heartbeat observed")
 		}
 	}
 
@@ -961,6 +967,18 @@ func (s *workerRunningSignal) Report(message string) {
 	})
 }
 
+func (s *workerRunningSignal) Pulse(message string) {
+	if s == nil {
+		return
+	}
+	s.seen.Store(true)
+	emitWorkerProgress(s.observer, WorkerProgressEvent{
+		Status:     "running",
+		Message:    strings.TrimSpace(message),
+		OccurredAt: time.Now().UTC(),
+	})
+}
+
 func (s *workerRunningSignal) Observed() bool {
 	if s == nil {
 		return false
@@ -989,6 +1007,29 @@ func emitWorkerProgress(observer WorkerProgressObserver, event WorkerProgressEve
 		event.OccurredAt = time.Now().UTC()
 	}
 	observer(event)
+}
+
+func configureWorkerCommand(cmd *exec.Cmd) {
+	if cmd == nil {
+		return
+	}
+	cmd.SysProcAttr = workerSysProcAttr()
+	cmd.WaitDelay = workerCommandWaitDelay
+	if cmd.SysProcAttr == nil {
+		return
+	}
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		pid := cmd.Process.Pid
+		err := terminateWorkerProcess(pid)
+		go func() {
+			time.Sleep(workerCancelKillDelay)
+			_ = killWorkerProcess(pid)
+		}()
+		return err
+	}
 }
 
 func validateWorkerLaunchConfig(config WorkerConfig) error {

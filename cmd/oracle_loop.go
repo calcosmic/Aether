@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -578,7 +580,9 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 }
 
 func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks []string) (map[string]interface{}, error) {
-	ctx := context.Background()
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
 	invoker := newOracleWorkerInvoker()
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
@@ -602,6 +606,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 	iterationsRun := 0
 	for state.Iteration < state.MaxIterations {
+		if ctx.Err() != nil {
+			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "stopped", "cancelled", "aether oracle status")
+		}
 		if oracleStopRequested(paths.StopPath) {
 			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "stopped", "manual_stop", "aether oracle status")
 		}
@@ -668,6 +675,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			}
 
 			result, invokeErr = runOracleIterationAttempt(ctx, invoker, paths, state, plan, detectedType, languages, frameworks, target, attempt, policy, responsePath)
+			if ctx.Err() != nil {
+				return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "stopped", "cancelled", "aether oracle status")
+			}
 			replyLoaded = false
 			if invokeErr == nil && result.Error == nil && !strings.EqualFold(strings.TrimSpace(result.Status), "failed") {
 				workerReply, invokeErr = loadOracleWorkerResponse(responsePath, target)
@@ -1080,6 +1090,16 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 		select {
 		case attemptResult := <-resultCh:
 			return attemptResult.result, attemptResult.err
+		case <-ctx.Done():
+			cancel()
+			return codex.WorkerResult{
+				Caste:    "oracle",
+				TaskID:   fmt.Sprintf("oracle.%d", state.Iteration),
+				Status:   "timeout",
+				Summary:  fmt.Sprintf("Oracle attempt stopped: %v", ctx.Err()),
+				Duration: time.Since(startedAt),
+				Error:    ctx.Err(),
+			}, ctx.Err()
 		case <-ticker.C:
 			elapsed := time.Since(startedAt)
 			if response, err := loadOracleWorkerResponse(responsePath, target); err == nil {

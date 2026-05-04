@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ const sessionStaleThreshold = 24 * time.Hour
 const handoffStateFence = "aether-colony-state"
 
 var handoffPhaseLinePattern = regexp.MustCompile(`(?i)(?:Current:|Phase:)\s*([0-9]+)\s*/\s*([0-9]+)(?:\s*(?:—|-)\s*(.*))?`)
+var resumeNoHandoff bool
 
 // sessionFreshnessResult describes how fresh a session is for resume.
 type sessionFreshnessResult struct {
@@ -190,7 +192,7 @@ var resumeColonyCmd = &cobra.Command{
 		// Verify session freshness
 		freshness := sessionVerifyFresh(store)
 
-		state, recoveredFromHandoff, stateErr := loadResumeState(handoffText)
+		state, recoveredFromHandoff, stateErr := loadResumeState(handoffText, resumeNoHandoff)
 		if stateErr != nil {
 			renderRecoveryMenu("resume", stateErr.Error(), nil)
 			return nil
@@ -315,23 +317,78 @@ var resumeColonyCmd = &cobra.Command{
 	},
 }
 
-func loadResumeState(handoffText string) (colony.ColonyState, bool, error) {
+func loadResumeState(handoffText string, noHandoff bool) (colony.ColonyState, bool, error) {
 	var rawState colony.ColonyState
+	stateLoaded := false
 	if err := store.LoadJSON("COLONY_STATE.json", &rawState); err == nil {
+		stateLoaded = true
 		state := normalizeLegacyColonyState(rawState)
 		if resumeStateIsRunnable(state) {
 			return state, false, nil
 		}
 	}
 
+	if noHandoff {
+		return colony.ColonyState{}, false, fmt.Errorf("COLONY_STATE.json is not runnable and HANDOFF.md fallback is disabled")
+	}
+
 	state, err := restoreStateFromHandoff(handoffText)
 	if err != nil {
 		return colony.ColonyState{}, false, fmt.Errorf("runtime state is broken and could not be restored from handoff: %w", err)
+	}
+	if stateLoaded {
+		warnResumeHandoffFallback(rawState, state)
+		if resumeHandoffGoalMismatch(rawState, state) {
+			return colony.ColonyState{}, false, fmt.Errorf("HANDOFF.md appears to belong to a different colony; current COLONY_STATE.json goal %q does not match handoff goal %q", colonyStateGoalText(rawState), colonyStateGoalText(state))
+		}
 	}
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		return colony.ColonyState{}, false, fmt.Errorf("failed to restore COLONY_STATE.json from handoff: %w", err)
 	}
 	return state, true, nil
+}
+
+func warnResumeHandoffFallback(currentState, handoffState colony.ColonyState) {
+	fmt.Fprintln(stderr, "warning: COLONY_STATE.json is not runnable; attempting to restore from HANDOFF.md")
+
+	currentGoal := colonyStateGoalText(currentState)
+	handoffGoal := colonyStateGoalText(handoffState)
+	if currentGoal != "" && handoffGoal != "" && !goalsMatch(currentGoal, handoffGoal) {
+		fmt.Fprintf(stderr, "warning: HANDOFF.md goal %q does not match current COLONY_STATE.json goal %q\n", handoffGoal, currentGoal)
+	}
+
+	warnIfHandoffOlderThanCurrentState()
+}
+
+func resumeHandoffGoalMismatch(currentState, handoffState colony.ColonyState) bool {
+	currentGoal := colonyStateGoalText(currentState)
+	handoffGoal := colonyStateGoalText(handoffState)
+	return currentGoal != "" && handoffGoal != "" && !goalsMatch(currentGoal, handoffGoal)
+}
+
+func warnIfHandoffOlderThanCurrentState() {
+	if store == nil {
+		return
+	}
+	stateInfo, stateErr := os.Stat(filepath.Join(store.BasePath(), "COLONY_STATE.json"))
+	handoffInfo, handoffErr := os.Stat(handoffDocumentPath())
+	if stateErr != nil || handoffErr != nil {
+		return
+	}
+	if handoffInfo.ModTime().Before(stateInfo.ModTime()) {
+		fmt.Fprintf(stderr, "warning: HANDOFF.md is older than COLONY_STATE.json; verify the recovered colony before continuing\n")
+	}
+}
+
+func colonyStateGoalText(state colony.ColonyState) string {
+	if state.Goal == nil {
+		return ""
+	}
+	return strings.TrimSpace(*state.Goal)
+}
+
+func goalsMatch(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
 func resumeStateIsRunnable(state colony.ColonyState) bool {
@@ -648,6 +705,7 @@ func loadOrCreateSessionSummary(now time.Time, state colony.ColonyState) (colony
 }
 
 func init() {
+	resumeColonyCmd.Flags().BoolVar(&resumeNoHandoff, "no-handoff", false, "disable HANDOFF.md fallback when COLONY_STATE.json is not runnable")
 	rootCmd.AddCommand(pauseColonyCmd)
 	rootCmd.AddCommand(resumeColonyCmd)
 }

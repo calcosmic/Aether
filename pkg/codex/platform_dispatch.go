@@ -616,6 +616,7 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 	if strings.TrimSpace(config.Root) != "" {
 		cmd.Dir = config.Root
 	}
+	configureWorkerCommand(cmd)
 
 	if agentURL := os.Getenv(envOpenCodeAgentURL); agentURL != "" {
 		cmd.Env = append(os.Environ(), envOpenCodeAgentURL+"="+agentURL)
@@ -637,13 +638,17 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 	defer heartbeat.Stop()
 
 	var waitErr error
+	ctxDone := ctx.Done()
 waitLoop:
 	for {
 		select {
 		case waitErr = <-waitCh:
 			break waitLoop
+		case <-ctxDone:
+			ctxDone = nil
+			running.Pulse("worker cancellation requested")
 		case <-heartbeat.C:
-			running.Report("worker heartbeat observed")
+			running.Pulse("worker heartbeat observed")
 		}
 	}
 

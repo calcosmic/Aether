@@ -100,7 +100,29 @@ func normalizeLegacyColonyState(state colony.ColonyState) colony.ColonyState {
 	hasGoal := state.Goal != nil && strings.TrimSpace(*state.Goal) != ""
 	hasPlanContext := len(state.Plan.Phases) > 0 || state.CurrentPhase > 0
 
+	if rawState == "" {
+		if hasGoal || hasPlanContext {
+			state.State = colony.StateREADY
+		} else {
+			state.State = colony.StateIDLE
+		}
+		return state
+	}
+
 	switch rawState {
+	case "IDLE":
+		state.State = colony.StateIDLE
+		if hasGoal && hasPlanContext {
+			state.State = colony.StateREADY
+		}
+	case "READY":
+		state.State = colony.StateREADY
+	case "EXECUTING":
+		state.State = colony.StateEXECUTING
+	case "BUILT":
+		state.State = colony.StateBUILT
+	case "COMPLETED":
+		state.State = colony.StateCOMPLETED
 	case "PAUSED":
 		state.State = colony.StateREADY
 		state.Paused = true
@@ -110,13 +132,32 @@ func normalizeLegacyColonyState(state colony.ColonyState) colony.ColonyState {
 		state.State = colony.StateCOMPLETED
 	case "ENTOMBED":
 		state.State = colony.StateIDLE
-	case "IDLE":
-		if hasGoal && hasPlanContext {
+	case "DONE", "COMPLETE", "FINISHED":
+		state.State = colony.StateCOMPLETED
+	case "ACTIVE", "RUNNING":
+		state.State = colony.StateEXECUTING
+	case "BUILD":
+		state.State = colony.StateBUILT
+	}
+
+	if !isValidColonyLifecycleState(state.State) {
+		if hasGoal || hasPlanContext {
 			state.State = colony.StateREADY
+		} else {
+			state.State = colony.StateIDLE
 		}
 	}
 
 	return state
+}
+
+func isValidColonyLifecycleState(state colony.State) bool {
+	switch state {
+	case colony.StateIDLE, colony.StateREADY, colony.StateEXECUTING, colony.StateBUILT, colony.StateCOMPLETED:
+		return true
+	default:
+		return false
+	}
 }
 
 func colonyStateLoadMessage(err error) string {

@@ -80,7 +80,11 @@ Check that the LiteLLM proxy is running for model routing:
 
 Run using the Bash tool with description "Checking model proxy...":
 ```bash
-curl -s http://localhost:4000/health | grep -q "healthy" && echo "Proxy healthy" || echo "Proxy not running - workers will use default model"
+if [ -n "$LITELLM_PROXY_URL" ]; then
+  curl -s "${LITELLM_PROXY_URL%/}/health" 2>/dev/null | grep -q "healthy" && echo "Proxy healthy" || echo "Proxy not reachable at $LITELLM_PROXY_URL - workers will use default model"
+else
+  echo "Proxy check skipped - LITELLM_PROXY_URL not set; workers will use default model"
+fi
 ```
 
 If proxy is not healthy, log a warning but continue (workers will fall back to default routing).

@@ -90,6 +90,7 @@ func saveGlobals(t *testing.T) {
 	origNarratorLookPath := narratorLookPath
 	origNarratorCommandContext := narratorCommandContext
 	origNarratorRuntimePath := narratorRuntimePath
+	origResumeNoHandoff := resumeNoHandoff
 	t.Cleanup(func() {
 		store = origStore
 		stdout = origStdout
@@ -110,6 +111,7 @@ func saveGlobals(t *testing.T) {
 		narratorLookPath = origNarratorLookPath
 		narratorCommandContext = origNarratorCommandContext
 		narratorRuntimePath = origNarratorRuntimePath
+		resumeNoHandoff = origResumeNoHandoff
 	})
 }
 

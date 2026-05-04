@@ -149,6 +149,9 @@ func TestScanColonyStateInvalidState(t *testing.T) {
 	for _, issue := range issues {
 		if issue.Severity == "critical" && issue.Category == "state" {
 			found = true
+			if !issue.Fixable {
+				t.Error("invalid state issue should be fixable")
+			}
 		}
 	}
 	if !found {

@@ -237,14 +237,9 @@ func scanColonyState(fc *fileChecker) []HealthIssue {
 			"Colony goal is missing"))
 	}
 
-	validStates := map[colony.State]bool{
-		colony.StateIDLE: true, colony.StateREADY: true,
-		colony.StateEXECUTING: true, colony.StateBUILT: true,
-		colony.StateCOMPLETED: true,
-	}
-	if !validStates[state.State] {
-		issues = append(issues, issueCritical("state", filename,
-			fmt.Sprintf("Invalid state '%s'", state.State)))
+	if !isValidColonyLifecycleState(state.State) {
+		issues = append(issues, fixableIssue(issueCritical("state", filename,
+			fmt.Sprintf("Invalid state '%s'", state.State))))
 	}
 
 	if !state.Scope.Valid() && state.Scope != "" {
