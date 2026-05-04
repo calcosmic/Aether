@@ -1,14 +1,19 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+const workerHandoffsPath = "handoffs/worker-handoffs.json"
 
 var (
 	planningScoutTimeout        = 15 * time.Minute
@@ -252,6 +257,31 @@ type codexQueenExecutionPolicyInput struct {
 	DispatchWorkers   bool
 }
 
+type workerHandoffFile struct {
+	Entries []workerHandoffRecord `json:"entries"`
+}
+
+type workerHandoffRecord struct {
+	ID                     string   `json:"id"`
+	Workflow               string   `json:"workflow,omitempty"`
+	Phase                  int      `json:"phase,omitempty"`
+	Wave                   int      `json:"wave,omitempty"`
+	WorkerName             string   `json:"worker_name"`
+	Caste                  string   `json:"caste,omitempty"`
+	TaskID                 string   `json:"task_id,omitempty"`
+	Status                 string   `json:"status,omitempty"`
+	Summary                string   `json:"summary,omitempty"`
+	ChangedFiles           []string `json:"changed_files,omitempty"`
+	CommandsRun            []string `json:"commands_run,omitempty"`
+	VerificationStatus     string   `json:"verification_status,omitempty"`
+	KnownFailures          []string `json:"known_failures,omitempty"`
+	OpenDecisions          []string `json:"open_decisions,omitempty"`
+	Assumptions            []string `json:"assumptions,omitempty"`
+	NextWorkerInstructions []string `json:"next_worker_instructions,omitempty"`
+	DoNotRepeat            []string `json:"do_not_repeat,omitempty"`
+	Freshness              string   `json:"freshness,omitempty"`
+}
+
 // workflowProfileContract creates a profile contract from a verification depth.
 func workflowProfileContract(depth colony.VerificationDepth) codexWorkflowProfileContract {
 	return codexWorkflowProfileContract{ReviewDepth: depth}
@@ -276,12 +306,237 @@ func recommendQueenExecutionPolicy(state colony.ColonyState, phase colony.Phase,
 
 // persistDispatchWorkerHandoff persists a worker handoff for a dispatch.
 func persistDispatchWorkerHandoff(dispatch codex.WorkerDispatch, result codex.DispatchResult) error {
-	return nil
+	if store == nil {
+		return nil
+	}
+	record := buildWorkerHandoffRecord(dispatch, result)
+	if strings.TrimSpace(record.WorkerName) == "" {
+		return nil
+	}
+	return store.UpdateFile(workerHandoffsPath, func(existing []byte) ([]byte, error) {
+		file := workerHandoffFile{}
+		if len(existing) > 0 {
+			if err := json.Unmarshal(existing, &file); err != nil {
+				var legacy []workerHandoffRecord
+				if legacyErr := json.Unmarshal(existing, &legacy); legacyErr != nil {
+					return nil, fmt.Errorf("unmarshal worker handoffs: %w", err)
+				}
+				file.Entries = legacy
+			}
+		}
+		file.Entries = append(file.Entries, record)
+		file.Entries = pruneWorkerHandoffRecords(file.Entries, 100)
+		data, err := json.MarshalIndent(file, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("marshal worker handoffs: %w", err)
+		}
+		return append(data, '\n'), nil
+	})
 }
 
 // renderWorkerHandoffSection renders the handoff context section for a worker.
 func renderWorkerHandoffSection(workflow string, phaseID int, workerName string) string {
-	return ""
+	if store == nil {
+		return ""
+	}
+	records, err := loadWorkerHandoffRecords()
+	if err != nil || len(records) == 0 {
+		return ""
+	}
+	workflow = strings.ToLower(strings.TrimSpace(workflow))
+	workerName = strings.TrimSpace(workerName)
+	filtered := make([]workerHandoffRecord, 0, len(records))
+	for _, record := range records {
+		if workflow != "" && strings.ToLower(strings.TrimSpace(record.Workflow)) != workflow {
+			continue
+		}
+		if phaseID > 0 && record.Phase > 0 && (record.Phase < phaseID-1 || record.Phase > phaseID) {
+			continue
+		}
+		if workerName != "" && strings.EqualFold(strings.TrimSpace(record.WorkerName), workerName) {
+			continue
+		}
+		filtered = append(filtered, record)
+	}
+	if len(filtered) == 0 {
+		return ""
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return filtered[i].Freshness > filtered[j].Freshness
+	})
+	if len(filtered) > 5 {
+		filtered = filtered[:5]
+	}
+
+	var b strings.Builder
+	b.WriteString("## Previous Worker Handoffs\n\n")
+	for _, record := range filtered {
+		title := strings.TrimSpace(record.WorkerName)
+		if title == "" {
+			title = "worker"
+		}
+		if record.TaskID != "" {
+			title += " (" + record.TaskID + ")"
+		}
+		fmt.Fprintf(&b, "### %s\n", title)
+		if record.Status != "" || record.VerificationStatus != "" {
+			fmt.Fprintf(&b, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown"))
+		}
+		if record.Summary != "" {
+			fmt.Fprintf(&b, "- Summary: %s\n", record.Summary)
+		}
+		appendHandoffList(&b, "Changed files", record.ChangedFiles)
+		appendHandoffList(&b, "Commands run", record.CommandsRun)
+		appendHandoffList(&b, "Known failures", record.KnownFailures)
+		appendHandoffList(&b, "Open decisions", record.OpenDecisions)
+		appendHandoffList(&b, "Assumptions", record.Assumptions)
+		appendHandoffList(&b, "Next worker instructions", record.NextWorkerInstructions)
+		appendHandoffList(&b, "Do not repeat", record.DoNotRepeat)
+		b.WriteString("\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func buildWorkerHandoffRecord(dispatch codex.WorkerDispatch, result codex.DispatchResult) workerHandoffRecord {
+	root := strings.TrimSpace(dispatch.Root)
+	if root == "" && store != nil {
+		root = filepath.Dir(filepath.Dir(store.BasePath()))
+	}
+	workerName := strings.TrimSpace(dispatch.WorkerName)
+	if workerName == "" {
+		workerName = strings.TrimSpace(result.WorkerName)
+	}
+	status := strings.ToLower(strings.TrimSpace(result.Status))
+	summary := ""
+	handoff := codex.WorkerHandoff{}
+	if result.WorkerResult != nil {
+		if workerName == "" {
+			workerName = strings.TrimSpace(result.WorkerResult.WorkerName)
+		}
+		if status == "" {
+			status = strings.ToLower(strings.TrimSpace(result.WorkerResult.Status))
+		}
+		summary = strings.TrimSpace(result.WorkerResult.Summary)
+		handoff = result.WorkerResult.Handoff
+		if workerHandoffEmpty(handoff) {
+			handoff = codex.WorkerHandoff{
+				ChangedFiles:       append(append(append([]string{}, result.WorkerResult.FilesCreated...), result.WorkerResult.FilesModified...), result.WorkerResult.TestsWritten...),
+				KnownFailures:      append([]string{}, result.WorkerResult.Blockers...),
+				VerificationStatus: verificationStatusForWorkerStatus(status),
+			}
+		}
+	}
+	if result.Error != nil {
+		handoff.KnownFailures = append(handoff.KnownFailures, result.Error.Error())
+		if status == "" {
+			status = "failed"
+		}
+	}
+	if status == "" {
+		status = "unknown"
+	}
+	if strings.TrimSpace(handoff.VerificationStatus) == "" {
+		handoff.VerificationStatus = verificationStatusForWorkerStatus(status)
+	}
+	handoff = codex.NormalizeWorkerHandoff(root, handoff)
+	if err := codex.ValidateWorkerHandoff(handoff); err != nil {
+		handoff.VerificationStatus = "unknown"
+		handoff.KnownFailures = append(handoff.KnownFailures, err.Error())
+	}
+	freshness := strings.TrimSpace(handoff.Freshness)
+	if freshness == "" {
+		freshness = time.Now().UTC().Format(time.RFC3339)
+	}
+	return workerHandoffRecord{
+		ID:                     fmt.Sprintf("%s:%s:%s:%d", firstNonEmpty(dispatch.Workflow, "worker"), firstNonEmpty(dispatch.TaskID, workerName), workerName, time.Now().UTC().UnixNano()),
+		Workflow:               strings.ToLower(strings.TrimSpace(dispatch.Workflow)),
+		Phase:                  dispatch.Phase,
+		Wave:                   dispatch.Wave,
+		WorkerName:             workerName,
+		Caste:                  strings.TrimSpace(dispatch.Caste),
+		TaskID:                 strings.TrimSpace(dispatch.TaskID),
+		Status:                 status,
+		Summary:                summary,
+		ChangedFiles:           handoff.ChangedFiles,
+		CommandsRun:            handoff.CommandsRun,
+		VerificationStatus:     handoff.VerificationStatus,
+		KnownFailures:          handoff.KnownFailures,
+		OpenDecisions:          handoff.OpenDecisions,
+		Assumptions:            handoff.Assumptions,
+		NextWorkerInstructions: handoff.NextWorkerInstructions,
+		DoNotRepeat:            handoff.DoNotRepeat,
+		Freshness:              freshness,
+	}
+}
+
+func loadWorkerHandoffRecords() ([]workerHandoffRecord, error) {
+	raw, err := store.ReadFile(workerHandoffsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var file workerHandoffFile
+	if err := json.Unmarshal(raw, &file); err == nil {
+		return file.Entries, nil
+	}
+	var legacy []workerHandoffRecord
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		return nil, err
+	}
+	return legacy, nil
+}
+
+func pruneWorkerHandoffRecords(records []workerHandoffRecord, limit int) []workerHandoffRecord {
+	if limit <= 0 || len(records) <= limit {
+		return records
+	}
+	sort.SliceStable(records, func(i, j int) bool {
+		return records[i].Freshness > records[j].Freshness
+	})
+	pruned := append([]workerHandoffRecord(nil), records[:limit]...)
+	sort.SliceStable(pruned, func(i, j int) bool {
+		return pruned[i].Freshness < pruned[j].Freshness
+	})
+	return pruned
+}
+
+func verificationStatusForWorkerStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "manually-reconciled":
+		return "pass"
+	case "failed", "blocked", "timeout":
+		return "fail"
+	case "":
+		return "unknown"
+	default:
+		return "partial"
+	}
+}
+
+func workerHandoffEmpty(h codex.WorkerHandoff) bool {
+	return len(h.ChangedFiles) == 0 &&
+		len(h.CommandsRun) == 0 &&
+		strings.TrimSpace(h.VerificationStatus) == "" &&
+		len(h.KnownFailures) == 0 &&
+		len(h.OpenDecisions) == 0 &&
+		len(h.Assumptions) == 0 &&
+		len(h.NextWorkerInstructions) == 0 &&
+		len(h.DoNotRepeat) == 0 &&
+		strings.TrimSpace(h.Freshness) == ""
+}
+
+func appendHandoffList(b *strings.Builder, label string, values []string) {
+	values = uniqueSortedStrings(values)
+	if len(values) == 0 {
+		return
+	}
+	const maxItems = 5
+	if len(values) > maxItems {
+		values = append(values[:maxItems], fmt.Sprintf("... %d more", len(values)-maxItems))
+	}
+	fmt.Fprintf(b, "- %s: %s\n", label, strings.Join(values, "; "))
 }
 
 // filterFailedDispatches returns dispatches with non-success statuses.

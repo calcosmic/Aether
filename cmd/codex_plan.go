@@ -114,13 +114,13 @@ type phaseTaskTemplate struct {
 }
 
 type codexPlanOptions struct {
-	Refresh            bool
-	Synthetic          bool
-	PlanOnly           bool
-	Depth              string
-	PlanningDepth      string
-	VerificationDepth  string
-	WorkerTimeout      time.Duration
+	Refresh           bool
+	Synthetic         bool
+	PlanOnly          bool
+	Depth             string
+	PlanningDepth     string
+	VerificationDepth string
+	WorkerTimeout     time.Duration
 }
 
 type codexPlanManifest struct {
@@ -134,8 +134,8 @@ type codexPlanManifest struct {
 	Granularity        string                  `json:"granularity"`
 	GranularityMin     int                     `json:"granularity_min"`
 	GranularityMax     int                     `json:"granularity_max"`
-	PlanningDepth     string                  `json:"planning_depth"`
-	VerificationDepth string                  `json:"verification_depth,omitempty"`
+	PlanningDepth      string                  `json:"planning_depth"`
+	VerificationDepth  string                  `json:"verification_depth,omitempty"`
 	Survey             codexSurveyContext      `json:"survey"`
 	Dispatches         []codexPlanningDispatch `json:"dispatches"`
 	DispatchMode       string                  `json:"dispatch_mode"`
@@ -206,22 +206,22 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}
 		updateSessionSummary("plan", nextCommand, fmt.Sprintf("Loaded existing plan (%d phases)", len(state.Plan.Phases)))
 		return map[string]interface{}{
-			"planned":                   true,
-			"existing_plan":             true,
-			"goal":                      *state.Goal,
-			"phases":                    state.Plan.Phases,
-			"count":                     len(state.Plan.Phases),
-			"depth":                     planDepth,
-				"planning_depth":            planningDepth,
+			"planned":                    true,
+			"existing_plan":              true,
+			"goal":                       *state.Goal,
+			"phases":                     state.Plan.Phases,
+			"count":                      len(state.Plan.Phases),
+			"depth":                      planDepth,
+			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
-			"granularity":               string(granularity),
-			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
-			"unresolved_clarifications": unresolvedClarifications,
-			"clarification_warning":     clarificationWarning,
-			"next":                      nextCommand,
+			"granularity":                string(granularity),
+			"dispatch_contract":          planningDispatchContractWithTimeout(opts.WorkerTimeout),
+			"unresolved_clarifications":  unresolvedClarifications,
+			"clarification_warning":      clarificationWarning,
+			"next":                       nextCommand,
 		}, nil
 	}
 
@@ -439,38 +439,38 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	result := map[string]interface{}{
-		"planned":                   true,
-		"existing_plan":             false,
-		"refreshed":                 opts.Refresh,
-		"goal":                      *state.Goal,
-		"phases":                    phases,
-		"count":                     len(phases),
-		"depth":                     planDepth,
-			"planning_depth":            planningDepth,
-			"verification_depth":         verificationDepth,
-			"verification_smart_default": verificationSmartDefault,
-			"planning_smart_default":     planningSmartDefault,
-			"planning_phase":             planningPhase,
-		"granularity":               string(granularity),
-		"granularity_min":           granularityMin(granularity),
-		"granularity_max":           granularityMax(granularity),
-		"confidence":                confidence,
-		"planning_dir":              planningDir,
-		"planning_files":            []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
-		"plan_artifact":             filepath.Base(planArtifactFile),
-		"phase_research_dir":        phaseResearchDir,
-		"phase_research_files":      phaseResearchFiles,
-		"dispatches":                dispatchMaps,
-		"dispatch_mode":             dispatchMode,
-		"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
-		"artifact_source":           artifactSource,
-		"plan_source":               planSource,
-		"gaps":                      unresolvedGaps,
-		"survey_docs":               survey.SurveyDocs,
-		"unresolved_clarifications": unresolvedClarifications,
-		"clarification_warning":     clarificationWarning,
-		"planning_warning":          planningWarning,
-		"next":                      nextCommand,
+		"planned":                    true,
+		"existing_plan":              false,
+		"refreshed":                  opts.Refresh,
+		"goal":                       *state.Goal,
+		"phases":                     phases,
+		"count":                      len(phases),
+		"depth":                      planDepth,
+		"planning_depth":             planningDepth,
+		"verification_depth":         verificationDepth,
+		"verification_smart_default": verificationSmartDefault,
+		"planning_smart_default":     planningSmartDefault,
+		"planning_phase":             planningPhase,
+		"granularity":                string(granularity),
+		"granularity_min":            granularityMin(granularity),
+		"granularity_max":            granularityMax(granularity),
+		"confidence":                 confidence,
+		"planning_dir":               planningDir,
+		"planning_files":             []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
+		"plan_artifact":              filepath.Base(planArtifactFile),
+		"phase_research_dir":         phaseResearchDir,
+		"phase_research_files":       phaseResearchFiles,
+		"dispatches":                 dispatchMaps,
+		"dispatch_mode":              dispatchMode,
+		"dispatch_contract":          planningDispatchContractWithTimeout(opts.WorkerTimeout),
+		"artifact_source":            artifactSource,
+		"plan_source":                planSource,
+		"gaps":                       unresolvedGaps,
+		"survey_docs":                survey.SurveyDocs,
+		"unresolved_clarifications":  unresolvedClarifications,
+		"clarification_warning":      clarificationWarning,
+		"planning_warning":           planningWarning,
+		"next":                       nextCommand,
 	}
 	statuses := make([]string, 0, len(dispatches))
 	for _, dispatch := range dispatches {
@@ -507,25 +507,25 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 		}
 		return map[string]interface{}{
-			"plan_only":                 true,
-			"planned":                   true,
-			"existing_plan":             true,
-			"goal":                      *state.Goal,
-			"phases":                    state.Plan.Phases,
-			"count":                     len(state.Plan.Phases),
-			"depth":                     planDepth,
-			"planning_depth":            planningDepth,
+			"plan_only":                  true,
+			"planned":                    true,
+			"existing_plan":              true,
+			"goal":                       *state.Goal,
+			"phases":                     state.Plan.Phases,
+			"count":                      len(state.Plan.Phases),
+			"depth":                      planDepth,
+			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
-			"granularity":               string(granularity),
-			"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
-			"dispatch_mode":             "plan-only",
-			"requires_finalizer":        false,
-			"unresolved_clarifications": unresolvedClarifications,
-			"clarification_warning":     clarificationWarning,
-			"next":                      nextCommand,
+			"granularity":                string(granularity),
+			"dispatch_contract":          planningDispatchContractWithTimeout(opts.WorkerTimeout),
+			"dispatch_mode":              "plan-only",
+			"requires_finalizer":         false,
+			"unresolved_clarifications":  unresolvedClarifications,
+			"clarification_warning":      clarificationWarning,
+			"next":                       nextCommand,
 		}, nil
 	}
 	if opts.Refresh && state.CurrentPhase > 0 {
@@ -557,8 +557,8 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		Granularity:        string(granularity),
 		GranularityMin:     granularityMin(granularity),
 		GranularityMax:     granularityMax(granularity),
-		PlanningDepth:     planningDepth,
-		VerificationDepth: verificationDepth,
+		PlanningDepth:      planningDepth,
+		VerificationDepth:  verificationDepth,
 		Survey:             survey,
 		Dispatches:         dispatches,
 		DispatchMode:       "plan-only",
@@ -568,29 +568,29 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	}
 
 	return map[string]interface{}{
-		"plan_only":                 true,
-		"planned":                   true,
-		"existing_plan":             false,
-		"refreshed":                 opts.Refresh,
-		"goal":                      *state.Goal,
-		"depth":                     planDepth,
-			"planning_depth":            planningDepth,
+		"plan_only":                  true,
+		"planned":                    true,
+		"existing_plan":              false,
+		"refreshed":                  opts.Refresh,
+		"goal":                       *state.Goal,
+		"depth":                      planDepth,
+		"planning_depth":             planningDepth,
 		"verification_depth":         verificationDepth,
 		"verification_smart_default": verificationSmartDefault,
 		"planning_smart_default":     planningSmartDefault,
 		"planning_phase":             planningPhase,
-		"granularity":               string(granularity),
-		"granularity_min":           granularityMin(granularity),
-		"granularity_max":           granularityMax(granularity),
-		"plan_manifest":             manifest,
-		"planning_manifest":         manifest,
-		"dispatches":                dispatches,
-		"dispatch_count":            len(dispatches),
-		"dispatch_mode":             "plan-only",
-		"dispatch_contract":         planningDispatchContractWithTimeout(opts.WorkerTimeout),
-		"unresolved_clarifications": unresolvedClarifications,
-		"clarification_warning":     clarificationWarning,
-		"next":                      "spawn wrapper planning agents, then record completion",
+		"granularity":                string(granularity),
+		"granularity_min":            granularityMin(granularity),
+		"granularity_max":            granularityMax(granularity),
+		"plan_manifest":              manifest,
+		"planning_manifest":          manifest,
+		"dispatches":                 dispatches,
+		"dispatch_count":             len(dispatches),
+		"dispatch_mode":              "plan-only",
+		"dispatch_contract":          planningDispatchContractWithTimeout(opts.WorkerTimeout),
+		"unresolved_clarifications":  unresolvedClarifications,
+		"clarification_warning":      clarificationWarning,
+		"next":                       "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>",
 			"spawn_log_required":      true,
@@ -796,6 +796,8 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 			TaskID:           fmt.Sprintf("plan-%d", i),
 			TaskBrief:        renderPlanningWorkerBrief(root, survey, spec),
 			ContextCapsule:   capsule,
+			HandoffSection:   renderWorkerHandoffSection("plan", 0, planned[i].Name),
+			Workflow:         "plan",
 			SkillSection:     resolveSkillSectionForWorkflow("plan", spec.Caste, spec.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
@@ -1116,6 +1118,12 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
 	b.WriteString("- Avoid high-noise paths unless directly relevant: .aether/backups/, .aether/chambers/, .aether/data/build/, .git/, node_modules/, dist/, build/, vendor/.\n")
+	graphTargets := append(append([]string{}, survey.EntryPoints...), survey.TestFiles...)
+	if graphContext := renderCodegraphContextForText(root, graphTargets, codegraphWorkerContextBudgetChars); graphContext != "" {
+		b.WriteString("\n")
+		b.WriteString(graphContext)
+		b.WriteString("\n\n")
+	}
 	b.WriteString("Write planning outputs directly into the repository.\n")
 	b.WriteString("- Primary outputs: ")
 	b.WriteString(strings.Join(primaryOutputs, ", "))

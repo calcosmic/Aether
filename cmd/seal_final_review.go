@@ -244,6 +244,7 @@ func plannedSealFinalReviewDispatches(root string, state colony.ColonyState, pha
 			TaskID:           fmt.Sprintf("seal-review-%s", spec.Caste),
 			TaskBrief:        renderSealFinalReviewBrief(root, state, phase, spec),
 			ContextCapsule:   capsule,
+			HandoffSection:   renderWorkerHandoffSection("seal", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("seal:%d:%s", phase.ID, spec.Caste))),
 			Workflow:         "seal",
 			Phase:            phase.ID,
 			SkillSection:     resolveSkillSectionForWorkflow("seal", spec.Caste, spec.Task),

@@ -208,8 +208,8 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 			if comp["actual"] != float64(5) {
 				t.Errorf("expected actual=5 for claude commands, got: %v", comp["actual"])
 			}
-			if comp["expected"] != float64(50) {
-				t.Errorf("expected expected=50 for claude commands, got: %v", comp["expected"])
+			if comp["expected"] != float64(expectedClaudeCommandCount) {
+				t.Errorf("expected expected=%d for claude commands, got: %v", expectedClaudeCommandCount, comp["expected"])
 			}
 		}
 	}
@@ -446,7 +446,7 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 	if !strings.Contains(output, "P U B L I S H") || !strings.Contains(output, "S T A T U S") {
 		t.Errorf("expected banner title in output, got: %s", output)
 	}
-	if !strings.Contains(output, "Commands (claude): 5 found, expected 50") {
+	if !strings.Contains(output, fmt.Sprintf("Commands (claude): 5 found, expected %d", expectedClaudeCommandCount)) {
 		t.Errorf("expected component count in output, got: %s", output)
 	}
 }

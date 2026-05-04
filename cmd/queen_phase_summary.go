@@ -47,6 +47,9 @@ func renderActionsNeeded(summary WaveLifecycleSummary, recoveryLog RecoveryLogFi
 // plus actions-needed section.
 // Per D-11: uses existing output channels (stdout).
 func renderPhaseEndSummary(summary WaveLifecycleSummary, phaseNum int) {
+	if !shouldRenderVisualOutput(stdout) || store == nil {
+		return
+	}
 	// Read recovery log for actions-needed
 	recoveryLog, _ := recoveryLogReadPhase(phaseNum)
 

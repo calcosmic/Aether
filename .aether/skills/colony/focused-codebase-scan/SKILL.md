@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: focused-codebase-scan
 description: Use when a worker needs a quick targeted codebase scan before planning or implementation
 type: colony

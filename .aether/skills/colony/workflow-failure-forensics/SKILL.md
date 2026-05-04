@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: workflow-failure-forensics
 description: Use when a phase, build, continue, or colony workflow failed and needs evidence-based post-mortem analysis
 type: colony

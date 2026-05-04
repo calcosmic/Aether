@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: safe-rollback
 description: Use when reverting phase or implementation work requires dependency-aware rollback and recovery planning
 type: colony

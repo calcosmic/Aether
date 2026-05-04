@@ -18,7 +18,7 @@ const (
 	defaultOracleTargetConfidence = 95
 	defaultOracleReasoningEffort  = "medium"
 	defaultOracleScope            = "auto"
-	defaultOracleTemplate         = "custom"
+	defaultOracleTemplate         = "auto"
 	defaultOracleMaxAttempts      = 2
 	defaultOracleStrategy         = "adaptive"
 	defaultOracleTimeout          = 12 * time.Minute
@@ -55,6 +55,43 @@ func resolveOracleDepth(depth string) oracleDepthConfig {
 		return cfg
 	}
 	return oracleDepthLevels["balanced"]
+}
+
+func resolveOracleTemplate(topic, requested string) (string, error) {
+	template := strings.ToLower(strings.TrimSpace(requested))
+	if template == "" || template == "auto" {
+		return inferOracleTemplate(topic), nil
+	}
+	switch template {
+	case "requirements", "product-requirements", "product-spec":
+		return "prd", nil
+	case "technology-evaluation", "technology-eval":
+		return "tech-eval", nil
+	case "best-practice", "best-practices", "research", "research-brief":
+		return "research-brief", nil
+	case "prd", "tech-eval", "architecture-review", "bug-investigation", "custom":
+		return template, nil
+	default:
+		return "", fmt.Errorf("--template must be auto, prd, tech-eval, architecture-review, bug-investigation, research-brief, or custom, got %q", requested)
+	}
+}
+
+func inferOracleTemplate(topic string) string {
+	lower := strings.ToLower(topic)
+	switch {
+	case containsAnyOracleKeyword(lower, "prd", "product requirements", "requirements", "user stories", "acceptance criteria", "scope", "project brief", "define the product", "what i want", "what we want"):
+		return "prd"
+	case containsAnyOracleKeyword(lower, "bug", "failure", "failing", "broken", "root cause", "regression", "flaky", "error", "crash"):
+		return "bug-investigation"
+	case containsAnyOracleKeyword(lower, "architecture", "architectural", "design", "refactor", "system design", "scalability", "structure"):
+		return "architecture-review"
+	case containsAnyOracleKeyword(lower, "evaluate", "evaluation", "compare", " vs ", "versus", "adopt", "library", "framework", "tooling", "dependency"):
+		return "tech-eval"
+	case containsAnyOracleKeyword(lower, "best practice", "best practices", "patterns", "conventions", "idiomatic", "how should"):
+		return "research-brief"
+	default:
+		return "custom"
+	}
 }
 
 func resolveOracleScope(topic, requested string) (oracleScopeProfile, error) {
@@ -320,14 +357,18 @@ type oracleWorkerEvidence struct {
 	Type     string `json:"type"`
 }
 
-func runOracleCompatibility(root string, args []string, depth string, confidenceTarget string, requestedScope ...string) (map[string]interface{}, error) {
+func runOracleCompatibility(root string, args []string, depth string, confidenceTarget string, oracleOptions ...string) (map[string]interface{}, error) {
 	mode := "status"
 	if len(args) > 0 {
 		mode = strings.ToLower(strings.TrimSpace(args[0]))
 	}
 	scope := ""
-	if len(requestedScope) > 0 {
-		scope = requestedScope[0]
+	if len(oracleOptions) > 0 {
+		scope = oracleOptions[0]
+	}
+	template := ""
+	if len(oracleOptions) > 1 {
+		template = oracleOptions[1]
 	}
 
 	switch mode {
@@ -336,7 +377,7 @@ func runOracleCompatibility(root string, args []string, depth string, confidence
 	case "stop":
 		return stopOracleCompatibility(root)
 	default:
-		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget, scope)
+		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget, scope, template)
 	}
 }
 
@@ -361,6 +402,7 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 		"status":             emptyFallback(strings.TrimSpace(state.Status), "idle"),
 		"topic":              strings.TrimSpace(state.Topic),
 		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
+		"template":           emptyFallback(strings.TrimSpace(state.Template), "custom"),
 		"platform":           emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
 		"phase":              emptyFallback(strings.TrimSpace(state.Phase), "idle"),
 		"iteration":          state.Iteration,
@@ -439,7 +481,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func startOracleCompatibility(root, topic, depth string, confidenceTarget string, requestedScope string) (map[string]interface{}, error) {
+func startOracleCompatibility(root, topic, depth string, confidenceTarget string, requestedScope string, requestedTemplate string) (map[string]interface{}, error) {
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
@@ -467,6 +509,10 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	if err != nil {
 		return nil, err
 	}
+	template, err := resolveOracleTemplate(topic, requestedTemplate)
+	if err != nil {
+		return nil, err
+	}
 	detectedType, languages, frameworks := detectOracleProjectProfile(root)
 	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks, scopeProfile)
 
@@ -487,7 +533,7 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		Version:           "1.1",
 		Topic:             topic,
 		Scope:             scopeProfile.Scope,
-		Template:          defaultOracleTemplate,
+		Template:          template,
 		Phase:             "survey",
 		Iteration:         0,
 		MaxIterations:     depthCfg.MaxIterations,
@@ -963,6 +1009,7 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"status":             status,
 		"topic":              state.Topic,
 		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
+		"template":           emptyFallback(strings.TrimSpace(state.Template), "custom"),
 		"phase":              state.Phase,
 		"iteration":          state.Iteration,
 		"iterations_run":     iterationsRun,
@@ -1106,6 +1153,8 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 		brief = strings.TrimSpace(brief + "\n\n## Recovery Attempt\n\n- This is a retry after a failed or malformed worker pass.\n- Keep the pass narrow and question-scoped.\n- If you cannot make safe progress, write a blocked Oracle response with the exact concrete blocker instead of drifting.\n")
 	}
 	brief = strings.TrimSpace(brief + "\n\n## Oracle Response Contract\n\nResponse File: " + emptyFallback(responseRelPath, responsePath) + "\n\nWrite this JSON object to the response file:\n```json\n{\n  \"question_id\": \"" + target.ID + "\",\n  \"status\": \"answered | partial | blocked\",\n  \"confidence\": 0,\n  \"summary\": \"short concrete summary\",\n  \"findings\": [\n    {\n      \"text\": \"new finding\",\n      \"evidence\": [\n        {\"title\": \"what you inspected\", \"location\": \"file path, command, or URL\", \"type\": \"codebase | runtime | documentation | official | github | blog | forum | academic\"}\n      ]\n    }\n  ],\n  \"gaps\": [\"remaining unanswered point\"],\n  \"contradictions\": [\"conflicting evidence if any\"],\n  \"recommendation\": \"release recommendation or next concrete action\"\n}\n```\n- Do not write markdown to the response file.\n- `answered` and `partial` responses must contain at least one finding.\n- `blocked` responses must explain the blocker concretely in `summary` or `gaps`.\n")
+	referenceTask := strings.TrimSpace(state.Topic + "\n" + target.Text)
+	referenceSection := resolveReferenceSectionWithOutput("oracle", referenceTask, "oracle", state.Template)
 
 	return invoker.Invoke(ctx, codex.WorkerConfig{
 		AgentName:        "aether-oracle",
@@ -1115,8 +1164,10 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 		TaskID:           fmt.Sprintf("oracle.%d", state.Iteration),
 		TaskBrief:        brief,
 		ContextCapsule:   renderOracleContextCapsule(state, plan, detectedType, languages, frameworks, target, attempt, responseRelPath),
+		HandoffSection:   renderWorkerHandoffSection("oracle", 0, workerName),
 		Root:             paths.Root,
 		Timeout:          policy.Timeout,
+		SkillSection:     referenceSection,
 		PheromoneSection: resolvePheromoneSection(),
 		ConfigOverrides:  oracleWorkerConfigOverrides(policy),
 		ResponsePath:     responsePath,
@@ -1138,6 +1189,7 @@ func renderOracleContextCapsule(state oracleStateFile, plan oraclePlanFile, dete
 	fmt.Fprintf(&b, "- Target Confidence: %d%%\n", state.TargetConfidence)
 	fmt.Fprintf(&b, "- Current Confidence: %d%%\n", state.OverallConfidence)
 	fmt.Fprintf(&b, "- Research Scope: %s\n", emptyFallback(state.Scope, defaultOracleScope))
+	fmt.Fprintf(&b, "- Output Template: %s\n", emptyFallback(state.Template, "custom"))
 	fmt.Fprintf(&b, "- Evidence Strategy: %s\n", oracleEvidenceStrategyForScope(state.Scope))
 	fmt.Fprintf(&b, "- Project Type: %s\n", emptyFallback(detectedType, "unknown"))
 	fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "unknown"))
@@ -1625,6 +1677,10 @@ func scanCodebaseStructure(root string) string {
 
 func buildBriefInformedQuestions(topic string, brief string, detectedType string, profiles ...oracleScopeProfile) []oracleQuestion {
 	scopeProfile := oracleScopeFromOptional(topic, profiles)
+	topicLabel := oracleTopicHeadline(topic)
+	if topicLabel == "" {
+		topicLabel = "this topic"
+	}
 	var questions []oracleQuestion
 	qID := 0
 
@@ -1642,33 +1698,33 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 
 	// Always include a user-intent boundary question.
 	if scopeProfile.IncludeRepoContext {
-		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s in the context of %s?", topic, detectedType))
+		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s in the context of %s?", topicLabel, detectedType))
 	} else {
-		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s?", topic))
+		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s?", topicLabel))
 	}
 
 	if scopeProfile.IncludeExternalContext {
-		nextQ(fmt.Sprintf("Which current external sources, repositories, documentation, or examples are authoritative for %s?", topic))
+		nextQ(fmt.Sprintf("Which current external sources, repositories, documentation, or examples are authoritative for %s?", topicLabel))
 	}
 
 	if scopeProfile.IncludeRepoContext {
 		// Extract key directories from brief for file relevance question
 		keyDirs := extractBriefSection(brief, "Codebase Structure")
 		if keyDirs != "" {
-			nextQ(fmt.Sprintf("Which specific files and modules in the following structure are most relevant to %s?\n%s", topic, keyDirs))
+			nextQ(fmt.Sprintf("Which specific files and modules in the following structure are most relevant to %s?\n%s", topicLabel, keyDirs))
 		} else {
-			nextQ(fmt.Sprintf("Which files, commands, or runtime surfaces matter most to investigating %s?", topic))
+			nextQ(fmt.Sprintf("Which files, commands, or runtime surfaces matter most to investigating %s?", topicLabel))
 		}
 	}
 
 	if note := oracleMedicBoundaryNote(topic); note != "" {
-		nextQ(fmt.Sprintf("Where should Medic-owned diagnostics or readiness checks be used instead of Oracle research for %s?", topic))
+		nextQ(fmt.Sprintf("Where should Medic-owned diagnostics or readiness checks be used instead of Oracle research for %s?", topicLabel))
 	}
 
 	// If signals exist, add a constraints question
 	signals := extractBriefSection(brief, "Active Signals")
 	if signals != "" && !strings.Contains(signals, "(none)") {
-		nextQ(fmt.Sprintf("How do the following constraints affect the approach to %s?\n%s", topic, signals))
+		nextQ(fmt.Sprintf("How do the following constraints affect the approach to %s?\n%s", topicLabel, signals))
 	}
 
 	if scopeProfile.IncludeRecentLearnings {
@@ -1682,7 +1738,7 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 				learningSummary = strings.TrimPrefix(lines[0], "- ")
 			}
 			if learningSummary != "" {
-				nextQ(fmt.Sprintf("Given that %s was previously observed, how does %s relate?", learningSummary, topic))
+				nextQ(fmt.Sprintf("Given that %s was previously observed, how does %s relate?", learningSummary, topicLabel))
 			}
 		}
 	}
@@ -1691,7 +1747,7 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 		// If frameworks detected, add a framework-specific question
 		frameworks := extractBriefField(brief, "Frameworks")
 		if frameworks != "" && frameworks != "none detected" {
-			nextQ(fmt.Sprintf("What %s-specific patterns or pitfalls apply to %s?", frameworks, topic))
+			nextQ(fmt.Sprintf("What %s-specific patterns or pitfalls apply to %s?", frameworks, topicLabel))
 		}
 	}
 
@@ -1699,21 +1755,21 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 		// Colony goal relevance question
 		goal := extractBriefSection(brief, "Colony Goal")
 		if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
-			nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topic, goal))
+			nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topicLabel, goal))
 		}
 	}
 
 	// Always include evidence and recommendation questions without assuming a
 	// repo-health or release-readiness frame.
-	nextQ(fmt.Sprintf("What evidence supports, contradicts, or limits the strongest answer to %s?", topic))
+	nextQ(fmt.Sprintf("What evidence supports, contradicts, or limits the strongest answer to %s?", topicLabel))
 	if scopeProfile.IncludeExternalContext {
-		nextQ(fmt.Sprintf("What options, tradeoffs, risks, or unknowns remain for %s?", topic))
+		nextQ(fmt.Sprintf("What options, tradeoffs, risks, or unknowns remain for %s?", topicLabel))
 	}
-	nextQ(fmt.Sprintf("What concrete, actionable recommendation follows from investigating %s?", topic))
+	nextQ(fmt.Sprintf("What concrete, actionable recommendation follows from investigating %s?", topicLabel))
 
 	// Ensure minimum of 5 questions without padding with health/readiness checks.
 	if len(questions) < 5 {
-		nextQ(fmt.Sprintf("What remaining gaps should the user know before acting on %s?", topic))
+		nextQ(fmt.Sprintf("What remaining gaps should the user know before acting on %s?", topicLabel))
 	}
 
 	return questions
@@ -2049,7 +2105,7 @@ func loadOracleStateFile(path string) (oracleStateFile, error) {
 		state.Scope = defaultOracleScope
 	}
 	if strings.TrimSpace(state.Template) == "" {
-		state.Template = defaultOracleTemplate
+		state.Template = "custom"
 	}
 	if strings.TrimSpace(state.Strategy) == "" {
 		state.Strategy = defaultOracleStrategy

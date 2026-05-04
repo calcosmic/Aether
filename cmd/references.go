@@ -136,11 +136,16 @@ func init() {
 // resolveReferenceSection returns a markdown section for relevant global
 // references. It is intentionally read-only; target repos do not own references.
 func resolveReferenceSection(caste, task, workflow string) string {
+	return resolveReferenceSectionWithOutput(caste, task, workflow, "")
+}
+
+func resolveReferenceSectionWithOutput(caste, task, workflow, outputType string) string {
 	matches, _ := matchReferences(referenceMatchRequest{
-		Role:     caste,
-		Task:     task,
-		Workflow: workflow,
-		Limit:    2,
+		Role:       caste,
+		Task:       task,
+		Workflow:   workflow,
+		OutputType: outputType,
+		Limit:      2,
 	})
 	if len(matches) == 0 {
 		return ""

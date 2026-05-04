@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: cross-model-plan-review
 description: Use when a plan or high-risk approach needs independent review from another model or CLI
 type: colony

@@ -36,7 +36,7 @@ func TestFriendlyErrorNoMatch(t *testing.T) {
 
 func TestRenderFriendlyErrorFormat(t *testing.T) {
 	entry := friendlyError{
-		Pattern:    "test pattern",
+		Pattern:     "test pattern",
 		Explanation: "Something went wrong with the test.",
 		NextSteps:   []string{"Run `aether patrol`.", "Check your config."},
 	}
@@ -161,6 +161,19 @@ func TestFriendlyErrorPatternMatchFailedInitStore(t *testing.T) {
 	// in the pattern map, so it should match first.
 	if !strings.Contains(entry.Explanation, "data storage") {
 		t.Errorf("expected 'failed to initialize store' match (more specific), got: %s", entry.Explanation)
+	}
+}
+
+func TestFriendlyErrorPatternMatchInvalidCharterJSON(t *testing.T) {
+	entry, ok := friendlyErrorForPattern("invalid charter JSON: invalid character 'o' in literal null")
+	if !ok {
+		t.Fatal("expected match for invalid charter JSON")
+	}
+	if strings.Contains(strings.ToLower(entry.Explanation), "corrupted") {
+		t.Errorf("invalid charter JSON should not be reported as state corruption: %s", entry.Explanation)
+	}
+	if !strings.Contains(entry.Explanation, "charter") {
+		t.Errorf("expected explanation to mention charter, got: %s", entry.Explanation)
 	}
 }
 

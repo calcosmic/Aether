@@ -42,6 +42,7 @@ type WorkerConfig struct {
 	Timeout          time.Duration // Per-worker timeout (default: 10 minutes)
 	SkillSection     string        // Skill guidance content injected into worker prompts
 	PheromoneSection string        // Pheromone signal content injected into worker prompts
+	HandoffSection   string        // Previous worker relay context injected into worker prompts
 	ConfigOverrides  []string      // Optional codex config overrides passed as -c key=value
 	ResponsePath     string        // Optional controller-managed response file path
 	CallbackURL      string        // Worker callback/messaging URL (separate from LLM provider URL)
@@ -97,6 +98,7 @@ type workerClaims struct {
 	ToolCount     int                        `json:"tool_count"`
 	Blockers      []string                   `json:"blockers"`
 	Spawns        []string                   `json:"spawns"`
+	Handoff       WorkerHandoff              `json:"handoff,omitempty"`
 }
 
 // agentTOML represents the required fields from a Codex agent TOML file.
@@ -182,6 +184,10 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		ToolCount:     0,
 		Blockers:      nil,
 		Spawns:        nil,
+		Handoff: NormalizeWorkerHandoff(config.Root, WorkerHandoff{
+			VerificationStatus:     "not_run",
+			NextWorkerInstructions: []string{"Synthetic worker completed without repo changes."},
+		}),
 	}
 
 	claimsJSON, err := json.Marshal(claims)
@@ -204,6 +210,7 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
+		Handoff:       claims.Handoff,
 		Duration:      time.Since(start),
 		RawOutput:     rawOutput,
 	}, nil
@@ -349,7 +356,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		}, fmt.Errorf("worker startup failed: %w", err)
 	}
 
-	prompt, err := AssemblePrompt(config.AgentTOMLPath, config.ContextCapsule, config.SkillSection, config.PheromoneSection, config.TaskBrief)
+	prompt, err := AssemblePrompt(config.AgentTOMLPath, config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief)
 	if err != nil {
 		return WorkerResult{
 			WorkerName: config.WorkerName,
@@ -391,10 +398,11 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 	defer os.Remove(schemaPath)
 
-	// Build the command: codex exec --full-auto --ephemeral --output-last-message FILE --output-schema FILE
+	// Build the command: codex --sandbox workspace-write --ask-for-approval never exec ...
 	args := []string{
+		"--sandbox", "workspace-write",
+		"--ask-for-approval", "never",
 		"exec",
-		"--full-auto",
 		"--json",
 		"--ephemeral",
 		"--skip-git-repo-check",
@@ -537,6 +545,7 @@ waitLoop:
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
+		Handoff:       claims.Handoff,
 		Duration:      duration,
 		RawOutput:     rawOutput,
 	}, nil
@@ -726,6 +735,7 @@ Return ONLY a single JSON object as your final response.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
 - Set status to one of: %s.
 - Report blockers truthfully. If blocked, explain why in blockers.
+- Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness.
 - Keep summary concise and concrete.
 - Include artifacts only when the task brief explicitly asks for a named structured artifact.
 `, filepath.Clean(root), statusLine))
@@ -753,6 +763,7 @@ func workerClaimsSchema() jsonSchema {
 			"tool_count",
 			"blockers",
 			"spawns",
+			"handoff",
 		},
 		Properties: map[string]interface{}{
 			"ant_name": map[string]interface{}{"type": "string"},
@@ -776,6 +787,21 @@ func workerClaimsSchema() jsonSchema {
 			},
 			"blockers": stringArray,
 			"spawns":   stringArray,
+			"handoff": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"changed_files":            stringArray,
+					"commands_run":             stringArray,
+					"verification_status":      map[string]interface{}{"type": "string", "enum": []string{"pass", "fail", "partial", "not_run", "unknown"}},
+					"known_failures":           stringArray,
+					"open_decisions":           stringArray,
+					"assumptions":              stringArray,
+					"next_worker_instructions": stringArray,
+					"do_not_repeat":            stringArray,
+					"freshness":                map[string]interface{}{"type": "string"},
+				},
+			},
 		},
 	}
 }
@@ -836,7 +862,27 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 	claims.TestsWritten = normalizeClaimPaths(config.Root, claims.TestsWritten)
 	claims.Blockers = compactStrings(claims.Blockers)
 	claims.Spawns = compactStrings(claims.Spawns)
+	if workerHandoffIsEmpty(claims.Handoff) {
+		claims.Handoff = synthesizeWorkerHandoff(claims)
+	}
+	claims.Handoff = NormalizeWorkerHandoff(config.Root, claims.Handoff)
 	return claims
+}
+
+func synthesizeWorkerHandoff(claims workerClaims) WorkerHandoff {
+	status := "partial"
+	switch strings.ToLower(strings.TrimSpace(claims.Status)) {
+	case "completed":
+		status = "pass"
+	case "blocked", "failed":
+		status = "fail"
+	}
+	return WorkerHandoff{
+		ChangedFiles:           append(append(append([]string{}, claims.FilesCreated...), claims.FilesModified...), claims.TestsWritten...),
+		VerificationStatus:     status,
+		KnownFailures:          append([]string{}, claims.Blockers...),
+		NextWorkerInstructions: []string{strings.TrimSpace(claims.Summary)},
+	}
 }
 
 func normalizeClaimPaths(root string, paths []string) []string {

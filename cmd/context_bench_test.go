@@ -367,7 +367,7 @@ func BenchmarkProof(b *testing.B) {
 	copyBenchmarkProofFixture(b, filepath.Join("testdata", "skill-fixtures", "tailwind-app"), root)
 
 	hubDir := os.Getenv("AETHER_HUB_DIR")
-	copyBenchmarkProofFixture(b, filepath.Join("..", ".aether", "skills", "colony", "build-discipline"), filepath.Join(hubDir, "skills", "colony", "build-discipline"))
+	copyBenchmarkProofFixture(b, filepath.Join("..", ".aether", "skills", "colony", "build-discipline"), filepath.Join(hubDir, "system", "skills", "colony", "build-discipline"))
 	copyBenchmarkProofFixture(b, filepath.Join("..", ".aether", "skills", "domain", "tailwind"), filepath.Join(hubDir, "skills", "domain", "tailwind"))
 	copyBenchmarkProofFixture(b, filepath.Join("..", ".aether", "skills", "domain", "golang"), filepath.Join(hubDir, "skills", "domain", "golang"))
 

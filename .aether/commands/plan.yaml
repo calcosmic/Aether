@@ -3,6 +3,11 @@ description: "📋 Generate a depth-scoped colony plan with real Scout and Route
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>"
+codex_orchestration:
+  category: "full-orchestration"
+  skill: "aether-colony-build-cycle"
+  guide: "aether command-guide plan --platform codex"
+  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_additions:
   depth_ceremony: |
     Prompt for planning depth before requesting the manifest:

@@ -3,6 +3,11 @@ description: "🔨 Build a phase — Queen dispatches workers, colony self-organ
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only"
+codex_orchestration:
+  category: "full-orchestration"
+  skill: "aether-colony-build-cycle"
+  guide: "aether command-guide build --platform codex"
+  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_additions:
   pre_build: |
     Ground the build before planning:

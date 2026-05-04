@@ -89,6 +89,43 @@ func TestRunUpdateSyncPrunesLegacyRepoAssetsButPreservesCustomFiles(t *testing.T
 		t.Fatalf("write custom skill: %v", err)
 	}
 
+	writeRepoFile := func(rel string, data []byte) {
+		t.Helper()
+		path := filepath.Join(repoDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	staleSystemFiles := []string{
+		".aether/codex/aether-builder.toml",
+		".aether/settings/claude/settings.json",
+		".aether/.npmignore",
+		".aether/aether-utils.sh",
+		".aether/ledger.jsonl",
+		".aether/manifest.json",
+		".aether/model-profiles.yaml",
+		".aether/registry.json",
+		".aether/version.json",
+		".aether/workers.md",
+	}
+	for _, rel := range staleSystemFiles {
+		writeRepoFile(rel, []byte("stale managed system file\n"))
+	}
+	preservedLocalFiles := map[string][]byte{
+		".aether/CONTEXT.md":                  []byte("# Local context\n"),
+		".aether/HANDOFF.md":                  []byte("# Local handoff\n"),
+		".aether/CROWNED-ANTHILL.md":          []byte("# Local seal\n"),
+		".aether/chambers/demo/manifest.json": []byte(`{"name":"demo"}`),
+		".aether/custom/manifest.json":        []byte(`{"name":"local"}`),
+		".aether/temp/scratch.txt":            []byte("scratch\n"),
+	}
+	for rel, data := range preservedLocalFiles {
+		writeRepoFile(rel, data)
+	}
+
 	result := runUpdateSync(hubDir, repoDir, false)
 	if len(result.errors) > 0 {
 		t.Fatalf("runUpdateSync errors: %v", result.errors)
@@ -114,6 +151,70 @@ func TestRunUpdateSyncPrunesLegacyRepoAssetsButPreservesCustomFiles(t *testing.T
 	}
 	if _, err := os.Stat(filepath.Join(customSkillDir, "SKILL.md")); err != nil {
 		t.Fatalf("custom repo skill should be preserved: %v", err)
+	}
+	for _, rel := range staleSystemFiles {
+		if _, err := os.Stat(filepath.Join(repoDir, filepath.FromSlash(rel))); err == nil {
+			t.Fatalf("expected stale system file %s to be pruned", rel)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat stale system file %s: %v", rel, err)
+		}
+	}
+	for rel, want := range preservedLocalFiles {
+		got, err := os.ReadFile(filepath.Join(repoDir, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("local file %s should be preserved: %v", rel, err)
+		}
+		if string(got) != string(want) {
+			t.Fatalf("local file %s changed: got %q want %q", rel, string(got), string(want))
+		}
+	}
+}
+
+func TestRunUpdateSyncDoesNotPruneAetherSourceCheckout(t *testing.T) {
+	saveGlobals(t)
+
+	hubDir := t.TempDir()
+	repoDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoDir, "go.mod"), []byte("module github.com/calcosmic/Aether\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	mainPath := filepath.Join(repoDir, "cmd", "aether", "main.go")
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0755); err != nil {
+		t.Fatalf("create cmd/aether: %v", err)
+	}
+	if err := os.WriteFile(mainPath, []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write main.go: %v", err)
+	}
+
+	preserved := map[string][]byte{
+		".aether/version.json":   []byte(`{"version":"9.9.9"}`),
+		".aether/manifest.json":  []byte(`{"files":{}}`),
+		".aether/codex/dev.toml": []byte("name = \"dev\"\n"),
+		".aether/docs/dev.md":    []byte("# Dev doc\n"),
+		".aether/workers.md":     []byte("# Workers\n"),
+	}
+	for rel, data := range preserved {
+		path := filepath.Join(repoDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	result := runUpdateSync(hubDir, repoDir, true)
+	if len(result.errors) > 0 {
+		t.Fatalf("runUpdateSync errors: %v", result.errors)
+	}
+	for rel, want := range preserved {
+		got, err := os.ReadFile(filepath.Join(repoDir, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("source checkout file %s should be preserved: %v", rel, err)
+		}
+		if string(got) != string(want) {
+			t.Fatalf("source checkout file %s changed: got %q want %q", rel, string(got), string(want))
+		}
 	}
 }
 
@@ -197,6 +298,7 @@ func createHubWithExpectedCounts(t *testing.T, hubDir string) {
 	for rel, count := range map[string]int{
 		filepath.Join("commands", "claude"):   expectedClaudeCommandCount,
 		filepath.Join("commands", "opencode"): expectedOpenCodeCommandCount,
+		"agents-claude":                       expectedClaudeAgents,
 		"agents":                              expectedOpenCodeAgentCount,
 		"codex":                               expectedCodexAgentCount,
 	} {

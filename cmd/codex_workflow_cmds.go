@@ -69,13 +69,13 @@ var planCmd = &cobra.Command{
 			return nil
 		}
 		result, err := runCodexPlanWithOptions(skillWorkspaceRoot(), codexPlanOptions{
-			Refresh:       refresh || forceAlias,
-			Synthetic:     synthetic,
-			PlanOnly:      planOnly,
-			Depth:         depth,
-			PlanningDepth: planningDepth,
+			Refresh:           refresh || forceAlias,
+			Synthetic:         synthetic,
+			PlanOnly:          planOnly,
+			Depth:             depth,
+			PlanningDepth:     planningDepth,
 			VerificationDepth: verificationDepth,
-			WorkerTimeout: workerTimeout,
+			WorkerTimeout:     workerTimeout,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -127,7 +127,7 @@ var buildCmd = &cobra.Command{
 			LightFlag:               lightFlag,
 			HeavyFlag:               heavyFlag,
 			CircuitBreakerThreshold: cbThreshold,
-			Verbose:               verboseFlag,
+			Verbose:                 verboseFlag,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -182,7 +182,7 @@ var continueCmd = &cobra.Command{
 				LightFlag:           lightFlag,
 				HeavyFlag:           heavyFlag,
 				SkipWatchers:        skipWatchers,
-			VerificationDepth:   verificationDepth,
+				VerificationDepth:   verificationDepth,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -735,6 +735,7 @@ func detectDomainsFromRoot(root string) []string {
 	checks := map[string][]string{
 		"go":     {"go.mod", "go.sum"},
 		"web":    {"package.json", "next.config.js", "vite.config.ts"},
+		"docker": {"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"},
 		"ruby":   {"Gemfile", "Rakefile"},
 		"python": {"requirements.txt", "setup.py", "pyproject.toml"},
 		"rust":   {"Cargo.toml"},

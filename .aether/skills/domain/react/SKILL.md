@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: react
 description: Use when the project uses React for building user interfaces
 type: domain

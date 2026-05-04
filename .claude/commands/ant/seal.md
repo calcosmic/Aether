@@ -58,3 +58,11 @@ The colony is sealed. Now deliver the work to the outside world.
    - **Skip for now**: No delivery actions, exit gracefully
 4. Execute each selected action sequentially (stops on first failure, user decides retry/skip/abort).
 5. Report clear success/failure for each completed action.
+
+## Cross-Platform Drift Guard
+
+If you change blocker handling, shelf candidate handling, Porter delivery, or
+closeout behavior here, update `.aether/commands/seal.yaml`,
+`cmd/command_guide.go`, and the Codex skill `aether-colony-build-cycle` in the
+same change. Verify `aether command-guide seal --platform codex` still describes
+the matching Codex flow.

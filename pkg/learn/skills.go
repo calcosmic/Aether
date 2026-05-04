@@ -53,6 +53,7 @@ type SkillIndexEntry struct {
 type SkillEvidenceFrontmatter struct {
 	Name              string   `yaml:"name"`
 	Description       string   `yaml:"description"`
+	Source            string   `yaml:"source,omitempty"`
 	Type              string   `yaml:"type,omitempty"`
 	Category          string   `yaml:"category,omitempty"`
 	Roles             []string `yaml:"roles,omitempty"`
@@ -142,6 +143,7 @@ func (svc *SkillService) CreateSkill(meta SkillMetadata, content string) error {
 	fm := SkillEvidenceFrontmatter{
 		Name:        meta.Name,
 		Description: content[:minInt(200, len(content))],
+		Source:      "custom",
 		Type:        "learned",
 		Category:    "colony",
 		SourceRunID: meta.SourceRunID,

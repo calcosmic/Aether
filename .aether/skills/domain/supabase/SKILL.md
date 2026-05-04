@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: supabase
 description: Use when the project uses Supabase as backend-as-a-service for auth, database, storage, or realtime
 type: domain

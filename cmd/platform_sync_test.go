@@ -78,6 +78,127 @@ func TestOpenCodeAgentNamePreservedInSync(t *testing.T) {
 	}
 }
 
+func TestInstallSyncPairsDoesNotMirrorFullSkillsToCodex(t *testing.T) {
+	for _, pair := range installSyncPairs() {
+		if pair.srcRel == ".aether/skills" && pair.destRel == ".codex/skills/aether" {
+			t.Fatalf("install sync must not mirror full shipped skills into Codex native discovery: %+v", pair)
+		}
+	}
+}
+
+func TestSyncCodexSkillShimsPrunesFullMirrorAndPreservesCustom(t *testing.T) {
+	tmpDir := t.TempDir()
+	destDir := filepath.Join(tmpDir, ".codex", "skills", "aether")
+
+	oldMirror := filepath.Join(destDir, "domain", "typescript")
+	if err := os.MkdirAll(oldMirror, 0755); err != nil {
+		t.Fatalf("mkdir old mirror: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(oldMirror, "SKILL.md"), []byte("---\nname: typescript\nsource: shipped\ntype: domain\n---\nold full skill\n"), 0644); err != nil {
+		t.Fatalf("write old mirror: %v", err)
+	}
+
+	customSkill := filepath.Join(destDir, "custom-routing")
+	if err := os.MkdirAll(customSkill, 0755); err != nil {
+		t.Fatalf("mkdir custom skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(customSkill, "SKILL.md"), []byte("---\nname: custom-routing\nsource: custom\ntype: codex-shim\n---\ncustom\n"), 0644); err != nil {
+		t.Fatalf("write custom skill: %v", err)
+	}
+
+	result := syncCodexSkillShims(destDir)
+	if len(result.errors) > 0 {
+		t.Fatalf("syncCodexSkillShims errors: %v", result.errors)
+	}
+	if _, err := os.Stat(filepath.Join(oldMirror, "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected old full mirror to be pruned, stat err: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(customSkill, "SKILL.md")); err != nil {
+		t.Fatalf("expected custom skill to be preserved: %v", err)
+	}
+	for _, shim := range codexSkillShims() {
+		if _, err := os.Stat(filepath.Join(destDir, shim.Dir, "SKILL.md")); err != nil {
+			t.Fatalf("expected shim %s to exist: %v", shim.Dir, err)
+		}
+	}
+
+	dirs := findSkillDirs(destDir)
+	if len(dirs) != len(codexSkillShims())+1 {
+		t.Fatalf("expected %d shim/custom skills, got %d: %v", len(codexSkillShims())+1, len(dirs), dirs)
+	}
+}
+
+func TestPruneShippedFromUserSkillsDirRemovesOnlyExactHubMatches(t *testing.T) {
+	tmpDir := t.TempDir()
+	hubSystem := filepath.Join(tmpDir, "system")
+	hubDir := tmpDir
+
+	shippedPath := filepath.Join(hubSystem, "skills", "domain", "typescript", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(shippedPath), 0755); err != nil {
+		t.Fatalf("mkdir shipped: %v", err)
+	}
+	shippedContent := []byte("---\nname: typescript\nsource: shipped\ntype: domain\n---\ncurrent\n")
+	if err := os.WriteFile(shippedPath, shippedContent, 0644); err != nil {
+		t.Fatalf("write shipped: %v", err)
+	}
+
+	leakedPath := filepath.Join(hubDir, "skills", "domain", "typescript", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(leakedPath), 0755); err != nil {
+		t.Fatalf("mkdir leaked: %v", err)
+	}
+	if err := os.WriteFile(leakedPath, shippedContent, 0644); err != nil {
+		t.Fatalf("write leaked: %v", err)
+	}
+
+	customPath := filepath.Join(hubDir, "skills", "domain", "custom", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(customPath), 0755); err != nil {
+		t.Fatalf("mkdir custom: %v", err)
+	}
+	if err := os.WriteFile(customPath, []byte("---\nname: custom\nsource: custom\ntype: domain\n---\ncustom\n"), 0644); err != nil {
+		t.Fatalf("write custom: %v", err)
+	}
+
+	result := pruneShippedFromUserSkillsDir(hubSystem, hubDir)
+	if len(result.errors) > 0 {
+		t.Fatalf("prune errors: %v", result.errors)
+	}
+	if _, err := os.Stat(leakedPath); !os.IsNotExist(err) {
+		t.Fatalf("expected exact leaked shipped skill to be removed, stat err: %v", err)
+	}
+	if _, err := os.Stat(customPath); err != nil {
+		t.Fatalf("expected custom skill to be preserved: %v", err)
+	}
+}
+
+func TestPruneRepoCodexSkillMirrorForcePreservesCustom(t *testing.T) {
+	tmpDir := t.TempDir()
+	mirror := filepath.Join(tmpDir, ".codex", "skills", "aether", "domain", "typescript")
+	if err := os.MkdirAll(mirror, 0755); err != nil {
+		t.Fatalf("mkdir mirror: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(mirror, "SKILL.md"), []byte("---\nname: typescript\ntype: domain\n---\nold mirror\n"), 0644); err != nil {
+		t.Fatalf("write mirror: %v", err)
+	}
+	custom := filepath.Join(tmpDir, ".codex", "skills", "aether", "custom")
+	if err := os.MkdirAll(custom, 0755); err != nil {
+		t.Fatalf("mkdir custom: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(custom, "SKILL.md"), []byte("---\nname: custom\nsource: custom\ntype: codex-shim\n---\ncustom\n"), 0644); err != nil {
+		t.Fatalf("write custom: %v", err)
+	}
+
+	result := pruneRepoCodexSkillMirror(tmpDir, true)
+	if len(result.errors) > 0 {
+		t.Fatalf("prune errors: %v", result.errors)
+	}
+	if _, err := os.Stat(filepath.Join(mirror, "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale repo Codex mirror to be pruned, stat err: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(custom, "SKILL.md")); err != nil {
+		t.Fatalf("expected custom Codex skill to be preserved: %v", err)
+	}
+}
+
 // TestOpenCodeAgentNamePreservedInHubSync verifies that an OpenCode agent file
 // retains its name field through the hub sync pipeline (syncDirToHubWithExclusion).
 func TestOpenCodeAgentNamePreservedInHubSync(t *testing.T) {

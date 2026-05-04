@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: hypothesis-debugging
 description: Use when an elusive or intermittent bug needs hypothesis-driven debugging and evidence collection
 type: colony

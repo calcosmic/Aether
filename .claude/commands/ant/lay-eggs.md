@@ -16,11 +16,11 @@ The reusable Aether machinery stays installed globally; this repo only gets its
 own nest state, notes, locks, and project wisdom.
 
 <failure_modes>
-### Hub Not Found
-If `~/.aether/version.json` does not exist:
-- The global hub is not installed
+### Runtime Or Hub Unavailable
+If the `aether lay-eggs` command reports that the binary or hub is unavailable:
+- Show the CLI error output
 - Tell the user to install the Aether Go binary and run `aether install` first
-- Stop — cannot proceed without the hub
+- Stop after the runtime failure
 
 ### Partial Setup Failure
 If the CLI reports setup errors:
@@ -75,28 +75,7 @@ Do not manually copy them into `.aether/`, `.claude/`, `.opencode/`, or
 `aether lay-eggs` owns only repo-local setup.
 </global_assets>
 
-### Step 1: Check Hub Availability
-
-Check if the global hub exists by reading `~/.aether/version.json` (expand `~`
-to the user's home directory).
-
-**If the hub does NOT exist:**
-```
-Aether hub not found at ~/.aether/system/
-
-The global hub must be installed before setting up a repo.
-
-  go install github.com/calcosmic/Aether/cmd/aether@latest
-  aether install
-
-This installs the Aether Go binary and populates the hub at ~/.aether/system/
-with the shared agents, commands, skills, docs, templates, and utilities.
-
-After installing, run /ant-lay-eggs again.
-```
-Stop here.
-
-### Step 2: Check Existing Setup
+### Step 1: Check Existing Setup
 
 Check whether `.aether/` already exists.
 
@@ -106,15 +85,15 @@ Aether is already present in this repo.
 
 Refreshing repo-local setup and preserving colony state...
 ```
-Proceed to Step 3. This makes the command safe to re-run as a repair pass.
+Proceed to Step 2. This makes the command safe to re-run as a repair pass.
 
 **If it does NOT exist:**
 ```
 Setting up Aether local state in this repo...
 ```
-Proceed to Step 3.
+Proceed to Step 2.
 
-### Step 3: Run Runtime Setup
+### Step 2: Run Runtime Setup
 
 Run using the Bash tool with description "Preparing Aether local state...":
 
@@ -125,7 +104,7 @@ AETHER_OUTPUT_MODE=visual aether lay-eggs $ARGUMENTS
 The Go runtime is the source of truth. Do not recreate the setup logic in the
 wrapper unless the runtime command is unavailable.
 
-### Step 4: Verify Local-Only Layout
+### Step 3: Verify Local-Only Layout
 
 Run using the Bash tool with description "Verifying local-only Aether layout...":
 
@@ -163,7 +142,7 @@ assets are still present and should be cleaned by the runtime during the
 global-hub migration. Do not delete user-owned custom skills or local state by
 hand from this wrapper.
 
-### Step 5: Display Result
+### Step 4: Display Result
 
 ```
 🥚 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

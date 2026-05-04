@@ -80,7 +80,7 @@ var recipeCatalog = []workflowRecipe{
 		WhyItMatters: "Aether has source files and installed hub files; this path keeps them aligned before other repos consume the update.",
 		Commands: []string{
 			`go test ./...`,
-			`aether install --package-dir "$PWD"`,
+			`aether publish --channel stable --binary-dest "$HOME/.local/bin"`,
 			`aether update --force`,
 		},
 	},

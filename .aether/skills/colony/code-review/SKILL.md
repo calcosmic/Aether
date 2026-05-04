@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: code-review
 description: Use when changed source files need review for bugs, security, code quality, or maintainability risks
 type: colony

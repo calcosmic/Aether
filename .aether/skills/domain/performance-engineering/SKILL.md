@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: performance-engineering
 description: Use when the project uses performance-critical features requiring optimization, load testing, profiling, or Core Web Vitals improvement
 type: domain

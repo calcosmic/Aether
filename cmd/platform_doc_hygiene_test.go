@@ -198,7 +198,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
 				"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
-				".aether/docs/command-playbooks/build-wave.md",
+				"~/.aether/system/docs/command-playbooks/build-wave.md",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
 			forbidden: []string{
@@ -490,7 +490,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
 				"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
-				".aether/docs/command-playbooks/build-wave.md",
+				"~/.aether/system/docs/command-playbooks/build-wave.md",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
 			forbidden: []string{

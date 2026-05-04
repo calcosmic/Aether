@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: docker
 description: Use when the project uses Docker for containerization and deployment
 type: domain

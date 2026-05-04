@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: acceptance-verification
 description: Use when delivered functionality needs acceptance-criteria verification before a phase advances
 type: colony

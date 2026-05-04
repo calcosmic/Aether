@@ -12,15 +12,20 @@ import (
 )
 
 func readHiveWisdomEntries(hubDir string, limit int, fallbacks *[]string) []hiveWisdomEntry {
+	return readHiveWisdomEntriesForDomains(hubDir, limit, nil, fallbacks)
+}
+
+func readHiveWisdomEntriesForDomains(hubDir string, limit int, domains []string, fallbacks *[]string) []hiveWisdomEntry {
 	wisdomPath := filepath.Join(hubDir, "hive", "wisdom.json")
 	data, err := os.ReadFile(wisdomPath)
 	if err == nil {
 		var wf hiveWisdomData
 		if json.Unmarshal(data, &wf) == nil && len(wf.Entries) > 0 {
-			if limit > 0 && len(wf.Entries) > limit {
-				return append([]hiveWisdomEntry(nil), wf.Entries[:limit]...)
+			entries := filterHiveWisdomEntriesByDomain(wf.Entries, domains)
+			if limit > 0 && len(entries) > limit {
+				return append([]hiveWisdomEntry(nil), entries[:limit]...)
 			}
-			return append([]hiveWisdomEntry(nil), wf.Entries...)
+			return append([]hiveWisdomEntry(nil), entries...)
 		}
 	}
 
@@ -48,8 +53,67 @@ func readHiveWisdomEntries(hubDir string, limit int, fallbacks *[]string) []hive
 		}
 	}
 
-	*fallbacks = append(*fallbacks, "hive_wisdom: no hive or eternal data")
+	if fallbacks != nil {
+		*fallbacks = append(*fallbacks, "hive_wisdom: no hive or eternal data")
+	}
 	return nil
+}
+
+func filterHiveWisdomEntriesByDomain(entries []hiveWisdomEntry, domains []string) []hiveWisdomEntry {
+	domainSet := map[string]bool{}
+	for _, domain := range domains {
+		domain = strings.ToLower(strings.TrimSpace(domain))
+		if domain != "" {
+			domainSet[domain] = true
+		}
+	}
+	if len(domainSet) == 0 {
+		return append([]hiveWisdomEntry(nil), entries...)
+	}
+	filtered := make([]hiveWisdomEntry, 0, len(entries))
+	for _, entry := range entries {
+		domain := strings.ToLower(strings.TrimSpace(entry.Domain))
+		if domain == "" || domain == "general" || domainSet[domain] {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
+}
+
+func readRegistryDomainsForRepo(hubDir, repoRoot string) []string {
+	repoRoot = cleanComparablePath(repoRoot)
+	if repoRoot == "" {
+		return nil
+	}
+	registryPath := filepath.Join(hubDir, "registry", "registry.json")
+	raw, err := os.ReadFile(registryPath)
+	if err != nil {
+		return nil
+	}
+	var rd registryData
+	if err := json.Unmarshal(raw, &rd); err != nil {
+		return nil
+	}
+	for _, entry := range rd.Colonies {
+		if !entry.Active {
+			continue
+		}
+		if cleanComparablePath(entry.RepoPath) == repoRoot {
+			return uniqueSortedStrings(entry.Domains)
+		}
+	}
+	return nil
+}
+
+func cleanComparablePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	return filepath.Clean(path)
 }
 
 func freshnessScoreFromTimestamp(ts string, now time.Time, fallback float64) float64 {
@@ -126,6 +190,8 @@ func sectionRelevanceScore(name string) float64 {
 		return 0.10
 	case "prior_reviews":
 		return 0.70
+	case "worker_handoffs":
+		return 0.75
 	case "review_depth":
 		return 0.40
 	default:

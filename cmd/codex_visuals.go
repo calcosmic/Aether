@@ -1654,6 +1654,7 @@ func renderSetupVisual(repoDir string, results []map[string]interface{}, totalCo
 
 func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun bool, details []map[string]interface{}, totalCopied, totalSkipped int, restartTargets []string, binaryMode string, versionsMatch bool) string {
 	var b strings.Builder
+	totalRemoved := syncDetailsRemoved(details)
 	b.WriteString(renderBanner(commandEmoji("update"), "Update"))
 	b.WriteString(visualDivider)
 	b.WriteString(renderAetherWordmark())
@@ -1683,7 +1684,11 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 	b.WriteString(mode)
 	b.WriteString("\n")
 	if !dryRun {
-		b.WriteString(fmt.Sprintf("Assets: %d copied, %d unchanged\n", totalCopied, totalSkipped))
+		b.WriteString(fmt.Sprintf("Assets: %d copied, %d unchanged", totalCopied, totalSkipped))
+		if totalRemoved > 0 {
+			b.WriteString(fmt.Sprintf(", %d removed", totalRemoved))
+		}
+		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 	b.WriteString(renderSyncSummary(details))
@@ -1701,7 +1706,7 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 		if force {
 			next = `Run ` + "`aether update --force`" + ` to apply the forced sync.`
 			alt = `Run ` + "`aether update`" + ` instead for the safer non-force path.`
-			runtimeAlt = `Run ` + "`aether install --package-dir <Aether checkout>`" + ` in the Aether repo first if you need an unreleased local runtime fix on this machine.`
+			runtimeAlt = `Run ` + "`aether publish --package-dir <Aether checkout>`" + ` in the Aether repo first if you need an unreleased local runtime fix on this machine.`
 		}
 		b.WriteString(renderNextUp(next, alt, runtimeAlt))
 		return b.String()
@@ -1712,7 +1717,7 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 		b.WriteString(restartNote)
 		b.WriteString("\n")
 	}
-	if totalCopied == 0 && len(restartTargets) == 0 {
+	if totalCopied == 0 && totalRemoved == 0 && len(restartTargets) == 0 {
 		b.WriteString(renderNextUp(
 			`No follow-up is required. Run `+"`aether status`"+` only if you want to inspect the colony.`,
 			`Run `+"`aether init \"next goal\"`"+` only if this repo does not have an active colony yet.`,
@@ -1733,6 +1738,14 @@ func renderUpdateVisual(repoDir, hubVersion, localVersion string, force, dryRun 
 		runtimeNext,
 	))
 	return b.String()
+}
+
+func syncDetailsRemoved(details []map[string]interface{}) int {
+	total := 0
+	for _, entry := range details {
+		total += intValue(entry["removed"])
+	}
+	return total
 }
 
 func installRuntimeLines(binaryMode string) []string {
@@ -1762,7 +1775,7 @@ func installRuntimeLines(binaryMode string) []string {
 func renderInstallPaths(binaryMode string) string {
 	lines := []string{
 		`Published release repos: use ` + "`aether update --force --download-binary`" + ` when you want companion files and the matching released binary together.`,
-		`Local Aether development: use ` + "`aether install --package-dir \"$PWD\"`" + ` in the Aether repo when testing unreleased changes on this machine.`,
+		`Local Aether development: use ` + "`aether publish --channel stable --binary-dest \"$HOME/.local/bin\"`" + ` in the Aether repo when testing unreleased changes on this machine.`,
 	}
 	if strings.TrimSpace(binaryMode) == "release-download" {
 		lines[0] = "Published release repos: this install will refresh companion files first and download the published binary next."
@@ -1784,7 +1797,7 @@ func updateRuntimeLines(binaryMode string, versionsMatch bool) []string {
 		return []string{
 			"Companion files would be synced first, then a published release binary would be downloaded.",
 			"`aether update --download-binary` only installs released runtime builds, not unreleased local source changes.",
-			"For an unreleased local runtime fix on this machine, run `aether install --package-dir <Aether checkout>` in the Aether repo first.",
+			"For an unreleased local runtime fix on this machine, run `aether publish --package-dir <Aether checkout>` in the Aether repo first.",
 		}
 	case "release-download":
 		return []string{
@@ -1814,7 +1827,7 @@ func renderUpdatePaths(force bool, binaryMode string) string {
 
 	lines := []string{
 		`Published release: run ` + releaseCmd + ` to keep companion files and the matching released binary in lockstep.`,
-		`Local source checkout: run ` + "`aether install --package-dir <Aether checkout>`" + ` in the Aether repo, then rerun ` + "`aether update --force`" + ` here.`,
+		`Local source checkout: run ` + "`aether publish --package-dir <Aether checkout>`" + ` in the Aether repo, then rerun ` + "`aether update --force`" + ` here.`,
 	}
 
 	switch strings.TrimSpace(binaryMode) {
@@ -1860,7 +1873,7 @@ func renderBinaryActionNextUp(title string) string {
 		return renderNextUp(
 			`Existing repos: run `+"`aether update --force`"+` to refresh companion files from the hub.`,
 			`New repos: run `+"`aether lay-eggs`"+` to set up Aether.`,
-			`Active Codex chats: restart after updating if Codex skills or agents changed.`,
+			`Active Codex chats: restart after updating if Codex shims or agents changed.`,
 		)
 	case "binary build":
 		return renderNextUp(

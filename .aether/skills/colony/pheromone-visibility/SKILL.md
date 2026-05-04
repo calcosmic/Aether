@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: pheromone-visibility
 description: Use when performing any pheromone operation including creating, reinforcing, expiring, or auto-emitting signals during builds and continues
 type: colony

@@ -34,6 +34,9 @@ func consolidateQueenAudit(phaseNum int) QueenAuditFile {
 		Phase:       phaseNum,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	}
+	if store == nil {
+		return audit
+	}
 
 	// Source 1: queen-state-{N}.json (gate decisions from Phase 97)
 	if qs, err := queenStateRead(phaseNum); err == nil {
@@ -107,6 +110,9 @@ func consolidateQueenAudit(phaseNum int) QueenAuditFile {
 
 // writeAuditFile persists the audit file to queen-audit-{phaseNum}.json.
 func writeAuditFile(phaseNum int, audit QueenAuditFile) error {
+	if store == nil {
+		return nil
+	}
 	rel := fmt.Sprintf("queen-audit-%d.json", phaseNum)
 	return store.SaveJSON(rel, audit)
 }

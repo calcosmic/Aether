@@ -114,10 +114,14 @@ Wrappers MUST NOT:
 Codex is a special case because it does NOT use wrapper markdown:
 
 - Codex interacts directly with the Go CLI
-- All Codex UX comes from the runtime visual renderer
 - Codex agents are defined in `.codex/agents/*.toml`, not slash commands
-- Improvements to Codex UX must target `cmd/codex_visuals.go`
-- Codex should NOT simulate wrapper behavior in its agents
+- Runtime visual UX comes from `cmd/codex_visuals.go`
+- Wrapper-equivalent intelligence for `init`, `oracle`, `plan`, `build`,
+  `continue`, `seal`, and `discuss` comes from `aether command-guide` plus the
+  Codex lifecycle skills `aether-colony-creation`, `aether-colony-research`, and
+  `aether-colony-build-cycle`
+- Codex skills may interview, synthesize, spawn, and summarize, but runtime
+  commands still own state mutation, manifests, verification, and persistence
 
 ## Source Chain
 
@@ -127,6 +131,8 @@ Codex is a special case because it does NOT use wrapper markdown:
 .claude/commands/ant/*.md        ← Claude Code wrappers
 .opencode/commands/ant/*.md      ← OpenCode wrappers
     ↓ (delegation)
+.aether/skills/colony/aether-colony-*/SKILL.md ← Codex orchestration skills
+aether command-guide              ← Runtime-readable orchestration contract
 cmd/codex_*.go                   ← Go runtime (authoritative execution)
 cmd/codex_visuals.go             ← Visual renderer (authoritative presentation)
 ```

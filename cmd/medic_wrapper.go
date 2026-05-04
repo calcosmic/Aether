@@ -14,7 +14,7 @@ const (
 	expectedClaudeAgents     = 27
 	expectedOpenCodeAgents   = 27
 	expectedCodexAgents      = 27
-	expectedColonySkills     = 52
+	expectedColonySkills     = 55
 	expectedDomainSkills     = 31
 	expectedCodexSkills      = expectedColonySkills + expectedDomainSkills
 )
@@ -30,6 +30,9 @@ type wrapperSurface struct {
 // Uses the repo root since wrapper files live at repo root, not inside .aether/data/.
 func scanWrapperParity(fc *fileChecker) []HealthIssue {
 	var issues []HealthIssue
+	if !isAetherSourceCheckout(fc.repoRoot) {
+		return issues
+	}
 
 	surfaces := []wrapperSurface{
 		{"YAML commands", filepath.Join(fc.repoRoot, ".aether", "commands", "*.yaml"), expectedYAMLCommands},
@@ -104,16 +107,17 @@ func scanHubPublishIntegrity() []HealthIssue {
 	info, err := os.Stat(hubSystem)
 	if err != nil || !info.IsDir() {
 		issues = append(issues, issueCritical("publish", hubSystem,
-			fmt.Sprintf("Hub system directory missing at %s; run `aether install --package-dir <Aether checkout>` from the Aether repo", hubSystem)))
+			fmt.Sprintf("Hub system directory missing at %s; run `aether publish --package-dir <Aether checkout>` from the Aether repo", hubSystem)))
 		return issues
 	}
 
 	surfaces := []wrapperSurface{
 		{"Hub Claude commands", filepath.Join(hubSystem, "commands", "claude", "*.md"), expectedClaudeCommands},
+		{"Hub Claude agents", filepath.Join(hubSystem, "agents-claude", "*.md"), expectedClaudeAgents},
 		{"Hub OpenCode commands", filepath.Join(hubSystem, "commands", "opencode", "*.md"), expectedOpenCodeCommands},
 		{"Hub OpenCode agents", filepath.Join(hubSystem, "agents", "*.md"), expectedOpenCodeAgents},
 		{"Hub Codex agents", filepath.Join(hubSystem, "codex", "*.toml"), expectedCodexAgents},
-		{"Hub Codex skills", filepath.Join(hubSystem, "skills", "*", "*", "SKILL.md"), expectedCodexSkills},
+		{"Hub shipped skills", filepath.Join(hubSystem, "skills", "*", "*", "SKILL.md"), expectedCodexSkills},
 	}
 
 	counts := make(map[string]int, len(surfaces))
@@ -122,7 +126,7 @@ func scanHubPublishIntegrity() []HealthIssue {
 		counts[s.name] = actual
 		if actual != s.expected {
 			issues = append(issues, issueCritical("publish", filepath.Dir(s.pattern),
-				fmt.Sprintf("%s has %d files, expected %d. Republish from the Aether repo with `aether install --package-dir <Aether checkout>`, then rerun `aether update --force` in target repos.",
+				fmt.Sprintf("%s has %d files, expected %d. Republish from the Aether repo with `aether publish --package-dir <Aether checkout>`, then rerun `aether update --force` in target repos.",
 					s.name, actual, s.expected)))
 		}
 	}

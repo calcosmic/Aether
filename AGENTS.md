@@ -1,7 +1,7 @@
 # AGENTS.md -- Aether Development Guide (Codex CLI)
 
-> **Current Version:** v1.0.19
-> **Last Updated:** 2026-04-22
+> **Current Version:** v1.0.28
+> **Last Updated:** 2026-05-04
 > **Platform:** Codex CLI (OpenAI)
 
 This file provides project-level instructions for Codex CLI, equivalent to
@@ -20,9 +20,9 @@ OpenCode, and Codex CLI.
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.19 |
+| Version | v1.0.28 |
 | Agent definitions | 25 (TOML in `.codex/agents/`) |
-| Skills | 83 (52 colony + 31 domain) |
+| Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Verification | `go test ./...` and `go test ./... -race` clean |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
@@ -44,13 +44,23 @@ aether status
 ```
 
 When the user types a literal `aether ...` command in Codex, execute that exact
-CLI command first. Do not reinterpret it as a fuzzy workflow prompt, and use
-`aether --help` as the runtime source of truth if markdown docs disagree. For
-lifecycle commands run through Codex shell execution, prefer
+CLI command first for literal passthrough commands such as `status`, `update`,
+`focus`, `pheromones`, and `reference-list`.
+
+Exception: `aether init`, `aether oracle`, `aether plan`, `aether build`,
+`aether continue`, `aether seal`, and `aether discuss` have wrapper-equivalent
+Codex orchestration. For those commands, run or inspect
+`aether command-guide <command> --platform codex` and use the matching Codex
+skill (`aether-colony-creation`, `aether-colony-research`, or
+`aether-colony-build-cycle`) unless the user explicitly says raw, exact,
+no-interview, or no-orchestration.
+
+Use `aether --help` as the runtime source of truth if markdown docs disagree.
+For lifecycle commands run through Codex shell execution, prefer
 `AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants JSON.
-Do not preface literal commands with repo archaeology, skill narration, or
-"I'm checking..." commentary. The CLI output is primary; your own wrapper
-should be zero or one short sentence.
+Do not preface literal passthrough commands with repo archaeology, skill
+narration, or "I'm checking..." commentary. The CLI output is primary; your own
+wrapper should be zero or one short sentence.
 
 Agent definitions live in `.codex/agents/*.toml` (TOML format) and Codex reads
 them as part of its agent discovery system.
@@ -93,12 +103,20 @@ Build and continue output uses stage transition markers:
 | Visual | `AETHER_OUTPUT_MODE=visual` or TTY | ANSI banners, emojis, colors, stage markers, context-clear guidance |
 | JSON | `AETHER_OUTPUT_MODE=json` or piped | Structured data envelopes for programmatic use |
 
-### What Codex Does NOT Get
+### Codex Orchestration Layer
 
-Claude/OpenCode wrappers add colony framing (Queen persona, pre-build context,
-post-build narration) on top of the runtime output. Codex sees only the raw
-runtime output. To improve Codex UX, change `cmd/codex_visuals.go` — not the
-wrapper markdown.
+Claude/OpenCode wrappers add colony framing, scoping interviews, worker
+orchestration, and post-command narration on top of runtime output. Codex has no
+slash-command wrapper files, so the equivalent layer is:
+
+- `aether command-guide <command> --platform codex` for command-specific steps
+- `aether-colony-creation` for init synthesis
+- `aether-colony-research` for oracle/discuss synthesis
+- `aether-colony-build-cycle` for plan/build/continue/seal orchestration
+
+For pure visual/runtime polish, change `cmd/codex_visuals.go`. For intelligent
+command behavior, keep the YAML source, Claude/OpenCode wrappers, Codex skill,
+and `cmd/command_guide.go` aligned in the same change.
 
 ---
 
@@ -273,21 +291,22 @@ vim .aether/commands/build.yaml
 git add .
 git commit -m "your message"
 
-# 3. Refresh the installed hub files from this source checkout
-aether install --package-dir "$PWD"
+# 3. Publish the source checkout to the hub and rebuild the local binary
+aether publish --channel stable --binary-dest "$HOME/.local/bin"
 
-# 4. In other repos, pull companion-file updates
+# 4. In other repos, pull hub-backed cleanup and guidance updates
 aether update --force
 ```
 
 Runtime note:
-- `aether install --package-dir "$PWD"` is the step that publishes unreleased Go runtime fixes on this machine because it refreshes the shared hub and, from a source checkout, rebuilds the shared `aether` binary.
+- `aether publish` is the primary publish command. It builds the binary, syncs companion files to the hub, and verifies version agreement automatically.
+- `aether install --package-dir "$PWD"` still works for backward compatibility but does not include version verification.
 - `aether update` in other repos only syncs companion files by default. It does not publish an unreleased local runtime change, and without `--force` it can leave stale Aether-managed files behind.
 - `aether update --force --download-binary` is the published-release path when you also need the release runtime binary.
-- For isolated source-development on this machine, install the dev channel instead: `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"` and then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
+- For isolated source-development on this machine, publish the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"` and then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
 - `.aether/version.json` is the source-checkout release version file. `npm/package.json` must match it exactly for published releases.
 - If `aether update --force` shows `Commands (claude)` or `Commands (opencode)` as `0 copied, 0 unchanged`, the hub publish is incomplete. Republish from the Aether repo first, then rerun `aether update --force` in the target repo.
-- If the change you made modifies `aether install` itself, bootstrap once with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"` so the new install logic publishes the hub and rebuilds the shared binary from source.
+- If the change modifies publish/install/update logic, bootstrap once with `go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"` so the new logic publishes the hub and rebuilds the shared binary from source.
 - Published release flow: bump `.aether/version.json` and `npm/package.json` to the same version, push the commit, then push tag `vX.Y.Z`.
 
 ---
@@ -540,18 +559,20 @@ User-colony communication via signals:
 Skills provide reusable behavior modules and domain knowledge that workers can load
 on demand. Two categories:
 
-- **Colony skills** (10) -- Behavioral patterns that shape how workers operate
+- **Colony skills** (55) -- Behavioral patterns that shape how workers operate
   (e.g., TDD discipline, error handling conventions, commit style)
-- **Domain skills** (18) -- Technical knowledge for specific frameworks, languages,
+- **Domain skills** (31) -- Technical knowledge for specific frameworks, languages,
   or tools (e.g., React patterns, Go idioms, database optimization)
 
 ### Where Skills Live
 
 | Location | Purpose |
 |----------|---------|
-| `.aether/skills/` | Source of truth (packaged with Aether) |
-| `~/.aether/skills/` | Installed skills (hub-level, shared across colonies) |
+| `.aether/skills/` | Shipped skill source of truth in the Aether repo |
+| `~/.aether/system/skills/` | Published hub mirror of shipped skills |
 | `~/.aether/skills/domain/` | Custom user-created domain skills |
+| repo `.aether/skills/` | Repo-specific custom skills only |
+| `~/.codex/skills/aether/` | Small Codex shim set that routes to `aether skill-inject` |
 
 ### How Matching Works
 
@@ -590,8 +611,8 @@ on demand. Two categories:
 
 ### Update Safety
 
-- Repo-local Codex skill copies are preserved during normal `aether update`
-- `aether update --force` refreshes tracked files from the hub and may discard local edits
+- Repo-local Codex full-skill mirrors are retired; `aether update --force` prunes stale non-custom copies
+- `aether update --force` refreshes tracked files from the hub and may discard local edits in managed paths
 - User skills stored outside the tracked Aether paths remain untouched
 
 ---
@@ -894,4 +915,4 @@ data files clean, and test coverage comprehensive as features evolve.
 
 ---
 
-*Updated for Aether v1.0.19 -- 2026-04-22*
+*Updated for Aether v1.0.28 -- 2026-05-04*

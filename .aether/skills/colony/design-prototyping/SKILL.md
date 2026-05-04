@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: design-prototyping
 description: Use when UI or interaction ideas need throwaway visual prototypes before implementation decisions are locked
 type: colony

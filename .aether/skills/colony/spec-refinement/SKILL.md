@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: spec-refinement
 description: Use when a phase needs falsifiable requirements or ambiguity reduction before planning or building
 type: colony

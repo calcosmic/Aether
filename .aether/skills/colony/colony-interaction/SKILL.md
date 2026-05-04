@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: colony-interaction
 description: Use when executing commands that involve major decisions, plan commits, build starts, verifications, or phase advances
 type: colony
@@ -16,9 +17,17 @@ The colony workflow must not run autonomously past major decision points. Users 
 
 ## Literal Command Exemption
 
-These touchpoints do not apply when the user already gave an explicit literal CLI command such as `aether update`, `aether status`, `aether entomb`, or `aether build 2`.
+These touchpoints do not apply when the user already gave an explicit literal CLI command such as `aether update`, `aether status`, or `aether entomb`.
 
-- Execute the literal command first.
+Exception: `aether init`, `aether oracle`, `aether plan`, `aether build`,
+`aether continue`, `aether seal`, and `aether discuss` have wrapper-equivalent
+Codex orchestration. For those commands, consult
+`aether command-guide <command> --platform codex` and use the matching Aether
+Codex skill (`aether-colony-creation`, `aether-colony-research`, or
+`aether-colony-build-cycle`) unless the user explicitly asks for raw, exact,
+no-interview, or no-orchestration execution.
+
+- Execute literal passthrough commands first.
 - Do not convert it into a planning conversation or repo archaeology pass.
 - Do not announce skill usage, intent interpretation, or a preflight summary before running the command.
 - Do not inspect repo files first unless the command itself fails and you need evidence to explain that failure.

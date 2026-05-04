@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: external-plan-import
 description: Use when an external PRD, roadmap, spec, or plan must be imported into colony planning safely
 type: colony

@@ -36,7 +36,7 @@ var installCmd = &cobra.Command{
 		"  .opencode/commands/ant/ -> ~/.config/opencode/commands/ant/\n" +
 		"  .opencode/agents/      -> ~/.config/opencode/agents/\n" +
 		"  .codex/agents/         -> ~/.codex/agents/\n" +
-		"  .aether/skills/        -> ~/.codex/skills/aether/\n\n" +
+		"  generated Codex shims  -> ~/.codex/skills/aether/\n\n" +
 		"Also creates the selected hub directory (~/.aether/ for stable, ~/.aether-dev/ for dev) for cross-repo coordination.",
 	Args: cobra.NoArgs,
 	RunE: runInstall,
@@ -473,6 +473,21 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel) 
 		results = append(results, entry)
 	}
 
+	shimResult := syncCodexSkillShims(filepath.Join(homeDir, ".codex", "skills", "aether"))
+	shimEntry := map[string]interface{}{
+		"label":   "Skills (codex shims)",
+		"src":     "generated",
+		"dest":    ".codex/skills/aether",
+		"copied":  shimResult.copied,
+		"skipped": shimResult.skipped,
+		"removed": len(shimResult.removed),
+	}
+	if len(shimResult.errors) > 0 {
+		shimEntry["errors"] = shimResult.errors
+		syncErrors = append(syncErrors, shimResult.errors...)
+	}
+	results = append(results, shimEntry)
+
 	return results, syncErrors
 }
 
@@ -702,6 +717,13 @@ func setupInstallHub(hubDir, packageDir string) map[string]interface{} {
 	if len(referenceSyncResult.errors) > 0 {
 		existing, _ := result["errors"].([]string)
 		result["errors"] = append(existing, referenceSyncResult.errors...)
+	}
+
+	userSkillPruneResult := pruneShippedFromUserSkillsDir(systemDir, hubDir)
+	result["user_skills_removed"] = len(userSkillPruneResult.removed)
+	if len(userSkillPruneResult.errors) > 0 {
+		existing, _ := result["errors"].([]string)
+		result["errors"] = append(existing, userSkillPruneResult.errors...)
 	}
 
 	result["copied"] = hubSyncResult.copied

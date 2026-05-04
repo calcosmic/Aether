@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: phase-learning-extraction
 description: Use when completed work should produce reusable decisions, lessons, surprises, and patterns for future phases
 type: colony

@@ -33,7 +33,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
 		"result.dispatch_manifest",
 		"## Playbook Procedure",
-		".aether/docs/command-playbooks/build-wave.md",
+		"~/.aether/system/docs/command-playbooks/build-wave.md",
 		"## Wave Execution",
 		"dispatch_manifest.execution_plan",
 		"execution_wave",

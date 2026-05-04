@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: golang
 description: Use when the project uses Go for systems programming or backend services
 type: domain

@@ -1011,9 +1011,10 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	pheromoneSection := resolvePheromoneSection()
 	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
 	indexByName := make(map[string]int, len(dispatches))
+	dispatchByName := make(map[string]codex.WorkerDispatch, len(dispatches))
 	for i, dispatch := range dispatches {
 		agentName := codexAgentNameForCaste(dispatch.Caste)
-		workerDispatches = append(workerDispatches, codex.WorkerDispatch{
+		workerDispatch := codex.WorkerDispatch{
 			ID:               fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
 			WorkerName:       dispatch.Name,
 			AgentName:        agentName,
@@ -1030,8 +1031,10 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			Root:             root,
 			Timeout:          workerTimeout,
 			Wave:             normalizedDispatchWave(dispatch),
-		})
+		}
+		workerDispatches = append(workerDispatches, workerDispatch)
 		indexByName[dispatch.Name] = i
+		dispatchByName[dispatch.Name] = workerDispatch
 	}
 
 	cb := NewCircuitBreaker(circuitBreakerThreshold)
@@ -1058,6 +1061,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	if cleaned > 0 || orphaned > 0 {
 		emitVisualProgress(fmt.Sprintf("Worktree cleanup: %d cleaned, %d orphaned", cleaned, orphaned))
 	}
+	for _, result := range results {
+		if dispatch, ok := dispatchByName[result.WorkerName]; ok {
+			_ = persistDispatchWorkerHandoff(dispatch, result)
+		}
+	}
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("dispatch build workers: %w", err)
 	}
@@ -1081,10 +1089,10 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			dispatches[idx].Duration = result.WorkerResult.Duration.Seconds()
 			dispatches[idx].Outputs = buildDispatchClaimOutputs(*result.WorkerResult)
 		}
-			// Per D-02/D-04: print raw worker output only in verbose mode
-			if result.WorkerResult != nil && result.WorkerResult.RawOutput != "" {
-				filteredFprintln(stdout, result.WorkerResult.RawOutput)
-			}
+		// Per D-02/D-04: print raw worker output only in verbose mode
+		if result.WorkerResult != nil && result.WorkerResult.RawOutput != "" {
+			filteredFprintln(stdout, result.WorkerResult.RawOutput)
+		}
 
 		if result.Error != nil && len(dispatches[idx].Blockers) == 0 {
 			dispatches[idx].Blockers = []string{result.Error.Error()}
@@ -1651,10 +1659,21 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 		}
 	}
 
-	b.WriteString("\n## Relevant Playbooks\n\n")
-	for _, playbook := range buildPlaybooksForDispatch(dispatch, playbooks) {
-		b.WriteString("- ")
-		b.WriteString(playbook)
+	heartbeatPath := filepath.ToSlash(filepath.Join(root, ".aether", "data", heartbeatFilePrefix+dispatch.Name+".json"))
+	b.WriteString("\n## Heartbeat Protocol\n\n")
+	b.WriteString(fmt.Sprintf("- While active, write `%s` roughly every 30 seconds.\n", heartbeatPath))
+	b.WriteString(fmt.Sprintf("- Include `worker_id: %s`, `caste: %s`, `phase: %d`, and an RFC3339 `timestamp`.\n", dispatch.Name, dispatch.Caste, phase.ID))
+	b.WriteString("- Remove your heartbeat file before reporting completion.\n")
+
+	if graphContext := renderCodegraphContextForText(root, codegraphTextPartsForBuildBrief(phase, dispatch), codegraphWorkerContextBudgetChars); graphContext != "" {
+		b.WriteString("\n")
+		b.WriteString(graphContext)
+		b.WriteString("\n")
+	}
+
+	if playbookContext := renderBuildPlaybookContext(root, dispatch, playbooks); playbookContext != "" {
+		b.WriteString("\n")
+		b.WriteString(playbookContext)
 		b.WriteString("\n")
 	}
 

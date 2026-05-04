@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ import (
 type skillFrontmatter struct {
 	Name             string   `json:"name" yaml:"name"`
 	Description      string   `json:"description" yaml:"description"`
+	Source           string   `json:"source,omitempty" yaml:"source"`
 	Type             string   `json:"type,omitempty" yaml:"type"`
 	Category         string   `json:"category,omitempty" yaml:"category"`
 	Domains          []string `json:"domains,omitempty" yaml:"domains"`
@@ -50,6 +52,7 @@ type skillIndexEntry struct {
 	Path             string   `json:"path"`
 	IsUserCreated    bool     `json:"is_user_created"`
 	Source           string   `json:"source,omitempty"`
+	DeclaredSource   string   `json:"declared_source,omitempty"`
 }
 
 type skillIndexData struct {
@@ -116,7 +119,13 @@ type skillInjectResult struct {
 	DomainSkills []skillResolvedEntry `json:"domain_skills"`
 	Matched      []string             `json:"matched"`
 	Count        int                  `json:"count"`
+	BudgetChars  int                  `json:"budget_chars"`
 }
+
+const skillInjectNormalBudgetChars = 8000
+const skillInjectCompactBudgetChars = 4000
+const skillInjectBudgetChars = skillInjectNormalBudgetChars
+const skillInjectBudgetEnvVar = "AETHER_SKILL_BUDGET"
 
 type workspaceFileSnapshot struct {
 	RelPaths       []string
@@ -307,7 +316,9 @@ var skillInjectCmd = &cobra.Command{
 		}
 
 		match := matchSkillsForWorkflow(resolveHubPath(), workflow, role, task)
-		outputOK(renderSkillInjectResult(match))
+		compact, _ := cmd.Flags().GetBool("compact")
+		budget, _ := cmd.Flags().GetInt("budget")
+		outputOK(renderSkillInjectResultWithBudget(match, resolveSkillInjectBudget(compact, budget)))
 		return nil
 	},
 }
@@ -439,7 +450,10 @@ var skillIsUserCreatedCmd = &cobra.Command{
 		_, userExists := os.Stat(userPath)
 		_, shippedExists := os.Stat(shippedPath)
 
-		isUserCreated := userExists == nil && shippedExists != nil
+		isUserCreated := false
+		if userExists == nil {
+			isUserCreated = skillFileDeclaresSource(userPath, "custom") || (shippedExists != nil && !skillFileDeclaresSource(userPath, "shipped"))
+		}
 		outputOK(map[string]interface{}{
 			"skill":           name,
 			"is_user_created": isUserCreated,
@@ -450,9 +464,19 @@ var skillIsUserCreatedCmd = &cobra.Command{
 	},
 }
 
+func skillFileDeclaresSource(path, expected string) bool {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	fm := parseSkillFrontmatter(string(raw))
+	return fm != nil && strings.TrimSpace(fm.Source) == expected
+}
+
 func buildFullIndex(hub string) []skillIndexEntry {
-	entries := []skillIndexEntry{}
-	seen := map[string]bool{}
+	selected := map[string]skillIndexEntry{}
+	selectedRank := map[string]int{}
+	sourceCheckout := isAetherSourceCheckout(skillWorkspaceRoot())
 
 	for _, root := range skillScanRoots(hub) {
 		for _, d := range findSkillDirs(root.Path) {
@@ -461,12 +485,18 @@ func buildFullIndex(hub string) []skillIndexEntry {
 				continue
 			}
 			key := entry.Type + ":" + entry.Name
-			if seen[key] {
+			rank := skillIndexEntryPriority(*entry, sourceCheckout)
+			if existingRank, ok := selectedRank[key]; ok && existingRank <= rank {
 				continue
 			}
-			seen[key] = true
-			entries = append(entries, *entry)
+			selected[key] = *entry
+			selectedRank[key] = rank
 		}
+	}
+
+	entries := make([]skillIndexEntry, 0, len(selected))
+	for _, entry := range selected {
+		entries = append(entries, entry)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -477,6 +507,39 @@ func buildFullIndex(hub string) []skillIndexEntry {
 	})
 
 	return entries
+}
+
+func skillIndexEntryPriority(entry skillIndexEntry, sourceCheckout bool) int {
+	switch strings.TrimSpace(entry.DeclaredSource) {
+	case "custom":
+		return 10
+	case "learned":
+		return 20
+	case "shipped":
+		if entry.Source == "repo-aether" && sourceCheckout {
+			return 25
+		}
+		if entry.Source == "hub-aether-shipped" {
+			return 30
+		}
+		return 60
+	}
+
+	switch entry.Source {
+	case "repo-learned":
+		return 20
+	case "hub-aether-shipped":
+		return 30
+	case "repo-aether":
+		if sourceCheckout {
+			return 35
+		}
+		return 55
+	case "hub-aether-domain":
+		return 50
+	default:
+		return 70
+	}
 }
 
 func parseSkillFrontmatter(content string) *skillFrontmatter {
@@ -507,6 +570,8 @@ func parseSkillFrontmatter(content string) *skillFrontmatter {
 				fm.Name = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
 			case strings.HasPrefix(line, "description:"):
 				fm.Description = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
+			case strings.HasPrefix(line, "source:"):
+				fm.Source = strings.TrimSpace(strings.TrimPrefix(line, "source:"))
 			case strings.HasPrefix(line, "category:"):
 				fm.Category = strings.TrimSpace(strings.TrimPrefix(line, "category:"))
 			case strings.HasPrefix(line, "type:"):
@@ -538,6 +603,7 @@ func parseLegacyCSV(raw string) []string {
 }
 
 func (fm *skillFrontmatter) normalize() {
+	fm.Source = strings.TrimSpace(fm.Source)
 	fm.Type = strings.TrimSpace(fm.Type)
 	fm.Category = strings.TrimSpace(fm.Category)
 	if fm.Type == "" {
@@ -565,29 +631,10 @@ func (fm *skillFrontmatter) normalize() {
 
 func skillScanRoots(hub string) []skillScanRoot {
 	roots := []skillScanRoot{
-		{Path: ".codex/skills/aether", Source: "repo-codex", IsUserCreated: false},
-		{Path: ".agents/skills/aether", Source: "repo-agents", IsUserCreated: false},
 		{Path: ".aether/skills", Source: "repo-aether", IsUserCreated: false},
 		{Path: ".aether/hive/skills", Source: "repo-learned", IsUserCreated: false},
 		{Path: filepath.Join(hub, "system", "skills"), Source: "hub-aether-shipped", IsUserCreated: false},
-		{Path: filepath.Join(hub, "skills"), Source: "hub-aether", IsUserCreated: true},
-	}
-
-	includeUserRoots := true
-	if envHub := strings.TrimSpace(os.Getenv("AETHER_HUB_DIR")); envHub != "" {
-		includeUserRoots = false
-	} else if defaultHub := resolveHubPath(); defaultHub != "" && !samePathOrAncestor(defaultHub, hub) && !samePathOrAncestor(hub, defaultHub) {
-		includeUserRoots = false
-	}
-
-	if includeUserRoots {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			roots = append(roots,
-				skillScanRoot{Path: filepath.Join(home, ".codex", "skills", "aether"), Source: "user-codex", IsUserCreated: true},
-				skillScanRoot{Path: filepath.Join(home, ".agents", "skills", "aether"), Source: "user-agents", IsUserCreated: true},
-			)
-		}
+		{Path: filepath.Join(hub, "skills", "domain"), Source: "hub-aether-domain", IsUserCreated: true},
 	}
 
 	deduped := make([]skillScanRoot, 0, len(roots))
@@ -655,8 +702,24 @@ func indexSkillDir(dir string, isUserCreated bool, source ...string) *skillIndex
 		Priority:         fm.Priority,
 		Version:          fm.Version,
 		Path:             skillPath,
-		IsUserCreated:    isUserCreated,
+		IsUserCreated:    skillIsUserCreatedFromSource(isUserCreated, sourceName, fm.Source),
 		Source:           sourceName,
+		DeclaredSource:   fm.Source,
+	}
+}
+
+func skillIsUserCreatedFromSource(rootUserCreated bool, rootSource, declaredSource string) bool {
+	switch strings.TrimSpace(declaredSource) {
+	case "custom":
+		return true
+	case "shipped":
+		return false
+	}
+	switch rootSource {
+	case "repo-learned", "hub-aether-domain":
+		return true
+	default:
+		return rootUserCreated
 	}
 }
 
@@ -957,13 +1020,31 @@ func skillHasNonRoleReason(reasons []skillMatchReason) bool {
 }
 
 func renderSkillInjectResult(match skillMatchResult) skillInjectResult {
+	return renderSkillInjectResultWithBudget(match, resolveSkillInjectBudget(false, 0))
+}
+
+func renderSkillInjectResultWithBudget(match skillMatchResult, budget int) skillInjectResult {
+	budget = normalizeSkillInjectBudget(budget)
 	sections := []string{}
 	for _, entry := range append(match.ColonySkills, match.DomainSkills...) {
 		content, err := os.ReadFile(entry.Path)
 		if err != nil {
 			continue
 		}
-		sections = append(sections, fmt.Sprintf("### Skill: %s\n\n%s", entry.Name, string(content)))
+		nextSection := fmt.Sprintf("### Skill: %s\n\n%s", entry.Name, string(content))
+		candidate := strings.Join(append(append([]string{}, sections...), nextSection), "\n\n---\n\n")
+		if len(candidate) > budget {
+			remaining := budget - len(strings.Join(sections, "\n\n---\n\n"))
+			if len(sections) > 0 {
+				remaining -= len("\n\n---\n\n")
+			}
+			nextSection = truncateSkillInjectSection(nextSection, remaining)
+			if strings.TrimSpace(nextSection) != "" {
+				sections = append(sections, nextSection)
+			}
+			break
+		}
+		sections = append(sections, nextSection)
 	}
 
 	section := strings.Join(sections, "\n\n---\n\n")
@@ -981,7 +1062,57 @@ func renderSkillInjectResult(match skillMatchResult) skillInjectResult {
 		DomainSkills: match.DomainSkills,
 		Matched:      match.Matched,
 		Count:        match.Count,
+		BudgetChars:  budget,
 	}
+}
+
+func resolveSkillInjectBudget(compact bool, explicit int) int {
+	if explicit > 0 {
+		return normalizeSkillInjectBudget(explicit)
+	}
+	if raw := strings.TrimSpace(os.Getenv(skillInjectBudgetEnvVar)); raw != "" {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+			return normalizeSkillInjectBudget(value)
+		}
+	}
+	if compact {
+		return skillInjectCompactBudgetChars
+	}
+	return skillInjectNormalBudgetChars
+}
+
+func normalizeSkillInjectBudget(budget int) int {
+	if budget <= 0 {
+		return skillInjectNormalBudgetChars
+	}
+	if budget < 512 {
+		return 512
+	}
+	return budget
+}
+
+func truncateSkillInjectSection(section string, maxChars int) string {
+	section = strings.TrimSpace(section)
+	if section == "" || maxChars <= 0 {
+		return ""
+	}
+	if len(section) <= maxChars {
+		return section
+	}
+	marker := "\n\n[truncated]"
+	markerRunes := []rune(marker)
+	sectionRunes := []rune(section)
+	if maxChars <= len(markerRunes)+8 {
+		return strings.TrimSpace(string(sectionRunes[:maxChars]))
+	}
+	keep := maxChars - len(markerRunes)
+	if keep < 8 {
+		keep = 8
+	}
+	if keep > len(sectionRunes) {
+		keep = len(sectionRunes)
+	}
+	return strings.TrimSpace(string(sectionRunes[:keep])) + marker
 }
 
 func sortScoredSkills(skills []scoredSkill) {
@@ -1262,6 +1393,8 @@ func init() {
 	skillInjectCmd.Flags().String("role", "", "Worker role")
 	skillInjectCmd.Flags().String("task", "", "Task description")
 	skillInjectCmd.Flags().String("workflow", "", "Aether workflow context (optional)")
+	skillInjectCmd.Flags().Bool("compact", false, "Use compact 4000-character skill budget")
+	skillInjectCmd.Flags().Int("budget", 0, "Override skill injection budget in characters")
 	skillDiffCmd.Flags().String("skill", "", "Skill name (required)")
 	skillIsUserCreatedCmd.Flags().String("skill", "", "Skill name (required)")
 

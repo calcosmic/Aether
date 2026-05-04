@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: milestone-gap-planning
 description: Use when a milestone audit reveals gaps that need to become concrete follow-up phases
 type: colony

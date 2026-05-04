@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,13 +16,16 @@ import (
 )
 
 const sessionStaleThreshold = 24 * time.Hour
+const handoffStateFence = "aether-colony-state"
+
+var handoffPhaseLinePattern = regexp.MustCompile(`(?i)(?:Current:|Phase:)\s*([0-9]+)\s*/\s*([0-9]+)(?:\s*(?:—|-)\s*(.*))?`)
 
 // sessionFreshnessResult describes how fresh a session is for resume.
 type sessionFreshnessResult struct {
 	Fresh       bool
 	Age         time.Duration
 	GitMatch    bool
-	GitCheck    bool   // whether git HEAD comparison was performed
+	GitCheck    bool // whether git HEAD comparison was performed
 	SessionID   string
 	BaselineSHA string
 	CurrentSHA  string
@@ -184,9 +190,12 @@ var resumeColonyCmd = &cobra.Command{
 		// Verify session freshness
 		freshness := sessionVerifyFresh(store)
 
-		var rawState colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &rawState); err == nil {
-			state := normalizeLegacyColonyState(rawState)
+		state, recoveredFromHandoff, stateErr := loadResumeState(handoffText)
+		if stateErr != nil {
+			renderRecoveryMenu("resume", stateErr.Error(), nil)
+			return nil
+		}
+		if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
 			state.Paused = false
 			state.PausedAt = nil
 			if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil {
@@ -227,6 +236,9 @@ var resumeColonyCmd = &cobra.Command{
 				outputError(2, fmt.Sprintf("failed to save session: %v", err), nil)
 				return nil
 			}
+			if recoveredFromHandoff {
+				freshness.Fresh = false
+			}
 
 			var session colony.SessionFile
 			if err := store.LoadJSON("session.json", &session); err == nil {
@@ -252,6 +264,9 @@ var resumeColonyCmd = &cobra.Command{
 
 		result := buildResumeDashboardResult()
 		result["resumed"] = true
+		if recoveredFromHandoff {
+			result["state_recovered_from_handoff"] = true
+		}
 		result["freshness"] = map[string]interface{}{
 			"fresh":      freshness.Fresh,
 			"age_hours":  fmt.Sprintf("%.1f", freshness.Age.Hours()),
@@ -300,6 +315,244 @@ var resumeColonyCmd = &cobra.Command{
 	},
 }
 
+func loadResumeState(handoffText string) (colony.ColonyState, bool, error) {
+	var rawState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &rawState); err == nil {
+		state := normalizeLegacyColonyState(rawState)
+		if resumeStateIsRunnable(state) {
+			return state, false, nil
+		}
+	}
+
+	state, err := restoreStateFromHandoff(handoffText)
+	if err != nil {
+		return colony.ColonyState{}, false, fmt.Errorf("runtime state is broken and could not be restored from handoff: %w", err)
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		return colony.ColonyState{}, false, fmt.Errorf("failed to restore COLONY_STATE.json from handoff: %w", err)
+	}
+	return state, true, nil
+}
+
+func resumeStateIsRunnable(state colony.ColonyState) bool {
+	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
+		return false
+	}
+	state = normalizeLegacyColonyState(state)
+	switch state.State {
+	case colony.StateIDLE, colony.StateREADY, colony.StateEXECUTING, colony.StateBUILT, colony.StateCOMPLETED:
+	default:
+		return false
+	}
+	if state.CurrentPhase < 0 {
+		return false
+	}
+	if len(state.Plan.Phases) > 0 && state.CurrentPhase > len(state.Plan.Phases) {
+		return false
+	}
+	return true
+}
+
+func restoreStateFromHandoff(handoffText string) (colony.ColonyState, error) {
+	if strings.TrimSpace(handoffText) == "" {
+		return colony.ColonyState{}, fmt.Errorf("HANDOFF.md is missing or empty")
+	}
+	if state, ok := restoreStateFromHandoffSnapshot(handoffText); ok {
+		return state, nil
+	}
+	return restoreStateFromLegacyHandoff(handoffText)
+}
+
+func restoreStateFromHandoffSnapshot(handoffText string) (colony.ColonyState, bool) {
+	block := extractFencedBlock(handoffText, handoffStateFence)
+	if block == "" {
+		return colony.ColonyState{}, false
+	}
+	var state colony.ColonyState
+	if err := json.Unmarshal([]byte(block), &state); err != nil {
+		return colony.ColonyState{}, false
+	}
+	state = normalizeLegacyColonyState(state)
+	if !resumeStateIsRunnable(state) {
+		return colony.ColonyState{}, false
+	}
+	return state, true
+}
+
+func restoreStateFromLegacyHandoff(handoffText string) (colony.ColonyState, error) {
+	goal := parseHandoffGoal(handoffText)
+	phaseID, totalPhases, phaseName := parseHandoffPhase(handoffText)
+	stateValue := parseHandoffState(handoffText)
+	if strings.TrimSpace(goal) == "" {
+		return colony.ColonyState{}, fmt.Errorf("HANDOFF.md does not contain a recoverable goal")
+	}
+	if phaseID < 0 {
+		return colony.ColonyState{}, fmt.Errorf("HANDOFF.md does not contain a recoverable phase")
+	}
+	if totalPhases < phaseID {
+		totalPhases = phaseID
+	}
+	if totalPhases < 0 {
+		totalPhases = 0
+	}
+	if stateValue == "" {
+		stateValue = colony.StateREADY
+	}
+
+	phases := make([]colony.Phase, 0, totalPhases)
+	for i := 1; i <= totalPhases; i++ {
+		status := colony.PhaseReady
+		if i < phaseID {
+			status = colony.PhaseCompleted
+		}
+		if i == phaseID {
+			status = colony.PhaseInProgress
+		}
+		name := fmt.Sprintf("Phase %d", i)
+		if i == phaseID && strings.TrimSpace(phaseName) != "" {
+			name = strings.TrimSpace(phaseName)
+		}
+		phases = append(phases, colony.Phase{ID: i, Name: name, Status: status})
+	}
+	if phaseID > 0 && phaseID <= len(phases) {
+		tasks := parseHandoffTasks(handoffText, phaseID)
+		phases[phaseID-1].Tasks = tasks
+	}
+
+	return colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		Scope:        colony.ScopeProject,
+		State:        stateValue,
+		CurrentPhase: phaseID,
+		Plan:         colony.Plan{Phases: phases},
+		Events: []string{
+			fmt.Sprintf("%s|state_recovered|resume|Restored COLONY_STATE.json from HANDOFF.md", time.Now().UTC().Format(time.RFC3339)),
+		},
+	}, nil
+}
+
+func extractFencedBlock(text, fenceName string) string {
+	lines := strings.Split(text, "\n")
+	inBlock := false
+	var block []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !inBlock {
+			if strings.HasPrefix(trimmed, "```") && strings.TrimSpace(strings.TrimPrefix(trimmed, "```")) == fenceName {
+				inBlock = true
+			}
+			continue
+		}
+		if strings.HasPrefix(trimmed, "```") {
+			return strings.TrimSpace(strings.Join(block, "\n"))
+		}
+		block = append(block, line)
+	}
+	return ""
+}
+
+func parseHandoffGoal(text string) string {
+	if section := extractHandoffMarkdownSection(text, "Goal"); section != "" {
+		if value := firstMeaningfulHandoffLine(section); value != "" {
+			return value
+		}
+	}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if value, ok := strings.CutPrefix(line, "Goal:"); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func parseHandoffPhase(text string) (int, int, string) {
+	for _, line := range strings.Split(text, "\n") {
+		matches := handoffPhaseLinePattern.FindStringSubmatch(strings.TrimSpace(line))
+		if len(matches) == 0 {
+			continue
+		}
+		phaseID, _ := strconv.Atoi(matches[1])
+		total, _ := strconv.Atoi(matches[2])
+		phaseName := ""
+		if len(matches) > 3 {
+			phaseName = strings.TrimSpace(matches[3])
+		}
+		return phaseID, total, phaseName
+	}
+	return -1, -1, ""
+}
+
+func parseHandoffState(text string) colony.State {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "- "))
+		var value string
+		if raw, ok := strings.CutPrefix(line, "State:"); ok {
+			value = strings.TrimSpace(raw)
+		}
+		switch colony.State(strings.ToUpper(value)) {
+		case colony.StateIDLE, colony.StateREADY, colony.StateEXECUTING, colony.StateBUILT, colony.StateCOMPLETED:
+			return colony.State(strings.ToUpper(value))
+		}
+	}
+	return ""
+}
+
+func parseHandoffTasks(text string, phaseID int) []colony.Task {
+	section := extractHandoffMarkdownSection(text, "Tasks")
+	if section == "" {
+		section = extractHandoffMarkdownSection(text, "Open Tasks")
+	}
+	var tasks []colony.Task
+	taskNum := 1
+	for _, line := range strings.Split(section, "\n") {
+		value := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "- "))
+		value = strings.TrimSpace(strings.TrimPrefix(value, "[ ]"))
+		value = strings.TrimSpace(strings.TrimPrefix(value, "[>]"))
+		value = strings.TrimSpace(strings.TrimPrefix(value, "[x]"))
+		if value == "" || strings.EqualFold(value, "none") {
+			continue
+		}
+		id := fmt.Sprintf("%d.%d", phaseID, taskNum)
+		tasks = append(tasks, colony.Task{ID: &id, Goal: value, Status: colony.TaskPending})
+		taskNum++
+	}
+	return tasks
+}
+
+func extractHandoffMarkdownSection(text, heading string) string {
+	lines := strings.Split(text, "\n")
+	inSection := false
+	var section []string
+	target := "## " + strings.TrimSpace(heading)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.EqualFold(trimmed, target) {
+			inSection = true
+			continue
+		}
+		if inSection && strings.HasPrefix(trimmed, "## ") {
+			break
+		}
+		if inSection {
+			section = append(section, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(section, "\n"))
+}
+
+func firstMeaningfulHandoffLine(section string) string {
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "- "))
+		if line == "" || strings.EqualFold(line, "none") {
+			continue
+		}
+		return line
+	}
+	return ""
+}
+
 func buildHandoffDocument(now time.Time, state colony.ColonyState, session colony.SessionFile, nextAction string) string {
 	var b strings.Builder
 	goal := session.ColonyGoal
@@ -346,6 +599,7 @@ func buildHandoffDocument(now time.Time, state colony.ColonyState, session colon
 		b.WriteString(session.Summary)
 		b.WriteString("\n")
 	}
+	b.WriteString(renderHandoffStateSnapshot(state))
 
 	return b.String()
 }

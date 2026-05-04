@@ -404,6 +404,7 @@ func TestQueenWaveLifecycle_WaveSummaryJSON(t *testing.T) {
 
 // Test 9: Summary table rendering produces expected headers and totals.
 func TestQueenWaveLifecycle_SummaryTable(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	setupBuildFlowTest(t)
 
 	summary := WaveLifecycleSummary{

@@ -1,243 +1,215 @@
-# Aether Architecture - How It Works
+# Aether Runtime Update Architecture
 
-> **Distribution note:** The Go `aether` binary is the only runtime. A thin npm bootstrap package now exists at `npm/` for `npx --yes aether-colony@latest`, but it only downloads and hands off to the published Go release.
+> Distribution note: the Go `aether` binary is the only runtime. The npm package
+> at `npm/` is a thin bootstrapper for `npx --yes aether-colony@latest`; it
+> downloads the published Go release and then runs the normal install flow.
 
 Version rule:
-- `.aether/version.json` is the source-checkout release version file.
-- `npm/package.json` must use the exact same version as `.aether/version.json`.
-- The public npm `latest` tag should point at the same stable release version as GitHub Releases.
+- `.aether/version.json` is the source-checkout release version.
+- `npm/package.json` must use the exact same version for public releases.
+- The public npm `latest` dist-tag should match the current stable GitHub
+  release version.
 
-## The Core Concept
+## Current Model
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     AETHER REPO (this repo)                      │
-│                                                                  │
-│   cmd/                 ← Go source code (primary)               │
-│   ├── main.go         CLI entry point                           │
-│   └── *.go            80+ subcommands                           │
-│                                                                  │
-│   pkg/                 ← Shared Go packages                     │
-│   ├── agent/          Agent pool, spawn tree                    │
-│   ├── downloader/     Binary download + extraction              │
-│   ├── memory/         Learning pipeline, instincts              │
-│   └── storage/        JSON store, file locking                  │
-│                                                                  │
-│   .aether/             ← SOURCE OF TRUTH (companion files)      │
-│   ├── workers.md       Worker definitions                       │
-│   ├── rules/           Rules files (e.g. aether-colony.md)      │
-│   ├── skills/          colony/ (11) + domain/ (18)              │
-│   ├── templates/       Colony state, pheromones, etc.           │
-│   ├── docs/            Distributed documentation                │
-│   ├── agents-claude/   Agent definitions (packaging mirror)     │
-│   └── utils/           Runtime utilities                        │
-│                                                                  │
-│   .aether/data/        ← LOCAL ONLY (gitignored, never sync'd)  │
-│   .aether/dreams/      ← LOCAL ONLY (gitignored, never sync'd)  │
-│                                                                  │
-│   .claude/commands/ant/ ← 50 slash commands (Claude Code)       │
-│   .claude/agents/ant/   ← 25 agent definitions (Claude Code)    │
-│   .claude/rules/        ← Rules loaded by Claude Code           │
-│                                                                  │
-│   .opencode/commands/ant/ ← 50 slash commands (OpenCode)        │
-│   .opencode/agents/       ← Agent definitions (OpenCode)        │
-│   .codex/agents/          ← 25 agent definitions (Codex CLI)    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+For dummies: the hub is the cupboard, not every project folder. Aether keeps
+commands, agents, shipped skills, docs, templates, workers, exchange files, and
+runtime references in the shared hub and platform home directories. Target repos
+keep only their local colony state, local guidance files, Claude settings/rules,
+and cleanup markers.
+
+```text
++---------------------------+       aether publish        +---------------------------+
+| Aether source checkout     | --------------------------> | ~/.aether/ or ~/.aether-dev/ |
+|                           |                             |                           |
+| cmd/, pkg/                | builds aether/aether-dev    | system/                   |
+| .aether/                  | syncs companion files       |   workers.md              |
+| .claude/                  | syncs wrapper surfaces      |   skills/ docs/ templates |
+| .opencode/                | syncs agent surfaces        |   commands/ agents/ codex |
+| .codex/                   | verifies version agreement  | version.json              |
++---------------------------+                             +-------------+-------------+
+                                                                        |
+                                                                        | aether update
+                                                                        v
+                                                          +---------------------------+
+                                                          | target repo                |
+                                                          | .aether/data/              |
+                                                          | .aether/QUEEN.md           |
+                                                          | AGENTS.md/.codex/.opencode |
+                                                          | .claude/settings/rules     |
+                                                          +---------------------------+
 ```
 
-## The Distribution Flow
+Stable `aether publish` also refreshes platform home assets:
 
-```
-┌──────────────────┐ aether install --package-dir "$PWD" ┌──────────────────────┐
-│   Aether Repo    │ ──────────────────────> │   ~/.aether/ (HUB)   │
-│                  │                          │                      │
-│ .aether/*  ──────┤   copies companion      │ system/              │
-│ .claude/   ──────┤   files + agents +      │ ├── workers.md       │
-│ .opencode/ ──────┤   commands to hub       │ ├── rules/           │
-│                  │                          │ ├── skills/          │
-│                  │                          │ ├── templates/       │
-│                  │                          │ ├── agents-claude/   │
-│                  │                          │ ├── commands/        │
-│                  │                          │ └── docs/            │
-└──────────────────┘                          └──────────┬───────────┘
-                                                         │
-                           aether update / aether setup   │
-                                                         │
-                                              ┌──────────▼───────────┐
-                                              │  any-repo/            │
-                                              │  ├── .aether/         │
-                                              │  ├── .claude/         │
-                                              │  └── .opencode/       │
-                                              │                      │
-                                              │  .aether/data/        │
-                                              │  (never touched)      │
-                                              └──────────────────────┘
-```
+| Platform | Destination |
+|----------|-------------|
+| Claude commands | `~/.claude/commands/ant-*.md` |
+| Claude agents | `~/.claude/agents/ant/` |
+| OpenCode commands | `~/.config/opencode/commands/ant/` |
+| OpenCode agents | `~/.config/opencode/agents/` |
+| Codex agents | `~/.codex/agents/` |
+| Codex skill shims | `~/.codex/skills/aether/` |
+
+Dev-channel publish intentionally skips platform home sync so unreleased work
+does not overwrite the stable user-facing command surface on the same machine.
 
 ## What Goes Where
 
-| Category | Source (Aether repo) | Hub (`~/.aether/system/`) | Target repos |
-|----------|---------------------|--------------------------|--------------|
-| System files | `.aether/*` | `system/*` | `.aether/*` |
-| Rules | `.aether/rules/` | `system/rules/` | `.claude/rules/` |
-| Commands (Claude) | `.claude/commands/ant/` | `system/commands/claude/` | `.claude/commands/ant/` |
-| Agents (Claude) | `.claude/agents/ant/` | `system/agents-claude/` | `.claude/agents/ant/` |
-| Commands (OpenCode) | `.opencode/commands/ant/` | `system/commands/opencode/` | `.opencode/commands/ant/` |
-| Agents (OpenCode) | `.opencode/agents/` | `system/agents/` | `.opencode/agents/` |
-| Agents (Codex) | `.codex/agents/` | `system/codex/` | `.codex/agents/` |
-| Skills (Codex) | `.aether/skills-codex/` | `system/skills-codex/` | `.codex/skills/aether/` |
-| Skills | `.aether/skills/` | `system/skills/` | `.aether/skills/` |
-| Templates | `.aether/templates/` | `system/templates/` | `.aether/templates/` |
-| Docs | `.aether/docs/` | `system/docs/` | `.aether/docs/` |
+| Category | Source | Hub | Target repos |
+|----------|--------|-----|--------------|
+| Go runtime | `cmd/`, `pkg/` | built binary metadata | not copied by update |
+| System docs/templates/skills/workers/exchange | `.aether/` | `system/` | global only; stale repo copies pruned |
+| Claude commands | `.claude/commands/ant/` | `system/commands/claude/` and platform home | global/platform home only |
+| Claude agents | `.claude/agents/ant/` | `system/agents-claude/` and platform home | global/platform home only |
+| OpenCode commands | `.opencode/commands/ant/` | `system/commands/opencode/` and platform home | global/platform home only |
+| OpenCode agents | `.opencode/agents/` | `system/agents/` and platform home | global/platform home only |
+| Codex agents | `.codex/agents/` | `system/codex/` and platform home | global/platform home only |
+| Shipped skills | `.aether/skills/` | `system/skills/` | hub only; runtime loads with `skill-inject` |
+| Codex skill shims | generated by install/publish | not stored in hub | global platform home only |
+| Claude settings/rules | `.claude/settings.json`, `.aether/rules/` | `system/settings/claude`, `system/rules/` | synced to `.claude/` |
+| Project guidance | templates under `.aether/templates/` | `system/templates/` | synced as `AGENTS.md`, `.codex/CODEX.md`, `.opencode/OPENCODE.md` when managed |
+| Colony state | generated in target repo | never | stays repo-local |
 
-Published bootstrap path:
-- `npx --yes aether-colony@latest` downloads the published Go release, installs it locally, and runs `aether install`.
-- The npm package is not a second runtime and should always trail a published Go release, never lead it.
+## Commands
 
-**Never distributed (local only):**
-- `.aether/data/` — colony state, pheromones, midden
-- `.aether/dreams/` — dream journal
-- `.aether/oracle/` — research artifacts
-- `.aether/checkpoints/` — session checkpoints
-- `.aether/locks/` — file locks
+### `aether publish` in the Aether repo
 
-## The Three Commands
+This is the preferred source-checkout publish path.
 
-### `aether install` (in Aether repo)
+What it does:
+1. Builds the channel binary (`aether` or `aether-dev`) unless
+   `--skip-build-binary` is used.
+2. Syncs source companion files into `~/.aether/system/` or
+   `~/.aether-dev/system/`.
+3. On stable, refreshes Claude/OpenCode/Codex platform home assets.
+4. Verifies the built binary version and hub version agree.
 
-Pushes from the Aether repo to the hub. This is what you run after editing source files.
+Use:
 
-**What it does:**
-1. Copies the repo's source-of-truth companion files into `~/.aether/system/`
-2. Publishes Claude/OpenCode command wrappers, Claude/OpenCode/Codex agents, rules, and Codex skills into the hub layout used by downstream `aether update`
-3. Refreshes hub metadata such as `registry.json` and `version.json`
-4. When run from an Aether source checkout, rebuilds the shared local `aether` binary unless `--skip-build-binary` is used
-5. Optionally downloads the published Go binary from GitHub Releases (`--download-binary`)
+```bash
+# Stable/public channel
+aether publish --channel stable --binary-dest "$HOME/.local/bin"
 
-**Sync pairs (repo → hub system):**
+# Dev/isolated channel
+aether publish --channel dev --binary-dest "$HOME/.local/bin"
+```
 
-| Source | Destination | Label |
-|--------|-------------|-------|
-| `.aether/` | `~/.aether/system/` | System files |
-| `.aether/rules/` | `~/.aether/system/rules/` | Rules (claude) |
-| `.claude/commands/ant/` | `~/.aether/system/commands/claude/` | Commands (claude) |
-| `.claude/agents/ant/` | `~/.aether/system/agents-claude/` | Agents (claude) |
-| `.opencode/commands/ant/` | `~/.aether/system/commands/opencode/` | Commands (opencode) |
-| `.opencode/agents/` | `~/.aether/system/agents/` | Agents (opencode) |
-| `.codex/agents/` | `~/.aether/system/codex/` | Agents (codex) |
-| `.aether/skills-codex/` | `~/.aether/system/skills-codex/` | Skills (codex) |
+### `aether install`
 
-The install command also removes stale managed files in the hub when they no longer exist in the source checkout.
+`install` remains the public bootstrap command and backward-compatible source
+publish path. New users run it after installing the binary. Maintainers should
+prefer `aether publish` because publish performs version agreement verification.
 
-Runtime rule:
-- Unreleased Go runtime fixes propagate across repos on the same machine through `aether install --package-dir <Aether checkout>`, because that is the step that refreshes the hub and rebuilds the shared binary.
-- If `install` itself changed, bootstrap once with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"` so the new install logic publishes from source immediately.
+Use `go run ./cmd/aether publish ...` if the installed binary is too stale to
+run the new publish logic. Use `go run ./cmd/aether install ...` only as a
+fallback when publish itself is the broken code path.
 
-### `aether update` (in any repo)
+### `aether update` in a target repo
 
-Pulls from the hub to the local repo. This is what you run in other repos to get updates.
+Update pulls from the hub and prepares the target repo. It does not build or
+publish the binary.
 
-**What it does:**
-1. Checks hub version against local version
-2. Syncs all companion files from `~/.aether/system/` to the local repo
-3. Preserves local data (data/, dreams/ are protected)
-4. Optionally downloads a new binary (`--download-binary`)
+What it does now:
+1. Verifies a hub version exists.
+2. Ensures repo-local state scaffolding exists.
+3. Prunes stale generated repo-local commands, agents, shipped skills, and old
+   `.aether/` system copies.
+4. Syncs `.claude/settings.json`, `.claude/rules/`, and managed project
+   guidance docs.
+5. Preserves `.aether/data/`, dreams, oracle, locks, local `QUEEN.md`, and other
+   local colony state.
 
-Runtime rule:
-- Plain `aether update` does not rebuild or publish the local Go runtime. It only syncs repo companion files.
-- `aether update --force` should be the default downstream refresh when you need stale Aether-managed files removed.
-- `aether update --download-binary` can fetch a published release binary, but it cannot pull an unreleased local source change.
+Use:
 
-**Sync pairs (hub system/ → local repo):**
+```bash
+# In a dirty target repo, preview first
+aether update --force --dry-run
 
-| Source (relative to hub system/) | Destination (relative to .aether/) | Label |
-|----------------------------------|-------------------------------------|-------|
-| `.` | `.` | System files |
-| `commands/claude` | `../.claude/commands/ant` | Commands (claude) |
-| `commands/opencode` | `../.opencode/commands/ant` | Commands (opencode) |
-| `agents` | `../.opencode/agents` | Agents (opencode) |
-| `agents-claude` | `../.claude/agents/ant` | Agents (claude) |
-| `rules` | `../.claude/rules` | Rules (claude) |
+# Apply hub-backed cleanup and scaffolding refresh
+aether update --force
 
-**Modes:**
-- **Normal (default):** Only copies new files. Existing files are never overwritten.
-- **Force (`--force`):** Overwrites modified files and removes stale ones. Protected directories (data/, dreams/) are never touched.
-- **Dry-run (`--dry-run`):** Shows what would change without making changes.
+# Published release binary refresh path
+aether update --force --download-binary
+```
 
-### `aether setup` (in any repo)
+### `aether setup`
 
-Initial setup from hub. Same sync pairs as `update` but never overwrites existing files — local always takes precedence. Also creates required directories (data/, checkpoints/, locks/) and a .gitignore.
+Setup is the first-time target-repo preparation flow. It uses the same current
+hub model as update: local state directories are created, but shared agents,
+commands, skills, docs, templates, workers, exchange files, and references stay
+global.
 
 ## Protected Paths
 
-These are never modified by update/setup:
+These are never overwritten by update/setup:
 
 | Path | Reason |
 |------|--------|
-| `.aether/data/` | Colony state (COLONY_STATE.json, pheromones, midden) |
-| `.aether/dreams/` | Dream journal entries |
+| `.aether/data/` | Colony state, pheromones, midden |
+| `.aether/dreams/` | Session notes |
+| `.aether/oracle/` | Research artifacts |
 | `.aether/checkpoints/` | Session checkpoints |
-| `.aether/locks/` | File locks |
-| `QUEEN.md` | Hub-level wisdom (never overwritten by update) |
-| `CROWNED-ANTHILL.md` | Colony seal marker |
+| `.aether/locks/` | Runtime locks |
+| `.aether/QUEEN.md` | Repo-local wisdom/preferences |
+| `CROWNED-ANTHILL.md` | Seal marker |
 
-## Simple Rules
-
-| Rule | Explanation |
-|------|-------------|
-| **Edit `.aether/` system files** | Source of truth in the Aether repo |
-| **Edit `.aether/rules/`** | Rules source — syncs to `.claude/rules/` via update |
-| **Edit `.claude/commands/ant/`** | Slash commands for Claude Code |
-| **Edit `.claude/agents/ant/`** | Agent definitions for Claude Code |
-| **Edit `.opencode/` equivalents** | OpenCode commands and agents |
-| **`.aether/data/` is safe** | Colony state is never touched by updates |
-| **In other repos, don't edit `.aether/` system files** | Working copies get overwritten by `aether update --force` |
-
-## Quick Reference
+## One Clean Workflow
 
 ```bash
-# First-time published install without Go:
-npx --yes aether-colony@latest
+# In the Aether source repo
+aether publish --channel stable --binary-dest "$HOME/.local/bin"
+aether integrity --source --channel stable
 
-# You changed files in the Aether repo:
-aether install --package-dir "$PWD"     # Push to hub (~/.aether/system/) and, from source, rebuild the shared binary
-
-# You want updates in another repo:
-aether update                           # Pull companion files from hub (safe — new files only)
-aether update --force                   # Overwrite modified + remove stale
-aether update --dry-run                 # Preview what would change
-
-# First-time setup in a new repo:
-aether setup                            # Copy from hub, create directories
-
-# Or use the slash command:
-/ant-update                             # Same as aether update
-
-# Binary management:
-aether install --download-binary        # Install + fetch latest binary
-aether update --force --download-binary # Refresh companion files + fetch latest published binary
+# In a target repo
+aether update --force --dry-run
+aether update --force
 ```
 
-## File Counts
+For isolated development:
 
-| What | Source Location | Distributed To |
-|------|----------------|----------------|
-| 50 slash commands (Claude) | `.claude/commands/ant/` | `.claude/commands/ant/` |
-| 50 slash commands (OpenCode) | `.opencode/commands/ant/` | `.opencode/commands/ant/` |
-| 25 Claude agent definitions | `.claude/agents/ant/` | `.claude/agents/ant/` |
-| 25 Codex agent definitions | `.codex/agents/` | `.codex/agents/` |
-| 29 source skills (11 colony + 18 domain) | `.aether/skills/` | `.aether/skills/` |
-| 29 Codex mirror skills | `.aether/skills-codex/` | `.codex/skills/aether/` |
-| 12 templates | `.aether/templates/` | `.aether/templates/` |
-| 1 rules file | `.aether/rules/` | `.claude/rules/` |
+```bash
+# In the Aether source repo
+aether publish --channel dev --binary-dest "$HOME/.local/bin"
+aether-dev integrity --source --channel dev
+
+# In a target repo
+aether-dev update --force --dry-run
+aether-dev update --force
+```
+
+## Failure Signatures
+
+| Symptom | Meaning | Fix |
+|---------|---------|-----|
+| `Aether hub not installed` | The selected channel hub has no readable `version.json` or `system/version.json` | Run `aether publish` or `aether install`; for dev use `aether publish --channel dev` |
+| Hub version behind binary version | The binary was updated but the hub was not republished | Run `aether publish` in the Aether repo |
+| Hub companion counts below expected | Publish did not populate commands/agents/skills into the hub | Run `aether publish`, then `aether integrity --source` |
+| Target repo still has old `.codex/agents` or `.claude/commands/ant` copies | Old repo-local generated assets were left behind | Run `aether update --force` after a fresh publish |
+
+## Expected Hub Counts
+
+The integrity/stale-publish checks currently expect:
+
+| Surface | Expected |
+|---------|----------|
+| Claude commands | 60 |
+| OpenCode commands | 60 |
+| OpenCode agents | 27 |
+| Codex agents | 27 |
+| Hub shipped skills | 86 |
+| Codex skill shims | 4 |
 
 ## Agent Parity Model
 
-Agent definitions have three locations:
+Agent definitions are canonical platform sources:
 
-1. **`.claude/agents/ant/`** — Canonical (what Claude Code reads)
-2. **`.aether/agents-claude/`** — Byte-identical packaging mirror (used by install to populate hub)
-3. **`.opencode/agents/`** — Structural parity (same filenames/count, OpenCode format)
+| Platform | Source |
+|----------|--------|
+| Claude | `.claude/agents/ant/*.md` |
+| OpenCode | `.opencode/agents/*` |
+| Codex | `.codex/agents/*.toml` |
 
-When editing agents, always update `.claude/agents/ant/` first, then mirror to `.aether/agents-claude/`.
+There are no repo-local packaging mirrors. `aether publish` installs these into
+the hub and stable platform homes; target repo `aether update --force` removes
+old generated copies rather than recreating them.

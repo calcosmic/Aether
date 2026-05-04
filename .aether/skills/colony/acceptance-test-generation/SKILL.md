@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: acceptance-test-generation
 description: Use when acceptance criteria need unit, integration, or end-to-end tests generated from implementation context
 type: colony

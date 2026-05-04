@@ -118,6 +118,15 @@ Once `build-finalize` succeeds:
 
 The runtime supports `--verification-depth <light|standard|heavy>` to control post-build review thoroughness. The default is "standard" (probe-only review). Use `--verification-depth heavy` for full quality gates (gatekeeper + auditor + probe) or `--light` to skip review agents entirely. The old `--light` and `--heavy` flags still work as backward-compatible aliases.
 
+## Cross-Platform Drift Guard
+
+If you change build context framing, signal presentation, manifest handling,
+worker spawning, finalization, or closeout behavior here, update
+`.aether/commands/build.yaml`, `cmd/command_guide.go`, and the Codex skill
+`aether-colony-build-cycle` in the same change. Verify
+`aether command-guide build --platform codex` still describes the matching Codex
+flow.
+
 ## Guardrails
 
 - Do NOT run `aether build` without `--plan-only` from this wrapper.

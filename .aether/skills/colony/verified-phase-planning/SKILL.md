@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: verified-phase-planning
 description: Use when producing or checking a phase plan before builders begin work
 type: colony

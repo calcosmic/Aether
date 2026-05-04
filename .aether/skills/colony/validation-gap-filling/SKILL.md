@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: validation-gap-filling
 description: Use when implementation exists but tests or validation evidence are missing or incomplete
 type: colony

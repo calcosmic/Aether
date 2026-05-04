@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: security-audit
 description: Use when completed work or security-sensitive code needs a structured vulnerability and threat mitigation audit
 type: colony

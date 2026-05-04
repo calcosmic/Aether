@@ -42,19 +42,15 @@
 //
 // # Codex CLI Invocation
 //
-// The codex CLI (v0.121.0+) is invoked as a subprocess using the `exec` subcommand:
+// The codex CLI is invoked as a subprocess using the `exec` subcommand:
 //
-//	codex exec --full-auto "<prompt>"
+//	codex --sandbox workspace-write --ask-for-approval never exec "<prompt>"
 //
 // Where:
 //   - exec runs codex in non-interactive execution mode
-//   - --full-auto approves all tool calls automatically (no human approval),
-//     and silently overrides any --sandbox value, hardcoding WorkspaceWrite
+//   - --sandbox workspace-write allows worker commands to edit the workspace
+//   - --ask-for-approval never keeps worker dispatch non-interactive
 //   - <prompt> is the assembled task prompt (see Prompt Assembly below)
-//
-// NOTE: Do not include --sandbox alongside --full-auto. The --full-auto flag
-// silently overrides the sandbox level to WorkspaceWrite regardless of what
-// value is passed to --sandbox. Including both is misleading.
 //
 // IMPORTANT: There is NO --agent flag on the codex CLI. Agent TOML files are not
 // selected directly by the CLI; Aether reads developer_instructions from the TOML
@@ -84,7 +80,7 @@
 //
 // Recommended RealInvoker invocation combining these flags:
 //
-//	codex exec --full-auto --json --ephemeral --output-last-message <file> --output-schema <file>
+//	codex --sandbox workspace-write --ask-for-approval never exec --json --ephemeral --output-last-message <file> --output-schema <file>
 //
 // This gives us JSONL event output for logs, a deterministic final-message file
 // for claims parsing, and a schema gate on the final response.

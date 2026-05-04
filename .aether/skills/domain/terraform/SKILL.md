@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: terraform
 description: Use when the project uses Terraform or OpenTofu for infrastructure-as-code provisioning
 type: domain

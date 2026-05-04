@@ -250,6 +250,7 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 					Timeout:          dispatch.Timeout,
 					SkillSection:     dispatch.SkillSection,
 					PheromoneSection: dispatch.PheromoneSection,
+					HandoffSection:   dispatch.HandoffSection,
 				}
 
 				result, invokeErr := invokeCodexWorkerWithRuntimeProgress(ctx, invoker, cfg, dispatch, wave)
@@ -409,6 +410,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 				Timeout:          dispatch.Timeout,
 				SkillSection:     dispatch.SkillSection,
 				PheromoneSection: dispatch.PheromoneSection,
+				HandoffSection:   dispatch.HandoffSection,
 			}
 
 			result, err := invokeCodexWorkerWithRuntimeProgress(ctx, invoker, cfg, dispatch, wave)

@@ -500,9 +500,11 @@ func TestE2EInstallSetupProtectedDirsFromHub(t *testing.T) {
 		t.Errorf("setup overwrote user COLONY_STATE.json\ngot:  %s\nwant: %s", string(stateContent), userState)
 	}
 
-	// dreams/ should not have been created in the repo at all
-	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "dreams")); err == nil {
-		t.Error("setup created dreams/ directory in repo (should be skipped)")
+	// dreams/ is local-only scaffold. Hub dreams must never be copied into it.
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "dreams", "evil.md")); err == nil {
+		t.Error("setup copied hub dreams/ content into repo-local state")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat repo dream: %v", err)
 	}
 
 	// Now run update with force

@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
-	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
 
@@ -28,25 +28,25 @@ type codexExternalBuildCompletion struct {
 }
 
 type codexExternalBuildWorkerResult struct {
-	Stage         string   `json:"stage,omitempty"`
-	Wave          int      `json:"wave,omitempty"`
-	ExecutionWave int      `json:"execution_wave,omitempty"`
-	Caste         string   `json:"caste,omitempty"`
-	Name          string   `json:"name"`
-	AntName       string   `json:"ant_name,omitempty"`
-	Task          string   `json:"task,omitempty"`
-	Status        string   `json:"status"`
-	Summary       string   `json:"summary,omitempty"`
-	TaskID        string   `json:"task_id,omitempty"`
-	TaskIndex     int      `json:"task_index,omitempty"`
-	DependsOn     []string `json:"depends_on,omitempty"`
-	Outputs       []string `json:"outputs,omitempty"`
-	Blockers      []string `json:"blockers,omitempty"`
-	Duration      float64  `json:"duration,omitempty"`
-	ToolCount     int      `json:"tool_count,omitempty"`
-	FilesCreated  []string `json:"files_created,omitempty"`
-	FilesModified []string `json:"files_modified,omitempty"`
-	TestsWritten  []string             `json:"tests_written,omitempty"`
+	Stage         string              `json:"stage,omitempty"`
+	Wave          int                 `json:"wave,omitempty"`
+	ExecutionWave int                 `json:"execution_wave,omitempty"`
+	Caste         string              `json:"caste,omitempty"`
+	Name          string              `json:"name"`
+	AntName       string              `json:"ant_name,omitempty"`
+	Task          string              `json:"task,omitempty"`
+	Status        string              `json:"status"`
+	Summary       string              `json:"summary,omitempty"`
+	TaskID        string              `json:"task_id,omitempty"`
+	TaskIndex     int                 `json:"task_index,omitempty"`
+	DependsOn     []string            `json:"depends_on,omitempty"`
+	Outputs       []string            `json:"outputs,omitempty"`
+	Blockers      []string            `json:"blockers,omitempty"`
+	Duration      float64             `json:"duration,omitempty"`
+	ToolCount     int                 `json:"tool_count,omitempty"`
+	FilesCreated  []string            `json:"files_created,omitempty"`
+	FilesModified []string            `json:"files_modified,omitempty"`
+	TestsWritten  []string            `json:"tests_written,omitempty"`
 	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
@@ -232,6 +232,13 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := recordExternalBuildSpawnTree(dispatches); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	if err := persistExternalBuildHandoffs(root, phaseNum, dispatches, completion.workerResults()); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	recoveryInstructions, err := buildExternalBuildRecoveryInstructions(phaseNum, dispatches)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 
 	// Atomically commit the colony state mutation.
 	var committedState colony.ColonyState
@@ -260,7 +267,109 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		"claims_path":    displayDataPath(claimsRel),
 		"next":           "aether continue",
 	}
+	if len(recoveryInstructions) > 0 {
+		result["recovery_instructions"] = recoveryInstructions
+	}
 	return result, updatedState, updatedPhase, dispatches, nil
+}
+
+func buildExternalBuildRecoveryInstructions(phaseNum int, dispatches []codexBuildDispatch) ([]map[string]interface{}, error) {
+	var failed []codexBuildDispatch
+	for _, dispatch := range dispatches {
+		switch strings.ToLower(strings.TrimSpace(dispatch.Status)) {
+		case "", "completed", "manually-reconciled":
+			continue
+		default:
+			failed = append(failed, dispatch)
+		}
+	}
+	if len(failed) == 0 {
+		return nil, nil
+	}
+
+	wave := failed[0].Wave
+	if wave <= 0 {
+		wave = 1
+	}
+	budget := budgetFromRecoveryLog(phaseNum, wave)
+	if budget == nil {
+		budget = newRecoveryBudget(wave)
+	}
+	cb := globalCircuitBreaker
+	if cb == nil {
+		cb = NewCircuitBreaker(3)
+	}
+	workerDispatches := codexWorkerDispatchesForRecovery(dispatches, phaseNum)
+
+	instructions := make([]map[string]interface{}, 0, len(failed))
+	var logEntries []RecoveryLogEntry
+	for _, dispatch := range failed {
+		status := strings.ToLower(strings.TrimSpace(dispatch.Status))
+		message := strings.TrimSpace(dispatch.Summary)
+		if len(dispatch.Blockers) > 0 {
+			message = strings.TrimSpace(message + " " + strings.Join(dispatch.Blockers, " "))
+		}
+		outcome := orchestrateRecovery(RecoveryContext{
+			Phase:          phaseNum,
+			Wave:           normalizedDispatchWave(dispatch),
+			WorkerName:     dispatch.Name,
+			TaskID:         dispatch.TaskID,
+			Caste:          dispatch.Caste,
+			Status:         status,
+			ErrorMessage:   message,
+			Dispatches:     workerDispatches,
+			CircuitBreaker: cb,
+			Budget:         budget,
+		})
+		logEntries = append(logEntries, outcome.LogEntries...)
+		instructions = append(instructions, map[string]interface{}{
+			"worker":             dispatch.Name,
+			"task_id":            dispatch.TaskID,
+			"caste":              dispatch.Caste,
+			"status":             status,
+			"action":             outcome.Action.Type,
+			"peer":               outcome.Action.PeerName,
+			"detail":             outcome.Action.Detail,
+			"classification":     string(outcome.Classification),
+			"failure_type":       string(outcome.FailureType),
+			"rationale":          outcome.Rationale,
+			"budget_remaining":   outcome.Action.BudgetRemaining,
+			"recovery_exhausted": outcome.Exhausted,
+		})
+	}
+	if err := appendRecoveryOutcomesToLog(phaseNum, budget, logEntries); err != nil {
+		return nil, err
+	}
+	return instructions, nil
+}
+
+func codexWorkerDispatchesForRecovery(dispatches []codexBuildDispatch, phaseNum int) []codex.WorkerDispatch {
+	workers := make([]codex.WorkerDispatch, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		workers = append(workers, codex.WorkerDispatch{
+			ID:         normalizedDispatchTaskID(dispatch),
+			WorkerName: dispatch.Name,
+			AgentName:  codexAgentNameForCaste(dispatch.Caste),
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			TaskBrief:  dispatch.Task,
+			Wave:       normalizedDispatchWave(dispatch),
+			Workflow:   "build",
+			Phase:      phaseNum,
+		})
+	}
+	return workers
+}
+
+func appendRecoveryOutcomesToLog(phaseNum int, budget *RecoveryBudget, entries []RecoveryLogEntry) error {
+	file, err := recoveryLogReadPhase(phaseNum)
+	if err != nil {
+		file = RecoveryLogFile{Phase: phaseNum}
+	}
+	file.Entries = append(file.Entries, entries...)
+	file.RecoveryBudget = budget
+	rel := fmt.Sprintf("recovery-log-%d.json", phaseNum)
+	return store.SaveJSON(rel, file)
 }
 
 func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExternalBuildWorkerResult) ([]codexBuildDispatch, error) {
@@ -289,6 +398,9 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		if !isTerminalExternalBuildStatus(status) {
 			return nil, fmt.Errorf("external worker result for %s has non-terminal status %q", dispatch.Name, result.Status)
 		}
+		if err := codex.ValidateWorkerHandoff(result.Handoff); err != nil {
+			return nil, fmt.Errorf("external worker result for %s has invalid handoff: %w", dispatch.Name, err)
+		}
 		dispatch.Status = status
 		dispatch.Summary = strings.TrimSpace(result.Summary)
 		dispatch.Blockers = uniqueSortedStrings(result.Blockers)
@@ -299,6 +411,50 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		dispatches[i] = dispatch
 	}
 	return dispatches, nil
+}
+
+func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexBuildDispatch, results []codexExternalBuildWorkerResult) error {
+	resultByName := make(map[string]codexExternalBuildWorkerResult, len(results))
+	for _, result := range results {
+		if name := result.effectiveName(); name != "" {
+			resultByName[name] = result
+		}
+	}
+	for _, dispatch := range dispatches {
+		result, ok := resultByName[dispatch.Name]
+		if !ok {
+			continue
+		}
+		status := normalizeExternalBuildStatus(result.Status)
+		workerResult := &codex.WorkerResult{
+			WorkerName:    dispatch.Name,
+			Caste:         dispatch.Caste,
+			TaskID:        dispatch.TaskID,
+			Status:        status,
+			Summary:       result.Summary,
+			FilesCreated:  normalizeClaimPathsToRoot(root, result.FilesCreated),
+			FilesModified: normalizeClaimPathsToRoot(root, result.FilesModified),
+			TestsWritten:  normalizeClaimPathsToRoot(root, result.TestsWritten),
+			Blockers:      result.Blockers,
+			Handoff:       codex.NormalizeWorkerHandoff(root, result.Handoff),
+		}
+		if err := persistDispatchWorkerHandoff(codex.WorkerDispatch{
+			WorkerName: dispatch.Name,
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			Workflow:   "build",
+			Phase:      phaseNum,
+			Wave:       normalizedDispatchWave(dispatch),
+			Root:       root,
+		}, codex.DispatchResult{
+			WorkerName:   dispatch.Name,
+			Status:       status,
+			WorkerResult: workerResult,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateExternalResultIdentity(dispatch codexBuildDispatch, result codexExternalBuildWorkerResult) error {

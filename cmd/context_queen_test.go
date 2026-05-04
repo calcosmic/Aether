@@ -74,6 +74,24 @@ func TestReadQUEENMdStillExtractsWisdomAndPatterns(t *testing.T) {
 	}
 }
 
+func TestReadQUEENMdExtractsCodebasePatterns(t *testing.T) {
+	content := `# QUEEN.md
+## Codebase Patterns
+- Keep runtime source and published hub paths aligned
+- Prefer shared dispatch helpers over per-command path logic
+`
+	tmpFile := filepath.Join(t.TempDir(), "QUEEN.md")
+	os.WriteFile(tmpFile, []byte(content), 0644)
+
+	result := readQUEENMd(tmpFile)
+	if _, ok := result["Keep runtime source and published hub paths aligned"]; !ok {
+		t.Fatalf("Codebase Patterns entry not extracted: %#v", result)
+	}
+	if _, ok := result["Prefer shared dispatch helpers over per-command path logic"]; !ok {
+		t.Fatalf("second Codebase Patterns entry not extracted: %#v", result)
+	}
+}
+
 func TestReadQUEENMdDoesNotExtractOtherSections(t *testing.T) {
 	content := `# QUEEN.md
 ## Wisdom

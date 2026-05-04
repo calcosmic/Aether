@@ -14,3 +14,11 @@ Use the Go `aether` CLI as the source of truth.
 - If the runtime reports `discussion_status: settled`, route wrapper users back to `/ant-plan`; direct CLI users can run `aether plan`.
 - Use `/ant-council` only when the user wants multi-position deliberation; `/ant-discuss` is the lightweight pre-plan clarification gate.
 - If docs and runtime disagree, runtime wins.
+
+## Cross-Platform Drift Guard
+
+If you change discuss analysis, question presentation, answer persistence, or
+routing behavior here, update `.aether/commands/discuss.yaml`,
+`cmd/command_guide.go`, and the Codex skill `aether-colony-research` in the same
+change. Verify `aether command-guide discuss --platform codex` still describes
+the matching Codex flow.

@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: ai-design-contract
 description: Use when a phase involves LLMs, AI agents, RAG, ML inference, or prompt/tool integration design
 type: colony

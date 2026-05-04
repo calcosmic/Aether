@@ -134,13 +134,23 @@ aether pheromone-display
 ```
 
 When the user message is already a literal `aether ...` command, execute that exact CLI
-command first. Do not inspect repo files to infer intent, and do not treat command-doc
-mirrors as more authoritative than the installed `aether` binary. For lifecycle commands
-run through Codex shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...` unless the
-user explicitly wants JSON output.
-Do not preface literal commands with repo archaeology, skill narration, or
-"I'm checking..." commentary. Let the CLI output stand on its own and keep any
-extra explanation to one short sentence unless the user asks for more.
+command first for literal passthrough commands such as `status`, `update`, `focus`,
+`pheromones`, and `reference-list`.
+
+Exception: `aether init`, `aether oracle`, `aether plan`, `aether build`,
+`aether continue`, `aether seal`, and `aether discuss` have wrapper-equivalent Codex
+orchestration. For those commands, run or inspect
+`aether command-guide <command> --platform codex` and use the matching Codex skill:
+`aether-colony-creation`, `aether-colony-research`, or `aether-colony-build-cycle`.
+Only bypass that layer when the user explicitly says raw, exact, no-interview, or
+no-orchestration.
+
+Do not treat command-doc mirrors as more authoritative than the installed `aether`
+binary. For lifecycle commands run through Codex shell execution, prefer
+`AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants JSON output.
+Do not preface literal passthrough commands with repo archaeology, skill narration, or
+"I'm checking..." commentary. Let the CLI output stand on its own and keep any extra
+explanation to one short sentence unless the user asks for more.
 
 ### Agent Definitions (TOML Format)
 
@@ -179,6 +189,12 @@ Skills are not a separate Codex plugin bundle. Codex agent definitions remain in
 
 Skills are automatically matched and injected into worker prompts during `build`,
 `colonize`, and `plan` dispatches.
+
+Codex lifecycle orchestration skills are intentionally separate from worker skill
+injection. `aether-colony-creation`, `aether-colony-research`, and
+`aether-colony-build-cycle` tell Codex how to interview, synthesize, spawn, and
+summarize before or around the runtime command. They must stay aligned with
+`.aether/commands/*.yaml` and `aether command-guide`.
 
 ### Pheromone Signals
 
@@ -401,7 +417,7 @@ Runtime note:
 - For isolated source-development on this machine, publish the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
 - `.aether/version.json` is the source-checkout release version file. `npm/package.json` must match it exactly for published releases.
 - If `aether update --force` shows `Commands (claude)` or `Commands (opencode)` as `0 copied, 0 unchanged`, the hub publish is incomplete. Republish from the Aether repo first, then rerun `aether update --force` in the target repo.
-- If the change modifies `aether install` itself, bootstrap once with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`.
+- If the change modifies publish/install/update logic, bootstrap once with `go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"`.
 - Published release flow: bump `.aether/version.json` and `npm/package.json` to the same version, push the commit, then push tag `vX.Y.Z`.
 
 ---

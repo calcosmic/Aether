@@ -199,15 +199,15 @@ func queenWaveLifecycle(
 
 	// Build aggregate summary
 	summary := WaveLifecycleSummary{
-		Phase:          phaseNum,
-		TotalWaves:     totalWaves,
+		Phase:           phaseNum,
+		TotalWaves:      totalWaves,
 		TotalDispatched: 0,
-		TotalSucceeded: 0,
-		TotalFailed:    0,
-		TotalRecovered: 0,
-		TotalEscalated: 0,
-		Waves:          waves,
-		CompletedAt:    time.Now().UTC().Format(time.RFC3339),
+		TotalSucceeded:  0,
+		TotalFailed:     0,
+		TotalRecovered:  0,
+		TotalEscalated:  0,
+		Waves:           waves,
+		CompletedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 
 	for _, w := range waves {
@@ -227,6 +227,9 @@ func queenWaveLifecycle(
 // writeWaveSummary persists a wave lifecycle summary to wave-summary-{N}.json.
 // Per D-07/D-08: uses the existing per-phase persistence pattern.
 func writeWaveSummary(phaseNum int, summary WaveLifecycleSummary) error {
+	if store == nil {
+		return nil
+	}
 	rel := fmt.Sprintf("wave-summary-%d.json", phaseNum)
 	return store.SaveJSON(rel, summary)
 }
@@ -242,6 +245,9 @@ func readWaveSummary(phaseNum int) (WaveLifecycleSummary, error) {
 // renderWaveSummaryTable renders the wave summary as a go-pretty table to stdout.
 // Per D-06: wave-by-wave rows with totals, follows renderFailureClassifyTable pattern.
 func renderWaveSummaryTable(summary WaveLifecycleSummary) {
+	if !shouldRenderVisualOutput(stdout) {
+		return
+	}
 	t := table.NewWriter()
 	t.AppendHeader(table.Row{"Wave", "Dispatched", "Succeeded", "Failed", "Recovered", "Escalated"})
 	for _, w := range summary.Waves {
@@ -249,5 +255,5 @@ func renderWaveSummaryTable(summary WaveLifecycleSummary) {
 	}
 	t.AppendSeparator()
 	t.AppendRow(table.Row{"Total", summary.TotalDispatched, summary.TotalSucceeded, summary.TotalFailed, summary.TotalRecovered, summary.TotalEscalated})
-	fmt.Fprintln(stdout, t.Render())
+	writeVisualOutput(stdout, t.Render()+"\n")
 }

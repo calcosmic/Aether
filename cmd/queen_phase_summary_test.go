@@ -180,6 +180,7 @@ func TestRenderActionsNeeded_NonEscalatedRecoveryEntriesIgnored(t *testing.T) {
 
 // TestRenderPhaseEndSummary_WithItems writes to stdout when actions are needed.
 func TestRenderPhaseEndSummary_WithItems(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	setupBuildFlowTest(t)
 	const phase = 1
 

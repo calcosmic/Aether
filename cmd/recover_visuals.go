@@ -171,7 +171,7 @@ func recoverNextStep(issues []HealthIssue) string {
 		}
 		switch issue.Category {
 		case "missing_agents":
-			return "Run `aether update --force` to restore missing agent files."
+			return "Run `aether recover --apply` to restore missing global agent files from the hub."
 		case "broken_survey":
 			return "Run `aether colonize` to regenerate survey data."
 		case "partial_phase":

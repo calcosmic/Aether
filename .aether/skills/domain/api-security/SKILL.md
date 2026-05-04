@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: api-security
 description: Use when the project uses APIs that require authentication, authorization, rate limiting, or threat protection
 type: domain

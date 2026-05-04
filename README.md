@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-25-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-50-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.19-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.28-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -121,7 +121,7 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.19` bootstraps Aether `1.0.19`.
+`aether-colony@1.0.28` bootstraps Aether `1.0.28`.
 
 **Option 1: Go binary**
 
@@ -210,8 +210,8 @@ primary platforms.
 - Use `focus` and `redirect` before `build`; use `feedback` after `continue` when you want to steer the next phase.
 - Use `run` when you want autopilot, and the explicit `build` -> `continue` loop when you want tight control over each phase.
 - Use `profile` periodically to refresh learned preferences and push the top `[profiled]` directives into `QUEEN.md`.
-- After changing Aether itself, rebuild or reinstall the binary and run `aether install --package-dir "$PWD"` so the hub and companion files match the source checkout.
-- For isolated source-development on the same machine, install the dev channel instead: `go run ./cmd/aether install --channel dev --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos.
+- After changing Aether itself, run `aether publish --channel stable --binary-dest "$HOME/.local/bin"` so the binary, hub, and platform assets match the source checkout.
+- For isolated source-development on the same machine, publish the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"`, then use `aether-dev update --force` in target repos.
 - After `aether install` or `aether update`, reopen Claude Code, OpenCode, or Codex if you need refreshed repo instructions, agents, or skills to load into a new session.
 
 ## Platform Support Policy
@@ -1076,9 +1076,9 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.19 -- Released (Current)
+### 🎉 v1.0.28 -- Released (Current)
 
-- One public Aether version now governs the Go runtime, npm bootstrap package, README badges, changelog, and operator docs: `1.0.19`
+- One public Aether version now governs the Go runtime, npm bootstrap package, README badges, changelog, and operator docs: `1.0.28`
 - `npx --yes aether-colony@latest` remains a thin bootstrap, not a second runtime, and now stays explicitly documented as matching the published Go release version
 - The npm bootstrap now matches the actual GitHub release asset names and checksum filename, so `latest` no longer points at a package that asks GitHub for files that do not exist
 - The publish/update runbook now treats `aether install --package-dir "$PWD"`, downstream `aether update --force`, `--download-binary`, and npm publishing as one release system instead of disconnected steps

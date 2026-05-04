@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: planning-assumption-audit
 description: Use before planning to surface hidden assumptions that could cause expensive wrong turns
 type: colony

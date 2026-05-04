@@ -252,6 +252,7 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 		TaskID:           "quick.scout",
 		TaskBrief:        taskBrief,
 		ContextCapsule:   renderQuickContextCapsule(question),
+		HandoffSection:   renderWorkerHandoffSection("quick", 0, workerName),
 		Root:             root,
 		Timeout:          timeout,
 		SkillSection:     resolveSkillSectionForWorkflow("quick", "scout", question),

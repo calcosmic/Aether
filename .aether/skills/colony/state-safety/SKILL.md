@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: state-safety
 description: Use when reading or writing JSON state files including COLONY_STATE.json, pheromones.json, constraints.json, or session.json
 type: colony

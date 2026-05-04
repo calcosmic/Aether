@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: documentation-generation
 description: Use when project documentation must be generated or updated from verified codebase facts
 type: colony

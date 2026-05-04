@@ -75,8 +75,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Check hub exists
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubVersionFile := filepath.Join(hubDir, "version.json")
-	if _, err := os.Stat(hubVersionFile); os.IsNotExist(err) {
+	if readHubVersionAtPath(hubDir) == "" {
 		outputErrorMessage("Aether hub not installed. Run \"aether install\" first.")
 		return nil
 	}
@@ -148,6 +147,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}{
 		{"Local state scaffold", ensureRepoLocalScaffold(localAether)},
 		{"Prune legacy repo platform assets", pruneLegacyRepoPlatformAssets(repoDir)},
+		{"Prune repo Codex skill mirror", pruneRepoCodexSkillMirror(repoDir, false)},
 		{"Prune shipped repo skills", pruneShippedRepoSkills(hubSystem, localAether, false)},
 	} {
 		result := map[string]interface{}{

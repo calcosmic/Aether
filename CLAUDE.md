@@ -1,7 +1,7 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.27
-> **Last Updated:** 2026-05-03
+> **Current Version:** v1.0.28
+> **Last Updated:** 2026-05-04
 
 ---
 
@@ -9,10 +9,10 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.27 |
+| Version | v1.0.28 |
 | Slash commands | 56 (Claude) + 56 (OpenCode); Codex uses native CLI + 27 TOML agents |
 | Agent definitions | 27 |
-| Skills | 83 (52 colony + 31 domain) |
+| Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Tests | 2900+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
@@ -247,7 +247,7 @@ Runtime note:
 - `aether update --force --download-binary` is the published-release path when you also need the release runtime binary.
 - For isolated source-development on this machine, publish the dev channel instead: `aether publish --channel dev --binary-dest "$HOME/.local/bin"` and then use `aether-dev update --force` in target repos. This keeps `~/.aether-dev/` and `aether-dev` separate from the public stable runtime.
 - If `aether update --force` shows `Commands (claude)` or `Commands (opencode)` as `0 copied, 0 unchanged`, the hub publish is incomplete. Republish from the Aether repo first, then rerun `aether update --force` in the target repo.
-- If the change modifies `aether install` itself, bootstrap once with `go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"`.
+- If the change modifies publish/install/update logic, bootstrap once with `go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"`.
 
 ---
 
@@ -435,18 +435,20 @@ User-colony communication via signals:
 Skills provide reusable behavior modules and domain knowledge that workers can load
 on demand. They come in two categories:
 
-- **Colony skills** (11) — Behavioral patterns that shape how workers operate
+- **Colony skills** (55) — Behavioral patterns that shape how workers operate
   (e.g., TDD discipline, error handling conventions, commit style)
-- **Domain skills** (18) — Technical knowledge for specific frameworks, languages,
+- **Domain skills** (31) — Technical knowledge for specific frameworks, languages,
   or tools (e.g., React patterns, Go idioms, database optimization)
 
 ### Where Skills Live
 
 | Location | Purpose |
 |----------|---------|
-| `.aether/skills/` | Source of truth (packaged with Aether) |
-| `~/.aether/skills/` | Installed skills (hub-level, shared across colonies) |
+| `.aether/skills/` | Shipped skill source of truth in the Aether repo |
+| `~/.aether/system/skills/` | Published hub mirror of shipped skills |
 | `~/.aether/skills/domain/` | Custom user-created domain skills |
+| repo `.aether/skills/` | Repo-specific custom skills only |
+| `~/.codex/skills/aether/` | Small Codex shim set that routes to `aether skill-inject` |
 
 ### How Matching Works
 
@@ -877,4 +879,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.27 — 2026-05-03*
+*Updated for Aether v1.0.28 — 2026-05-04*

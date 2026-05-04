@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: pheromone-protocol
 description: Use when pheromone signals are present in your assembled context and you need to interpret and comply with them
 type: colony

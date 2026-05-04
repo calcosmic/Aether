@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: nextjs
 description: Use when the project uses Next.js for server-side rendering or full-stack React
 type: domain

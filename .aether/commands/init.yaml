@@ -3,6 +3,19 @@ description: "🥚 Initialize Aether colony through the Aether CLI runtime"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=json aether init $ARGUMENTS"
+codex_orchestration:
+  category: "full-orchestration"
+  skill: "aether-colony-creation"
+  guide: "aether command-guide init --platform codex"
+  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+intent_refinement:
+  - "Do not treat init-research as the final charter. It is only a deterministic codebase scan."
+  - "Before creating colony state, ask one compact batch of 4-7 AI-led scoping questions when the goal is vague or broad."
+  - "Questions should clarify target users, success criteria, non-goals, constraints, risk tolerance, affected systems, and the first useful milestone."
+  - "Synthesize the raw goal, user answers, and init-research scan into a deeper charter JSON. Do not simply echo the runtime-generated charter."
+  - "Separate deterministic scan warnings from AI-synthesized pheromones. README/changelog/license/formatter suggestions are housekeeping, not strategic colony guidance."
+  - "Suggest at most 3 synthesized pheromones, and only when they are specific to the user's clarified intent. Let the user approve each one before writing it."
+  - "Run `AETHER_OUTPUT_MODE=visual aether init --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

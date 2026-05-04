@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -129,7 +128,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		"ok":      true,
 		"message": fmt.Sprintf("Publish complete: Aether v%s published to %s", version, hubDir),
 		"version": version,
-		"hub":    hubDir,
+		"hub":     hubDir,
 	}, renderBinaryActionVisual("Publish Complete", fmt.Sprintf("Aether v%s published", version), version, hubDir))
 
 	warnBinaryCoLocation(channel, homeDir)
@@ -173,15 +172,10 @@ func warnBinaryCoLocation(channel runtimeChannel, homeDir string) {
 
 // readHubVersionAtPath reads the version from a hub directory's version.json.
 func readHubVersionAtPath(hubDir string) string {
-	data, err := os.ReadFile(filepath.Join(hubDir, "version.json"))
-	if err != nil {
-		return ""
+	for _, rel := range []string{"version.json", filepath.Join("system", "version.json")} {
+		if version := readVersionJSONFile(filepath.Join(hubDir, rel)); version != "" {
+			return version
+		}
 	}
-	var v struct {
-		Version string `json:"version"`
-	}
-	if err := json.Unmarshal(data, &v); err != nil {
-		return ""
-	}
-	return normalizeVersion(v.Version)
+	return ""
 }

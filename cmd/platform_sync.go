@@ -57,7 +57,6 @@ func installSyncPairs() []installSyncPair {
 		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true},
 		{srcRel: ".opencode/agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
-		{srcRel: ".aether/skills", destRel: ".codex/skills/aether", label: "Skills (codex)", cleanup: false, preserveLocalChanges: true},
 	}
 }
 
@@ -77,6 +76,123 @@ func repoSyncPairs() []repoSyncPair {
 	}
 }
 
+type codexSkillShim struct {
+	Dir         string
+	Name        string
+	Description string
+	Body        string
+}
+
+func codexSkillShims() []codexSkillShim {
+	return []codexSkillShim{
+		{
+			Dir:         "aether-command-guide",
+			Name:        "aether-command-guide",
+			Description: "Use for Aether lifecycle commands; ask the runtime for current orchestration guidance before acting.",
+			Body:        "Run `aether command-guide <command> --platform codex` before intelligent Aether flows. Follow the guide over stale local notes. For raw user commands, run the literal command.",
+		},
+		{
+			Dir:         "aether-skill-loader",
+			Name:        "aether-skill-loader",
+			Description: "Use when Aether worker context needs skills; load matched skill content from the runtime on demand.",
+			Body:        "Run `aether skill-inject --workflow <workflow> --role <role> --task \"<task>\"` to fetch the relevant shipped and custom Aether skills. Do not preload full skill mirrors.",
+		},
+		{
+			Dir:         "aether-colony-creation",
+			Name:        "aether-colony-creation",
+			Description: "Use when initializing an Aether colony in Codex; refine intent before calling the runtime.",
+			Body:        "For `aether init` or setup requests, use `aether command-guide init --platform codex`, ask compact clarifying questions when needed, synthesize a precise charter, then let the runtime create state.",
+		},
+		{
+			Dir:         "aether-colony-research",
+			Name:        "aether-colony-research",
+			Description: "Use when running Oracle or discuss flows in Codex; scope research before persistence begins.",
+			Body:        "For `aether oracle` or `aether discuss`, use `aether command-guide <oracle|discuss> --platform codex`, clarify output shape, scope, depth, and confidence, then run the runtime flow.",
+		},
+	}
+}
+
+func syncCodexSkillShims(destDir string) syncResult {
+	result := syncResult{}
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", destDir, err))
+		return result
+	}
+
+	allowed := map[string]bool{}
+	for _, shim := range codexSkillShims() {
+		allowed[filepath.ToSlash(shim.Dir)] = true
+	}
+
+	for _, dir := range findSkillDirs(destDir) {
+		rel, err := filepath.Rel(destDir, dir)
+		if err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("rel %s: %v", dir, err))
+			continue
+		}
+		rel = filepath.ToSlash(rel)
+		if allowed[rel] {
+			continue
+		}
+		if skillDirDeclaresSource(dir, "custom") {
+			result.skipped++
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", dir, err))
+			continue
+		}
+		result.removed = append(result.removed, rel)
+	}
+
+	for _, shim := range codexSkillShims() {
+		skillPath := filepath.Join(destDir, filepath.FromSlash(shim.Dir), "SKILL.md")
+		content := renderCodexSkillShim(shim)
+		if current, err := os.ReadFile(skillPath); err == nil && string(current) == content {
+			result.skipped++
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(skillPath), 0755); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", filepath.Dir(skillPath), err))
+			continue
+		}
+		if err := os.WriteFile(skillPath, []byte(content), 0644); err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", skillPath, err))
+			continue
+		}
+		result.copied++
+	}
+
+	cleanEmptyDirs(destDir)
+	return result
+}
+
+func renderCodexSkillShim(shim codexSkillShim) string {
+	return fmt.Sprintf(`---
+name: %s
+description: %s
+source: shipped
+type: codex-shim
+domains: [aether, codex, orchestration]
+priority: high
+version: "1.0"
+---
+
+# %s
+
+%s
+`, shim.Name, shim.Description, shim.Name, shim.Body)
+}
+
+func skillDirDeclaresSource(dir, expected string) bool {
+	raw, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil {
+		return false
+	}
+	fm := parseSkillFrontmatter(string(raw))
+	return fm != nil && strings.TrimSpace(fm.Source) == expected
+}
+
 func neverSyncPath(string) bool {
 	return false
 }
@@ -85,12 +201,14 @@ var managedAetherSystemDirs = map[string]bool{
 	"agents":        true,
 	"agents-claude": true,
 	"agents-codex":  true,
+	"codex":         true,
 	"commands":      true,
 	"docs":          true,
 	"exchange":      true,
 	"references":    true,
 	"rules":         true,
 	"schemas":       true,
+	"settings":      true,
 	"skills-codex":  true,
 	"templates":     true,
 	"ts":            true,
@@ -98,7 +216,14 @@ var managedAetherSystemDirs = map[string]bool{
 }
 
 var managedAetherSystemFiles = map[string]bool{
-	"workers.md": true,
+	".npmignore":          true,
+	"aether-utils.sh":     true,
+	"ledger.jsonl":        true,
+	"manifest.json":       true,
+	"model-profiles.yaml": true,
+	"registry.json":       true,
+	"version.json":        true,
+	"workers.md":          true,
 }
 
 func isManagedAetherSystemPath(relPath string) bool {
@@ -113,7 +238,10 @@ func isManagedAetherSystemPath(relPath string) bool {
 	if managedAetherSystemDirs[first] {
 		return true
 	}
-	return managedAetherSystemFiles[filepath.Base(clean)]
+	if strings.Contains(clean, "/") {
+		return false
+	}
+	return managedAetherSystemFiles[clean]
 }
 
 func isShippedAetherCodexAgent(relPath string) bool {
@@ -426,6 +554,92 @@ func pruneShippedRepoSkills(hubSystem, localAether string, force bool) syncResul
 	}
 	if len(result.removed) > 0 {
 		cleanEmptyDirs(localSkills)
+	}
+	return result
+}
+
+func pruneShippedFromUserSkillsDir(hubSystem, hubDir string) syncResult {
+	result := syncResult{}
+	shippedSkills := filepath.Join(hubSystem, "skills")
+	userSkills := filepath.Join(hubDir, "skills")
+	info, err := os.Stat(userSkills)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", userSkills, err))
+		return result
+	}
+	if !info.IsDir() {
+		return result
+	}
+
+	for _, rel := range listFilesRecursive(userSkills) {
+		if syncPathIgnored(rel) {
+			continue
+		}
+		userPath := filepath.Join(userSkills, rel)
+		shippedPath := filepath.Join(shippedSkills, rel)
+		if _, err := os.Stat(shippedPath); err != nil {
+			if !os.IsNotExist(err) {
+				result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", shippedPath, err))
+			}
+			continue
+		}
+		userHash, userErr := fileSHA256(userPath)
+		shippedHash, shippedErr := fileSHA256(shippedPath)
+		if userErr != nil || shippedErr != nil || userHash != shippedHash {
+			result.skipped++
+			continue
+		}
+		if err := os.Remove(userPath); err != nil && !os.IsNotExist(err) {
+			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", userPath, err))
+			continue
+		}
+		result.removed = append(result.removed, filepath.ToSlash(rel))
+	}
+	if len(result.removed) > 0 {
+		cleanEmptyDirs(userSkills)
+	}
+	return result
+}
+
+func pruneRepoCodexSkillMirror(repoDir string, force bool) syncResult {
+	result := syncResult{}
+	if !force || isAetherSourceCheckout(repoDir) {
+		return result
+	}
+	root := filepath.Join(repoDir, ".codex", "skills", "aether")
+	info, err := os.Stat(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result
+		}
+		result.errors = append(result.errors, fmt.Sprintf("stat %s: %v", root, err))
+		return result
+	}
+	if !info.IsDir() {
+		return result
+	}
+
+	for _, dir := range findSkillDirs(root) {
+		if skillDirDeclaresSource(dir, "custom") {
+			result.skipped++
+			continue
+		}
+		rel, err := filepath.Rel(root, dir)
+		if err != nil {
+			result.errors = append(result.errors, fmt.Sprintf("rel %s: %v", dir, err))
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
+			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", dir, err))
+			continue
+		}
+		result.removed = append(result.removed, filepath.ToSlash(rel))
+	}
+	if len(result.removed) > 0 {
+		cleanEmptyDirs(root)
 	}
 	return result
 }

@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: context-management
 description: Use when performing state-changing operations, recovering sessions, creating handoffs, or managing context freshness
 type: colony

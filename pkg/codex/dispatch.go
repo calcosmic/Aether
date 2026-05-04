@@ -172,6 +172,7 @@ func invokeDispatch(ctx context.Context, invoker WorkerInvoker, d WorkerDispatch
 		Timeout:          d.Timeout,
 		SkillSection:     d.SkillSection,
 		PheromoneSection: d.PheromoneSection,
+		HandoffSection:   d.HandoffSection,
 	}
 
 	emitDispatchLifecycle(observer, d, "starting", "", nil, nil)

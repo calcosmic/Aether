@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: python
 description: Use when the project uses Python for backend, scripting, or data work
 type: domain

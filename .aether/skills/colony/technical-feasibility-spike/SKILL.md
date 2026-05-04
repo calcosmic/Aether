@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: technical-feasibility-spike
 description: Use when a technical unknown needs a small throwaway experiment before committing to a plan
 type: colony

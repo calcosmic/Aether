@@ -177,6 +177,14 @@ Branch strictly on the `plan-finalize` result:
 2. Route first to `/ant-build 1` or the exact runtime-surfaced next build command.
 3. If planning blocked, translate the blocker into plain language and follow the runtime recovery command first.
 
+## Cross-Platform Drift Guard
+
+If you change planning depth selection, clarification handling, worker spawning,
+finalization, or closeout behavior here, update `.aether/commands/plan.yaml`,
+`cmd/command_guide.go`, and the Codex skill `aether-colony-build-cycle` in the
+same change. Verify `aether command-guide plan --platform codex` still describes
+the matching Codex flow.
+
 ## Guardrails
 
 - Do NOT run `aether plan` without `--plan-only` from this wrapper.

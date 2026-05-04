@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: frontend-design-contract
 description: Use when frontend work needs an explicit UI, interaction, accessibility, and responsive design contract before implementation
 type: colony

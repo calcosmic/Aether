@@ -74,6 +74,9 @@ func TestSkillCreate_EvidenceFrontmatter(t *testing.T) {
 	if !strings.Contains(content, "source_run_id: run-123") {
 		t.Errorf("frontmatter missing source_run_id: run-123")
 	}
+	if !strings.Contains(content, "source: custom") {
+		t.Errorf("frontmatter missing source: custom")
+	}
 	if !strings.Contains(content, "confidence: 0.85") {
 		t.Errorf("frontmatter missing confidence: 0.85")
 	}

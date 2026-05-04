@@ -75,6 +75,49 @@ func TestInitResearchNode(t *testing.T) {
 	}
 }
 
+func TestInitResearchDockerCompose(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	projectRoot := filepath.Dir(filepath.Dir(s.BasePath()))
+	os.WriteFile(filepath.Join(projectRoot, "docker-compose.yml"), []byte("services:\n  postgres:\n    image: postgres:16\n"), 0644)
+
+	rootCmd.SetArgs([]string{"init-research", "--goal", "service stack", "--target", projectRoot})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["detected_type"] != "docker" {
+		t.Errorf("detected_type = %v, want docker", result["detected_type"])
+	}
+	languages := result["languages"].([]interface{})
+	for _, language := range languages {
+		if language == "docker" {
+			t.Fatalf("languages should not treat docker as a programming language: %v", languages)
+		}
+	}
+	frameworks := result["frameworks"].([]interface{})
+	foundDockerCompose := false
+	for _, framework := range frameworks {
+		if framework == "docker compose" {
+			foundDockerCompose = true
+		}
+	}
+	if !foundDockerCompose {
+		t.Fatalf("frameworks = %v, want docker compose", frameworks)
+	}
+}
+
 func TestInitResearchUnknown(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -456,7 +499,6 @@ func TestInitResearchPriorColonies(t *testing.T) {
 		t.Errorf("prior_colonies.names = %v, want to contain 'colony1'", names)
 	}
 }
-
 
 // --- Task 1: Dependency parser tests ---
 
@@ -1339,7 +1381,6 @@ func TestDeepParseBiome(t *testing.T) {
 		t.Errorf("governance_details = %v, want Biome entry", govDetails)
 	}
 }
-
 
 func TestDeepParseGHActions(t *testing.T) {
 	saveGlobals(t)

@@ -62,8 +62,8 @@ func runIntegrity(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot determine home directory: %w", err)
 	}
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubVersionFile := filepath.Join(hubDir, "version.json")
-	if _, err := os.Stat(hubVersionFile); os.IsNotExist(err) {
+	hubVersion := readHubVersionAtPath(hubDir)
+	if hubVersion == "" {
 		result := integrityResult{
 			Context: ctx,
 			Channel: string(channel),
@@ -83,7 +83,6 @@ func runIntegrity(cmd *cobra.Command, args []string) error {
 
 	// 4. Collect versions
 	binaryVersion := resolveVersion()
-	hubVersion := readHubVersionAtPath(hubDir)
 
 	// 5. Run checks based on context
 	var checks []integrityCheck
@@ -285,7 +284,7 @@ func checkHubCompanionFiles(hubDir string) integrityCheck {
 		{"commands/opencode/", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil, false},
 		{"agents/opencode/", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil, false},
 		{"agents/codex/", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }, false},
-		{"skills/codex/", filepath.Join(hubSystem, "skills"), expectedCodexSkillCount, nil, true},
+		{"skills/hub/", filepath.Join(hubSystem, "skills"), expectedCodexSkillCount, nil, true},
 	}
 
 	var discrepancies []string

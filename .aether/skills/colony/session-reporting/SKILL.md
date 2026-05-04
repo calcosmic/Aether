@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: session-reporting
 description: Use when a session needs a concise report of work completed, outcomes, and follow-up state
 type: colony

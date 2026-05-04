@@ -43,9 +43,11 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 
 	goal := "Ship release readiness"
 	taskID := "task-1"
+	charter := colony.Charter{Intent: "ship release readiness"}
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:       "3.0",
 		Goal:          &goal,
+		Charter:       &charter,
 		ColonyVersion: 2,
 		Scope:         colony.ScopeMeta,
 		State:         colony.StateCOMPLETED,
@@ -155,6 +157,9 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	}
 	if reset.Goal != nil {
 		t.Fatalf("reset goal = %v, want nil", *reset.Goal)
+	}
+	if reset.Charter != nil {
+		t.Fatalf("reset charter = %+v, want nil", reset.Charter)
 	}
 	if reset.CurrentPhase != 0 {
 		t.Fatalf("reset current phase = %d, want 0", reset.CurrentPhase)

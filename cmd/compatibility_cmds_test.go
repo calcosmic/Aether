@@ -505,7 +505,7 @@ func TestOracleCompatibilityRunsAutonomousLoop(t *testing.T) {
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "release parity"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "--template", "prd", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -811,13 +811,14 @@ func TestOracleCompatibilityAppliesSurveyAttemptPolicy(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
 		t.Fatalf("write oracle agent: %v", err)
 	}
+	writeOracleReferenceFixture(t, filepath.Join(root, ".aether", "references"))
 
 	capturing := &oracleCapturingInvoker{}
 	originalInvoker := newOracleWorkerInvoker
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return capturing }
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "release parity"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "--template", "prd", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -840,6 +841,9 @@ func TestOracleCompatibilityAppliesSurveyAttemptPolicy(t *testing.T) {
 	}
 	if !strings.Contains(first.TaskBrief, "Response File:") {
 		t.Fatalf("oracle task brief missing response file contract:\n%s", first.TaskBrief)
+	}
+	if !strings.Contains(first.SkillSection, "## Reference Library") || !strings.Contains(first.SkillSection, "Oracle Test Reference") {
+		t.Fatalf("oracle worker missing reference library injection:\n%s", first.SkillSection)
 	}
 }
 
@@ -1102,6 +1106,39 @@ func (i *oracleCapturingInvoker) Invoke(ctx context.Context, cfg codex.WorkerCon
 
 func (i *oracleCapturingInvoker) IsAvailable(ctx context.Context) bool { return true }
 func (i *oracleCapturingInvoker) ValidateAgent(path string) error      { return nil }
+
+func writeOracleReferenceFixture(t *testing.T, root string) {
+	t.Helper()
+	dir := filepath.Join(root, "playbooks")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir oracle references: %v", err)
+	}
+	content := `---
+schema_version: "1.0"
+id: oracle-test-reference
+kind: playbook
+category: playbooks
+title: Oracle Test Reference
+description: "Reference used to verify Oracle worker prompt injection."
+output_types: [prd]
+agent_roles: [architect]
+task_types: [requirements]
+task_keywords: [requirements]
+workflow_triggers: [plan]
+priority: high
+version: "1.0"
+render:
+  mode: full
+  max_chars: 1000
+---
+# Oracle Test Reference
+
+Follow the Oracle reference-library guidance.
+`
+	if err := os.WriteFile(filepath.Join(dir, "oracle-test-reference.md"), []byte(content), 0644); err != nil {
+		t.Fatalf("write oracle reference fixture: %v", err)
+	}
+}
 
 type oracleSlowCompletingInvoker struct {
 	delay time.Duration
@@ -1515,8 +1552,8 @@ Ship cross-platform parity
 	if len(questions) < 5 {
 		t.Fatalf("expected at least 5 questions, got %d", len(questions))
 	}
-	if len(questions) > 8 {
-		t.Fatalf("expected at most 8 questions, got %d", len(questions))
+	if len(questions) > 10 {
+		t.Fatalf("expected at most 10 questions, got %d", len(questions))
 	}
 
 	allText := ""
@@ -1582,6 +1619,43 @@ simple bug fix
 	}
 	if !strings.Contains(allText, "simple bug fix") {
 		t.Error("questions do not reference topic in minimal brief")
+	}
+}
+
+func TestBuildBriefInformedQuestionsUsesBoundedTopicLabel(t *testing.T) {
+	brief := `## Topic
+full audit
+
+## Project Profile
+- Type: go
+- Languages: go
+- Frameworks: cobra
+
+## Codebase Structure
+- cmd/
+- pkg/
+
+## Active Signals
+(none)
+
+## Recent Learnings
+(none)`
+	longTopic := "Full-stack audit of the Aether colony system. Review graph wiring, Queen markdown pipeline, worker handoff flow, pheromone injection, 72-file uncommitted diff, porter repo-awareness, skill matching, hive brain, split playbooks, and cross-platform parity. For each finding provide exact file path, line number, severity, bug description, and proposed code fix."
+
+	questions := buildBriefInformedQuestions(longTopic, brief, "go")
+	if len(questions) == 0 {
+		t.Fatal("expected questions")
+	}
+	for _, q := range questions {
+		if strings.Contains(q.Text, "72-file uncommitted diff") {
+			t.Fatalf("question %s repeated full oversized topic:\n%s", q.ID, q.Text)
+		}
+		if len(q.Text) > 420 {
+			t.Fatalf("question %s is too long (%d chars):\n%s", q.ID, len(q.Text), q.Text)
+		}
+	}
+	if !strings.Contains(questions[0].Text, "Full-stack audit of the Aether colony system") {
+		t.Fatalf("first question lost topic headline:\n%s", questions[0].Text)
 	}
 }
 

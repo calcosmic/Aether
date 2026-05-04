@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: colony-lifecycle
 description: Use when producing command output, handling state transitions, or routing users to the next action in the colony workflow
 type: colony

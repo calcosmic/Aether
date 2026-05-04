@@ -28,7 +28,7 @@ var updateCmd = &cobra.Command{
 		"By default this does not replace the installed `aether` binary.\n" +
 		"Use `--download-binary` to fetch a published release binary.\n" +
 		"If you need an unreleased local runtime fix from an Aether source checkout,\n" +
-		"run `aether install --package-dir <Aether checkout>` in the Aether repo first.",
+		"run `aether publish --package-dir <Aether checkout>` in the Aether repo first.",
 	Args: cobra.NoArgs,
 	RunE: runUpdate,
 }
@@ -63,14 +63,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Check hub exists
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubVersionFile := filepath.Join(hubDir, "version.json")
-	if _, err := os.Stat(hubVersionFile); os.IsNotExist(err) {
+	hubVersion := readHubVersionAtPath(hubDir)
+	if hubVersion == "" {
 		outputErrorMessage("Aether hub not installed. Run \"aether install\" first.")
 		return nil
 	}
 
 	// Read hub version for comparison
-	hubVersion := readHubVersion(hubVersionFile)
 	binaryVersion := resolveVersion()
 	downloadBinary, _ := cmd.Flags().GetBool("download-binary")
 	binaryMode := updateBinaryRefreshMode(downloadBinary, dryRun)
@@ -153,7 +152,11 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			mirrorRestored = restored
 		}
 		restartTargets := platformRestartTargets(syncResult.details)
+		removed := syncDetailsRemoved(syncResult.details)
 		message := fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped)
+		if removed > 0 {
+			message += fmt.Sprintf(", %d removed", removed)
+		}
 		if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
 			message += ". " + restartNote
 		}
@@ -163,6 +166,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"hub_version":             hubVersion,
 			"local_version":           binaryVersion,
 			"force":                   force,
+			"removed":                 removed,
 			"details":                 syncResult.details,
 			"binary_refresh_mode":     binaryMode,
 			"binary_refresh_note":     updateBinaryRefreshNote(binaryMode, channel),
@@ -279,7 +283,12 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 
 	appendSyncResult(&result.details, &result, "Local state scaffold", ensureRepoLocalScaffold(localAether))
 
+	sourceCheckout := isAetherSourceCheckout(repoDir)
 	for _, pair := range repoSyncPairs() {
+		if pair.consumerOnly && sourceCheckout {
+			appendSyncResult(&result.details, &result, pair.label, syncResult{})
+			continue
+		}
 		srcDir := filepath.Join(hubSystem, filepath.FromSlash(pair.hubRel))
 		destDir := filepath.Join(localAether, filepath.FromSlash(pair.destRel))
 
@@ -314,6 +323,7 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 	}
 
 	appendSyncResult(&result.details, &result, "Prune legacy repo platform assets", pruneLegacyRepoPlatformAssets(repoDir))
+	appendSyncResult(&result.details, &result, "Prune repo Codex skill mirror", pruneRepoCodexSkillMirror(repoDir, force))
 	appendSyncResult(&result.details, &result, "Prune shipped repo skills", pruneShippedRepoSkills(hubSystem, localAether, force))
 
 	return result
@@ -350,7 +360,7 @@ const (
 	expectedOpenCodeCommandCount = 60
 	expectedOpenCodeAgentCount   = 27
 	expectedCodexAgentCount      = 27
-	expectedCodexSkillCount      = 83
+	expectedCodexSkillCount      = 86
 )
 
 type staleComponent struct {
@@ -437,10 +447,11 @@ func checkStalePublish(hubDir, hubVersion, binaryVersion string, channel runtime
 		recursive bool
 	}{
 		{"Commands (claude)", filepath.Join(hubSystem, "commands", "claude"), expectedClaudeCommandCount, nil, false},
+		{"Agents (claude)", filepath.Join(hubSystem, "agents-claude"), expectedClaudeAgents, nil, false},
 		{"Commands (opencode)", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil, false},
 		{"Agents (opencode)", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil, false},
 		{"Agents (codex)", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }, false},
-		{"Skills (codex)", filepath.Join(hubSystem, "skills"), expectedCodexSkillCount, nil, true},
+		{"Skills (hub)", filepath.Join(hubSystem, "skills"), expectedCodexSkillCount, nil, true},
 	}
 
 	for _, check := range checks {

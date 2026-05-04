@@ -82,6 +82,25 @@ Some content here.
 	}
 }
 
+func TestParseSkillFrontmatterSource(t *testing.T) {
+	input := `---
+name: Custom Skill
+description: User-created behavior
+source: custom
+type: domain
+---
+
+# Body content
+`
+	fm := parseSkillFrontmatter(input)
+	if fm == nil {
+		t.Fatal("expected non-nil frontmatter")
+	}
+	if fm.Source != "custom" {
+		t.Errorf("Source = %q, want custom", fm.Source)
+	}
+}
+
 func TestParseSkillFrontmatterNilOnEmpty(t *testing.T) {
 	if parseSkillFrontmatter("no frontmatter here") != nil {
 		t.Error("expected nil for content without frontmatter")
@@ -437,7 +456,7 @@ func setupProofSkillHub(t *testing.T) string {
 	)
 	copyFileForTest(t,
 		filepath.Join(repoRoot, ".aether", "skills", "colony", "build-discipline", "SKILL.md"),
-		filepath.Join(tmpHub, "skills", "colony", "build-discipline", "SKILL.md"),
+		filepath.Join(tmpHub, "system", "skills", "colony", "build-discipline", "SKILL.md"),
 	)
 	return tmpHub
 }
@@ -775,7 +794,7 @@ func TestSkillMatchTop3(t *testing.T) {
 
 	// Create 5 colony skills that all match role "builder"
 	for i := 0; i < 5; i++ {
-		skillDir := filepath.Join(tmpHub, "skills", "colony", "skill-"+string(rune('A'+i)))
+		skillDir := filepath.Join(tmpHub, "system", "skills", "colony", "skill-"+string(rune('A'+i)))
 		os.MkdirAll(skillDir, 0755)
 		os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(
 			"---\nname: Skill "+string(rune('A'+i))+"\ncategory: colony\nroles: builder\n---\nContent\n",
@@ -817,7 +836,7 @@ func TestWorkflowGatedColonySkillRequiresWorkflowAndTaskEvidence(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chdir(origDir) })
 
-	skillDir := filepath.Join(tmpHub, "skills", "colony", "continue-review")
+	skillDir := filepath.Join(tmpHub, "system", "skills", "colony", "continue-review")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir skill dir: %v", err)
 	}
@@ -871,7 +890,7 @@ func TestWorkflowOnlyColonySkillMatchesWorkflowEvidence(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chdir(origDir) })
 
-	skillDir := filepath.Join(tmpHub, "skills", "colony", "brownfield-analysis")
+	skillDir := filepath.Join(tmpHub, "system", "skills", "colony", "brownfield-analysis")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir skill dir: %v", err)
 	}
@@ -906,7 +925,7 @@ func TestLegacyRoleOnlyColonySkillStillMatchesByRole(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chdir(origDir) })
 
-	skillDir := filepath.Join(tmpHub, "skills", "colony", "legacy-build")
+	skillDir := filepath.Join(tmpHub, "system", "skills", "colony", "legacy-build")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir skill dir: %v", err)
 	}
@@ -949,7 +968,7 @@ func TestSkillMatchBuildsLiveCatalogWhenDiskIndexIsStale(t *testing.T) {
 		t.Fatalf("write stale index: %v", err)
 	}
 
-	skillDir := filepath.Join(tmpHub, "skills", "colony", "live-build")
+	skillDir := filepath.Join(tmpHub, "system", "skills", "colony", "live-build")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
 		t.Fatalf("mkdir skill dir: %v", err)
 	}
@@ -1017,6 +1036,69 @@ func TestSkillInject(t *testing.T) {
 	colonySkills := result["colony_skills"].([]interface{})
 	if len(colonySkills) == 0 {
 		t.Fatal("expected injected result to preserve proof-bearing colony skills")
+	}
+}
+
+func TestRenderSkillInjectResultEnforcesStandaloneBudget(t *testing.T) {
+	tmpDir := t.TempDir()
+	skillPath := filepath.Join(tmpDir, "SKILL.md")
+	content := "---\nname: oversized\n---\n" + strings.Repeat("skill guidance ", 900)
+	if err := os.WriteFile(skillPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	result := renderSkillInjectResult(skillMatchResult{
+		Role: "builder",
+		ColonySkills: []skillResolvedEntry{{
+			skillIndexEntry: skillIndexEntry{Name: "oversized", Path: skillPath, Type: "colony"},
+			Score:           100,
+		}},
+	})
+
+	if len(result.Section) > skillInjectBudgetChars {
+		t.Fatalf("skill section length = %d, want <= %d", len(result.Section), skillInjectBudgetChars)
+	}
+	if !strings.Contains(result.Section, "[truncated]") {
+		t.Fatalf("expected truncated marker in oversized skill section")
+	}
+}
+
+func TestRenderSkillInjectResultUsesCompactBudget(t *testing.T) {
+	tmpDir := t.TempDir()
+	skillPath := filepath.Join(tmpDir, "SKILL.md")
+	content := "---\nname: compact-oversized\n---\n" + strings.Repeat("compact skill guidance ", 500)
+	if err := os.WriteFile(skillPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	result := renderSkillInjectResultWithBudget(skillMatchResult{
+		Role: "builder",
+		ColonySkills: []skillResolvedEntry{{
+			skillIndexEntry: skillIndexEntry{Name: "compact-oversized", Path: skillPath, Type: "colony"},
+			Score:           100,
+		}},
+	}, skillInjectCompactBudgetChars)
+
+	if result.BudgetChars != skillInjectCompactBudgetChars {
+		t.Fatalf("budget = %d, want %d", result.BudgetChars, skillInjectCompactBudgetChars)
+	}
+	if len(result.Section) > skillInjectCompactBudgetChars {
+		t.Fatalf("skill section length = %d, want <= %d", len(result.Section), skillInjectCompactBudgetChars)
+	}
+	if !strings.Contains(result.Section, "[truncated]") {
+		t.Fatalf("expected truncated marker in compact skill section")
+	}
+}
+
+func TestResolveSkillInjectBudgetExplicitBeatsCompact(t *testing.T) {
+	if got := resolveSkillInjectBudget(true, 2048); got != 2048 {
+		t.Fatalf("explicit budget = %d, want 2048", got)
+	}
+	if got := resolveSkillInjectBudget(true, 0); got != skillInjectCompactBudgetChars {
+		t.Fatalf("compact budget = %d, want %d", got, skillInjectCompactBudgetChars)
+	}
+	if got := resolveSkillInjectBudget(false, 0); got != skillInjectNormalBudgetChars {
+		t.Fatalf("normal budget = %d, want %d", got, skillInjectNormalBudgetChars)
 	}
 }
 
@@ -1564,6 +1646,86 @@ func TestBuildFullIndex(t *testing.T) {
 		if e.Name == "Custom Skill" && !e.IsUserCreated {
 			t.Error("Custom Skill should be user-created")
 		}
+	}
+}
+
+func TestBuildFullIndexPrefersHubShippedOverLegacyRepoMirror(t *testing.T) {
+	tmpHub := t.TempDir()
+	workDir := filepath.Join(tmpHub, "work")
+	localSkillDir := filepath.Join(workDir, ".aether", "skills", "domain", "typescript")
+	hubSkillDir := filepath.Join(tmpHub, "system", "skills", "domain", "typescript")
+	if err := os.MkdirAll(localSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir local skill: %v", err)
+	}
+	if err := os.MkdirAll(hubSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir hub skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localSkillDir, "SKILL.md"), []byte(
+		"---\nname: TypeScript\ntype: domain\n---\nLegacy repo mirror\n",
+	), 0644); err != nil {
+		t.Fatalf("write local skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubSkillDir, "SKILL.md"), []byte(
+		"---\nname: TypeScript\nsource: shipped\ntype: domain\n---\nCurrent hub shipped skill\n",
+	), 0644); err != nil {
+		t.Fatalf("write hub skill: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	entries := buildFullIndex(tmpHub)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 deduped entry, got %d: %+v", len(entries), entries)
+	}
+	if entries[0].Source != "hub-aether-shipped" {
+		t.Fatalf("expected hub-shipped skill to win, got source %q", entries[0].Source)
+	}
+	if entries[0].DeclaredSource != "shipped" {
+		t.Fatalf("expected declared source shipped, got %q", entries[0].DeclaredSource)
+	}
+}
+
+func TestBuildFullIndexRepoCustomOverridesHubShipped(t *testing.T) {
+	tmpHub := t.TempDir()
+	workDir := filepath.Join(tmpHub, "work")
+	localSkillDir := filepath.Join(workDir, ".aether", "skills", "domain", "typescript")
+	hubSkillDir := filepath.Join(tmpHub, "system", "skills", "domain", "typescript")
+	if err := os.MkdirAll(localSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir local skill: %v", err)
+	}
+	if err := os.MkdirAll(hubSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir hub skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(localSkillDir, "SKILL.md"), []byte(
+		"---\nname: TypeScript\nsource: custom\ntype: domain\n---\nRepo custom override\n",
+	), 0644); err != nil {
+		t.Fatalf("write local skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubSkillDir, "SKILL.md"), []byte(
+		"---\nname: TypeScript\nsource: shipped\ntype: domain\n---\nCurrent hub shipped skill\n",
+	), 0644); err != nil {
+		t.Fatalf("write hub skill: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	entries := buildFullIndex(tmpHub)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 deduped entry, got %d: %+v", len(entries), entries)
+	}
+	if entries[0].Source != "repo-aether" {
+		t.Fatalf("expected repo custom skill to win, got source %q", entries[0].Source)
+	}
+	if !entries[0].IsUserCreated {
+		t.Fatal("expected repo custom skill to be user-created")
 	}
 }
 

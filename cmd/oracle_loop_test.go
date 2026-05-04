@@ -17,6 +17,34 @@ func TestDefaultOracleTargetConfidenceIs95(t *testing.T) {
 	}
 }
 
+func TestResolveOracleTemplate(t *testing.T) {
+	tests := []struct {
+		name      string
+		topic     string
+		requested string
+		want      string
+	}{
+		{"explicit prd", "scope a new colony", "prd", "prd"},
+		{"requirements alias", "write product requirements", "requirements", "prd"},
+		{"auto prd", "turn this into user stories and acceptance criteria", "auto", "prd"},
+		{"auto bug", "root cause the failing update command", "", "bug-investigation"},
+		{"auto tech eval", "compare sqlite vs postgres", "", "tech-eval"},
+		{"auto architecture", "design the reference injection architecture", "", "architecture-review"},
+		{"auto fallback", "research a general topic", "", "custom"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveOracleTemplate(tt.topic, tt.requested)
+			if err != nil {
+				t.Fatalf("resolveOracleTemplate returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolveOracleTemplate(%q, %q) = %q, want %q", tt.topic, tt.requested, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestOracleConfidenceTargetFlagDefaultUsesDepthPreset(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -318,10 +346,10 @@ func TestBuildOracleRubric(t *testing.T) {
 				},
 			},
 			{
-				ID:         "q3",
-				Text:       "What is Z?",
-				Status:     "open",
-				Confidence: 0,
+				ID:          "q3",
+				Text:        "What is Z?",
+				Status:      "open",
+				Confidence:  0,
 				KeyFindings: nil,
 			},
 		},
@@ -403,8 +431,8 @@ func TestCollectEvidence(t *testing.T) {
 				},
 			},
 			{
-				ID:     "q2",
-				Status: "open",
+				ID:          "q2",
+				Status:      "open",
 				KeyFindings: nil,
 			},
 		},

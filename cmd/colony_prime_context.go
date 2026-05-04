@@ -560,9 +560,26 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		})
 	}
 
+	if handoffSection := renderWorkerHandoffSection("build", state.CurrentPhase, ""); strings.TrimSpace(handoffSection) != "" {
+		sections = append(sections, colonyPrimeSection{
+			name:              "worker_handoffs",
+			title:             "Previous Worker Handoffs",
+			source:            filepath.Join(store.BasePath(), workerHandoffsPath),
+			content:           handoffSection,
+			priority:          4,
+			freshnessScore:    0.95,
+			confirmationScore: 0.70,
+			relevanceScore:    0.75,
+		})
+	}
+
 	hubDir := resolveHubPath()
 	var fallbacks []string
-	hiveEntries := readHiveWisdomEntries(hubDir, 5, &fallbacks)
+	repoRoot := ""
+	if store != nil && strings.TrimSpace(store.BasePath()) != "" {
+		repoRoot = filepath.Dir(filepath.Dir(store.BasePath()))
+	}
+	hiveEntries := readHiveWisdomEntriesForDomains(hubDir, 5, readRegistryDomainsForRepo(hubDir, repoRoot), &fallbacks)
 	hiveLines := buildHiveWisdomLines(hiveEntries)
 	if len(hiveLines) > 0 {
 		var hiveSB strings.Builder

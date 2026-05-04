@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: kotlin
 description: Use when the project uses Kotlin for Android development, backend services, or Kotlin Multiplatform
 type: domain

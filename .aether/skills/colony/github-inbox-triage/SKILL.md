@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: github-inbox-triage
 description: Use when GitHub issues and pull requests need triage against colony priorities before planning
 type: colony

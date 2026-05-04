@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: rails
 description: Use when the project uses Ruby on Rails for web development
 type: domain
