@@ -73,7 +73,7 @@ func TestCleanupOldBackups(t *testing.T) {
 
 	// Create 5 backup directories
 	for i := 0; i < 5; i++ {
-		timestamp := time.Now().AddDate(0, 0, -(4-i)).UTC().Format("20060102-150405")
+		timestamp := time.Now().AddDate(0, 0, -(4 - i)).UTC().Format("20060102-150405")
 		path := filepath.Join(backupsDir, "medic-"+timestamp)
 		if err := os.MkdirAll(path, 0755); err != nil {
 			t.Fatalf("create backup %d: %v", i, err)
@@ -262,6 +262,55 @@ func TestRepairLegacyState(t *testing.T) {
 	}
 	if !state.Paused {
 		t.Error("expected paused flag to be set")
+	}
+}
+
+func TestRepairInvalidStateNormalizesRuntimeDrift(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, ".aether", "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	goal := "Repair invalid production state"
+	writeJSONFile(t, dataDir, "COLONY_STATE.json", map[string]interface{}{
+		"version":       "3.0",
+		"goal":          goal,
+		"state":         "done",
+		"current_phase": 1,
+		"plan": map[string]interface{}{
+			"phases": []interface{}{
+				map[string]interface{}{"id": 1, "name": "Complete", "status": "completed"},
+			},
+		},
+	})
+
+	issue := HealthIssue{
+		Severity: "critical",
+		Category: "state",
+		File:     "COLONY_STATE.json",
+		Message:  "Invalid state 'done'",
+		Fixable:  true,
+	}
+
+	record := repairStateIssues(issue, MedicOptions{Fix: true}, dataDir)
+	if !record.Success {
+		t.Fatalf("repair failed: %s", record.Error)
+	}
+	if record.Action != "normalize_invalid_state" {
+		t.Errorf("action = %q, want %q", record.Action, "normalize_invalid_state")
+	}
+
+	data, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	var state colony.ColonyState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("parse state: %v", err)
+	}
+	if state.State != colony.StateCOMPLETED {
+		t.Fatalf("state = %q, want COMPLETED", state.State)
 	}
 }
 

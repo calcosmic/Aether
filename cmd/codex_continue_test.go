@@ -3043,7 +3043,7 @@ func TestRunVerificationStepUsesConfigurableTimeout(t *testing.T) {
 		t.Skip("sleep command not available on Windows")
 	}
 
-	step := runVerificationStep(t.TempDir(), "tests", "sleep 5", 100*time.Millisecond)
+	step := runVerificationStep(context.Background(), t.TempDir(), "tests", "sleep 5", 100*time.Millisecond)
 
 	if step.Passed {
 		t.Fatal("verification step passed, want timeout failure")

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
@@ -15,7 +17,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const defaultSwarmWorkerTimeout = 6 * time.Minute
+const (
+	defaultSwarmWorkerTimeout = 6 * time.Minute
+	defaultSwarmRunTimeout    = 30 * time.Minute
+)
 
 var newSwarmWorkerInvoker = codex.NewWorkerInvoker
 
@@ -182,36 +187,63 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	if invoker == nil {
 		return nil, fmt.Errorf("swarm worker invoker is not configured")
 	}
-	if !invoker.IsAvailable(context.Background()) {
+	parentCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	ctx, cancel := context.WithTimeout(parentCtx, defaultSwarmRunTimeout)
+	defer cancel()
+
+	if !invoker.IsAvailable(ctx) {
 		return nil, dispatchUnavailableError(invoker)
 	}
 
 	state, _ := loadColonyState()
-	swarmID := fmt.Sprintf("swarm-%d", time.Now().UTC().Unix())
+	startedAt := time.Now().UTC()
+	runHandle, err := beginRuntimeSpawnRun("swarm", startedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize swarm run: %w", err)
+	}
+	runStatus := "failed"
+	defer func() {
+		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
+	}()
+
+	swarmID := fmt.Sprintf("swarm-%d", startedAt.Unix())
 	if err := initializeSwarmRun(swarmID); err != nil {
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
 	}
 
 	investigation := buildSwarmInvestigationPlans(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, investigation, "Investigation Wave"))
-	investigationRuns, err := executeSwarmWave(context.Background(), root, swarmID, target, investigation, "", invoker)
+	investigationRuns, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker)
 	if err != nil {
+		if ctx.Err() != nil {
+			runStatus = "timeout"
+			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
+		}
 		return nil, err
 	}
 
 	findingSummary := renderSwarmFindingSummary(investigationRuns)
 	builderPlan := buildSwarmBuilderPlan(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, []swarmWorkerPlan{builderPlan}, "Fix Wave"))
-	builderRuns, err := executeSwarmWave(context.Background(), root, swarmID, target, []swarmWorkerPlan{builderPlan}, findingSummary, invoker)
+	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, []swarmWorkerPlan{builderPlan}, findingSummary, invoker)
 	if err != nil {
+		if ctx.Err() != nil {
+			runStatus = "timeout"
+			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
+		}
 		return nil, err
 	}
 
 	builderSummary := renderSwarmFindingSummary(builderRuns)
 	watcherPlan := buildSwarmWatcherPlan(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, []swarmWorkerPlan{watcherPlan}, "Verification Wave"))
-	watcherRuns, err := executeSwarmWave(context.Background(), root, swarmID, target, []swarmWorkerPlan{watcherPlan}, findingSummary+"\n\n"+builderSummary, invoker)
+	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, []swarmWorkerPlan{watcherPlan}, findingSummary+"\n\n"+builderSummary, invoker)
 	if err != nil {
+		if ctx.Err() != nil {
+			runStatus = "timeout"
+			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
+		}
 		return nil, err
 	}
 
@@ -219,6 +251,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	allRuns = append(allRuns, watcherRuns...)
 
 	status, recommendation, rootCause, solution, blockers := summarizeSwarmOutcome(allRuns)
+	runStatus = summarizeRunStatus(status)
 	filesTouched, testsWritten := collectSwarmTouchedFiles(allRuns)
 	next := swarmNextCommand(state, status)
 
@@ -338,6 +371,9 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	runs := make([]swarmWorkerExecution, 0, len(plans))
 	for _, plan := range plans {
+		if err := ctx.Err(); err != nil {
+			return runs, err
+		}
 		if err := spawnTree.RecordSpawn("Swarm", plan.Caste, plan.Name, plan.Task, plan.Wave); err != nil {
 			return nil, fmt.Errorf("record swarm spawn %s: %w", plan.Name, err)
 		}
@@ -623,7 +659,7 @@ func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation,
 			if status != "failed" {
 				status = "blocked"
 			}
-		case "failed":
+		case "failed", "timeout":
 			status = "failed"
 		}
 	}

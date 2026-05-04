@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -578,7 +580,9 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 }
 
 func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks []string) (map[string]interface{}, error) {
-	ctx := context.Background()
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
 	invoker := newOracleWorkerInvoker()
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
@@ -602,6 +606,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 	iterationsRun := 0
 	for state.Iteration < state.MaxIterations {
+		if ctx.Err() != nil {
+			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "stopped", "cancelled", "aether oracle status")
+		}
 		if oracleStopRequested(paths.StopPath) {
 			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "stopped", "manual_stop", "aether oracle status")
 		}
@@ -668,11 +675,22 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			}
 
 			result, invokeErr = runOracleIterationAttempt(ctx, invoker, paths, state, plan, detectedType, languages, frameworks, target, attempt, policy, responsePath)
+			if ctx.Err() != nil {
+				return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "stopped", "cancelled", "aether oracle status")
+			}
 			replyLoaded = false
-			if invokeErr == nil && result.Error == nil && !strings.EqualFold(strings.TrimSpace(result.Status), "failed") {
-				workerReply, invokeErr = loadOracleWorkerResponse(responsePath, target)
+			workerReply, responseSource, responseErr := loadOracleWorkerResponseForAttempt(responsePath, result, target)
+			if responseErr == nil {
+				replyLoaded = true
+				invokeErr = nil
+				result.Error = nil
+				if responseSource != "file" {
+					if persistErr := writeOracleWorkerResponseFile(responsePath, workerReply); persistErr != nil {
+						invokeErr = persistErr
+						replyLoaded = false
+					}
+				}
 				if invokeErr == nil {
-					replyLoaded = true
 					if strings.TrimSpace(workerReply.Summary) != "" {
 						result.Summary = workerReply.Summary
 					}
@@ -696,6 +714,8 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 						}
 					}
 				}
+			} else if invokeErr == nil && result.Error == nil && !strings.EqualFold(strings.TrimSpace(result.Status), "failed") {
+				invokeErr = responseErr
 			}
 			artifactPath, artifactErr = writeOracleIterationArtifact(paths, state, attempt, result, invokeErr, responsePath)
 			state.LastArtifactPath = artifactPath
@@ -1080,6 +1100,16 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 		select {
 		case attemptResult := <-resultCh:
 			return attemptResult.result, attemptResult.err
+		case <-ctx.Done():
+			cancel()
+			return codex.WorkerResult{
+				Caste:    "oracle",
+				TaskID:   fmt.Sprintf("oracle.%d", state.Iteration),
+				Status:   "timeout",
+				Summary:  fmt.Sprintf("Oracle attempt stopped: %v", ctx.Err()),
+				Duration: time.Since(startedAt),
+				Error:    ctx.Err(),
+			}, ctx.Err()
 		case <-ticker.C:
 			elapsed := time.Since(startedAt)
 			if response, err := loadOracleWorkerResponse(responsePath, target); err == nil {
@@ -1828,6 +1858,111 @@ func loadOracleWorkerResponse(path string, target oracleQuestion) (oracleWorkerR
 		return oracleWorkerResponse{}, fmt.Errorf("parse oracle response: %w", err)
 	}
 	return normalizeOracleWorkerResponse(response, target)
+}
+
+func loadOracleWorkerResponseForAttempt(path string, result codex.WorkerResult, target oracleQuestion) (oracleWorkerResponse, string, error) {
+	if response, err := loadOracleWorkerResponse(path, target); err == nil {
+		return response, "file", nil
+	} else if strings.TrimSpace(result.RawOutput) == "" {
+		return oracleWorkerResponse{}, "", err
+	}
+
+	response, err := parseOracleWorkerResponseFromText(result.RawOutput, target)
+	if err == nil {
+		return response, "worker_output", nil
+	}
+	return oracleWorkerResponse{}, "", err
+}
+
+func parseOracleWorkerResponseFromText(text string, target oracleQuestion) (oracleWorkerResponse, error) {
+	candidates := oracleJSONObjectCandidates(text)
+	var lastErr error
+	for _, candidate := range candidates {
+		var response oracleWorkerResponse
+		if err := json.Unmarshal([]byte(candidate), &response); err != nil {
+			lastErr = err
+			continue
+		}
+		normalized, err := normalizeOracleWorkerResponse(response, target)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return normalized, nil
+	}
+	if lastErr != nil {
+		return oracleWorkerResponse{}, fmt.Errorf("parse oracle response from worker output: %w", lastErr)
+	}
+	return oracleWorkerResponse{}, fmt.Errorf("parse oracle response from worker output: no JSON object found")
+}
+
+func oracleJSONObjectCandidates(text string) []string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return nil
+	}
+	candidates := []string{trimmed}
+	seen := map[string]bool{trimmed: true}
+
+	for start := len(trimmed) - 1; start >= 0; start-- {
+		if trimmed[start] != '{' {
+			continue
+		}
+		depth := 0
+		inString := false
+		escaped := false
+		for end := start; end < len(trimmed); end++ {
+			ch := trimmed[end]
+			if inString {
+				if escaped {
+					escaped = false
+					continue
+				}
+				if ch == '\\' {
+					escaped = true
+					continue
+				}
+				if ch == '"' {
+					inString = false
+				}
+				continue
+			}
+			switch ch {
+			case '"':
+				inString = true
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					candidate := strings.TrimSpace(trimmed[start : end+1])
+					if candidate != "" && !seen[candidate] {
+						candidates = append(candidates, candidate)
+						seen[candidate] = true
+					}
+					end = len(trimmed)
+				}
+			}
+		}
+	}
+	return candidates
+}
+
+func writeOracleWorkerResponseFile(path string, response oracleWorkerResponse) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("write oracle response: missing response path")
+	}
+	data, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal oracle response: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("create oracle response dir: %w", err)
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0644); err != nil {
+		return fmt.Errorf("write oracle response: %w", err)
+	}
+	return nil
 }
 
 func normalizeOracleWorkerResponse(response oracleWorkerResponse, target oracleQuestion) (oracleWorkerResponse, error) {

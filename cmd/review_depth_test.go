@@ -10,12 +10,11 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-func TestResolveReviewDepth_FinalPhaseAlwaysHeavy(t *testing.T) {
+func TestResolveReviewDepth_LightFlagOverridesFinalPhase(t *testing.T) {
 	phase := colony.Phase{ID: 5, Name: "Final polish"}
-	// Final phase (ID == totalPhases) must be heavy even with lightFlag=true
 	got := resolveReviewDepth(phase, 5, true, false)
-	if got != ReviewDepthHeavy {
-		t.Errorf("final phase with lightFlag=true: got %q, want %q", got, ReviewDepthHeavy)
+	if got != ReviewDepthLight {
+		t.Errorf("final phase with lightFlag=true: got %q, want %q", got, ReviewDepthLight)
 	}
 }
 
@@ -69,21 +68,21 @@ func TestResolveReviewDepth_KeywordPhaseAutoHeavy(t *testing.T) {
 		expected ReviewDepth
 	}{
 		{
-			name:     "security keyword triggers heavy",
-			phase:    colony.Phase{ID: 2, Name: "Security audit"},
-			total:    5, light: false, heavy: false,
+			name:  "security keyword triggers heavy",
+			phase: colony.Phase{ID: 2, Name: "Security audit"},
+			total: 5, light: false, heavy: false,
 			expected: ReviewDepthHeavy,
 		},
 		{
-			name:     "keyword phase with light flag overrides to light",
-			phase:    colony.Phase{ID: 2, Name: "Auth refactor"},
-			total:    5, light: true, heavy: false,
+			name:  "keyword phase with light flag overrides to light",
+			phase: colony.Phase{ID: 2, Name: "Auth refactor"},
+			total: 5, light: true, heavy: false,
 			expected: ReviewDepthLight,
 		},
 		{
-			name:     "non-keyword non-final defaults light",
-			phase:    colony.Phase{ID: 2, Name: "UI polish"},
-			total:    5, light: false, heavy: false,
+			name:  "non-keyword non-final defaults light",
+			phase: colony.Phase{ID: 2, Name: "UI polish"},
+			total: 5, light: false, heavy: false,
 			expected: ReviewDepthLight,
 		},
 	}
@@ -405,7 +404,7 @@ func TestRenderReviewDepthLine_HeavyNonFinal(t *testing.T) {
 
 func TestRenderReviewDepthLine_Light(t *testing.T) {
 	got := renderReviewDepthLine(colony.VerificationDepthLight, 3, 5)
-	want := "Review depth: light (Phase 3 of 5 -- final phase gets full review)"
+	want := "Review depth: light (Phase 3 of 5)"
 	if got != want {
 		t.Errorf("renderReviewDepthLine(light, 3, 5) = %q, want %q", got, want)
 	}
@@ -413,16 +412,15 @@ func TestRenderReviewDepthLine_Light(t *testing.T) {
 
 // --- Task 1 tests: VerificationDepth 3-level dispatch ---
 
-func TestResolveVerificationDepth_FinalPhaseAlwaysHeavy(t *testing.T) {
+func TestResolveVerificationDepth_FinalPhaseDefaultsHeavyButHonorsLight(t *testing.T) {
 	phase := colony.Phase{ID: 5, Name: "Final polish"}
 	got := resolveVerificationDepth(phase, 5, false, false, "")
 	if got != colony.VerificationDepthHeavy {
 		t.Errorf("final phase no flags: got %q, want %q", got, colony.VerificationDepthHeavy)
 	}
-	// light flag on final phase still gets heavy
 	got = resolveVerificationDepth(phase, 5, true, false, "")
-	if got != colony.VerificationDepthHeavy {
-		t.Errorf("final phase with lightFlag=true: got %q, want %q", got, colony.VerificationDepthHeavy)
+	if got != colony.VerificationDepthLight {
+		t.Errorf("final phase with lightFlag=true: got %q, want %q", got, colony.VerificationDepthLight)
 	}
 }
 
@@ -491,11 +489,11 @@ func TestResolveVerificationDepth_KeywordPhaseAlwaysHeavy(t *testing.T) {
 func TestResolveVerificationDepthFlag_BoolPriority(t *testing.T) {
 	// --light takes priority over --verification-depth string
 	tests := []struct {
-		name       string
-		light      bool
-		heavy      bool
-		depthStr   string
-		want       string
+		name     string
+		light    bool
+		heavy    bool
+		depthStr string
+		want     string
 	}{
 		{"light flag overrides string", true, false, "heavy", "light"},
 		{"heavy flag overrides string", false, true, "light", "heavy"},
@@ -625,7 +623,7 @@ func TestPhasePositionLevel(t *testing.T) {
 		{"late boundary of 8", 6, 8, "late"}, // 6 >= 8*0.75=6.0, 6 != 8
 		{"late of 8", 7, 8, "late"},
 		{"last is final", 8, 8, "final"},
-		{"late of 5", 4, 5, "late"}, // 4 >= 5*0.75=3.75, 4 != 5
+		{"late of 5", 4, 5, "late"},                 // 4 >= 5*0.75=3.75, 4 != 5
 		{"intermediate of 5", 3, 5, "intermediate"}, // 3 > 1.25, 3 < 3.75
 	}
 	for _, tt := range tests {
@@ -641,8 +639,8 @@ func TestPhasePositionLevel(t *testing.T) {
 func TestCollectPhaseText(t *testing.T) {
 	t.Run("full phase with tasks", func(t *testing.T) {
 		phase := colony.Phase{
-			Name:        "Build Auth",
-			Description: "Add auth middleware",
+			Name:            "Build Auth",
+			Description:     "Add auth middleware",
 			SuccessCriteria: []string{"Auth works"},
 			Tasks: []colony.Task{{
 				Goal:            "Implement login",

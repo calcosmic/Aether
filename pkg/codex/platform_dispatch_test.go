@@ -226,6 +226,21 @@ EOF
 	}
 }
 
+func TestClassifyHostedExecutionErrorExplainsOpenCodeLocalServerFailure(t *testing.T) {
+	err := classifyHostedExecutionError("opencode", os.ErrNotExist, "POST http://localhost:4000/messages returned 404", false)
+	text := err.Error()
+	for _, want := range []string{
+		"opencode worker dispatcher unavailable",
+		"local OpenCode server",
+		"AETHER_WORKER_PLATFORM=claude/codex",
+		"localhost:4000/messages",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("classified error missing %q:\n%s", want, text)
+		}
+	}
+}
+
 // createTestMarkdownAgent creates a minimal markdown agent file for testing.
 func createTestMarkdownAgent(t *testing.T, dir, name, description string) string {
 	t.Helper()

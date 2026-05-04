@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
@@ -102,6 +104,7 @@ type codexContinueOptions struct {
 	ReconcileTaskIDs    []string
 	WorkerTimeout       time.Duration
 	VerificationTimeout time.Duration
+	ParentContext       context.Context
 	LightFlag           bool
 	HeavyFlag           bool
 	SkipWatchers        bool
@@ -401,6 +404,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
+	parentCtx := options.ParentContext
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	ctx, stopSignals := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
 
 	state, err := loadActiveColonyState()
 	if err != nil {
@@ -512,7 +521,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		progress = NewCeremonyProgress(continueSteps, stdout)
 	}
 
-	verification, watcherFlow := runCodexContinueVerification(root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
+	verification, watcherFlow := runCodexContinueVerification(ctx, root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
@@ -534,7 +543,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			Detail:    c.Detail,
 		})
 	}
-	_ = gateResultsWrite(gateResultEntries)
+	if err := gateResultsWrite(gateResultEntries); err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to persist gate results: %w", err)
+	}
 
 	// Per-phase gate results persistence (D-14)
 	var phaseGateResults []GateCheckResult
@@ -552,7 +563,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			Timestamp:       now.Format(time.RFC3339),
 		})
 	}
-	_ = gateResultsWritePhase(phase.ID, phaseGateResults)
+	if err := gateResultsWritePhase(phase.ID, phaseGateResults); err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to persist phase gate results: %w", err)
+	}
 
 	if tracer != nil && state.RunID != nil {
 		_ = tracer.LogArtifact(*state.RunID, "continue.verification", map[string]interface{}{
@@ -1204,15 +1217,18 @@ func isCodexWorkerAvailable() bool {
 	return invoker.IsAvailable(context.Background())
 }
 
-func runCodexContinueVerification(root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
+func runCodexContinueVerification(ctx context.Context, root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	now := time.Now().UTC()
 	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
 	commands := resolveCodexVerificationCommands(root)
 	steps := []codexVerificationStep{
-		runVerificationStep(root, "build", commands.Build, verificationTimeout),
-		runVerificationStep(root, "types", commands.Type, verificationTimeout),
-		runVerificationStep(root, "lint", commands.Lint, verificationTimeout),
-		runVerificationStep(root, "tests", commands.Test, verificationTimeout),
+		runVerificationStep(ctx, root, "build", commands.Build, verificationTimeout),
+		runVerificationStep(ctx, root, "types", commands.Type, verificationTimeout),
+		runVerificationStep(ctx, root, "lint", commands.Lint, verificationTimeout),
+		runVerificationStep(ctx, root, "tests", commands.Test, verificationTimeout),
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
@@ -1241,7 +1257,7 @@ func runCodexContinueVerification(root string, state colony.ColonyState, phase c
 			"aether-continue")
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
 	} else {
-		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
 	}
 	watcher := continueWatcher
 	if !watcher.Present {
@@ -1294,10 +1310,13 @@ func runCodexContinueVerification(root string, state colony.ColonyState, phase c
 	}, watcherFlow
 }
 
-func runCodexContinueWatcherVerification(root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, workerTimeout time.Duration) (codexWatcherVerification, *codexContinueWorkerFlowStep) {
+func runCodexContinueWatcherVerification(ctx context.Context, root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, workerTimeout time.Duration) (codexWatcherVerification, *codexContinueWorkerFlowStep) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	invoker := newCodexWorkerInvoker()
 	dispatch := plannedContinueWatcherDispatch(root, phase, manifest, steps, claims, buildWatcher, invoker, workerTimeout)
-	if !invoker.IsAvailable(context.Background()) {
+	if !invoker.IsAvailable(ctx) {
 		summary := fmt.Sprintf("continue watcher verification could not start because %s", dispatchAvailabilityMessage(invoker))
 		return codexWatcherVerification{
 				Present: true,
@@ -1316,7 +1335,7 @@ func runCodexContinueWatcherVerification(root string, phase colony.Phase, manife
 	}
 
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
-	watcherCtx, watcherCancel := context.WithTimeout(context.Background(), effectiveContinueReviewTimeout(workerTimeout))
+	watcherCtx, watcherCancel := context.WithTimeout(ctx, effectiveContinueReviewTimeout(workerTimeout))
 	defer watcherCancel()
 	results, err := dispatchBatchByWaveWithVisuals(
 		watcherCtx,
@@ -2279,7 +2298,7 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 	}
 }
 
-func runVerificationStep(root, name, command string, timeout time.Duration) codexVerificationStep {
+func runVerificationStep(ctx context.Context, root, name, command string, timeout time.Duration) codexVerificationStep {
 	if strings.TrimSpace(command) == "" {
 		return codexVerificationStep{
 			Name:    name,
@@ -2290,7 +2309,7 @@ func runVerificationStep(root, name, command string, timeout time.Duration) code
 	}
 
 	timeout = effectiveContinueVerificationTimeout(timeout)
-	output, exitCode, timedOut, err := runShellCommand(root, command, timeout)
+	output, exitCode, timedOut, err := runShellCommandContext(ctx, root, command, timeout)
 	step := codexVerificationStep{
 		Name:           name,
 		Command:        command,
@@ -2887,7 +2906,14 @@ func updateCodexContinueContext(phase colony.Phase, manifest codexContinueManife
 }
 
 func runShellCommand(root, command string, timeout time.Duration) (string, int, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return runShellCommandContext(context.Background(), root, command, timeout)
+}
+
+func runShellCommandContext(parent context.Context, root, command string, timeout time.Duration) (string, int, bool, error) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	var cmd *exec.Cmd

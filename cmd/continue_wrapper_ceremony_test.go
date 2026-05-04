@@ -157,6 +157,7 @@ func TestContinueWrapperSourcesUseFastDevContinue(t *testing.T) {
 	command := "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
 	paths := []string{
 		filepath.Join(repoRoot, ".aether", "commands", "continue.yaml"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant-continue.md"),
 		filepath.Join(repoRoot, ".claude", "commands", "ant", "continue.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "continue.md"),
 	}

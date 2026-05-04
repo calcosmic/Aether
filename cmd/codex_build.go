@@ -119,6 +119,7 @@ var errRuntimeStateSuperseded = errors.New("runtime state superseded")
 
 type codexBuildOptions struct {
 	WorkerTimeout           time.Duration
+	ParentContext           context.Context
 	Force                   bool
 	LightFlag               bool
 	HeavyFlag               bool
@@ -330,7 +331,11 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	waveCount := len(waveExecution)
 	parallelWaves := countParallelWaveExecutionPlans(waveExecution)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	parentCtx := options.ParentContext
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	ctx, cancel := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	ceremony := newBuildCeremonyEmitter(ctx, root, phase)

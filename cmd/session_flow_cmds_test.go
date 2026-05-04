@@ -323,6 +323,135 @@ func TestResumeColonyRestoresInvalidStateFromLegacyHandoff(t *testing.T) {
 	}
 }
 
+func TestResumeColonyNoHandoffRejectsBrokenState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var outBuf bytes.Buffer
+	var errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+
+	currentGoal := "Current real colony"
+	handoffGoal := "Old handoff colony"
+	handoffState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &handoffGoal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Old phase", Status: colony.PhaseReady}},
+		},
+	}
+	if err := writeHandoffDocument(renderHandoffSnapshot(handoffState, colony.SessionFile{
+		SessionID:      "old-handoff",
+		StartedAt:      "2026-04-15T10:00:00Z",
+		ColonyGoal:     handoffGoal,
+		CurrentPhase:   1,
+		SuggestedNext:  "aether build 1",
+		ContextCleared: true,
+		Summary:        "Old handoff",
+	}, "Paused Colony", "aether build 1", "Old handoff")); err != nil {
+		t.Fatalf("failed to seed handoff: %v", err)
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &currentGoal,
+		State:        colony.State("BROKEN_STATE"),
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Current phase", Status: colony.PhaseReady}},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"resume-colony", "--no-handoff"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.Goal == nil || *state.Goal != currentGoal {
+		t.Fatalf("state was overwritten from handoff: goal=%v", state.Goal)
+	}
+	if state.State != colony.State("BROKEN_STATE") {
+		t.Fatalf("state changed despite --no-handoff: %q", state.State)
+	}
+	if !strings.Contains(errBuf.String(), "HANDOFF.md fallback is disabled") {
+		t.Fatalf("expected no-handoff recovery message, got:\n%s", errBuf.String())
+	}
+}
+
+func TestResumeColonyWarnsAndBlocksOnHandoffGoalMismatch(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var outBuf bytes.Buffer
+	var errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+
+	currentGoal := "Current real colony"
+	handoffGoal := "Old handoff colony"
+	handoffState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &handoffGoal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Old phase", Status: colony.PhaseReady}},
+		},
+	}
+	if err := writeHandoffDocument(renderHandoffSnapshot(handoffState, colony.SessionFile{
+		SessionID:      "old-handoff",
+		StartedAt:      "2026-04-15T10:00:00Z",
+		ColonyGoal:     handoffGoal,
+		CurrentPhase:   1,
+		SuggestedNext:  "aether build 1",
+		ContextCleared: true,
+		Summary:        "Old handoff",
+	}, "Paused Colony", "aether build 1", "Old handoff")); err != nil {
+		t.Fatalf("failed to seed handoff: %v", err)
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &currentGoal,
+		State:        colony.State("BROKEN_STATE"),
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Current phase", Status: colony.PhaseReady}},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	errOutput := errBuf.String()
+	if !strings.Contains(errOutput, "COLONY_STATE.json is not runnable") {
+		t.Fatalf("expected broken-state handoff warning, got:\n%s", errOutput)
+	}
+	if !strings.Contains(errOutput, "does not match current COLONY_STATE.json goal") {
+		t.Fatalf("expected goal mismatch warning, got:\n%s", errOutput)
+	}
+	if !strings.Contains(errOutput, "appears to belong to a different colony") {
+		t.Fatalf("expected recovery error to block mismatched handoff, got:\n%s", errOutput)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.Goal == nil || *state.Goal != currentGoal {
+		t.Fatalf("mismatched handoff overwrote current goal: %v", state.Goal)
+	}
+}
+
 func TestResumeColonyRotatesStaleSpawnTreeForPausedColony(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

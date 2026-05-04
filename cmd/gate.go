@@ -194,9 +194,20 @@ func checkTestsPass() gateCheck {
 		}
 	}
 
-	cmd := exec.Command(parts[0], parts[1:]...)
+	ctx, cancel := context.WithTimeout(context.Background(), BuildTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	cmd.Dir = storage.ResolveAetherRoot(context.Background())
 	output, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return gateCheck{
+			Name:    "tests_pass",
+			Passed:  false,
+			Detail:  fmt.Sprintf("test command timed out after %s", BuildTimeout),
+			FixHint: "rerun the test command with a longer targeted timeout or investigate the hanging test",
+		}
+	}
 
 	if err != nil {
 		// Test command failed — extract summary from output
@@ -749,7 +760,7 @@ func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, revi
 			continue
 		}
 
-			threshold, ok := thresholds[check.Name]
+		threshold, ok := thresholds[check.Name]
 		if !ok {
 			// Unclassified soft_block gate (should not happen, but safe default)
 			remainingBlockers = append(remainingBlockers, check.Detail)

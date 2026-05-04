@@ -22,19 +22,23 @@ var heavyKeywords = []string{
 }
 
 // resolveReviewDepth determines whether a phase gets light or heavy review.
-// Priority: final phase > heavy flag > keyword match > light/default.
+// Priority: explicit heavy flag > explicit light flag > final phase > keyword match > default.
 func resolveReviewDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFlag bool) ReviewDepth {
-	// Final phase is always heavy regardless of flags.
-	if phase.ID == totalPhases {
-		return ReviewDepthHeavy
-	}
 	// Explicit heavy flag overrides everything else.
 	if heavyFlag {
 		return ReviewDepthHeavy
 	}
+	// Explicit light flag honors the user's request, including on final phases.
+	if lightFlag {
+		return ReviewDepthLight
+	}
+	// Final phase defaults to heavy when the user did not ask for a lighter pass.
+	if phase.ID == totalPhases {
+		return ReviewDepthHeavy
+	}
 	// Keyword auto-detection triggers heavy review, BUT explicit light flag
 	// overrides keyword match (user intent takes priority).
-	if phaseHasHeavyKeywords(phase.Name) && !lightFlag {
+	if phaseHasHeavyKeywords(phase.Name) {
 		return ReviewDepthHeavy
 	}
 	// Default to light for intermediate phases.
@@ -60,28 +64,23 @@ func chaosShouldRunInLightMode(phaseID int) bool {
 }
 
 // resolveVerificationDepth determines the 3-level verification depth for a phase.
-// Priority: final phase -> heavyFlag -> heavy keyword match (unless lightFlag) -> lightFlag -> explicit --verification-depth string -> default standard.
+// Priority: explicit heavy flag -> explicit light flag -> explicit --verification-depth string -> keyword match -> smart default.
 func resolveVerificationDepth(phase colony.Phase, totalPhases int, lightFlag, heavyFlag bool, verificationDepthStr string) colony.VerificationDepth {
-	// Final phase is always heavy regardless of flags.
-	if phase.ID == totalPhases {
-		return colony.VerificationDepthHeavy
-	}
 	// Explicit heavy flag overrides everything else.
 	if heavyFlag {
 		return colony.VerificationDepthHeavy
 	}
-	// Keyword auto-detection triggers heavy review, BUT explicit light flag
-	// overrides keyword match (user intent takes priority).
-	if phaseHasHeavyKeywords(phase.Name) && !lightFlag {
-		return colony.VerificationDepthHeavy
-	}
-	// Explicit light flag.
+	// Explicit light honors the user's request, including on final phases.
 	if lightFlag {
 		return colony.VerificationDepthLight
 	}
-	// Explicit --verification-depth string (normalized).
+	// Explicit --verification-depth string overrides smart defaults.
 	if verificationDepthStr != "" {
 		return colony.NormalizeVerificationDepth(verificationDepthStr)
+	}
+	// Keyword auto-detection triggers heavy review only when depth is automatic.
+	if phaseHasHeavyKeywords(phase.Name) {
+		return colony.VerificationDepthHeavy
 	}
 	// Smart default based on phase position + code change risk.
 	return resolveSmartVerificationDepth(phase, totalPhases)

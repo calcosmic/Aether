@@ -616,6 +616,7 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 	if strings.TrimSpace(config.Root) != "" {
 		cmd.Dir = config.Root
 	}
+	configureWorkerCommand(cmd)
 
 	if agentURL := os.Getenv(envOpenCodeAgentURL); agentURL != "" {
 		cmd.Env = append(os.Environ(), envOpenCodeAgentURL+"="+agentURL)
@@ -637,13 +638,17 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 	defer heartbeat.Stop()
 
 	var waitErr error
+	ctxDone := ctx.Done()
 waitLoop:
 	for {
 		select {
 		case waitErr = <-waitCh:
 			break waitLoop
+		case <-ctxDone:
+			ctxDone = nil
+			running.Pulse("worker cancellation requested")
 		case <-heartbeat.C:
-			running.Report("worker heartbeat observed")
+			running.Pulse("worker heartbeat observed")
 		}
 	}
 
@@ -1122,6 +1127,9 @@ func classifyHostedExecutionError(label string, err error, stderr string, runnin
 	if prefix == "" {
 		prefix = "worker process"
 	}
+	if strings.EqualFold(prefix, "opencode") && looksLikeOpenCodeLocalServerFailure(detail) {
+		return fmt.Errorf("opencode worker dispatcher unavailable: local OpenCode server rejected the run request; ensure OpenCode is running for `opencode run`, or set AETHER_WORKER_PLATFORM=claude/codex to use another dispatcher: %w (stderr: %s)", err, detail)
+	}
 	if !runningObserved {
 		prefix = "worker startup failed"
 	} else {
@@ -1131,6 +1139,15 @@ func classifyHostedExecutionError(label string, err error, stderr string, runnin
 		return fmt.Errorf("%s: %w (stderr: %s)", prefix, err, detail)
 	}
 	return fmt.Errorf("%s: %w", prefix, err)
+}
+
+func looksLikeOpenCodeLocalServerFailure(stderr string) bool {
+	text := strings.ToLower(strings.TrimSpace(stderr))
+	if text == "" {
+		return false
+	}
+	return strings.Contains(text, "localhost:4000/messages") ||
+		(strings.Contains(text, "/messages") && strings.Contains(text, "404"))
 }
 
 func describeAvailabilitySet(active Platform, statuses []AvailabilityStatus) string {

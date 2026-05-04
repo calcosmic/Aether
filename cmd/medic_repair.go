@@ -85,10 +85,10 @@ func createBackup(dataPath string) (string, error) {
 
 	// Write a manifest so we know what was backed up
 	manifest := map[string]interface{}{
-		"timestamp":     timestamp,
-		"files_copied":  copied,
-		"created_at":    time.Now().UTC().Format(time.RFC3339),
-		"source_path":   dataPath,
+		"timestamp":    timestamp,
+		"files_copied": copied,
+		"created_at":   time.Now().UTC().Format(time.RFC3339),
+		"source_path":  dataPath,
 	}
 	manifestData, _ := json.MarshalIndent(manifest, "", "  ")
 	manifestData = append(manifestData, '\n')
@@ -333,6 +333,17 @@ func repairStateIssues(issue HealthIssue, opts MedicOptions, dataPath string) Re
 		state.State = colony.StateREADY
 		record.After = string(state.State)
 		record.Success = true
+
+	case strings.Contains(issue.Message, "Invalid state"):
+		record.Action = "normalize_invalid_state"
+		record.Before = string(state.State)
+		state = normalizeLegacyColonyState(state)
+		record.After = string(state.State)
+		record.Success = isValidColonyLifecycleState(state.State)
+		if !record.Success {
+			record.Error = fmt.Sprintf("normalized state is still invalid: %q", state.State)
+			return record
+		}
 
 	default:
 		if strings.Contains(strings.ToLower(issue.Message), "deprecated") {

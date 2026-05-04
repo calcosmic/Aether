@@ -37,8 +37,8 @@ wrapper_additions:
     - light: Skip all review agents (fastest, minimal safety net)
     - standard: Probe-only review (default, watcher + probe coverage)
     - heavy: Full quality gauntlet (gatekeeper + auditor + probe)
-    The default is "standard" for intermediate phases. Final phases always use "heavy".
-    Users can override with --verification-depth <light|standard|heavy>.
+    The default is "standard" for intermediate phases. Final phases default to "heavy" when depth is automatic.
+    Users can override any automatic depth, including final phases, with --verification-depth <light|standard|heavy>.
 guardrails:
   - "Do NOT use `--plan-only` or `continue-finalize` for default fast continue."
   - "Do NOT run `aether continue --synthetic` after real wrapper Task agents complete."

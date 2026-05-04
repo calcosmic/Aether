@@ -393,6 +393,34 @@ func TestStreamManagerWaitForAgent(t *testing.T) {
 	}
 }
 
+func TestStreamManagerWaitForAllContextCancellation(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	spawnTree := NewSpawnTree(store, "")
+	sm := NewStreamManager(spawnTree, 0)
+
+	agent := NewBuilderAgent("builder-1")
+	state, _ := sm.RegisterAgent(agent)
+	state.SetStatus(StreamStatusActive)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	results, err := sm.WaitForAllContext(ctx)
+	if err == nil {
+		t.Fatal("WaitForAllContext returned nil error, want context timeout")
+	}
+	if _, ok := results["builder-1"]; !ok {
+		t.Fatal("WaitForAllContext did not return latest state snapshot")
+	}
+	if got := results["builder-1"].GetStatus(); got != StreamStatusActive {
+		t.Fatalf("snapshot status = %s, want active", got)
+	}
+}
+
 // TestStreamManagerExecuteStreamingWithAgent tests executing with streaming.
 func TestStreamManagerExecuteStreamingWithAgent(t *testing.T) {
 	dir := t.TempDir()
@@ -431,6 +459,37 @@ func TestStreamManagerExecuteStreamingWithAgent(t *testing.T) {
 	// Verify result
 	if finalState.GetResult() == nil {
 		t.Error("Should have a result")
+	}
+}
+
+func TestStreamManagerExecuteStreamingWithAgentRecoversPanic(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	spawnTree := NewSpawnTree(store, "")
+	sm := NewStreamManager(spawnTree, 0)
+
+	agent := &mockStreamingAgent{name: "panic-builder", caste: CasteBuilder, panicStreaming: true}
+	if _, err := sm.ExecuteStreamingWithAgent(context.Background(), agent, events.Event{Topic: "build.start"}); err != nil {
+		t.Fatalf("ExecuteStreamingWithAgent failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	finalState, ok, err := sm.WaitForAgentContext(ctx, "panic-builder")
+	if err != nil {
+		t.Fatalf("WaitForAgentContext returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("panic-builder stream missing")
+	}
+	if got := finalState.GetStatus(); got != StreamStatusFailed {
+		t.Fatalf("status = %s, want failed", got)
+	}
+	if finalState.GetError() == nil || !strings.Contains(finalState.GetError().Error(), "streaming agent panic") {
+		t.Fatalf("panic error not recorded: %v", finalState.GetError())
 	}
 }
 
@@ -767,9 +826,10 @@ func TestStreamManagerWithDifferentCastes(t *testing.T) {
 
 // mockStreamingAgent is a test agent that implements StreamingAgent.
 type mockStreamingAgent struct {
-	name     string
-	caste    Caste
-	triggers []Trigger
+	name           string
+	caste          Caste
+	triggers       []Trigger
+	panicStreaming bool
 }
 
 func (m *mockStreamingAgent) Name() string {
@@ -789,6 +849,9 @@ func (m *mockStreamingAgent) Execute(ctx context.Context, event events.Event) er
 }
 
 func (m *mockStreamingAgent) ExecuteStreaming(ctx context.Context, event events.Event, handler llm.StreamHandler) error {
+	if m.panicStreaming {
+		panic("synthetic streaming panic")
+	}
 	if handler != nil {
 		handler.OnToken("Token from " + m.name)
 		handler.OnComplete(&llm.StreamResult{

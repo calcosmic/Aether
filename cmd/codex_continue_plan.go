@@ -1,37 +1,38 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 type codexContinueExternalDispatch struct {
-	Stage         string   `json:"stage"`
-	Wave          int      `json:"wave"`
-	Caste         string   `json:"caste"`
-	AgentName     string   `json:"agent_name,omitempty"`
-	Name          string   `json:"name"`
-	Task          string   `json:"task"`
-	TaskID        string   `json:"task_id"`
-	Timeout       int      `json:"timeout_seconds,omitempty"`
-	Status        string   `json:"status"`
-	Summary       string   `json:"summary,omitempty"`
-	Blockers      []string `json:"blockers,omitempty"`
-	Duration      float64  `json:"duration,omitempty"`
-	Report        string   `json:"report,omitempty"`
-	Brief         string   `json:"brief,omitempty"`
-	SkillSection  string   `json:"skill_section,omitempty"`
-	SkillCount    int      `json:"skill_count,omitempty"`
-	ColonySkills  int      `json:"colony_skill_count,omitempty"`
-	DomainSkills  int      `json:"domain_skill_count,omitempty"`
-	MatchedSkills []string `json:"matched_skills,omitempty"`
-	Handoff      codex.WorkerHandoff `json:"handoff,omitempty"`
+	Stage         string              `json:"stage"`
+	Wave          int                 `json:"wave"`
+	Caste         string              `json:"caste"`
+	AgentName     string              `json:"agent_name,omitempty"`
+	Name          string              `json:"name"`
+	Task          string              `json:"task"`
+	TaskID        string              `json:"task_id"`
+	Timeout       int                 `json:"timeout_seconds,omitempty"`
+	Status        string              `json:"status"`
+	Summary       string              `json:"summary,omitempty"`
+	Blockers      []string            `json:"blockers,omitempty"`
+	Duration      float64             `json:"duration,omitempty"`
+	Report        string              `json:"report,omitempty"`
+	Brief         string              `json:"brief,omitempty"`
+	SkillSection  string              `json:"skill_section,omitempty"`
+	SkillCount    int                 `json:"skill_count,omitempty"`
+	ColonySkills  int                 `json:"colony_skill_count,omitempty"`
+	DomainSkills  int                 `json:"domain_skill_count,omitempty"`
+	MatchedSkills []string            `json:"matched_skills,omitempty"`
+	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
 }
 
 type codexContinuePlanManifest struct {
@@ -170,10 +171,10 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manifest codexContinueManifest, now time.Time, verificationTimeout time.Duration, skipWatchers bool) codexContinueVerificationReport {
 	commands := resolveCodexVerificationCommands(root)
 	steps := []codexVerificationStep{
-		runVerificationStep(root, "build", commands.Build, verificationTimeout),
-		runVerificationStep(root, "types", commands.Type, verificationTimeout),
-		runVerificationStep(root, "lint", commands.Lint, verificationTimeout),
-		runVerificationStep(root, "tests", commands.Test, verificationTimeout),
+		runVerificationStep(context.Background(), root, "build", commands.Build, verificationTimeout),
+		runVerificationStep(context.Background(), root, "types", commands.Type, verificationTimeout),
+		runVerificationStep(context.Background(), root, "lint", commands.Lint, verificationTimeout),
+		runVerificationStep(context.Background(), root, "tests", commands.Test, verificationTimeout),
 	}
 	claims := verifyCodexBuildClaims(root, manifest)
 	watcher := evaluateContinueWatcherVerification(manifest)

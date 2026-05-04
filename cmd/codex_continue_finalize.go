@@ -205,7 +205,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			Detail:    c.Detail,
 		})
 	}
-	_ = gateResultsWrite(gateResultEntries)
+	if err := gateResultsWrite(gateResultEntries); err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to persist gate results: %w", err)
+	}
 
 	// Per-phase gate results persistence (D-14)
 	var phaseGateResults []GateCheckResult
@@ -223,7 +225,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			Timestamp:       now.Format(time.RFC3339),
 		})
 	}
-	_ = gateResultsWritePhase(phase.ID, phaseGateResults)
+	if err := gateResultsWritePhase(phase.ID, phaseGateResults); err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to persist phase gate results: %w", err)
+	}
 
 	if err := writeCodexContinueWorkerOutcomeReports(root, phase, workerFlow, now); err != nil {
 		return nil, state, phase, nil, nil, false, err
@@ -268,7 +272,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 				}
 				phaseGateResults = append(phaseGateResults, entry)
 			}
-			_ = gateResultsWritePhase(phase.ID, phaseGateResults)
+			if err := gateResultsWritePhase(phase.ID, phaseGateResults); err != nil {
+				return nil, state, phase, nil, nil, false, fmt.Errorf("failed to persist auto-resolved phase gate results: %w", err)
+			}
 
 			// Also update COLONY_STATE.json gate results
 			var updatedGateEntries []colony.GateResultEntry
@@ -280,7 +286,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 					Detail:    c.Detail,
 				})
 			}
-			_ = gateResultsWrite(updatedGateEntries)
+			if err := gateResultsWrite(updatedGateEntries); err != nil {
+				return nil, state, phase, nil, nil, false, fmt.Errorf("failed to persist auto-resolved gate results: %w", err)
+			}
 
 			// Log recovery actions (per RECV-06, using Phase 94 recovery log)
 			var recoveryEntries []RecoveryLogEntry
