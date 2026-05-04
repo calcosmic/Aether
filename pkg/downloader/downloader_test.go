@@ -656,3 +656,52 @@ func TestExtractTarGzImpl_AcceptsCapitalizedBinaryName(t *testing.T) {
 		t.Errorf("content mismatch: got %q, want %q", string(data), binContent)
 	}
 }
+
+func TestExtractTarGzImpl_AcceptsRootBinary(t *testing.T) {
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "test.tar.gz")
+	stageDir := filepath.Join(tmpDir, "stage")
+	destDir := filepath.Join(tmpDir, "dest")
+	binContent := "fake binary content"
+
+	if err := os.MkdirAll(stageDir, 0755); err != nil {
+		t.Fatalf("mkdir stage: %v", err)
+	}
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		t.Fatalf("mkdir dest: %v", err)
+	}
+
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create tar.gz: %v", err)
+	}
+	gz := gzip.NewWriter(file)
+	tw := tar.NewWriter(gz)
+	header := &tar.Header{Name: "aether", Typeflag: tar.TypeReg, Mode: 0755, Size: int64(len(binContent))}
+	if err := tw.WriteHeader(header); err != nil {
+		t.Fatalf("write header: %v", err)
+	}
+	if _, err := tw.Write([]byte(binContent)); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close file: %v", err)
+	}
+
+	if err := extractTarGzImpl(archivePath, stageDir, destDir, "aether"); err != nil {
+		t.Fatalf("extractTarGzImpl root binary returned error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(destDir, "aether"))
+	if err != nil {
+		t.Fatalf("read dest binary: %v", err)
+	}
+	if string(data) != binContent {
+		t.Errorf("content mismatch: got %q, want %q", string(data), binContent)
+	}
+}

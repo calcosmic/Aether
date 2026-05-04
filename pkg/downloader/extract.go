@@ -36,14 +36,17 @@ func extractTarGzImpl(archivePath, stageDir, destDir, bin string) error {
 			return fmt.Errorf("tar read: %w", err)
 		}
 
-		// Extract files to stage dir, stripping the top-level directory
+		// Extract files to stage dir. GoReleaser may place files either at
+		// archive root or under a top-level directory, so strip that directory
+		// only when one exists.
 		relPath := header.Name
-		// Strip leading "./" or top-level dir
 		parts := strings.SplitN(relPath, "/", 2)
-		if len(parts) < 2 {
+		if len(parts) == 2 {
+			relPath = parts[1]
+		}
+		if relPath == "" {
 			continue
 		}
-		relPath = parts[1]
 
 		targetPath := filepath.Join(stageDir, relPath)
 
@@ -107,12 +110,13 @@ func extractZipImpl(archivePath, stageDir, destDir, bin string) error {
 		}
 
 		relPath := entry.Name
-		// Strip leading "./" or top-level dir
 		parts := strings.SplitN(relPath, "/", 2)
-		if len(parts) < 2 {
+		if len(parts) == 2 {
+			relPath = parts[1]
+		}
+		if relPath == "" {
 			continue
 		}
-		relPath = parts[1]
 
 		targetPath := filepath.Join(stageDir, relPath)
 
