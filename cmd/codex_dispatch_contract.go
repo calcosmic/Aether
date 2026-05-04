@@ -279,22 +279,6 @@ func persistDispatchWorkerHandoff(dispatch codex.WorkerDispatch, result codex.Di
 	return nil
 }
 
-// resolveReferenceSection resolves reference matches for a worker.
-func resolveReferenceSection(caste, task, outputType string) string {
-	return ""
-}
-
-// appendMarkdownSections appends non-empty markdown sections together.
-func appendMarkdownSections(base, section string) string {
-	if section == "" {
-		return base
-	}
-	if base == "" {
-		return section
-	}
-	return base + "\n" + section
-}
-
 // renderWorkerHandoffSection renders the handoff context section for a worker.
 func renderWorkerHandoffSection(workflow string, phaseID int, workerName string) string {
 	return ""
