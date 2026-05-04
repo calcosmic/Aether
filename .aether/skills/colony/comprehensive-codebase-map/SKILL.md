@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: comprehensive-codebase-map
 description: Use when the colony needs a complete multi-perspective map of a complex codebase
 type: colony

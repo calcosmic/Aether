@@ -36,12 +36,19 @@ func TestCountFilesInDir(t *testing.T) {
 	}
 }
 
+func markAetherSourceCheckout(t *testing.T, dir string) {
+	t.Helper()
+	writeFile(t, dir, "go.mod", []byte("module github.com/calcosmic/Aether\n"))
+	writeFile(t, dir, filepath.Join("cmd", "aether", "main.go"), []byte("package main\n"))
+}
+
 // ---------------------------------------------------------------------------
 // TestScanWrapperParityHealthy
 // ---------------------------------------------------------------------------
 
 func TestScanWrapperParityHealthy(t *testing.T) {
 	dir := t.TempDir()
+	markAetherSourceCheckout(t, dir)
 	aetherDir := filepath.Join(dir, ".aether")
 	claudeDir := filepath.Join(dir, ".claude")
 	opencodeDir := filepath.Join(dir, ".opencode")
@@ -55,8 +62,6 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 		filepath.Join(codexDir, "agents"),
 		filepath.Join(claudeDir, "agents", "ant"),
 		filepath.Join(opencodeDir, "agents"),
-		filepath.Join(aetherDir, "agents-claude"),
-		filepath.Join(aetherDir, "agents-codex"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0755); err != nil {
@@ -88,15 +93,6 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 	for i := 0; i < expectedOpenCodeAgents; i++ {
 		writeFile(t, opencodeDir, fmt.Sprintf("agents/agent%d.md", i), []byte("test"))
 	}
-	// Create expected number of Claude mirrors (25)
-	for i := 0; i < expectedClaudeMirror; i++ {
-		writeFile(t, aetherDir, fmt.Sprintf("agents-claude/agent%d.md", i), []byte("test"))
-	}
-	// Create expected number of Codex mirrors (25)
-	for i := 0; i < expectedCodexMirror; i++ {
-		writeFile(t, aetherDir, fmt.Sprintf("agents-codex/agent%d.toml", i), []byte("test"))
-	}
-
 	// Create expected number of colony skills
 	for i := 0; i < expectedColonySkills; i++ {
 		name := fmt.Sprintf("colony-skill-%d", i)
@@ -134,6 +130,7 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 
 func TestScanWrapperParityMismatch(t *testing.T) {
 	dir := t.TempDir()
+	markAetherSourceCheckout(t, dir)
 	aetherDir := filepath.Join(dir, ".aether")
 
 	// Create only 3 YAML commands instead of expected 50
@@ -165,6 +162,7 @@ func TestScanWrapperParityMismatch(t *testing.T) {
 
 func TestScanWrapperParityCrossSurfaceMismatch(t *testing.T) {
 	dir := t.TempDir()
+	markAetherSourceCheckout(t, dir)
 	aetherDir := filepath.Join(dir, ".aether")
 	claudeDir := filepath.Join(dir, ".claude")
 	opencodeDir := filepath.Join(dir, ".opencode")
@@ -220,6 +218,7 @@ func TestScanHubPublishIntegrityHealthy(t *testing.T) {
 	for _, dir := range []string{
 		filepath.Join(systemDir, "commands", "claude"),
 		filepath.Join(systemDir, "commands", "opencode"),
+		filepath.Join(systemDir, "agents-claude"),
 		filepath.Join(systemDir, "agents"),
 		filepath.Join(systemDir, "codex"),
 	} {
@@ -232,6 +231,9 @@ func TestScanHubPublishIntegrityHealthy(t *testing.T) {
 		writeFile(t, systemDir, fmt.Sprintf("commands/claude/cmd%d.md", i), []byte("test"))
 		writeFile(t, systemDir, fmt.Sprintf("commands/opencode/cmd%d.md", i), []byte("test"))
 	}
+	for i := 0; i < expectedClaudeAgents; i++ {
+		writeFile(t, systemDir, fmt.Sprintf("agents-claude/agent%d.md", i), []byte("test"))
+	}
 	for i := 0; i < expectedOpenCodeAgents; i++ {
 		writeFile(t, systemDir, fmt.Sprintf("agents/agent%d.md", i), []byte("test"))
 	}
@@ -241,19 +243,19 @@ func TestScanHubPublishIntegrityHealthy(t *testing.T) {
 
 	for i := 0; i < expectedColonySkills; i++ {
 		name := fmt.Sprintf("colony-skill-%d", i)
-		skillDir := filepath.Join(systemDir, "skills-codex", "colony", name)
+		skillDir := filepath.Join(systemDir, "skills", "colony", name)
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		writeFile(t, systemDir, fmt.Sprintf("skills-codex/colony/%s/SKILL.md", name), []byte("test"))
+		writeFile(t, systemDir, fmt.Sprintf("skills/colony/%s/SKILL.md", name), []byte("test"))
 	}
 	for i := 0; i < expectedDomainSkills; i++ {
 		name := fmt.Sprintf("domain-skill-%d", i)
-		skillDir := filepath.Join(systemDir, "skills-codex", "domain", name)
+		skillDir := filepath.Join(systemDir, "skills", "domain", name)
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		writeFile(t, systemDir, fmt.Sprintf("skills-codex/domain/%s/SKILL.md", name), []byte("test"))
+		writeFile(t, systemDir, fmt.Sprintf("skills/domain/%s/SKILL.md", name), []byte("test"))
 	}
 
 	issues := scanHubPublishIntegrity()
@@ -295,6 +297,7 @@ func TestScanHubPublishIntegrityMismatch(t *testing.T) {
 
 func TestDeepScanIncludesWrapperParity(t *testing.T) {
 	dir := t.TempDir()
+	markAetherSourceCheckout(t, dir)
 	dataDir := filepath.Join(dir, ".aether", "data")
 	hubDir := t.TempDir()
 	if err := os.MkdirAll(dataDir, 0755); err != nil {

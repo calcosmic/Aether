@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: phase-dependency-analysis
 description: Use when phase or task ordering needs dependency, overlap, or blast-radius analysis
 type: colony

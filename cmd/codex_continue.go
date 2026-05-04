@@ -66,23 +66,23 @@ type codexContinueGateReport struct {
 }
 
 type codexContinueReport struct {
-	Phase              int                           `json:"phase"`
-	GeneratedAt        string                        `json:"generated_at"`
-	Manifest           string                        `json:"manifest,omitempty"`
-	VerificationReport string                        `json:"verification_report"`
-	GateReport         string                        `json:"gate_report"`
-	ReviewReport       string                        `json:"review_report,omitempty"`
-	Summary            string                        `json:"summary,omitempty"`
-	ClosedWorkers      []string                      `json:"closed_workers,omitempty"`
-	WorkerFlow         []codexContinueWorkerFlowStep `json:"worker_flow,omitempty"`
-	PartialSuccess     bool                          `json:"partial_success,omitempty"`
-	OperationalIssues  []string                      `json:"operational_issues,omitempty"`
-	Tasks              []codexContinueTaskAssessment `json:"tasks,omitempty"`
-	Recovery           codexContinueRecoveryPlan     `json:"recovery,omitempty"`
-	Advanced           bool                          `json:"advanced"`
-	Completed          bool                          `json:"completed"`
-	Next               string                        `json:"next"`
-	LastContinueOptions *codexContinueOptionsJSON        `json:"last_continue_options,omitempty"`
+	Phase               int                           `json:"phase"`
+	GeneratedAt         string                        `json:"generated_at"`
+	Manifest            string                        `json:"manifest,omitempty"`
+	VerificationReport  string                        `json:"verification_report"`
+	GateReport          string                        `json:"gate_report"`
+	ReviewReport        string                        `json:"review_report,omitempty"`
+	Summary             string                        `json:"summary,omitempty"`
+	ClosedWorkers       []string                      `json:"closed_workers,omitempty"`
+	WorkerFlow          []codexContinueWorkerFlowStep `json:"worker_flow,omitempty"`
+	PartialSuccess      bool                          `json:"partial_success,omitempty"`
+	OperationalIssues   []string                      `json:"operational_issues,omitempty"`
+	Tasks               []codexContinueTaskAssessment `json:"tasks,omitempty"`
+	Recovery            codexContinueRecoveryPlan     `json:"recovery,omitempty"`
+	Advanced            bool                          `json:"advanced"`
+	Completed           bool                          `json:"completed"`
+	Next                string                        `json:"next"`
+	LastContinueOptions *codexContinueOptionsJSON     `json:"last_continue_options,omitempty"`
 }
 
 type codexContinueManifest struct {
@@ -282,13 +282,13 @@ func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phas
 	}
 	continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 	_ = store.SaveJSON(continueReportRel, codexContinueReport{
-		Phase:       phase.ID,
-		GeneratedAt: now.Format(time.RFC3339),
-		Summary:     summary,
-		Recovery:    recovery,
-		Advanced:    false,
-		Completed:   false,
-		Next:        recovery.RedispatchCommand,
+		Phase:               phase.ID,
+		GeneratedAt:         now.Format(time.RFC3339),
+		Summary:             summary,
+		Recovery:            recovery,
+		Advanced:            false,
+		Completed:           false,
+		Next:                recovery.RedispatchCommand,
 		LastContinueOptions: continueOptionsToJSON(options),
 	})
 	updateSessionSummary("continue", recovery.RedispatchCommand, summary)
@@ -388,6 +388,10 @@ type codexContinueReviewReport struct {
 }
 
 var continueContextUpdater = updateCodexContinueContext
+
+// circuitBreaker is the package-level circuit breaker for gate retry tracking.
+// It is initialized when the continue flow starts and checked for nil before use.
+var circuitBreaker *CircuitBreaker
 
 var continueSignalHousekeeper = func(now time.Time, state colony.ColonyState) (signalHousekeepingResult, error) {
 	return runSignalHousekeepingWithState(now, false, &state)
@@ -501,21 +505,24 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-		// Ceremony progress tracking (visual mode only)
-		var progress *ceremonyProgress
-		if shouldRenderVisualOutput(stdout) {
-			continueSteps := []string{"Verification", "Housekeeping", "Advance", "Complete"}
-			progress = NewCeremonyProgress(continueSteps, stdout)
-		}
+	// Ceremony progress tracking (visual mode only)
+	var progress *ceremonyProgress
+	if shouldRenderVisualOutput(stdout) {
+		continueSteps := []string{"Verification", "Housekeeping", "Advance", "Complete"}
+		progress = NewCeremonyProgress(continueSteps, stdout)
+	}
 
-		verification, watcherFlow := runCodexContinueVerification(root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
-		assessment := assessCodexContinue(phase, manifest, verification, options, now)
-		verification = attachContinueClaimVerification(verification, assessment)
-		priorGateResults := gateResultsRead()
-		gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
-		if progress != nil {
-			progress.Advance("Verification")
-		}
+	verification, watcherFlow := runCodexContinueVerification(root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
+	assessment := assessCodexContinue(phase, manifest, verification, options, now)
+	verification = attachContinueClaimVerification(verification, assessment)
+	priorGateResults, _ := gateResultsReadPhase(phase.ID)
+	if priorGateResults == nil {
+		priorGateResults = []GateCheckResult{}
+	}
+	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	if progress != nil {
+		progress.Advance("Verification")
+	}
 
 	// Persist gate results after each gate run
 	var gateResultEntries []colony.GateResultEntry
@@ -528,6 +535,24 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		})
 	}
 	_ = gateResultsWrite(gateResultEntries)
+
+	// Per-phase gate results persistence (D-14)
+	var phaseGateResults []GateCheckResult
+	for _, c := range gates.Checks {
+		status := "passed"
+		if !c.Passed {
+			status = "failed"
+		}
+		phaseGateResults = append(phaseGateResults, GateCheckResult{
+			Name:            c.Name,
+			Status:          status,
+			Detail:          c.Detail,
+			FixHint:         c.FixHint,
+			RecoveryOptions: c.RecoveryOptions,
+			Timestamp:       now.Format(time.RFC3339),
+		})
+	}
+	_ = gateResultsWritePhase(phase.ID, phaseGateResults)
 
 	if tracer != nil && state.RunID != nil {
 		_ = tracer.LogArtifact(*state.RunID, "continue.verification", map[string]interface{}{
@@ -578,20 +603,20 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 				"aether-continue")
 		}
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
-			Phase:              phase.ID,
-			GeneratedAt:        now.Format(time.RFC3339),
-			Manifest:           displayOptionalDataPath(manifest.Path),
-			VerificationReport: displayDataPath(verificationReportRel),
-			GateReport:         displayDataPath(gateReportRel),
-			Summary:            summary,
-			WorkerFlow:         workerFlow,
-			PartialSuccess:     assessment.PartialSuccess,
-			OperationalIssues:  append([]string{}, assessment.OperationalIssues...),
-			Tasks:              append([]codexContinueTaskAssessment{}, assessment.Tasks...),
-			Recovery:           assessment.Recovery,
-			Advanced:           false,
-			Completed:          false,
-			Next:               nextCommand,
+			Phase:               phase.ID,
+			GeneratedAt:         now.Format(time.RFC3339),
+			Manifest:            displayOptionalDataPath(manifest.Path),
+			VerificationReport:  displayDataPath(verificationReportRel),
+			GateReport:          displayDataPath(gateReportRel),
+			Summary:             summary,
+			WorkerFlow:          workerFlow,
+			PartialSuccess:      assessment.PartialSuccess,
+			OperationalIssues:   append([]string{}, assessment.OperationalIssues...),
+			Tasks:               append([]codexContinueTaskAssessment{}, assessment.Tasks...),
+			Recovery:            assessment.Recovery,
+			Advanced:            false,
+			Completed:           false,
+			Next:                nextCommand,
 			LastContinueOptions: continueOptionsToJSON(options),
 		})
 		blockedState, flowErr := recordBlockedContinueWorkerFlow(state, now, workerFlow)
@@ -651,21 +676,21 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 				"aether-continue")
 		}
 		_ = store.SaveJSON(continueReportRel, codexContinueReport{
-			Phase:              phase.ID,
-			GeneratedAt:        now.Format(time.RFC3339),
-			Manifest:           displayOptionalDataPath(manifest.Path),
-			VerificationReport: displayDataPath(verificationReportRel),
-			GateReport:         displayDataPath(gateReportRel),
-			ReviewReport:       displayDataPath(reviewReportRel),
-			Summary:            summary,
-			WorkerFlow:         workerFlow,
-			PartialSuccess:     assessment.PartialSuccess,
-			OperationalIssues:  append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
-			Tasks:              append([]codexContinueTaskAssessment{}, assessment.Tasks...),
-			Recovery:           assessment.Recovery,
-			Advanced:           false,
-			Completed:          false,
-			Next:               nextCommand,
+			Phase:               phase.ID,
+			GeneratedAt:         now.Format(time.RFC3339),
+			Manifest:            displayOptionalDataPath(manifest.Path),
+			VerificationReport:  displayDataPath(verificationReportRel),
+			GateReport:          displayDataPath(gateReportRel),
+			ReviewReport:        displayDataPath(reviewReportRel),
+			Summary:             summary,
+			WorkerFlow:          workerFlow,
+			PartialSuccess:      assessment.PartialSuccess,
+			OperationalIssues:   append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
+			Tasks:               append([]codexContinueTaskAssessment{}, assessment.Tasks...),
+			Recovery:            assessment.Recovery,
+			Advanced:            false,
+			Completed:           false,
+			Next:                nextCommand,
 			LastContinueOptions: continueOptionsToJSON(options),
 		})
 		blockedState, flowErr := recordBlockedContinueWorkerFlow(state, now, workerFlow)
@@ -799,22 +824,22 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// --- REPORT SAVES (after state is durable) ---
 	continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 	if err := store.SaveJSON(continueReportRel, codexContinueReport{
-		Phase:              phase.ID,
-		GeneratedAt:        now.Format(time.RFC3339),
-		Manifest:           displayOptionalDataPath(manifest.Path),
-		VerificationReport: displayDataPath(verificationReportRel),
-		GateReport:         displayDataPath(gateReportRel),
-		ReviewReport:       displayDataPath(reviewReportRel),
-		Summary:            summary,
-		ClosedWorkers:      closedWorkers,
-		WorkerFlow:         workerFlow,
-		PartialSuccess:     assessment.PartialSuccess,
-		OperationalIssues:  append([]string{}, assessment.OperationalIssues...),
-		Tasks:              append([]codexContinueTaskAssessment{}, assessment.Tasks...),
-		Recovery:           assessment.Recovery,
-		Advanced:           true,
-		Completed:          final,
-		Next:               nextCommand,
+		Phase:               phase.ID,
+		GeneratedAt:         now.Format(time.RFC3339),
+		Manifest:            displayOptionalDataPath(manifest.Path),
+		VerificationReport:  displayDataPath(verificationReportRel),
+		GateReport:          displayDataPath(gateReportRel),
+		ReviewReport:        displayDataPath(reviewReportRel),
+		Summary:             summary,
+		ClosedWorkers:       closedWorkers,
+		WorkerFlow:          workerFlow,
+		PartialSuccess:      assessment.PartialSuccess,
+		OperationalIssues:   append([]string{}, assessment.OperationalIssues...),
+		Tasks:               append([]codexContinueTaskAssessment{}, assessment.Tasks...),
+		Recovery:            assessment.Recovery,
+		Advanced:            true,
+		Completed:           final,
+		Next:                nextCommand,
 		LastContinueOptions: continueOptionsToJSON(options),
 	}); err != nil {
 		return nil, state, phase, nextPhase, &housekeeping, final, fmt.Errorf("failed to write continue report: %w", err)
@@ -1098,6 +1123,9 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 			TaskID:           fmt.Sprintf("continue-review-%s", spec.Caste),
 			TaskBrief:        renderCodexContinueReviewBrief(root, phase, manifest, verification, assessment, spec),
 			ContextCapsule:   capsule,
+			HandoffSection:   renderWorkerHandoffSection("continue", phase.ID, deterministicAntName(spec.Caste, fmt.Sprintf("phase:%d:continue:%s", phase.ID, spec.Caste))),
+			Workflow:         "continue",
+			Phase:            phase.ID,
 			SkillSection:     resolveSkillSectionForWorkflow("continue", spec.Caste, spec.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
@@ -2358,9 +2386,25 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 	}
 }
 
-func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []colony.GateResultEntry) codexContinueGateReport {
+func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
+
+	// Circuit breaker integration (LOOP-01): check if any gate has exceeded retry threshold
+	for _, prior := range priorGateResults {
+		if prior.Status == "failed" {
+			key := gateRetryKey(phase.ID, prior.Name)
+			if circuitBreaker != nil && !circuitBreaker.Allow(key) {
+				return codexContinueGateReport{
+					Phase:          phase.ID,
+					GeneratedAt:    now.Format(time.RFC3339),
+					Checks:         checks,
+					Passed:         false,
+					BlockingIssues: []string{fmt.Sprintf("circuit breaker tripped for gate %q after %d failed retries -- manual intervention required", prior.Name, circuitBreaker.FailureCount(key))},
+				}
+			}
+		}
+	}
 
 	// manifest_present gate
 	if shouldSkipGate(priorGateResults, "manifest_present") {
@@ -2369,6 +2413,11 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		manifestCheck := gateCheck{Name: "manifest_present", Passed: manifest.Present, Detail: "build manifest present"}
 		if !manifest.Present {
 			manifestCheck.Detail = fmt.Sprintf("build manifest is missing for phase %d", phase.ID)
+			manifestCheck.FixHint = "Ensure the build completed successfully and produced a manifest.json"
+			manifestCheck.RecoveryOptions = []string{
+				"Fix the build issue and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 			blockers = append(blockers, manifestCheck.Detail)
 		}
 		checks = append(checks, manifestCheck)
@@ -2384,6 +2433,11 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 			Detail: continueVerificationDetail(verification),
 		}
 		if !verification.ChecksPassed {
+			verifCheck.FixHint = gateRecoveryTemplate("verification_loop")
+			verifCheck.RecoveryOptions = []string{
+				"Fix manually and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 			blockers = append(blockers, verification.BlockingIssues...)
 		}
 		checks = append(checks, verifCheck)
@@ -2396,6 +2450,11 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		evidenceCheck := gateCheck{Name: "implementation_evidence", Passed: assessment.PositiveEvidence, Detail: "task or claim evidence recorded for the verified phase"}
 		if !assessment.PositiveEvidence {
 			evidenceCheck.Detail = "verification passed but no implementation evidence or reconciliation was recorded"
+			evidenceCheck.FixHint = "Ensure workers reported task completion or claims were filed"
+			evidenceCheck.RecoveryOptions = []string{
+				"Fix manually and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 			blockers = append(blockers, assessment.BlockingIssues...)
 		}
 		checks = append(checks, evidenceCheck)
@@ -2408,15 +2467,39 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		operationalCheck := gateCheck{Name: "operational_evidence", Passed: true, Detail: "no operational worker issues were recorded"}
 		if len(assessment.OperationalIssues) > 0 {
 			operationalCheck.Detail = fmt.Sprintf("%d operational worker issues recorded; continue is using verification-led truth instead", len(assessment.OperationalIssues))
+			operationalCheck.FixHint = "Review worker output for operational issues"
+			operationalCheck.RecoveryOptions = []string{
+				"Fix manually and run /ant-continue",
+				"Run /ant-unblock for guided recovery",
+			}
 		}
 		checks = append(checks, operationalCheck)
 	}
 
 	// flags gate (no_critical_flags) — runs every time for safety
 	flagCheck := checkNoCriticalFlags()
-	checks = append(checks, flagCheck)
 	if !flagCheck.Passed {
+		flagCheck.FixHint = "Resolve critical flags before continuing"
+		flagCheck.RecoveryOptions = []string{
+			"Fix manually and run /ant-continue",
+			"Run /ant-unblock for guided recovery",
+		}
 		blockers = append(blockers, flagCheck.Detail)
+	}
+	checks = append(checks, flagCheck)
+
+	// Record failures/successes in circuit breaker (LOOP-01)
+	for _, c := range checks {
+		key := gateRetryKey(phase.ID, c.Name)
+		if !c.Passed {
+			if circuitBreaker != nil {
+				circuitBreaker.RecordFailure(key)
+			}
+		} else {
+			if circuitBreaker != nil {
+				circuitBreaker.RecordSuccess(key)
+			}
+		}
 	}
 
 	return codexContinueGateReport{

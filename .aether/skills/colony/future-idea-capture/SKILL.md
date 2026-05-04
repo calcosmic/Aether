@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: future-idea-capture
 description: Use when a future idea should be captured with trigger conditions rather than forced into the active phase
 type: colony

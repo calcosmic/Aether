@@ -6,7 +6,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
-	"github.com/calcosmic/Aether/pkg/memory"
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/spf13/cobra"
 )
 
@@ -290,7 +290,7 @@ var learningPromoteCmd = &cobra.Command{
 		}
 
 		bus := events.NewBus(store, events.DefaultConfig())
-		promoteService := memory.NewPromoteService(store, bus)
+		promoteService := learn.NewPromoteService(store, bus)
 		ctx, cancel := timeoutCtx(cmd)
 		defer cancel()
 

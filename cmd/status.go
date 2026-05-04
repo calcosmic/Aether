@@ -195,6 +195,63 @@ func renderLoopSafetySection(loopEvents []events.Event) string {
 	b.WriteString("\n")
 	return b.String()
 }
+// renderGateStatusSection renders the Gate Status dashboard section.
+// Returns empty string when no gate-results file exists for the current phase,
+// or when the phase is 0 (not started).
+func renderGateStatusSection(state colony.ColonyState, s *storage.Store) string {
+	if s == nil || state.CurrentPhase <= 0 {
+		return ""
+	}
+
+		rel := fmt.Sprintf("gate-results-%d.json", state.CurrentPhase)
+		var results []GateCheckResult
+		if err := s.LoadJSON(rel, &results); err != nil || len(results) == 0 {
+			return ""
+		}
+
+	passed := 0
+	failed := 0
+	skipped := 0
+	var lastRun string
+	for _, r := range results {
+		switch r.Status {
+		case "passed":
+			passed++
+		case "failed":
+			failed++
+		case "skipped", "not-reached":
+			skipped++
+		}
+		if r.Timestamp > lastRun {
+			lastRun = r.Timestamp
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("status"), "Gate Status"))
+	b.WriteString(visualDivider)
+	fmt.Fprintf(&b, "Phase: %d\n", state.CurrentPhase)
+	fmt.Fprintf(&b, "Gates: %d (%d passed, %d failed, %d skipped)\n", len(results), passed, failed, skipped)
+	if lastRun != "" {
+		fmt.Fprintf(&b, "Last Run: %s\n", formatTimestamp(lastRun))
+	}
+
+	if failed > 0 {
+		b.WriteString("\nFailed Gates:\n")
+		for _, r := range results {
+			if r.Status == "failed" {
+				fmt.Fprintf(&b, "  - %s: %s", r.Name, emptyFallback(r.Detail, "no detail"))
+				if r.FixHint != "" {
+					fmt.Fprintf(&b, " (fix: %s)", r.FixHint)
+				}
+				b.WriteString("\n")
+			}
+		}
+	}
+
+	b.WriteString("\n")
+	return b.String()
+}
 
 func loadGuidedActions(s *storage.Store, root string) []guidedAction {
 	if s == nil {
@@ -424,6 +481,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 			b.WriteString(renderLoopSafetySection(loopEvents))
 		}
 	}
+
+		// Gate Status (GATE-09)
+		if gateSection := renderGateStatusSection(state, s); gateSection != "" {
+			b.WriteString(gateSection)
+		}
 
 	// Progress
 	totalPhases := len(state.Plan.Phases)

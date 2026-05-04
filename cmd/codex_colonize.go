@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -150,6 +151,7 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 	if err := writeSurveyCompatibilityJSON(surveyDir, facts); err != nil {
 		return nil, err
 	}
+	codegraphStats, codegraphWarning := runColonizeCodebaseGraph(root)
 
 	for i := range dispatches {
 		status := dispatches[i].Status
@@ -217,12 +219,35 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 		},
 		"next": "aether plan",
 	}
+	if codegraphStats != nil {
+		result["codebase_graph"] = map[string]interface{}{
+			"files_scanned": codegraphStats.FilesScanned,
+			"edges_found":   codegraphStats.EdgesFound,
+			"languages":     codegraphStats.Languages,
+			"output":        "codebase-graph.json",
+		}
+	}
+	if codegraphWarning != "" {
+		result["codebase_graph_warning"] = codegraphWarning
+	}
 	statuses := make([]string, 0, len(dispatches))
 	for _, dispatch := range dispatches {
 		statuses = append(statuses, dispatch.Status)
 	}
 	runStatus = summarizeRunStatus(statuses...)
 	return result, nil
+}
+
+func runColonizeCodebaseGraph(root string) (*codegraph.Stats, string) {
+	stats, err := runCodebaseScanFromColonize(root, nil)
+	if err != nil {
+		logActivity("colonize", fmt.Sprintf("codebase graph skipped: %v", err))
+		return nil, err.Error()
+	}
+	if stats != nil {
+		logActivity("colonize", fmt.Sprintf("codebase graph scanned %d files, %d edges", stats.FilesScanned, stats.EdgesFound))
+	}
+	return stats, ""
 }
 
 func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
@@ -283,7 +308,7 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 		if facts.DetectedType == "unknown" {
 			facts.DetectedType = detector.typ
 		}
-		if !seenLang[detector.typ] {
+		if detectorContributesLanguage(detector.typ) && !seenLang[detector.typ] {
 			facts.Languages = append(facts.Languages, detector.typ)
 			seenLang[detector.typ] = true
 		}
@@ -294,6 +319,9 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 			facts.Frameworks = append(facts.Frameworks, framework)
 			seenFramework[framework] = true
 		}
+	}
+	if hasAnyRootFile(names, dockerComposeFiles()) {
+		facts.PackageManagers = appendUnique(facts.PackageManagers, "docker compose")
 	}
 
 	if names["go.mod"] {
@@ -362,7 +390,13 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 		appendMatches(&facts.TODOs, rel, text, []string{"TODO", "FIXME", "HACK", "XXX"}, 10)
 		appendMatches(&facts.TypeSafetyGaps, rel, text, []string{"interface{}", ": any", "@ts-ignore", "@ts-nocheck"}, 10)
 		appendMatches(&facts.SecurityPatterns, rel, text, []string{"os.Getenv(", "process.env.", "dangerouslySetInnerHTML", "eval("}, 10)
-		appendMatches(&facts.Integrations, rel, text, []string{"github.com/spf13/cobra", "goreleaser", "GitHub", "OpenAI", "Codex", "Claude", "OpenCode"}, 10)
+		if !isPlatformGuidanceFile(rel) {
+			appendMatches(&facts.Integrations, rel, text, []string{
+				"github.com/spf13/cobra", "goreleaser", "GitHub", "OpenAI",
+				"postgres", "postgresql", "mysql", "redis", "clickhouse",
+				"metabase", "appsmith", "nocodb", "plausible", "listmonk",
+			}, 10)
+		}
 		return nil
 	})
 
@@ -459,6 +493,8 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 			TaskID:           fmt.Sprintf("survey-%d", i),
 			TaskBrief:        taskBrief,
 			ContextCapsule:   capsule,
+			HandoffSection:   renderWorkerHandoffSection("colonize", 0, workerName),
+			Workflow:         "colonize",
 			SkillSection:     resolveSkillSectionForWorkflow("colonize", spec.Caste, spec.Task),
 			PheromoneSection: pheromoneSection,
 			Root:             root,
@@ -677,7 +713,14 @@ func isEntryPoint(name string) bool {
 }
 
 func isTestFile(name string) bool {
-	return strings.HasSuffix(name, "_test.go") || strings.Contains(name, ".test.") || strings.Contains(name, ".spec.")
+	lower := strings.ToLower(name)
+	if strings.HasSuffix(lower, "_test.go") || strings.Contains(lower, ".test.") || strings.Contains(lower, ".spec.") {
+		return true
+	}
+	if strings.HasPrefix(lower, "test_") || strings.HasPrefix(lower, "test-") {
+		return true
+	}
+	return strings.HasSuffix(lower, ".bats")
 }
 
 func isExampleSource(name string) bool {
@@ -685,10 +728,35 @@ func isExampleSource(name string) bool {
 }
 
 func surveyReadableFile(name string) bool {
-	for _, suffix := range []string{".go", ".md", ".json", ".yaml", ".yml", ".toml"} {
+	for _, suffix := range []string{".go", ".md", ".json", ".yaml", ".yml", ".toml", ".sh", ".bash", ".sql"} {
 		if strings.HasSuffix(name, suffix) {
 			return true
 		}
+	}
+	return false
+}
+
+func dockerComposeFiles() []string {
+	return []string{"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"}
+}
+
+func hasAnyRootFile(names map[string]bool, candidates []string) bool {
+	for _, candidate := range candidates {
+		if names[candidate] {
+			return true
+		}
+	}
+	return false
+}
+
+func isPlatformGuidanceFile(rel string) bool {
+	rel = filepath.ToSlash(rel)
+	if strings.Contains(rel, "/") {
+		return false
+	}
+	switch rel {
+	case "AGENTS.md", "CLAUDE.md", "CODEX.md", "OPENCODE.md":
+		return true
 	}
 	return false
 }
@@ -801,11 +869,13 @@ func renderSurveyTrails(generatedAt string, facts codexWorkspaceFacts, dispatch 
 	if len(integrations) == 0 {
 		integrations = []string{"No direct third-party API client packages were detected in the scanned manifests."}
 	}
+	dataStorage := append([]string{}, filterContains(facts.KeyDependencies, []string{"sqlite", "postgres", "mysql", "mongo", "redis", "clickhouse"})...)
+	dataStorage = append(dataStorage, filterContains(facts.Integrations, []string{"sqlite", "postgres", "mysql", "mongo", "redis", "clickhouse"})...)
 	return renderSurveyDoc("TRAILS", generatedAt, dispatch.Name, []string{
 		"## APIs & External Services",
 		bulletList(integrations, "No explicit API/service integrations detected."),
 		"## Data Storage",
-		bulletList(filterContains(facts.KeyDependencies, []string{"sqlite", "postgres", "mysql", "mongo"}), "No dedicated database client package detected."),
+		bulletList(dataStorage, "No dedicated database or storage service detected."),
 		"## Authentication & Identity",
 		bulletList(filterContains(facts.Integrations, []string{"GitHub", "OpenAI"}), "No dedicated identity provider package detected."),
 		"## Monitoring & Observability",
@@ -817,59 +887,306 @@ func renderSurveyTrails(generatedAt string, facts codexWorkspaceFacts, dispatch 
 	})
 }
 
-func renderSurveyBlueprint(generatedAt string, facts codexWorkspaceFacts, dispatch codexSurveyorDispatch) string {
-	layers := []string{
-		"`cmd/` holds user-facing CLI command implementations.",
-		"`pkg/` holds reusable colony packages and storage/agent infrastructure.",
-		"Platform companion assets live in `.aether/`, `.claude/`, `.opencode/`, and `.codex/`.",
+func surveyPatternOverview(facts codexWorkspaceFacts) []string {
+	var overview []string
+	if facts.DetectedType != "" && facts.DetectedType != "unknown" {
+		overview = append(overview, fmt.Sprintf("Detected project type: `%s`.", facts.DetectedType))
 	}
+	if len(facts.Frameworks) > 0 {
+		overview = append(overview, fmt.Sprintf("Detected tools/frameworks: %s.", strings.Join(facts.Frameworks, ", ")))
+	}
+	if len(facts.Domains) > 0 {
+		overview = append(overview, fmt.Sprintf("Detected domains: %s.", strings.Join(facts.Domains, ", ")))
+	}
+	if len(facts.TopLevelDirs) > 0 {
+		overview = append(overview, fmt.Sprintf("Top-level layout includes: %s.", strings.Join(facts.TopLevelDirs, ", ")))
+	}
+	return overview
+}
+
+func inferArchitectureLayers(facts codexWorkspaceFacts) []string {
+	var layers []string
+	for _, dir := range facts.TopLevelDirs {
+		switch {
+		case dir == ".docker":
+			layers = append(layers, "`.docker/` holds container bootstrap or service initialization assets.")
+		case dir == "docs":
+			layers = append(layers, "`docs/` holds project documentation and operating notes.")
+		case dir == "tests":
+			layers = append(layers, "`tests/` holds executable verification scripts or test suites.")
+		case dir == "cmd":
+			layers = append(layers, "`cmd/` holds executable entry points or command implementations.")
+		case dir == "pkg":
+			layers = append(layers, "`pkg/` holds reusable packages or libraries.")
+		case dir == "src", dir == "app", dir == "pages", dir == "components":
+			layers = append(layers, fmt.Sprintf("`%s/` holds application or frontend source.", dir))
+		case strings.Contains(dir, "config"):
+			layers = append(layers, fmt.Sprintf("`%s/` holds project or service configuration.", dir))
+		case dir == "scripts" || dir == "bin":
+			layers = append(layers, fmt.Sprintf("`%s/` holds automation scripts.", dir))
+		case dir == "infra" || dir == "deploy" || dir == ".github":
+			layers = append(layers, fmt.Sprintf("`%s/` holds infrastructure, deployment, or CI assets.", dir))
+		case dir == "services" || dir == "apps" || dir == "packages":
+			layers = append(layers, fmt.Sprintf("`%s/` suggests a multi-service or workspace layout.", dir))
+		default:
+			layers = append(layers, fmt.Sprintf("`%s/` is a top-level project area detected by the survey.", dir))
+		}
+	}
+	if len(layers) == 0 && len(facts.EntryPoints) > 0 {
+		layers = append(layers, fmt.Sprintf("Root-level entry points: %s.", strings.Join(facts.EntryPoints, ", ")))
+	}
+	return layers
+}
+
+func inferDataFlow(facts codexWorkspaceFacts) []string {
+	var flow []string
+	if hasDockerComposeConfig(facts) {
+		flow = append(flow, "Docker Compose files coordinate local services and containerized dependencies.")
+	}
+	if len(facts.Integrations) > 0 {
+		flow = append(flow, "Integration/service clues were found in scanned source or configuration files.")
+	}
+	if len(facts.EntryPoints) > 0 {
+		flow = append(flow, fmt.Sprintf("Runtime flow likely starts from: %s.", strings.Join(facts.EntryPoints, ", ")))
+	}
+	if len(facts.ConfigFiles) > 0 {
+		flow = append(flow, "Top-level config files shape runtime behavior and environment wiring.")
+	}
+	return flow
+}
+
+func inferKeyAbstractions(facts codexWorkspaceFacts) []string {
+	var abstractions []string
+	if hasDockerComposeConfig(facts) {
+		abstractions = append(abstractions, "Service definitions", "container orchestration", "environment configuration")
+	}
+	if hasLanguage(facts, "go") {
+		abstractions = append(abstractions, "Go packages", "executable entry points")
+	}
+	if hasLanguage(facts, "node") || hasFramework(facts, "node") {
+		abstractions = append(abstractions, "Node package scripts", "application modules")
+	}
+	if hasTopLevelDir(facts, "docs") {
+		abstractions = append(abstractions, "documentation-backed workflow")
+	}
+	if hasTopLevelDir(facts, "tests") {
+		abstractions = append(abstractions, "scripted verification")
+	}
+	return abstractions
+}
+
+func inferCrossCuttingConcerns(facts codexWorkspaceFacts) []string {
+	var concerns []string
+	if len(facts.ConfigFiles) > 0 {
+		concerns = append(concerns, "configuration management")
+	}
+	if len(facts.SecurityPatterns) > 0 {
+		concerns = append(concerns, "environment variables or other security-sensitive settings")
+	}
+	if len(facts.TestFiles) > 0 {
+		concerns = append(concerns, "verification coverage")
+	}
+	if hasTopLevelDir(facts, "docs") {
+		concerns = append(concerns, "documentation upkeep")
+	}
+	if hasDockerComposeConfig(facts) {
+		concerns = append(concerns, "service startup order and local dependency health")
+	}
+	return concerns
+}
+
+func inferDirectoryPurposes(facts codexWorkspaceFacts) []string {
+	var purposes []string
+	for _, layer := range inferArchitectureLayers(facts) {
+		purposes = append(purposes, layer)
+	}
+	return purposes
+}
+
+func inferNamingConventions(facts codexWorkspaceFacts) []string {
+	var conventions []string
+	if hasLanguage(facts, "go") {
+		conventions = append(conventions, "Go tests use `*_test.go` where present.")
+	}
+	if hasDockerComposeConfig(facts) {
+		conventions = append(conventions, "Docker Compose configuration lives in root compose YAML files.")
+	}
+	for _, testFile := range facts.TestFiles {
+		lower := strings.ToLower(filepath.Base(testFile))
+		if strings.HasPrefix(lower, "test_") || strings.HasPrefix(lower, "test-") || strings.HasSuffix(lower, ".bats") {
+			conventions = appendUnique(conventions, "Shell or command-level tests use `test_*`, `test-*`, or Bats-style filenames.")
+		}
+	}
+	if len(filterContains(facts.ConfigFiles, []string{".yaml", ".yml", ".toml"})) > 0 {
+		conventions = append(conventions, "Configuration uses YAML/TOML files.")
+	}
+	return conventions
+}
+
+func inferCodeStyleClues(facts codexWorkspaceFacts) []string {
+	var clues []string
+	if hasLanguage(facts, "go") {
+		clues = append(clues, "Go source files are present; prefer gofmt/go test conventions.")
+	}
+	if hasLanguage(facts, "node") {
+		clues = append(clues, "Node package metadata is present; follow package scripts and project linting if configured.")
+	}
+	if hasDockerComposeConfig(facts) {
+		clues = append(clues, "Configuration-first service composition is driven by Docker Compose files.")
+	}
+	if hasTopLevelDir(facts, "docs") {
+		clues = append(clues, "Documentation is a first-class project artifact.")
+	}
+	return clues
+}
+
+func inferImportOrganization(facts codexWorkspaceFacts) []string {
+	var clues []string
+	if hasLanguage(facts, "go") {
+		clues = append(clues, "`go.mod` is the dependency source of truth.")
+	}
+	if hasLanguage(facts, "node") || hasFramework(facts, "node") {
+		clues = append(clues, "`package.json` is the package/script source of truth.")
+	}
+	if len(facts.KeyDependencies) > 0 {
+		clues = append(clues, fmt.Sprintf("Parsed dependency samples: %s.", strings.Join(facts.KeyDependencies, ", ")))
+	}
+	return clues
+}
+
+func inferErrorHandlingClues(facts codexWorkspaceFacts) []string {
+	var clues []string
+	if len(facts.SecurityPatterns) > 0 {
+		clues = append(clues, "Environment-sensitive settings were found; validate secret handling and defaults.")
+	}
+	if len(facts.TestFiles) > 0 {
+		clues = append(clues, "Tests exist and should guard behavior changes.")
+	}
+	if len(facts.TODOs) > 0 {
+		clues = append(clues, "TODO/FIXME markers may identify incomplete error paths.")
+	}
+	return clues
+}
+
+func inferTestFrameworks(facts codexWorkspaceFacts) []string {
+	var frameworks []string
+	for _, testFile := range facts.TestFiles {
+		lower := strings.ToLower(testFile)
+		switch {
+		case strings.HasSuffix(lower, "_test.go"):
+			frameworks = appendUnique(frameworks, "Go `testing` package")
+		case strings.Contains(lower, ".test.") || strings.Contains(lower, ".spec."):
+			frameworks = appendUnique(frameworks, "JavaScript/TypeScript spec-style tests")
+		case strings.HasSuffix(lower, ".sh") || strings.HasSuffix(lower, ".bash"):
+			frameworks = appendUnique(frameworks, "shell-based smoke or regression tests")
+		case strings.HasSuffix(lower, ".bats"):
+			frameworks = appendUnique(frameworks, "Bats shell tests")
+		}
+	}
+	return frameworks
+}
+
+func inferTestStructure(facts codexWorkspaceFacts) []string {
+	var structure []string
+	for _, testFile := range facts.TestFiles {
+		lower := strings.ToLower(testFile)
+		switch {
+		case strings.Contains(lower, "/tests/") || strings.HasPrefix(lower, "tests/"):
+			structure = appendUnique(structure, "Tests are grouped under `tests/`.")
+		case strings.HasSuffix(lower, "_test.go"):
+			structure = appendUnique(structure, "Go tests sit near package source files.")
+		case strings.HasSuffix(lower, ".sh") || strings.HasSuffix(lower, ".bash"):
+			structure = appendUnique(structure, "Shell test scripts verify command or service behavior.")
+		}
+	}
+	return structure
+}
+
+func inferCoverageTargets(facts codexWorkspaceFacts) []string {
+	var targets []string
+	if hasDockerComposeConfig(facts) {
+		targets = append(targets, "service composition and startup wiring")
+	}
+	if len(facts.EntryPoints) > 0 {
+		targets = append(targets, "runtime entry points")
+	}
+	if len(facts.ConfigFiles) > 0 {
+		targets = append(targets, "configuration and environment handling")
+	}
+	if len(facts.Integrations) > 0 {
+		targets = append(targets, "external service integration points")
+	}
+	return targets
+}
+
+func inferCommonTestPatterns(facts codexWorkspaceFacts) []string {
+	var patterns []string
+	for _, testFile := range facts.TestFiles {
+		lower := strings.ToLower(testFile)
+		switch {
+		case strings.HasSuffix(lower, "_test.go"):
+			patterns = appendUnique(patterns, "`go test ./...` likely exercises Go tests.")
+		case strings.HasSuffix(lower, ".sh") || strings.HasSuffix(lower, ".bash"):
+			patterns = appendUnique(patterns, "Executable shell scripts likely drive smoke/regression checks.")
+		case strings.Contains(lower, ".test.") || strings.Contains(lower, ".spec."):
+			patterns = appendUnique(patterns, "Spec-style files likely run through the project package scripts.")
+		}
+	}
+	return patterns
+}
+
+func hasDockerComposeConfig(facts codexWorkspaceFacts) bool {
+	for _, configFile := range facts.ConfigFiles {
+		for _, composeFile := range dockerComposeFiles() {
+			if configFile == composeFile {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasLanguage(facts codexWorkspaceFacts, language string) bool {
+	return containsString(facts.Languages, language)
+}
+
+func hasFramework(facts codexWorkspaceFacts, framework string) bool {
+	return containsString(facts.Frameworks, framework)
+}
+
+func hasTopLevelDir(facts codexWorkspaceFacts, dir string) bool {
+	return containsString(facts.TopLevelDirs, dir)
+}
+
+func renderSurveyBlueprint(generatedAt string, facts codexWorkspaceFacts, dispatch codexSurveyorDispatch) string {
 	return renderSurveyDoc("BLUEPRINT", generatedAt, dispatch.Name, []string{
 		"## Pattern Overview",
-		fmt.Sprintf("- The repo is organized as a Go CLI plus companion asset trees for multiple AI platforms."),
+		bulletList(surveyPatternOverview(facts), "No architectural pattern inferred from scanned files."),
 		"## Layers",
-		bulletList(layers, "No layered structure detected."),
+		bulletList(inferArchitectureLayers(facts), "No layered structure detected."),
 		"## Data Flow",
-		bulletList([]string{
-			"`aether install` publishes companion files into the hub.",
-			"`aether update` / `lay-eggs` sync hub assets into working repos.",
-			"Colony commands mutate `.aether/data/COLONY_STATE.json` and related runtime files.",
-		}, "No data flow summary available."),
+		bulletList(inferDataFlow(facts), "No data flow summary available from scanned files."),
 		"## Key Abstractions",
-		bulletList([]string{"Cobra commands", "Colony state machine", "Spawn tree", "Pheromone/context assembly", "Platform sync"}, "No abstractions detected."),
+		bulletList(inferKeyAbstractions(facts), "No abstractions detected from scanned files."),
 		"## Entry Points",
 		bulletList(facts.EntryPoints, "No entry points detected."),
 		"## Cross-Cutting Concerns",
-		bulletList([]string{"state safety", "context assembly", "agent definitions", "hub sync"}, "No cross-cutting concerns detected."),
+		bulletList(inferCrossCuttingConcerns(facts), "No cross-cutting concerns detected."),
 	})
 }
 
 func renderSurveyChambers(generatedAt string, facts codexWorkspaceFacts, dispatch codexSurveyorDispatch) string {
-	purposes := make([]string, 0, len(facts.TopLevelDirs))
-	for _, dir := range facts.TopLevelDirs {
-		switch dir {
-		case "cmd":
-			purposes = append(purposes, "`cmd/` — Go CLI command surface.")
-		case "pkg":
-			purposes = append(purposes, "`pkg/` — reusable packages and runtime internals.")
-		case ".aether":
-			purposes = append(purposes, "`.aether/` — companion assets and local colony state.")
-		case ".claude", ".opencode", ".codex":
-			purposes = append(purposes, fmt.Sprintf("`%s/` — platform-specific command or agent assets.", dir))
-		case "docs":
-			purposes = append(purposes, "`docs/` — supporting reference and marketing docs.")
-		}
-	}
 	return renderSurveyDoc("CHAMBERS", generatedAt, dispatch.Name, []string{
 		"## Directory Layout",
 		bulletList(facts.TopLevelDirs, "No top-level directories detected."),
 		"## Directory Purposes",
-		bulletList(purposes, "No directory purpose summaries available."),
+		bulletList(inferDirectoryPurposes(facts), "No directory purpose summaries available."),
 		"## Key File Locations",
 		bulletList(facts.EntryPoints, "No key file locations detected."),
 		"## Naming Conventions",
-		bulletList([]string{"Go commands live in `cmd/*.go`", "Tests use `*_test.go`", "Agent definitions use platform-specific directories"}, "No naming conventions inferred."),
+		bulletList(inferNamingConventions(facts), "No naming conventions inferred."),
 		"## Special Directories",
-		bulletList(filterContains(facts.TopLevelDirs, []string{".aether", ".claude", ".opencode", ".codex"}), "No special directories detected."),
+		bulletList(filterContains(facts.TopLevelDirs, []string{".docker", ".github", "infra", "deploy", "scripts", "tests"}), "No special directories detected."),
 	})
 }
 
@@ -880,13 +1197,13 @@ func renderSurveyDisciplines(generatedAt string, facts codexWorkspaceFacts, disp
 	}
 	return renderSurveyDoc("DISCIPLINES", generatedAt, dispatch.Name, []string{
 		"## Naming Patterns",
-		bulletList([]string{"snake/cobra-style command ids", "Go package directories under `cmd/` and `pkg/`", "`*_test.go` for tests"}, "No naming patterns inferred."),
+		bulletList(inferNamingConventions(facts), "No naming patterns inferred."),
 		"## Code Style",
-		bulletList([]string{"Go-first implementation", "JSON envelopes for machine-safe command output", "visual renderer layered on top of JSON output"}, "No code style clues detected."),
+		bulletList(inferCodeStyleClues(facts), "No code style clues detected."),
 		"## Import Organization",
-		bulletList([]string{"standard library first, then internal Aether packages, then third-party packages"}, "No import organization clues detected."),
+		bulletList(inferImportOrganization(facts), "No import organization clues detected."),
 		"## Error Handling",
-		bulletList([]string{"command handlers prefer `outputError` / `outputErrorMessage` rather than panics", "state writes are explicit and error-checked"}, "No error handling conventions inferred."),
+		bulletList(inferErrorHandlingClues(facts), "No error handling conventions inferred."),
 		"## Testing",
 		bulletList(facts.TestFiles, "No test files detected."),
 		"## Example Source Files",
@@ -895,21 +1212,17 @@ func renderSurveyDisciplines(generatedAt string, facts codexWorkspaceFacts, disp
 }
 
 func renderSurveySentinel(generatedAt string, facts codexWorkspaceFacts, dispatch codexSurveyorDispatch) string {
-	testFramework := "Go `testing` package"
-	if len(facts.TestFiles) == 0 {
-		testFramework = "No test suite detected"
-	}
 	return renderSurveyDoc("SENTINEL-PROTOCOLS", generatedAt, dispatch.Name, []string{
 		"## Test Framework",
-		fmt.Sprintf("- %s", testFramework),
+		bulletList(inferTestFrameworks(facts), "No test suite detected."),
 		"## Test File Organization",
 		bulletList(facts.TestFiles, "No test files detected."),
 		"## Test Structure",
-		bulletList([]string{"table-driven Go tests", "temporary workspace helpers", "JSON envelope assertions"}, "No test structure inferred."),
+		bulletList(inferTestStructure(facts), "No test structure inferred."),
 		"## Coverage Targets",
-		bulletList([]string{"command behavior", "state mutation", "visual rendering", "cross-platform storage"}, "No coverage targets inferred."),
+		bulletList(inferCoverageTargets(facts), "No coverage targets inferred."),
 		"## Common Patterns",
-		bulletList([]string{"`saveGlobals(t)` and `resetRootCmd(t)` helpers", "`setupBuildFlowTest` temp workspace setup", "`go test ./...` as the main verification command"}, "No testing patterns inferred."),
+		bulletList(inferCommonTestPatterns(facts), "No testing patterns inferred."),
 	})
 }
 
@@ -942,7 +1255,7 @@ func identifyPathogens(facts codexWorkspaceFacts) []string {
 	if len(facts.TODOs) > 5 {
 		issues = append(issues, fmt.Sprintf("%d TODO/FIXME/HACK markers need review.", len(facts.TODOs)))
 	}
-	if len(facts.KeyDependencies) == 0 && facts.FileCount > 10 {
+	if len(facts.KeyDependencies) == 0 && facts.FileCount > 10 && !hasDockerComposeConfig(facts) {
 		issues = append(issues, "No dependency manifest detected.")
 	}
 

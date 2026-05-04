@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: rest-api
 description: Use when the project designs or consumes RESTful HTTP APIs
 type: domain

@@ -1,0 +1,9 @@
+name: ant-shelf-add
+description: "Add a note to the Aether shelf backlog"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether shelf-add $ARGUMENTS"
+guardrails:
+  - "Do not edit `.aether/data/shelf.json` by hand from this command spec."
+  - "Use the runtime help for `shelf-add` as the source of truth for flags and behavior."
+  - "If docs and runtime disagree, runtime wins."

@@ -786,7 +786,7 @@ If integration_plan is provided above, you MUST:
 Use colony-flavored language, 4-8 words, trailing ellipsis.
 
 Work:
-1. Read .aether/workers.md for Builder discipline
+1. Read workers.md from the installed hub (`~/.aether/system/workers.md`, or the matching dev hub when using `aether-dev`) for Builder discipline
 2. Implement task, write tests
 3. Log activity using Bash tool with description
 4. Update display using Bash tool with description

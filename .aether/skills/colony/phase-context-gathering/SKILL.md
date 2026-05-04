@@ -1,6 +1,7 @@
 ---
 name: phase-context-gathering
 description: Use when a phase needs implementation context, file inventory, or gray-area analysis before work proceeds
+source: shipped
 type: colony
 domains: [analysis, codebase-intelligence, requirements]
 agent_roles: [scout, architect, watcher]

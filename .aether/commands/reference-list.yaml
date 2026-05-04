@@ -1,0 +1,8 @@
+name: ant-reference-list
+description: "List installed global references"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether reference-list $ARGUMENTS"
+guardrails:
+  - "Do not inspect raw reference directories unless the runtime output is insufficient for debugging."
+  - "If docs and runtime disagree, runtime wins."

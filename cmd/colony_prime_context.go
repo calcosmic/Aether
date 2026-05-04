@@ -10,6 +10,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/cache"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -559,9 +560,26 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		})
 	}
 
+	if handoffSection := renderWorkerHandoffSection("build", state.CurrentPhase, ""); strings.TrimSpace(handoffSection) != "" {
+		sections = append(sections, colonyPrimeSection{
+			name:              "worker_handoffs",
+			title:             "Previous Worker Handoffs",
+			source:            filepath.Join(store.BasePath(), workerHandoffsPath),
+			content:           handoffSection,
+			priority:          4,
+			freshnessScore:    0.95,
+			confirmationScore: 0.70,
+			relevanceScore:    0.75,
+		})
+	}
+
 	hubDir := resolveHubPath()
 	var fallbacks []string
-	hiveEntries := readHiveWisdomEntries(hubDir, 5, &fallbacks)
+	repoRoot := ""
+	if store != nil && strings.TrimSpace(store.BasePath()) != "" {
+		repoRoot = filepath.Dir(filepath.Dir(store.BasePath()))
+	}
+	hiveEntries := readHiveWisdomEntriesForDomains(hubDir, 5, readRegistryDomainsForRepo(hubDir, repoRoot), &fallbacks)
 	hiveLines := buildHiveWisdomLines(hiveEntries)
 	if len(hiveLines) > 0 {
 		var hiveSB strings.Builder
@@ -578,6 +596,56 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 			freshnessScore:    hiveFreshnessScore(now, hiveEntries),
 			confirmationScore: confidenceScoreFromHive(hiveEntries),
 			relevanceScore:    sectionRelevanceScore("hive_wisdom"),
+		})
+	}
+
+	// Learned Memory -- durable learning entries from successful builds (D-13, D-14, D-15, HIVE-03)
+	// D-15: colony-prime re-assembles per dispatch, so the snapshot refreshes between waves automatically.
+	learnStore := learn.NewColonyStore(store)
+	learnEntries, _ := learnStore.List(learn.EntryFilter{
+		MinConfidence: 0.3, // filter out very low confidence
+		Limit:         20,  // cap entries to prevent budget exhaustion (Pitfall 5)
+	})
+	if len(learnEntries) > 0 {
+		var learnSB strings.Builder
+		learnSB.WriteString("## LEARNED MEMORY (Verified Outcomes)\n\n")
+		for _, entry := range learnEntries {
+			learnSB.WriteString(fmt.Sprintf("- [Phase %d] %s (confidence: %.0f%%, classification: %s)\n",
+				entry.Phase, entry.Content, entry.Confidence*100, entry.Classification))
+		}
+
+		// Compute scores per D-13: phase -> priority, recency -> freshness, confidence -> confirmation
+		latestEntry := learnEntries[len(learnEntries)-1]
+		learnFreshness := 0.5
+		if latestEntry.Evidence.Timestamp != "" {
+			if t, err := time.Parse(time.RFC3339, latestEntry.Evidence.Timestamp); err == nil {
+				hoursSince := time.Since(t).Hours()
+				if hoursSince < 24 {
+					learnFreshness = 0.95
+				} else if hoursSince < 72 {
+					learnFreshness = 0.8
+				} else if hoursSince < 168 {
+					learnFreshness = 0.6
+				}
+			}
+		}
+		learnConfidence := 0.5
+		for _, e := range learnEntries {
+			learnConfidence += e.Confidence / float64(len(learnEntries))
+		}
+		if learnConfidence > 1.0 {
+			learnConfidence = 1.0
+		}
+
+		sections = append(sections, colonyPrimeSection{
+			name:              "learned_memory",
+			title:             "Learned Memory",
+			source:            filepath.Join(store.BasePath(), "entries.json"),
+			content:           learnSB.String(),
+			priority:          5, // same as global queen wisdom (per D-13)
+			freshnessScore:    learnFreshness,
+			confirmationScore: learnConfidence,
+			relevanceScore:    sectionRelevanceScore("learned_memory"),
 		})
 	}
 

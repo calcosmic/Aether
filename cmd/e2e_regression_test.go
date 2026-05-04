@@ -61,10 +61,15 @@ func TestE2ERegressionStablePublishUpdate(t *testing.T) {
 		t.Fatalf("stable update failed: %v", err)
 	}
 
-	// Step 5: Verify downstream has workers.md
+	// Step 5: Verify workers.md stays in the global hub, not the downstream repo.
 	repoWorkers := filepath.Join(repoDir, ".aether", "workers.md")
-	if _, err := os.Stat(repoWorkers); os.IsNotExist(err) {
-		t.Fatal("downstream workers.md not created by update")
+	if _, err := os.Stat(repoWorkers); err == nil {
+		t.Fatal("downstream workers.md should stay global after update")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat downstream workers.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(hubDir, "system", "workers.md")); err != nil {
+		t.Fatalf("hub workers.md missing after update: %v", err)
 	}
 
 	// Step 6: Verify version agreement — hub version matches source version
@@ -124,10 +129,15 @@ func TestE2ERegressionDevPublishUpdate(t *testing.T) {
 		t.Fatalf("dev update failed: %v", err)
 	}
 
-	// Step 5: Verify downstream has workers.md
+	// Step 5: Verify workers.md stays in the global dev hub, not the downstream repo.
 	repoWorkers := filepath.Join(repoDir, ".aether", "workers.md")
-	if _, err := os.Stat(repoWorkers); os.IsNotExist(err) {
-		t.Fatal("downstream workers.md not created by dev update")
+	if _, err := os.Stat(repoWorkers); err == nil {
+		t.Fatal("downstream workers.md should stay global after dev update")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat downstream workers.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(devHubDir, "system", "workers.md")); err != nil {
+		t.Fatalf("dev hub workers.md missing after update: %v", err)
 	}
 
 	// Step 6: Verify dev hub version matches source
@@ -334,9 +344,14 @@ func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
 		t.Fatalf("update --force failed: %v", err)
 	}
 
-	// Verify update created .aether directory
-	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "workers.md")); os.IsNotExist(err) {
-		t.Fatal("downstream workers.md not created by update")
+	// Verify update created local state without copying global workers.md.
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether")); err != nil {
+		t.Fatalf("repo .aether directory not created by update: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "workers.md")); err == nil {
+		t.Fatal("downstream workers.md should stay global after update")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat downstream workers.md: %v", err)
 	}
 
 	// Step 4: Initialize colony

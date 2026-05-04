@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: graphql
 description: Use when the project uses GraphQL for API queries and mutations
 type: domain

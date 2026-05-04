@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -627,6 +628,25 @@ func renderHandoffSnapshot(state colony.ColonyState, session colony.SessionFile,
 	b.WriteString("\n## Session Summary\n\n")
 	b.WriteString(summary)
 	b.WriteString("\n")
+	b.WriteString(renderHandoffStateSnapshot(state))
+	return b.String()
+}
+
+func renderHandoffStateSnapshot(state colony.ColonyState) string {
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n## Runtime State Snapshot\n\n")
+	b.WriteString("```")
+	b.WriteString(handoffStateFence)
+	b.WriteString("\n")
+	b.Write(data)
+	if len(data) == 0 || data[len(data)-1] != '\n' {
+		b.WriteString("\n")
+	}
+	b.WriteString("```\n")
 	return b.String()
 }
 

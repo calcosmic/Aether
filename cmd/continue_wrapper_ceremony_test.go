@@ -31,7 +31,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		"AETHER_OUTPUT_MODE=json aether spawn-complete",
 		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"## Verification Gates",
-			"## Verification Depth",
+		"## Verification Depth",
 		"Gatekeeper",
 		"Auditor",
 		"Probe",
@@ -53,7 +53,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		"## Default Continue",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 		"## Verification Gates",
-			"## Verification Depth",
+		"## Verification Depth",
 		"## Heavy External Review",
 		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
 		"## Learning Extraction",
@@ -148,7 +148,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	}
 }
 
-func TestContinueWrapperSourceAndMirrorsUseFastDevContinue(t *testing.T) {
+func TestContinueWrapperSourcesUseFastDevContinue(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)
@@ -157,8 +157,6 @@ func TestContinueWrapperSourceAndMirrorsUseFastDevContinue(t *testing.T) {
 	command := "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
 	paths := []string{
 		filepath.Join(repoRoot, ".aether", "commands", "continue.yaml"),
-		filepath.Join(repoRoot, ".aether", "commands", "claude", "continue.md"),
-		filepath.Join(repoRoot, ".aether", "commands", "opencode", "continue.md"),
 		filepath.Join(repoRoot, ".claude", "commands", "ant", "continue.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "continue.md"),
 	}
@@ -169,6 +167,17 @@ func TestContinueWrapperSourceAndMirrorsUseFastDevContinue(t *testing.T) {
 		}
 		if !strings.Contains(string(content), command) {
 			t.Fatalf("%s missing fast-dev continue command %q", path, command)
+		}
+	}
+
+	for _, path := range []string{
+		filepath.Join(repoRoot, ".aether", "commands", "claude", "continue.md"),
+		filepath.Join(repoRoot, ".aether", "commands", "opencode", "continue.md"),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("retired command mirror still exists: %s", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", path, err)
 		}
 	}
 }

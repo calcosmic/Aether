@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: build-discipline
 description: Use when implementing code, writing tests, or executing build tasks as a builder worker
 type: colony

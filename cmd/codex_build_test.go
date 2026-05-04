@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -73,8 +74,8 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 
 	result := envelope["result"].(map[string]interface{})
-	if got := int(result["dispatch_count"].(float64)); got != 9 {
-		t.Fatalf("dispatch_count = %d, want 9", got)
+	if got := int(result["dispatch_count"].(float64)); got != 7 {
+		t.Fatalf("dispatch_count = %d, want 7", got)
 	}
 	if got := int(result["wave_count"].(float64)); got != 2 {
 		t.Fatalf("wave_count = %d, want 2", got)
@@ -109,11 +110,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 9 {
-		t.Fatalf("expected 9 manifest dispatches, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 7 {
+		t.Fatalf("expected 7 manifest dispatches, got %d", len(manifest.Dispatches))
 	}
-	if len(manifest.WorkerBriefs) != 9 {
-		t.Fatalf("expected 9 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	if len(manifest.WorkerBriefs) != 7 {
+		t.Fatalf("expected 7 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -148,7 +149,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|architect|", "|Queen|watcher|", "|Queen|chaos|", "|Queen|archaeologist|", "|Queen|probe|", "|Queen|measurer|"} {
+	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|architect|", "|Queen|watcher|", "|Queen|archaeologist|", "|Queen|probe|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
 		}
@@ -280,12 +281,12 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if got := result["dispatch_mode"].(string); got != "plan-only" {
 		t.Fatalf("dispatch_mode = %q, want plan-only", got)
 	}
-	if got := int(result["dispatch_count"].(float64)); got != 9 {
-		t.Fatalf("dispatch_count = %d, want 9", got)
+	if got := int(result["dispatch_count"].(float64)); got != 7 {
+		t.Fatalf("dispatch_count = %d, want 7", got)
 	}
 	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 9 {
-		t.Fatalf("dispatches = %d, want 9", len(dispatches))
+	if len(dispatches) != 7 {
+		t.Fatalf("dispatches = %d, want 7", len(dispatches))
 	}
 	for _, raw := range dispatches {
 		dispatch := raw.(map[string]interface{})
@@ -317,10 +318,10 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	manifestDispatches := manifest["dispatches"].([]interface{})
 	assertDispatchHasRuntimeSkillAssignment(t, manifestDispatches[0].(map[string]interface{}))
 	executionPlan := manifest["execution_plan"].([]interface{})
-	if len(executionPlan) != 9 {
-		t.Fatalf("execution_plan = %d, want 9 steps: %#v", len(executionPlan), executionPlan)
+	if len(executionPlan) != 7 {
+		t.Fatalf("execution_plan = %d, want 7 steps: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"prep", "research", "design", "wave", "wave", "probe", "verification", "measurement", "resilience"}
+	wantStages := []string{"prep", "research", "design", "wave", "wave", "probe", "verification"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -474,6 +475,7 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 		}
 		if dispatch.Caste == "builder" {
 			worker.FilesCreated = []string{"wrapper-evidence.txt"}
+			worker.FilesModified = []string{"cmd/main.go"}
 			worker.TestsWritten = []string{"wrapper-evidence.txt"}
 		}
 		dispatchResults = append(dispatchResults, worker)
@@ -692,8 +694,8 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	if len(manifest.SelectedTasks) != 1 || manifest.SelectedTasks[0] != taskTwoID {
 		t.Fatalf("manifest selected tasks = %v, want [%s]", manifest.SelectedTasks, taskTwoID)
 	}
-	if len(manifest.Dispatches) != 3 {
-		t.Fatalf("expected 3 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
+	if len(manifest.Dispatches) != 2 {
+		t.Fatalf("expected 2 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
 	}
 	for _, dispatch := range manifest.Dispatches {
 		if dispatch.TaskID != "" && dispatch.TaskID != taskTwoID {
@@ -1410,7 +1412,7 @@ func TestResolveSkillSection_FormatsMatchedSkills(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	hubDir := tmpDir + "/hub"
-	skillsDir := hubDir + "/skills/colony/test-skill"
+	skillsDir := filepath.Join(hubDir, "system", "skills", "colony", "test-skill")
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		t.Fatalf("failed to create skill dir: %v", err)
 	}
@@ -1455,7 +1457,7 @@ func TestResolveSkillSection_ReturnsEmptyWhenNoMatches(t *testing.T) {
 func setupRuntimeSkillAssignmentHub(t *testing.T) {
 	t.Helper()
 	hubDir := filepath.Join(t.TempDir(), "hub")
-	skillsDir := filepath.Join(hubDir, "skills", "colony", "runtime-assignment")
+	skillsDir := filepath.Join(hubDir, "system", "skills", "colony", "runtime-assignment")
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		t.Fatalf("failed to create skill dir: %v", err)
 	}
@@ -1653,5 +1655,150 @@ func TestDispatchManifestAllCastes(t *testing.T) {
 
 	if len(seenFiles) != len(castes) {
 		t.Errorf("expected %d unique files, got %d", len(castes), len(seenFiles))
+	}
+}
+
+func TestBuildWorkerBriefContainsHeartbeat(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-23",
+		Caste: "builder",
+		Task:  "Implement feature X",
+	}
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Test Phase",
+		Description: "Testing heartbeat brief",
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+
+	if !strings.Contains(brief, "Heartbeat Protocol") {
+		t.Error("worker brief missing 'Heartbeat Protocol' section")
+	}
+	if !strings.Contains(brief, "heartbeat-") {
+		t.Error("worker brief missing 'heartbeat-' file reference")
+	}
+	if !strings.Contains(brief, "Hammer-23") {
+		t.Error("worker brief missing worker name in heartbeat section")
+	}
+	if !strings.Contains(brief, "builder") {
+		t.Error("worker brief missing caste in heartbeat section")
+	}
+}
+
+func TestBuildWorkerBriefLoadsPlaybookContent(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	playbookPath := filepath.Join(tmpDir, ".aether", "docs", "command-playbooks", "build-wave.md")
+	if err := os.MkdirAll(filepath.Dir(playbookPath), 0755); err != nil {
+		t.Fatalf("mkdir playbook dir: %v", err)
+	}
+	if err := os.WriteFile(playbookPath, []byte("# Build Wave\n\nWorker must follow runtime wave guidance.\n"), 0644); err != nil {
+		t.Fatalf("write playbook: %v", err)
+	}
+
+	dispatch := codexBuildDispatch{
+		Name:  "Hammer-24",
+		Caste: "builder",
+		Task:  "Implement feature X",
+	}
+	phase := colony.Phase{ID: 1, Name: "Test Phase"}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, []string{".aether/docs/command-playbooks/build-wave.md"}, time.Now())
+
+	if !strings.Contains(brief, "## Relevant Playbooks") {
+		t.Fatal("worker brief missing Relevant Playbooks section")
+	}
+	if !strings.Contains(brief, "Worker must follow runtime wave guidance.") {
+		t.Fatalf("worker brief did not load playbook content:\n%s", brief)
+	}
+}
+
+func TestBuildWorkerBriefIncludesCodegraphContext(t *testing.T) {
+	saveGlobals(t)
+
+	tmpDir := t.TempDir()
+	graphDir := filepath.Join(tmpDir, ".aether", "data")
+	if err := os.MkdirAll(graphDir, 0755); err != nil {
+		t.Fatalf("mkdir graph dir: %v", err)
+	}
+	graph := codegraph.CodeGraph{
+		Files: []codegraph.FileNode{
+			{Path: "src/app.ts", Language: "typescript"},
+			{Path: "src/util.ts", Language: "typescript"},
+		},
+		Edges: []codegraph.DepEdge{{Source: "src/app.ts", Target: "src/util.ts", Type: "import"}},
+	}
+	if err := graph.Save(filepath.Join(graphDir, "codebase-graph.json")); err != nil {
+		t.Fatalf("save graph: %v", err)
+	}
+
+	phase := colony.Phase{
+		ID:   1,
+		Name: "Graph Phase",
+		Tasks: []colony.Task{{
+			Goal:  "Update app shell",
+			Hints: []string{"src/app.ts"},
+		}},
+	}
+	dispatch := codexBuildDispatch{
+		Name:      "Hammer-25",
+		Caste:     "builder",
+		Task:      "Update app shell",
+		TaskID:    buildTaskID(phase.Tasks[0], 0),
+		TaskIndex: 0,
+	}
+
+	brief := renderCodexBuildWorkerBrief(tmpDir, phase, dispatch, nil, time.Now())
+
+	if !strings.Contains(brief, "## Codebase Graph Context") {
+		t.Fatalf("worker brief missing codegraph context:\n%s", brief)
+	}
+	if !strings.Contains(brief, "src/util.ts") {
+		t.Fatalf("worker brief missing related dependency file:\n%s", brief)
+	}
+}
+
+func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
+	saveGlobals(t)
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("create data dir: %v", err)
+	}
+
+	taskID := "1.1"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Test Phase",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &taskID, Goal: "Test task", Status: colony.TaskPending},
+		},
+	}
+
+	dispatches := []codexBuildDispatch{
+		{Name: "Hammer-23", Caste: "builder", Task: "Test task", TaskID: taskID},
+	}
+
+	invoker := &codex.FakeInvoker{}
+	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false)
+	if err != nil {
+		t.Fatalf("execute dispatches: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	// After dispatch completes, heartbeat files should be cleaned up
+	matches, _ := filepath.Glob(filepath.Join(dataDir, "heartbeat-*.json"))
+	if len(matches) > 0 {
+		t.Errorf("expected heartbeat files cleaned up after dispatch, found: %v", matches)
 	}
 }

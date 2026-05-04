@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: django
 description: Use when the project uses Django for Python web development
 type: domain

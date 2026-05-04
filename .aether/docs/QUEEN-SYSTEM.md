@@ -1,15 +1,24 @@
 # QUEEN.md System
 
-The QUEEN.md system is Aether's wisdom feedback loop - a mechanism for capturing, validating, and propagating learnings across colonies.
+The QUEEN.md system is Aether's wisdom feedback loop - a mechanism for capturing, validating, and propagating learnings across colonies and within a single repo.
 
 ## Overview
 
-The Queen represents the accumulation of validated knowledge from all colonies. As colonies complete work, they promote significant patterns, decisions, and insights to QUEEN.md. Future colonies can then read this wisdom to benefit from previous experience.
+The Queen has two scopes:
+
+- Global Queen: `~/.aether/QUEEN.md`, shared across repos on this machine. It
+  stores cross-colony wisdom and user preferences.
+- Local Queen: `.aether/QUEEN.md`, scoped to the current repo. It stores the
+  project charter, repo-specific lessons, and local preferences.
+
+Colony-prime reads the global Queen first, then reads the local Queen. Local
+entries extend global entries; they do not replace the global file.
 
 ## File Location
 
 ```
-.aether/QUEEN.md
+~/.aether/QUEEN.md      # global hub wisdom and preferences
+.aether/QUEEN.md        # repo-local project wisdom
 ```
 
 ## Structure
@@ -77,7 +86,8 @@ Track how wisdom has evolved over time.
 
 ### queen-init
 
-Initialize QUEEN.md from template if it doesn't exist.
+Initialize global and repo-local QUEEN.md files from the standard template if
+they do not exist.
 
 ```bash
 aether queen-init
@@ -85,12 +95,13 @@ aether queen-init
 
 **Returns:**
 ```json
-{"created": true, "path": ".aether/QUEEN.md", "source": "~/.aether/system/templates/QUEEN.md.template"}
+{"created": true, "path": "~/.aether/QUEEN.md", "local_created": true, "local_path": ".aether/QUEEN.md"}
 ```
 
 ### queen-read
 
-Read QUEEN.md and return wisdom as JSON for worker priming.
+Read hub-global QUEEN.md content. Worker priming uses colony-prime to merge
+global and local Queen wisdom.
 
 ```bash
 aether queen-read
@@ -123,7 +134,7 @@ aether queen-read
 
 ### queen-promote
 
-Promote a learning to QUEEN.md wisdom.
+Promote a learning or preference to hub-global QUEEN.md.
 
 ```bash
 aether queen-promote <type> <content> <colony_name>
@@ -136,27 +147,39 @@ aether queen-promote <type> <content> <colony_name>
 aether queen-promote pattern "Always validate inputs" "my-colony"
 ```
 
+### queen-write-learnings
+
+Write phase learnings to repo-local QUEEN.md.
+
+```bash
+aether queen-write-learnings --learnings '[{"claim":"Prefer focused tests before full suites"}]'
+```
+
 ## Integration with Commands
 
 ### init.md
 
-Calls `queen-init` after bootstrap to ensure QUEEN.md exists for the colony.
+Calls `queen-init` after bootstrap to ensure global and local Queen files exist.
 
 ### build.md
 
-Calls `queen-read` before spawning workers to inject wisdom into worker prompts.
+Uses colony-prime before spawning workers. Colony-prime reads global Queen
+wisdom, local Queen wisdom, and preferences from both files.
 
 ### continue.md
 
-After verification, promotes validated learnings to QUEEN.md using `queen-promote`.
+After verification, phase learnings are written to repo-local QUEEN.md using
+`queen-write-learnings`.
 
 ### seal.md
 
-Before archiving, promotes significant patterns and decisions to QUEEN.md.
+Before archiving, significant cross-colony patterns can be promoted to the
+hub-global Queen and Hive Brain.
 
 ### entomb.md
 
-Before creating the chamber, promotes validated learnings to QUEEN.md.
+Before creating the chamber, validated local learnings can be preserved in the
+repo-local Queen file.
 
 ## Promotion Thresholds
 
@@ -196,10 +219,10 @@ The QUEEN.md file includes a METADATA block at the end:
 
 ## Best Practices
 
-1. **Don't manually edit QUEEN.md** - Use `queen-promote` to ensure proper formatting
+1. **Don't manually edit QUEEN.md** - Use Queen runtime commands to preserve formatting
 2. **Validate before promoting** - Only promote learnings that have been tested
 3. **Use descriptive colony names** - Helps track wisdom origins
-4. **Read wisdom at build start** - Workers benefit from accumulated knowledge
+4. **Read wisdom at build start** - Workers benefit from global and local knowledge
 5. **Review periodically** - Some wisdom may become outdated as the system evolves
 
 ## See Also

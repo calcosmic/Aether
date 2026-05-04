@@ -26,6 +26,9 @@ type WorkerDispatch struct {
 	Timeout          time.Duration // Per-worker timeout override
 	SkillSection     string        // Skill guidance content injected into worker prompts
 	PheromoneSection string        // Pheromone signal content injected into worker prompts
+	HandoffSection   string        // Worker handoff context section
+	Workflow         string        // Workflow type (build, continue, etc.)
+	Phase            int           // Phase number
 }
 
 // DispatchResult captures the outcome of a single worker dispatch within a batch.
@@ -169,6 +172,7 @@ func invokeDispatch(ctx context.Context, invoker WorkerInvoker, d WorkerDispatch
 		Timeout:          d.Timeout,
 		SkillSection:     d.SkillSection,
 		PheromoneSection: d.PheromoneSection,
+		HandoffSection:   d.HandoffSection,
 	}
 
 	emitDispatchLifecycle(observer, d, "starting", "", nil, nil)

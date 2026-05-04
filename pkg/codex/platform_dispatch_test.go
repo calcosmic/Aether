@@ -8,6 +8,110 @@ import (
 	"testing"
 )
 
+func TestAgentDefinitionPathUsesSourceCheckoutLocalAgents(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(home, ".aether"))
+
+	writeTestFile(t, filepath.Join(root, "go.mod"), "module github.com/calcosmic/Aether\n")
+	writeTestFile(t, filepath.Join(root, "cmd", "aether", "main.go"), "package main\n")
+	writeTestFile(t, filepath.Join(home, ".codex", "agents", "aether-builder.toml"), "name = \"global\"\n")
+
+	tests := []struct {
+		platform Platform
+		want     string
+	}{
+		{PlatformClaude, filepath.Join(root, ".claude", "agents", "ant", "aether-builder.md")},
+		{PlatformOpenCode, filepath.Join(root, ".opencode", "agents", "aether-builder.md")},
+		{PlatformCodex, filepath.Join(root, ".codex", "agents", "aether-builder.toml")},
+	}
+
+	for _, tt := range tests {
+		got := AgentDefinitionPath(root, tt.platform, "aether-builder")
+		if got != tt.want {
+			t.Fatalf("AgentDefinitionPath source %s = %q, want %q", tt.platform, got, tt.want)
+		}
+	}
+}
+
+func TestAgentDefinitionPathUsesGlobalHomesForConsumerRepo(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	hub := filepath.Join(home, ".aether")
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HUB_DIR", hub)
+
+	// Stale local copies should not win in consumer repos.
+	writeTestFile(t, filepath.Join(root, ".claude", "agents", "ant", "aether-builder.md"), "local")
+	writeTestFile(t, filepath.Join(root, ".opencode", "agents", "aether-builder.md"), "local")
+	writeTestFile(t, filepath.Join(root, ".codex", "agents", "aether-builder.toml"), "local")
+
+	claudeGlobal := filepath.Join(home, ".claude", "agents", "ant", "aether-builder.md")
+	opencodeGlobal := filepath.Join(home, ".config", "opencode", "agents", "aether-builder.md")
+	codexGlobal := filepath.Join(home, ".codex", "agents", "aether-builder.toml")
+	writeTestFile(t, claudeGlobal, "global")
+	writeTestFile(t, opencodeGlobal, "global")
+	writeTestFile(t, codexGlobal, "global")
+
+	tests := []struct {
+		platform Platform
+		want     string
+	}{
+		{PlatformClaude, claudeGlobal},
+		{PlatformOpenCode, opencodeGlobal},
+		{PlatformCodex, codexGlobal},
+	}
+
+	for _, tt := range tests {
+		got := AgentDefinitionPath(root, tt.platform, "aether-builder")
+		if got != tt.want {
+			t.Fatalf("AgentDefinitionPath consumer %s = %q, want %q", tt.platform, got, tt.want)
+		}
+	}
+}
+
+func TestAgentDefinitionPathFallsBackToHub(t *testing.T) {
+	root := t.TempDir()
+	home := t.TempDir()
+	hub := filepath.Join(home, ".aether")
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HUB_DIR", hub)
+
+	claudeHub := filepath.Join(hub, "system", "agents-claude", "aether-builder.md")
+	opencodeHub := filepath.Join(hub, "system", "agents", "aether-builder.md")
+	codexHub := filepath.Join(hub, "system", "codex", "aether-builder.toml")
+	writeTestFile(t, claudeHub, "hub")
+	writeTestFile(t, opencodeHub, "hub")
+	writeTestFile(t, codexHub, "hub")
+
+	tests := []struct {
+		platform Platform
+		want     string
+	}{
+		{PlatformClaude, claudeHub},
+		{PlatformOpenCode, opencodeHub},
+		{PlatformCodex, codexHub},
+	}
+
+	for _, tt := range tests {
+		got := AgentDefinitionPath(root, tt.platform, "aether-builder")
+		if got != tt.want {
+			t.Fatalf("AgentDefinitionPath hub fallback %s = %q, want %q", tt.platform, got, tt.want)
+		}
+	}
+}
+
+func writeTestFile(t *testing.T, path string, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
 // --- AETHER_OPENCODE_AGENT_URL env var injection tests ---
 
 func TestInvokeHostedWorkerEnvVarOverride(t *testing.T) {

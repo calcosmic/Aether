@@ -91,6 +91,10 @@ var projectDetectors = []struct {
 	frameworks []string
 }{
 	{"package.json", "node", []string{"node"}},
+	{"docker-compose.yml", "docker", []string{"docker compose"}},
+	{"docker-compose.yaml", "docker", []string{"docker compose"}},
+	{"compose.yml", "docker", []string{"docker compose"}},
+	{"compose.yaml", "docker", []string{"docker compose"}},
 	{"go.mod", "go", []string{"go"}},
 	{"Cargo.toml", "rust", []string{"rust"}},
 	{"pyproject.toml", "python", []string{"python"}},
@@ -102,6 +106,10 @@ var projectDetectors = []struct {
 	{"mix.exs", "elixir", []string{"elixir"}},
 	{"composer.json", "php", []string{"php"}},
 	{"Makefile", "make", []string{"make"}},
+}
+
+func detectorContributesLanguage(typ string) bool {
+	return typ != "docker"
 }
 
 // governanceDetectors maps config files to governance categories.
@@ -137,20 +145,20 @@ var governanceDetectors = []struct {
 
 // extendedSkipDirs lists directories to skip during recursive walk.
 var extendedSkipDirs = map[string]bool{
-	".git":        true,
+	".git":         true,
 	"node_modules": true,
-	".next":       true,
-	"dist":        true,
-	"build":       true,
-	"vendor":      true,
-	".venv":       true,
-	"venv":        true,
-	"coverage":    true,
-	".aether":     true,
-	".claude":     true,
-	".opencode":   true,
-	".codex":      true,
-	"__pycache__": true,
+	".next":        true,
+	"dist":         true,
+	"build":        true,
+	"vendor":       true,
+	".venv":        true,
+	"venv":         true,
+	"coverage":     true,
+	".aether":      true,
+	".claude":      true,
+	".opencode":    true,
+	".codex":       true,
+	"__pycache__":  true,
 }
 
 // detectGovernance scans the target directory for governance tool config files.
@@ -1163,7 +1171,7 @@ func parseGemfileDeps(target string) []depEntry {
 
 // mavenProject is a minimal XML struct for parsing pom.xml.
 type mavenProject struct {
-	XMLName     xml.Name   `xml:"project"`
+	XMLName      xml.Name  `xml:"project"`
 	Dependencies mavenDeps `xml:"dependencies"`
 }
 
@@ -1832,7 +1840,7 @@ var initResearchCmd = &cobra.Command{
 
 		for _, det := range projectDetectors {
 			if entryNames[det.file] {
-				if !seenTypes[det.typ] {
+				if detectorContributesLanguage(det.typ) && !seenTypes[det.typ] {
 					languages = append(languages, det.typ)
 					seenTypes[det.typ] = true
 				}

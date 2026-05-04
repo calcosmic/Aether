@@ -34,22 +34,13 @@ That means:
 
 ## Current State
 
-- Go runtime is healthy, v1.0.24 shipped
-- Milestone v1.11 Aether Unification complete (shipped 2026-04-30)
+- Go runtime is healthy, v1.0.27 shipped
+- Milestone v1.14 Queen Authority complete (shipped 2026-05-04)
 - 2900+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
-- Colony recovery system: `aether recover` + `--apply` for stuck-state rescue
-- Review persistence system: 7-domain ledger CRUD, colony-prime injection, lifecycle integration
-- Idea shelving: persistent colony backlog, auto-shelve at seal, surface at init, survive entomb
-- Hive Brain: seal auto-promotes high-confidence instincts to cross-colony wisdom
-- Planning depth system (light/standard/deep) with smart defaults -- Phase 83
-- Verification depth system (light/standard/heavy) with smart defaults -- Phase 84
-- Depth selection UI with ColonyState persistence and build manifest propagation -- Phase 86
-- Planning depth system: light/standard/deep task decomposition via --planning-depth flag (Phase 83)
-- Smart review depth: light/heavy modes, final phase always heavy, `--light` flag
-- Porter ant: 26th caste, wired into seal lifecycle with interactive publishing
-- All 50 slash commands working across Claude Code, OpenCode, and Codex CLI
-- Smart Init intelligence: charter ceremony, rich init-research, suggest-analyze
+- Queen coordinates phases autonomously — gate classification, auto-recovery, wave lifecycle
+- 11 continue gates with watcher veto, auditor blocking, and runtime verification
+- Reference library system with indexed, scored, matchable global references
 
 <details>
 <summary>Prior State History</summary>
@@ -91,7 +82,9 @@ That means:
 - [x] v1.9 Review Persistence -- Phases 52-56 (completed 2026-04-26)
 - [x] v1.10 Colony Polish -- Phases 57-69 (shipped 2026-04-28)
 - [x] v1.11 Aether Unification -- Phases 70-79 (shipped 2026-04-30)
-- [ ] v1.12 Safe Colony -- Phases 80+
+- [x] v1.12 Safe Colony -- Phases 80-87 (shipped 2026-05-01)
+- [x] v1.13 Recovery Hardening & Hive Learning -- Phases 88-92 (shipped 2026-05-03)
+- [x] v1.14 Queen Authority -- Phases 93-99 (shipped 2026-05-04)
 
 ## Requirements
 
@@ -120,10 +113,21 @@ That means:
 - Independent planning depth and verification depth controls -- v1.12 (Phase 83 & 84)
 - Smart depth defaults based on phase position and code change risk -- v1.12 (Phase 83 & 84)
 - User depth override UI at plan start with persistence -- v1.12 (Phase 86)
+- Loop safety (watcher auto-skip, recovery redirect, circuit breaker, cycle detection, lifecycle exclusion, telemetry) -- v1.12
+- Recovery hardening (build-complete validation, provenance checks, confidence-targeted Oracle) -- v1.13
+- Gate self-healing (Fixer caste, smart gate retry, recoverable banners, /ant-unblock) -- v1.13
+- Hive learning (colony memory store, SQLite FTS recall, auto-created skills, privacy gate) -- v1.13
+- Worker lifecycle hardening (heartbeats, process groups, PID tracking, stale cleanup) -- v1.13
+- Gate classification (hard_block/soft_block/advisory) with audit trail -- v1.14
+- Auto-recovery orchestrator (bounded retry, peer redistribution, Fixer dispatch) -- v1.14
+- Queen decision layer (pure-function coordinator, plan-only + finalize) -- v1.14
+- Smart gates (depth-aware auto-resolve, hard blocks never auto-resolved) -- v1.14
+- Queen wave lifecycle (always-advance, dependency injection, recovery) -- v1.14
+- Output filtering (verbose-aware, phase-end summaries, queen audit) -- v1.14
 
 ### Active
 
-- Full loop audit across all Aether commands (continue, build, plan, seal, etc.) -- v1.12
+(None — start next milestone with /gsd-new-milestone)
 
 ### Out of Scope
 
@@ -163,7 +167,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Execute v1.11 with `/gsd-discuss-phase 70`.
+Execute v1.14 with `/gsd-discuss-phase 93`.
 
 ## Evolution
 
@@ -205,3 +209,17 @@ This document evolves at phase transitions and milestone boundaries.
 - User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
 
 *Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*
+
+## Current Milestone: v1.14 Queen Authority
+
+**Goal:** The queen coordinates phases autonomously — she dispatches workers, monitors progress, auto-recovers from failures, and only escalates to you when she's genuinely stuck. You stop babysitting.
+
+**Target features:**
+- Queen auto-recovery — workers that stall or fail get re-spawned, re-assigned, or skipped without human intervention
+- Smart gates — non-critical findings auto-resolve, only genuine problems block advancement
+- Clean output — filtered, summarized status instead of raw worker noise
+- Queen phase coordination — within a phase, queen manages the wave lifecycle end-to-end
+
+**Key context:** The infrastructure exists (4-tier escalation, 11 gates, wave dispatch). This milestone wires the queen into that infrastructure so she can actually drive it, not just narrate it.
+
+*Last updated: 2026-05-04 after v1.14 Queen Authority milestone shipped*

@@ -374,24 +374,79 @@ func scanBrokenSurvey(state colony.ColonyState, dataDir string) []HealthIssue {
 // DETECT-07: Missing Agent Files
 // ---------------------------------------------------------------------------
 
-// scanMissingAgentFiles checks that all three agent surfaces have the expected
-// number of agent definition files.
+type recoverAgentSurface struct {
+	name     string
+	pattern  string
+	destDir  string
+	hubRel   string
+	expected int
+}
+
+// recoverAgentSurfaces returns the agent locations that must exist for the
+// current checkout type. Aether source checkouts keep canonical platform source
+// files in-repo; consumer repos use globally installed platform homes.
+func recoverAgentSurfaces(repoRoot string) []recoverAgentSurface {
+	if isAetherSourceCheckout(repoRoot) {
+		return []recoverAgentSurface{
+			{
+				name:     "Claude agents",
+				pattern:  filepath.Join(repoRoot, ".claude", "agents", "ant", "*.md"),
+				destDir:  filepath.Join(repoRoot, ".claude", "agents", "ant"),
+				hubRel:   "agents-claude",
+				expected: expectedClaudeAgents,
+			},
+			{
+				name:     "OpenCode agents",
+				pattern:  filepath.Join(repoRoot, ".opencode", "agents", "*.md"),
+				destDir:  filepath.Join(repoRoot, ".opencode", "agents"),
+				hubRel:   "agents",
+				expected: expectedOpenCodeAgents,
+			},
+			{
+				name:     "Codex agents",
+				pattern:  filepath.Join(repoRoot, ".codex", "agents", "*.toml"),
+				destDir:  filepath.Join(repoRoot, ".codex", "agents"),
+				hubRel:   "codex",
+				expected: expectedCodexAgents,
+			},
+		}
+	}
+
+	home := homeDir()
+	return []recoverAgentSurface{
+		{
+			name:     "Global Claude agents",
+			pattern:  filepath.Join(home, ".claude", "agents", "ant", "*.md"),
+			destDir:  filepath.Join(home, ".claude", "agents", "ant"),
+			hubRel:   "agents-claude",
+			expected: expectedClaudeAgents,
+		},
+		{
+			name:     "Global OpenCode agents",
+			pattern:  filepath.Join(home, ".config", "opencode", "agents", "*.md"),
+			destDir:  filepath.Join(home, ".config", "opencode", "agents"),
+			hubRel:   "agents",
+			expected: expectedOpenCodeAgents,
+		},
+		{
+			name:     "Global Codex agents",
+			pattern:  filepath.Join(home, ".codex", "agents", "*.toml"),
+			destDir:  filepath.Join(home, ".codex", "agents"),
+			hubRel:   "codex",
+			expected: expectedCodexAgents,
+		},
+	}
+}
+
+// scanMissingAgentFiles checks that the active platform agent surfaces have the
+// expected number of agent definition files.
 func scanMissingAgentFiles() []HealthIssue {
 	repoRoot := resolveAetherRoot()
-
-	surfaces := []struct {
-		name     string
-		pattern  string
-		expected int
-	}{
-		{"Claude agents", filepath.Join(repoRoot, ".claude", "agents", "ant", "*.md"), expectedClaudeAgents},
-		{"OpenCode agents", filepath.Join(repoRoot, ".opencode", "agents", "*.md"), expectedOpenCodeAgents},
-		{"Codex agents", filepath.Join(repoRoot, ".codex", "agents", "*.toml"), expectedCodexAgents},
-	}
+	hubSystem := filepath.Join(resolveHubPath(), "system")
 
 	var issues []HealthIssue
 
-	for _, surface := range surfaces {
+	for _, surface := range recoverAgentSurfaces(repoRoot) {
 		files, globErr := filepath.Glob(surface.pattern)
 		if globErr != nil {
 			continue
@@ -402,16 +457,8 @@ func scanMissingAgentFiles() []HealthIssue {
 
 			// Cross-check hub for available files.
 			hubNote := ""
-			hubDir := ""
-			switch surface.name {
-			case "Claude agents":
-				hubDir = filepath.Join(homeDir(), ".aether", "system", "claude", "agents")
-			case "OpenCode agents":
-				hubDir = filepath.Join(homeDir(), ".aether", "system", "opencode", "agents")
-			case "Codex agents":
-				hubDir = filepath.Join(homeDir(), ".aether", "system", "codex", "agents")
-			}
-			if hubDir != "" {
+			if surface.hubRel != "" {
+				hubDir := filepath.Join(hubSystem, filepath.FromSlash(surface.hubRel))
 				if hubFiles, err := filepath.Glob(filepath.Join(hubDir, "*")); err == nil && len(hubFiles) > 0 {
 					hubNote = " (files available in hub)"
 				}

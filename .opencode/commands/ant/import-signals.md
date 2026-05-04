@@ -27,7 +27,7 @@ Usage: /ant-import-signals <path-to-signals.xml>
   <path-to-signals.xml>  Path to an exported pheromone XML file
 
 Example:
-  /ant-import-signals .aether/exchange/pheromones.xml
+  /ant-import-signals .aether/data/pheromones-export.xml
 ```
 
 Verify the XML file exists. If not -> "File not found: <path>", stop.

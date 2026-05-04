@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: documentation-ingestion
 description: Use when existing project documentation must be discovered and converted into colony context
 type: colony

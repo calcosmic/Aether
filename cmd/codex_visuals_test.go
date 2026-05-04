@@ -84,7 +84,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -823,6 +823,38 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 	}
 	if strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
 		t.Fatalf("expected generic next-step guidance to be suppressed, got:\n%s", output)
+	}
+}
+
+func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
+	output := renderUpdateVisual(
+		"/tmp/example",
+		"1.0.27",
+		"1.0.27",
+		true,
+		false,
+		[]map[string]interface{}{
+			{"label": "Repo .aether cleanup", "copied": 0, "skipped": 0, "removed": 7},
+			{"label": "Prune legacy repo platform assets", "copied": 0, "skipped": 0, "removed": 3},
+		},
+		0,
+		0,
+		nil,
+		"unchanged",
+		true,
+	)
+
+	if !strings.Contains(output, "Assets: 0 copied, 0 unchanged, 10 removed") {
+		t.Fatalf("expected top-level removal total, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Repo .aether cleanup — 0 copied, 0 unchanged, 7 removed") {
+		t.Fatalf("expected per-asset removal detail, got:\n%s", output)
+	}
+	if strings.Contains(output, "No follow-up is required.") {
+		t.Fatalf("removed files should not be reported as a no-change update:\n%s", output)
+	}
+	if !strings.Contains(output, "Run `aether status` to inspect the colony after the refresh.") {
+		t.Fatalf("expected post-removal status guidance, got:\n%s", output)
 	}
 }
 
@@ -1872,6 +1904,37 @@ func TestCasteIdentityPorter(t *testing.T) {
 	color := casteANSIColor("porter")
 	if color != porterColor {
 		t.Errorf("casteANSIColor(porter): expected %q, got %q", porterColor, color)
+	}
+}
+
+// --- Fixer Caste Tests (Phase 89) ---
+
+func TestCasteIdentityFixer(t *testing.T) {
+	os.Setenv("AETHER_FORCE_COLOR", "1")
+	defer os.Unsetenv("AETHER_FORCE_COLOR")
+
+	const fixerEmoji = "🔧"
+	const fixerColor = "33"
+	const fixerLabel = "Fixer"
+
+	identity := casteIdentity("fixer")
+	if !strings.Contains(identity, fixerEmoji) {
+		t.Errorf("casteIdentity(fixer): expected wrench emoji, got %q", identity)
+	}
+	if !strings.Contains(identity, fixerLabel) {
+		t.Errorf("casteIdentity(fixer): expected 'Fixer' label, got %q", identity)
+	}
+	emoji := casteEmoji("fixer")
+	if emoji != fixerEmoji {
+		t.Errorf("casteEmoji(fixer): expected 🔧, got %q", emoji)
+	}
+	label := casteLabel("fixer")
+	if label != fixerLabel {
+		t.Errorf("casteLabel(fixer): expected 'Fixer', got %q", label)
+	}
+	color := casteANSIColor("fixer")
+	if color != fixerColor {
+		t.Errorf("casteANSIColor(fixer): expected %q, got %q", fixerColor, color)
 	}
 }
 

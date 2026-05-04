@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -1552,5 +1553,36 @@ func TestPlanningDepthInWrapperContract(t *testing.T) {
 	}
 	if pd != "deep" {
 		t.Fatalf("wrapper_contract planning_depth = %q, want %q", pd, "deep")
+	}
+}
+
+func TestPlanningWorkerBriefIncludesCodegraphContext(t *testing.T) {
+	saveGlobals(t)
+
+	root := t.TempDir()
+	graphDir := filepath.Join(root, ".aether", "data")
+	if err := os.MkdirAll(graphDir, 0755); err != nil {
+		t.Fatalf("mkdir graph dir: %v", err)
+	}
+	graph := codegraph.CodeGraph{
+		Files: []codegraph.FileNode{
+			{Path: "src/app.ts", Language: "typescript"},
+			{Path: "src/service.ts", Language: "typescript"},
+		},
+		Edges: []codegraph.DepEdge{{Source: "src/app.ts", Target: "src/service.ts", Type: "import"}},
+	}
+	if err := graph.Save(filepath.Join(graphDir, "codebase-graph.json")); err != nil {
+		t.Fatalf("save graph: %v", err)
+	}
+
+	brief := renderPlanningWorkerBrief(root, codexSurveyContext{
+		EntryPoints: []string{"src/app.ts"},
+	}, planningWorkerSpecs[0])
+
+	if !strings.Contains(brief, "## Codebase Graph Context") {
+		t.Fatalf("planning brief missing codegraph context:\n%s", brief)
+	}
+	if !strings.Contains(brief, "src/service.ts") {
+		t.Fatalf("planning brief missing related dependency file:\n%s", brief)
 	}
 }

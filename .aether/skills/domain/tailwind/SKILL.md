@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: tailwind
 description: Use when the project uses Tailwind CSS for utility-first styling
 type: domain

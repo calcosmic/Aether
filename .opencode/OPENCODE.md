@@ -8,10 +8,10 @@
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  In the Aether repo, .aether/ IS the source of truth.          │
-│  Edit system files there and publish directly.                 │
+│  In the Aether repo, canonical source files are edited once.   │
+│  Publish/install writes those files to the global hub.          │
 │                                                                │
-│  .aether/           → SOURCE OF TRUTH (edit this, published)   │
+│  .aether/           → SOURCE for workers, skills, docs, utils  │
 │  .aether/data/      → LOCAL ONLY (never distributed)           │
 │  .aether/dreams/    → LOCAL ONLY (never distributed)           │
 │                                                                │
@@ -25,7 +25,7 @@
 |---------------------|---------------|-----|
 | Agent definitions | `.opencode/agents/` | Source of truth |
 | Slash commands | `.opencode/commands/ant/` | Source of truth |
-| workers.md | `.aether/workers.md` | Source of truth |
+| Worker definitions | Aether repo `.aether/` `workers.md` | Source of truth, published to hub |
 | aether CLI | `cmd/` (Go binary) | Source of truth |
 
 **After editing:**
@@ -59,15 +59,17 @@ Aether Repo (this repo)
 ▼
 ~/.aether/system/
 ├── .aether/*                    ← system files
-├── commands/opencode/           ← OpenCode slash commands
+├── OpenCode command wrappers    ← published from .opencode/commands/ant/
 └── agents/                      ← OpenCode agents
    │
    └── aether update or /ant-update
       ▼
-      any-repo/
-      ├── .aether/
-      ├── .opencode/commands/ant/
-      └── .opencode/agents/
+      any-repo/.aether/
+      ├── data/
+      ├── dreams/
+      ├── locks/
+      ├── QUEEN.md
+      └── skills/       ← custom repo skills only
 ```
 
 ---
@@ -77,7 +79,7 @@ Aether Repo (this repo)
 | Directory | Purpose | Syncs to Hub |
 |-----------|---------|--------------|
 | `.opencode/agents/` | Agent definitions | → `~/.aether/system/agents/` |
-| `.opencode/commands/ant/` | OpenCode slash commands | → `~/.aether/system/commands/opencode/` |
+| `.opencode/commands/ant/` | OpenCode slash commands | Published to the global OpenCode command hub |
 | `.aether/` (system files) | Source of truth for workers.md, utils, docs | → `~/.aether/system/` |
 | `.aether/data/` | Colony state | **NEVER touched** |
 
@@ -171,7 +173,7 @@ aether publish
 aether update --force
 
 # Verify the hub publish actually contains OpenCode surfaces
-find ~/.aether/system/commands/opencode -maxdepth 1 -type f | wc -l
+find ~/.config/opencode/commands/ant -maxdepth 1 -type f | wc -l
 find ~/.aether/system/agents -maxdepth 1 -type f | wc -l
 
 # Verify version agreement

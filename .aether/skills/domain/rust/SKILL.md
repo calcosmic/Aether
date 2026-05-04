@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: rust
 description: Use when the project uses Rust for systems programming, CLI tools, WebAssembly, or backend services
 type: domain

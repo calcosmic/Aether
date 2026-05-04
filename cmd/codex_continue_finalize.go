@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +12,10 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +34,7 @@ var continueFinalizeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		skipMissing, _ := cmd.Flags().GetBool("skip-missing")
+		noLearn, _ := cmd.Flags().GetBool("no-learn")
 		verificationTimeout, verificationTimeoutExplicit, err := resolveContinueVerificationTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -43,7 +48,7 @@ var continueFinalizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
-		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout)
+		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout, noLearn)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -112,7 +117,7 @@ func (c codexExternalContinueCompletion) workerResults() []codexContinueExternal
 	return results
 }
 
-func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool, verificationTimeoutOverride time.Duration) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+func runCodexContinueFinalize(root string, completion codexExternalContinueCompletion, skipMissing bool, verificationTimeoutOverride time.Duration, noLearn bool) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("no store initialized")
 	}
@@ -151,6 +156,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	if err := persistExternalContinueHandoffs(root, phase.ID, plan.Dispatches, completion.workerResults()); err != nil {
+		return nil, state, phase, nil, nil, false, err
+	}
 
 	verificationTimeout := continueFinalizeVerificationTimeout(plan, verificationTimeoutOverride)
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, plan.SkipWatchers)
@@ -162,7 +170,20 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	priorGateResults := gateResultsRead()
+	priorGateResults, _ := gateResultsReadPhase(phase.ID)
+	if priorGateResults == nil {
+		priorGateResults = []GateCheckResult{}
+	}
+	// Per SAFE-03, SAFE-04: trace continue provenance against stored manifest data.
+	// Rejects claims that reference missing or stale worker results.
+	if err := traceContinueProvenance(manifest.Data.Dispatches); err != nil {
+		return nil, state, phase, nil, nil, false, err
+	}
+	// Phase 97: Read queen-state as advisory context (D-09, D-11)
+	queenAdvisory, _ := queenStateRead(phase.ID)
+	// queenAdvisory.Decisions provides advisory context for logging -- finalize re-evaluates gates live
+	// queenAdvisory is NOT used to skip or alter gate evaluation -- it is purely informational
+	_ = queenAdvisory
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
@@ -186,17 +207,207 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 	_ = gateResultsWrite(gateResultEntries)
 
+	// Per-phase gate results persistence (D-14)
+	var phaseGateResults []GateCheckResult
+	for _, c := range gates.Checks {
+		status := "passed"
+		if !c.Passed {
+			status = "failed"
+		}
+		phaseGateResults = append(phaseGateResults, GateCheckResult{
+			Name:            c.Name,
+			Status:          status,
+			Detail:          c.Detail,
+			FixHint:         c.FixHint,
+			RecoveryOptions: c.RecoveryOptions,
+			Timestamp:       now.Format(time.RFC3339),
+		})
+	}
+	_ = gateResultsWritePhase(phase.ID, phaseGateResults)
+
 	if err := writeCodexContinueWorkerOutcomeReports(root, phase, workerFlow, now); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
 
+	// --- Auto-resolve soft_block gates (Phase 95, GATE-03) ---
+	// Per D-02: auto-resolve runs inside continue command, no new commands.
+	// Per D-04: only soft_block gates are auto-resolved.
 	if !gates.Passed {
-		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel)
-		if err != nil {
-			return nil, state, phase, nil, nil, false, err
+		resolveDepth := ""
+		if plan.ReviewDepth != "" {
+			resolveDepth = plan.ReviewDepth
 		}
-		runStatus = "blocked"
-		return result, blockedState, phase, nil, nil, false, nil
+		gates, autoResolved := autoResolveSoftBlockGates(phase.ID, gates, resolveDepth)
+
+		if len(autoResolved) > 0 {
+			// Re-persist gate results with auto-resolved annotations
+			phaseGateResults = nil
+			for _, c := range gates.Checks {
+				status := "passed"
+				if !c.Passed {
+					status = "failed"
+				}
+				entry := GateCheckResult{
+					Name:            c.Name,
+					Status:          status,
+					Detail:          c.Detail,
+					FixHint:         c.FixHint,
+					RecoveryOptions: c.RecoveryOptions,
+					Timestamp:       now.Format(time.RFC3339),
+				}
+				for _, resolved := range autoResolved {
+					if resolved == c.Name {
+						entry.QueenAnnotation = &QueenAnnotation{
+							Decision:     "auto-resolved",
+							Rationale:    fmt.Sprintf("soft_block gate %q auto-resolved at depth %s", c.Name, colony.NormalizeVerificationDepth(resolveDepth)),
+							Timestamp:    now.Format(time.RFC3339),
+							QueenVersion: "1.0.27",
+						}
+						break
+					}
+				}
+				phaseGateResults = append(phaseGateResults, entry)
+			}
+			_ = gateResultsWritePhase(phase.ID, phaseGateResults)
+
+			// Also update COLONY_STATE.json gate results
+			var updatedGateEntries []colony.GateResultEntry
+			for _, c := range gates.Checks {
+				updatedGateEntries = append(updatedGateEntries, colony.GateResultEntry{
+					Name:      c.Name,
+					Passed:    c.Passed,
+					Timestamp: now.Format(time.RFC3339),
+					Detail:    c.Detail,
+				})
+			}
+			_ = gateResultsWrite(updatedGateEntries)
+
+			// Log recovery actions (per RECV-06, using Phase 94 recovery log)
+			var recoveryEntries []RecoveryLogEntry
+			for idx, resolved := range autoResolved {
+				recoveryEntries = append(recoveryEntries, RecoveryLogEntry{
+					ID: fmt.Sprintf("auto-resolve-%s-%d-%s", resolved, phase.ID, now.Format("20060102-150405")),
+					Failure: FailureRecord{
+						WorkerName:     "",
+						TaskID:         "",
+						Caste:          "",
+						Phase:          phase.ID,
+						Status:         "failed",
+						Classification: Recoverable,
+						FailureType:    Transient,
+						ErrorMessage:   fmt.Sprintf("soft_block gate %q failed", resolved),
+						Timestamp:      now.Format(time.RFC3339),
+					},
+					ActionTaken:   "auto-resolved",
+					Outcome:       "gate threshold met -- auto-resolved by queen",
+					AttemptNumber: idx + 1,
+					Timestamp:     now.Format(time.RFC3339),
+					Detail:        fmt.Sprintf("gate %q auto-resolved at depth %s", resolved, colony.NormalizeVerificationDepth(resolveDepth)),
+				})
+			}
+			if len(recoveryEntries) > 0 {
+				existingLog, _ := recoveryLogReadPhase(phase.ID)
+				existingLog.Entries = append(existingLog.Entries, recoveryEntries...)
+				existingLog.Phase = phase.ID
+				_ = recoveryLogWritePhase(phase.ID, existingLog.Entries)
+			}
+		}
+
+		// Per D-03: if auto-resolve didn't clear all failures, dispatch Fixer for remaining soft_block gates
+		if !gates.Passed {
+			hasSoftBlockRemaining := false
+			for _, c := range gates.Checks {
+				if !c.Passed {
+					tier, _ := gateClassify(c.Name)
+					if tier == softBlock {
+						hasSoftBlockRemaining = true
+						break
+					}
+				}
+			}
+
+			if hasSoftBlockRemaining {
+				_ = dispatchFixer(phase.ID, "propose")
+			}
+
+			// --- Phase 96: Auto-recovery orchestrator for gate failures (RECV-04) ---
+			// Per D-09: this is a NEW trigger path, distinct from Phase 95's auto-resolve.
+			// The orchestrator evaluates whether retry/peer/fixer strategies apply to gate failures.
+			// This runs AFTER auto-resolve attempt, AFTER Phase 95's dispatchFixer call.
+			// Per D-05: both build and continue call orchestrateRecovery for their failure types.
+			var gateRecoveryInstructions []map[string]interface{}
+			if !gates.Passed {
+				budget := budgetFromRecoveryLog(phase.ID, 1) // continue uses wave 1
+				if budget == nil {
+					budget = newRecoveryBudget(1)
+				}
+
+				for _, c := range gates.Checks {
+					if c.Passed {
+						continue
+					}
+					tier, _ := gateClassify(c.Name)
+					// Per D-04: blocking failures escalate immediately, no orchestrator
+					if tier == hardBlock {
+						gateRecoveryInstructions = append(gateRecoveryInstructions, map[string]interface{}{
+							"gate":           c.Name,
+							"classification": "hard_block",
+							"action":         "escalate",
+							"detail":         "hard_block gate failure requires human intervention",
+						})
+						continue
+					}
+
+					// Build recovery context from gate failure
+					ctx := RecoveryContext{
+						Phase:          phase.ID,
+						Wave:           1,
+						WorkerName:     fmt.Sprintf("gate-%s", c.Name),
+						Caste:          "watcher",
+						Status:         "failed",
+						ErrorMessage:   c.Detail,
+						Budget:         budget,
+						CircuitBreaker: globalCircuitBreaker,
+					}
+					outcome := orchestrateRecovery(ctx)
+
+					// Persist recovery log entries
+					if len(outcome.LogEntries) > 0 {
+						existingLog, _ := recoveryLogReadPhase(phase.ID)
+						existingLog.Entries = append(existingLog.Entries, outcome.LogEntries...)
+						existingLog.Phase = phase.ID
+						_ = recoveryLogWritePhase(phase.ID, existingLog.Entries)
+					}
+
+					gateRecoveryInstructions = append(gateRecoveryInstructions, map[string]interface{}{
+						"gate":           c.Name,
+						"classification": string(outcome.Classification),
+						"action":         outcome.Action.Type,
+						"detail":         outcome.Action.Detail,
+						"exhausted":      outcome.Exhausted,
+						"rationale":      outcome.Rationale,
+					})
+				}
+
+				// Persist updated budget
+				_ = persistBudgetToRecoveryLog(phase.ID, budget)
+
+				// Phase 97: Log circuit breaker escalation events (D-12, COORD-04)
+				if globalCircuitBreaker != nil {
+					tripped := globalCircuitBreaker.TrippedWorkers()
+					if len(tripped) > 0 {
+						queenLogEscalation(phase.ID, tripped, "circuit breaker tripped during finalize -- escalation required")
+					}
+				}
+			}
+
+			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel, gateRecoveryInstructions)
+			if err != nil {
+				return nil, state, phase, nil, nil, false, err
+			}
+			runStatus = "blocked"
+			return result, blockedState, phase, nil, nil, false, nil
+		}
 	}
 
 	finalizeReviewDepth := colony.VerificationDepthLight
@@ -209,13 +420,110 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
 	if !review.Passed {
-		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, workerFlow, now, verificationReportRel, gateReportRel)
+		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, workerFlow, now, verificationReportRel, gateReportRel, nil)
 		if err != nil {
 			return nil, state, phase, nil, nil, false, err
 		}
 		runStatus = "blocked"
 		return result, blockedState, phase, nil, nil, false, nil
 	}
+
+	// --- Learning capture (D-01, D-02, D-03, D-04) ---
+	// Learning fires only after gates pass AND review passes AND provenance valid AND all workers succeeded.
+	// This is the ONLY path that produces durable learning (D-03).
+	captureLearning := func() {
+		// Check if all workers succeeded (D-02)
+		allWorkersSucceeded := true
+		for _, step := range workerFlow {
+			if step.Status != "completed" {
+				allWorkersSucceeded = false
+				break
+			}
+		}
+
+		// Check if learning is enabled (D-16) -- config + flag
+		learningEnabled := isLearningEnabled(noLearn)
+
+		if !learn.IsLearningEligible(allWorkersSucceeded, true, gates.Passed, learningEnabled) {
+			return // Not eligible -- no durable learning
+		}
+
+		// Collect evidence (D-09, LRN-02)
+		workerResults := make([]learn.WorkerResult, 0, len(workerFlow))
+		for _, step := range workerFlow {
+			workerResults = append(workerResults, learn.WorkerResult{
+				Name:         step.Name,
+				Caste:        step.Caste,
+				Status:       step.Status,
+				FilesTouched: nil, // codexContinueWorkerFlowStep has no FilesModified field
+			})
+		}
+
+		gatesPassed := 0
+		for _, c := range gates.Checks {
+			if c.Passed {
+				gatesPassed++
+			}
+		}
+
+		runID := ""
+		if runHandle != nil {
+			runID = runHandle.Run.ID
+		}
+		if runID == "" {
+			runID = fmt.Sprintf("run_%d_%s", phase.ID, now.Format("20060102_150405"))
+		}
+
+		evidence := learn.CollectEvidence(
+			runID, phase.ID, workerResults,
+			learn.GateResult{Passed: gatesPassed, Total: len(gates.Checks)},
+			"repo-local",
+		)
+
+		// Build learning content from phase summary
+		content := fmt.Sprintf("Phase %d completed successfully: %s", phase.ID, phase.Name)
+
+		// Run privacy scan + classify (D-10, D-11, PRIV-03)
+		scanResult := privacyScan(content)
+		classification := learn.ClassifyEntry(content, learn.PrivacyScanResult{
+			Blocked:  scanResult.Blocked,
+			Clean:    scanResult.Clean,
+			Findings: scanResult.Findings,
+		})
+
+		if classification == learn.ClassBlocked {
+			return // Blocked content never stored
+		}
+
+		// Store via ColonyStore (D-06: .aether/data/learn/)
+		learnStore := learn.NewColonyStore(store)
+		entry := learn.Entry{
+			Content:        scanResult.Clean, // use cleaned content
+			Evidence:       evidence,
+			Classification: classification,
+			Phase:          phase.ID,
+			Confidence:     evidence.Confidence,
+		}
+		if err := learnStore.Add(entry); err != nil {
+			// Non-blocking: learning failure must not prevent phase advancement
+			fmt.Fprintf(os.Stderr, "warning: failed to capture learning: %v\n", err)
+		} else {
+			// Phase 91: Auto-skill creation hook (AUTO-01)
+			// Only fires after successful learning capture for difficult verified tasks.
+			// Reads auto_skill_mode config to determine behavior (off/propose/auto, default propose).
+			sqliteStore, sqliteErr := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
+			if sqliteErr == nil {
+				defer sqliteStore.Close()
+				aetherRoot := storage.ResolveAetherRoot(context.Background())
+				mode := learn.LoadAutoSkillMode(store.BasePath())
+				if err := learn.AutoCreateSkillIfDifficult(entry, sqliteStore, aetherRoot, mode); err != nil {
+					// Non-blocking: auto-skill failure must not prevent phase advancement
+					fmt.Fprintf(os.Stderr, "warning: failed to auto-create skill: %v\n", err)
+				}
+			}
+		}
+	}
+	captureLearning()
 
 	result, updated, nextPhase, housekeeping, final, err := advanceExternalContinue(root, state, phase, manifest, verification, assessment, gates, review, reviewReportRel, watcherFlow, workerFlow, now, verificationReportRel, gateReportRel)
 	if err != nil {
@@ -300,6 +608,11 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		if !isTerminalExternalBuildStatus(status) {
 			return nil, fmt.Errorf("external continue result for %s has non-terminal status %q", dispatch.Name, result.Status)
 		}
+		if ok {
+			if err := codex.ValidateWorkerHandoff(result.Handoff); err != nil {
+				return nil, fmt.Errorf("external continue result for %s has invalid handoff: %w", dispatch.Name, err)
+			}
+		}
 		summary := strings.TrimSpace(result.Summary)
 		blockers := uniqueSortedStrings(result.Blockers)
 		if summary == "" && len(blockers) > 0 {
@@ -318,6 +631,47 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		})
 	}
 	return flow, nil
+}
+
+func persistExternalContinueHandoffs(root string, phaseNum int, dispatches []codexContinueExternalDispatch, results []codexContinueExternalDispatch) error {
+	resultByName := make(map[string]codexContinueExternalDispatch, len(results))
+	for _, result := range results {
+		if name := strings.TrimSpace(result.Name); name != "" {
+			resultByName[name] = result
+		}
+	}
+	for _, dispatch := range dispatches {
+		result, ok := resultByName[dispatch.Name]
+		if !ok {
+			continue
+		}
+		status := normalizeExternalBuildStatus(result.Status)
+		workerResult := &codex.WorkerResult{
+			WorkerName: dispatch.Name,
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			Status:     status,
+			Summary:    result.Summary,
+			Handoff:    codex.NormalizeWorkerHandoff(root, result.Handoff),
+			Blockers:   result.Blockers,
+		}
+		if err := persistDispatchWorkerHandoff(codex.WorkerDispatch{
+			WorkerName: dispatch.Name,
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			Workflow:   "continue",
+			Phase:      phaseNum,
+			Wave:       dispatch.Wave,
+			Root:       root,
+		}, codex.DispatchResult{
+			WorkerName:   dispatch.Name,
+			Status:       status,
+			WorkerResult: workerResult,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateExternalContinueIdentity(dispatch codexContinueExternalDispatch, result codexContinueExternalDispatch) error {
@@ -409,9 +763,10 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", step.Name, summary))
 		}
 	}
-	if !skipMissing && reviewDepth != colony.VerificationDepthLight && len(report.Workers) != len(codexContinueReviewSpecs) {
+	expectedReviewers := expectedContinueReviewWorkerCount(reviewDepth)
+	if !skipMissing && expectedReviewers > 0 && len(report.Workers) != expectedReviewers {
 		report.Passed = false
-		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", len(codexContinueReviewSpecs), len(report.Workers)))
+		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", expectedReviewers, len(report.Workers)))
 	}
 	report.BlockingIssues = uniqueSortedStrings(blockers)
 	report.Passed = report.Passed && len(report.BlockingIssues) == 0
@@ -423,7 +778,18 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 	return report
 }
 
-func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review *codexContinueReviewReport, reviewReportRel string, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string) (map[string]interface{}, colony.ColonyState, error) {
+func expectedContinueReviewWorkerCount(reviewDepth colony.VerificationDepth) int {
+	switch colony.NormalizeVerificationDepth(string(reviewDepth)) {
+	case colony.VerificationDepthLight:
+		return 0
+	case colony.VerificationDepthStandard:
+		return 1
+	default:
+		return len(codexContinueReviewSpecs)
+	}
+}
+
+func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review *codexContinueReviewReport, reviewReportRel string, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string, gateRecoveryInstructions []map[string]interface{}) (map[string]interface{}, colony.ColonyState, error) {
 	blockers := append([]string{}, gates.BlockingIssues...)
 	if review != nil {
 		blockers = append(blockers, review.BlockingIssues...)
@@ -486,6 +852,9 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	if review != nil {
 		result["review"] = *review
 		result["review_report"] = displayDataPath(reviewReportRel)
+	}
+	if len(gateRecoveryInstructions) > 0 {
+		result["recovery_instructions"] = gateRecoveryInstructions
 	}
 	return result, blockedState, nil
 }

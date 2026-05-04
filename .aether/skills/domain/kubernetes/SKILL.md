@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: kubernetes
 description: Use when the project uses Kubernetes for container orchestration, deployment, and service management
 type: domain

@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: session-handoff
 description: Use when pausing, resuming, or transferring context across sessions so work can continue safely
 type: colony

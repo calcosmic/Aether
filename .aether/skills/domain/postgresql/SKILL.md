@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: postgresql
 description: Use when the project uses PostgreSQL for relational data storage
 type: domain

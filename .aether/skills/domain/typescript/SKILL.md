@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: typescript
 description: Use when the project uses TypeScript for type-safe JavaScript development
 type: domain

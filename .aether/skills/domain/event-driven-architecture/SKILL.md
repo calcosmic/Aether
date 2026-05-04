@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: event-driven-architecture
 description: Use when the project uses message queues, event sourcing, CQRS, or asynchronous messaging patterns
 type: domain

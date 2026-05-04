@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: html-css
 description: Use when the project uses plain HTML, CSS, or SCSS for web pages
 type: domain

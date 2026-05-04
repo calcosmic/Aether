@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: cross-session-knowledge-threads
 description: Use when cross-cutting investigations or decisions need a persistent thread across sessions and phases
 type: colony

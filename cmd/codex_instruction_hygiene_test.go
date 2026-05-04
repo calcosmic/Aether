@@ -18,21 +18,21 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 		required []string
 	}{
 		{
-			path: ".aether/skills-codex/colony/colony-interaction/SKILL.md",
+			path: ".aether/skills/colony/colony-interaction/SKILL.md",
 			required: []string{
 				"Do not announce skill usage, intent interpretation, or a preflight summary before running the command.",
 				"After the command returns, keep your own wrapper to one short sentence at most.",
 			},
 		},
 		{
-			path: ".aether/skills-codex/colony/colony-lifecycle/SKILL.md",
+			path: ".aether/skills/colony/colony-lifecycle/SKILL.md",
 			required: []string{
 				"Do not prepend exploratory narration like \"I'm checking the repo\" or \"I'm treating this as...\"",
 				"If the `aether` CLI already rendered the result, do not restate the same guidance in a second synthetic \"Next Up\" block.",
 			},
 		},
 		{
-			path: ".aether/skills-codex/colony/colony-visuals/SKILL.md",
+			path: ".aether/skills/colony/colony-visuals/SKILL.md",
 			required: []string{
 				"Let the CLI's own visual output stand on its own.",
 				"Do not wrap the command with extra decorative commentary before and after execution.",

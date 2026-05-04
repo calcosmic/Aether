@@ -6,14 +6,55 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sync"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+func createDockerSurveyFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, dir := range []string{
+		filepath.Join(root, ".docker", "postgres"),
+		filepath.Join(root, "docs"),
+		filepath.Join(root, "homepage-config"),
+		filepath.Join(root, "listmonk"),
+		filepath.Join(root, "tests"),
+	} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	files := map[string]string{
+		"docker-compose.yml": `services:
+  postgres:
+    image: postgres:16
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+  metabase:
+    image: metabase/metabase:latest
+`,
+		"AGENTS.md": `Aether framework guidance for Codex, Claude, OpenCode, GitHub, OpenAI, Go CLI, and Cobra.
+This file describes assistant behavior and should not become product architecture evidence.
+`,
+		filepath.Join(".docker", "postgres", "init.sql"):  "select 1;\n",
+		filepath.Join("docs", "overview.md"):              "# Service dashboard\n",
+		filepath.Join("homepage-config", "services.yaml"): "services: []\n",
+		filepath.Join("listmonk", "config.toml"):          "[app]\n",
+		filepath.Join("tests", "test_smoke.sh"):           "#!/usr/bin/env bash\nset -euo pipefail\n",
+	}
+	for rel, content := range files {
+		target := filepath.Join(root, rel)
+		if err := os.WriteFile(target, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	return root
+}
 
 func TestColonizeWritesSurveyArtifactsAndUpdatesState(t *testing.T) {
 	saveGlobals(t)
@@ -363,6 +404,91 @@ func TestColonizeFallsBackWhenRealSurveyorsFail(t *testing.T) {
 	}
 	if files := result["survey_files"].([]interface{}); len(files) == 0 {
 		t.Fatal("expected fallback colonize to still write survey files")
+	}
+}
+
+func TestSurveyWorkspaceDockerRepoIgnoresPlatformGuidance(t *testing.T) {
+	root := createDockerSurveyFixture(t)
+
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace returned error: %v", err)
+	}
+
+	if facts.DetectedType != "docker" {
+		t.Fatalf("DetectedType = %q, want docker", facts.DetectedType)
+	}
+	if containsString(facts.Languages, "docker") {
+		t.Fatalf("Languages should not treat docker as a programming language: %v", facts.Languages)
+	}
+	for _, want := range []string{"docker compose"} {
+		if !containsString(facts.Frameworks, want) {
+			t.Fatalf("Frameworks missing %q: %v", want, facts.Frameworks)
+		}
+		if !containsString(facts.PackageManagers, want) {
+			t.Fatalf("PackageManagers missing %q: %v", want, facts.PackageManagers)
+		}
+	}
+	if !containsString(facts.Domains, "docker") {
+		t.Fatalf("Domains missing docker: %v", facts.Domains)
+	}
+	if !containsString(facts.TestFiles, filepath.Join("tests", "test_smoke.sh")) {
+		t.Fatalf("TestFiles missing shell smoke test: %v", facts.TestFiles)
+	}
+
+	integrations := strings.Join(facts.Integrations, "\n")
+	for _, forbidden := range []string{"Codex", "Claude", "OpenCode", "GitHub", "OpenAI"} {
+		if strings.Contains(integrations, forbidden) {
+			t.Fatalf("platform guidance leaked %q into integrations:\n%s", forbidden, integrations)
+		}
+	}
+	for _, want := range []string{"postgres", "clickhouse", "metabase"} {
+		if !strings.Contains(strings.ToLower(integrations), want) {
+			t.Fatalf("integrations missing %q in:\n%s", want, integrations)
+		}
+	}
+}
+
+func TestSurveyFallbackDocsAreEvidenceBasedForDockerRepo(t *testing.T) {
+	root := createDockerSurveyFixture(t)
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace returned error: %v", err)
+	}
+	dispatches := plannedSurveyors(root)
+
+	combined := strings.Join([]string{
+		renderSurveyBlueprint("now", facts, dispatches[1]),
+		renderSurveyChambers("now", facts, dispatches[1]),
+		renderSurveyDisciplines("now", facts, dispatches[2]),
+		renderSurveySentinel("now", facts, dispatches[2]),
+	}, "\n")
+
+	for _, forbidden := range []string{
+		"Go CLI plus companion",
+		"Cobra commands",
+		"Colony state machine",
+		"Aether packages",
+		"`aether install`",
+		"cmd/*.go",
+		"Go-first implementation",
+		"table-driven Go tests",
+		"`saveGlobals(t)`",
+	} {
+		if strings.Contains(combined, forbidden) {
+			t.Fatalf("fallback survey contains Aether-specific claim %q:\n%s", forbidden, combined)
+		}
+	}
+	for _, want := range []string{
+		"Detected project type: `docker`.",
+		"Docker Compose files coordinate local services",
+		"`docs/` holds project documentation",
+		"shell-based smoke or regression tests",
+		"service composition and startup wiring",
+	} {
+		if !strings.Contains(combined, want) {
+			t.Fatalf("fallback survey missing evidence-based text %q:\n%s", want, combined)
+		}
 	}
 }
 

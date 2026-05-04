@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: accessibility
 description: Use when the project uses web or mobile interfaces requiring WCAG 2.2 AA compliance, ARIA patterns, or assistive technology support
 type: domain

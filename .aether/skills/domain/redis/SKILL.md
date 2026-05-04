@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: redis
 description: Use when the project uses Redis for caching, pub/sub, session storage, or message streaming
 type: domain

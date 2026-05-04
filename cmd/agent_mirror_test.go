@@ -3,71 +3,80 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestPackagedAgentMirrorsMatchCanonicalSources(t *testing.T) {
+func TestRetiredPackagedAgentMirrorsAreAbsent(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	testCases := []struct {
-		name string
-		src  string
-		dst  string
-		ext  string
-	}{
-		{
-			name: "claude mirror",
-			src:  filepath.Join(repoRoot, ".claude", "agents", "ant"),
-			dst:  filepath.Join(repoRoot, ".aether", "agents-claude"),
-			ext:  ".md",
-		},
-		{
-			name: "codex mirror",
-			src:  filepath.Join(repoRoot, ".codex", "agents"),
-			dst:  filepath.Join(repoRoot, ".aether", "agents-codex"),
-			ext:  ".toml",
-		},
+	for _, rel := range []string{
+		".aether/agents-claude",
+		".aether/agents-codex",
+	} {
+		if _, err := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(rel))); err == nil {
+			t.Fatalf("retired packaged agent mirror exists: %s", rel)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+}
+
+func TestCanonicalAgentSourcesRemainAligned(t *testing.T) {
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var fileNames []string
-			if tc.name == "codex mirror" {
-				for _, baseName := range listShippedAetherCodexAgentBaseNames(t, tc.src) {
-					fileNames = append(fileNames, baseName+tc.ext)
-				}
-			} else {
-				srcEntries, err := os.ReadDir(tc.src)
-				if err != nil {
-					t.Fatalf("read %s: %v", tc.src, err)
-				}
-				for _, entry := range srcEntries {
-					if entry.IsDir() || filepath.Ext(entry.Name()) != tc.ext {
-						continue
-					}
-					fileNames = append(fileNames, entry.Name())
-				}
-			}
+	claudeDir := filepath.Join(repoRoot, ".claude", "agents", "ant")
+	opencodeDir := filepath.Join(repoRoot, ".opencode", "agents")
+	codexDir := filepath.Join(repoRoot, ".codex", "agents")
 
-			for _, fileName := range fileNames {
-				srcPath := filepath.Join(tc.src, fileName)
-				dstPath := filepath.Join(tc.dst, fileName)
+	claudeNames := agentBaseNames(t, claudeDir, ".md")
+	opencodeNames := agentBaseNames(t, opencodeDir, ".md")
+	codexNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
 
-				srcData, err := os.ReadFile(srcPath)
-				if err != nil {
-					t.Fatalf("read %s: %v", srcPath, err)
-				}
-				dstData, err := os.ReadFile(dstPath)
-				if err != nil {
-					t.Fatalf("read %s: %v", dstPath, err)
-				}
-				if string(srcData) != string(dstData) {
-					t.Fatalf("mirror drift detected for %s", fileName)
-				}
-			}
-		})
+	assertSameAgentBaseNames(t, "OpenCode", claudeNames, opencodeNames)
+	assertSameAgentBaseNames(t, "Codex", claudeNames, codexNames)
+}
+
+func agentBaseNames(t *testing.T, dir, ext string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ext {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(entry.Name(), ext))
+	}
+	return names
+}
+
+func assertSameAgentBaseNames(t *testing.T, platform string, want, got []string) {
+	t.Helper()
+	wantSet := map[string]bool{}
+	for _, name := range want {
+		wantSet[name] = true
+	}
+	gotSet := map[string]bool{}
+	for _, name := range got {
+		gotSet[name] = true
+	}
+	for name := range wantSet {
+		if !gotSet[name] {
+			t.Fatalf("%s missing canonical agent %s", platform, name)
+		}
+	}
+	for name := range gotSet {
+		if !wantSet[name] {
+			t.Fatalf("%s has extra agent %s", platform, name)
+		}
 	}
 }

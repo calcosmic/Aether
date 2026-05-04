@@ -35,10 +35,12 @@ The Prime Worker violated the spawn protocol.
   2. Prime Worker MUST spawn at least 1 specialist
   3. Re-run /ant-continue after spawns complete
 
-The phase will NOT advance until spawning occurs.
+Spawning did not complete. Recovery options:
+1. Check the build output for errors and fix them, then run `/ant-continue`
+2. Run `/ant-unblock` for guided recovery
 ```
 
-**CRITICAL:** Do NOT proceed to Step 1.7. Do NOT advance the phase.
+**Action Required:** Fix the spawning issue before continuing. Run `/ant-unblock` for guided recovery.
 Log the violation:
 ```bash
 aether activity-log --command "BLOCKED" --details "colony: Spawn gate failed: {task_count} tasks, 0 spawns"
@@ -66,10 +68,12 @@ Testing MUST be performed by a separate agent, not the builder.
   2. Prime Worker MUST spawn at least 1 Watcher
   3. Watcher must independently verify the work
 
-The phase will NOT advance until a Watcher validates.
+Watcher validation has not completed. Recovery options:
+1. Check the watcher output for errors and fix them, then run `/ant-continue`
+2. Run `/ant-unblock` for guided recovery
 ```
 
-**CRITICAL:** Do NOT proceed. Log the violation.
+**Action Required:** Log the violation, then run `/ant-unblock` for recovery options.
 
 **If spawn_count >= 1 AND watcher_count >= 1:**
 
@@ -430,13 +434,15 @@ Critical security vulnerabilities detected: {critical_count}
   2. Fix or update vulnerable dependencies
   3. Run /ant-continue again after resolving
 
-The phase will NOT advance with critical CVEs.
+Critical CVEs were detected. Recovery options:
+1. Resolve the CVEs and run `/ant-continue`
+2. Run `/ant-unblock` for guided recovery
 ```
 Write gate result:
 ```bash
 aether gate-results-write --name "gatekeeper" --passed false --detail "{critical_count} critical CVEs detected"
 ```
-**CRITICAL:** Do NOT proceed to Step 1.9. Stop here.
+**Action Required:** Resolve the CVE findings before continuing. Run `/ant-unblock` for guided recovery.
 
 - **If `security.high > 0`:**
 ```
@@ -559,14 +565,16 @@ Critical code quality issues detected: {critical_count}
 Critical Findings:
 {list each critical finding with file:line and description}
 
-The phase will NOT advance with critical quality issues.
+Critical quality issues were detected. Recovery options:
+1. Fix the quality issues and run `/ant-continue`
+2. Run `/ant-unblock` for guided recovery
 ```
 Run using the Bash tool with description "Logging critical quality block...": `aether error-flag-pattern --name "auditor-critical-findings" --description "$critical_count critical quality issues found" --severity "critical"`
 Write gate result:
 ```bash
 aether gate-results-write --name "auditor" --passed false --detail "{critical_count} critical quality issues, score {overall_score}/100"
 ```
-**CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
+**Action Required:** Fix the critical quality issues before continuing. Run `/ant-unblock` for guided recovery.
 
 - **Else if `overall_score < 60`:**
 ```
@@ -584,14 +592,16 @@ Code quality score below threshold: {overall_score}/100 (threshold: 60)
   2. Focus on HIGH severity items first
   3. Run /ant-continue again after improving quality
 
-The phase will NOT advance with quality score below 60.
+Quality score is below the threshold of 60. Recovery options:
+1. Improve the quality score and run `/ant-continue`
+2. Run `/ant-unblock` for guided recovery
 ```
 Run using the Bash tool with description "Logging quality score block...": `aether error-flag-pattern --name "auditor-quality-score" --description "Score $overall_score below threshold 60" --severity "critical"`
 Write gate result:
 ```bash
 aether gate-results-write --name "auditor" --passed false --detail "Quality score {overall_score}/100 below threshold 60"
 ```
-**CRITICAL:** Do NOT proceed to Step 1.10. Stop here.
+**Action Required:** Improve the quality score above 60 before continuing. Run `/ant-unblock` for guided recovery.
 
 - **Else if `findings.high > 0`:**
 ```
@@ -658,10 +668,12 @@ But no test files were found in the codebase.
   2. Actually write test files (not just claim them)
   3. Tests must exist and be runnable
 
-The phase will NOT advance with fabricated metrics.
+Fabricated metrics were detected. Recovery options:
+1. Address the metrics issue and run `/ant-continue`
+2. Run `/ant-unblock` for guided recovery
 ```
 
-**CRITICAL:** Do NOT proceed. Log the violation:
+**Action Required:** Log the metrics violation, then run `/ant-unblock` for recovery options.
 ```bash
 aether error-flag-pattern --name "fabricated-tdd" --description "Prime Worker reported TDD metrics without creating test files" --severity "critical"
 aether gate-results-write --name "tdd_evidence" --passed false --detail "Claimed {claimed_count} tests but no test files found"
@@ -803,7 +815,7 @@ Parse result for `blockers`, `issues`, and `notes` counts.
   3. Run /ant-continue again after resolving all blockers
 ```
 
-**CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
+**Action Required:** Resolve the current gate failures before continuing. Run `/ant-unblock` for guided recovery.
 
 Write gate result:
 ```bash
@@ -893,34 +905,30 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
    "Watcher has vetoed this phase. Choose how to proceed:"
 
    Options:
-   1. "Stash changes and retry" -- Runs git stash push, creates blocker flag, phase stays blocked. You can restore with git stash pop and fix issues.
+   1. "Keep changes and retry" -- Leaves working tree changes in place, phase stays blocked. Fix issues and run /ant-continue.
    2. "Keep working (stay blocked)" -- Does nothing. Phase stays blocked. You fix issues manually and re-run /ant-continue.
    3. "Force advance (accept risk)" -- Creates a FEEDBACK pheromone noting the override. Proceeds to Step 1.14 despite the veto. Use only if you disagree with the Watcher's assessment.
 
    c. **Handle each choice:**
 
-   - **Choice 1 ("Stash changes and retry"):**
-     Run using the Bash tool with description "Stashing changes due to Watcher veto...":
-     ```bash
-     git stash push -m "watcher-veto-phase-$current_phase" 2>&1
-     ```
+   - **Choice 1 ("Keep changes and retry"):**
      Run using the Bash tool with description "Creating watcher veto blocker flag...":
      ```bash
-     aether flag-create "WATCHER VETO: Quality score $quality_score (minimum 7), $critical_count critical issue(s). Changes stashed by user choice." --type blocker --phase "$current_phase"
+     aether flag-create "WATCHER VETO: Quality score $quality_score (minimum 7), $critical_count critical issue(s). Changes kept in place by user choice." --type blocker --phase "$current_phase"
      ```
      Run using the Bash tool with description "Logging Watcher veto to midden...":
      ```bash
-     aether midden-write --category "watcher-veto" --message "User chose to stash: phase $current_phase, score $quality_score, $critical_count critical issues" --source "watcher"
+     aether midden-write --category "watcher-veto" --message "User chose to keep changes: phase $current_phase, score $quality_score, $critical_count critical issues" --source "watcher"
      ```
      Run using the Bash tool with description "Writing watcher veto gate result...":
      ```bash
-     aether gate-results-write --name "watcher_veto" --passed false --detail "User stashed changes: score $quality_score, $critical_count critical issues"
+     aether gate-results-write --name "watcher_veto" --passed false --detail "User kept changes: score $quality_score, $critical_count critical issues"
      ```
      Display:
      ```
-     Changes stashed. Use git stash pop to restore, fix issues, then re-run /ant-continue.
+     Working tree changes preserved. Fix the critical issues listed above, then re-run /ant-continue.
      ```
-     **CRITICAL:** Do NOT proceed to Step 1.14. Do NOT advance the phase. Stop here.
+     **Action Required:** Resolve the watcher veto issue before continuing. Run `/ant-unblock` for guided recovery.
 
    - **Choice 2 ("Keep working (stay blocked)"):**
      Run using the Bash tool with description "Writing watcher veto gate result...":
@@ -931,7 +939,7 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
      ```
      Phase stays blocked. Fix the critical issues listed above, then re-run /ant-continue.
      ```
-     **CRITICAL:** Do NOT proceed to Step 1.14. Do NOT advance the phase. Stop here.
+     **Action Required:** Resolve the watcher veto issue before continuing. Run `/ant-unblock` for guided recovery.
 
    - **Choice 3 ("Force advance (accept risk)"):**
      Run using the Bash tool with description "Creating FEEDBACK pheromone for veto override...":
@@ -1062,7 +1070,7 @@ Recommended Actions:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**CRITICAL:** Do NOT proceed to Step 2. Do NOT advance the phase.
+**Action Required:** Resolve the current issues before continuing. Run `/ant-unblock` for guided recovery.
 Log the block:
 ```bash
 aether activity-log --command "BLOCKED" --details "medic: {critical_count} critical health issues detected"

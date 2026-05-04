@@ -8,7 +8,7 @@ Status: implemented in the 2026-04-25 skill catalog curation work. The final shi
 
 Import the useful skills from `/Users/callumcowie/- MASTER - Aether /Aether Skills:Agents:Prompts/skills` into Aether's real skill system as a curated migration, not a blind copy.
 
-The implementation preserves useful body content, renames over-themed skills to functional names, repairs frontmatter, maps skills to real Aether castes/workflows, mirrors them into `skills-codex`, and updates the matcher so a larger colony skill catalog does not flood every worker prompt.
+The implementation preserves useful body content, renames over-themed skills to functional names, repairs frontmatter, maps skills to real Aether castes/workflows, publishes shipped skills from `.aether/skills/`, and updates the matcher so a larger colony skill catalog does not flood every worker prompt.
 
 ## Key Changes
 
@@ -20,7 +20,7 @@ The implementation preserves useful body content, renames over-themed skills to 
   - Existing broad colony skills without new metadata keep current role-based behavior.
   - Newly curated colony skills with `workflow_triggers` or `task_keywords` require workflow/task evidence, not just role.
   - Runtime callsites pass workflow context into skill resolution for `colonize`, `plan`, `build`, and `continue`.
-- Keep `.aether/skills/` as the source of truth and mirror every imported/changed skill into `.aether/skills-codex/`.
+- Keep `.aether/skills/` as the single shipped skill source of truth.
 - Update expected packaged skill counts after migration and keep hub/integrity/medic checks consistent.
 
 ## Migration Map
@@ -87,7 +87,7 @@ Defer until there is explicit runtime/index design: `knowledge-graph`, `codebase
 - Domain skills still require repo/task evidence.
 - Curated colony skills require workflow/task evidence when they declare `workflow_triggers` or `task_keywords`.
 - Colonize, plan, build, and continue pass workflow context into skill resolution.
-- `.aether/skills` and `.aether/skills-codex` stay mirrored.
+- `.aether/skills` stays authoritative for shipped skills.
 - `go test ./cmd -run 'Test(ParseSkillFrontmatter|IndexSkillDir|SkillMatch|SkillInject|ScanWrapperParityHealthy|ScanHubPublishIntegrityHealthy|CheckStalePublish)' -count=1`
 - `go test ./... -count=1`
 - `go build ./cmd/aether`

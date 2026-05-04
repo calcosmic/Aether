@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: observability
 description: Use when the project uses logging, metrics, tracing, or monitoring infrastructure for observability
 type: domain

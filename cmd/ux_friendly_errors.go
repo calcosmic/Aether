@@ -6,7 +6,7 @@ import (
 
 // friendlyError maps an error pattern to a human-readable explanation and next steps.
 type friendlyError struct {
-	Pattern    string
+	Pattern     string
 	Explanation string
 	NextSteps   []string
 }
@@ -16,7 +16,15 @@ type friendlyError struct {
 // next steps for the user.
 var errorPatternMap = []friendlyError{
 	{
-		Pattern:    "no colony initialized",
+		Pattern:     "invalid charter JSON",
+		Explanation: "The charter passed to Aether is not valid JSON. The colony state file was not changed.",
+		NextSteps: []string{
+			"Retry with valid JSON, or run `aether init \"your goal\"` without `--charter-json`.",
+			"If an assistant generated the command, ask it to compact the charter or escape quotes/newlines correctly.",
+		},
+	},
+	{
+		Pattern:     "no colony initialized",
 		Explanation: "Aether needs a colony to work with. A colony is a workspace for building toward a specific goal.",
 		NextSteps: []string{
 			"Run `aether init \"your goal\"` to start a colony.",
@@ -24,7 +32,7 @@ var errorPatternMap = []friendlyError{
 		},
 	},
 	{
-		Pattern:    "failed to load colony state",
+		Pattern:     "failed to load colony state",
 		Explanation: "Aether could not read the colony data file. This may be corrupted or was modified outside of Aether.",
 		NextSteps: []string{
 			"Run `aether patrol` for diagnostics.",
@@ -32,14 +40,14 @@ var errorPatternMap = []friendlyError{
 		},
 	},
 	{
-		Pattern:    "flag --",
+		Pattern:     "flag --",
 		Explanation: "This command needs more information to run. Check the required flags and try again.",
 		NextSteps: []string{
 			"Run `aether <command> --help` to see available flags.",
 		},
 	},
 	{
-		Pattern:    "failed to initialize store",
+		Pattern:     "failed to initialize store",
 		Explanation: "Aether could not set up its data storage. This usually means the data directory is inaccessible.",
 		NextSteps: []string{
 			"Run `aether patrol` for diagnostics.",
@@ -47,14 +55,14 @@ var errorPatternMap = []friendlyError{
 		},
 	},
 	{
-		Pattern:    "permission denied",
+		Pattern:     "permission denied",
 		Explanation: "Aether does not have permission to access a file or directory.",
 		NextSteps: []string{
 			"Check file permissions. On macOS/Linux: `ls -la <path>` to inspect.",
 		},
 	},
 	{
-		Pattern:    "json:",
+		Pattern:     "json:",
 		Explanation: "Aether's data file is corrupted or was modified outside of Aether.",
 		NextSteps: []string{
 			"Run `aether patrol` for diagnostics.",

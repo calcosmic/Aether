@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: medic
 description: Colony health diagnostics and repair — healthy state specifications for all colony data files, failure modes, and remedies
 type: colony

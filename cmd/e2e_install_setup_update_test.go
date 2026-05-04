@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -208,19 +207,12 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 			t.Fatalf("setup returned ok:false, output: %s", output)
 		}
 
-		// Verify companion file was synced to repo
+		// Verify companion file stays global and is not copied to the repo
 		repoWorkers := filepath.Join(repoDir, ".aether", "workers.md")
-		if _, err := os.Stat(repoWorkers); os.IsNotExist(err) {
-			t.Fatal("repo workers.md not created by setup")
-		}
-
-		// Verify content matches v1
-		content, err := os.ReadFile(repoWorkers)
-		if err != nil {
-			t.Fatalf("failed to read repo workers.md: %v", err)
-		}
-		if string(content) != string(workersV1) {
-			t.Errorf("repo workers.md content mismatch after setup\ngot:  %s\nwant: %s", string(content), string(workersV1))
+		if _, err := os.Stat(repoWorkers); err == nil {
+			t.Fatal("repo workers.md should not be created by setup")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo workers.md: %v", err)
 		}
 
 		// Verify required directories were created
@@ -239,16 +231,20 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 			t.Error(".gitignore not created by setup")
 		}
 
-		// Verify docs were synced
+		// Verify shipped docs were not copied into the repo
 		repoGuide := filepath.Join(repoDir, ".aether", "docs", "guide.md")
-		if _, err := os.Stat(repoGuide); os.IsNotExist(err) {
-			t.Error("docs/guide.md not synced to repo")
+		if _, err := os.Stat(repoGuide); err == nil {
+			t.Error("docs/guide.md should stay global")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo guide: %v", err)
 		}
 
-		// Verify skills were synced
+		// Verify shipped skills were not copied into the repo
 		repoSkill := filepath.Join(repoDir, ".aether", "skills", "colony", "tdd.md")
-		if _, err := os.Stat(repoSkill); os.IsNotExist(err) {
-			t.Error("skills/colony/tdd.md not synced to repo")
+		if _, err := os.Stat(repoSkill); err == nil {
+			t.Error("skills/colony/tdd.md should stay global")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo skill: %v", err)
 		}
 	})
 
@@ -338,36 +334,36 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 			t.Fatalf("update returned ok:false, output: %s", output)
 		}
 
-		// Verify workers.md was updated to v2
+		// Verify workers.md remains global
 		repoWorkers := filepath.Join(repoDir, ".aether", "workers.md")
-		content, err := os.ReadFile(repoWorkers)
-		if err != nil {
-			t.Fatalf("failed to read repo workers.md after update: %v", err)
-		}
-		if string(content) != string(workersV2) {
-			t.Errorf("repo workers.md not updated to v2\ngot:  %s\nwant: %s", string(content), string(workersV2))
+		if _, err := os.Stat(repoWorkers); err == nil {
+			t.Fatal("repo workers.md should not be copied by update")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo workers.md after update: %v", err)
 		}
 
-		// Verify guide.md was updated
+		// Verify guide.md remains global
 		repoGuide := filepath.Join(repoDir, ".aether", "docs", "guide.md")
-		content, err = os.ReadFile(repoGuide)
-		if err != nil {
-			t.Fatalf("failed to read repo guide.md after update: %v", err)
-		}
-		if !strings.Contains(string(content), "v2") {
-			t.Errorf("repo guide.md not updated\ngot: %s", string(content))
+		if _, err := os.Stat(repoGuide); err == nil {
+			t.Fatal("repo guide.md should not be copied by update")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo guide.md after update: %v", err)
 		}
 
-		// Verify new file was copied
+		// Verify arbitrary new system file was not copied
 		repoNewFile := filepath.Join(repoDir, ".aether", "newfile.md")
-		if _, err := os.Stat(repoNewFile); os.IsNotExist(err) {
-			t.Error("new file not synced to repo")
+		if _, err := os.Stat(repoNewFile); err == nil {
+			t.Error("new file should not be synced to repo")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo newfile: %v", err)
 		}
 
-		// Verify updated command was synced
+		// Verify updated command was not synced to repo
 		repoUpdatedCmd := filepath.Join(repoDir, ".claude", "commands", "ant-updated.md")
-		if _, err := os.Stat(repoUpdatedCmd); os.IsNotExist(err) {
-			t.Error("updated command not synced to repo")
+		if _, err := os.Stat(repoUpdatedCmd); err == nil {
+			t.Error("updated command should stay global")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo command: %v", err)
 		}
 
 		// Verify rules were synced
@@ -504,9 +500,11 @@ func TestE2EInstallSetupProtectedDirsFromHub(t *testing.T) {
 		t.Errorf("setup overwrote user COLONY_STATE.json\ngot:  %s\nwant: %s", string(stateContent), userState)
 	}
 
-	// dreams/ should not have been created in the repo at all
-	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "dreams")); err == nil {
-		t.Error("setup created dreams/ directory in repo (should be skipped)")
+	// dreams/ is local-only scaffold. Hub dreams must never be copied into it.
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "dreams", "evil.md")); err == nil {
+		t.Error("setup copied hub dreams/ content into repo-local state")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat repo dream: %v", err)
 	}
 
 	// Now run update with force
@@ -532,9 +530,11 @@ func TestE2EInstallSetupProtectedDirsFromHub(t *testing.T) {
 		t.Errorf("force update overwrote user COLONY_STATE.json\ngot:  %s\nwant: %s", string(stateContent), userState)
 	}
 
-	// Verify workers.md was updated (non-protected file should work)
+	// Verify workers.md is not copied into repos anymore.
 	repoWorkers := filepath.Join(repoDir, ".aether", "workers.md")
-	if _, err := os.Stat(repoWorkers); os.IsNotExist(err) {
-		t.Error("workers.md should exist after setup+update")
+	if _, err := os.Stat(repoWorkers); err == nil {
+		t.Error("workers.md should stay global after setup+update")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat workers.md after setup+update: %v", err)
 	}
 }

@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: milestone-lifecycle
 description: Use when starting, completing, archiving, or transitioning milestones between project stages
 type: colony

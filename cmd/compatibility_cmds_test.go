@@ -505,7 +505,7 @@ func TestOracleCompatibilityRunsAutonomousLoop(t *testing.T) {
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "release parity"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "--template", "prd", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestOracleCompatibilityStopKillsControllerProcessTree(t *testing.T) {
 		t.Fatalf("write loop marker: %v", err)
 	}
 
-	result, err := runOracleCompatibility(root, []string{"stop"}, "")
+	result, err := runOracleCompatibility(root, []string{"stop"}, "", "")
 	if err != nil {
 		t.Fatalf("oracle stop returned error: %v", err)
 	}
@@ -811,13 +811,14 @@ func TestOracleCompatibilityAppliesSurveyAttemptPolicy(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
 		t.Fatalf("write oracle agent: %v", err)
 	}
+	writeOracleReferenceFixture(t, filepath.Join(root, ".aether", "references"))
 
 	capturing := &oracleCapturingInvoker{}
 	originalInvoker := newOracleWorkerInvoker
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return capturing }
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "release parity"})
+	rootCmd.SetArgs([]string{"oracle", "--depth", "exhaustive", "--template", "prd", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle start returned error: %v", err)
 	}
@@ -840,6 +841,9 @@ func TestOracleCompatibilityAppliesSurveyAttemptPolicy(t *testing.T) {
 	}
 	if !strings.Contains(first.TaskBrief, "Response File:") {
 		t.Fatalf("oracle task brief missing response file contract:\n%s", first.TaskBrief)
+	}
+	if !strings.Contains(first.SkillSection, "## Reference Library") || !strings.Contains(first.SkillSection, "Oracle Test Reference") {
+		t.Fatalf("oracle worker missing reference library injection:\n%s", first.SkillSection)
 	}
 }
 
@@ -875,7 +879,7 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := runOracleCompatibility(root, []string{"heartbeat test"}, "")
+		_, err := runOracleCompatibility(root, []string{"heartbeat test"}, "", "")
 		done <- err
 	}()
 
@@ -974,7 +978,7 @@ func TestOracleCompatibilityRejectsDuplicateActiveLoop(t *testing.T) {
 		t.Fatalf("write oracle state: %v", err)
 	}
 
-	_, err := runOracleCompatibility(root, []string{"new topic"}, "")
+	_, err := runOracleCompatibility(root, []string{"new topic"}, "", "")
 	if err == nil {
 		t.Fatal("expected duplicate active loop error, got nil")
 	}
@@ -987,8 +991,9 @@ type oracleCompletingInvoker struct{}
 
 func (i *oracleCompletingInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
-		Confidence: 90,
+		Confidence: 99,
 		Summary:    "Autonomous oracle loop produced a source-backed answer.",
 		Findings: []oracleWorkerFinding{{
 			Text: "Autonomous oracle loop produced a source-backed answer.",
@@ -1102,6 +1107,39 @@ func (i *oracleCapturingInvoker) Invoke(ctx context.Context, cfg codex.WorkerCon
 func (i *oracleCapturingInvoker) IsAvailable(ctx context.Context) bool { return true }
 func (i *oracleCapturingInvoker) ValidateAgent(path string) error      { return nil }
 
+func writeOracleReferenceFixture(t *testing.T, root string) {
+	t.Helper()
+	dir := filepath.Join(root, "playbooks")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir oracle references: %v", err)
+	}
+	content := `---
+schema_version: "1.0"
+id: oracle-test-reference
+kind: playbook
+category: playbooks
+title: Oracle Test Reference
+description: "Reference used to verify Oracle worker prompt injection."
+output_types: [prd]
+agent_roles: [architect]
+task_types: [requirements]
+task_keywords: [requirements]
+workflow_triggers: [plan]
+priority: high
+version: "1.0"
+render:
+  mode: full
+  max_chars: 1000
+---
+# Oracle Test Reference
+
+Follow the Oracle reference-library guidance.
+`
+	if err := os.WriteFile(filepath.Join(dir, "oracle-test-reference.md"), []byte(content), 0644); err != nil {
+		t.Fatalf("write oracle reference fixture: %v", err)
+	}
+}
+
 type oracleSlowCompletingInvoker struct {
 	delay time.Duration
 }
@@ -1168,8 +1206,9 @@ func (i *oracleRetryInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig)
 	}
 
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
-		Confidence: 88,
+		Confidence: 99,
 		Summary:    "Retry path completed the oracle iteration successfully.",
 		Findings: []oracleWorkerFinding{{
 			Text: "Retry path completed the oracle iteration successfully.",
@@ -1201,8 +1240,9 @@ type oracleResponseFirstInvoker struct {
 
 func (i *oracleResponseFirstInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{
+		QuestionID: oracleTestActiveQuestionID(cfg.Root),
 		Status:     "answered",
-		Confidence: 85,
+		Confidence: 99,
 		Summary:    "Response file was written before the worker finished its normal final message path.",
 		Findings: []oracleWorkerFinding{{
 			Text: "The controller can consume a valid response file before the nested worker emits its final claims JSON.",
@@ -1242,6 +1282,19 @@ func writeOracleTestResponse(cfg codex.WorkerConfig, response oracleWorkerRespon
 		return err
 	}
 	return os.WriteFile(cfg.ResponsePath, append(data, '\n'), 0644)
+}
+
+func oracleTestActiveQuestionID(root string) string {
+	data, err := os.ReadFile(filepath.Join(root, ".aether", "oracle", "state.json"))
+	if err != nil {
+		return ""
+	}
+	var state map[string]interface{}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return ""
+	}
+	id, _ := state["active_question_id"].(string)
+	return id
 }
 
 func TestRunCompatibilityDryRunPlansLifecycle(t *testing.T) {
@@ -1430,6 +1483,46 @@ func TestFormulateOracleBriefContainsRequiredSections(t *testing.T) {
 	}
 }
 
+func TestResolveOracleScopeAutoDetectsRepoAndWeb(t *testing.T) {
+	repoScope, err := resolveOracleScope("this repo runtime behavior", "auto")
+	if err != nil {
+		t.Fatalf("repo scope error: %v", err)
+	}
+	if repoScope.Scope != "repo" || !repoScope.IncludeRepoContext || repoScope.IncludeExternalContext {
+		t.Fatalf("unexpected repo scope: %+v", repoScope)
+	}
+
+	webScope, err := resolveOracleScope("latest framework pricing", "auto")
+	if err != nil {
+		t.Fatalf("web scope error: %v", err)
+	}
+	if webScope.Scope != "web" || webScope.IncludeRepoContext || !webScope.IncludeExternalContext {
+		t.Fatalf("unexpected web scope: %+v", webScope)
+	}
+
+	bothScope, err := resolveOracleScope("latest Aether runtime compatibility", "auto")
+	if err != nil {
+		t.Fatalf("both scope error: %v", err)
+	}
+	if bothScope.Scope != "both" || !bothScope.IncludeRepoContext || !bothScope.IncludeExternalContext {
+		t.Fatalf("unexpected both scope: %+v", bothScope)
+	}
+}
+
+func TestFormulateOracleBriefWebScopeOmitsRepoContext(t *testing.T) {
+	scope, err := resolveOracleScope("latest framework pricing", "web")
+	if err != nil {
+		t.Fatalf("scope error: %v", err)
+	}
+	brief := formulateOracleBrief(t.TempDir(), "latest framework pricing", "go", []string{"go"}, []string{"cobra"}, scope)
+	if !strings.Contains(brief, "## Research Scope") {
+		t.Fatalf("brief missing scope:\n%s", brief)
+	}
+	if strings.Contains(brief, "## Project Profile") || strings.Contains(brief, "## Codebase Structure") {
+		t.Fatalf("web scope should omit repo context:\n%s", brief)
+	}
+}
+
 func TestBuildBriefInformedQuestionsReferencesBriefContent(t *testing.T) {
 	brief := `## Topic
 release parity analysis
@@ -1459,8 +1552,8 @@ Ship cross-platform parity
 	if len(questions) < 5 {
 		t.Fatalf("expected at least 5 questions, got %d", len(questions))
 	}
-	if len(questions) > 8 {
-		t.Fatalf("expected at most 8 questions, got %d", len(questions))
+	if len(questions) > 10 {
+		t.Fatalf("expected at most 10 questions, got %d", len(questions))
 	}
 
 	allText := ""
@@ -1529,6 +1622,43 @@ simple bug fix
 	}
 }
 
+func TestBuildBriefInformedQuestionsUsesBoundedTopicLabel(t *testing.T) {
+	brief := `## Topic
+full audit
+
+## Project Profile
+- Type: go
+- Languages: go
+- Frameworks: cobra
+
+## Codebase Structure
+- cmd/
+- pkg/
+
+## Active Signals
+(none)
+
+## Recent Learnings
+(none)`
+	longTopic := "Full-stack audit of the Aether colony system. Review graph wiring, Queen markdown pipeline, worker handoff flow, pheromone injection, 72-file uncommitted diff, porter repo-awareness, skill matching, hive brain, split playbooks, and cross-platform parity. For each finding provide exact file path, line number, severity, bug description, and proposed code fix."
+
+	questions := buildBriefInformedQuestions(longTopic, brief, "go")
+	if len(questions) == 0 {
+		t.Fatal("expected questions")
+	}
+	for _, q := range questions {
+		if strings.Contains(q.Text, "72-file uncommitted diff") {
+			t.Fatalf("question %s repeated full oversized topic:\n%s", q.ID, q.Text)
+		}
+		if len(q.Text) > 420 {
+			t.Fatalf("question %s is too long (%d chars):\n%s", q.ID, len(q.Text), q.Text)
+		}
+	}
+	if !strings.Contains(questions[0].Text, "Full-stack audit of the Aether colony system") {
+		t.Fatalf("first question lost topic headline:\n%s", questions[0].Text)
+	}
+}
+
 func TestCurrentOracleRedirectAreasReturnsRedirectSignals(t *testing.T) {
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -1565,8 +1695,8 @@ func TestLoadColonyLearningsReturnsRecentInstincts(t *testing.T) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := colony.ColonyState{
-		Version:    "3.0",
-		Goal:       ptrString("Build greatness"),
+		Version: "3.0",
+		Goal:    ptrString("Build greatness"),
 		Memory: colony.Memory{
 			Instincts: []colony.Instinct{
 				{ID: "i1", Trigger: "old trigger", Action: "old action", CreatedAt: "2020-01-01T00:00:00Z"},
@@ -1725,10 +1855,10 @@ func TestScoreQuestionImpact(t *testing.T) {
 		},
 	}
 	state := oracleStateFile{
-		OpenGaps:       []string{"authentication token validation is unclear", "authentication security configuration missing", "authentication flow has gaps"},
-		Contradictions: []string{"conflicting information about database indexing"},
+		OpenGaps:         []string{"authentication token validation is unclear", "authentication security configuration missing", "authentication flow has gaps"},
+		Contradictions:   []string{"conflicting information about database indexing"},
 		TargetConfidence: 85,
-		Iteration:       2,
+		Iteration:        2,
 	}
 
 	// Q1 should score higher than Q2 because Q1 has massive gap overlap (3 gaps mention "authentication")
@@ -1794,9 +1924,9 @@ func TestSelectOracleQuestionSmartGapOverlap(t *testing.T) {
 		},
 	}
 	state := oracleStateFile{
-		OpenGaps:        []string{"authentication token validation is unclear", "auth token expiry needs research"},
+		OpenGaps:         []string{"authentication token validation is unclear", "auth token expiry needs research"},
 		TargetConfidence: 85,
-		Iteration:       1,
+		Iteration:        1,
 	}
 
 	result := selectOracleQuestionSmart(plan, state)

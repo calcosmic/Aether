@@ -48,13 +48,14 @@ func LoadAgentInstructions(tomlPath string) (string, error) {
 // AssemblePrompt combines prompt sections in the correct order:
 //  1. TOML developer_instructions (agent role definition)
 //  2. Compact colony-prime context
-//  3. Skill section (skill guidance, if non-empty)
-//  4. Pheromone section (pheromone signals, if non-empty)
-//  5. Task brief (worker's specific assignment)
+//  3. Worker handoff section (prior relay data, if non-empty)
+//  4. Skill section (skill guidance, if non-empty)
+//  5. Pheromone section (pheromone signals, if non-empty)
+//  6. Task brief (worker's specific assignment)
 //
 // Empty sections are omitted. The fully assembled prompt is then trimmed to the
 // configured global prompt budget. Returns the concatenated prompt string.
-func AssemblePrompt(agentTOMLPath, contextCapsule, skillSection, pheromoneSection, taskBrief string) (string, error) {
+func AssemblePrompt(agentTOMLPath, contextCapsule, handoffSection, skillSection, pheromoneSection, taskBrief string) (string, error) {
 	instructions, err := LoadAgentInstructions(agentTOMLPath)
 	if err != nil {
 		return "", err
@@ -63,6 +64,7 @@ func AssemblePrompt(agentTOMLPath, contextCapsule, skillSection, pheromoneSectio
 	parts := []promptPart{
 		{name: "instructions", content: strings.TrimSpace(instructions), required: true},
 		{name: "context", content: strings.TrimSpace(contextCapsule), required: false},
+		{name: "handoff", content: strings.TrimSpace(handoffSection), required: false},
 		{name: "skill", content: strings.TrimSpace(skillSection), required: false},
 		{name: "pheromone", content: strings.TrimSpace(pheromoneSection), required: false},
 		{name: "brief", content: strings.TrimSpace(taskBrief), required: true},
@@ -73,9 +75,10 @@ func AssemblePrompt(agentTOMLPath, contextCapsule, skillSection, pheromoneSectio
 
 // AssembleHostedPrompt builds the worker prompt for platforms that load their
 // agent instructions from the host runtime instead of a Codex TOML file.
-func AssembleHostedPrompt(contextCapsule, skillSection, pheromoneSection, taskBrief string) string {
+func AssembleHostedPrompt(contextCapsule, handoffSection, skillSection, pheromoneSection, taskBrief string) string {
 	parts := []promptPart{
 		{name: "context", content: strings.TrimSpace(contextCapsule), required: false},
+		{name: "handoff", content: strings.TrimSpace(handoffSection), required: false},
 		{name: "skill", content: strings.TrimSpace(skillSection), required: false},
 		{name: "pheromone", content: strings.TrimSpace(pheromoneSection), required: false},
 		{name: "brief", content: strings.TrimSpace(taskBrief), required: true},
@@ -151,6 +154,7 @@ func assemblePromptParts(parts []promptPart, budget int) string {
 	}{
 		{name: "skill", minChars: 0},
 		{name: "pheromone", minChars: 0},
+		{name: "handoff", minChars: 0},
 		{name: "context", minChars: 32},
 	}
 	for _, item := range trimOrder {

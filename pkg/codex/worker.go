@@ -42,8 +42,10 @@ type WorkerConfig struct {
 	Timeout          time.Duration // Per-worker timeout (default: 10 minutes)
 	SkillSection     string        // Skill guidance content injected into worker prompts
 	PheromoneSection string        // Pheromone signal content injected into worker prompts
+	HandoffSection   string        // Previous worker relay context injected into worker prompts
 	ConfigOverrides  []string      // Optional codex config overrides passed as -c key=value
 	ResponsePath     string        // Optional controller-managed response file path
+	CallbackURL      string        // Worker callback/messaging URL (separate from LLM provider URL)
 }
 
 // effectiveTimeout returns the configured timeout or the default.
@@ -57,20 +59,22 @@ func (c WorkerConfig) effectiveTimeout() time.Duration {
 // WorkerResult captures the outcome of a worker invocation.
 // Field names match the documented codexWorkerResult in doc.go.
 type WorkerResult struct {
-	WorkerName    string        // The worker's assigned name
-	Caste         string        // Worker caste
-	TaskID        string        // Task identifier
-	Status        string        // "completed", "failed", "blocked", or "timeout"
-	Summary       string        // Worker's self-reported summary
-	FilesCreated  []string      // Files the worker claims to have created
-	FilesModified []string      // Files the worker claims to have modified
-	TestsWritten  []string      // Test files the worker created
-	ToolCount     int           // Number of tool calls reported
-	Blockers      []string      // Blocking issues reported
-	Spawns        []string      // Sub-workers spawned
-	Duration      time.Duration // Wall-clock time of the invocation
-	RawOutput     string        // Full stdout from the subprocess
-	Error         error         // Invocation error (if any)
+	WorkerName    string                     // The worker's assigned name
+	Caste         string                     // Worker caste
+	TaskID        string                     // Task identifier
+	Status        string                     // "completed", "failed", "blocked", or "timeout"
+	Summary       string                     // Worker's self-reported summary
+	FilesCreated  []string                   // Files the worker claims to have created
+	FilesModified []string                   // Files the worker claims to have modified
+	TestsWritten  []string                   // Test files the worker created
+	Artifacts     map[string]json.RawMessage // Optional structured artifacts requested by task-specific briefs
+	ToolCount     int                        // Number of tool calls reported
+	Blockers      []string                   // Blocking issues reported
+	Spawns        []string                   // Sub-workers spawned
+	Duration      time.Duration              // Wall-clock time of the invocation
+	RawOutput     string                     // Full stdout from the subprocess
+	Error         error                      // Invocation error (if any)
+	Handoff       WorkerHandoff              // Worker handoff relay data
 }
 
 type jsonSchema struct {
@@ -82,17 +86,19 @@ type jsonSchema struct {
 
 // workerClaims represents the trailing JSON block returned by a Codex worker.
 type workerClaims struct {
-	AntName       string   `json:"ant_name"`
-	Caste         string   `json:"caste"`
-	TaskID        string   `json:"task_id"`
-	Status        string   `json:"status"`
-	Summary       string   `json:"summary"`
-	FilesCreated  []string `json:"files_created"`
-	FilesModified []string `json:"files_modified"`
-	TestsWritten  []string `json:"tests_written"`
-	ToolCount     int      `json:"tool_count"`
-	Blockers      []string `json:"blockers"`
-	Spawns        []string `json:"spawns"`
+	AntName       string                     `json:"ant_name"`
+	Caste         string                     `json:"caste"`
+	TaskID        string                     `json:"task_id"`
+	Status        string                     `json:"status"`
+	Summary       string                     `json:"summary"`
+	FilesCreated  []string                   `json:"files_created"`
+	FilesModified []string                   `json:"files_modified"`
+	TestsWritten  []string                   `json:"tests_written"`
+	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ToolCount     int                        `json:"tool_count"`
+	Blockers      []string                   `json:"blockers"`
+	Spawns        []string                   `json:"spawns"`
+	Handoff       WorkerHandoff              `json:"handoff,omitempty"`
 }
 
 // agentTOML represents the required fields from a Codex agent TOML file.
@@ -178,6 +184,10 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		ToolCount:     0,
 		Blockers:      nil,
 		Spawns:        nil,
+		Handoff: NormalizeWorkerHandoff(config.Root, WorkerHandoff{
+			VerificationStatus:     "not_run",
+			NextWorkerInstructions: []string{"Synthetic worker completed without repo changes."},
+		}),
 	}
 
 	claimsJSON, err := json.Marshal(claims)
@@ -196,9 +206,11 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		FilesCreated:  claims.FilesCreated,
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
+		Artifacts:     claims.Artifacts,
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
+		Handoff:       claims.Handoff,
 		Duration:      time.Since(start),
 		RawOutput:     rawOutput,
 	}, nil
@@ -344,7 +356,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		}, fmt.Errorf("worker startup failed: %w", err)
 	}
 
-	prompt, err := AssemblePrompt(config.AgentTOMLPath, config.ContextCapsule, config.SkillSection, config.PheromoneSection, config.TaskBrief)
+	prompt, err := AssemblePrompt(config.AgentTOMLPath, config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief)
 	if err != nil {
 		return WorkerResult{
 			WorkerName: config.WorkerName,
@@ -386,10 +398,11 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 	defer os.Remove(schemaPath)
 
-	// Build the command: codex exec --full-auto --ephemeral --output-last-message FILE --output-schema FILE
+	// Build the command: codex --sandbox workspace-write --ask-for-approval never exec ...
 	args := []string{
+		"--sandbox", "workspace-write",
+		"--ask-for-approval", "never",
 		"exec",
-		"--full-auto",
 		"--json",
 		"--ephemeral",
 		"--skip-git-repo-check",
@@ -407,6 +420,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		cmd.Dir = config.Root
 	}
 	cmd.Stdin = strings.NewReader(prompt)
+	cmd.SysProcAttr = workerSysProcAttr()
 
 	var stdout, stderr bytes.Buffer
 	running := newWorkerRunningSignal(observer)
@@ -432,6 +446,14 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 			Error:      startupErr,
 		}, startupErr
 	}
+
+	GlobalProcessTracker().TrackProcess(cmd.Process.Pid, TrackedProcess{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		Platform:   "codex",
+		Root:       config.Root,
+	})
+	defer GlobalProcessTracker().UntrackProcess(cmd.Process.Pid)
 
 	waitCh := make(chan error, 1)
 	go func() {
@@ -519,9 +541,11 @@ waitLoop:
 		FilesCreated:  claims.FilesCreated,
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
+		Artifacts:     claims.Artifacts,
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
+		Handoff:       claims.Handoff,
 		Duration:      duration,
 		RawOutput:     rawOutput,
 	}, nil
@@ -711,7 +735,9 @@ Return ONLY a single JSON object as your final response.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
 - Set status to one of: %s.
 - Report blockers truthfully. If blocked, explain why in blockers.
+- Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness.
 - Keep summary concise and concrete.
+- Include artifacts only when the task brief explicitly asks for a named structured artifact.
 `, filepath.Clean(root), statusLine))
 }
 
@@ -737,6 +763,7 @@ func workerClaimsSchema() jsonSchema {
 			"tool_count",
 			"blockers",
 			"spawns",
+			"handoff",
 		},
 		Properties: map[string]interface{}{
 			"ant_name": map[string]interface{}{"type": "string"},
@@ -750,12 +777,31 @@ func workerClaimsSchema() jsonSchema {
 			"files_created":  stringArray,
 			"files_modified": stringArray,
 			"tests_written":  stringArray,
+			"artifacts": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": true,
+			},
 			"tool_count": map[string]interface{}{
 				"type":    "integer",
 				"minimum": 0,
 			},
 			"blockers": stringArray,
 			"spawns":   stringArray,
+			"handoff": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"changed_files":            stringArray,
+					"commands_run":             stringArray,
+					"verification_status":      map[string]interface{}{"type": "string", "enum": []string{"pass", "fail", "partial", "not_run", "unknown"}},
+					"known_failures":           stringArray,
+					"open_decisions":           stringArray,
+					"assumptions":              stringArray,
+					"next_worker_instructions": stringArray,
+					"do_not_repeat":            stringArray,
+					"freshness":                map[string]interface{}{"type": "string"},
+				},
+			},
 		},
 	}
 }
@@ -816,7 +862,27 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 	claims.TestsWritten = normalizeClaimPaths(config.Root, claims.TestsWritten)
 	claims.Blockers = compactStrings(claims.Blockers)
 	claims.Spawns = compactStrings(claims.Spawns)
+	if workerHandoffIsEmpty(claims.Handoff) {
+		claims.Handoff = synthesizeWorkerHandoff(claims)
+	}
+	claims.Handoff = NormalizeWorkerHandoff(config.Root, claims.Handoff)
 	return claims
+}
+
+func synthesizeWorkerHandoff(claims workerClaims) WorkerHandoff {
+	status := "partial"
+	switch strings.ToLower(strings.TrimSpace(claims.Status)) {
+	case "completed":
+		status = "pass"
+	case "blocked", "failed":
+		status = "fail"
+	}
+	return WorkerHandoff{
+		ChangedFiles:           append(append(append([]string{}, claims.FilesCreated...), claims.FilesModified...), claims.TestsWritten...),
+		VerificationStatus:     status,
+		KnownFailures:          append([]string{}, claims.Blockers...),
+		NextWorkerInstructions: []string{strings.TrimSpace(claims.Summary)},
+	}
 }
 
 func normalizeClaimPaths(root string, paths []string) []string {
@@ -912,6 +978,13 @@ func emitWorkerProgress(observer WorkerProgressObserver, event WorkerProgressEve
 }
 
 func validateWorkerLaunchConfig(config WorkerConfig) error {
+	// Validate callback URL scheme if set (T-89-09: reject file://, javascript:, data:)
+	if strings.TrimSpace(config.CallbackURL) != "" {
+		if err := validateCallbackURLScheme(config.CallbackURL); err != nil {
+			return err
+		}
+	}
+
 	root := strings.TrimSpace(config.Root)
 	if root == "" {
 		return nil
@@ -924,6 +997,28 @@ func validateWorkerLaunchConfig(config WorkerConfig) error {
 		return fmt.Errorf("worker startup failed: working directory %q is not a directory", root)
 	}
 	return nil
+}
+
+// validateCallbackURL validates that a callback URL is present and uses an
+// allowed scheme (http or https). This is the primary validation function
+// for callers that require a callback URL before spawning workers (D-13, PLAT-02).
+func validateCallbackURL(url string) error {
+	trimmed := strings.TrimSpace(url)
+	if trimmed == "" {
+		return fmt.Errorf("Missing worker callback URL -- configure provider.callback_url before spawning workers")
+	}
+	return validateCallbackURLScheme(trimmed)
+}
+
+// validateCallbackURLScheme checks that a non-empty callback URL uses
+// an allowed scheme. This is called both by validateCallbackURL (for the
+// required check) and by validateWorkerLaunchConfig (for the optional scheme check).
+func validateCallbackURLScheme(url string) error {
+	lower := strings.ToLower(strings.TrimSpace(url))
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return nil
+	}
+	return fmt.Errorf("worker callback URL %q uses an invalid scheme -- only http and https are allowed", url)
 }
 
 func workerHeartbeatInterval(timeout time.Duration) time.Duration {

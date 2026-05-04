@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: worker-priming
 description: Use when starting work as a spawned worker to understand what context you have been given and how to use it
 type: colony

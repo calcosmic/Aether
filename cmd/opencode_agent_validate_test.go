@@ -178,7 +178,7 @@ tools:
 		}
 	})
 
-	t.Run("all 25 real agent files pass validation", func(t *testing.T) {
+	t.Run("all real agent files pass validation", func(t *testing.T) {
 		repoRoot, err := findOpenCodeRepoRoot()
 		if err != nil {
 			t.Skip("repo root not found, skipping real file validation")

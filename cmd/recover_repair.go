@@ -539,7 +539,7 @@ func repairBrokenSurvey(issue HealthIssue, dataDir string) RepairRecord {
 // ---------------------------------------------------------------------------
 
 // repairMissingAgentFiles copies agent definition files from the hub
-// (~/.aether/system/) to the repo if they are missing locally.
+// (~/.aether/system/) to the active source or global platform homes.
 func repairMissingAgentFiles(issue HealthIssue, dataDir string) RepairRecord {
 	record := RepairRecord{
 		Category: issue.Category,
@@ -547,22 +547,13 @@ func repairMissingAgentFiles(issue HealthIssue, dataDir string) RepairRecord {
 	}
 
 	repoRoot := resolveAetherRoot()
-	hubBase := filepath.Join(homeDir(), ".aether", "system")
-
-	surfaces := []struct {
-		hubSub  string
-		destDir string
-	}{
-		{"claude/agents", filepath.Join(repoRoot, ".claude", "agents", "ant")},
-		{"opencode/agents", filepath.Join(repoRoot, ".opencode", "agents")},
-		{"codex/agents", filepath.Join(repoRoot, ".codex", "agents")},
-	}
+	hubBase := filepath.Join(resolveHubPath(), "system")
 
 	copied := 0
 	hubExists := false
 
-	for _, surface := range surfaces {
-		hubDir := filepath.Join(hubBase, surface.hubSub)
+	for _, surface := range recoverAgentSurfaces(repoRoot) {
+		hubDir := filepath.Join(hubBase, filepath.FromSlash(surface.hubRel))
 		entries, err := os.ReadDir(hubDir)
 		if err != nil {
 			continue
@@ -596,7 +587,7 @@ func repairMissingAgentFiles(issue HealthIssue, dataDir string) RepairRecord {
 	}
 
 	if copied == 0 && !hubExists {
-		record.Error = "hub has no agent files -- run `aether update` first"
+		record.Error = "hub has no agent files -- run `aether publish` from the Aether repo or `aether install` to populate platform homes"
 		return record
 	}
 

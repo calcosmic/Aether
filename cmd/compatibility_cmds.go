@@ -60,7 +60,10 @@ var oracleCmd = &cobra.Command{
 		}
 
 		depth, _ := cmd.Flags().GetString("depth")
-			result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth)
+		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
+		scope, _ := cmd.Flags().GetString("scope")
+		template, _ := cmd.Flags().GetString("template")
+		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget, scope, template)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -135,6 +138,9 @@ func init() {
 	runCompatibilityCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for build and continue dispatches (e.g. 15m)")
 
 	oracleCmd.Flags().String("depth", "", "Research depth: quick, balanced, deep, exhaustive (default: balanced)")
+	oracleCmd.Flags().String("confidence-target", "", "Target confidence percentage 1-100 (default: per depth level). Oracle will not finalize below this target unless a hard blocker is reported or max iterations are reached.")
+	oracleCmd.Flags().String("scope", defaultOracleScope, "Research scope: auto, repo, web, or both")
+	oracleCmd.Flags().String("template", defaultOracleTemplate, "Output template: auto, prd, tech-eval, architecture-review, bug-investigation, research-brief, or custom")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)
@@ -573,6 +579,11 @@ func renderOracleCompatibilityVisual(result map[string]interface{}) string {
 	if phase := strings.TrimSpace(stringValue(result["phase"])); phase != "" {
 		b.WriteString("Phase: ")
 		b.WriteString(phase)
+		b.WriteString("\n")
+	}
+	if template := strings.TrimSpace(stringValue(result["template"])); template != "" {
+		b.WriteString("Template: ")
+		b.WriteString(template)
 		b.WriteString("\n")
 	}
 	if iteration := intValue(result["iteration"]); iteration > 0 {

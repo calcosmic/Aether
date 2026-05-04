@@ -84,7 +84,7 @@ You are a Builder Ant.
 	capsule := "--- CONTEXT CAPSULE ---\nGoal: Build feature X\n--- END CONTEXT CAPSULE ---"
 	brief := "# Task 2.1\n\nImplement the thing."
 
-	prompt, err := AssemblePrompt(tomlPath, capsule, "", "", brief)
+	prompt, err := AssemblePrompt(tomlPath, capsule, "", "", "", brief)
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}
@@ -129,7 +129,7 @@ You are a Builder Ant.
 
 	brief := "# Task 2.1\n\nImplement the thing."
 
-	prompt, err := AssemblePrompt(tomlPath, "", "", "", brief)
+	prompt, err := AssemblePrompt(tomlPath, "", "", "", "", brief)
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}
@@ -159,18 +159,20 @@ developer_instructions = '''
 	}
 
 	capsule := "[SECTION:CAPSULE]"
+	handoff := "[SECTION:HANDOFF]"
 	skill := "[SECTION:SKILL]"
 	pheromone := "[SECTION:PHEROMONE]"
 	brief := "[SECTION:BRIEF]"
 
-	prompt, err := AssemblePrompt(tomlPath, capsule, skill, pheromone, brief)
+	prompt, err := AssemblePrompt(tomlPath, capsule, handoff, skill, pheromone, brief)
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}
 
-	// Check strict ordering: instructions < capsule < skill < pheromone < brief
+	// Check strict ordering: instructions < capsule < handoff < skill < pheromone < brief
 	instrIdx := strings.Index(prompt, "[SECTION:INSTRUCTIONS]")
 	capsuleIdx := strings.Index(prompt, "[SECTION:CAPSULE]")
+	handoffIdx := strings.Index(prompt, "[SECTION:HANDOFF]")
 	skillIdx := strings.Index(prompt, "[SECTION:SKILL]")
 	pheromoneIdx := strings.Index(prompt, "[SECTION:PHEROMONE]")
 	briefIdx := strings.Index(prompt, "[SECTION:BRIEF]")
@@ -180,6 +182,9 @@ developer_instructions = '''
 	}
 	if capsuleIdx < 0 {
 		t.Fatal("capsule marker not found in prompt")
+	}
+	if handoffIdx < 0 {
+		t.Fatal("handoff marker not found in prompt")
 	}
 	if skillIdx < 0 {
 		t.Fatal("skill marker not found in prompt")
@@ -193,8 +198,11 @@ developer_instructions = '''
 	if instrIdx >= capsuleIdx {
 		t.Errorf("instructions (idx=%d) should come before capsule (idx=%d)", instrIdx, capsuleIdx)
 	}
-	if capsuleIdx >= skillIdx {
-		t.Errorf("capsule (idx=%d) should come before skill (idx=%d)", capsuleIdx, skillIdx)
+	if capsuleIdx >= handoffIdx {
+		t.Errorf("capsule (idx=%d) should come before handoff (idx=%d)", capsuleIdx, handoffIdx)
+	}
+	if handoffIdx >= skillIdx {
+		t.Errorf("handoff (idx=%d) should come before skill (idx=%d)", handoffIdx, skillIdx)
 	}
 	if skillIdx >= pheromoneIdx {
 		t.Errorf("skill (idx=%d) should come before pheromone (idx=%d)", skillIdx, pheromoneIdx)
@@ -221,7 +229,7 @@ developer_instructions = '''
 	capsule := "[SECTION:CAPSULE]"
 	brief := "[SECTION:BRIEF]"
 
-	prompt, err := AssemblePrompt(tomlPath, capsule, "", "", brief)
+	prompt, err := AssemblePrompt(tomlPath, capsule, "", "", "", brief)
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}
@@ -263,7 +271,7 @@ developer_instructions = '''
 		t.Fatalf("failed to write test TOML: %v", err)
 	}
 
-	prompt, err := AssemblePrompt(tomlPath, "", "[SECTION:SKILL]", "", "[SECTION:BRIEF]")
+	prompt, err := AssemblePrompt(tomlPath, "", "", "[SECTION:SKILL]", "", "[SECTION:BRIEF]")
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}
@@ -298,7 +306,7 @@ developer_instructions = '''
 	pheromone := "[SECTION:PHEROMONE]\n" + strings.Repeat("P", 90)
 	brief := "[SECTION:BRIEF]\n" + strings.Repeat("B", 60)
 
-	prompt, err := AssemblePrompt(tomlPath, context, skill, pheromone, brief)
+	prompt, err := AssemblePrompt(tomlPath, context, "", skill, pheromone, brief)
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}
@@ -341,7 +349,7 @@ developer_instructions = '''
 	skill := "[SECTION:SKILL]\n" + strings.Repeat("S", 120)
 	brief := "[SECTION:BRIEF]\n" + strings.Repeat("B", 60)
 
-	prompt, err := AssemblePrompt(tomlPath, context, skill, "", brief)
+	prompt, err := AssemblePrompt(tomlPath, context, "", skill, "", brief)
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}
@@ -372,7 +380,7 @@ developer_instructions = '''
 	}
 
 	brief := "[SECTION:BRIEF]\n" + strings.Repeat("B", 180)
-	prompt, err := AssemblePrompt(tomlPath, "", "", "", brief)
+	prompt, err := AssemblePrompt(tomlPath, "", "", "", "", brief)
 	if err != nil {
 		t.Fatalf("AssemblePrompt returned error: %v", err)
 	}

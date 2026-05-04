@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -341,8 +342,8 @@ func TestGateRecoveryTemplate_UnknownGate(t *testing.T) {
 }
 
 func TestShouldSkipGate_PassedGateSkipped(t *testing.T) {
-	prior := []colony.GateResultEntry{
-		{Name: "spawn_gate", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	prior := []GateCheckResult{
+		{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 	}
 	result := shouldSkipGate(prior, "spawn_gate")
 	if !result {
@@ -351,8 +352,8 @@ func TestShouldSkipGate_PassedGateSkipped(t *testing.T) {
 }
 
 func TestShouldSkipGate_TestsNeverSkipped(t *testing.T) {
-	prior := []colony.GateResultEntry{
-		{Name: "tests_pass", Passed: true, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	prior := []GateCheckResult{
+		{Name: "tests_pass", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 	}
 	result := shouldSkipGate(prior, "tests_pass")
 	if result {
@@ -361,8 +362,8 @@ func TestShouldSkipGate_TestsNeverSkipped(t *testing.T) {
 }
 
 func TestShouldSkipGate_FailedGateNotSkipped(t *testing.T) {
-	prior := []colony.GateResultEntry{
-		{Name: "spawn_gate", Passed: false, Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	prior := []GateCheckResult{
+		{Name: "spawn_gate", Status: "failed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 	}
 	result := shouldSkipGate(prior, "spawn_gate")
 	if result {
@@ -777,8 +778,16 @@ func TestShouldSkipGateCmd_PassedGate(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "COLONY_STATE.json"), stateData, 0644)
 
 	var buf bytes.Buffer
-	rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate"})
+		rootCmd.SetArgs([]string{"should-skip-gate", "--name", "spawn_gate", "--phase", "1"})
 	stdout = &buf
+
+		// Write per-phase gate results file
+		phaseResults := []GateCheckResult{
+			{Name: "spawn_gate", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		}
+		phaseData, _ := json.Marshal(phaseResults)
+		os.WriteFile(filepath.Join(dir, "gate-results-1.json"), phaseData, 0644)
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command failed: %v", err)
 	}
@@ -858,11 +867,11 @@ func TestGateRecoveryTemplateCmd_UnknownGate(t *testing.T) {
 // re-checked, and tests_pass is never skipped regardless of prior results.
 func TestIncrementalGateChecking_SkipsPriorPassed(t *testing.T) {
 	ts := time.Now().UTC().Format(time.RFC3339)
-	prior := []colony.GateResultEntry{
-		{Name: "spawn_gate", Passed: true, Timestamp: ts},
-		{Name: "state_gate", Passed: true, Timestamp: ts},
-		{Name: "build_gate", Passed: false, Timestamp: ts},
-		{Name: "tests_pass", Passed: true, Timestamp: ts},
+	prior := []GateCheckResult{
+		{Name: "spawn_gate", Status: "passed", Timestamp: ts},
+		{Name: "state_gate", Status: "passed", Timestamp: ts},
+		{Name: "build_gate", Status: "failed", Timestamp: ts},
+		{Name: "tests_pass", Status: "passed", Timestamp: ts},
 	}
 
 	// Passed non-test gates should be skipped
@@ -886,5 +895,883 @@ func TestIncrementalGateChecking_SkipsPriorPassed(t *testing.T) {
 	// Unknown gate (not in prior results) should NOT be skipped
 	if shouldSkipGate(prior, "unknown_gate") {
 		t.Error("expected unknown_gate to NOT be skipped")
+	}
+}
+
+// --- Gate Classification Tests (Phase 93, Plan 01) ---
+
+func TestGateClassifications_CoversAllNamedGates(t *testing.T) {
+	for name := range gateRecoveryTemplates {
+		tier, rationale := gateClassify(name)
+		if tier == "" {
+			t.Errorf("gateClassifications missing entry for %q", name)
+		}
+		if rationale == "" {
+			t.Errorf("gateClassifications has empty rationale for %q", name)
+		}
+	}
+}
+
+func TestGateClassifications_CoversAllAlwaysRunGates(t *testing.T) {
+	for name := range alwaysRunGates {
+		tier, _ := gateClassify(name)
+		if tier == "" {
+			t.Errorf("gateClassifications missing entry for always-run gate %q", name)
+		}
+	}
+}
+
+func TestGateClassifications_HardBlockImmutability(t *testing.T) {
+	hardBlockGates := []string{"gatekeeper", "watcher_veto", "flags", "tests_pass", "no_critical_flags"}
+	for _, name := range hardBlockGates {
+		tier, _ := gateClassify(name)
+		if tier != hardBlock {
+			t.Errorf("expected %q to be hard_block, got %q", name, tier)
+		}
+	}
+}
+
+func TestGateClassify_UnknownGate(t *testing.T) {
+	tier, rationale := gateClassify("nonexistent_gate")
+	if tier != "" {
+		t.Errorf("expected empty tier for unknown gate, got %q", tier)
+	}
+	if rationale != "" {
+		t.Errorf("expected empty rationale for unknown gate, got %q", rationale)
+	}
+}
+
+func TestIsHardBlockGate_HardGates(t *testing.T) {
+	hardGates := []string{"gatekeeper", "watcher_veto", "flags", "tests_pass", "no_critical_flags"}
+	for _, name := range hardGates {
+		if !isHardBlockGate(name) {
+			t.Errorf("expected isHardBlockGate(%q) to be true", name)
+		}
+	}
+}
+
+func TestIsHardBlockGate_SoftGates(t *testing.T) {
+	softGates := []string{"auditor", "complexity", "tdd_evidence"}
+	for _, name := range softGates {
+		if isHardBlockGate(name) {
+			t.Errorf("expected isHardBlockGate(%q) to be false", name)
+		}
+	}
+}
+
+func TestQueenAnnotation_JSONRoundtrip(t *testing.T) {
+	original := GateCheckResult{
+		Name:      "auditor",
+		Status:    "failed",
+		Detail:    "quality score below 60",
+		Timestamp: "2026-05-03T12:00:00Z",
+		QueenAnnotation: &QueenAnnotation{
+			Decision:     "auto-resolved",
+			Rationale:    "score 58 is within tolerance",
+			Timestamp:    "2026-05-03T12:00:00Z",
+			QueenVersion: "1.0.27",
+		},
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded GateCheckResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if decoded.QueenAnnotation == nil {
+		t.Fatal("expected QueenAnnotation to be non-nil after roundtrip")
+	}
+	if decoded.QueenAnnotation.Decision != "auto-resolved" {
+		t.Errorf("expected Decision 'auto-resolved', got %q", decoded.QueenAnnotation.Decision)
+	}
+	if decoded.QueenAnnotation.Rationale != "score 58 is within tolerance" {
+		t.Errorf("expected Rationale 'score 58 is within tolerance', got %q", decoded.QueenAnnotation.Rationale)
+	}
+	if decoded.QueenAnnotation.Timestamp != "2026-05-03T12:00:00Z" {
+		t.Errorf("expected Timestamp '2026-05-03T12:00:00Z', got %q", decoded.QueenAnnotation.Timestamp)
+	}
+	if decoded.QueenAnnotation.QueenVersion != "1.0.27" {
+		t.Errorf("expected QueenVersion '1.0.27', got %q", decoded.QueenAnnotation.QueenVersion)
+	}
+	if decoded.Detail != "quality score below 60" {
+		t.Errorf("expected Detail preserved, got %q", decoded.Detail)
+	}
+}
+
+func TestGateCheckResult_BackwardCompatible_NoAnnotation(t *testing.T) {
+	oldJSON := `{"name":"tests_pass","status":"failed","detail":"2 tests failed","timestamp":"2026-05-01T00:00:00Z","retry_count":0}`
+
+	var result GateCheckResult
+	if err := json.Unmarshal([]byte(oldJSON), &result); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if result.QueenAnnotation != nil {
+		t.Error("expected QueenAnnotation to be nil for old JSON without queen_annotation field")
+	}
+	if result.Detail != "2 tests failed" {
+		t.Errorf("expected Detail '2 tests failed', got %q", result.Detail)
+	}
+}
+
+func TestGateClassifyCmd_JSONOutput(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-classify", "--json"})
+	stdout = &buf
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"gatekeeper"`) {
+		t.Errorf("expected JSON output to contain 'gatekeeper', got: %s", output)
+	}
+	if !strings.Contains(output, `"auditor"`) {
+		t.Errorf("expected JSON output to contain 'auditor', got: %s", output)
+	}
+}
+
+func TestGateClassifyCmd_TableOutput(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-classify"})
+	stdout = &buf
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "gatekeeper") {
+		t.Errorf("expected table output to contain 'gatekeeper', got: %s", output)
+	}
+	if !strings.Contains(output, "hard_block") {
+		t.Errorf("expected table output to contain 'hard_block', got: %s", output)
+	}
+	if !strings.Contains(output, "soft_block") {
+		t.Errorf("expected table output to contain 'soft_block', got: %s", output)
+	}
+}
+
+// --- Auto-Resolve Tests (Phase 95, Plan 01) ---
+
+func TestAutoResolveSoftBlock(t *testing.T) {
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "auditor", Passed: false, Detail: "quality score below threshold"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality score below threshold"},
+	}
+
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if len(resolved) != 1 || resolved[0] != "auditor" {
+		t.Errorf("expected auditor in resolved list, got %v", resolved)
+	}
+	if !updated.Checks[0].Passed {
+		t.Error("expected auditor check to be flipped to Passed=true")
+	}
+	if !updated.Passed {
+		t.Error("expected overall report.Passed=true after resolving all soft_block gates")
+	}
+}
+
+func TestAutoResolveHardBlockNever(t *testing.T) {
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "gatekeeper", Passed: false, Detail: "CVE found"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"CVE found"},
+	}
+
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if len(resolved) != 0 {
+		t.Errorf("expected empty resolved list for hard_block gate, got %v", resolved)
+	}
+	if updated.Checks[0].Passed {
+		t.Error("hard_block gate should remain failed")
+	}
+	if updated.Passed {
+		t.Error("report should remain failed with hard_block gate")
+	}
+}
+
+func TestAutoResolveAdvisoryIgnored(t *testing.T) {
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "medic", Passed: false, Detail: "health issue"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"health issue"},
+	}
+
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if len(resolved) != 0 {
+		t.Errorf("expected empty resolved list for advisory gate, got %v", resolved)
+	}
+	if updated.Checks[0].Passed {
+		t.Error("advisory gate should remain as-is (not auto-resolved)")
+	}
+}
+
+func TestAutoResolveDepthMultiplier(t *testing.T) {
+	if m := autoResolveDepthMultiplier(colony.VerificationDepthLight); m != 1.5 {
+		t.Errorf("expected light multiplier 1.5, got %f", m)
+	}
+	if m := autoResolveDepthMultiplier(colony.VerificationDepthStandard); m != 1.0 {
+		t.Errorf("expected standard multiplier 1.0, got %f", m)
+	}
+	if m := autoResolveDepthMultiplier(colony.VerificationDepthHeavy); m != 0.0 {
+		t.Errorf("expected heavy multiplier 0.0, got %f", m)
+	}
+}
+
+func TestAutoResolveHeavySkipsAll(t *testing.T) {
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "auditor", Passed: false, Detail: "quality score below threshold"},
+			{Name: "complexity", Passed: false, Detail: "too complex"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality score below threshold", "too complex"},
+	}
+
+	updated, resolved := autoResolveSoftBlockGates(1, report, "heavy")
+
+	if len(resolved) != 0 {
+		t.Errorf("expected no auto-resolved gates at heavy depth, got %v", resolved)
+	}
+	if updated.Checks[0].Passed {
+		t.Error("auditor should remain failed at heavy depth")
+	}
+	if updated.Checks[1].Passed {
+		t.Error("complexity should remain failed at heavy depth")
+	}
+}
+
+func TestAnnotateGateResultPreservesOriginal(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Seed gate results with original data
+	original := []GateCheckResult{
+		{
+			Name:            "auditor",
+			Status:          "failed",
+			Detail:          "original detail",
+			FixHint:         "fix it",
+			RecoveryOptions: []string{"retry"},
+			Timestamp:       time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+	if err := gateResultsWritePhase(1, original); err != nil {
+		t.Fatalf("failed to write gate results: %v", err)
+	}
+
+	// Annotate
+	annotation := QueenAnnotation{
+		Decision:     "auto-resolved",
+		Rationale:    "finding below threshold",
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		QueenVersion: "1.0.27",
+	}
+	if err := annotateGateResult(1, "auditor", annotation); err != nil {
+		t.Fatalf("annotateGateResult failed: %v", err)
+	}
+
+	// Read back and verify
+	results, err := gateResultsReadPhase(1)
+	if err != nil {
+		t.Fatalf("failed to read gate results: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0]
+
+	// Original fields must be preserved
+	if r.Detail != "original detail" {
+		t.Errorf("Detail modified: got %q, want 'original detail'", r.Detail)
+	}
+	if r.FixHint != "fix it" {
+		t.Errorf("FixHint modified: got %q, want 'fix it'", r.FixHint)
+	}
+	if len(r.RecoveryOptions) != 1 || r.RecoveryOptions[0] != "retry" {
+		t.Errorf("RecoveryOptions modified: got %v", r.RecoveryOptions)
+	}
+
+	// Annotation must be set
+	if r.QueenAnnotation == nil {
+		t.Fatal("expected QueenAnnotation to be set")
+	}
+	if r.QueenAnnotation.Decision != "auto-resolved" {
+		t.Errorf("expected Decision 'auto-resolved', got %q", r.QueenAnnotation.Decision)
+	}
+}
+
+func TestAutoResolveMixedResults(t *testing.T) {
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "auditor", Passed: false, Detail: "quality issue"},
+			{Name: "complexity", Passed: false, Detail: "too complex"},
+			{Name: "gatekeeper", Passed: false, Detail: "CVE found"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality issue", "too complex", "CVE found"},
+	}
+
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	// Two soft_block gates should be resolved
+	if len(resolved) != 2 {
+		t.Errorf("expected 2 resolved gates, got %d: %v", len(resolved), resolved)
+	}
+	resolvedSet := make(map[string]bool)
+	for _, r := range resolved {
+		resolvedSet[r] = true
+	}
+	if !resolvedSet["auditor"] || !resolvedSet["complexity"] {
+		t.Errorf("expected auditor and complexity resolved, got %v", resolved)
+	}
+
+	// Hard_block gate should remain failed
+	if updated.Checks[2].Passed {
+		t.Error("gatekeeper (hard_block) should remain failed")
+	}
+
+	// Overall should be failed because hard_block still blocking
+	if updated.Passed {
+		t.Error("report.Passed should be false because gatekeeper still blocks")
+	}
+}
+
+func TestAutoResolveUnclassifiedGate(t *testing.T) {
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "unknown_structural_gate", Passed: false, Detail: "something failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"something failed"},
+	}
+
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if len(resolved) != 0 {
+		t.Errorf("expected empty resolved for unclassified gate, got %v", resolved)
+	}
+	if updated.Checks[0].Passed {
+		t.Error("unclassified gate should remain failed (fail-open for safety)")
+	}
+}
+
+func TestAutoResolveEmptyReport(t *testing.T) {
+	report := codexContinueGateReport{
+		Phase:          1,
+		Checks:         []gateCheck{},
+		Passed:         true,
+		BlockingIssues: nil,
+	}
+
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if len(resolved) != 0 {
+		t.Errorf("expected empty resolved for all-passed report, got %v", resolved)
+	}
+	if !updated.Passed {
+		t.Error("report should remain passed when all gates are already passing")
+	}
+}
+
+func TestGateAutoResolveCmdJSON(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-auto-resolve", "--json"})
+	stdout = &buf
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Parse JSON output (wrapped in {"ok":true,"result":...})
+	var wrapper struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(output), &wrapper); err != nil {
+		t.Fatalf("failed to parse JSON output: %v\noutput: %s", err, output)
+	}
+	if !wrapper.OK {
+		t.Fatalf("expected ok=true, got output: %s", output)
+	}
+
+	// All 6 soft_block gates should be present
+	expectedGates := []string{"auditor", "complexity", "tdd_evidence", "anti_pattern", "verification_loop", "spawn_gate"}
+	for _, gate := range expectedGates {
+		if _, ok := wrapper.Result[gate]; !ok {
+			t.Errorf("expected gate %q in JSON output, not found", gate)
+		}
+	}
+}
+
+func TestGateAutoResolveCmdTable(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetArgs([]string{"gate-auto-resolve"})
+	stdout = &buf
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("command failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Table should contain gate names
+	if !strings.Contains(output, "auditor") {
+		t.Errorf("expected table output to contain 'auditor', got: %s", output)
+	}
+	if !strings.Contains(output, "complexity") {
+		t.Errorf("expected table output to contain 'complexity', got: %s", output)
+	}
+}
+
+// --- GATE-04 gap closure: configurable thresholds via config.json ---
+
+func TestEffectiveGateAutoResolveThresholds_Defaults(t *testing.T) {
+	gateCmdTestSetup(t)
+
+	thresholds := effectiveGateAutoResolveThresholds()
+	if len(thresholds) != 6 {
+		t.Fatalf("expected 6 default thresholds, got %d", len(thresholds))
+	}
+	if thresholds["auditor"].Threshold != 0.0 {
+		t.Errorf("expected auditor threshold 0.0, got %f", thresholds["auditor"].Threshold)
+	}
+}
+
+func TestEffectiveGateAutoResolveThresholds_ConfigOverride(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	// Set up directory structure matching production: .aether/data is store base, .planning/ is config
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = s
+
+	// Create .planning/config.json with threshold override
+	planningDir := filepath.Join(tmpDir, ".planning")
+	os.MkdirAll(planningDir, 0o755)
+	configPath := filepath.Join(planningDir, "config.json")
+	configData := `{"workflow": {"gate_auto_resolve_thresholds": {"auditor": 0.5, "complexity": 1.0}}}`
+	if err := os.WriteFile(configPath, []byte(configData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	thresholds := effectiveGateAutoResolveThresholds()
+
+	// Overridden gates
+	if thresholds["auditor"].Threshold != 0.5 {
+		t.Errorf("expected auditor override 0.5, got %f", thresholds["auditor"].Threshold)
+	}
+	if thresholds["complexity"].Threshold != 1.0 {
+		t.Errorf("expected complexity override 1.0, got %f", thresholds["complexity"].Threshold)
+	}
+
+	// Non-overridden gates keep defaults
+	if thresholds["tdd_evidence"].Threshold != 0.0 {
+		t.Errorf("expected tdd_evidence default 0.0, got %f", thresholds["tdd_evidence"].Threshold)
+	}
+
+	// Rationale preserved from defaults
+	if thresholds["auditor"].Rationale == "" {
+		t.Error("expected auditor rationale to be preserved from defaults")
+	}
+}
+
+func TestEffectiveGateAutoResolveThresholds_InvalidOverride(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = s
+
+	// Config with invalid types and unknown gate names
+	planningDir := filepath.Join(tmpDir, ".planning")
+	os.MkdirAll(planningDir, 0o755)
+	configPath := filepath.Join(planningDir, "config.json")
+	configData := `{"workflow": {"gate_auto_resolve_thresholds": {"auditor": "not-a-number", "unknown_gate": 5.0}}}`
+	if err := os.WriteFile(configPath, []byte(configData), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	thresholds := effectiveGateAutoResolveThresholds()
+
+	// Invalid type ignored, defaults win
+	if thresholds["auditor"].Threshold != 0.0 {
+		t.Errorf("expected auditor default 0.0 (invalid override ignored), got %f", thresholds["auditor"].Threshold)
+	}
+
+	// Unknown gate names ignored
+	if _, ok := thresholds["unknown_gate"]; ok {
+		t.Error("expected unknown_gate to not appear in thresholds")
+	}
+}
+
+func TestEffectiveGateAutoResolveThresholds_NoConfig(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = s
+
+	// No config.json exists -- defaults returned
+	thresholds := effectiveGateAutoResolveThresholds()
+	if len(thresholds) != 6 {
+		t.Fatalf("expected 6 defaults when no config, got %d", len(thresholds))
+	}
+}
+
+// --- Phase 95 Plan 02: Integration tests for auto-resolve in finalize flow ---
+
+// TestContinueFinalizeAutoResolve_AllSoftBlockResolved verifies that when all failed gates
+// are soft_block and auto-resolvable at standard depth, the finalize flow would advance.
+func TestContinueFinalizeAutoResolve_AllSoftBlockResolved(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "verification_steps_passed", Passed: true},
+			{Name: "implementation_evidence", Passed: true},
+			{Name: "operational_evidence", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed"},
+	}
+
+	// Write initial gate results (simulating finalize persistence before auto-resolve)
+	phaseGateResults := []GateCheckResult{
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "verification_steps_passed", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "implementation_evidence", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "operational_evidence", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "auditor", Status: "failed", Detail: "quality check failed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if err := gateResultsWritePhase(1, phaseGateResults); err != nil {
+		t.Fatalf("failed to write initial gate results: %v", err)
+	}
+
+	// Run auto-resolve at standard depth
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if !updated.Passed {
+		t.Error("expected report.Passed=true after auto-resolving all soft_block gates at standard depth")
+	}
+	if len(autoResolved) != 1 || autoResolved[0] != "auditor" {
+		t.Errorf("expected auditor resolved, got %v", autoResolved)
+	}
+	if len(updated.BlockingIssues) != 0 {
+		t.Errorf("expected no remaining blockers, got %v", updated.BlockingIssues)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_MixedHardBlockAndSoftBlock verifies that hard_block gates
+// still block even when soft_block gates are auto-resolved.
+func TestContinueFinalizeAutoResolve_MixedHardBlockAndSoftBlock(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "gatekeeper", Passed: false, Detail: "security CVE found"},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+			{Name: "complexity", Passed: false, Detail: "complexity threshold exceeded"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"security CVE found", "quality check failed", "complexity threshold exceeded"},
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	// Hard block gate should still block
+	if updated.Passed {
+		t.Error("expected report.Passed=false -- gatekeeper (hard_block) should remain")
+	}
+	// Soft block gates should be resolved
+	if len(autoResolved) != 2 {
+		t.Errorf("expected 2 soft_block gates resolved, got %v", autoResolved)
+	}
+	// Only hard_block issue should remain
+	if len(updated.BlockingIssues) != 1 {
+		t.Errorf("expected 1 remaining blocker (gatekeeper), got %v", updated.BlockingIssues)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_HeavyDepthBlocksAutoResolve verifies that at heavy depth,
+// no soft_block gates are auto-resolved (multiplier 0.0).
+func TestContinueFinalizeAutoResolve_HeavyDepthBlocksAutoResolve(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed"},
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "heavy")
+
+	if updated.Passed {
+		t.Error("expected report.Passed=false at heavy depth (no auto-resolve)")
+	}
+	if len(autoResolved) != 0 {
+		t.Errorf("expected no gates resolved at heavy depth, got %v", autoResolved)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_AnnotationPersisted verifies that auto-resolved gates
+// are annotated in the per-phase gate-results file.
+func TestContinueFinalizeAutoResolve_AnnotationPersisted(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	// Write initial gate results
+	phaseGateResults := []GateCheckResult{
+		{Name: "manifest_present", Status: "passed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "auditor", Status: "failed", Detail: "quality check failed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+	}
+	if err := gateResultsWritePhase(1, phaseGateResults); err != nil {
+		t.Fatalf("failed to write initial gate results: %v", err)
+	}
+
+	// Run auto-resolve
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed"},
+	}
+	_, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if len(autoResolved) != 1 {
+		t.Fatalf("expected 1 gate resolved, got %v", autoResolved)
+	}
+
+	// Annotate the resolved gate (simulating what finalize does)
+	err = annotateGateResult(1, "auditor", QueenAnnotation{
+		Decision:     "auto-resolved",
+		Rationale:    "soft_block gate auto-resolved at standard depth",
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		QueenVersion: "1.0.27",
+	})
+	if err != nil {
+		t.Fatalf("failed to annotate gate result: %v", err)
+	}
+
+	// Read back and verify annotation persisted
+	results, err := gateResultsReadPhase(1)
+	if err != nil {
+		t.Fatalf("failed to read gate results: %v", err)
+	}
+
+	found := false
+	for _, r := range results {
+		if r.Name == "auditor" {
+			found = true
+			if r.QueenAnnotation == nil {
+				t.Fatal("expected QueenAnnotation on auditor gate, got nil")
+			}
+			if r.QueenAnnotation.Decision != "auto-resolved" {
+				t.Errorf("expected decision 'auto-resolved', got %q", r.QueenAnnotation.Decision)
+			}
+			// Verify original fields preserved
+			if r.Detail != "quality check failed" {
+				t.Errorf("expected original detail preserved, got %q", r.Detail)
+			}
+		}
+	}
+	if !found {
+		t.Error("auditor gate not found in results")
+	}
+}
+
+// TestContinueFinalizeAutoResolve_RecoveryLogWritten verifies that recovery log entries
+// can be written for auto-resolved gates (pattern verification).
+func TestContinueFinalizeAutoResolve_RecoveryLogWritten(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	now := time.Now().UTC()
+
+	// Simulate the finalize flow writing recovery entries after auto-resolve
+	entries := []RecoveryLogEntry{
+		{
+			ID: fmt.Sprintf("auto-resolve-%s-%d-%s", "auditor", 1, now.Format("20060102-150405")),
+			Failure: FailureRecord{
+				WorkerName:     "",
+				TaskID:         "",
+				Caste:          "",
+				Phase:          1,
+				Status:         "failed",
+				Classification: Recoverable,
+				FailureType:    Transient,
+				ErrorMessage:   "soft_block gate \"auditor\" failed",
+				Timestamp:      now.Format(time.RFC3339),
+			},
+			ActionTaken:   "auto-resolved",
+			Outcome:       "gate threshold met -- auto-resolved by queen",
+			AttemptNumber: 1,
+			Timestamp:     now.Format(time.RFC3339),
+			Detail:        "gate \"auditor\" auto-resolved at depth standard",
+		},
+	}
+
+	if err := recoveryLogWritePhase(1, entries); err != nil {
+		t.Fatalf("failed to write recovery log: %v", err)
+	}
+
+	// Read back and verify
+	file, err := recoveryLogReadPhase(1)
+	if err != nil {
+		t.Fatalf("failed to read recovery log: %v", err)
+	}
+
+	if len(file.Entries) != 1 {
+		t.Fatalf("expected 1 recovery log entry, got %d", len(file.Entries))
+	}
+	if file.Entries[0].ActionTaken != "auto-resolved" {
+		t.Errorf("expected action 'auto-resolved', got %q", file.Entries[0].ActionTaken)
+	}
+	if file.Entries[0].Failure.Classification != Recoverable {
+		t.Errorf("expected recoverable classification, got %s", file.Entries[0].Failure.Classification)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_AllPassNoAutoResolve verifies that when all gates pass,
+// auto-resolve is not invoked and behavior is unchanged.
+func TestContinueFinalizeAutoResolve_AllPassNoAutoResolve(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "verification_steps_passed", Passed: true},
+			{Name: "implementation_evidence", Passed: true},
+			{Name: "operational_evidence", Passed: true},
+		},
+		Passed:         true,
+		BlockingIssues: nil,
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+
+	if !updated.Passed {
+		t.Error("expected report.Passed=true when all gates already pass")
+	}
+	if len(autoResolved) != 0 {
+		t.Errorf("expected no auto-resolved gates when all pass, got %v", autoResolved)
+	}
+}
+
+// TestContinueFinalizeAutoResolve_LightDepthMostAggressive verifies that light depth
+// resolves all 6 soft_block gates.
+func TestContinueFinalizeAutoResolve_LightDepthMostAggressive(t *testing.T) {
+	dir := t.TempDir()
+	s, err := storage.NewStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	report := codexContinueGateReport{
+		Phase: 1,
+		Checks: []gateCheck{
+			{Name: "manifest_present", Passed: true},
+			{Name: "auditor", Passed: false, Detail: "quality check failed"},
+			{Name: "complexity", Passed: false, Detail: "complexity exceeded"},
+			{Name: "tdd_evidence", Passed: false, Detail: "missing test"},
+			{Name: "anti_pattern", Passed: false, Detail: "anti-pattern found"},
+			{Name: "verification_loop", Passed: false, Detail: "verification failed"},
+			{Name: "spawn_gate", Passed: false, Detail: "spawn failed"},
+		},
+		Passed:         false,
+		BlockingIssues: []string{"quality check failed", "complexity exceeded", "missing test", "anti-pattern found", "verification failed", "spawn failed"},
+	}
+
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "light")
+
+	if !updated.Passed {
+		t.Error("expected report.Passed=true at light depth with only soft_block gates")
+	}
+	if len(autoResolved) != 6 {
+		t.Errorf("expected 6 soft_block gates resolved at light depth, got %d: %v", len(autoResolved), autoResolved)
 	}
 }

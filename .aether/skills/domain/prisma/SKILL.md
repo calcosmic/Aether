@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: prisma
 description: Use when the project uses Prisma ORM for database access
 type: domain

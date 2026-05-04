@@ -24,6 +24,9 @@ func e2eRecoverSetup(t *testing.T) (*bytes.Buffer, string) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	_, dataDir := initRecoverTestStore(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(home, ".aether"))
 	var buf bytes.Buffer
 	stdout = &buf
 	return &buf, dataDir
@@ -188,25 +191,30 @@ func seedMissingAgentsState(t *testing.T, dataDir string) {
 	// Deliberately no agent files -- triggers missing_agents
 }
 
-// seedHealthyColonyState writes a fully healthy colony with 25 agent files per
-// surface. The tmpDir is the AETHER_ROOT (set by initRecoverTestStore).
+// seedHealthyColonyState writes a fully healthy colony with the expected global
+// platform agent files. The tmpDir is the AETHER_ROOT set by initRecoverTestStore.
 func seedHealthyColonyState(t *testing.T, tmpDir string) {
 	t.Helper()
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	home := homeDir()
 	goal := "Healthy colony"
 	state := colony.ColonyState{
-		Goal:          &goal,
-		State:         colony.StateREADY,
-		CurrentPhase:  1,
-		Plan:          colony.Plan{Phases: []colony.Phase{{ID: 1, Status: "completed"}}},
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: []colony.Phase{{ID: 1, Status: "completed"}}},
 	}
 	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
 
-	// Create 25 agent files per surface to avoid false positives.
-	for i := 0; i < 25; i++ {
-		recoverWriteFile(t, tmpDir, fmt.Sprintf(".claude/agents/ant/agent%d.md", i), "# Agent")
-		recoverWriteFile(t, tmpDir, fmt.Sprintf(".opencode/agents/agent%d.md", i), "# Agent")
-		recoverWriteFile(t, tmpDir, fmt.Sprintf(".codex/agents/agent%d.toml", i), "[agent]")
+	// Create expected global platform agent files to avoid false positives.
+	for i := 0; i < expectedClaudeAgents; i++ {
+		recoverWriteFile(t, home, fmt.Sprintf(".claude/agents/ant/agent%d.md", i), "# Agent")
+	}
+	for i := 0; i < expectedOpenCodeAgents; i++ {
+		recoverWriteFile(t, home, fmt.Sprintf(".config/opencode/agents/agent%d.md", i), "# Agent")
+	}
+	for i := 0; i < expectedCodexAgents; i++ {
+		recoverWriteFile(t, home, fmt.Sprintf(".codex/agents/agent%d.toml", i), "[agent]")
 	}
 	// No spawn-runs.json, no TerritorySurveyed, no Worktrees, no survey files.
 }

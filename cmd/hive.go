@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,14 +18,15 @@ import (
 // Hive types for wisdom management.
 
 type hiveWisdomEntry struct {
-	ID          string  `json:"id"`
-	Text        string  `json:"text"`
-	Domain      string  `json:"domain"`
-	SourceRepo  string  `json:"source_repo"`
-	Confidence  float64 `json:"confidence"`
-	CreatedAt   string  `json:"created_at"`
-	AccessedAt  string  `json:"accessed_at"`
-	AccessCount int     `json:"access_count"`
+	ID          string   `json:"id"`
+	Text        string   `json:"text"`
+	Domain      string   `json:"domain"`
+	SourceRepo  string   `json:"source_repo"`
+	SourceRepos []string `json:"source_repos,omitempty"`
+	Confidence  float64  `json:"confidence"`
+	CreatedAt   string   `json:"created_at"`
+	AccessedAt  string   `json:"accessed_at"`
+	AccessCount int      `json:"access_count"`
 }
 
 type hiveWisdomData struct {
@@ -102,6 +104,7 @@ var hiveStoreCmd = &cobra.Command{
 		for i, e := range wf.Entries {
 			if e.Text == text && e.Domain == domain {
 				// Reinforce
+				reinforceHiveWisdomEntry(&wf.Entries[i], sourceRepo, 0.5)
 				wf.Entries[i].AccessCount++
 				wf.Entries[i].AccessedAt = time.Now().UTC().Format(time.RFC3339)
 				if err := writeWisdom(wisdomPath, wf); err != nil {
@@ -138,6 +141,7 @@ var hiveStoreCmd = &cobra.Command{
 			Text:        text,
 			Domain:      domain,
 			SourceRepo:  sourceRepo,
+			SourceRepos: uniqueSortedStrings([]string{sourceRepo}),
 			Confidence:  0.5,
 			CreatedAt:   now,
 			AccessedAt:  now,
@@ -288,9 +292,7 @@ func promoteToHive(text, domain, sourceRepo string, confidence float64) error {
 	// Check for existing entry to boost confidence
 	for i, e := range wf.Entries {
 		if e.Text == abstracted && e.Domain == domain {
-			if confidence > wf.Entries[i].Confidence {
-				wf.Entries[i].Confidence = confidence
-			}
+			reinforceHiveWisdomEntry(&wf.Entries[i], sourceRepo, confidence)
 			wf.Entries[i].AccessCount++
 			wf.Entries[i].AccessedAt = now
 			if err := writeWisdom(wisdomPath, wf); err != nil {
@@ -322,6 +324,7 @@ func promoteToHive(text, domain, sourceRepo string, confidence float64) error {
 		Text:        abstracted,
 		Domain:      domain,
 		SourceRepo:  sourceRepo,
+		SourceRepos: uniqueSortedStrings([]string{sourceRepo}),
 		Confidence:  confidence,
 		CreatedAt:   now,
 		AccessedAt:  now,
@@ -340,6 +343,52 @@ func promoteToHive(text, domain, sourceRepo string, confidence float64) error {
 	}, "aether-hive")
 
 	return nil
+}
+
+func reinforceHiveWisdomEntry(entry *hiveWisdomEntry, sourceRepo string, confidence float64) {
+	if entry == nil {
+		return
+	}
+	repos := hiveSourceRepos(*entry)
+	sourceRepo = strings.TrimSpace(sourceRepo)
+	if sourceRepo != "" {
+		repos = append(repos, sourceRepo)
+	}
+	repos = uniqueSortedStrings(repos)
+	sort.Strings(repos)
+	entry.SourceRepos = repos
+	if strings.TrimSpace(entry.SourceRepo) == "" && len(repos) > 0 {
+		entry.SourceRepo = repos[0]
+	}
+	boosted := confidence
+	if tier := hiveConfidenceForRepoCount(len(repos)); tier > boosted {
+		boosted = tier
+	}
+	if boosted > entry.Confidence {
+		entry.Confidence = boosted
+	}
+}
+
+func hiveSourceRepos(entry hiveWisdomEntry) []string {
+	repos := make([]string, 0, len(entry.SourceRepos)+1)
+	if strings.TrimSpace(entry.SourceRepo) != "" {
+		repos = append(repos, entry.SourceRepo)
+	}
+	repos = append(repos, entry.SourceRepos...)
+	return uniqueSortedStrings(repos)
+}
+
+func hiveConfidenceForRepoCount(count int) float64 {
+	switch {
+	case count >= 4:
+		return 0.95
+	case count == 3:
+		return 0.85
+	case count == 2:
+		return 0.70
+	default:
+		return 0
+	}
 }
 
 var hivePromoteCmd = &cobra.Command{

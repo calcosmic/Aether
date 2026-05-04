@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: milestone-audit
 description: Use before sealing a milestone to compare original intent with delivered work, quality, and remaining gaps
 type: colony

@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: nodejs
 description: Use when the project uses Node.js for server-side JavaScript
 type: domain

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -548,13 +549,15 @@ func TestScanBrokenSurvey_SkipsWhenNoSurvey(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestScanMissingAgentFiles_DetectsShortCount(t *testing.T) {
-	s, _ := initRecoverTestStore(t)
-	root := filepath.Dir(filepath.Dir(s.BasePath())) // tmpDir/.aether/data -> tmpDir
+	initRecoverTestStore(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(home, ".aether"))
 
-	// Create agent dirs with fewer than 25 files each.
-	claudeDir := filepath.Join(root, ".claude", "agents", "ant")
-	opencodeDir := filepath.Join(root, ".opencode", "agents")
-	codexDir := filepath.Join(root, ".codex", "agents")
+	// Create global platform agent dirs with fewer than the expected count.
+	claudeDir := filepath.Join(home, ".claude", "agents", "ant")
+	opencodeDir := filepath.Join(home, ".config", "opencode", "agents")
+	codexDir := filepath.Join(home, ".codex", "agents")
 
 	if err := os.MkdirAll(claudeDir, 0755); err != nil {
 		t.Fatal(err)
@@ -581,16 +584,40 @@ func TestScanMissingAgentFiles_DetectsShortCount(t *testing.T) {
 }
 
 func TestScanMissingAgentFiles_NoDirs(t *testing.T) {
-	s, _ := initRecoverTestStore(t)
-	// AETHER_ROOT points to tmpDir but no agent dirs exist.
-	// resolveAetherRoot returns tmpDir, glob on nonexistent dirs returns empty.
-	_ = filepath.Dir(filepath.Dir(s.BasePath()))
+	initRecoverTestStore(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(home, ".aether"))
 
 	issues := scanMissingAgentFiles()
 	if len(issues) == 0 {
 		t.Fatal("expected issues when agent directories are missing")
 	}
 	assertHasCategory(t, issues, "missing_agents", "missing agent dirs")
+}
+
+func TestScanMissingAgentFiles_ConsumerRepoUsesGlobalAgents(t *testing.T) {
+	initRecoverTestStore(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(home, ".aether"))
+
+	for i := 0; i < expectedClaudeAgents; i++ {
+		recoverWriteFile(t, home, fmt.Sprintf(".claude/agents/ant/agent%d.md", i), "# Agent")
+	}
+	for i := 0; i < expectedOpenCodeAgents; i++ {
+		recoverWriteFile(t, home, fmt.Sprintf(".config/opencode/agents/agent%d.md", i), "# Agent")
+	}
+	for i := 0; i < expectedCodexAgents; i++ {
+		recoverWriteFile(t, home, fmt.Sprintf(".codex/agents/agent%d.toml", i), "[agent]")
+	}
+
+	issues := scanMissingAgentFiles()
+	for _, issue := range issues {
+		if issue.Category == "missing_agents" {
+			t.Fatalf("consumer repo should use global agent homes, got issue: %+v", issue)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -826,8 +853,8 @@ func TestRecoverNextStep_WarningMissingAgents(t *testing.T) {
 		{Severity: "warning", Category: "missing_agents", Message: "Few agents"},
 	}
 	next := recoverNextStep(issues)
-	if !strings.Contains(next, "update") {
-		t.Errorf("next step for missing_agents should mention update, got: %s", next)
+	if !strings.Contains(next, "recover --apply") {
+		t.Errorf("next step for missing_agents should mention recover --apply, got: %s", next)
 	}
 }
 
@@ -1192,23 +1219,21 @@ func TestRepairMissingAgents_CopiesFromHub(t *testing.T) {
 	root := filepath.Dir(filepath.Dir(s.BasePath())) // tmpDir
 
 	// Set up hub directory structure with agent files.
-	hubDir := filepath.Join(root, "hub_home", ".aether", "system")
-	claudeHubDir := filepath.Join(hubDir, "claude", "agents")
+	home := filepath.Join(root, "hub_home")
+	t.Setenv("HOME", home)
+	hubDir := filepath.Join(home, ".aether")
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+	claudeHubDir := filepath.Join(hubDir, "system", "agents-claude")
 	if err := os.MkdirAll(claudeHubDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(claudeHubDir, "test-agent.md"), []byte("hub content"), 0644)
 
-	// Create repo agent dir (empty).
-	claudeRepoDir := filepath.Join(root, ".claude", "agents", "ant")
-	if err := os.MkdirAll(claudeRepoDir, 0755); err != nil {
+	// Create global platform agent dir (empty).
+	claudeHomeDir := filepath.Join(home, ".claude", "agents", "ant")
+	if err := os.MkdirAll(claudeHomeDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-
-	// Override HOME to point to our fake home.
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", filepath.Join(root, "hub_home"))
-	defer os.Setenv("HOME", origHome)
 
 	state := newRecoverTestState(t)
 	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
@@ -1227,7 +1252,7 @@ func TestRepairMissingAgents_CopiesFromHub(t *testing.T) {
 	}
 
 	// Verify agent file was copied.
-	if _, err := os.Stat(filepath.Join(claudeRepoDir, "test-agent.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(claudeHomeDir, "test-agent.md")); err != nil {
 		t.Error("expected test-agent.md to be copied from hub")
 	}
 }
@@ -1237,9 +1262,8 @@ func TestRepairMissingAgents_HubEmpty(t *testing.T) {
 
 	// Set HOME to an empty temp dir (no hub).
 	tmpHome := t.TempDir()
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", origHome)
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(tmpHome, ".aether"))
 
 	state := newRecoverTestState(t)
 	recoverWriteJSON(t, dataDir, "COLONY_STATE.json", state)
@@ -1766,4 +1790,3 @@ func TestRecoverNextStep_BadManifest(t *testing.T) {
 		t.Errorf("next step for bad_manifest should mention --force, got: %s", next)
 	}
 }
-

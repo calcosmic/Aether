@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: colony-visuals
 description: Use when producing any user-facing output including banners, progress indicators, section headers, or command results
 type: colony

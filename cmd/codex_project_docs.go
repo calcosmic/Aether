@@ -136,7 +136,7 @@ func platformRestartTargets(details []map[string]interface{}) []string {
 		{label: "AGENTS.md", target: "AGENTS.md"},
 		{label: ".codex/CODEX.md", target: ".codex/CODEX.md"},
 		{label: "Agents (codex)", target: "Codex agents"},
-		{label: "Skills (codex)", target: "Codex skills"},
+		{label: "Skills (codex shims)", target: "Codex skill shims"},
 		{label: ".opencode/OPENCODE.md", target: ".opencode/OPENCODE.md"},
 		{label: "Agents (opencode)", target: "OpenCode agents"},
 	}

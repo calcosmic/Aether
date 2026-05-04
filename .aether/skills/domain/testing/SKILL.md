@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: testing
 description: Use when the project needs automated testing with Jest, Vitest, pytest, or similar frameworks
 type: domain

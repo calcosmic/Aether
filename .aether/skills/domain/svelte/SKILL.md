@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: svelte
 description: Use when the project uses Svelte or SvelteKit for building reactive UIs
 type: domain

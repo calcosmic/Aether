@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: artifact-archive-cleanup
 description: Use when stale or completed colony artifacts need safe archival, cleanup, or retrieval without losing evidence
 type: colony

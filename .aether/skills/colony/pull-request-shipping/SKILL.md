@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: pull-request-shipping
 description: Use when verified work is ready to become a clean pull request and release-ready branch
 type: colony

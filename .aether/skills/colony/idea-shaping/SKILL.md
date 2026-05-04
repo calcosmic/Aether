@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: idea-shaping
 description: Use when a rough idea needs structured exploration before it becomes a plan, spike, backlog item, or quick task
 type: colony

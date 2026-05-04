@@ -1,188 +1,384 @@
-# Technology Stack
+# Technology Stack: Queen Authority
 
-**Project:** Aether v1.11 -- Self-Hosting Cleanup, Smart Init Restoration, Platform Hardening, UX Improvements
-**Researched:** 2026-04-28
-**Confidence:** HIGH (all findings from direct source code inspection)
+**Project:** Aether v1.14 -- Queen Authority
+**Researched:** 2026-05-03
+**Confidence:** HIGH (all findings from source code inspection of existing Aether runtime)
 
 ## Executive Summary
 
-v1.11 requires zero new external Go dependencies. All four feature areas -- self-hosting cleanup, Smart Init restoration, platform hardening, and UX improvements -- build on patterns that already exist in the codebase. The Go runtime (`cmd/`) already has `init-research` with 10 pheromone suggestion patterns, governance detection, charter generation, and git history analysis. The publish/update pipeline already handles companion file sync across 3 platforms with stale-publish detection. The gap is integration: `suggest-analyze` exists only as a documented-but-unimplemented command, and the init ceremony in the wrappers calls `init-research` but the Go runtime `init` command does not invoke it directly.
+The queen authority milestone requires **zero new external dependencies**. Every capability the queen needs -- worker dispatch, failure detection, circuit breaking, retry with backoff, gate evaluation, output aggregation, and process lifecycle management -- already exists as discrete components in the Go runtime. The work is entirely about wiring these existing pieces into a coordinator loop inside the Go binary, not about importing new libraries.
 
-## Recommended Stack
+The queen becomes an autonomous coordinator by reading existing infrastructure that is currently driven externally by wrapper markdown (Claude/OpenCode) or by manual user invocation:
 
-### Core Framework (No Changes)
+| Current Driver | Queen Authority Change |
+|---------------|----------------------|
+| Wrapper markdown calls `aether build`, `aether continue` | Go runtime runs build/continue in a loop internally |
+| User manually runs `/ant-unblock` when gates fail | Go runtime evaluates gates and dispatches Fixer automatically |
+| User reads raw worker output | Go runtime filters/summarizes output before surfacing |
+| User decides whether to re-dispatch a failed worker | Go runtime applies circuit breaker + retry policy |
+| User manages wave progression | Go runtime manages wave lifecycle end-to-end |
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Go | 1.26.1 | Runtime language | Existing `go.mod` target. No version change needed. |
-| `github.com/spf13/cobra` | v1.10.2 | CLI subcommand registration | All new commands (`aether audit`, `aether suggest-analyze`, `aether suggest-approve`) register via `rootCmd.AddCommand()` in `init()`. |
-| `pkg/storage.Store` | existing | File-locked JSON persistence | All state mutations use `SaveJSON`/`LoadJSON`/`AtomicWrite` with cross-process file locking. |
-| `encoding/json` | stdlib | Marshal/unmarshal | Standard pattern across every command. |
-| `os` / `path/filepath` / `io/fs` | stdlib | Directory walking, file operations | Already used by `init_research.go` for the same directory scanning patterns needed for audit. |
+## Existing Infrastructure Already Available
 
-### No New Dependencies
+The following components exist and are production-tested. The queen coordinator assembles them into an autonomous loop.
 
-| Category | Existing Coverage | New Dependency Needed |
-|----------|-------------------|----------------------|
-| Directory scanning | `init_research.go` `filepath.WalkDir` with skip lists | No |
-| File fingerprinting | `pheromone_write.go` `sha256Sum` content hashing | No |
-| CLI output | `helpers.go` `outputOK`/`outputError`/`outputWorkflow` | No |
-| Visual rendering | `codex_visuals.go` ANSI caste colors, stage markers | No |
-| JSON structured output | All commands use `map[string]interface{}` payloads | No |
-| File locking | `pkg/storage/store.go` `FileLocker` | No |
+### 1. Worker Dispatch (`pkg/codex/dispatch.go`)
 
-### Feature 1: Self-Hosting Cleanup (`aether audit`)
+Already has wave-based dependency ordering, lifecycle events, parallel execution, and result aggregation.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| New command: `cmd/audit.go` | new | Scan repo for stale self-hosting artifacts | New cobra subcommand following `cmd/autofix.go` pattern (~100-150 lines). Walks known artifact locations, reports findings as structured JSON. |
-| `filepath.WalkDir` | stdlib | Recursive directory scanning | Same pattern as `init_research.go` lines 495-530. Extended skip list to avoid `node_modules`, `.git`, etc. |
-| `os.Stat` + size checks | stdlib | Detect stale/oversized artifacts | Compare file sizes and ages against thresholds (e.g., chambers > 6 months, oracle archives, stale build data). |
-| `os.RemoveAll` (with confirmation) | stdlib | Remove identified artifacts | Follows `autofix.go` checkpoint-then-remove pattern. Audit reports, `aether audit --clean` removes with backup. |
-| `cmd/autofix.go` checkpoint pattern | existing | Safety net before destructive cleanup | Already has `autofix-checkpoint` / `autofix-rollback` for COLONY_STATE.json. Audit cleanup can use same pattern for any files it removes. |
+| Component | Location | Status |
+|-----------|----------|--------|
+| `DispatchBatchWithObserver` | `pkg/codex/dispatch.go:92` | Production, tested |
+| `DispatchWaveWithObserver` | `pkg/codex/dispatch.go:124` | Production, tested |
+| `DispatchObserver` callback | `pkg/codex/dispatch.go:50` | Production, tested |
+| `ExtractClaims` aggregation | `pkg/codex/dispatch.go:228` | Production, tested |
+| `WorkerInvoker` interface | `pkg/codex/worker.go:125` | Production, tested |
+| `ProgressAwareWorkerInvoker` | `pkg/codex/worker.go:120` | Production, tested |
+| `WorkerResult` struct | `pkg/codex/worker.go:60` | Production, tested |
 
-**Artifact locations to scan (from direct inspection):**
+**What this means for queen:** The queen does not need to spawn workers herself. She calls `DispatchBatchWithObserver` with a `DispatchObserver` callback that feeds her lifecycle events (starting, running, completed, failed, timeout). The observer is the queen's sensory input.
 
-| Location | Size | Description | Action |
-|----------|------|-------------|--------|
-| `.aether/chambers/` | 6.3M | 18 entombed colony archives | Report age, offer selective removal |
-| `.aether/data/build/` | varies | Build artifacts from old phases | Report, safe to clean if colony not active |
-| `.aether/data/backups/` | varies | COLONY_STATE backups | Report age, offer removal |
-| `.aether/data/*.bak*` | small | Rotated backup files | Safe to remove |
-| `.aether/data/spawn-tree-archive/` | varies | Old spawn tree snapshots | Report, offer removal |
-| `.aether/data/learning-observations.json.bak.*` | small | Old observation backups | Safe to remove |
-| `.aether/data/session.json.bak*` | small | Session backups | Safe to remove |
-| `.aether/data/pr-context-cache.json` | small | Stale context cache | Safe to remove |
-| `.aether/data/watch-progress.txt` / `watch-status.txt` | small | Stale watch output | Safe to remove |
-| `.aether/dreams/` | small | Local session notes | Never remove (user content) |
-| `.aether/oracle/archive/` | 1.6M | Deep research archives | Report, offer selective removal |
+### 2. Circuit Breaker (`cmd/circuit_breaker.go`)
 
-### Feature 2: Smart Init Restoration
+Already has per-worker failure tracking, threshold-based tripping, same-caste peer redistribution, and ceremony event emission.
 
-The Go runtime already has most of the Smart Init intelligence. The gap is that `aether init` does not call `init-research` internally, and `suggest-analyze` / `suggest-approve` commands do not exist.
+| Component | Location | Status |
+|-----------|----------|--------|
+| `CircuitBreaker` struct | `cmd/circuit_breaker.go:23` | Production, tested |
+| `Allow/RecordSuccess/RecordFailure` | `cmd/circuit_breaker.go:44-68` | Production, tested |
+| `findSameCastePeer` | `cmd/circuit_breaker.go:102` | Production, tested |
+| `Reset` (per-wave) | `cmd/circuit_breaker.go:71` | Production, tested |
+| `TrippedWorkers` | `cmd/circuit_breaker.go:86` | Production, tested |
+| Ceremony events | `cmd/circuit_breaker.go:120-155` | Production, tested |
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `cmd/init_cmd.go` (modify) | existing | Add `--smart` flag that invokes init-research before state creation | Currently `init` creates COLONY_STATE.json directly. With `--smart`, it first runs `initResearchCmd` logic internally, outputs charter for approval, then creates state. |
-| `cmd/init_research.go` (modify) | existing | Export scan functions as reusable Go functions (not just CLI command) | `detectGovernance()`, `analyzeGitHistory()`, `generatePheromoneSuggestions()`, `generateCharter()` already exist as internal functions. They need to be callable from `init_cmd.go` without going through the cobra command. Currently they are -- they are package-level functions, not methods on a struct. **No code change needed.** |
-| New command: `cmd/suggest.go` | new | `aether suggest-analyze` and `aether suggest-approve` subcommands | ~200-300 lines. `suggest-analyze` reuses `generatePheromoneSuggestions()` from `init_research.go` plus adds build-specific patterns. `suggest-approve` reads suggestions and calls `pheromone-write` for approved ones. |
-| `.claude/commands/ant/build-context.md` (modify) | existing | Uncomment suggest-analyze step in build playbook | Currently lines 149-181 deprecate suggest-analyze. Remove deprecation guard and call the real command. |
+**What this means for queen:** The queen already has a circuit breaker. She resets it at wave boundaries, records failures/successes from `DispatchObserver` events, checks `Allow()` before dispatching, and calls `findSameCastePeer` when a worker is tripped.
 
-**Smart Init ceremony flow (Go-side):**
+### 3. Gate System (`cmd/gate.go`, `cmd/fixer_dispatch.go`)
+
+Already has 11 named gates, per-phase persistence, incremental re-check (skip passed), recovery templates, and Fixer dispatch with attempt caps.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `gateCheck` struct | `cmd/gate.go:22` | Production, tested |
+| `shouldSkipGate` | `cmd/gate.go:557` | Production, tested |
+| `gateResultsWritePhase` | `cmd/gate.go:605` | Production, tested |
+| `gateResultsReadPhase` | `cmd/gate.go:613` | Production, tested |
+| `gateRecoveryTemplates` | `cmd/gate.go:487-536` | Production, tested |
+| `dispatchFixer` | `cmd/fixer_dispatch.go:131` | Production, tested |
+| `resolveFixedGates` | `cmd/fixer_dispatch.go:217` | Production, tested |
+| `checkAttemptCap` | `cmd/fixer_dispatch.go:92` | Production, tested |
+| `isFixerDispatchBlocked` | `cmd/fixer_dispatch.go:105` | Production, tested |
+| 11 gate recovery templates | `cmd/gate.go:487-536` | Production, tested |
+
+**What this means for queen:** Smart gating is mostly wiring. The queen reads gate results after continue, classifies failures as auto-resolvable vs. human-escalation, dispatches Fixer for auto-resolvable ones, and surfaces only genuine blockers to the user. The classification logic is the new part -- the infrastructure for dispatching Fixer and tracking attempts already exists.
+
+### 4. Process Tracking (`pkg/codex/process_tracker.go`)
+
+Already has PID registry, stale worker detection, graceful termination with SIGTERM/SIGKILL escalation, and cleanup.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `ProcessTracker` | `pkg/codex/process_tracker.go:45` | Production, tested |
+| `TrackProcess/UntrackProcess` | `pkg/codex/process_tracker.go:68-106` | Production, tested |
+| `KillAll` (per-root) | `pkg/codex/process_tracker.go:128` | Production, tested |
+| `DetectStaleWorkers` | `pkg/codex/process_tracker.go:144` | Production, tested |
+| `CleanupStaleWorkers` | `pkg/codex/process_tracker.go:185` | Production, tested |
+
+**What this means for queen:** The queen can check `DetectStaleWorkers` at wave boundaries and call `KillAll` for cleanup. She does not need to build process management from scratch.
+
+### 5. Immune System / Retry (`cmd/immune.go`)
+
+Already has error diagnosis, exponential backoff retry, scar recording, and auto-scar detection from midden failures.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `diagnoseError` | `cmd/immune.go:46` | Production, tested |
+| `trophallaxisRetryCmd` (backoff) | `cmd/immune.go:91` | Production, tested |
+| `scarAdd/scarCheck` | `cmd/immune.go:126-238` | Production, tested |
+| `immuneAutoScar` | `cmd/immune.go:240` | Production, tested |
+
+**What this means for queen:** The queen calls `diagnoseError` on worker failures to determine retryability, then uses the existing backoff formula (`2^attempt * 2` seconds) for retry delays. She records failures as scars for future avoidance.
+
+### 6. Autopilot State (`cmd/autopilot.go`)
+
+Already has phase tracking, replan interval checking, headless mode, and stop/init commands.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `autopilotState` struct | `cmd/autopilot.go:20` | Production, tested |
+| `autopilot-update` | `cmd/autopilot.go:85` | Production, tested |
+| `autopilot-check-replan` | `cmd/autopilot.go:223` | Production, tested |
+| `autopilot-set-headless` | `cmd/autopilot.go:277` | Production, tested |
+
+**What this means for queen:** The autopilot state machine already tracks multi-phase progress. The queen authority loop extends this from "track and report" to "decide and act."
+
+### 7. Workflow Profile System (`cmd/codex_dispatch_contract.go`)
+
+Already has three profiles (fast, standard, final-review), queen recommendation engine, depth flags, and lifecycle command contracts.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `recommendQueenWorkflowProfile` | `cmd/codex_dispatch_contract.go:329` | Production, tested |
+| `workflowProfiles` | `cmd/codex_dispatch_contract.go:138` | Production, tested |
+| `codexWorkflowProfileContract` | `cmd/codex_dispatch_contract.go:62` | Production, tested |
+
+**What this means for queen:** The queen already recommends profiles. In autonomous mode, she applies her recommendation directly instead of emitting it as advice.
+
+### 8. Colony State (`pkg/colony/colony.go`)
+
+Already has state machine transitions, phase advancement, worktree tracking, gate results, and charter data.
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `ColonyState` struct | `pkg/colony/colony.go:272` | Production, tested |
+| `Transition` (state machine) | `pkg/colony/state_machine.go:7` | Production, tested |
+| `AdvancePhase` | `pkg/colony/state_machine.go:23` | Production, tested |
+| `GateResultEntry` | `pkg/colony/colony.go:227` | Production, tested |
+| `WorktreeEntry` | `pkg/colony/colony.go:214` | Production, tested |
+
+**What this means for queen:** All state mutations go through `store.UpdateJSONAtomically`, which is file-locked and atomic. The queen reads state, makes decisions, writes state -- all through existing safe patterns.
+
+## New Code Needed (No New Dependencies)
+
+### Queen Coordinator Loop
+
+A single new package `pkg/queen/` that assembles the existing components into an autonomous decision loop.
 
 ```
-aether init --smart "Build feature X"
-  |
-  +-- Run init-research scan (reuse existing functions)
-  |   |-- detectGovernance() -> linters, CI, tests, formatters
-  |   |-- analyzeGitHistory() -> commits, contributors, branch
-  |   |-- generatePheromoneSuggestions() -> 10 patterns
-  |   |-- generateCharter() -> intent, vision, governance, goals
-  |   +-- detectPriorColonies() -> archived colony count
-  |
-  +-- Output charter + suggestions as structured JSON
-  |
-  +-- Wait for approval (interactive or --auto-approve flag)
-  |
-  +-- Write approved pheromones via pheromone-write
-  |
-  +-- Create COLONY_STATE.json (existing init logic)
+pkg/queen/
+├── coordinator.go      # Main loop: dispatch -> monitor -> recover -> advance
+├── gate_classifier.go  # Classifies gate failures as auto-resolvable vs. escalate
+├── output_filter.go    # Filters and summarizes worker output for clean display
+├── retry_policy.go     # Retry decisions using existing immune.go backoff
+├── wave_manager.go     # Wave lifecycle: allocate, execute, collect, cleanup
+├── coordinator_test.go
+├── gate_classifier_test.go
+├── output_filter_test.go
+├── retry_policy_test.go
+└── wave_manager_test.go
 ```
 
-### Feature 3: Platform Hardening
+### cmd/ Additions
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `cmd/platform_sync.go` (modify) | existing | Add parity validation to `aether publish` | Already has `repoSyncPairs()` defining 9 sync pairs. Add a validation pass that compares command/agent counts across Claude, OpenCode, and Codex after publish. Same counting logic as `checkStalePublish()` in `update_cmd.go` lines 403-472. |
-| `cmd/command_parity_test.go` (existing) | existing | Already tests command count parity | Verify this test covers all 3 platforms, not just Claude. Currently tests `expectedClaudeCommandCount = 50` and `expectedOpenCodeCommandCount = 50`. |
-| Error wrapping with `fmt.Errorf` | stdlib | Consistent error messages across platforms | Some commands use bare `outputError`, others use `fmt.Errorf`. Standardize on wrapping chain with `%w` for debugging. |
-| `cmd/codex_worker_artifacts.go` (existing) | existing | Codex worker cleanup | Already handles Codex-specific worker artifact management. Verify it handles all error cases gracefully. |
+| New Command | Purpose | Pattern |
+|-------------|---------|---------|
+| `queen-coordinator` | Run the autonomous coordinator loop (replaces wrapper-driven build/continue) | Extends `cmd/autopilot.go` pattern |
+| `queen-gate-classify` | Classify a gate failure as auto-resolvable or human-escalation | New, uses existing gate data |
+| `queen-output-filter` | Filter and summarize worker output | New, pure text processing |
+| `queen-retry-decide` | Decide whether to retry a failed worker | Uses existing `diagnoseError` + `trophallaxisRetryCmd` logic |
+| `queen-wave-status` | Current wave status and worker health | Aggregates existing dispatch + process tracker data |
 
-**Current parity status (verified by direct inspection):**
+### Gate Classification Logic (New)
 
-| Surface | Claude Code | OpenCode | Codex CLI | Status |
-|---------|-------------|----------|-----------|--------|
-| Slash commands | 50 | 50 | N/A (uses `aether` CLI) | PARITY |
-| Agent definitions | 26 | 26 | 26 | PARITY |
-| Build command | 125 lines (identical) | 125 lines (identical) | Go runtime | PARITY |
-| Continue command | identical | identical | Go runtime | PARITY |
-| Init command | calls `init-research` | calls `init-research` | needs `--smart` flag | GAP (Codex) |
-| suggest-analyze | documented but no Go impl | documented but no Go impl | no Go impl | MISSING |
-| Error format | `outputError` JSON | `outputError` JSON | Go runtime | CONSISTENT |
+The core new intellectual work: deciding which gate failures the queen can auto-resolve and which require human intervention.
 
-### Feature 4: UX Improvements
+```go
+// pkg/queen/gate_classifier.go
+type GateClassification struct {
+    Name         string
+    Severity     string // "auto", "retry", "escalate"
+    Reason       string
+    RecoveryHint string
+}
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `cmd/codex_visuals.go` (modify) | existing | Add ANSI visual output for audit, smart-init, and suggest commands | Already has `casteColorMap`, `casteEmojiMap`, `casteLabelMap`, `casteIdentity()`, stage markers. New commands follow the same `render*Visual()` function pattern. |
-| `cmd/colony_prime_context.go` (modify) | existing | Add init-research findings as a colony-prime section | The section system supports arbitrary sections with priority ordering. An `init_context` section at low priority would inject detected governance and pheromone suggestions into worker prompts during the first build. |
-| Structured JSON output | existing | All commands use `outputOK`/`outputError`/`outputWorkflow` | New commands must use the same output contract for wrapper compatibility. |
+// Auto-resolvable gates: the queen can dispatch Fixer and verify
+var autoResolvableGates = map[string]bool{
+    "tests_pass":       true,  // Fixer re-runs tests, fixes failures
+    "watcher_veto":     true,  // Fixer addresses quality issues
+    "tdd_evidence":     true,  // Fixer writes missing tests
+    "anti_pattern":     true,  // Fixer removes critical patterns
+    "complexity":       true,  // Fixer refactors complex code
+    "medic":            true,  // Fixer applies medic repairs
+}
 
-## New Files to Create
+// Escalation gates: require human judgment
+var escalationGates = map[string]bool{
+    "gatekeeper":    true,  // Security CVEs need human review
+    "auditor":       true,  // Quality below threshold needs human review
+    "runtime":       true,  // User-reported issues need human confirmation
+    "flags":         true,  // Blocker flags represent user decisions
+}
+```
 
-| File | Purpose | Estimated Size | Pattern Source |
-|------|---------|----------------|----------------|
-| `cmd/audit.go` | `aether audit` + `aether audit --clean` commands for stale artifact detection and removal | ~200 lines | `cmd/autofix.go` (checkpoint pattern) + `cmd/init_research.go` (directory walking) |
-| `cmd/suggest.go` | `aether suggest-analyze` and `aether suggest-approve` subcommands | ~250 lines | `cmd/midden_cmds.go` (subcommand registration) + `cmd/init_research.go` (suggestion generation) |
+**Confidence: HIGH** -- The gate names and recovery templates already exist in `cmd/gate.go:487-536`. Classification is a mapping from existing data to new behavior.
 
-## Files to Modify
+### Output Filtering Logic (New)
 
-| File | Change | Risk |
-|------|--------|------|
-| `cmd/init_cmd.go` | Add `--smart` flag that runs init-research scan before state creation; output charter for approval; write approved pheromones | Medium -- modifies the init hot path, needs careful idempotency handling |
-| `cmd/init_research.go` | Add build-specific pheromone patterns to `generatePheromoneSuggestions()` (e.g., test coverage gaps, TODO density, large file detection) | Low -- additive function, no existing callers affected |
-| `.claude/commands/ant/build-context.md` | Remove suggest-analyze deprecation guard (lines 149-181), replace with real `aether suggest-analyze` call | Low -- already documented as the intended flow |
-| `.opencode/commands/ant/build-context.md` | Same as above | Low |
-| `cmd/codex_visuals.go` | Add `renderAuditVisual()`, `renderSmartInitVisual()`, `renderSuggestVisual()` functions | Low -- additive rendering functions, no existing callers affected |
-| `cmd/platform_sync.go` | Add post-publish parity validation (command count, agent count across all 3 platforms) | Low -- additive validation pass |
-| `cmd/command_parity_test.go` | Extend to cover Codex agent count (26) and Codex skill count (83) | Low -- additive test cases |
+The queen needs to suppress raw worker noise and surface only actionable summaries.
 
-## Alternatives Considered
+```go
+// pkg/queen/output_filter.go
+type FilteredOutput struct {
+    Summary    string            // Human-readable phase summary
+    Workers    []WorkerSummary   // Per-worker status line
+    Warnings   []string          // Notable but non-blocking items
+    Blockers   []string          // Items requiring human attention
+    Artifacts  map[string]string // Key outputs (test results, coverage, etc.)
+}
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Artifact cleanup approach | New `aether audit` command with `--clean` flag | Shell script one-liner (`find .aether -type f -mtime +30 -delete`) | A Go command integrates with the existing checkpoint/rollback safety net, produces structured JSON output for wrapper consumption, and follows the "runtime is authoritative" principle. Shell scripts break the wrapper-runtime contract. |
-| Smart Init integration | `--smart` flag on existing `aether init` | Separate `aether smart-init` command | A flag on the existing command avoids duplicating the idempotency logic, sealed-colony detection, worktree cleanup, and session creation that `init_cmd.go` already handles. The flag simply inserts the research-approval step before state creation. |
-| suggest-analyze implementation | New `cmd/suggest.go` reusing `generatePheromoneSuggestions()` | LLM-based analysis in wrapper markdown | The original shell `suggest-analyze` was 300 lines of deterministic file pattern detection -- not LLM analysis. The Go port should match this: deterministic checks that produce reproducible suggestions. The 10 patterns already in `init_research.go` plus build-specific additions cover the original shell script's scope. |
-| Parity validation | Add to `aether publish` | Separate `aether verify-parity` command | Validation at publish time catches parity breaks before they reach downstream repos. A separate command would require developers to remember to run it manually. |
-| Audit scope | Walk known `.aether/` subdirectories | Full repo scan for any Aether-managed file | A targeted scan of known locations is faster, produces actionable results, and avoids false positives from user-created files that happen to be in `.aether/` but are not self-hosting artifacts (e.g., `dreams/`). |
+type WorkerSummary struct {
+    Name    string
+    Caste   string
+    Status  string // "completed", "failed", "retried", "skipped"
+    Summary string // Worker's self-reported summary (from WorkerResult.Summary)
+    Files   int    // Count of files created/modified
+    Duration string
+}
+```
+
+**Approach:** The queen reads `WorkerResult.Summary` (already a concise self-report), `WorkerResult.RawOutput` (full stdout, only surfaced on failure), and `DispatchResult.Error` (invocation errors). Normal-path output shows one line per worker. Failure-path output shows the worker's summary plus the last 20 lines of raw output.
+
+**Confidence: HIGH** -- All data structures already exist. This is formatting logic, not new infrastructure.
+
+### Retry Policy (New, Wraps Existing)
+
+```go
+// pkg/queen/retry_policy.go
+type RetryDecision struct {
+    Retry      bool
+    Attempt    int
+    BackoffSec int
+    Reason     string
+}
+
+func DecideRetry(err error, workerName string, attempt int, cb *CircuitBreaker) RetryDecision {
+    // 1. Check circuit breaker
+    if !cb.Allow(workerName) {
+        return RetryDecision{Retry: false, Reason: "circuit breaker tripped"}
+    }
+
+    // 2. Diagnose error using existing immune system
+    diagnosis := diagnoseError(err.Error())
+
+    // 3. Check attempt cap (reuse existing trophallaxis logic)
+    if attempt >= 3 {
+        return RetryDecision{Retry: false, Reason: "max attempts reached"}
+    }
+
+    // 4. Calculate backoff (existing formula: 2^attempt * 2)
+    backoff := int(math.Pow(2, float64(attempt)) * 2)
+
+    if !diagnosis["retryable"].(bool) {
+        return RetryDecision{Retry: false, Reason: fmt.Sprintf("non-retryable: %s", diagnosis["strategy"])}
+    }
+
+    return RetryDecision{
+        Retry:      true,
+        Attempt:    attempt + 1,
+        BackoffSec: backoff,
+        Reason:     diagnosis["strategy"].(string),
+    }
+}
+```
+
+**Confidence: HIGH** -- `diagnoseError` and backoff formula already exist in `cmd/immune.go`. This is a thin orchestration layer.
 
 ## What NOT to Add
 
-| Technology | Why Avoid |
-|------------|-----------|
-| Any new `go.mod` dependency | All four feature areas are covered by existing patterns. `go mod tidy` should produce no changes. The entire v1.11 scope is additive Go code using stdlib + cobra + existing `pkg/` packages. |
-| SQLite or any database | Artifact metadata is trivially small (file paths, sizes, timestamps). JSON files and in-memory maps are sufficient. Adding a database for a one-time audit tool is massive over-engineering. |
-| LLM API calls for suggest-analyze | The original shell script was deterministic pattern matching, not LLM analysis. Porting it as Go code that checks file patterns preserves the original behavior and avoids API costs, latency, and non-determinism. |
-| Configuration file for audit rules | The artifact locations are well-known and few (11 locations identified). Hard-coding them in `audit.go` with clear constants is simpler, more auditable, and avoids a config file that needs to be kept in sync. |
-| Watchdog or cron-based cleanup | `aether audit` is a manual command. Self-hosting cleanup is a one-time event, not an ongoing process. Automated cleanup risks deleting active colony data. Manual execution with `--clean` flag gives the user control. |
-| New agent definitions | No new worker castes are needed. Audit, suggest-analyze, and smart-init are CLI operations, not colony worker tasks. |
+| Rejected Addition | Why |
+|-------------------|-----|
+| `thejerf/suture` (supervisor trees) | Suture manages long-running service goroutines with restart semantics. Aether's workers are short-lived subprocess invocations (spawn, execute, collect result). The existing `DispatchBatchWithObserver` + `CircuitBreaker` + `ProcessTracker` already handle this. Suture would add an abstraction layer that duplicates existing behavior. |
+| `oklog/run` (actor group) | `oklog/run` orchestrates concurrent goroutines with graceful shutdown. The queen loop is sequential (dispatch wave, wait, evaluate, decide). Concurrency within a wave is already handled by `DispatchWaveWithObserver`. `oklog/run` solves a problem Aether does not have. |
+| `cenkalti/backoff` or `sethvargo/go-retry` | The existing immune system already implements exponential backoff (`2^attempt * 2` seconds) in `cmd/immune.go:114`. Adding a backoff library for a single formula is over-engineering. |
+| Event-driven architecture (channels, pub/sub) | The `DispatchObserver` callback pattern is already event-driven. Adding channels or a pub/sub system between dispatch and queen would add complexity without benefit -- the queen processes events synchronously in her loop. |
+| State machine library | The colony state machine already exists in `pkg/colony/state_machine.go`. Adding a library like `fsm` or `mergo` would duplicate existing, tested transitions. |
+| External queue (Redis, NATS) | Workers are local subprocesses, not distributed services. File-locked JSON persistence via `pkg/storage.Store` is the correct coordination mechanism for single-machine, single-user colonies. |
 
-## Installation
+## Existing Dependency Usage (No Version Changes)
 
-No installation needed. All dependencies already exist in `go.mod`.
+| Dependency | Current Version | Queen Authority Usage |
+|------------|----------------|----------------------|
+| `golang.org/x/sync` | v0.20.0 | Already used in `pkg/agent/pool.go` for `errgroup`. Wave parallel execution already uses `sync.WaitGroup` in `pkg/codex/dispatch.go`. No change needed. |
+| `github.com/spf13/cobra` | v1.10.2 | New queen commands register via `rootCmd.AddCommand()`. No version change. |
+| `github.com/BurntSushi/toml` | v1.5.0 | Agent TOML parsing unchanged. No version change. |
+| `modernc.org/sqlite` | v1.50.0 | Hive learning store unchanged. Queen reads colony state from JSON (not SQLite). No version change. |
+| `pkg/storage.Store` | existing | All state mutations via `UpdateJSONAtomically`. No change. |
 
-```bash
-# Verify existing dependencies are sufficient
-go mod tidy  # should show no changes
-go build ./cmd/aether  # should compile cleanly
+## Architecture: Queen Coordinator Loop
 
-# Run existing tests to establish baseline before starting
-go test ./... -race
+The queen coordinator is a sequential decision loop, not a concurrent service:
+
 ```
+┌──────────────────────────────────────────────────────┐
+│                QUEEN COORDINATOR                      │
+│                                                       │
+│  for each phase in plan:                              │
+│    1. SELECT PROFILE                                  │
+│       └─ recommendQueenWorkflowProfile() [existing]    │
+│                                                       │
+│    2. DISPATCH WAVE                                   │
+│       ├─ CircuitBreaker.Reset()                       │
+│       ├─ DispatchBatchWithObserver(observer)           │
+│       └─ observer -> queen event buffer               │
+│                                                       │
+│    3. EVALUATE WAVE RESULTS                           │
+│       ├─ For each failed worker:                      │
+│       │   ├─ CircuitBreaker.RecordFailure()            │
+│       │   ├─ DecideRetry() -> uses diagnoseError       │
+│       │   ├─ If retryable: re-dispatch (back to 2)     │
+│       │   └─ If tripped: findSameCastePeer or skip    │
+│       └─ ExtractClaims() for success summary          │
+│                                                       │
+│    4. RUN GATES                                       │
+│       ├─ Read gate results (gateResultsReadPhase)      │
+│       ├─ ClassifyGate() -> auto | retry | escalate     │
+│       ├─ Auto-resolvable: dispatchFixer() [existing]   │
+│       ├─ Re-verify fixed gates                        │
+│       └─ Escalate remaining to user                   │
+│                                                       │
+│    5. FILTER OUTPUT                                   │
+│       └─ Build FilteredOutput from WorkerResults       │
+│                                                       │
+│    6. ADVANCE OR ESCALATE                             │
+│       ├─ All gates passed: AdvancePhase() [existing]   │
+│       ├─ Some gates failed: surface blockers to user  │
+│       └─ Record scars, emit telemetry                 │
+│                                                       │
+│    7. CLEANUP                                         │
+│       ├─ DetectStaleWorkers() -> KillAll() [existing]  │
+│       └─ spawnTrackClear() [existing]                 │
+│                                                       │
+└──────────────────────────────────────────────────────┘
+```
+
+## Integration Points
+
+| Queen Action | Calls Into | Package |
+|-------------|-----------|---------|
+| Select profile | `recommendQueenWorkflowProfile` | `cmd/codex_dispatch_contract.go` |
+| Dispatch workers | `DispatchBatchWithObserver` | `pkg/codex/dispatch.go` |
+| Track failures | `CircuitBreaker.RecordFailure` | `cmd/circuit_breaker.go` |
+| Check retryability | `diagnoseError` | `cmd/immune.go` |
+| Redistribute task | `findSameCastePeer` | `cmd/circuit_breaker.go` |
+| Evaluate gates | `gateResultsReadPhase`, `shouldSkipGate` | `cmd/gate.go` |
+| Dispatch fixer | `dispatchFixer` | `cmd/fixer_dispatch.go` |
+| Resolve fixed gates | `resolveFixedGates` | `cmd/fixer_dispatch.go` |
+| Check attempt cap | `checkAttemptCap` | `cmd/fixer_dispatch.go` |
+| Advance phase | `AdvancePhase` | `pkg/colony/state_machine.go` |
+| Mutate state | `store.UpdateJSONAtomically` | `pkg/storage/storage.go` |
+| Track processes | `ProcessTracker.TrackProcess` | `pkg/codex/process_tracker.go` |
+| Cleanup stale | `CleanupStaleWorkers` | `pkg/codex/process_tracker.go` |
+| Record scars | `scarAdd` logic (inline) | `cmd/immune.go` |
+| Update autopilot | `autopilot-update` logic (inline) | `cmd/autopilot.go` |
+| Emit telemetry | `emitLoopBreakEvent` | `cmd/` (existing ceremony) |
+
+## Estimated New Code
+
+| Component | Lines (estimate) | Complexity |
+|-----------|-----------------|------------|
+| `pkg/queen/coordinator.go` | ~200 | Medium -- main loop orchestration |
+| `pkg/queen/gate_classifier.go` | ~80 | Low -- classification map + logic |
+| `pkg/queen/output_filter.go` | ~120 | Low -- text formatting |
+| `pkg/queen/retry_policy.go` | ~60 | Low -- wraps existing diagnoseError |
+| `pkg/queen/wave_manager.go` | ~150 | Medium -- wave lifecycle management |
+| `cmd/queen_*.go` (5 commands) | ~300 | Low -- cobra command wrappers |
+| Tests | ~400 | Standard |
+| **Total** | **~1,310** | |
 
 ## Sources
 
-- `/Users/callumcowie/repos/Aether/go.mod` -- Existing dependency inventory (Go 1.26.1, cobra v1.10.2, no database drivers)
-- `/Users/callumcowie/repos/Aether/cmd/init_cmd.go` -- Current `aether init` implementation (222 lines), idempotency checks, sealed-colony detection
-- `/Users/callumcowie/repos/Aether/cmd/init_research.go` -- Existing `init-research` command (598 lines) with `detectGovernance()`, `analyzeGitHistory()`, `generatePheromoneSuggestions()`, `generateCharter()`, `detectPriorColonies()`, 10 pheromone patterns, 12 project type detectors, 23 governance detectors
-- `/Users/callumcowie/repos/Aether/cmd/autofix.go` -- Checkpoint/rollback pattern for safe state mutation (105 lines)
-- `/Users/callumcowie/repos/Aether/cmd/midden_cmds.go` -- CRUD subcommand registration pattern (10 subcommands)
-- `/Users/callumcowie/repos/Aether/cmd/update_cmd.go` -- Publish/update pipeline with stale-publish detection (533 lines), `checkStalePublish()` parity checks
-- `/Users/callumcowie/repos/Aether/cmd/platform_sync.go` -- `repoSyncPairs()` defining 9 sync pairs across 3 platforms
-- `/Users/callumcowie/repos/Aether/cmd/codex_visuals.go` -- ANSI rendering infrastructure for caste identity, stage markers
-- `/Users/callumcowie/repos/Aether/cmd/colony_prime_context.go` -- Section-based context injection with priority ordering
-- `/Users/callumcowie/repos/Aether/cmd/pheromone_write.go` -- Pheromone write with SHA-256 deduplication
-- `/Users/callumcowie/repos/Aether/.claude/commands/ant/init.md` -- Wrapper init command calling `aether init-research` then `aether init`
-- `/Users/callumcowie/repos/Aether/.aether/docs/command-playbooks/build-context.md` -- Build playbook with suggest-analyze deprecation guard (lines 149-181)
-- `/Users/callumcowie/repos/Aether/pkg/storage/storage.go` -- Store API with `AtomicWrite`, `SaveJSON`, `LoadJSON`, file locking
+- Source code inspection: `pkg/codex/dispatch.go`, `pkg/codex/worker.go`, `pkg/codex/process_tracker.go`, `cmd/circuit_breaker.go`, `cmd/gate.go`, `cmd/fixer_dispatch.go`, `cmd/immune.go`, `cmd/autopilot.go`, `cmd/codex_dispatch_contract.go`, `pkg/colony/colony.go`, `pkg/colony/state_machine.go`, `pkg/storage/storage.go`
+- Existing go.mod: `golang.org/x/sync v0.20.0`, `github.com/spf13/cobra v1.10.2`, `modernc.org/sqlite v1.50.0`
+- Suture supervisor trees: [github.com/thejerf/suture](https://github.com/thejerf/suture) -- evaluated and rejected (see "What NOT to Add")
+- oklog/run: [github.com/oklog/run](https://github.com/oklog/run) -- evaluated and rejected (see "What NOT to Add")
+- errgroup SetLimit: [pkg.go.dev/golang.org/x/sync/errgroup](https://pkg.go.dev/golang.org/x/sync/errgroup) -- already in project, no changes needed

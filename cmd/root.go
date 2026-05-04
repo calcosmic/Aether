@@ -99,7 +99,11 @@ func readInstalledHubVersion() string {
 	if hubDir == "" {
 		return ""
 	}
-	data, err := os.ReadFile(filepath.Join(hubDir, "version.json"))
+	return readHubVersionAtPath(hubDir)
+}
+
+func readVersionJSONFile(path string) string {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}
@@ -188,7 +192,7 @@ var rootCmd = &cobra.Command{
 func skipStoreInit(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "completion", "version", "help":
+		case "command-guide", "completion", "version", "help":
 			return true
 		}
 	}

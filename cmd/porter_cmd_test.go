@@ -36,9 +36,7 @@ func TestPorterCheckJSONOutput(t *testing.T) {
 }
 
 func TestPorterCheckIncludesIntegrityChecks(t *testing.T) {
-	// Verify porter check composes integrity check functions
-	// by checking that the result structure includes expected check names
-	// when run in a test environment (may have skip/fail status)
+	// Running inside the Aether source repo, so source checks apply
 	checks := buildPorterChecks("stable", true)
 	expectedNames := map[string]bool{
 		"Source version":        false,
@@ -47,6 +45,8 @@ func TestPorterCheckIncludesIntegrityChecks(t *testing.T) {
 		"Hub companion files":   false,
 		"Downstream simulation": false,
 		"Git status":            false,
+		"Git stashes":           false,
+		"Git worktrees":         false,
 		"Test status":           false,
 		"Changelog completeness": false,
 	}
@@ -92,9 +92,17 @@ func TestPorterCheckResultStructure(t *testing.T) {
 }
 
 func TestPorterCheckHasCorrectCount(t *testing.T) {
+	// Source repo context: 10 checks
 	checks := buildPorterChecks("stable", true)
-	if len(checks) != 8 {
-		t.Errorf("expected 8 porter checks, got %d", len(checks))
+	if len(checks) != 10 {
+		t.Errorf("expected 10 porter checks (source), got %d", len(checks))
+	}
+}
+
+func TestPorterConsumerChecksHasCorrectCount(t *testing.T) {
+	checks := buildPorterChecksForContext(porterContextConsumer, "stable", true)
+	if len(checks) != 6 {
+		t.Errorf("expected 6 consumer porter checks, got %d", len(checks))
 	}
 }
 
@@ -119,5 +127,91 @@ func TestCheckChangelogCompletenessFunction(t *testing.T) {
 	}
 	if result.Status != "pass" && result.Status != "fail" && result.Status != "skip" {
 		t.Errorf("expected pass/fail/skip, got %q", result.Status)
+	}
+}
+
+func TestCheckGitStashesFunction(t *testing.T) {
+	result := checkGitStashes()
+	if result.Name != "Git stashes" {
+		t.Errorf("expected name 'Git stashes', got %q", result.Name)
+	}
+	if result.Status != "pass" && result.Status != "fail" {
+		t.Errorf("expected pass or fail, got %q", result.Status)
+	}
+	if result.Status == "fail" && result.RecoveryCommand == "" {
+		t.Error("failed git stashes check should have recovery command")
+	}
+}
+
+func TestCheckGitWorktreesFunction(t *testing.T) {
+	result := checkGitWorktrees()
+	if result.Name != "Git worktrees" {
+		t.Errorf("expected name 'Git worktrees', got %q", result.Name)
+	}
+	if result.Status != "pass" && result.Status != "fail" && result.Status != "skip" {
+		t.Errorf("expected pass/fail/skip, got %q", result.Status)
+	}
+	if result.Status == "fail" && result.RecoveryCommand == "" {
+		t.Error("failed git worktrees check should have recovery command")
+	}
+}
+
+func TestDetectPorterContext(t *testing.T) {
+	ctx := detectPorterContext()
+	if ctx != porterContextSource && ctx != porterContextConsumer {
+		t.Errorf("expected source or consumer, got %q", ctx)
+	}
+	// Running inside the Aether source repo, should detect source
+	if ctx != porterContextSource {
+		t.Logf("Note: detected %q context (expected source if running in Aether repo)", ctx)
+	}
+}
+
+func TestPorterSourceChecksIncludesStashAndWorktree(t *testing.T) {
+	checks := buildPorterChecksForContext(porterContextSource, "stable", true)
+	names := map[string]bool{}
+	for _, c := range checks {
+		names[c.Name] = true
+	}
+	if !names["Git stashes"] {
+		t.Error("source checks missing 'Git stashes'")
+	}
+	if !names["Git worktrees"] {
+		t.Error("source checks missing 'Git worktrees'")
+	}
+	if !names["Changelog completeness"] {
+		t.Error("source checks missing 'Changelog completeness'")
+	}
+	if !names["Test status"] {
+		t.Error("source checks missing 'Test status'")
+	}
+}
+
+func TestPorterConsumerChecksExcludesSourceOnlyChecks(t *testing.T) {
+	checks := buildPorterChecksForContext(porterContextConsumer, "stable", true)
+	names := map[string]bool{}
+	for _, c := range checks {
+		names[c.Name] = true
+	}
+	if names["Source version"] {
+		t.Error("consumer checks should not include 'Source version'")
+	}
+	if names["Downstream simulation"] {
+		t.Error("consumer checks should not include 'Downstream simulation'")
+	}
+	if names["Test status"] {
+		t.Error("consumer checks should not include 'Test status'")
+	}
+	if names["Changelog completeness"] {
+		t.Error("consumer checks should not include 'Changelog completeness'")
+	}
+	if !names["Git stashes"] {
+		t.Error("consumer checks missing 'Git stashes'")
+	}
+	if !names["Git worktrees"] {
+		t.Error("consumer checks missing 'Git worktrees'")
+	}
+	if !names["Hub companion sync"] {
+		t.Error("consumer checks missing 'Hub companion sync'")
 	}
 }

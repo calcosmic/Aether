@@ -128,8 +128,8 @@ func TestScanIntegrityWarningForStaleInfo(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(system, "codex"), 0755); err != nil {
 		t.Fatalf("failed to create codex dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(system, "skills-codex"), 0755); err != nil {
-		t.Fatalf("failed to create skills-codex dir: %v", err)
+	if err := os.MkdirAll(filepath.Join(system, "skills"), 0755); err != nil {
+		t.Fatalf("failed to create skills dir: %v", err)
 	}
 	// Write matching version but minimal companion files
 	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.20"}`), 0644); err != nil {

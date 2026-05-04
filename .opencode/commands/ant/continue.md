@@ -91,6 +91,15 @@ Use only runtime output as the learning source:
 3. If the runtime surfaced signal housekeeping, explain what expired, what remained active, and what that means for the final seal in one short steering sentence
 4. The runtime emits context-clear guidance automatically — do not duplicate it
 
+## Cross-Platform Drift Guard
+
+If you change continue verification depth, heavy review spawning, learning
+summary, routing, or closeout behavior here, update
+`.aether/commands/continue.yaml`, `cmd/command_guide.go`, and the Codex skill
+`aether-colony-build-cycle` in the same change. Verify
+`aether command-guide continue --platform codex` still describes the matching
+Codex flow.
+
 ## Guardrails
 
 - Do NOT use `--plan-only` or `continue-finalize` for default fast continue.

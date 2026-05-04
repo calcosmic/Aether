@@ -165,16 +165,16 @@ var entombCmd = &cobra.Command{
 		}, "aether-entomb")
 
 		result := map[string]interface{}{
-			"entombed":           true,
-			"goal":               goal,
-			"scope":              string(scope),
-			"chamber":            chamberName,
-			"chamber_path":       chamberDir,
-			"phases_completed":   completedPhaseCount(state),
-			"total_phases":       len(state.Plan.Phases),
+			"entombed":            true,
+			"goal":                goal,
+			"scope":               string(scope),
+			"chamber":             chamberName,
+			"chamber_path":        chamberDir,
+			"phases_completed":    completedPhaseCount(state),
+			"total_phases":        len(state.Plan.Phases),
 			"near_miss_instincts": len(nearMiss),
-			"temp_swept":         tempSwept,
-			"next":               `aether init "next goal"`,
+			"temp_swept":          tempSwept,
+			"next":                `aether init "next goal"`,
 		}
 		if len(nearMiss) > 0 {
 			result["suggestion"] = fmt.Sprintf("%d instincts eligible for hive promotion -- run aether hive-promote", len(nearMiss))
@@ -458,6 +458,7 @@ func verifyEntombedChamber(chamberDir string) error {
 
 func resetColonyStateForEntomb(state colony.ColonyState) colony.ColonyState {
 	state.Goal = nil
+	state.Charter = nil
 	state.Scope = ""
 	state.ColonyVersion = 0
 	state.State = colony.StateIDLE

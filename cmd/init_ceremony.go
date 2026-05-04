@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -68,12 +69,109 @@ func resetCachedStdinReader() {
 	cachedStdinReader = nil
 }
 
+// synthesizeLaunchBrief produces a structured markdown launch brief from
+// the colony goal, charter, and research data. Each section shows content
+// from the charter and research data where available; sections with no data
+// show "To be determined" rather than being empty.
+func synthesizeLaunchBrief(goal string, charter *colony.Charter, researchData ceremonyResearchData) string {
+	tbd := "To be determined"
+
+	// Extract tech stack lines from research data
+	var techLines []string
+	for _, ts := range researchData.TechStackDetail {
+		if ts.Language != "" {
+			techLines = append(techLines, "- Language: "+ts.Language)
+		}
+		for _, dep := range ts.Deps {
+			techLines = append(techLines, "- "+dep.Name)
+		}
+	}
+	// Include charter tech stack if not already covered
+	if charter.TechStack != "" {
+		techLines = append([]string{emptyFallback(charter.TechStack, tbd)}, techLines...)
+	}
+
+	// Extract dependencies from research data
+	var depLines []string
+	for _, ts := range researchData.TechStackDetail {
+		for _, dep := range ts.Deps {
+			depLines = append(depLines, "- "+dep.Name+" ("+ts.Language+")")
+		}
+		for _, dep := range ts.DevDeps {
+			depLines = append(depLines, "- "+dep.Name+" (dev)")
+		}
+	}
+
+	// Scope from charter
+	scope := emptyFallback(charter.Goals, tbd)
+	// Add vision context if available
+	if charter.Vision != "" {
+		scope = emptyFallback(charter.Vision, tbd) + "\n\n" + scope
+	}
+
+	// Risks from charter
+	risks := emptyFallback(charter.KeyRisks, tbd)
+	if charter.Constraints != "" {
+		risks += "\n- " + charter.Constraints
+	}
+
+	// Success criteria from charter goals
+	successCriteria := emptyFallback(charter.Goals, tbd)
+
+	// Build sections
+	var b strings.Builder
+	b.WriteString("# Colony Launch Brief\n\n")
+
+	b.WriteString("## Goal\n")
+	b.WriteString(emptyFallback(goal, tbd))
+	b.WriteString("\n\n")
+
+	b.WriteString("## Scope\n")
+	b.WriteString(scope)
+	b.WriteString("\n\n")
+
+	b.WriteString("## Risks\n")
+	b.WriteString(risks)
+	b.WriteString("\n\n")
+
+	b.WriteString("## Tech Stack\n")
+	if len(techLines) > 0 {
+		for _, line := range techLines {
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString(tbd)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## Dependencies\n")
+	if len(depLines) > 0 {
+		for _, line := range depLines {
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString(tbd)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## Success Criteria\n")
+	b.WriteString(successCriteria)
+	b.WriteString("\n")
+
+	return b.String()
+}
+
 // runInitCeremony executes the full init ceremony flow:
 // 1. Run init-research to scan and generate charter
 // 2. Display charter using renderCharterDisplay
 // 3. Auto-approve pheromone suggestions
-// 4. Prompt user: Proceed / Revise / Cancel
-// 5. Act on choice
+// 4. Synthesize launch brief from charter + research data
+// 5. Prompt user: Approve / Edit / Reject
+// 6. Act on choice
 func runInitCeremony(cmd *cobra.Command, args []string) error {
 	if store == nil {
 		outputErrorMessage("no store initialized")
@@ -105,7 +203,7 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Run the ceremony loop (supports Revise cycling)
+	// Run the ceremony loop (supports reject-restart cycling)
 	for {
 		charter, pheromoneSuggestions, researchData, err := runCeremonyResearch(goal, target)
 		if err != nil {
@@ -134,48 +232,80 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Final approval prompt
-		choice := promptNumberedChoice("What would you like to do?", []string{
-			"Proceed -- accept charter and create colony",
-			"Revise -- provide a new goal and re-scan",
-			"Cancel -- stop without creating anything",
-		})
+		// Synthesize and display launch brief (CONF-04)
+		brief := synthesizeLaunchBrief(goal, charter, researchData)
+		fmt.Fprint(os.Stderr, brief)
 
-		switch choice {
-		case 1: // Proceed
-			emitLifecycleCeremony("colony:init:charter-approved", events.CeremonyPayload{
-				Task:    fmt.Sprintf("Charter approved for goal: %s", goal),
-				Message: fmt.Sprintf("Charter: %s", charter.Intent),
-			}, "init-ceremony")
+		// Brief approval flow (CONF-05) -- replaces old Proceed/Revise/Cancel
+		for {
+			choice := promptNumberedChoice("What would you like to do with this launch brief?", []string{
+				"Approve -- accept brief and create colony",
+				"Edit -- modify the brief in your editor",
+				"Reject -- return to goal prompt",
+			})
 
-			if err := createCeremonyColony(goal, scope, *charter); err != nil {
-				outputError(1, fmt.Sprintf("failed to create colony: %v", err), nil)
+			switch choice {
+			case 1: // Approve
+				emitLifecycleCeremony("colony:init:charter-approved", events.CeremonyPayload{
+					Task:    fmt.Sprintf("Launch brief approved for goal: %s", goal),
+					Message: fmt.Sprintf("Charter: %s", charter.Intent),
+				}, "init-ceremony")
+
+				if err := createCeremonyColony(goal, scope, *charter); err != nil {
+					outputError(1, fmt.Sprintf("failed to create colony: %v", err), nil)
+					return nil
+				}
+
+				emitLifecycleCeremony("colony:init:completed", events.CeremonyPayload{
+					Task:    fmt.Sprintf("Colony created for goal: %s", goal),
+					Message: fmt.Sprintf("Session: %s_%d", strings.ToLower(strings.Fields(goal)[0]), time.Now().Unix()),
+				}, "init-ceremony")
+
 				return nil
-			}
 
-			emitLifecycleCeremony("colony:init:completed", events.CeremonyPayload{
-				Task:    fmt.Sprintf("Colony created for goal: %s", goal),
-				Message: fmt.Sprintf("Session: %s_%d", strings.ToLower(strings.Fields(goal)[0]), time.Now().Unix()),
-			}, "init-ceremony")
+			case 2: // Edit
+				tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("aether-launch-brief-%d.md", time.Now().UnixNano()))
+				if err := os.WriteFile(tmpFile, []byte(brief), 0644); err != nil {
+					fmt.Fprintf(os.Stderr, "  Warning: could not create temp file for editing: %v\n", err)
+					continue
+				}
+				editor := os.Getenv("EDITOR")
+				if editor == "" {
+					editor = "vi"
+				}
+				editCmd := exec.Command(editor, tmpFile)
+				editCmd.Stdin = os.Stdin
+				editCmd.Stdout = os.Stdout
+				editCmd.Stderr = os.Stderr
+				if err := editCmd.Run(); err != nil {
+					fmt.Fprintf(os.Stderr, "  Warning: editor exited with error: %v\n", err)
+					os.Remove(tmpFile)
+					continue
+				}
+				edited, err := os.ReadFile(tmpFile)
+				os.Remove(tmpFile)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "  Warning: could not read edited brief: %v\n", err)
+					continue
+				}
+				brief = string(edited)
+				fmt.Fprint(os.Stderr, "\n--- Edited Launch Brief ---\n\n")
+				fmt.Fprint(os.Stderr, brief)
+				continue
 
-			return nil
+			case 3: // Reject
+				fmt.Fprintln(os.Stderr, "  Brief rejected. Returning to goal prompt.")
+				goal = ""
+				break
 
-		case 2: // Revise
-			newGoal := promptString("Enter new goal")
-			if newGoal == "" {
-				fmt.Fprintln(os.Stderr, "  Goal cannot be empty, keeping current goal.")
+			default:
+				fmt.Fprintln(os.Stderr, "  Invalid choice. Please enter 1, 2, or 3.")
 				continue
 			}
-			goal = newGoal
-			// Clean restart -- re-run from research with new goal
-			continue
+			break
+		}
 
-		case 3: // Cancel
-			fmt.Fprintln(os.Stderr, "  Colony creation cancelled. No artifacts created.")
-			return nil
-
-		default:
-			fmt.Fprintln(os.Stderr, "  Invalid choice. Please enter 1, 2, or 3.")
+		if goal == "" {
 			continue
 		}
 	}
@@ -460,7 +590,7 @@ func isTerm(f *os.File) bool {
 
 var initCeremonyCmd = &cobra.Command{
 	Use:   "init-ceremony <goal>",
-	Short: "Run the full colony init ceremony (scan, charter, approve)",
+	Short: "Run the full colony init ceremony (scan, charter, brief, approve)",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runInitCeremony,
 }

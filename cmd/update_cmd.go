@@ -19,13 +19,16 @@ var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update Aether companion files and optionally the binary",
 	Long: "Update Aether by syncing companion files from the distribution hub\n" +
-		"(~/.aether/system/ for stable, ~/.aether-dev/system/ for dev) to the local .aether/ directory.\n\n" +
-		"This updates slash commands, agent definitions, skills, templates, and docs.\n" +
-		"Local user data (COLONY_STATE.json, pheromones, etc.) is never overwritten.\n\n" +
+		"(~/.aether/system/ for stable, ~/.aether-dev/system/ for dev) and\n" +
+		"refreshing repo-local state scaffolding.\n\n" +
+		"Shared agents, commands, shipped skills, templates, docs, utils, workers,\n" +
+		"exchange files, and references stay global instead of being copied into\n" +
+		"target repos. Local user data (COLONY_STATE.json, pheromones, etc.) is\n" +
+		"never overwritten.\n\n" +
 		"By default this does not replace the installed `aether` binary.\n" +
 		"Use `--download-binary` to fetch a published release binary.\n" +
 		"If you need an unreleased local runtime fix from an Aether source checkout,\n" +
-		"run `aether install --package-dir <Aether checkout>` in the Aether repo first.",
+		"run `aether publish --package-dir <Aether checkout>` in the Aether repo first.",
 	Args: cobra.NoArgs,
 	RunE: runUpdate,
 }
@@ -60,14 +63,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Check hub exists
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubVersionFile := filepath.Join(hubDir, "version.json")
-	if _, err := os.Stat(hubVersionFile); os.IsNotExist(err) {
+	hubVersion := readHubVersionAtPath(hubDir)
+	if hubVersion == "" {
 		outputErrorMessage("Aether hub not installed. Run \"aether install\" first.")
 		return nil
 	}
 
 	// Read hub version for comparison
-	hubVersion := readHubVersion(hubVersionFile)
 	binaryVersion := resolveVersion()
 	downloadBinary, _ := cmd.Flags().GetBool("download-binary")
 	binaryMode := updateBinaryRefreshMode(downloadBinary, dryRun)
@@ -92,29 +94,22 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"binary_refresh_mode": binaryMode,
 			"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
 			"actions": []string{
-				"Sync .aether/ system files (commands, agents, skills, templates, docs)",
+				"Ensure repo-local .aether/data, dreams, oracle, locks, QUEEN.md, and .gitignore",
+				"Prune stale generated repo-local agents, commands, and shipped skills",
 				"Refresh repo-level platform guidance (AGENTS.md, .codex/CODEX.md, .opencode/OPENCODE.md) when managed by Aether",
-				"Sync .claude/commands/ant-*.md",
 				"Sync .claude/settings.json",
-				"Sync .claude/agents/ant/",
-				"Sync .codex/agents/",
-				"Sync .codex/skills/",
-				"Sync .opencode/commands/ant/",
-				"Sync .opencode/agents/",
 				fmt.Sprintf("Do not change the installed %s binary unless --download-binary is also used", defaultBinaryName(channel)),
 			},
 		}
 		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, []map[string]interface{}{})
 		result["stale_publish"] = staleResultToMap(staleResult)
 		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, force, true, []map[string]interface{}{
-			{"label": "System files", "copied": 0, "skipped": 0},
-			{"label": "Commands (claude)", "copied": 0, "skipped": 0},
+			{"label": "Local state scaffold", "copied": 0, "skipped": 0},
+			{"label": "Repo .aether cleanup", "copied": 0, "skipped": 0},
+			{"label": "Prune legacy repo platform assets", "copied": 0, "skipped": 0},
+			{"label": "Prune shipped repo skills", "copied": 0, "skipped": 0},
 			{"label": "Settings (claude)", "copied": 0, "skipped": 0},
-			{"label": "Agents (claude)", "copied": 0, "skipped": 0},
-			{"label": "Agents (codex)", "copied": 0, "skipped": 0},
-			{"label": "Skills (codex)", "copied": 0, "skipped": 0},
-			{"label": "Commands (opencode)", "copied": 0, "skipped": 0},
-			{"label": "Agents (opencode)", "copied": 0, "skipped": 0},
+			{"label": "Rules (claude)", "copied": 0, "skipped": 0},
 		}, 0, 0, nil, binaryMode, hubVersion == binaryVersion)
 		if staleResult.Classification != staleOK {
 			visual += renderStalePublishBanner(staleResult)
@@ -157,7 +152,11 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			mirrorRestored = restored
 		}
 		restartTargets := platformRestartTargets(syncResult.details)
+		removed := syncDetailsRemoved(syncResult.details)
 		message := fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped)
+		if removed > 0 {
+			message += fmt.Sprintf(", %d removed", removed)
+		}
 		if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
 			message += ". " + restartNote
 		}
@@ -167,6 +166,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			"hub_version":             hubVersion,
 			"local_version":           binaryVersion,
 			"force":                   force,
+			"removed":                 removed,
 			"details":                 syncResult.details,
 			"binary_refresh_mode":     binaryMode,
 			"binary_refresh_note":     updateBinaryRefreshNote(binaryMode, channel),
@@ -281,12 +281,19 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 		"CROWNED-ANTHILL.md": true,
 	}
 
+	appendSyncResult(&result.details, &result, "Local state scaffold", ensureRepoLocalScaffold(localAether))
+
+	sourceCheckout := isAetherSourceCheckout(repoDir)
 	for _, pair := range repoSyncPairs() {
+		if pair.consumerOnly && sourceCheckout {
+			appendSyncResult(&result.details, &result, pair.label, syncResult{})
+			continue
+		}
 		srcDir := filepath.Join(hubSystem, filepath.FromSlash(pair.hubRel))
 		destDir := filepath.Join(localAether, filepath.FromSlash(pair.destRel))
 
 		syncRes := syncDir(srcDir, destDir, syncOptions{
-			cleanup:              force,
+			cleanup:              pair.cleanup,
 			preserveLocalChanges: !force && pair.preserveLocalChanges,
 			protectedDirs:        protectedDirs,
 			protectedFiles:       protectedFiles,
@@ -314,6 +321,10 @@ func runUpdateSync(hubDir, repoDir string, force bool) updateSyncResult {
 		result.copied += syncRes.copied
 		result.skipped += syncRes.skipped
 	}
+
+	appendSyncResult(&result.details, &result, "Prune legacy repo platform assets", pruneLegacyRepoPlatformAssets(repoDir))
+	appendSyncResult(&result.details, &result, "Prune repo Codex skill mirror", pruneRepoCodexSkillMirror(repoDir, force))
+	appendSyncResult(&result.details, &result, "Prune shipped repo skills", pruneShippedRepoSkills(hubSystem, localAether, force))
 
 	return result
 }
@@ -345,11 +356,11 @@ const (
 )
 
 const (
-	expectedClaudeCommandCount   = 50
-	expectedOpenCodeCommandCount = 50
-	expectedOpenCodeAgentCount   = 26
-	expectedCodexAgentCount      = 26
-	expectedCodexSkillCount      = 83
+	expectedClaudeCommandCount   = 60
+	expectedOpenCodeCommandCount = 60
+	expectedOpenCodeAgentCount   = 27
+	expectedCodexAgentCount      = 27
+	expectedCodexSkillCount      = 86
 )
 
 type staleComponent struct {
@@ -436,10 +447,11 @@ func checkStalePublish(hubDir, hubVersion, binaryVersion string, channel runtime
 		recursive bool
 	}{
 		{"Commands (claude)", filepath.Join(hubSystem, "commands", "claude"), expectedClaudeCommandCount, nil, false},
+		{"Agents (claude)", filepath.Join(hubSystem, "agents-claude"), expectedClaudeAgents, nil, false},
 		{"Commands (opencode)", filepath.Join(hubSystem, "commands", "opencode"), expectedOpenCodeCommandCount, nil, false},
 		{"Agents (opencode)", filepath.Join(hubSystem, "agents"), expectedOpenCodeAgentCount, nil, false},
 		{"Agents (codex)", filepath.Join(hubSystem, "codex"), expectedCodexAgentCount, func(name string) bool { return strings.HasSuffix(name, ".toml") }, false},
-		{"Skills (codex)", filepath.Join(hubSystem, "skills-codex"), expectedCodexSkillCount, nil, true},
+		{"Skills (hub)", filepath.Join(hubSystem, "skills"), expectedCodexSkillCount, nil, true},
 	}
 
 	for _, check := range checks {

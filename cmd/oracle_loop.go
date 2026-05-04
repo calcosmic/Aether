@@ -15,10 +15,10 @@ import (
 
 const (
 	defaultOracleMaxIterations    = 8
-	defaultOracleTargetConfidence = 85
+	defaultOracleTargetConfidence = 95
 	defaultOracleReasoningEffort  = "medium"
-	defaultOracleScope            = "both"
-	defaultOracleTemplate         = "custom"
+	defaultOracleScope            = "auto"
+	defaultOracleTemplate         = "auto"
 	defaultOracleMaxAttempts      = 2
 	defaultOracleStrategy         = "adaptive"
 	defaultOracleTimeout          = 12 * time.Minute
@@ -30,6 +30,17 @@ type oracleDepthConfig struct {
 	TargetConfidence int
 	Label            string
 	Description      string
+}
+
+type oracleScopeProfile struct {
+	Scope                  string
+	Label                  string
+	Description            string
+	EvidenceStrategy       string
+	IncludeRepoContext     bool
+	IncludeExternalContext bool
+	IncludeColonyGoal      bool
+	IncludeRecentLearnings bool
 }
 
 var oracleDepthLevels = map[string]oracleDepthConfig{
@@ -46,8 +57,172 @@ func resolveOracleDepth(depth string) oracleDepthConfig {
 	return oracleDepthLevels["balanced"]
 }
 
+func resolveOracleTemplate(topic, requested string) (string, error) {
+	template := strings.ToLower(strings.TrimSpace(requested))
+	if template == "" || template == "auto" {
+		return inferOracleTemplate(topic), nil
+	}
+	switch template {
+	case "requirements", "product-requirements", "product-spec":
+		return "prd", nil
+	case "technology-evaluation", "technology-eval":
+		return "tech-eval", nil
+	case "best-practice", "best-practices", "research", "research-brief":
+		return "research-brief", nil
+	case "prd", "tech-eval", "architecture-review", "bug-investigation", "custom":
+		return template, nil
+	default:
+		return "", fmt.Errorf("--template must be auto, prd, tech-eval, architecture-review, bug-investigation, research-brief, or custom, got %q", requested)
+	}
+}
+
+func inferOracleTemplate(topic string) string {
+	lower := strings.ToLower(topic)
+	switch {
+	case containsAnyOracleKeyword(lower, "prd", "product requirements", "requirements", "user stories", "acceptance criteria", "scope", "project brief", "define the product", "what i want", "what we want"):
+		return "prd"
+	case containsAnyOracleKeyword(lower, "bug", "failure", "failing", "broken", "root cause", "regression", "flaky", "error", "crash"):
+		return "bug-investigation"
+	case containsAnyOracleKeyword(lower, "architecture", "architectural", "design", "refactor", "system design", "scalability", "structure"):
+		return "architecture-review"
+	case containsAnyOracleKeyword(lower, "evaluate", "evaluation", "compare", " vs ", "versus", "adopt", "library", "framework", "tooling", "dependency"):
+		return "tech-eval"
+	case containsAnyOracleKeyword(lower, "best practice", "best practices", "patterns", "conventions", "idiomatic", "how should"):
+		return "research-brief"
+	default:
+		return "custom"
+	}
+}
+
+func resolveOracleScope(topic, requested string) (oracleScopeProfile, error) {
+	scope := strings.ToLower(strings.TrimSpace(requested))
+	if scope == "" {
+		scope = defaultOracleScope
+	}
+	if scope == "auto" {
+		scope = inferOracleAutoScope(topic)
+	}
+
+	switch scope {
+	case "repo":
+		return oracleScopeProfile{
+			Scope:                  "repo",
+			Label:                  "Repository",
+			Description:            "Research the current repository, local runtime behavior, and generated Aether surfaces.",
+			EvidenceStrategy:       "Use local code, docs, tests, generated artifacts, and real command behavior first. Use web sources only when local evidence cannot answer the question.",
+			IncludeRepoContext:     true,
+			IncludeExternalContext: false,
+			IncludeColonyGoal:      true,
+			IncludeRecentLearnings: true,
+		}, nil
+	case "web":
+		return oracleScopeProfile{
+			Scope:                  "web",
+			Label:                  "General Research",
+			Description:            "Research the user's topic without assuming the current repository is the subject.",
+			EvidenceStrategy:       "Use current primary sources, official documentation, repository metadata, papers, or reputable external sources. Inspect local files only if the topic explicitly asks about this repo.",
+			IncludeRepoContext:     false,
+			IncludeExternalContext: true,
+			IncludeColonyGoal:      false,
+			IncludeRecentLearnings: false,
+		}, nil
+	case "both":
+		return oracleScopeProfile{
+			Scope:                  "both",
+			Label:                  "Repo + External",
+			Description:            "Research both current repository evidence and relevant external sources.",
+			EvidenceStrategy:       "Start with the evidence source that best matches the target question: local files for repo claims, external primary sources for broad or current-world claims.",
+			IncludeRepoContext:     true,
+			IncludeExternalContext: true,
+			IncludeColonyGoal:      true,
+			IncludeRecentLearnings: true,
+		}, nil
+	default:
+		return oracleScopeProfile{}, fmt.Errorf("--scope must be auto, repo, web, or both, got %q", requested)
+	}
+}
+
+func inferOracleAutoScope(topic string) string {
+	lower := strings.ToLower(topic)
+	repoKeywords := []string{
+		"this repo", "this repository", "current repo", "current repository", "codebase", "aether", "colony",
+		"phase", "build", "continue", "seal", "codex", "claude", "opencode", "pheromone", "runtime", "cli",
+		"local", "source checkout",
+	}
+	externalKeywords := []string{
+		"latest", "current", "today", "at the moment", "top ", "github repo", "github repos", "market",
+		"library", "framework", "benchmark", "compare", "best", "news", "pricing", "paper", "standard",
+		"external", "web",
+	}
+	hasRepo := containsAnyOracleKeyword(lower, repoKeywords...)
+	hasExternal := containsAnyOracleKeyword(lower, externalKeywords...)
+	switch {
+	case hasRepo && hasExternal:
+		return "both"
+	case hasRepo:
+		return "repo"
+	case hasExternal:
+		return "web"
+	default:
+		return "both"
+	}
+}
+
+func oracleScopeFromOptional(topic string, profiles []oracleScopeProfile) oracleScopeProfile {
+	if len(profiles) > 0 && strings.TrimSpace(profiles[0].Scope) != "" {
+		return profiles[0]
+	}
+	profile, err := resolveOracleScope(topic, defaultOracleScope)
+	if err != nil {
+		profile, _ = resolveOracleScope(topic, "both")
+	}
+	return profile
+}
+
+func oracleEvidenceStrategyForScope(scope string) string {
+	profile, err := resolveOracleScope("", scope)
+	if err == nil {
+		return profile.EvidenceStrategy
+	}
+	profile, _ = resolveOracleScope("", "both")
+	return profile.EvidenceStrategy
+}
+
+// validateOracleConfidenceTarget returns an empty string if the value is valid (1-100),
+// or an error description if invalid.
+func validateOracleConfidenceTarget(value string) string {
+	v := 0
+	for _, ch := range value {
+		if ch < '0' || ch > '9' {
+			return fmt.Sprintf("--confidence-target must be an integer 1-100, got %q", value)
+		}
+		v = v*10 + int(ch-'0')
+	}
+	if v < 1 || v > 100 {
+		return fmt.Sprintf("--confidence-target must be between 1 and 100, got %d", v)
+	}
+	return ""
+}
+
 var newOracleWorkerInvoker = codex.NewWorkerInvoker
 var oracleAttemptPolicyForPhase = defaultOracleAttemptPolicy
+
+// oracleDetectedPlatform returns the active platform string for Oracle state fields.
+// It uses the detected platform from environment and process tree — no invoker needed.
+func oracleDetectedPlatform() string {
+	if p := codex.DetectActivePlatform(); p != codex.PlatformUnknown {
+		return string(p)
+	}
+	return string(codex.PlatformCodex)
+}
+
+// oracleInvokerPlatform returns the platform from the invoker, falling back to detection.
+func oracleInvokerPlatform(invoker codex.WorkerInvoker) string {
+	if p := codex.PlatformFromInvoker(invoker); p != codex.PlatformUnknown {
+		return string(p)
+	}
+	return oracleDetectedPlatform()
+}
 
 type oracleStateFile struct {
 	Version            string   `json:"version,omitempty"`
@@ -111,6 +286,7 @@ type oracleFinding struct {
 	Text      string   `json:"text"`
 	SourceIDs []string `json:"source_ids,omitempty"`
 	Iteration int      `json:"iteration,omitempty"`
+	Blocker   bool     `json:"blocker,omitempty"`
 }
 
 type oraclePaths struct {
@@ -181,10 +357,18 @@ type oracleWorkerEvidence struct {
 	Type     string `json:"type"`
 }
 
-func runOracleCompatibility(root string, args []string, depth string) (map[string]interface{}, error) {
+func runOracleCompatibility(root string, args []string, depth string, confidenceTarget string, oracleOptions ...string) (map[string]interface{}, error) {
 	mode := "status"
 	if len(args) > 0 {
 		mode = strings.ToLower(strings.TrimSpace(args[0]))
+	}
+	scope := ""
+	if len(oracleOptions) > 0 {
+		scope = oracleOptions[0]
+	}
+	template := ""
+	if len(oracleOptions) > 1 {
+		template = oracleOptions[1]
 	}
 
 	switch mode {
@@ -193,7 +377,7 @@ func runOracleCompatibility(root string, args []string, depth string) (map[strin
 	case "stop":
 		return stopOracleCompatibility(root)
 	default:
-		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth)
+		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget, scope, template)
 	}
 }
 
@@ -217,7 +401,9 @@ func oracleStatusResult(root string) (map[string]interface{}, error) {
 		"active":             active,
 		"status":             emptyFallback(strings.TrimSpace(state.Status), "idle"),
 		"topic":              strings.TrimSpace(state.Topic),
-		"platform":           emptyFallback(strings.TrimSpace(state.Platform), "codex"),
+		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
+		"template":           emptyFallback(strings.TrimSpace(state.Template), "custom"),
+		"platform":           emptyFallback(strings.TrimSpace(state.Platform), oracleDetectedPlatform()),
 		"phase":              emptyFallback(strings.TrimSpace(state.Phase), "idle"),
 		"iteration":          state.Iteration,
 		"max_iterations":     state.MaxIterations,
@@ -268,7 +454,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 		state.StartedAt = now
 	}
 	state.Version = "1.1"
-	state.Platform = "codex"
+	state.Platform = oracleDetectedPlatform()
 	state.Status = "stopped"
 	state.StopReason = "manual_stop"
 	state.LastUpdated = now
@@ -295,7 +481,7 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func startOracleCompatibility(root, topic, depth string) (map[string]interface{}, error) {
+func startOracleCompatibility(root, topic, depth string, confidenceTarget string, requestedScope string, requestedTemplate string) (map[string]interface{}, error) {
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
@@ -318,15 +504,36 @@ func startOracleCompatibility(root, topic, depth string) (map[string]interface{}
 	_ = os.Remove(paths.StopPath)
 	_ = os.Remove(paths.LoopPath)
 
-	detectedType, languages, frameworks := detectOracleProjectProfile(root)
-	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks)
 	depthCfg := resolveOracleDepth(depth)
+	scopeProfile, err := resolveOracleScope(topic, requestedScope)
+	if err != nil {
+		return nil, err
+	}
+	template, err := resolveOracleTemplate(topic, requestedTemplate)
+	if err != nil {
+		return nil, err
+	}
+	detectedType, languages, frameworks := detectOracleProjectProfile(root)
+	brief := formulateOracleBrief(root, topic, detectedType, languages, frameworks, scopeProfile)
+
+	// Validate and apply explicit confidence target override (per D-08)
+	if strings.TrimSpace(confidenceTarget) != "" {
+		if errMsg := validateOracleConfidenceTarget(strings.TrimSpace(confidenceTarget)); errMsg != "" {
+			return nil, fmt.Errorf("%s", errMsg)
+		}
+		v := 0
+		for _, ch := range strings.TrimSpace(confidenceTarget) {
+			v = v*10 + int(ch-'0')
+		}
+		depthCfg.TargetConfidence = v
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	state := oracleStateFile{
 		Version:           "1.1",
 		Topic:             topic,
-		Scope:             defaultOracleScope,
-		Template:          defaultOracleTemplate,
+		Scope:             scopeProfile.Scope,
+		Template:          template,
 		Phase:             "survey",
 		Iteration:         0,
 		MaxIterations:     depthCfg.MaxIterations,
@@ -337,14 +544,14 @@ func startOracleCompatibility(root, topic, depth string) (map[string]interface{}
 		Status:            "active",
 		Strategy:          defaultOracleStrategy,
 		FocusAreas:        currentOracleFocusAreas(),
-		Platform:          "codex",
+		Platform:          oracleDetectedPlatform(),
 		ControllerPID:     os.Getpid(),
 		Depth:             depthCfg.Label,
 	}
 	plan := oraclePlanFile{
 		Version:     "1.1",
 		Sources:     map[string]oracleSource{},
-		Questions:   buildBriefInformedQuestions(topic, brief, detectedType),
+		Questions:   buildBriefInformedQuestions(topic, brief, detectedType, scopeProfile),
 		CreatedAt:   now,
 		LastUpdated: now,
 	}
@@ -539,7 +746,7 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 		state.Iteration = iterationsRun
 		state.OverallConfidence = oracleOverallConfidence(plan)
-		state.Platform = "codex"
+		state.Platform = oracleInvokerPlatform(invoker)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
 		state.ActiveTimeoutSec = 0
@@ -589,9 +796,195 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 	return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "max_iterations_reached", "max_iterations_reached", "aether oracle status")
 }
 
+// mapApprovalStatus maps internal Oracle status to user-facing approval status.
+func mapApprovalStatus(status string) string {
+	switch status {
+	case "complete":
+		return "approved"
+	case "blocked":
+		return "blocked"
+	case "max_iterations_reached":
+		return "max_iterations"
+	default:
+		return "below_target"
+	}
+}
+
+// hasHardBlocker returns true if any finding in the plan has been flagged as a hard blocker.
+func hasHardBlocker(plan oraclePlanFile, state oracleStateFile) bool {
+	for _, q := range plan.Questions {
+		for _, f := range q.KeyFindings {
+			if f.Blocker {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// oracleRubricEntry represents a single question's rubric assessment.
+type oracleRubricEntry map[string]interface{}
+
+// oracleGapEntry represents a single identified gap.
+type oracleGapEntry struct {
+	QuestionID string `json:"question_id"`
+	Question   string `json:"question"`
+	Reason     string `json:"reason"`
+	Confidence int    `json:"confidence"`
+}
+
+// oracleEvidenceEntry represents evidence summary for a question.
+type oracleEvidenceEntry struct {
+	QuestionID   string `json:"question_id"`
+	SummaryCount int    `json:"summary_count"`
+	SourceCount  int    `json:"source_count"`
+	TopSources   string `json:"top_sources,omitempty"`
+}
+
+// buildOracleRubric produces per-question breakdown with confidence score, sources, and assessment.
+func buildOracleRubric(plan oraclePlanFile, state oracleStateFile) []oracleRubricEntry {
+	rubric := make([]oracleRubricEntry, 0, len(plan.Questions))
+	for _, q := range plan.Questions {
+		entry := oracleRubricEntry{
+			"question_id": q.ID,
+			"question":    q.Text,
+			"status":      emptyFallback(q.Status, "open"),
+			"confidence":  q.Confidence,
+		}
+		// Collect unique source IDs
+		sourceSet := make(map[string]bool)
+		for _, f := range q.KeyFindings {
+			for _, sid := range f.SourceIDs {
+				sourceSet[sid] = true
+			}
+		}
+		sources := make([]string, 0, len(sourceSet))
+		for sid := range sourceSet {
+			sources = append(sources, sid)
+		}
+		sort.Strings(sources)
+		entry["source_count"] = len(sources)
+		entry["finding_count"] = len(q.KeyFindings)
+		entry["iterations_touched"] = len(q.IterationsTouched)
+
+		// Assessment
+		if q.Confidence >= state.TargetConfidence {
+			entry["assessment"] = "met"
+		} else if q.Confidence >= state.TargetConfidence/2 {
+			entry["assessment"] = "partial"
+		} else {
+			entry["assessment"] = "insufficient"
+		}
+
+		rubric = append(rubric, entry)
+	}
+	return rubric
+}
+
+// buildSynthesizedPrompt creates a consolidated research prompt from the Oracle's
+// accumulated findings, suitable for passing to downstream agents or users as a
+// summary of what was learned.
+func buildSynthesizedPrompt(plan oraclePlanFile, state oracleStateFile) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Oracle Research Synthesis\n\n")
+	fmt.Fprintf(&b, "**Topic:** %s\n", emptyFallback(state.Topic, "unknown"))
+	fmt.Fprintf(&b, "**Confidence:** %d%% / %d%%\n\n", state.OverallConfidence, state.TargetConfidence)
+
+	for _, q := range plan.Questions {
+		fmt.Fprintf(&b, "## %s: %s\n", q.ID, q.Text)
+		fmt.Fprintf(&b, "Status: %s | Confidence: %d%%\n", emptyFallback(q.Status, "open"), q.Confidence)
+		if len(q.KeyFindings) > 0 {
+			b.WriteString("\nKey findings:\n")
+			for _, f := range q.KeyFindings {
+				fmt.Fprintf(&b, "- %s\n", f.Text)
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	if len(state.FocusAreas) > 0 {
+		fmt.Fprintf(&b, "**Focus areas:** %s\n", strings.Join(state.FocusAreas, ", "))
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// identifyGaps lists questions that haven't reached sufficient confidence or areas where evidence is thin.
+func identifyGaps(plan oraclePlanFile, state oracleStateFile) []oracleGapEntry {
+	var gaps []oracleGapEntry
+	for _, q := range plan.Questions {
+		status := strings.ToLower(strings.TrimSpace(q.Status))
+		if status == "answered" && q.Confidence >= state.TargetConfidence {
+			continue // fully met, no gap
+		}
+		reason := "below target confidence"
+		if status == "open" {
+			reason = "unanswered question"
+		} else if len(q.KeyFindings) == 0 {
+			reason = "no findings"
+		}
+		gaps = append(gaps, oracleGapEntry{
+			QuestionID: q.ID,
+			Question:   truncateString(q.Text, 200),
+			Reason:     reason,
+			Confidence: q.Confidence,
+		})
+	}
+	// Include open gaps from state
+	for _, gap := range state.OpenGaps {
+		gaps = append(gaps, oracleGapEntry{
+			QuestionID: "open_gap",
+			Question:   truncateString(gap, 200),
+			Reason:     "open gap from state",
+			Confidence: 0,
+		})
+	}
+	if len(gaps) == 0 {
+		return nil
+	}
+	return gaps
+}
+
+// collectEvidence aggregates evidence per question.
+func collectEvidence(plan oraclePlanFile, state oracleStateFile) []oracleEvidenceEntry {
+	var entries []oracleEvidenceEntry
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		sourceSet := make(map[string]bool)
+		for _, f := range q.KeyFindings {
+			for _, sid := range f.SourceIDs {
+				sourceSet[sid] = true
+			}
+		}
+		// Build top sources string
+		topSources := make([]string, 0, len(sourceSet))
+		for sid := range sourceSet {
+			if src, ok := plan.Sources[sid]; ok {
+				topSources = append(topSources, emptyFallback(src.Title, src.URL))
+			} else {
+				topSources = append(topSources, sid)
+			}
+		}
+		sort.Strings(topSources)
+		topStr := strings.Join(topSources, ", ")
+
+		entries = append(entries, oracleEvidenceEntry{
+			QuestionID:   q.ID,
+			SummaryCount: len(q.KeyFindings),
+			SourceCount:  len(sourceSet),
+			TopSources:   topStr,
+		})
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	return entries
+}
+
 func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, iterationsRun int, status, stopReason, next string) (map[string]interface{}, error) {
 	state.Status = status
-	state.Platform = "codex"
+	state.Platform = oracleDetectedPlatform()
 	state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
 	if strings.TrimSpace(stopReason) != "" {
 		state.StopReason = stopReason
@@ -615,12 +1008,15 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"autonomous":         true,
 		"status":             status,
 		"topic":              state.Topic,
+		"scope":              emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope),
+		"template":           emptyFallback(strings.TrimSpace(state.Template), "custom"),
 		"phase":              state.Phase,
 		"iteration":          state.Iteration,
 		"iterations_run":     iterationsRun,
 		"max_iterations":     state.MaxIterations,
 		"overall_confidence": state.OverallConfidence,
 		"target_confidence":  state.TargetConfidence,
+		"final_confidence":   state.OverallConfidence,
 		"question_count":     questionCount,
 		"answered_count":     answeredCount,
 		"touched_count":      touchedCount,
@@ -646,6 +1042,13 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"stop_reason":        stopReason,
 		"summary":            strings.TrimSpace(state.Summary),
 		"next":               next,
+		// Rubric output per D-09
+		"rubric":             buildOracleRubric(plan, state),
+		"gaps":               identifyGaps(plan, state),
+		"evidence":           collectEvidence(plan, state),
+		"approval_status":    mapApprovalStatus(status),
+		"original_prompt":    strings.TrimSpace(state.Topic),
+		"synthesized_prompt": buildSynthesizedPrompt(plan, state),
 	}, nil
 }
 
@@ -735,7 +1138,8 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 			fmt.Sprintf("Languages: %s", renderCSV(languages, "unknown")),
 			fmt.Sprintf("Frameworks: %s", renderCSV(frameworks, "none detected")),
 			fmt.Sprintf("Target question text: %s", emptyFallback(strings.TrimSpace(target.Text), "select the lowest-confidence open question")),
-			"Prefer direct codebase, generated-artifact, and runtime-command evidence first; use web sources only when local evidence cannot answer the target question.",
+			fmt.Sprintf("Research scope: %s", emptyFallback(state.Scope, defaultOracleScope)),
+			oracleEvidenceStrategyForScope(state.Scope),
 			oraclePhaseDirective(state, plan),
 			"Return worker claims JSON normally, but put the actual research payload in the Oracle response file path provided above.",
 		},
@@ -749,6 +1153,8 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 		brief = strings.TrimSpace(brief + "\n\n## Recovery Attempt\n\n- This is a retry after a failed or malformed worker pass.\n- Keep the pass narrow and question-scoped.\n- If you cannot make safe progress, write a blocked Oracle response with the exact concrete blocker instead of drifting.\n")
 	}
 	brief = strings.TrimSpace(brief + "\n\n## Oracle Response Contract\n\nResponse File: " + emptyFallback(responseRelPath, responsePath) + "\n\nWrite this JSON object to the response file:\n```json\n{\n  \"question_id\": \"" + target.ID + "\",\n  \"status\": \"answered | partial | blocked\",\n  \"confidence\": 0,\n  \"summary\": \"short concrete summary\",\n  \"findings\": [\n    {\n      \"text\": \"new finding\",\n      \"evidence\": [\n        {\"title\": \"what you inspected\", \"location\": \"file path, command, or URL\", \"type\": \"codebase | runtime | documentation | official | github | blog | forum | academic\"}\n      ]\n    }\n  ],\n  \"gaps\": [\"remaining unanswered point\"],\n  \"contradictions\": [\"conflicting evidence if any\"],\n  \"recommendation\": \"release recommendation or next concrete action\"\n}\n```\n- Do not write markdown to the response file.\n- `answered` and `partial` responses must contain at least one finding.\n- `blocked` responses must explain the blocker concretely in `summary` or `gaps`.\n")
+	referenceTask := strings.TrimSpace(state.Topic + "\n" + target.Text)
+	referenceSection := resolveReferenceSectionWithOutput("oracle", referenceTask, "oracle", state.Template)
 
 	return invoker.Invoke(ctx, codex.WorkerConfig{
 		AgentName:        "aether-oracle",
@@ -758,8 +1164,10 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 		TaskID:           fmt.Sprintf("oracle.%d", state.Iteration),
 		TaskBrief:        brief,
 		ContextCapsule:   renderOracleContextCapsule(state, plan, detectedType, languages, frameworks, target, attempt, responseRelPath),
+		HandoffSection:   renderWorkerHandoffSection("oracle", 0, workerName),
 		Root:             paths.Root,
 		Timeout:          policy.Timeout,
+		SkillSection:     referenceSection,
 		PheromoneSection: resolvePheromoneSection(),
 		ConfigOverrides:  oracleWorkerConfigOverrides(policy),
 		ResponsePath:     responsePath,
@@ -780,6 +1188,9 @@ func renderOracleContextCapsule(state oracleStateFile, plan oraclePlanFile, dete
 	fmt.Fprintf(&b, "- Attempt: %d of %d\n", attempt, defaultOracleMaxAttempts)
 	fmt.Fprintf(&b, "- Target Confidence: %d%%\n", state.TargetConfidence)
 	fmt.Fprintf(&b, "- Current Confidence: %d%%\n", state.OverallConfidence)
+	fmt.Fprintf(&b, "- Research Scope: %s\n", emptyFallback(state.Scope, defaultOracleScope))
+	fmt.Fprintf(&b, "- Output Template: %s\n", emptyFallback(state.Template, "custom"))
+	fmt.Fprintf(&b, "- Evidence Strategy: %s\n", oracleEvidenceStrategyForScope(state.Scope))
 	fmt.Fprintf(&b, "- Project Type: %s\n", emptyFallback(detectedType, "unknown"))
 	fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "unknown"))
 	fmt.Fprintf(&b, "- Frameworks: %s\n", renderCSV(frameworks, "none detected"))
@@ -1108,7 +1519,8 @@ func loadColonyLearnings(root string) []string {
 	return learnings
 }
 
-func formulateOracleBrief(root, topic, detectedType string, languages, frameworks []string) string {
+func formulateOracleBrief(root, topic, detectedType string, languages, frameworks []string, profiles ...oracleScopeProfile) string {
+	scopeProfile := oracleScopeFromOptional(topic, profiles)
 	var b strings.Builder
 
 	b.WriteString("# Oracle Research Brief\n\n")
@@ -1116,32 +1528,47 @@ func formulateOracleBrief(root, topic, detectedType string, languages, framework
 	// Topic section
 	fmt.Fprintf(&b, "## Topic\n%s\n\n", topic)
 
-	// Project Profile section
-	b.WriteString("## Project Profile\n")
-	fmt.Fprintf(&b, "- Type: %s\n", detectedType)
-	fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "none detected"))
-	fmt.Fprintf(&b, "- Frameworks: %s\n", renderCSV(frameworks, "none detected"))
+	b.WriteString("## Research Scope\n")
+	fmt.Fprintf(&b, "- Scope: %s\n", scopeProfile.Scope)
+	fmt.Fprintf(&b, "- Description: %s\n", scopeProfile.Description)
+	fmt.Fprintf(&b, "- Evidence strategy: %s\n", scopeProfile.EvidenceStrategy)
 	b.WriteString("\n")
 
-	// Colony Goal section
-	b.WriteString("## Colony Goal\n")
-	colonyGoal := loadColonyGoal(root)
-	if colonyGoal != "" {
-		fmt.Fprintf(&b, "%s\n", colonyGoal)
-	} else {
-		b.WriteString("(no colony goal set)\n")
+	if note := oracleMedicBoundaryNote(topic); note != "" {
+		b.WriteString("## Boundary Note\n")
+		fmt.Fprintf(&b, "%s\n\n", note)
 	}
-	b.WriteString("\n")
 
-	// Codebase Structure section
-	b.WriteString("## Codebase Structure\n")
-	structure := scanCodebaseStructure(root)
-	if structure != "" {
-		fmt.Fprintf(&b, "%s\n", structure)
-	} else {
-		b.WriteString("(unable to scan)\n")
+	if scopeProfile.IncludeRepoContext {
+		// Project Profile section
+		b.WriteString("## Project Profile\n")
+		fmt.Fprintf(&b, "- Type: %s\n", detectedType)
+		fmt.Fprintf(&b, "- Languages: %s\n", renderCSV(languages, "none detected"))
+		fmt.Fprintf(&b, "- Frameworks: %s\n", renderCSV(frameworks, "none detected"))
+		b.WriteString("\n")
+
+		// Colony Goal section
+		if scopeProfile.IncludeColonyGoal {
+			b.WriteString("## Colony Goal\n")
+			colonyGoal := loadColonyGoal(root)
+			if colonyGoal != "" {
+				fmt.Fprintf(&b, "%s\n", colonyGoal)
+			} else {
+				b.WriteString("(no colony goal set)\n")
+			}
+			b.WriteString("\n")
+		}
+
+		// Codebase Structure section
+		b.WriteString("## Codebase Structure\n")
+		structure := scanCodebaseStructure(root)
+		if structure != "" {
+			fmt.Fprintf(&b, "%s\n", structure)
+		} else {
+			b.WriteString("(unable to scan)\n")
+		}
+		b.WriteString("\n")
 	}
-	b.WriteString("\n")
 
 	// Active Signals section
 	b.WriteString("## Active Signals\n")
@@ -1159,14 +1586,16 @@ func formulateOracleBrief(root, topic, detectedType string, languages, framework
 	}
 	b.WriteString("\n")
 
-	// Recent Learnings section
-	b.WriteString("## Recent Learnings\n")
-	learnings := loadColonyLearnings(root)
-	if len(learnings) == 0 {
-		b.WriteString("(none)\n")
-	} else {
-		for _, l := range learnings {
-			fmt.Fprintf(&b, "- %s\n", l)
+	if scopeProfile.IncludeRecentLearnings {
+		// Recent Learnings section
+		b.WriteString("## Recent Learnings\n")
+		learnings := loadColonyLearnings(root)
+		if len(learnings) == 0 {
+			b.WriteString("(none)\n")
+		} else {
+			for _, l := range learnings {
+				fmt.Fprintf(&b, "- %s\n", l)
+			}
 		}
 	}
 
@@ -1246,7 +1675,12 @@ func scanCodebaseStructure(root string) string {
 	return strings.TrimSpace(b.String())
 }
 
-func buildBriefInformedQuestions(topic string, brief string, detectedType string) []oracleQuestion {
+func buildBriefInformedQuestions(topic string, brief string, detectedType string, profiles ...oracleScopeProfile) []oracleQuestion {
+	scopeProfile := oracleScopeFromOptional(topic, profiles)
+	topicLabel := oracleTopicHeadline(topic)
+	if topicLabel == "" {
+		topicLabel = "this topic"
+	}
 	var questions []oracleQuestion
 	qID := 0
 
@@ -1262,59 +1696,91 @@ func buildBriefInformedQuestions(topic string, brief string, detectedType string
 		})
 	}
 
-	// Always include 2 context-establishing questions
-	nextQ(fmt.Sprintf("What is the actual problem boundary for %s in the context of %s?", topic, detectedType))
-
-	// Extract key directories from brief for file relevance question
-	keyDirs := extractBriefSection(brief, "Codebase Structure")
-	if keyDirs != "" {
-		nextQ(fmt.Sprintf("Which specific files and modules in the following structure are most relevant to %s?\n%s", topic, keyDirs))
+	// Always include a user-intent boundary question.
+	if scopeProfile.IncludeRepoContext {
+		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s in the context of %s?", topicLabel, detectedType))
 	} else {
-		nextQ(fmt.Sprintf("Which files, commands, or runtime surfaces matter most to investigating %s?", topic))
+		nextQ(fmt.Sprintf("What is the exact research boundary and decision the user needs for %s?", topicLabel))
+	}
+
+	if scopeProfile.IncludeExternalContext {
+		nextQ(fmt.Sprintf("Which current external sources, repositories, documentation, or examples are authoritative for %s?", topicLabel))
+	}
+
+	if scopeProfile.IncludeRepoContext {
+		// Extract key directories from brief for file relevance question
+		keyDirs := extractBriefSection(brief, "Codebase Structure")
+		if keyDirs != "" {
+			nextQ(fmt.Sprintf("Which specific files and modules in the following structure are most relevant to %s?\n%s", topicLabel, keyDirs))
+		} else {
+			nextQ(fmt.Sprintf("Which files, commands, or runtime surfaces matter most to investigating %s?", topicLabel))
+		}
+	}
+
+	if note := oracleMedicBoundaryNote(topic); note != "" {
+		nextQ(fmt.Sprintf("Where should Medic-owned diagnostics or readiness checks be used instead of Oracle research for %s?", topicLabel))
 	}
 
 	// If signals exist, add a constraints question
 	signals := extractBriefSection(brief, "Active Signals")
 	if signals != "" && !strings.Contains(signals, "(none)") {
-		nextQ(fmt.Sprintf("How do the following constraints affect the approach to %s?\n%s", topic, signals))
+		nextQ(fmt.Sprintf("How do the following constraints affect the approach to %s?\n%s", topicLabel, signals))
 	}
 
-	// If learnings exist, add a learning-relevance question
-	learnings := extractBriefSection(brief, "Recent Learnings")
-	if learnings != "" && !strings.Contains(learnings, "(none)") {
-		// Take first learning for question text
-		lines := strings.Split(learnings, "\n")
-		learningSummary := ""
-		if len(lines) > 0 {
-			learningSummary = strings.TrimPrefix(lines[0], "- ")
+	if scopeProfile.IncludeRecentLearnings {
+		// If learnings exist, add a learning-relevance question
+		learnings := extractBriefSection(brief, "Recent Learnings")
+		if learnings != "" && !strings.Contains(learnings, "(none)") {
+			// Take first learning for question text
+			lines := strings.Split(learnings, "\n")
+			learningSummary := ""
+			if len(lines) > 0 {
+				learningSummary = strings.TrimPrefix(lines[0], "- ")
+			}
+			if learningSummary != "" {
+				nextQ(fmt.Sprintf("Given that %s was previously observed, how does %s relate?", learningSummary, topicLabel))
+			}
 		}
-		if learningSummary != "" {
-			nextQ(fmt.Sprintf("Given that %s was previously observed, how does %s relate?", learningSummary, topic))
+	}
+
+	if scopeProfile.IncludeRepoContext {
+		// If frameworks detected, add a framework-specific question
+		frameworks := extractBriefField(brief, "Frameworks")
+		if frameworks != "" && frameworks != "none detected" {
+			nextQ(fmt.Sprintf("What %s-specific patterns or pitfalls apply to %s?", frameworks, topicLabel))
 		}
 	}
 
-	// If frameworks detected, add a framework-specific question
-	frameworks := extractBriefField(brief, "Frameworks")
-	if frameworks != "" && frameworks != "none detected" {
-		nextQ(fmt.Sprintf("What %s-specific patterns or pitfalls apply to %s?", frameworks, topic))
+	if scopeProfile.IncludeColonyGoal {
+		// Colony goal relevance question
+		goal := extractBriefSection(brief, "Colony Goal")
+		if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
+			nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topicLabel, goal))
+		}
 	}
 
-	// Colony goal relevance question
-	goal := extractBriefSection(brief, "Colony Goal")
-	if goal != "" && !strings.Contains(goal, "(no colony goal set)") {
-		nextQ(fmt.Sprintf("How does investigating %s advance the colony goal of: %s?", topic, goal))
+	// Always include evidence and recommendation questions without assuming a
+	// repo-health or release-readiness frame.
+	nextQ(fmt.Sprintf("What evidence supports, contradicts, or limits the strongest answer to %s?", topicLabel))
+	if scopeProfile.IncludeExternalContext {
+		nextQ(fmt.Sprintf("What options, tradeoffs, risks, or unknowns remain for %s?", topicLabel))
 	}
+	nextQ(fmt.Sprintf("What concrete, actionable recommendation follows from investigating %s?", topicLabel))
 
-  // Always include evidence and improvement questions
-  nextQ(fmt.Sprintf("What evidence currently supports or contradicts the expected behavior of %s?", topic))
-  nextQ(fmt.Sprintf("What changes would materially improve reliability or clarity for %s?", topic))
-
-  // Ensure minimum of 5 questions by adding recommendation if needed
-  if len(questions) < 5 {
-    nextQ(fmt.Sprintf("What concrete, actionable recommendation follows from investigating %s?", topic))
-  }
+	// Ensure minimum of 5 questions without padding with health/readiness checks.
+	if len(questions) < 5 {
+		nextQ(fmt.Sprintf("What remaining gaps should the user know before acting on %s?", topicLabel))
+	}
 
 	return questions
+}
+
+func oracleMedicBoundaryNote(topic string) string {
+	lower := strings.ToLower(topic)
+	if !containsAnyOracleKeyword(lower, "health", "readiness", "ready", "release-ready", "shippable", "ship-ready", "integrity", "broken", "corruption") {
+		return ""
+	}
+	return "Medic owns colony health, repair, integrity, and readiness diagnostics. Oracle may research the topic and cite evidence, but it must not replace `aether medic` or present itself as the health checker."
 }
 
 // extractBriefSection returns the content after a "## Section Name" header until the next "## " or end of string.
@@ -1608,7 +2074,7 @@ func writeOracleStateFile(path string, state oracleStateFile) error {
 		state.Version = "1.1"
 	}
 	if strings.TrimSpace(state.Platform) == "" {
-		state.Platform = "codex"
+		state.Platform = oracleDetectedPlatform()
 	}
 	if strings.TrimSpace(state.LastUpdated) == "" {
 		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
@@ -1639,13 +2105,13 @@ func loadOracleStateFile(path string) (oracleStateFile, error) {
 		state.Scope = defaultOracleScope
 	}
 	if strings.TrimSpace(state.Template) == "" {
-		state.Template = defaultOracleTemplate
+		state.Template = "custom"
 	}
 	if strings.TrimSpace(state.Strategy) == "" {
 		state.Strategy = defaultOracleStrategy
 	}
 	if strings.TrimSpace(state.Platform) == "" {
-		state.Platform = "codex"
+		state.Platform = oracleDetectedPlatform()
 	}
 	return state, nil
 }
@@ -1889,19 +2355,7 @@ func containsOracleIteration(items []int, target int) bool {
 }
 
 func oracleReadyForCompletion(plan oraclePlanFile, state oracleStateFile) bool {
-	return state.OverallConfidence >= state.TargetConfidence || oracleAllQuestionsAnswered(plan)
-}
-
-func oracleAllQuestionsAnswered(plan oraclePlanFile) bool {
-	if len(plan.Questions) == 0 {
-		return false
-	}
-	for _, q := range plan.Questions {
-		if !strings.EqualFold(strings.TrimSpace(q.Status), "answered") {
-			return false
-		}
-	}
-	return true
+	return state.OverallConfidence >= state.TargetConfidence
 }
 
 func oracleOverallConfidence(plan oraclePlanFile) int {

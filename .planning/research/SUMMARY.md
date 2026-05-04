@@ -1,160 +1,210 @@
 # Project Research Summary
 
-**Project:** Aether v1.9 -- Review Findings Persistence and Domain-Ledger System
-**Domain:** Internal feature integration (extending an existing Go CLI framework with file-based state management)
-**Researched:** 2026-04-26
+**Project:** Aether v1.14 -- Queen Authority
+**Domain:** Autonomous queen coordination for multi-agent colony framework
+**Researched:** 2026-05-03
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether v1.9 adds a review findings persistence layer to an established Go runtime with 2900+ passing tests. The system needs two things: per-worker outcome reports for continue-review workers (mirroring what build workers already have), and a domain-ledger system where seven review agents (Gatekeeper, Auditor, Chaos, Watcher, Archaeologist, Measurer, Tracker) persist structured findings that survive `/clear` and accumulate across phases. Colony-prime then injects open findings into downstream worker prompts, closing the loop so Phase N+1 builders see what Phase N reviewers found.
+Queen Authority transforms the Aether queen from narrator into autonomous coordinator. The core insight from all four research streams is that the Go runtime already contains nearly every component needed -- circuit breaker, Fixer dispatch, gate evaluation, retry logic, wave management, and process tracking -- but these components require manual triggering. v1.14 wires them together into a self-driving coordination loop so the queen can detect failures, classify severity, apply bounded recovery, and escalate only when genuinely stuck.
 
-The recommended approach requires zero new external dependencies. Every capability -- JSON persistence with file locking, CLI subcommand registration, deterministic ID generation, colony-prime context injection -- already exists as an established pattern in `cmd/` and `pkg/`. The work is two new files (one types file at ~80 lines, one commands file at ~350 lines) plus targeted modifications to six existing files and 28 agent definition mirrors. The closest analog is the midden system (`pkg/colony/midden.go` + `cmd/midden_cmds.go`), which solves the same problem (structured CRUD over JSON files with atomic writes) and provides a proven template.
+The recommended approach is a phased build: start with gate classification and recovery data infrastructure (low risk, everything depends on it), then the smart gate pipeline and recovery orchestrator, then queen-led build/continue integration, and finally output filtering as the presentation layer. No new external dependencies are needed. The estimated new code is approximately 1,300 lines across a new `pkg/queen/` package plus modifications to existing `cmd/` files.
 
-The key risks are token budget blowout from the new colony-prime section (mitigated by priority 8 ranking and a hard character cap), agent write-scope escape (mitigated by write-scope guardrails restricting writes to `.aether/data/reviews/` only), and a race condition between concurrent review writes and colony-prime reads (mitigated by using `UpdateJSONAtomically` for writes and a cached summary file for reads). All three risks have straightforward prevention strategies documented in the pitfalls research.
+The key risks are cascading fix-fail cycles (queen retries a fundamentally broken task endlessly), smart gates auto-resolving legitimate security findings, and output filtering hiding critical errors from the user. All three are mitigated by the same principle: the queen advises, the Go runtime decides. Hard-block gates (watcher_veto, gatekeeper, flags, loop_detection) must never be auto-resolved. Every queen decision must be logged to an audit trail. Recovery must be bounded by a per-phase budget with mandatory human escalation when exhausted.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new dependencies. The entire v1.9 milestone is built from existing Go standard library packages and the established `pkg/storage.Store`, `github.com/spf13/cobra`, and `pkg/colony` type system already in `go.mod`.
+Zero new external dependencies. Every capability the queen needs already exists in the Go runtime.
 
-**Core technologies:**
-- `pkg/storage.Store` (existing): Atomic JSON read/write with per-file locking -- the foundation for all 7 domain ledger files
-- `github.com/spf13/cobra` v1.10.2 (existing): CLI subcommand registration for 4 new ledger commands, following the `midden_cmds.go` pattern
-- `cmd/colony_prime_context.go` section system (existing): Additive context sections with priority-based budget trimming, proven by the `medic_health` section
-- `crypto/sha256` + `encoding/json` (stdlib): Content-hash deduplication and structured types for ledger entries
-- `store.AtomicWrite` (existing): Per-worker `.md` report files, mirroring `writeCodexBuildOutcomeReports()`
+**Core technologies (existing, no version changes):**
+- `pkg/codex/dispatch.go` (`DispatchBatchWithObserver`): wave-based worker dispatch with observer callbacks -- the queen's sensory input for lifecycle events
+- `cmd/codex_dispatch_contract.go` (`recommendQueenWorkflowProfile`): profile recommendation engine -- the queen applies her recommendation directly instead of emitting advice
+- `cmd/circuit_breaker.go`: per-worker failure tracking with threshold-based tripping and same-caste peer redistribution
+- `cmd/gate.go`: 11 named gates with per-phase persistence and recovery templates
+- `cmd/fixer_dispatch.go`: Fixer dispatch with attempt caps and circuit breaker integration
+- `cmd/immune.go`: error diagnosis and exponential backoff retry (`2^attempt * 2` seconds)
+- `pkg/codex/process_tracker.go`: PID registry, stale worker detection, graceful termination
+- `pkg/colony/state_machine.go`: state transitions and phase advancement
+- `pkg/storage.Store` (`UpdateJSONAtomically`): file-locked atomic state mutations
+
+**Rejected additions (and why):**
+- `thejerf/suture` (supervisor trees) -- workers are short-lived subprocesses, not long-running services; existing dispatch + circuit breaker already handles this
+- `oklog/run` (actor group) -- queen loop is sequential, not concurrent; wave-internal concurrency already handled by `DispatchWaveWithObserver`
+- External backoff libraries -- single formula (`2^attempt * 2`) already implemented in `cmd/immune.go`
+- State machine libraries -- `pkg/colony/state_machine.go` already exists and is tested
 
 ### Expected Features
 
-**Must have (table stakes) -- P1:**
-- Continue-review worker outcome reports -- review workers currently produce rich findings with no file output; this is an asymmetric gap with build workers
-- `Report` field on `codexContinueExternalDispatch` and `codexContinueWorkerFlowStep` -- the structural enabler for report data flow
-- `review-ledger-write` / `read` / `summary` subcommands -- programmatic access to ledger data
-- Colony-prime `prior-reviews` section at priority 8 -- the primary user-facing value; persistence without injection is pointless
-- Agent Write tool for 7 review agents -- agents need to persist findings through the CLI
-- Wrapper completion packet `report` field -- documents the data contract between wrappers and runtime
-- Agent mirror sync across all 4 surfaces (Claude, OpenCode, Codex, packaging)
+**Must have (table stakes -- core recovery loop):**
+- A1: Failure Classification Engine -- distinguish recoverable vs non-recoverable before acting
+- A2: Bounded Auto-Retry with Exponential Backoff -- retry transient failures with MaxR/MaxT bounds
+- A3: Peer Redistribution on Worker Failure -- use `findSameCastePeer` automatically when circuit breaker trips
+- A4: Queen-Driven Fixer Dispatch -- call `dispatchFixer` automatically for `requires-attempt` failures
+- A5: Escalation Protocol with Human Handoff -- generate structured escalation summary when recovery exhausted
 
-**Should have -- P2:**
-- `review-ledger-resolve` subcommand -- marking entries as resolved (valuable but not needed for the core loop)
-- Status command review findings display -- open finding counts in `aether status`
-- Seal/entomb ledger lifecycle -- archiving and cleanup at colony end
+**Should have (competitive differentiators):**
+- B1: Gate Severity Classification -- add `critical`/`high`/`medium`/`low`/`info` to `GateCheckResult`
+- B2: Non-Blocking Advisory Gates -- low/info severity findings logged but don't block advancement
+- B4: Gate Dependency Graph -- skip dependent gates when prerequisite fails (use existing `not-reached` status)
+- C1: Output Severity Filtering -- default display shows warnings and above; verbose shows everything
+- C2: Phase Completion Summary -- Go runtime generates structured summary (tasks, gates, duration, next action)
 
 **Defer (v2+):**
-- Cross-colony ledger sharing via Hive Brain -- findings contain code-specific paths that go stale across repos
-- Auto-block on critical findings -- would create conflicting signals with the existing continue-review blocking
-- Automatic finding-to-pheromone promotion -- the mapping between "finding" and "action" requires judgment
+- B3: Auto-Resolution for Known Recoverable Patterns -- pattern matching logic needs careful safety bounds
+- C3: Progressive Disclosure -- UX refinement, not core functionality
+- D1-D3: Full Wave Lifecycle Ownership, Inter-Wave Decision Making, Phase Completion Decision -- highest architectural integration risk, prove the recovery loop first
+- Learned severity thresholds -- requires multi-colony data
+- Cross-phase pattern learning -- complexity not justified until core loop proven
+- User-defined recovery strategies -- YAGNI
+
+**Anti-features (never implement):**
+- Silent auto-recovery without logging -- destroys user visibility
+- Queen overriding circuit breaker thresholds -- defeats the safety mechanism
+- LLM-based failure classification -- non-deterministic, hard to debug; use rule-based classification
+- Auto-advance without confirmation in manual mode -- violates user expectations
+- Auto-resolving critical severity gates -- security/safety gates must always block
+- Queen modifying worker code directly -- breaks audit trail and worker autonomy
+- Infinite recovery loops -- Erlang/OTP lesson: bounded recovery with mandatory escalation
 
 ### Architecture Approach
 
-Review persistence extends four established subsystems without introducing new ones: continue-flow report writing, CLI subcommand registration, colony-prime context injection, and agent tool definitions. The data flow is: review agents call `aether review-ledger-write` per finding; the runtime validates, assigns deterministic IDs (`sec-2-001`), and writes atomically to `reviews/{domain}/ledger.json`; colony-prime reads open findings and injects a compact markdown section into worker prompts at priority 8.
+The architecture follows a strict authority model: the Queen (wrapper layer) makes decisions, the Go runtime (authoritative) executes them. The Queen cannot write COLONY_STATE.json directly, cannot skip hard-block gates, and cannot force phase advance without verification. This preserves the existing wrapper-runtime contract.
 
 **Major components:**
-1. `cmd/review_ledger.go` (NEW): Four cobra subcommands for CRUD operations on domain-ledger entries, plus `pkg/colony/review_ledger.go` for shared types
-2. `cmd/codex_continue_finalize.go` (MODIFIED): Two new functions (`writeCodexContinueOutcomeReports`, `renderCodexContinueWorkerOutcomeReport`) plus struct field preservation in `mergeExternalContinueResults`
-3. `cmd/colony_prime_context.go` (MODIFIED): New `buildPriorReviewsSection()` function producing a priority-8 section from open ledger entries
-4. Agent definitions across 4 surfaces (MODIFIED): 7 agents gain Write tool, findings instructions, and write-scope guardrails
+
+1. **`pkg/queen/` (new package)** -- coordinator loop that assembles existing components into an autonomous decision chain: dispatch wave, monitor via `DispatchObserver`, evaluate results, run gates with classification, apply recovery, filter output, advance or escalate
+2. **`cmd/gate.go` (modified)** -- add `gateClassification` (hard_block/soft_block/advisory), `AutoRecoverable` field, classification-aware `runCodexContinueGates()` that processes soft-block and advisory failures differently from hard blocks
+3. **`cmd/recovery.go` (new file)** -- recovery orchestrator with `attemptAutoRecovery()` that runs between gate failure and blocking; strategy per gate (re-run verification, skip spawn in queen-led mode, retry tests)
+4. **`cmd/codex_build.go` (modified)** -- add `RecoveryAttempts`, `LastFailureReason` to `codexBuildDispatch`; add `codexRecoveryPolicy` to manifest
+5. **`cmd/codex_continue.go` (modified)** -- add `runCodexContinuePlanOnly()` (gates without state mutation) and `runCodexContinueFinalize()` (commit with recovery context); add `codexContinueSummary` struct
+6. **Wrapper playbooks (modified)** -- `build-wave.md` Step 5.2 reads recovery metadata and executes recovery tiers 1-3; `continue-gates.md` adds queen-led conditional branches per gate
 
 ### Critical Pitfalls
 
-1. **Token budget blowout from prior-review injection** -- Cap the section at 800 chars (normal) / 400 (compact), summarize at domain level not individual findings, set priority to 8 so reviews trim before pheromones and blockers
-2. **Agent write-scope escape** -- Review agents are currently read-only by design; adding Write requires hook enforcement restricting writes to `.aether/data/reviews/` only, shipped in the same phase as the tool addition
-3. **JSON backward compatibility break in merge function** -- `mergeExternalContinueResults` must explicitly copy every new field from dispatch to flow step; add a round-trip test that verifies all fields survive the merge
-4. **File locking contention between writes and reads** -- Use `UpdateJSONAtomically` for writes, cache a `summary.json` for colony-prime reads (one file instead of seven), never hold locks on multiple files simultaneously
-5. **Stale review data accumulation** -- Seal must archive `reviews/` to chambers; `/ant-init` must clear existing reviews for the new colony; this cannot be deferred
+1. **Cascading fix-fail cycles** -- queen re-spawns a worker with a new name, circuit breaker sees a fresh worker, same underlying failure repeats. Prevention: classify failures as retryable vs non-retryable BEFORE recovery; track task-level attempt count (not just worker-level); per-phase recovery budget (max 3); when skipping a task, check downstream dependencies.
+2. **Smart gates auto-resolving legitimate findings** -- queen marks a real security/quality issue as "false positive." Prevention: NEVER auto-resolve security gates (gatekeeper, anti_pattern) or watcher_veto; preserve original failure detail in `queen_gate_decisions.json` audit log; require queen to read source code before auto-resolving; flag if auto-resolution rate exceeds 30%.
+3. **Output filtering hiding critical information** -- real errors suppressed as "noise." Prevention: two-tier output (summary + always-show errors); `--verbose` default for first phase; persist full output to `queen-output-{phase}.json`; never filter lines containing "error", "failed", "panic", "fatal", "blocked", "veto", "critical".
+4. **Queen as single point of failure** -- crash corrupts coordination state; decision loop becomes bottleneck. Prevention: queen ADVISES not COMMANDS (existing Go functions remain decision makers); persist coordination state to COLONY_STATE.json; separate 12K char context budget for queen (don't reuse colony-prime's 8K); write decision logic as pure functions for testability.
+5. **Silent failure mode** -- smooth auto-recovery masks real problems so user never knows anything went wrong. Prevention: log every queen decision to persistent file; phase-end activity summary ("Queen made 3 auto-recovery decisions -- review with `/ant-queen-log`"); transparency mode prints one line per autonomous decision by default; dual-flagged findings (two independent gates agree) always block.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure (5 phases):
+Based on research, suggested phase structure:
 
-### Phase 1: Continue-Review Worker Outcome Reports
-**Rationale:** Simplest change -- extends an existing flow with a pattern that already exists for builds. No new CLI commands, no new data formats. Just struct fields and two functions. Must come first because later phases depend on the `Report` field existing in the continue pipeline.
-**Delivers:** Per-worker `.md` files at `build/phase-N/worker-reports/{name}.md` for review workers, matching the build report UX
-**Addresses:** Continue-review outcome reports, `Report` field on structs, wrapper completion packet
-**Avoids:** JSON backward compatibility break (Pitfall 3) -- round-trip test validates field survival in merge
+### Phase 1: Gate Classification Infrastructure
+**Rationale:** Every subsequent phase depends on knowing which gates are hard-block vs soft-block vs advisory. This is the foundation everything else builds on. Additive changes only -- no existing behavior changes until consumers are added.
+**Delivers:** `gateClassification` type, `gateClassifications` map, `AutoRecoverable` field on `gateCheck`, `Severity` field on `GateCheckResult`
+**Addresses:** B1 (Gate Severity Classification), B4 (Gate Dependency Graph -- trivial since `not-reached` status already exists)
+**Avoids:** Pitfall 2 (smart gates auto-resolving) -- hard-block classification is defined here
+**Modifies:** `cmd/gate.go`
+**Risk:** Low
 
-### Phase 2: Domain-Ledger CRUD Subcommands
-**Rationale:** Independent infrastructure that downstream phases (colony-prime injection, agent writes) depend on. Getting CRUD right and tested first means consumers have a stable API.
-**Delivers:** `review-ledger-write`, `review-ledger-read`, `review-ledger-summary`, `review-ledger-resolve` subcommands with deterministic IDs, domain validation, and atomic writes
-**Uses:** `pkg/storage.Store` for atomic JSON, `crypto/sha256` for dedup, `pkg/colony/review_ledger.go` for types
-**Implements:** Domain-ledger storage layer
-**Avoids:** File locking contention (Pitfall 4) -- uses `UpdateJSONAtomically` and sequential domain processing
+### Phase 2: Recovery Data Model
+**Rationale:** Auto-recovery logic needs somewhere to store state. Add recovery fields to existing structs and create the `aether recovery-record` subcommand. All changes are backward-compatible with `omitempty`.
+**Delivers:** `RecoveryAttempts` and `LastFailureReason` on `codexBuildDispatch`; `RecoveryLog` on `ColonyState`; `codexRecoveryPolicy` on manifest; `aether recovery-record` subcommand
+**Addresses:** A1 (Failure Classification -- data structures), A5 (Escalation Protocol -- persistence)
+**Avoids:** Pitfall 4 (single point of failure) -- recovery state persisted to COLONY_STATE.json via existing atomic writes
+**Modifies:** `cmd/codex_build.go`, `pkg/colony/colony.go`, new `cmd/recovery.go`
+**Risk:** Low
 
-### Phase 3: Colony-Prime Prior-Reviews Section
-**Rationale:** Depends on Phase 2 (must be able to read ledger files). This is the primary user-facing value -- the moment when persisted findings actually inform downstream workers.
-**Delivers:** `buildPriorReviewsSection()` at priority 8, reading open findings from all domain ledgers, compact markdown injection into worker context
-**Avoids:** Token budget blowout (Pitfall 1) -- character cap, domain-level summary, priority-based trimming
+### Phase 3: Smart Gate Pipeline and Recovery Orchestrator
+**Rationale:** This is the core of queen authority. Combines gate classification (Phase 1) with recovery data (Phase 2) into an autonomous recovery loop. The queen can now auto-recover from soft-block gates before blocking.
+**Delivers:** `attemptAutoRecovery()` in `cmd/recovery.go`; classification-aware `runCodexContinueGates()`; `codexSmartGateSummary` struct; per-gate recovery strategies
+**Addresses:** A2 (Bounded Auto-Retry), A3 (Peer Redistribution), A4 (Queen-Driven Fixer), B2 (Non-Blocking Advisory Gates)
+**Avoids:** Pitfall 1 (cascading fix-fail) via circuit breaker integration; Pitfall 2 (auto-resolving) via hard-block preservation
+**Modifies:** `cmd/codex_continue.go`, `cmd/recovery.go`, `cmd/gate.go`
+**Risk:** Medium -- changes gate evaluation logic, must preserve existing hard-block behavior
 
-### Phase 4: Agent Definition Updates
-**Rationale:** Depends on Phase 2 (agents need `review-ledger-write` to exist as a target). Highest-touch change at 28 file edits (7 agents x 4 surfaces), but low-risk mechanically.
-**Delivers:** Write tool added to 7 review agents, findings instructions, write-scope guardrails, mirror sync verified
-**Avoids:** Agent write-scope escape (Pitfall 2) -- guardrails and hook enforcement ship in this phase; mirror sync drift (Pitfall 6) -- parity verified as acceptance criteria
+### Phase 4: Queen-Led Continue Integration
+**Rationale:** Enables the queen-led continue flow by splitting `aether continue` into `--plan-only` (evaluate without mutating) and `--finalize` (commit with recovery context). This gives the queen the information she needs to make recovery decisions without side effects.
+**Delivers:** `aether continue --plan-only`, `aether continue --finalize`, queen-led conditional branches in `continue-gates.md`
+**Addresses:** Queen-led mode activation for playbook gates (relaxed thresholds, auto-skip runtime, lower watcher veto threshold)
+**Avoids:** Pitfall 4 (queen mutating state directly) -- plan-only is read-only; Pitfall 3 (anti-pattern 3) -- relaxed thresholds only when `QueenLedMode` is true
+**Modifies:** `cmd/codex_continue.go`, `continue-gates.md`, `.claude/commands/ant/continue.md`
+**Risk:** Medium -- new code paths but isolated behind flags
 
-### Phase 5: Lifecycle Integration
-**Rationale:** Touches existing lifecycle commands (seal, entomb, status) that already work. Must come last because it handles cleanup of data created by earlier phases.
-**Delivers:** Seal archives `reviews/` to chambers, `/ant-init` clears stale reviews, `aether status` shows open finding counts
-**Avoids:** Stale review data accumulation (Pitfall 5) -- archive and cleanup prevent cross-colony contamination
+### Phase 5: Queen-Led Build Recovery
+**Rationale:** Wrapper-layer changes that consume the infrastructure from Phases 1-4. The Queen agent now reads recovery metadata from dispatch results and executes recovery tiers 1-3 (retry, reassign, escalate) automatically during build waves.
+**Delivers:** Modified `build-wave.md` Step 5.2 with recovery logic; updated Queen agent with recovery-aware spawning; `/ant-queen-log` command for reviewing decisions
+**Addresses:** Full Category A (Auto-Recovery Loop), queen Fixer coordination, transparency/audit trail
+**Avoids:** Pitfall 6 (queen vs Fixer conflict) -- queen is sole recovery coordinator, Fixer checks recovery lock
+**Modifies:** `build-wave.md`, `.claude/agents/ant/aether-queen.md`, `.opencode/agents/aether-queen.md`
+**Risk:** Medium -- changes wrapper behavior, but Go runtime is the safety net
+
+### Phase 6: Output Filtering and Phase Summary
+**Rationale:** Pure presentation layer, no dependencies on recovery/gating logic beyond reading their output. This is the polish phase that makes queen authority feel clean rather than noisy.
+**Delivers:** `renderPhaseSummary()` and `renderSmartGateSummary()` in `cmd/codex_visuals.go`; `codexContinueSummary` struct; `codexBuildSummary` struct; filtered wrapper markdown
+**Addresses:** C1 (Output Severity Filtering), C2 (Phase Completion Summary)
+**Avoids:** Pitfall 3 (hiding critical info) via two-tier output, `--verbose` default, never-filter keywords, persistent full output
+**Modifies:** `cmd/codex_visuals.go`, `cmd/codex_build.go`, `cmd/codex_continue.go`, wrapper markdown
+**Risk:** Low -- additive, existing detailed output remains available via `--verbose`
 
 ### Phase Ordering Rationale
 
-- Phase 1 is first because it adds struct fields that Phase 2-5 all depend on indirectly (the `Report` field on continue dispatch structs)
-- Phase 2 is second because Phases 3 and 4 both need ledger subcommands to exist before they can consume or target them
-- Phase 3 and Phase 4 are independent of each other (colony-prime reads ledgers; agents write to ledgers), but both need Phase 2 complete. Phase 3 is ordered first because it delivers user value sooner
-- Phase 5 is last because it handles lifecycle cleanup of data produced by Phases 1-4
-- The grouping separates: struct changes (Phase 1), new infrastructure (Phase 2), read-side integration (Phase 3), write-side integration (Phase 4), lifecycle cleanup (Phase 5)
+- Phases 1 and 2 are pure infrastructure with no behavior changes -- they create the foundation
+- Phase 3 is the highest-value phase (autonomous recovery becomes real) but depends on 1 and 2
+- Phase 4 splits continue into plan/finalize, enabling the queen-led flow that Phase 5 consumes
+- Phase 5 wires everything together in the wrapper layer
+- Phase 6 is presentation polish that can ship anytime after Phase 3
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3:** Colony-prime budget tuning -- the 800-char cap and priority 8 placement need empirical validation with real finding volumes; consider a budget test as part of acceptance criteria
-- **Phase 4:** Codex TOML agent translation -- the Codex mirror is a different format; verify the TOML `tools` field supports Write the same way markdown frontmatter does
+- **Phase 3:** Gate recovery strategies need per-gate research -- what exactly constitutes "auto-recoverable" for each of the 11 gates requires understanding each gate's failure semantics in detail
+- **Phase 5:** Queen agent prompt engineering for recovery decisions -- how to give the queen enough context to make good recovery choices without exceeding her context budget
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** Exact structural mirror of `writeCodexBuildOutcomeReports` -- well-documented, line numbers verified
-- **Phase 2:** Exact structural mirror of `midden_cmds.go` -- CRUD over JSON with cobra, proven by 10 existing subcommands
-- **Phase 5:** Minor additions to existing lifecycle commands -- straightforward archival and display
+- **Phase 1:** Struct field additions and static map lookups -- well-understood
+- **Phase 2:** Data model extensions with `omitempty` -- standard Go pattern
+- **Phase 4:** CLI flag additions and code path splitting -- standard cobra pattern
+- **Phase 6:** Output formatting and rendering -- standard visual system pattern
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All patterns verified by reading source code directly. Zero new dependencies confirmed via `go.mod` review. Every capability (atomic write, file locking, CLI registration, section injection) has a proven template in the existing codebase. |
-| Features | HIGH | Feature list derived from PROJECT.md v1.9 specification. Dependency chain between features is clear and verified against actual code locations (struct fields, function signatures, file paths). Anti-features well-documented with clear reasoning. |
-| Architecture | HIGH | Data flow mapped end-to-end. Integration points verified at specific line numbers. Component responsibility matrix complete. Anti-patterns identified with correct alternatives. |
-| Pitfalls | HIGH | All 7 pitfalls derived from direct codebase analysis with specific file/line references. Prevention strategies are concrete (character caps, hook enforcement, merge function updates). Recovery costs estimated. Pitfall-to-phase mapping provided. |
+| Stack | HIGH | All findings from direct source code inspection; zero new dependencies means no integration risk |
+| Features | HIGH | Every feature maps to existing infrastructure; confidence backed by Erlang/OTP, LangGraph, Google ADK, CrewAI patterns |
+| Architecture | HIGH | Authority model (queen advises, runtime decides) preserves existing wrapper-runtime contract; all integration points identified with line numbers |
+| Pitfalls | HIGH | All 12 pitfalls derived from direct codebase analysis of the actual files that will be modified; prevention strategies reference specific existing functions |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Finalize-vs-agent write ownership:** The architecture research recommends making finalize own persistence (agents return findings in completion payload, finalize writes to ledger). The pitfalls research notes that agents could write directly via CLI invocation. This decision must be settled before Phase 4 planning. Recommendation: finalize owns writes (single source of truth, no race conditions).
-- **Codex TOML tool field format:** The architecture research assumes the Codex TOML `tools` field accepts `Write` in a comma-separated list matching markdown frontmatter. This needs verification against `pkg/llm/config.go` Codex parsing during Phase 4.
-- **Summary caching strategy:** The pitfalls research recommends a cached `summary.json` for colony-prime reads. The architecture research does not include this file in the data model. This should be added to Phase 2 (ledger subcommands) as an optimization, or deferred to Phase 5 if performance proves acceptable with 7 direct reads.
-- **Hook system extension:** Write-scope enforcement for review agents requires either extending `protectedHookWriteReason` or adding a new scope-check function. The exact implementation path needs a brief investigation during Phase 4.
+- **Gate-specific recovery strategies (Phase 3):** Research identified that each gate has different failure semantics, but the exact recovery strategy per gate needs to be defined during Phase 3 planning. The classification map provides the framework, but "what does auto-recovery look like for `tests_pass` vs `implementation_evidence`?" needs phase-level detail.
+- **Queen context budget tuning (Phase 5):** Research recommends 12K chars for queen coordination context, but the exact contents and trim order need to be validated empirically during implementation.
+- **Recovery budget defaults (Phase 3):** Research suggests max 3 auto-recovery attempts per phase, but the right number depends on colony size and phase complexity. Should be configurable with sensible defaults.
+- **Watcher veto threshold in queen-led mode:** Research suggests lowering from 7 to 5, but this needs user testing. The threshold should be configurable via queen autonomy level.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis of `cmd/codex_build.go:1125-1219` -- build outcome report pattern (template for continue reports)
-- Direct codebase analysis of `cmd/midden_cmds.go` -- CRUD subcommand registration pattern (template for ledger commands)
-- Direct codebase analysis of `cmd/colony_prime_context.go:123-527` -- section assembly, priorities, budget system
-- Direct codebase analysis of `pkg/storage/storage.go` -- `AtomicWrite`, `SaveJSON`, `LoadJSON`, file locking
-- Direct codebase analysis of `cmd/codex_continue_finalize.go` -- continue finalize flow, `mergeExternalContinueResults`
-- Direct codebase analysis of `cmd/hive.go` -- LRU eviction, directory creation, hub-scoped storage
-- Direct codebase analysis of `.claude/agents/ant/aether-gatekeeper.md` -- agent definition structure, read-only constraints
-- `.planning/PROJECT.md` -- v1.9 milestone specification and feature requirements
+- Aether source code: `cmd/gate.go`, `cmd/circuit_breaker.go`, `cmd/fixer_dispatch.go`, `cmd/immune.go`, `cmd/autopilot.go`, `cmd/codex_dispatch_contract.go`, `cmd/codex_build.go`, `cmd/codex_continue.go`, `cmd/colony_prime_context.go`, `cmd/codex_visuals.go`, `cmd/recovery.go` (new)
+- Aether source code: `pkg/codex/dispatch.go`, `pkg/codex/worker.go`, `pkg/codex/process_tracker.go`, `pkg/colony/colony.go`, `pkg/colony/state_machine.go`, `pkg/storage/storage.go`
+- Aether playbooks: `.aether/docs/command-playbooks/build-wave.md`, `.aether/docs/command-playbooks/continue-gates.md`
+- Aether agents: `.claude/agents/ant/aether-queen.md`, `.claude/agents/ant/aether-fixer.md`
+- Erlang/OTP Supervisor Behaviour (erlang.org/doc/apps/stdlib/supervisor.html) -- bounded restart patterns
 
 ### Secondary (MEDIUM confidence)
-- `pkg/colony/context_ranking.go` -- ranking algorithm details (priority and budget trimming behavior)
-- `cmd/hook_cmds.go` -- write protection and path normalization (for write-scope enforcement)
-- `pkg/colony/sanitize.go` -- content sanitization patterns (for finding description safety)
+- Google ADK Multi-Agent Patterns (developers.googleblog.com, 2025-12-16) -- coordinator pattern, human-in-the-loop
+- LangGraph Multi-Agent Patterns (langchain-ai.github.io/langgraph/concepts/multi_agent/) -- retryable vs non-retryable exceptions
+- CrewAI Hierarchical Process (docs.crewai.com/en/learn/hierarchical-process) -- result validation
+- OpenAI Swarm Handoff Patterns (github.com/openai/swarm) -- experimental but relevant
+- AutoGen Error Handling (github.com/microsoft/autogen) -- typed state transitions
+- EAGER: Efficient Failure Management (arxiv.org/abs/2603.21522, IJCAI 2025) -- historical failure patterns
+- Error Cascades in Multi-Agent Systems (arxiv.org/html/2603.04474v1) -- noise amplification
+- RCAFlow: Hierarchical Planning (ojs.aaai.org, AAAI) -- multi-agent noise reduction
+- Agent Response Filtering -- Upsonic AI (upsonic.ai/lexicon/agent-response-filtering) -- over-filtering risks
+- Establishing Trust in AI Agents -- Medium -- monitoring, control layers
+- Agentic AI Security: Threats, Defenses, Evaluation -- arXiv 2510.23883v1 -- output filtering vs sandboxing
 
 ### Tertiary (LOW confidence)
-- Codex TOML agent format specifics -- assumed to support comma-separated `tools` field matching markdown; needs verification
-- Colony-prime budget behavior with large prior-reviews sections -- theoretical analysis; needs empirical testing at Phase 3
+- None -- all sources are either direct codebase analysis (HIGH) or established framework documentation/published research (MEDIUM)
 
 ---
-*Research completed: 2026-04-26*
+*Research completed: 2026-05-03*
 *Ready for roadmap: yes*

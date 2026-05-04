@@ -140,3 +140,17 @@ func TestResolveVersionPrefersRepoVersionFile(t *testing.T) {
 		t.Fatalf("resolveVersion() = %q, want %q", got, "1.0.17")
 	}
 }
+
+func TestReadHubVersionAtPathFallsBackToSystemVersion(t *testing.T) {
+	hubDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hubDir, "system"), 0755); err != nil {
+		t.Fatalf("failed to create hub system dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubDir, "system", "version.json"), []byte(`{"version":"1.0.27"}`), 0644); err != nil {
+		t.Fatalf("failed to write system version: %v", err)
+	}
+
+	if got := readHubVersionAtPath(hubDir); got != "1.0.27" {
+		t.Fatalf("readHubVersionAtPath() = %q, want %q", got, "1.0.27")
+	}
+}

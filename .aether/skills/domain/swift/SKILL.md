@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: swift
 description: Use when the project uses Swift for iOS, macOS, watchOS, tvOS, or visionOS development
 type: domain

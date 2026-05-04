@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: cross-phase-acceptance-scan
 description: Use when acceptance criteria or UAT gaps need to be scanned across phases before milestone closure
 type: colony

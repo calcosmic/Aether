@@ -14,7 +14,9 @@
 - **v1.9 Review Persistence** - Phases 52-56 (shipped 2026-04-26)
 - **v1.10 Colony Polish** - Phases 57-69 (shipped 2026-04-28)
 - **v1.11 Aether Unification** - Phases 70-79 (shipped 2026-04-30)
-- ✅ **v1.12 Safe Colony** - Phases 80-87 (shipped 2026-05-01)
+- **v1.12 Safe Colony** - Phases 80-87 (shipped 2026-05-01)
+- **v1.13 Recovery Hardening & Hive Learning** - Phases 88-92 (shipped 2026-05-03)
+- **v1.14 Queen Authority** - Phases 93-99 (shipped 2026-05-04)
 
 ## Phases
 
@@ -136,7 +138,7 @@
 - [x] Phase 52: Continue Review Worker Outcome Reports
 - [x] Phase 53: Domain Ledger CRUD Subcommands
 - [x] Phase 54: Colony-Prime Prior Reviews Section
-- [x] Phase 55: Agent Definition Updates
+- [x] Phase 55: Agent Definition Reviews
 - [x] Phase 56: Lifecycle Integration
 
 </details>
@@ -178,59 +180,172 @@
 </details>
 
 <details>
-<summary>✅ v1.12 Safe Colony (Phases 80-87) — SHIPPED 2026-05-01</summary>
+<summary>v1.12 Safe Colony (Phases 80-87) -- SHIPPED 2026-05-01</summary>
 
-- [x] **Phase 80: Build/Continue Loop Prevention** - Prevent infinite watcher respawns, recovery loops, and build wave retry loops
-- [x] **Phase 81: Plan and Lifecycle Loop Safety** - Block circular phase dependencies and ensure lifecycle commands suggest different recovery steps
-- [x] **Phase 82: Loop Detection Telemetry** - Log all loop-breaking events to the event bus and surface them in status
-- [x] **Phase 83: Planning Depth System** - Add light/standard/deep planning depth that controls task decomposition granularity
-- [x] **Phase 84: Verification Depth Extension** - Extend verification depth from 2 levels (light/heavy) to 3 levels (light/standard/heavy)
-- [x] **Phase 85: Smart Depth Defaults** - Auto-select planning and verification depth from phase position and code change risk
-- [x] **Phase 86: Depth Selection UI and Persistence** - Present smart defaults to user at plan time and persist depths in the build packet
-- [x] **Phase 87: Fix Continue Depth Persistence** - Close DEPTH-05 gap: continue reads persisted verification depth and honors --verification-depth flag
+- [x] Phase 80: Build/Continue Loop Prevention
+- [x] Phase 81: Plan and Lifecycle Loop Safety
+- [x] Phase 82: Loop Detection Telemetry
+- [x] Phase 83: Planning Depth System
+- [x] Phase 84: Verification Depth Extension
+- [x] Phase 85: Smart Depth Defaults
+- [x] Phase 86: Depth Selection UI and Persistence
+- [x] Phase 87: Fix Continue Depth Persistence
+
+</details>
+
+<details>
+<summary>v1.13 Recovery Hardening & Hive Learning (Phases 88-92) -- SHIPPED 2026-05-03</summary>
+
+- [x] Phase 88: Recovery Foundation (4/4 plans)
+- [x] Phase 89: Gate Self-Healing & Smart Planning (5/5 plans)
+- [x] Phase 90: Learning Foundation (4/4 plans)
+- [x] Phase 91: Hive Intelligence (5/5 plans)
+- [x] Phase 92: System Hardening & Validation (5/5 plans)
+
+</details>
+
+<details>
+<summary>✅ v1.14 Queen Authority (Phases 93-99) — SHIPPED 2026-05-04</summary>
+
+- [x] Phase 93: Gate Classification Infrastructure (1 plan) — completed 2026-05-03
+- [x] Phase 94: Recovery Data Model (2 plans) — completed 2026-05-03
+- [x] Phase 95: Smart Gate Pipeline (2 plans) — completed 2026-05-03
+- [x] Phase 96: Auto-Recovery Orchestrator (2 plans) — completed 2026-05-03
+- [x] Phase 97: Queen-Led Continue (2 plans) — completed 2026-05-03
+- [x] Phase 98: Queen Wave Lifecycle (2 plans) — completed 2026-05-04
+- [x] Phase 99: Output Filtering & Phase Summary (3 plans) — completed 2026-05-04
+
+See `.planning/milestones/v1.14-ROADMAP.md` for full phase details.
 
 </details>
 
 ## Phase Details
 
 <details>
-<summary>v1.0 through v1.11 Phase Details (archived)</summary>
-
-All prior milestone phase details are archived. See MILESTONES.md for accomplishment summaries.
-
-</details>
-
-### Phase Details
-
-<details>
 <summary>v1.0 through v1.12 Phase Details (archived)</summary>
 
-All prior milestone phase details are archived. See MILESTONES.md for accomplishment summaries.
+All prior milestone phase details are archived. See milestones/ for full details.
 
 </details>
+
+<details>
+<summary>v1.13 Phase Details (archived)</summary>
+
+See `.planning/milestones/v1.13-ROADMAP.md` for full phase details.
+
+</details>
+
+### Phase 93: Gate Classification Infrastructure
+**Goal**: Every gate has a deterministic classification (hard_block, soft_block, advisory) and every auto-resolution preserves the original finding in an audit trail -- the foundation all smart gate behavior builds on.
+**Depends on**: Nothing (first phase of milestone)
+**Requirements**: GATE-01, GATE-02, GATE-05
+**Success Criteria** (what must be TRUE):
+  1. Running `aether gate-classify` (or equivalent subcommand) prints all 11 gates with their classification and a brief rationale
+  2. Security gates (gatekeeper) and watcher veto are hardcoded as hard_block and no configuration can change that classification
+  3. When a gate finding is annotated with a queen decision, the original finding text, fix hint, and recovery options remain intact in the audit trail
+**Plans**: 1 plan
+
+Plans:
+- [x] 93-01-PLAN.md -- Classification registry, QueenAnnotation struct, gate-classify CLI command, and tests
+
+### Phase 94: Recovery Data Model
+**Goal**: Worker failures have a deterministic classification system (recoverable, requires-attempt, blocking), transient failures are distinguished from systemic failures, and every recovery action is logged to a phase-scoped file.
+**Depends on**: Nothing (parallel to Phase 93, no shared dependencies)
+**Requirements**: RECV-01, RECV-05, RECV-06
+**Success Criteria** (what must be TRUE):
+  1. A worker failure produces a structured failure record containing classification (recoverable/requires-attempt/blocking), failure type (transient/systemic), original error, and timestamp
+  2. Transient failures (timeout, context overflow) and systemic failures (bad task spec, missing dependency) are classified by deterministic rules, not by LLM inference
+  3. After a phase with recovery activity, a phase-scoped recovery log file exists containing every auto-recovery action with original error, action taken, and outcome
+**Plans**: 2 plans
+
+Plans:
+- [x] 94-01-PLAN.md -- Failure classification types, registry, classifyWorkerFailure function, persistence, and CLI commands
+- [x] 94-02-PLAN.md -- Comprehensive tests for classification rules, JSON roundtrips, backward compatibility, and CLI commands
+
+### Phase 95: Smart Gate Pipeline
+**Goal**: Soft_block gates auto-resolve when the queen verifies the finding is non-critical, with configurable severity thresholds and documented safe defaults -- hard_block gates remain untouched.
+**Depends on**: Phase 93 (gate classifications must exist before the pipeline can use them)
+**Requirements**: GATE-03, GATE-04
+**Success Criteria** (what must be TRUE):
+  1. When a soft_block gate fails during continue, the queen evaluates the finding and either auto-resolves it (with logged rationale) or escalates to the user -- the user is never blocked by a soft_block gate without the queen attempting resolution first
+  2. Running `aether gate-auto-resolve` shows the current thresholds for each soft_block gate with their documented safe defaults and depth-adjusted values
+  3. Hard_block gates (security, watcher veto) continue to block advancement exactly as they do today -- no behavioral change for hard blocks
+**Plans**: 2 plans
+
+Plans:
+- [x] 95-01-PLAN.md -- Auto-resolve threshold map, evaluation function, depth multiplier, annotation, and gate-auto-resolve CLI command
+- [x] 95-02-PLAN.md -- Wire auto-resolve into continue finalize flow with recovery logging and Fixer dispatch
+
+### Phase 96: Auto-Recovery Orchestrator
+**Goal**: Failed workers are automatically retried within a per-phase budget, tasks are redistributed to peer workers before spawning new ones, and the Fixer agent is dispatched automatically on gate failures -- all bounded and logged.
+**Depends on**: Phase 93 (gate classification for deciding which gates trigger Fixer), Phase 94 (recovery data model for failure records and logging)
+**Requirements**: RECV-02, RECV-03, RECV-04
+**Success Criteria** (what must be TRUE):
+  1. When a worker fails with a recoverable classification, the queen automatically retries up to the per-phase budget (default 3) before escalating to the user
+  2. On worker failure, the failed task is reassigned to a same-caste peer with available capacity before a new worker is created
+  3. When a gate failure occurs during continue, the Fixer agent is dispatched automatically to attempt repair -- the user sees the Fixer was dispatched and the outcome, without being asked to trigger it manually
+**Plans**: 2 plans
+
+Plans:
+- [x] 96-01-PLAN.md -- Core orchestrator function with classification-dependent sequences, RecoveryBudget, and comprehensive unit tests
+- [x] 96-02-PLAN.md -- Wire orchestrator into build finalize and continue finalize with integration tests
+
+### Phase 97: Queen-Led Continue
+**Goal**: The continue command splits into a read-only plan-only phase (queen evaluates gates, decides actions) and a finalize phase (queen executes approved actions), with the queen operating as a single-invocation coordinator that respects the circuit breaker.
+**Depends on**: Phase 95 (smart gate pipeline for evaluation), Phase 96 (auto-recovery for action execution)
+**Requirements**: COORD-02, COORD-03, COORD-04
+**Success Criteria** (what must be TRUE):
+  1. Running `aether continue --plan-only` evaluates all gates and produces a decision list (auto-resolve, escalate, fix) without mutating colony state
+  2. Running `aether continue --finalize` executes the approved actions from the plan-only phase, including any recovery context from auto-recovery
+  3. When the circuit breaker trips, the queen logs the escalation and returns control to the user -- she never overrides or resets breaker state
+**Plans**: 2 plans
+
+Plans:
+- [x] 97-01-PLAN.md -- Queen decision types, pure function, state persistence, and escalation logging
+- [x] 97-02-PLAN.md -- Wire queen decisions into plan-only output and finalize advisory context
+
+### Phase 98: Queen Wave Lifecycle
+**Goal**: The queen manages the full wave lifecycle end-to-end within a phase -- dispatching waves, monitoring worker progress, handling failures within waves, and advancing to the next wave when ready.
+**Depends on**: Phase 96 (auto-recovery for failure handling), Phase 97 (queen-led continue for advancement decisions)
+**Requirements**: COORD-01
+**Success Criteria** (what must be TRUE):
+  1. During a build phase, the queen dispatches a wave, monitors worker completion, and when all workers finish (or fail with recovery), she decides whether to advance to the next wave or escalate -- the user sees a summary of wave status between waves
+  2. When a worker fails mid-wave, the queen handles the failure (retry, reassign, or skip) without waiting for user input, and the wave continues with remaining workers
+  3. After all waves in a phase complete, the queen produces a wave lifecycle summary showing waves dispatched, workers per wave, failures encountered, and recovery actions taken
+**Plans**: 2 plans
+
+Plans:
+- [x] 98-01-PLAN.md -- Queen wave lifecycle function with always-advance policy, between-wave recovery, ceremony events, and wave summary (TDD)
+- [x] 98-02-PLAN.md -- Wire queen wave lifecycle into build command with integration tests
+
+### Phase 99: Output Filtering & Phase Summary
+**Goal**: Build output defaults to filtered summary mode showing only what matters, queen decisions are logged to a persistent audit file, and phase-end summaries replace raw worker noise with actionable information.
+**Depends on**: Phase 96 (recovery activity to summarize), Phase 98 (wave lifecycle data for summaries)
+**Requirements**: OUT-01, OUT-02, OUT-03
+**Success Criteria** (what must be TRUE):
+  1. Running `aether build` without `--verbose` shows a concise summary of what was attempted, what succeeded, what failed and how it was recovered, and what needs human attention -- raw worker output is suppressed
+  2. Running `aether build --verbose` shows full worker output for debugging or trust calibration
+  3. A queen activity audit file (JSON) exists after any phase with queen decisions, containing timestamp, decision type, input finding, action taken, and rationale for every autonomous decision
+**Plans**: 3 plans
+
+Plans:
+- [ ] 99-01-PLAN.md -- Output filter with --verbose flag, filteredPrintln/filteredFprintf functions, and build command wiring (OUT-03)
+- [ ] 99-02-PLAN.md -- Queen audit consolidation from 3 source files with QueenAuditFile schema (OUT-02)
+- [ ] 99-03-PLAN.md -- Phase-end summary renderer with actions-needed section and build command wiring (OUT-01)
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 80 -> 81 -> 82 -> 83 -> 84 -> 85 -> 86 -> 87
-
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 70. Self-Hosting Cleanup | v1.11 | 1/1 | Complete    | 2026-04-28 |
-| 71. Platform Hardening | v1.11 | 2/2 | Complete    | 2026-04-28 |
-| 72. Smart Init Charter | v1.11 | 2/2 | Complete    | 2026-04-28 |
-| 73. Rich Init Research | v1.11 | 3/3 | Complete    | 2026-04-28 |
-| 74. Suggest-Analyze | v1.11 | 2/2 | Complete    | 2026-04-29 |
-| 75. Intelligence Core | v1.11 | 3/3 | Complete    | 2026-04-29 |
-| 76. UX Improvements | v1.11 | 2/2 | Complete    | 2026-04-29 |
-| 77. Ceremony Data Surfacing | v1.11 | 1/1 | Complete    | 2026-04-29 |
-| 78. Platform Test Coverage | v1.11 | 1/1 | Complete    | 2026-04-29 |
-| 79. Documentation & Validation Hygiene | v1.11 | 1/1 | Complete    | 2026-04-30 |
-| 80. Build/Continue Loop Prevention | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 81. Plan and Lifecycle Loop Safety | v1.12 | 1/2 | Complete    | 2026-04-30 |
-| 82. Loop Detection Telemetry | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 83. Planning Depth System | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 84. Verification Depth Extension | v1.12 | 2/2 | Complete    | 2026-04-30 |
-| 85. Smart Depth Defaults | v1.12 | 0/2 | Complete    | 2026-04-30 |
-| 86. Depth Selection UI and Persistence | v1.12 | 3/3 | Complete    | 2026-05-01 |
-| 87. Fix Continue Depth Persistence | v1.12 | 1/1 | Complete    | 2026-05-01 |
+| 88. Recovery Foundation | v1.13 | 4/4 | Complete | 2026-05-01 |
+| 89. Gate Self-Healing & Smart Planning | v1.13 | 5/5 | Complete | 2026-05-02 |
+| 90. Learning Foundation | v1.13 | 4/4 | Complete | 2026-05-01 |
+| 91. Hive Intelligence | v1.13 | 5/5 | Complete | 2026-05-03 |
+| 92. System Hardening & Validation | v1.13 | 5/5 | Complete | 2026-05-03 |
+| 93. Gate Classification Infrastructure | v1.14 | 1/1 | Complete | 2026-05-03 |
+| 94. Recovery Data Model | v1.14 | 2/2 | Complete | 2026-05-03 |
+| 95. Smart Gate Pipeline | v1.14 | 2/2 | Complete | 2026-05-03 |
+| 96. Auto-Recovery Orchestrator | v1.14 | 2/2 | Complete | 2026-05-03 |
+| 97. Queen-Led Continue | v1.14 | 2/2 | Complete | 2026-05-03 |
+| 98. Queen Wave Lifecycle | v1.14 | 2/2 | Complete | 2026-05-04 |
+| 99. Output Filtering & Phase Summary | v1.14 | 3/3 | Complete | 2026-05-04 |

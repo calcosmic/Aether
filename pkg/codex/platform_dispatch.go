@@ -233,6 +233,32 @@ func AgentDefinitionPath(root string, platform Platform, agentName string) strin
 	if base == "" {
 		return ""
 	}
+
+	local := localAgentDefinitionPath(root, platform, base)
+	if isAetherSourceRoot(root) {
+		return local
+	}
+
+	if global := globalAgentDefinitionPath(platform, base); fileExists(global) {
+		return global
+	}
+	if hub := hubAgentDefinitionPath(platform, base); fileExists(hub) {
+		return hub
+	}
+	if fileExists(local) {
+		return local
+	}
+
+	if global := globalAgentDefinitionPath(platform, base); global != "" {
+		return global
+	}
+	if hub := hubAgentDefinitionPath(platform, base); hub != "" {
+		return hub
+	}
+	return local
+}
+
+func localAgentDefinitionPath(root string, platform Platform, base string) string {
 	switch platform {
 	case PlatformClaude:
 		return filepath.Join(root, ".claude", "agents", "ant", base+".md")
@@ -241,6 +267,79 @@ func AgentDefinitionPath(root string, platform Platform, agentName string) strin
 	default:
 		return filepath.Join(root, ".codex", "agents", base+".toml")
 	}
+}
+
+func globalAgentDefinitionPath(platform Platform, base string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	switch platform {
+	case PlatformClaude:
+		return filepath.Join(home, ".claude", "agents", "ant", base+".md")
+	case PlatformOpenCode:
+		return filepath.Join(home, ".config", "opencode", "agents", base+".md")
+	default:
+		return filepath.Join(home, ".codex", "agents", base+".toml")
+	}
+}
+
+func hubAgentDefinitionPath(platform Platform, base string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = ""
+	}
+	hub := strings.TrimSpace(os.Getenv("AETHER_HUB_DIR"))
+	if hub == "" && strings.TrimSpace(home) != "" {
+		hub = filepath.Join(home, defaultAetherHubDirName())
+	}
+	if hub == "" {
+		return ""
+	}
+	switch platform {
+	case PlatformClaude:
+		return filepath.Join(hub, "system", "agents-claude", base+".md")
+	case PlatformOpenCode:
+		return filepath.Join(hub, "system", "agents", base+".md")
+	default:
+		return filepath.Join(hub, "system", "codex", base+".toml")
+	}
+}
+
+func defaultAetherHubDirName() string {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("AETHER_CHANNEL")), "dev") {
+		return ".aether-dev"
+	}
+	if len(os.Args) > 0 {
+		binary := strings.ToLower(strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0])))
+		if binary == "aether-dev" {
+			return ".aether-dev"
+		}
+	}
+	return ".aether"
+}
+
+func isAetherSourceRoot(root string) bool {
+	if strings.TrimSpace(root) == "" {
+		return false
+	}
+	goMod := filepath.Join(root, "go.mod")
+	data, err := os.ReadFile(goMod)
+	if err != nil || !strings.Contains(string(data), "github.com/calcosmic/Aether") {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(root, "cmd", "aether", "main.go")); err != nil {
+		return false
+	}
+	return true
+}
+
+func fileExists(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
@@ -434,14 +533,14 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 	if root := strings.TrimSpace(config.Root); root != "" {
 		args = append(args, "--add-dir", root)
 	}
-	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
+	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
 	args = append(args, prompt)
 	return invokeHostedWorker(ctx, c, config, observer, args, "claude")
 }
 
 func (o *OpenCodeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
 	args := []string{"run", "--agent", openCodePrimaryAgent(), "--format", "json"}
-	workerPrompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
+	workerPrompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
 	prompt := renderOpenCodeSubagentDispatchPrompt(config, workerPrompt)
 	args = append(args, prompt)
 	return invokeHostedWorker(ctx, o, config, observer, args, "opencode")
@@ -581,6 +680,7 @@ waitLoop:
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
+		Handoff:       claims.Handoff,
 		Duration:      duration,
 		RawOutput:     rawOutput,
 	}, nil

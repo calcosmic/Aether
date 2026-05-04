@@ -69,13 +69,13 @@ var planCmd = &cobra.Command{
 			return nil
 		}
 		result, err := runCodexPlanWithOptions(skillWorkspaceRoot(), codexPlanOptions{
-			Refresh:       refresh || forceAlias,
-			Synthetic:     synthetic,
-			PlanOnly:      planOnly,
-			Depth:         depth,
-			PlanningDepth: planningDepth,
+			Refresh:           refresh || forceAlias,
+			Synthetic:         synthetic,
+			PlanOnly:          planOnly,
+			Depth:             depth,
+			PlanningDepth:     planningDepth,
 			VerificationDepth: verificationDepth,
-			WorkerTimeout: workerTimeout,
+			WorkerTimeout:     workerTimeout,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -120,12 +120,14 @@ var buildCmd = &cobra.Command{
 		lightFlag, _ := cmd.Flags().GetBool("light")
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		cbThreshold, _ := cmd.Flags().GetInt("circuit-breaker-threshold")
+		verboseFlag, _ := cmd.Flags().GetBool("verbose")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
 			WorkerTimeout:           workerTimeout,
 			Force:                   forceBuild,
 			LightFlag:               lightFlag,
 			HeavyFlag:               heavyFlag,
 			CircuitBreakerThreshold: cbThreshold,
+			Verbose:                 verboseFlag,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -180,7 +182,7 @@ var continueCmd = &cobra.Command{
 				LightFlag:           lightFlag,
 				HeavyFlag:           heavyFlag,
 				SkipWatchers:        skipWatchers,
-			VerificationDepth:   verificationDepth,
+				VerificationDepth:   verificationDepth,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -733,6 +735,7 @@ func detectDomainsFromRoot(root string) []string {
 	checks := map[string][]string{
 		"go":     {"go.mod", "go.sum"},
 		"web":    {"package.json", "next.config.js", "vite.config.ts"},
+		"docker": {"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"},
 		"ruby":   {"Gemfile", "Rakefile"},
 		"python": {"requirements.txt", "setup.py", "pyproject.toml"},
 		"rust":   {"Cargo.toml"},
@@ -977,6 +980,7 @@ func init() {
 	buildCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
+	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
@@ -987,8 +991,10 @@ func init() {
 	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
+	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
 	continueFinalizeCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
+	continueFinalizeCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
 	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")

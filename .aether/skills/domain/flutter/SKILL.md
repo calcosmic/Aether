@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: flutter
 description: Use when the project uses Flutter/Dart for cross-platform mobile, web, or desktop applications
 type: domain

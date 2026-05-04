@@ -420,6 +420,7 @@ func invokeSwarmWorker(ctx context.Context, root, target, swarmID string, plan s
 		TaskID:           fmt.Sprintf("swarm.%s", plan.Role),
 		TaskBrief:        brief,
 		ContextCapsule:   resolveCodexWorkerContext(),
+		HandoffSection:   renderWorkerHandoffSection("swarm", 0, plan.Name),
 		Root:             root,
 		Timeout:          firstSwarmTimeout(plan.Timeout),
 		SkillSection:     resolveSkillSection(plan.Caste, plan.Task),

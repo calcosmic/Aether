@@ -1,0 +1,9 @@
+name: ant-queen-compose
+description: "Create or improve repo-local QUEEN.md project brain"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether queen-compose $ARGUMENTS"
+guardrails:
+  - "Do not edit QUEEN.md by hand from this command spec."
+  - "Do not spawn workers for this command; use the runtime CLI only."
+  - "If docs and runtime disagree, runtime wins."

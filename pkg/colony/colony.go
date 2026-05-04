@@ -225,10 +225,12 @@ type WorktreeEntry struct {
 
 // GateResultEntry records the outcome of a single gate check in a continue run.
 type GateResultEntry struct {
-	Name      string `json:"name"`
-	Passed    bool   `json:"passed"`
-	Timestamp string `json:"timestamp"`
-	Detail    string `json:"detail,omitempty"`
+	Name            string   `json:"name"`
+	Passed          bool     `json:"passed"`
+	Timestamp       string   `json:"timestamp"`
+	Detail          string   `json:"detail,omitempty"`
+	FixHint         string   `json:"fix_hint,omitempty"`
+	RecoveryOptions []string `json:"recovery_options,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

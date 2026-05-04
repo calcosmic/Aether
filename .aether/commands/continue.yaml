@@ -3,6 +3,11 @@ description: "👁️ Verify build work, extract learnings, and advance the colo
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
+codex_orchestration:
+  category: "semi-intelligent"
+  skill: "aether-colony-build-cycle"
+  guide: "aether command-guide continue --platform codex"
+  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_additions:
   pre_continue: |
     Ground continue before running the runtime-owned verification path:

@@ -4,10 +4,10 @@ This runbook is the authoritative workflow for publishing Aether changes and ver
 
 ## Rule of Thumb
 
-- `aether install --package-dir "$PWD"` publishes companion files from an Aether source checkout into the shared hub on this machine and rebuilds the shared local `aether` binary.
-- `aether publish` is the preferred source-checkout publish command. On the stable channel it refreshes the stable hub and the user-level platform assets; on the dev channel it keeps platform home assets untouched.
-- `aether update` in another repo only pulls companion files from that hub. It does not publish source-checkout changes by itself.
-- `aether update --force` should be the default downstream refresh when you need stale Aether-managed files removed.
+- `aether publish` is the source-checkout publish command. It builds the local channel binary, refreshes the shared hub, and verifies binary/hub version agreement.
+- `aether install --package-dir "$PWD"` still publishes companion files and rebuilds the local binary for backward compatibility, but maintainers should prefer `aether publish`.
+- `aether update` in another repo refreshes repo-local scaffolding, syncs managed guidance/settings/rules, and prunes stale generated asset copies. It does not publish source-checkout changes by itself.
+- `aether update --force` should be the default downstream refresh when you need stale Aether-managed repo-local files removed.
 - `aether update --download-binary` downloads a published release binary. Use it when you need the released runtime, not an unreleased local source change.
 - `.aether/version.json` is the source-checkout release version file. `npm/package.json` must use the exact same version.
 
@@ -75,11 +75,11 @@ aether update --force
 
 Why this works:
 - `aether publish` builds the binary, refreshes `~/.aether/system/` and stable user-level platform assets from the current checkout, and verifies version agreement.
-- `update --force` refreshes tracked companion files from the hub and removes stale managed files.
+- `update --force` refreshes local scaffolding from the hub, syncs managed guidance/settings/rules, and removes stale generated agents, commands, shipped skills, and old `.aether/` system copies that no longer belong in target repos.
 
 Claude command layout:
 - Aether source keeps generated Claude wrappers under `.claude/commands/ant/*.md` for parity with OpenCode generation.
-- Stable install/publish/update writes Claude commands as flat `ant-*.md` files under `.claude/commands/` or `~/.claude/commands/`.
+- Stable install/publish writes Claude commands as flat `ant-*.md` files in the global Claude command directory.
 - Generated legacy files under `.claude/commands/ant/*.md` are removed on force/update or stable publish so Claude Code exposes `/ant-build`, not an `ant:` namespace.
 - Non-Aether custom files in `.claude/commands/ant/` are preserved.
 
@@ -267,11 +267,12 @@ aether publish --channel dev
 ```
 
 Companion file completeness checks verify expected counts:
-- 50 Claude commands
-- 50 OpenCode commands
-- 25 OpenCode agents
-- 25 Codex agents
-- 83 Codex skills
+- 60 Claude commands
+- 60 OpenCode commands
+- 27 OpenCode agents
+- 27 Codex agents
+- 86 hub shipped skills
+- 4 Codex skill shims
 
 ## Go Binary Change Checklist
 
@@ -289,8 +290,9 @@ aether version
 If the change touches `aether install`, `aether update`, version resolution, or binary publishing/bootstrap logic, also run:
 
 ```bash
-go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"
+go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"
 aether version
+aether integrity --source --channel stable
 ```
 
 Then verify at least one downstream repo:
@@ -308,17 +310,18 @@ npm --prefix . test
 npm pack --dry-run
 ```
 
-## Bootstrap Workflow When `install` Itself Changed
+## Bootstrap Workflow When Publish/Install Changed
 
-If the change you made affects `aether install`, the currently installed binary may still be running the old publish logic. Bootstrap the new installer directly from source once:
+If the change you made affects `aether install`, `aether publish`, version resolution, or hub detection, the currently installed binary may still be running old logic. Bootstrap the new publisher directly from source once:
 
 ```bash
-go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"
+go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"
 ```
 
 Why this is different:
-- `go run` executes the new install code from the source checkout immediately.
+- `go run` executes the new publish/install/update code from the source checkout immediately.
 - `--binary-dest "$HOME/.local/bin"` rebuilds the shared `aether` binary to a stable path on `PATH` instead of a temporary Go build location.
+- `publish` verifies binary and hub versions agree before returning success.
 
 After that bootstrap run, downstream repos should use:
 
@@ -332,7 +335,7 @@ These outputs mean the hub publish is incomplete and downstream repos cannot rec
 
 - `Commands (claude) — 0 copied, 0 unchanged`
 - `Commands (opencode) — 0 copied, 0 unchanged`
-- `Agents (opencode)` count is below 25
+- `Agents (opencode)` count is below 27
 
 Root cause:
 - The target repo is updating from `~/.aether/system/`.
@@ -342,32 +345,37 @@ Fix:
 
 ```bash
 # In the Aether repo
-aether install --package-dir "$PWD"
+aether publish
 
 # In the target repo
 aether update --force
 ```
 
-If the publish bug is inside `install` itself, use the bootstrap workflow above first.
+If the publish bug is inside `publish` itself, use the fallback install bootstrap once:
+
+```bash
+go run ./cmd/aether install --package-dir "$PWD" --binary-dest "$HOME/.local/bin"
+```
 
 ## Verification Checklist
 
 On the publishing machine, verify the hub contains the expected surfaces:
 
 ```bash
-find ~/.aether/system/commands/claude -maxdepth 1 -type f | wc -l
-find ~/.aether/system/commands/opencode -maxdepth 1 -type f | wc -l
+find "$HOME/.aether/system/commands"/claude -maxdepth 1 -type f | wc -l
+find "$HOME/.aether/system/commands"/opencode -maxdepth 1 -type f | wc -l
 find ~/.aether/system/agents -maxdepth 1 -type f | wc -l
 find ~/.aether/system/codex -maxdepth 1 -type f | wc -l
-find ~/.aether/system/skills-codex -name SKILL.md | wc -l
+find "$HOME/.aether/system" -path '*/SKILL.md' | wc -l
 ```
 
 Expected counts:
-- Claude commands: `50`
-- OpenCode commands: `50`
-- OpenCode agents: `25`
-- Codex agents: `25`
-- Codex skills: `83`
+- Claude commands: `60`
+- OpenCode commands: `60`
+- OpenCode agents: `27`
+- Codex agents: `27`
+- Hub shipped skills: `86`
+- Codex skill shims: `4`
 
 Release metadata should also agree:
 - `.aether/version.json` version equals `npm/package.json` version
@@ -375,7 +383,7 @@ Release metadata should also agree:
 - `aether version --check` returns exit 0 (binary and hub versions agree)
 - `npm view aether-colony dist-tags --json` reports `latest` at the same stable release version
 
-In a downstream repo, a healthy refresh should no longer show `0/0` for Claude/OpenCode commands.
+In a downstream repo, a healthy refresh should prune stale generated repo-local commands/agents instead of trying to copy them back into the repo.
 
 ## Medic Check
 

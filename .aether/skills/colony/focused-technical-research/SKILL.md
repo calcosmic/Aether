@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: focused-technical-research
 description: Use when external library, framework, API, or architecture research must be isolated from implementation context
 type: colony

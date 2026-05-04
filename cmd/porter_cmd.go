@@ -12,6 +12,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// porterContext distinguishes between source and consumer repo contexts.
+type porterContext string
+
+const (
+	porterContextSource   porterContext = "source"
+	porterContextConsumer porterContext = "consumer"
+)
+
+// detectPorterContext determines whether the current working directory is inside
+// the Aether source repo or a consumer repo.
+func detectPorterContext() porterContext {
+	ctx := detectIntegrityContext()
+	if ctx == "source" {
+		return porterContextSource
+	}
+	return porterContextConsumer
+}
+
 var porterCmd = &cobra.Command{
 	Use:   "porter",
 	Short: "Deliver colony work to the outside world",
@@ -47,12 +65,15 @@ func runPorterCheck(cmd *cobra.Command, args []string) error {
 
 	// Check if hub exists (skip hub-dependent checks if not installed)
 	hubVersionFile := hubDir + "/version.json"
+	ctx := detectPorterContext()
 	if _, statErr := os.Stat(hubVersionFile); os.IsNotExist(statErr) {
 		// Still run non-hub checks
 		checks := []integrityCheck{
 			checkSourceVersion(),
 			checkBinaryVersion(),
 			checkGitStatus(),
+			checkGitStashes(),
+			checkGitWorktrees(),
 			checkTestStatus(),
 			checkChangelogCompleteness(),
 		}
@@ -64,7 +85,7 @@ func runPorterCheck(cmd *cobra.Command, args []string) error {
 			}
 		}
 		result := integrityResult{
-			Context:          "porter",
+			Context:          string(ctx),
 			Channel:          string(channel),
 			Checks:           checks,
 			Overall:          overall,
@@ -88,7 +109,7 @@ func runPorterCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	result := integrityResult{
-		Context:          "porter",
+		Context:          string(ctx),
 		Channel:          string(channel),
 		Checks:           checks,
 		Overall:          overall,
@@ -98,38 +119,73 @@ func runPorterCheck(cmd *cobra.Command, args []string) error {
 	return renderPorterResult(cmd, result)
 }
 
-// buildPorterChecks constructs the full set of porter checks, reusing integrity
-// functions and adding delivery-specific checks. When skipTests is true, the
-// expensive go test subprocess is replaced with a skip-status placeholder.
+// buildPorterChecks constructs the full set of porter checks based on repo context.
 func buildPorterChecks(channel string, skipTests bool) []integrityCheck {
-	// Resolve hub directory
+	ctx := detectPorterContext()
+	return buildPorterChecksForContext(ctx, channel, skipTests)
+}
+
+// buildPorterChecksForContext is the testable core that accepts an explicit context.
+// Source repos get version alignment, companion, test, changelog, and publish readiness.
+// Consumer repos get hub sync and update readiness.
+func buildPorterChecksForContext(ctx porterContext, channel string, skipTests bool) []integrityCheck {
+	gitStatus := checkGitStatus()
+	gitStashes := checkGitStashes()
+	gitWorktrees := checkGitWorktrees()
+
 	homeDir, _ := os.UserHomeDir()
 	rc := normalizeRuntimeChannel(channel)
 	hubDir := resolveHubPathForHome(homeDir, rc)
 	hubVersion := readHubVersionAtPath(hubDir)
 	binaryVersion := resolveVersion()
 
-	var testCheck integrityCheck
-	if skipTests {
-		testCheck = integrityCheck{
-			Name:   "Test status",
-			Status: "skip",
-			Message: "Skipped (test mode)",
+	if ctx == porterContextSource {
+		var testCheck integrityCheck
+		if skipTests {
+			testCheck = integrityCheck{
+				Name:    "Test status",
+				Status:  "skip",
+				Message: "Skipped (test mode)",
+			}
+		} else {
+			testCheck = checkTestStatus()
 		}
-	} else {
-		testCheck = checkTestStatus()
+
+		return []integrityCheck{
+			checkSourceVersion(),
+			checkBinaryVersion(),
+			checkHubVersion(hubDir),
+			checkHubCompanionFiles(hubDir),
+			checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, rc),
+			gitStatus,
+			gitStashes,
+			gitWorktrees,
+			testCheck,
+			checkChangelogCompleteness(),
+		}
 	}
 
+	// Consumer repo checks
 	return []integrityCheck{
-		checkSourceVersion(),
 		checkBinaryVersion(),
 		checkHubVersion(hubDir),
-		checkHubCompanionFiles(hubDir),
-		checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, rc),
-		checkGitStatus(),
-		testCheck,
-		checkChangelogCompleteness(),
+		checkHubCompanionSync(hubDir),
+		gitStatus,
+		gitStashes,
+		gitWorktrees,
 	}
+}
+
+// checkHubCompanionSync wraps checkHubCompanionFiles for consumer repo context.
+func checkHubCompanionSync(hubDir string) integrityCheck {
+	result := checkHubCompanionFiles(hubDir)
+	result.Name = "Hub companion sync"
+	if result.Status == "pass" {
+		result.Message = "Companion files synchronized with hub"
+	} else {
+		result.RecoveryCommand = "Run aether update --force to sync companion files"
+	}
+	return result
 }
 
 func renderPorterResult(cmd *cobra.Command, result integrityResult) error {
@@ -153,7 +209,8 @@ func renderPorterResult(cmd *cobra.Command, result integrityResult) error {
 func buildPorterVisual(result integrityResult) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("\U0001f4e6", "Porter Delivery Readiness"))
-	b.WriteString(fmt.Sprintf("Channel: %s\n\n", result.Channel))
+	b.WriteString(fmt.Sprintf("Channel: %s\n", result.Channel))
+	b.WriteString(fmt.Sprintf("Context: %s repo\n\n", result.Context))
 
 	passCount := 0
 	for _, c := range result.Checks {
@@ -224,6 +281,69 @@ func checkGitStatus() integrityCheck {
 		Status:          "fail",
 		Message:         fmt.Sprintf("%d uncommitted changes", changed),
 		RecoveryCommand: "Commit or stash changes before delivery",
+	}
+}
+
+// checkGitStashes runs `git stash list` and warns if unapplied stashes exist,
+// since they may represent incomplete or at-risk work.
+func checkGitStashes() integrityCheck {
+	out, err := exec.Command("git", "stash", "list").Output()
+	if err != nil {
+		return integrityCheck{
+			Name:    "Git stashes",
+			Status:  "skip",
+			Message: "Not in a git repository",
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	count := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	if count == 0 {
+		return integrityCheck{
+			Name:    "Git stashes",
+			Status:  "pass",
+			Message: "No stashes found",
+		}
+	}
+	return integrityCheck{
+		Name:            "Git stashes",
+		Status:          "fail",
+		Message:         fmt.Sprintf("%d unapplied stash(es) detected", count),
+		RecoveryCommand: "Apply or drop stashes with git stash pop / git stash drop",
+	}
+}
+
+// checkGitWorktrees detects active git worktrees and fails if any exist beyond
+// the main working tree, since they may contain unmerged work.
+func checkGitWorktrees() integrityCheck {
+	out, err := exec.Command("git", "worktree", "list", "--porcelain").Output()
+	if err != nil {
+		return integrityCheck{
+			Name:    "Git worktrees",
+			Status:  "skip",
+			Message: "Not in a git repository or worktrees unsupported",
+		}
+	}
+	paths := parseWorktreePaths(string(out))
+	// The first entry is always the main working tree
+	if len(paths) <= 1 {
+		return integrityCheck{
+			Name:    "Git worktrees",
+			Status:  "pass",
+			Message: "No additional worktrees active",
+		}
+	}
+	extraCount := len(paths) - 1
+	return integrityCheck{
+		Name:            "Git worktrees",
+		Status:          "fail",
+		Message:         fmt.Sprintf("%d active worktree(s) detected", extraCount),
+		RecoveryCommand: "Merge or remove worktrees before delivery",
+		Details:         map[string]interface{}{"worktree_paths": paths[1:]},
 	}
 }
 

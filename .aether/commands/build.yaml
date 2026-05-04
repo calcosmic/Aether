@@ -3,6 +3,11 @@ description: "🔨 Build a phase — Queen dispatches workers, colony self-organ
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only"
+codex_orchestration:
+  category: "full-orchestration"
+  skill: "aether-colony-build-cycle"
+  guide: "aether command-guide build --platform codex"
+  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_additions:
   pre_build: |
     Ground the build before planning:
@@ -15,7 +20,7 @@ wrapper_additions:
     Restore real wrapper orchestration:
     1. Run `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only`.
     2. Parse `result.dispatch_manifest`; do not parse visual output.
-    3. Load `.aether/docs/command-playbooks/build-wave.md` as the spawning procedure.
+    3. Load the build-wave playbook from the installed hub (`~/.aether/system/docs/command-playbooks/build-wave.md`, or the matching dev hub when using `aether-dev`) as the spawning procedure.
     4. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
     5. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
     6. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.

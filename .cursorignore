@@ -1,0 +1,40 @@
+# Hide generated mirrors and local runtime state from Cursor.
+#
+# These paths are either regenerated from source files, packaging mirrors, or
+# machine-local state. They are intentionally not the files to edit when
+# developing Aether.
+
+# Generated command wrappers and packaging mirrors
+.aether/commands/claude/
+.aether/commands/opencode/
+.aether/agents-claude/
+.aether/agents-codex/
+.aether/skills-codex/
+
+# Runtime-local state and caches
+.aether/.aether/
+.aether/data/
+.aether/temp/
+.aether/locks/
+.aether/archive/
+.aether/backups/
+.aether/chambers/
+.aether/dreams/
+.aether/oracle/
+cmd/.aether/
+
+# Local host-agent skill/tool spillover
+.agents/
+.crush/
+.claude/skills/
+skills
+
+# Planning artifacts
+.planning/
+.tmp/
+
+# Dependencies and platform caches
+node_modules/
+.opencode/node_modules/
+.claude/worktrees/
+.worktrees/

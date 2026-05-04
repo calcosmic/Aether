@@ -106,6 +106,93 @@ func TestCharterWriteTargetsLocal(t *testing.T) {
 	}
 }
 
+func TestQueenComposeCreatesLocalQueen(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	store = s
+
+	rootCmd.SetArgs([]string{
+		"queen-compose",
+		"--project", "Aether runtime",
+		"--current-work", "Global hub local-only repo state",
+		"--stack", "Go CLI",
+		"--commands", "go test ./cmd",
+		"--constraints", "Do not copy shared assets into target repos",
+		"--verification", "Focused Go tests pass",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("queen-compose returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got %v", env)
+	}
+	result, _ := env["result"].(map[string]interface{})
+	if result["target"] != "local" {
+		t.Fatalf("expected local target, got %v", result["target"])
+	}
+
+	localPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("read local QUEEN.md: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"**Project:** Aether runtime",
+		"**Current Work:** Global hub local-only repo state",
+		"**Stack:** Go CLI",
+		"**Commands:** go test ./cmd",
+		"Do not copy shared assets into target repos",
+		"Focused Go tests pass",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("local QUEEN.md missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestQueenComposePreservesExistingLocalQueenContent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	store = s
+
+	localPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
+	existing := queenDefaultContent + "\n## Custom Notes\n\nKeep this line.\n"
+	if err := os.WriteFile(localPath, []byte(existing), 0644); err != nil {
+		t.Fatalf("write existing local QUEEN.md: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"queen-compose", "--project", "Preserve me", "--plain-english=false"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("queen-compose returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("read local QUEEN.md: %v", err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "Keep this line.") {
+		t.Fatalf("existing custom content was not preserved:\n%s", text)
+	}
+	if !strings.Contains(text, "**Project:** Preserve me") {
+		t.Fatalf("new project content missing:\n%s", text)
+	}
+	if !strings.Contains(text, "Do not add beginner framing unless the user asks for it") {
+		t.Fatalf("plain-english=false preference missing:\n%s", text)
+	}
+}
+
 func TestQueenWriteLearningsTargetsLocal(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

@@ -10,8 +10,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/BurntSushi/toml"
 )
 
 // TestCodexInstallCopiesAgents verifies that install copies .codex/agents/
@@ -177,9 +175,7 @@ func TestCodexInstallAgentContent(t *testing.T) {
 }
 
 // TestCodexSetupCopiesAgents verifies that setup copies Codex agent files
-// from the hub to a target repository.
-// Install syncs .codex/agents/ -> system/codex/, so hub stores at system/codex/*.toml.
-// Setup sync pair maps system/codex/ -> .codex/agents/, landing at .codex/agents/*.toml.
+// from the package to the global home and hub, while target repos stay local-only.
 func TestCodexSetupCopiesAgents(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -227,28 +223,17 @@ func TestCodexSetupCopiesAgents(t *testing.T) {
 		t.Fatalf("setup command failed: %v", err)
 	}
 
-	// Verify Codex agents were synced to repo.
-	// Hub stores at system/codex/*.toml; setup syncs system/codex/ -> .codex/agents/
-	// so files land at .codex/agents/*.toml (flat, no nesting).
+	// Verify Codex agents stay global/hub-side and are not copied to the repo.
 	repoCodexFile := filepath.Join(repoDir, ".codex", "agents", "aether-builder.toml")
-	if _, err := os.Stat(repoCodexFile); os.IsNotExist(err) {
-		t.Errorf("expected file %s to exist after setup", repoCodexFile)
-	}
-
-	// Verify content matches
-	actual, err := os.ReadFile(repoCodexFile)
-	if err != nil {
-		t.Fatalf("failed to read repo codex agent: %v", err)
-	}
-	if string(actual) != string(agentContent) {
-		t.Errorf("content mismatch after setup\ngot:  %s\nwant: %s", string(actual), string(agentContent))
+	if _, err := os.Stat(repoCodexFile); err == nil {
+		t.Errorf("codex agent should stay global, but setup copied %s", repoCodexFile)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat repo codex agent: %v", err)
 	}
 }
 
-// TestCodexUpdateCopiesAgents verifies that update copies Codex agent files
-// from the hub to a target repository.
-// Install syncs .codex/agents/ -> system/codex/, so hub stores at system/codex/*.toml.
-// Setup/update sync pair maps system/codex/ -> .codex/agents/, landing at .codex/agents/*.toml.
+// TestCodexUpdateCopiesAgents verifies that update does not copy Codex agent
+// files from the hub into a target repository.
 func TestCodexUpdateCopiesAgents(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -295,8 +280,7 @@ func TestCodexUpdateCopiesAgents(t *testing.T) {
 		t.Fatalf("setup command failed: %v", err)
 	}
 
-	// Step 3: Update hub with a new Codex agent placed directly in system/codex/
-	// placed directly in system/codex/ so it syncs cleanly to .codex/agents/
+	// Step 3: Update hub with a new Codex agent placed directly in system/codex/.
 	hubSystem := filepath.Join(homeDir, ".aether", "system")
 	hubCodexDir := filepath.Join(hubSystem, "codex")
 	if err := os.MkdirAll(hubCodexDir, 0755); err != nil {
@@ -326,19 +310,12 @@ func TestCodexUpdateCopiesAgents(t *testing.T) {
 		t.Fatalf("update command failed: %v", err)
 	}
 
-	// Verify the new Codex agent was synced to repo
+	// Verify the new Codex agent stayed global/hub-side.
 	repoCodexFile := filepath.Join(repoDir, ".codex", "agents", "aether-watcher.toml")
-	if _, err := os.Stat(repoCodexFile); os.IsNotExist(err) {
-		t.Errorf("expected file %s to exist after update", repoCodexFile)
-	}
-
-	// Verify content matches
-	actual, err := os.ReadFile(repoCodexFile)
-	if err != nil {
-		t.Fatalf("failed to read repo codex agent: %v", err)
-	}
-	if string(actual) != string(newAgentContent) {
-		t.Errorf("content mismatch after update\ngot:  %s\nwant: %s", string(actual), string(newAgentContent))
+	if _, err := os.Stat(repoCodexFile); err == nil {
+		t.Errorf("codex agent should stay global, but update copied %s", repoCodexFile)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat repo codex agent: %v", err)
 	}
 }
 
@@ -430,24 +407,15 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 			t.Fatalf("setup failed: %v", err)
 		}
 
-		// Verify Codex agents synced to repo.
-		// Hub stores at system/codex/*.toml; setup syncs system/codex/ -> .codex/agents/
-		// so files land at .codex/agents/*.toml (flat, no nesting).
+		// Verify Codex agents are not copied to the repo.
 		repoCodex := filepath.Join(repoDir, ".codex", "agents")
 		for _, name := range []string{"aether-builder.toml", "aether-watcher.toml"} {
 			f := filepath.Join(repoCodex, name)
-			if _, err := os.Stat(f); os.IsNotExist(err) {
-				t.Errorf("expected %s in repo after setup", f)
+			if _, err := os.Stat(f); err == nil {
+				t.Errorf("codex agent should stay global, but setup copied %s", f)
+			} else if !os.IsNotExist(err) {
+				t.Fatalf("stat %s: %v", f, err)
 			}
-		}
-
-		// Verify content matches
-		repoBuilder, err := os.ReadFile(filepath.Join(repoCodex, "aether-builder.toml"))
-		if err != nil {
-			t.Fatalf("failed to read builder.toml from repo: %v", err)
-		}
-		if string(repoBuilder) != string(builderContent) {
-			t.Errorf("builder.toml content mismatch after setup\ngot:  %s\nwant: %s", string(repoBuilder), string(builderContent))
 		}
 	})
 
@@ -456,8 +424,7 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
 
-		// Add a new agent directly in hub system/codex/ (not in agents/ subdir)
-		// so it syncs cleanly to .codex/agents/ without the extra nesting level
+		// Add a new agent directly in hub system/codex/.
 		hubCodex := filepath.Join(homeDir, ".aether", "system", "codex")
 		if err := os.MkdirAll(hubCodex, 0755); err != nil {
 			t.Fatalf("failed to create hub codex dir: %v", err)
@@ -488,25 +455,20 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 			t.Errorf("expected update output to contain ok, got: %s", output)
 		}
 
-		// Verify new agent was synced to .codex/agents/ (top level, no nesting)
+		// Verify new agent was not copied to .codex/agents/.
 		repoSage := filepath.Join(repoDir, ".codex", "agents", "aether-sage.toml")
-		if _, err := os.Stat(repoSage); os.IsNotExist(err) {
-			t.Errorf("expected %s to exist after update", repoSage)
+		if _, err := os.Stat(repoSage); err == nil {
+			t.Errorf("codex agent should stay global, but update copied %s", repoSage)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat sage.toml from repo: %v", err)
 		}
 
-		// Verify content
-		actual, err := os.ReadFile(repoSage)
-		if err != nil {
-			t.Fatalf("failed to read sage.toml from repo: %v", err)
-		}
-		if string(actual) != string(sageContent) {
-			t.Errorf("sage.toml content mismatch after update\ngot:  %s\nwant: %s", string(actual), string(sageContent))
-		}
-
-		// Original agents should still exist after update
+		// Original agents should still stay out of the repo after update.
 		repoBuilder := filepath.Join(repoDir, ".codex", "agents", "aether-builder.toml")
-		if _, err := os.Stat(repoBuilder); os.IsNotExist(err) {
-			t.Error("expected aether-builder.toml to still exist after update")
+		if _, err := os.Stat(repoBuilder); err == nil {
+			t.Error("codex builder agent should stay global after update")
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat builder.toml from repo: %v", err)
 		}
 	})
 }
@@ -613,13 +575,13 @@ Keep my local builder instructions.
 	}
 }
 
-func TestCodexInstallPreservesModifiedHomeSkill(t *testing.T) {
+func TestCodexInstallPrunesHomeFullSkillMirrorAndWritesShims(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
 	homeDir := t.TempDir()
-	srcDir := filepath.Join(packageDir, ".aether", "skills-codex", "colony", "build-discipline")
+	srcDir := filepath.Join(packageDir, ".aether", "skills", "colony", "build-discipline")
 
 	if err := os.MkdirAll(srcDir, 0755); err != nil {
 		t.Fatalf("failed to create skill dir: %v", err)
@@ -671,12 +633,13 @@ Local skill override
 		t.Fatalf("install command failed: %v", err)
 	}
 
-	got, err := os.ReadFile(destFile)
-	if err != nil {
-		t.Fatalf("failed to read preserved local skill: %v", err)
+	if _, err := os.Stat(destFile); !os.IsNotExist(err) {
+		t.Fatalf("expected full Codex skill mirror to be pruned, stat err: %v", err)
 	}
-	if string(got) != string(local) {
-		t.Fatalf("expected install to preserve modified home skill\ngot:\n%s\nwant:\n%s", string(got), string(local))
+	for _, shim := range codexSkillShims() {
+		if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", shim.Dir, "SKILL.md")); err != nil {
+			t.Fatalf("expected generated shim %s: %v", shim.Dir, err)
+		}
 	}
 }
 
@@ -717,9 +680,8 @@ type codexAgentTOML struct {
 	DeveloperInstructions string   `toml:"developer_instructions"`
 }
 
-// TestCodexInstallSetupUpdate_All24Agents verifies the full install -> setup
-// pipeline deploys all 24 Codex TOML agents correctly, and that each agent
-// file is valid TOML with all required fields.
+// TestCodexInstallSetupUpdate_All24Agents verifies install publishes Codex TOML
+// agents globally, while setup keeps target repos local-state-only.
 func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -774,7 +736,7 @@ func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 		}
 	})
 
-	// Step 3: Setup to sync from hub to repo.
+	// Step 3: Setup should not copy global Codex agents into the repo.
 	t.Run("setup", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
@@ -787,38 +749,17 @@ func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 			t.Fatalf("setup failed: %v", err)
 		}
 
-		// Verify all 24 agent TOML files exist in target .codex/agents/.
 		repoCodex := filepath.Join(repoDir, ".codex", "agents")
-		for _, agentName := range all25AgentNames {
-			f := filepath.Join(repoCodex, agentName+".toml")
-			if _, err := os.Stat(f); os.IsNotExist(err) {
-				t.Errorf("expected %s in repo after setup", f)
+		if _, err := os.Stat(repoCodex); err == nil {
+			entries, readErr := os.ReadDir(repoCodex)
+			if readErr != nil {
+				t.Fatalf("failed to read repo codex dir: %v", readErr)
 			}
-		}
-
-		// Verify each agent file is valid TOML with required fields.
-		for _, agentName := range all25AgentNames {
-			t.Run(agentName, func(t *testing.T) {
-				data, err := os.ReadFile(filepath.Join(repoCodex, agentName+".toml"))
-				if err != nil {
-					t.Fatalf("failed to read %s.toml: %v", agentName, err)
-				}
-
-				var agent codexAgentTOML
-				if _, err := toml.Decode(string(data), &agent); err != nil {
-					t.Fatalf("invalid TOML in %s.toml: %v", agentName, err)
-				}
-
-				if agent.Name == "" {
-					t.Errorf("%s: missing required field 'name'", agentName)
-				}
-				if agent.Description == "" {
-					t.Errorf("%s: missing required field 'description'", agentName)
-				}
-				if agent.DeveloperInstructions == "" {
-					t.Errorf("%s: missing required field 'developer_instructions'", agentName)
-				}
-			})
+			if len(entries) > 0 {
+				t.Fatalf("setup should not copy global Codex agents into repo, found %d files", len(entries))
+			}
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat repo codex dir: %v", err)
 		}
 	})
 }
@@ -842,8 +783,8 @@ func listShippedAetherCodexAgentBaseNames(t *testing.T, dir string) []string {
 	return names
 }
 
-// TestCrossPlatformAgentParity verifies that the shipped Aether Codex surface
-// stays in parity across Claude, OpenCode, Codex, and the packaged Codex mirror.
+// TestCrossPlatformAgentParity verifies that the shipped Aether agent surfaces
+// stay in parity across Claude, OpenCode, and Codex.
 func TestCrossPlatformAgentParity(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	if err != nil {
@@ -854,15 +795,13 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 	claudeDir := filepath.Join(repoRoot, ".claude", "agents", "ant")
 	opencodeDir := filepath.Join(repoRoot, ".opencode", "agents")
 	codexDir := filepath.Join(repoRoot, ".codex", "agents")
-	agentsCodexMirrorDir := filepath.Join(repoRoot, ".aether", "agents-codex")
 
 	claudeNames := listAgentBaseNames(t, claudeDir, ".md")
 	opencodeNames := listAgentBaseNames(t, opencodeDir, ".md")
 	codexNames := listShippedAetherCodexAgentBaseNames(t, codexDir)
-	agentsCodexNames := listShippedAetherCodexAgentBaseNames(t, agentsCodexMirrorDir)
 
-	// Verify each directory has exactly 25 entries.
-	const expectedCount = 26
+	// Verify each directory has exactly 27 entries (25 original + medic + fixer).
+	const expectedCount = 27
 	if len(claudeNames) != expectedCount {
 		t.Errorf("Claude agents: expected %d, got %d", expectedCount, len(claudeNames))
 	}
@@ -872,21 +811,13 @@ func TestCrossPlatformAgentParity(t *testing.T) {
 	if len(codexNames) != expectedCount {
 		t.Errorf("Codex agents: expected %d, got %d", expectedCount, len(codexNames))
 	}
-	if len(agentsCodexNames) != expectedCount {
-		t.Errorf("agents-codex mirror: expected %d, got %d", expectedCount, len(agentsCodexNames))
-	}
 
-	// Verify all four have matching base names.
+	// Verify all three have matching base names.
 	if !slicesEqual(claudeNames, opencodeNames) {
 		t.Errorf("Claude and OpenCode agent names do not match.\nClaude:  %v\nOpenCode: %v", claudeNames, opencodeNames)
 	}
 	if !slicesEqual(claudeNames, codexNames) {
 		t.Errorf("Claude and shipped Codex agent names do not match.\nClaude: %v\nCodex:  %v", claudeNames, codexNames)
-	}
-
-	// Verify the packaging mirror matches the shipped Codex surface exactly.
-	if !slicesEqual(codexNames, agentsCodexNames) {
-		t.Errorf("Shipped Codex agents and agents-codex mirror names do not match.\nCodex:        %v\nAgents-codex: %v", codexNames, agentsCodexNames)
 	}
 }
 
@@ -1062,8 +993,8 @@ func TestE2EOpenCodeAgentLoad(t *testing.T) {
 	if len(agentFiles) == 0 {
 		t.Fatal("no aether-*.md files found to copy")
 	}
-	if len(agentFiles) != 26 {
-		t.Errorf("expected 26 agent files, found %d", len(agentFiles))
+	if len(agentFiles) != 27 {
+		t.Errorf("expected 27 agent files, found %d", len(agentFiles))
 	}
 
 	// 3-4. Parse and validate each file
@@ -1164,14 +1095,14 @@ func TestCodexAgentCompleteness(t *testing.T) {
 		// Skip for read-only agents that don't implement code (archaeologist, chaos, measurer, etc.)
 		lower := strings.ToLower(content)
 		readOnlyAgents := map[string]bool{
-			"aether-archaeologist": true,
-			"aether-chaos":         true,
-			"aether-gatekeeper":    true,
-			"aether-includer":      true,
-			"aether-measurer":      true,
-			"aether-oracle":        true,
-			"aether-sage":          true,
-			"aether-scout":         true,
+			"aether-archaeologist":        true,
+			"aether-chaos":                true,
+			"aether-gatekeeper":           true,
+			"aether-includer":             true,
+			"aether-measurer":             true,
+			"aether-oracle":               true,
+			"aether-sage":                 true,
+			"aether-scout":                true,
 			"aether-surveyor-disciplines": true,
 			"aether-surveyor-nest":        true,
 			"aether-surveyor-pathogens":   true,

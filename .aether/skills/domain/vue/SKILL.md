@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: vue
 description: Use when the project uses Vue.js for building reactive user interfaces
 type: domain

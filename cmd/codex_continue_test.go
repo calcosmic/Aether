@@ -2615,6 +2615,10 @@ func seedContinueBuildPacket(t *testing.T, dataDir string, phase int, phaseName,
 		if normalizedDispatches[i].Status == "" || normalizedDispatches[i].Status == "spawned" {
 			normalizedDispatches[i].Status = "completed"
 		}
+		// Completed dispatches must have Outputs for continue provenance validation (SAFE-03/04).
+		if normalizedDispatches[i].Status == "completed" && len(normalizedDispatches[i].Outputs) == 0 {
+			normalizedDispatches[i].Outputs = []string{"build/output.go"}
+		}
 	}
 
 	briefs := make([]string, 0, len(normalizedDispatches))
@@ -5584,7 +5588,7 @@ func TestRecoveryCommandDiffersFromLastInvocation(t *testing.T) {
 
 func TestRecoveryFallbackToBuildForce(t *testing.T) {
 	assessment := codexContinueAssessment{
-		Phase: 1,
+		Phase:  1,
 		Passed: false,
 		Recovery: codexContinueRecoveryPlan{
 			RedispatchCommand: "aether continue",
@@ -5622,10 +5626,10 @@ func TestRecoveryFallbackToBuildForce(t *testing.T) {
 		t.Fatalf("failed to create build dir: %v", err)
 	}
 	report := codexContinueReport{
-		Phase:              1,
-		GeneratedAt:        time.Now().UTC().Format(time.RFC3339),
+		Phase:               1,
+		GeneratedAt:         time.Now().UTC().Format(time.RFC3339),
 		LastContinueOptions: lastOpts,
-		Next:               "aether continue",
+		Next:                "aether continue",
 	}
 	continueRel := filepath.Join("build", "phase-1", "continue.json")
 	if err := store.SaveJSON(continueRel, report); err != nil {
@@ -5708,7 +5712,6 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		t.Fatal("expected true when ReconcileTaskIDs match but order differs")
 	}
 }
-
 
 func setupContinueStateWithDepth(t *testing.T, phaseName string, depth string) (string, string, string, string) {
 	t.Helper()

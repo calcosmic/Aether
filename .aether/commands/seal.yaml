@@ -3,6 +3,11 @@ description: "🏺 Seal the colony with Crowned Anthill milestone"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=json aether seal $ARGUMENTS"
+codex_orchestration:
+  category: "semi-intelligent"
+  skill: "aether-colony-build-cycle"
+  guide: "aether command-guide seal --platform codex"
+  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

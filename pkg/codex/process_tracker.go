@@ -402,3 +402,34 @@ func removeTrackedProcess(root string, pid int) error {
 	}
 	return writeTrackedProcesses(root, next)
 }
+
+// Test helper functions -- exported for use by cmd tests.
+
+// WriteTrackedProcessesForTest writes tracked processes to the registry file for testing.
+func WriteTrackedProcessesForTest(root string, processes []TrackedProcess) error {
+	return writeTrackedProcesses(root, processes)
+}
+
+// SetWorkerProcessExistsFunc sets the process existence check function (for testing).
+func SetWorkerProcessExistsFunc(f func(int) bool) { workerProcessExistsFunc = f }
+
+// WorkerProcessExistsFunc returns the current process existence check function.
+func WorkerProcessExistsFunc() func(int) bool { return workerProcessExistsFunc }
+
+// SetWorkerProcessCommandFunc sets the process command line check function (for testing).
+func SetWorkerProcessCommandFunc(f func(int) string) { workerProcessCommandFunc = f }
+
+// WorkerProcessCommandFunc returns the current process command line check function.
+func WorkerProcessCommandFunc() func(int) string { return workerProcessCommandFunc }
+
+// SetWorkerTerminateFunc sets the terminate function (for testing).
+func SetWorkerTerminateFunc(f func(int) error) { terminateWorkerFunc = f }
+
+// TerminateWorkerFunc returns the current terminate function.
+func TerminateWorkerFunc() func(int) error { return terminateWorkerFunc }
+
+// SetWorkerKillFunc sets the kill function (for testing).
+func SetWorkerKillFunc(f func(int) error) { killWorkerFunc = f }
+
+// KillWorkerFunc returns the current kill function.
+func KillWorkerFunc() func(int) error { return killWorkerFunc }

@@ -1,4 +1,5 @@
 ---
+source: shipped
 name: brownfield-codebase-analysis
 description: Use during colonize to understand an existing codebase before planning work
 type: colony

@@ -352,7 +352,7 @@ func TestResolveSkillSectionEmitsSkillActivationCeremony(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	hubDir := tmpDir + "/hub"
-	skillsDir := hubDir + "/skills/colony/test-skill"
+	skillsDir := filepath.Join(hubDir, "system", "skills", "colony", "test-skill")
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		t.Fatalf("failed to create skill dir: %v", err)
 	}

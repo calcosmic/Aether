@@ -13,6 +13,20 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
+func resumeTestPhasesThrough(current int) []colony.Phase {
+	phases := make([]colony.Phase, 0, current)
+	for i := 1; i <= current; i++ {
+		status := colony.PhaseCompleted
+		name := "Earlier"
+		if i == current {
+			status = colony.PhaseInProgress
+			name = "Current"
+		}
+		phases = append(phases, colony.Phase{ID: i, Name: name, Status: status})
+	}
+	return phases
+}
+
 func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -167,6 +181,145 @@ func TestResumeColonyRestoresSessionAndClearsHandoff(t *testing.T) {
 	}
 	if resumed.PausedAt != nil {
 		t.Fatalf("expected paused_at to be cleared on resume, got %v", *resumed.PausedAt)
+	}
+}
+
+func TestResumeColonyRestoresInvalidStateFromHandoffSnapshot(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	goal := "Recover runtime state from handoff"
+	taskID := "1.1"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Milestone:    "Open Chambers",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Recovered execution",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Make resume repair runtime state", Status: colony.TaskPending}},
+				},
+				{ID: 2, Name: "Verification", Status: colony.PhaseReady},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+	session := colony.SessionFile{
+		SessionID:      "resume-snapshot",
+		StartedAt:      "2026-04-15T10:00:00Z",
+		ColonyGoal:     goal,
+		CurrentPhase:   1,
+		SuggestedNext:  "aether build 1",
+		ContextCleared: true,
+		Summary:        "Snapshot should repair corrupted state",
+	}
+	if err := store.SaveJSON("session.json", session); err != nil {
+		t.Fatalf("failed to seed session: %v", err)
+	}
+	if err := writeHandoffDocument(renderHandoffSnapshot(state, session, "Paused Colony", "aether build 1", session.Summary)); err != nil {
+		t.Fatalf("failed to seed handoff: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "COLONY_STATE.json"), []byte(`{"test":true}`), 0644); err != nil {
+		t.Fatalf("failed to corrupt state: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), `"state_recovered_from_handoff":true`) {
+		t.Fatalf("expected handoff recovery marker, got: %s", buf.String())
+	}
+
+	var recovered colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &recovered); err != nil {
+		t.Fatalf("failed to reload recovered state: %v", err)
+	}
+	if recovered.Goal == nil || *recovered.Goal != goal {
+		t.Fatalf("goal = %v, want %q", recovered.Goal, goal)
+	}
+	if recovered.State != colony.StateREADY || recovered.CurrentPhase != 1 {
+		t.Fatalf("state/current_phase = %s/%d, want READY/1", recovered.State, recovered.CurrentPhase)
+	}
+	if len(recovered.Plan.Phases) != 2 || recovered.Plan.Phases[0].Name != "Recovered execution" {
+		t.Fatalf("plan phases not restored from snapshot: %+v", recovered.Plan.Phases)
+	}
+	if len(recovered.Plan.Phases[0].Tasks) != 1 || recovered.Plan.Phases[0].Tasks[0].Goal != "Make resume repair runtime state" {
+		t.Fatalf("phase task not restored from snapshot: %+v", recovered.Plan.Phases[0].Tasks)
+	}
+}
+
+func TestResumeColonyRestoresInvalidStateFromLegacyHandoff(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	handoff := `# Colony Session — Paused Colony
+
+## Goal
+
+- Legacy recovered colony
+
+## Phase
+
+- Current: 1/6 — First phase
+- State: READY
+
+## Tasks
+
+- Rebuild runtime state
+
+## Next Step
+
+- Run ` + "`aether build 1`" + `
+`
+	if err := writeHandoffDocument(handoff); err != nil {
+		t.Fatalf("failed to seed handoff: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "COLONY_STATE.json"), []byte(`{"test":true}`), 0644); err != nil {
+		t.Fatalf("failed to corrupt state: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"resume-colony"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("resume-colony returned error: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), `"state_recovered_from_handoff":true`) {
+		t.Fatalf("expected legacy handoff recovery marker, got: %s", buf.String())
+	}
+
+	var recovered colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &recovered); err != nil {
+		t.Fatalf("failed to reload recovered state: %v", err)
+	}
+	if recovered.Goal == nil || *recovered.Goal != "Legacy recovered colony" {
+		t.Fatalf("goal = %v, want legacy recovered colony", recovered.Goal)
+	}
+	if recovered.State != colony.StateREADY || recovered.CurrentPhase != 1 {
+		t.Fatalf("state/current_phase = %s/%d, want READY/1", recovered.State, recovered.CurrentPhase)
+	}
+	if len(recovered.Plan.Phases) != 6 {
+		t.Fatalf("phase count = %d, want 6", len(recovered.Plan.Phases))
+	}
+	if recovered.Plan.Phases[0].Name != "First phase" {
+		t.Fatalf("phase name = %q, want First phase", recovered.Plan.Phases[0].Name)
+	}
+	if len(recovered.Plan.Phases[0].Tasks) != 1 || recovered.Plan.Phases[0].Tasks[0].Goal != "Rebuild runtime state" {
+		t.Fatalf("legacy task not restored: %+v", recovered.Plan.Phases[0].Tasks)
 	}
 }
 
@@ -471,13 +624,13 @@ func TestResumeVisualFreshnessWarning(t *testing.T) {
 			"session_id": "test",
 		},
 		"current": map[string]interface{}{
-			"goal":    "Test goal",
-			"state":   "ready",
-			"phase":   1,
+			"goal":         "Test goal",
+			"state":        "ready",
+			"phase":        1,
 			"total_phases": 3,
 		},
 		"blockers": []string{},
-		"signals": map[string]interface{}{"items": []string{}, "count": 0},
+		"signals":  map[string]interface{}{"items": []string{}, "count": 0},
 	}
 
 	output := renderResumeVisual(result, "", true)
@@ -602,9 +755,7 @@ func TestResumeDetectsStaleFocusSignals(t *testing.T) {
 		CurrentPhase: 5,
 		Milestone:    "Open Chambers",
 		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
-			},
+			Phases: resumeTestPhasesThrough(5),
 		},
 	})
 
@@ -666,9 +817,7 @@ func TestResumeNoStaleWhenSourcePhaseMatchesCurrent(t *testing.T) {
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 3,
 		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 3, Name: "Current", Status: colony.PhaseInProgress},
-			},
+			Phases: resumeTestPhasesThrough(3),
 		},
 	})
 
@@ -722,9 +871,7 @@ func TestResumeNilSourcePhaseNotFlagged(t *testing.T) {
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 5,
 		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
-			},
+			Phases: resumeTestPhasesThrough(5),
 		},
 	})
 
@@ -780,9 +927,7 @@ func TestResumeOnlyFocusFlaggedNotRedirect(t *testing.T) {
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 5,
 		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
-			},
+			Phases: resumeTestPhasesThrough(5),
 		},
 	})
 
@@ -837,9 +982,7 @@ func TestResumeInactiveFocusNotFlagged(t *testing.T) {
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 5,
 		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 5, Name: "Current", Status: colony.PhaseInProgress},
-			},
+			Phases: resumeTestPhasesThrough(5),
 		},
 	})
 

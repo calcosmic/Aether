@@ -1,44 +1,45 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.12
-milestone_name: Safe Colony
-status: milestone_complete
-stopped_at: Phase 86 context gathered
-last_updated: "2026-05-01T12:41:37.792Z"
-last_activity: 2026-05-01 -- Phase --phase execution started
+milestone: v1.14
+milestone_name: Queen Authority
+status: completed
+stopped_at: context exhaustion at 75% (2026-05-04)
+last_updated: "2026-05-04T02:30:08.666Z"
+last_activity: 2026-05-04 -- Phase 99 marked complete
 progress:
   total_phases: 7
-  completed_phases: 6
-  total_plans: 15
-  completed_plans: 9
-  percent: 86
+  completed_phases: 7
+  total_plans: 14
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-30)
+See: .planning/PROJECT.md (updated 2026-05-03)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase --phase — 86
+**Current focus:** Phase 99 — output-filtering-phase-summary
 
 ## Current Position
 
-Phase: 87
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-01
+Phase: 99 — COMPLETE
+Next phase: 97 (queen-led-continue)
+Plan: 3 of 3
+Status: Phase 99 complete
+Last activity: 2026-05-04 -- Phase 99 marked complete
 
-Progress: [##        ] 14% (1/7 phases complete in this milestone)
+Progress: [======    ] 57%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 13 (v1.12)
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 7 (v1.14)
+- Average duration: ~10 min
+- Total execution time: 1.5 hours
 
 *Updated after each plan completion*
 
@@ -47,6 +48,20 @@ Progress: [##        ] 14% (1/7 phases complete in this milestone)
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- 96-01: Orchestrator is a pure function (classify, decide, log, return) -- no goroutine or daemon
+- 96-01: Budget uses total-used counter (retries + reassigns + fixer) against total_budget, not per-type limits
+- 96-01: RecoveryLogFile.RecoveryBudget uses omitempty for backward compatibility with Phase 94 files
+- 96-02: Continue finalize orchestrator runs AFTER Phase 95's dispatchFixer, providing context without dual-dispatch
+- 96-02: Hard block gates bypass orchestrator entirely, escalate immediately (D-04)
+- 96-02: Gate failures use status "failed" which maps to RequiresAttempt classification
+- v1.14: 7-phase roadmap: infrastructure first (gate classification + recovery data model), then core value (smart gates + auto-recovery), then integration (queen-led continue + wave lifecycle), then polish (output filtering)
+- v1.14: Phase 93 and 94 are independent infrastructure phases but executed sequentially for simplicity
+- v1.14: Gate classification (GATE-01) is the foundation -- everything else depends on knowing which gates are hard_block vs soft_block vs advisory
+- v1.14: Heavy depth multiplier is 0.0 (no auto-resolve) -- user asked for thorough checking, soft_block gates stay blocked
+- v1.14: Binary gates auto-resolve based on depth multiplier only (not numeric threshold); threshold 0.0 is normal for pass/fail gates
+- v1.13: LOOP requirements woven into gate recovery phases, not isolated
 
 ### Pending Todos
 
@@ -54,7 +69,10 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- Research flag (Phase 96): Gate-specific recovery strategies need per-gate research -- what constitutes "auto-recoverable" for each of the 11 gates requires understanding each gate's failure semantics
+- Research flag (Phase 98): Queen agent prompt engineering for recovery decisions -- how to give the queen enough context to make good recovery choices without exceeding her context budget
+- Risk: Cascading fix-fail cycles (queen retries fundamentally broken task) -- mitigated by failure classification before recovery and per-phase budget cap
+- Risk: Smart gates auto-resolving legitimate findings -- mitigated by never auto-resolving hard_block gates and preserving original findings in audit trail
 
 ## Deferred Items
 
@@ -71,11 +89,13 @@ Items acknowledged and carried forward from previous milestones:
 | v2 scope | Council system (INTEL-07) | Deferred | v1.11 |
 | v2 scope | Curation ant pipeline (INTEL-08) | Deferred | v1.11 |
 | v2 scope | Consolidation pipeline (INTEL-09) | Deferred | v1.11 |
+| v2 scope | Queen autonomy levels (QUEEN-01) | Needs user testing | v1.14 |
+| v2 scope | Cross-phase queen continuity (QUEEN-02) | Needs proven recovery loop first | v1.14 |
+| v2 scope | Queen context budget config (QUEEN-03) | Needs empirical validation | v1.14 |
+| v2 scope | Cross-phase coordination (QUEEN-04) | Architectural risk | v1.14 |
 
 ## Session Continuity
 
-Last session: --stopped-at
-Stopped at: Phase 86 context gathered
-Resume file: --resume-file
-
-**Planned Phase:** 86 (depth-selection-ui-and-persistence) — 3 plans — 2026-05-01T12:33:18.382Z
+Last session: 2026-05-04T02:30:08.657Z
+Stopped at: context exhaustion at 75% (2026-05-04)
+Resume file: None
