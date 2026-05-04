@@ -628,3 +628,31 @@ func TestExtractTarGzImpl_AcceptsAlternateRegularFileType(t *testing.T) {
 		t.Errorf("content mismatch: got %q, want %q", string(data), binContent)
 	}
 }
+
+func TestExtractTarGzImpl_AcceptsCapitalizedBinaryName(t *testing.T) {
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "test.tar.gz")
+	stageDir := filepath.Join(tmpDir, "stage")
+	destDir := filepath.Join(tmpDir, "dest")
+	binContent := "fake binary content"
+
+	if err := os.MkdirAll(stageDir, 0755); err != nil {
+		t.Fatalf("mkdir stage: %v", err)
+	}
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		t.Fatalf("mkdir dest: %v", err)
+	}
+
+	createTestTarGz(t, archivePath, "Aether_1.0.0_darwin_arm64", "Aether", binContent, tar.TypeReg)
+
+	if err := extractTarGzImpl(archivePath, stageDir, destDir, "aether"); err != nil {
+		t.Fatalf("extractTarGzImpl capitalized binary returned error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(destDir, "aether"))
+	if err != nil {
+		t.Fatalf("read dest binary: %v", err)
+	}
+	if string(data) != binContent {
+		t.Errorf("content mismatch: got %q, want %q", string(data), binContent)
+	}
+}

@@ -6,6 +6,7 @@ before:
 
 builds:
   - main: ./cmd/aether/
+    binary: aether
     ldflags:
       - -X github.com/calcosmic/Aether/cmd.Version={{.Version}}
     env:
