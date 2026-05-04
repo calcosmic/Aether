@@ -86,8 +86,12 @@ func isSupportedPlatform(goos, goarch string) bool {
 	return detectPlatform(goos, goarch) != nil
 }
 
-// archiveFilename returns the goreleaser archive filename for the given version and platform.
+// archiveFilename returns the primary GoReleaser archive filename for the given version and platform.
 func archiveFilename(version, goos, goarch string) string {
+	return fmt.Sprintf("Aether_%s_%s_%s.tar.gz", version, goos, goarch)
+}
+
+func legacyArchiveFilename(version, goos, goarch string) string {
 	ext := ".tar.gz"
 	if goos == "windows" {
 		ext = ".zip"
@@ -95,14 +99,35 @@ func archiveFilename(version, goos, goarch string) string {
 	return fmt.Sprintf("aether_v%s_%s_%s%s", version, goos, goarch, ext)
 }
 
+func archiveFilenameCandidates(version, goos, goarch string) []string {
+	primary := archiveFilename(version, goos, goarch)
+	legacy := legacyArchiveFilename(version, goos, goarch)
+	if primary == legacy {
+		return []string{primary}
+	}
+	return []string{primary, legacy}
+}
+
 // buildArchiveURL constructs the full download URL for the platform archive.
 func buildArchiveURL(version, goos, goarch string) string {
 	return fmt.Sprintf("%s/%s", fmt.Sprintf(baseReleaseURL, version), archiveFilename(version, goos, goarch))
 }
 
+func buildArchiveURLForFile(version, filename string) string {
+	return fmt.Sprintf("%s/%s", fmt.Sprintf(baseReleaseURL, version), filename)
+}
+
 // buildChecksumsURL constructs the URL for the checksums.txt file.
 func buildChecksumsURL(version string) string {
+	return fmt.Sprintf("%s/checksums.txt", fmt.Sprintf(baseReleaseURL, version))
+}
+
+func buildLegacyChecksumsURL(version string) string {
 	return fmt.Sprintf("%s/aether_v%s_checksums.txt", fmt.Sprintf(baseReleaseURL, version), version)
+}
+
+func buildChecksumsURLCandidates(version string) []string {
+	return []string{buildChecksumsURL(version), buildLegacyChecksumsURL(version)}
 }
 
 // binaryName returns the binary name for the given OS.
@@ -181,6 +206,18 @@ func downloadText(url string) (string, error) {
 	return string(data), nil
 }
 
+func downloadFirstText(urls []string) (string, string, error) {
+	var failures []string
+	for _, url := range urls {
+		content, err := downloadText(url)
+		if err == nil {
+			return content, url, nil
+		}
+		failures = append(failures, err.Error())
+	}
+	return "", "", errors.New(strings.Join(failures, "; "))
+}
+
 // HashResult holds the computed SHA-256 hash and path of a downloaded file.
 type HashResult struct {
 	Hash    string
@@ -251,24 +288,33 @@ func DownloadBinary(version, destDir string) (*DownloadResult, error) {
 		)
 	}
 
-	// 2. Construct URLs
-	archiveFile := archiveFilename(version, platform.OS, platform.Arch)
-	archiveURL := buildArchiveURL(version, platform.OS, platform.Arch)
-	checksumsURL := buildChecksumsURL(version)
-
-	// 3. Download checksums
-	checksumsContent, err := downloadText(checksumsURL)
+	// 2. Download checksums. Current releases publish checksums.txt; older
+	// releases used aether_v<version>_checksums.txt.
+	checksumsContent, _, err := downloadFirstText(buildChecksumsURLCandidates(version))
 	if err != nil {
 		return nil, fmt.Errorf("failed to download checksums for v%s: %w", version, err)
 	}
 
-	// 4. Parse expected hash
-	expectedHash, err := parseChecksum(checksumsContent, archiveFile)
-	if err != nil {
-		return nil, fmt.Errorf("checksum for %q not found in checksums.txt: %w", archiveFile, err)
+	// 3. Find the archive name used by this release. Current GoReleaser
+	// archives are Aether_<version>_<os>_<arch>.tar.gz; legacy releases used
+	// aether_v<version>_<os>_<arch> with zip archives on Windows.
+	var archiveFile string
+	var expectedHash string
+	var checksumFailures []string
+	for _, candidate := range archiveFilenameCandidates(version, platform.OS, platform.Arch) {
+		expectedHash, err = parseChecksum(checksumsContent, candidate)
+		if err == nil {
+			archiveFile = candidate
+			break
+		}
+		checksumFailures = append(checksumFailures, err.Error())
 	}
+	if archiveFile == "" {
+		return nil, fmt.Errorf("checksum for supported archive names not found in checksums.txt: %s", strings.Join(checksumFailures, "; "))
+	}
+	archiveURL := buildArchiveURLForFile(version, archiveFile)
 
-	// 5. Download archive to temp file, computing hash during stream
+	// 4. Download archive to temp file, computing hash during stream
 	tmpDir, err := os.MkdirTemp("", "aether-download-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -281,7 +327,7 @@ func DownloadBinary(version, destDir string) (*DownloadResult, error) {
 		return nil, fmt.Errorf("failed to download %s: %w", archiveFile, err)
 	}
 
-	// 6. Verify checksum
+	// 5. Verify checksum
 	if hashResult.Hash != expectedHash {
 		return nil, fmt.Errorf(
 			"checksum mismatch for %s: expected %s, got %s",
@@ -289,7 +335,7 @@ func DownloadBinary(version, destDir string) (*DownloadResult, error) {
 		)
 	}
 
-	// 7. Extract binary from archive
+	// 6. Extract binary from archive
 	binName := binaryName(platform.OS)
 	extractDir := filepath.Join(tmpDir, "extract")
 	if err := os.MkdirAll(extractDir, 0755); err != nil {
@@ -300,7 +346,7 @@ func DownloadBinary(version, destDir string) (*DownloadResult, error) {
 		return nil, fmt.Errorf("failed to extract archive: %w", err)
 	}
 
-	// 8. Atomic install: ensure dest dir exists, rename binary into place
+	// 7. Atomic install: ensure dest dir exists, rename binary into place
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return nil, fmt.Errorf("create dest dir %s: %w", destDir, err)
 	}
