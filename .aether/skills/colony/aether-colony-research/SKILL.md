@@ -56,8 +56,10 @@ that the Codex research synthesis layer was bypassed.
    - architecture or design review: `architecture-review`
    - bug, incident, or root cause: `bug-investigation`
    - practices, conventions, or background research: `research-brief`
-4. Ask the user to choose research depth unless they already gave one: `quick`,
-   `balanced`, `deep`, or `exhaustive`.
+4. Present research depth as selectable options unless the user already gave
+   one: `quick` (5 iterations), `balanced`/`standard` (15), `deep` (30), or
+   `exhaustive`/`marathon` (50). Do not hide this behind a raw flag-only flow.
+   If the user gives an exact iteration cap, pass `--max-iterations <1-50>`.
 5. Ask the user to choose target confidence unless they already gave one: 80%,
    90%, 95% recommended, or 99%. Pass the selected number as
    `--confidence-target <percent>`. Oracle should iterate until it reaches that
@@ -71,8 +73,13 @@ that the Codex research synthesis layer was bypassed.
 8. Run:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> "<synthesized prompt>"
+AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> --background "<synthesized prompt>"
 ```
+
+Use `--background` for long-running research, especially from OpenCode. The
+runtime detaches a controller, writes progress under `.aether/oracle`, and
+`aether oracle status` remains the inspection path. Omit `--background` only
+when the user explicitly wants foreground execution.
 
 For broad triage, prefer:
 
@@ -82,6 +89,8 @@ AETHER_OUTPUT_MODE=visual aether oracle --depth quick --confidence-target <perce
 
 If the shell/tool call times out, run `aether oracle status` before declaring
 failure or switching to ad hoc agents.
+If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic
+Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`.
 
 9. After Oracle completes, suggest persisting high-value findings as pheromones
    or hive wisdom only after user approval.

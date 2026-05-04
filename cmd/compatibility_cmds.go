@@ -65,7 +65,13 @@ var oracleCmd = &cobra.Command{
 		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
 		scope, _ := cmd.Flags().GetString("scope")
 		template, _ := cmd.Flags().GetString("template")
-		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget, scope, template)
+		maxIterations, _ := cmd.Flags().GetInt("max-iterations")
+		background, _ := cmd.Flags().GetBool("background")
+		maxIterationArg := ""
+		if maxIterations > 0 {
+			maxIterationArg = fmt.Sprintf("%d", maxIterations)
+		}
+		result, err := runOracleCompatibility(skillWorkspaceRoot(), args, depth, confidenceTarget, scope, template, maxIterationArg, fmt.Sprintf("%t", background))
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
@@ -158,6 +164,8 @@ func init() {
 	oracleCmd.Flags().String("confidence-target", "", "Target confidence percentage 1-100 (default: per depth level). Oracle will not finalize below this target unless a hard blocker is reported or max iterations are reached.")
 	oracleCmd.Flags().String("scope", defaultOracleScope, "Research scope: auto, repo, web, or both")
 	oracleCmd.Flags().String("template", defaultOracleTemplate, "Output template: auto, prd, tech-eval, architecture-review, bug-investigation, research-brief, or custom")
+	oracleCmd.Flags().Int("max-iterations", 0, "Override depth iteration cap, 1-50")
+	oracleCmd.Flags().Bool("background", false, "Start the Oracle loop in a detached background controller and return immediately")
 
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(oracleCmd)
@@ -621,6 +629,13 @@ func renderOracleCompatibilityVisual(result map[string]interface{}) string {
 	b.WriteString("Status: ")
 	b.WriteString(emptyFallback(stringValue(result["status"]), "idle"))
 	b.WriteString("\n")
+	if boolValue(result["background"]) {
+		b.WriteString("Controller: background")
+		if pid := intValue(result["controller_pid"]); pid > 0 {
+			b.WriteString(fmt.Sprintf(" (PID %d)", pid))
+		}
+		b.WriteString("\n")
+	}
 	if phase := strings.TrimSpace(stringValue(result["phase"])); phase != "" {
 		b.WriteString("Phase: ")
 		b.WriteString(phase)
@@ -631,9 +646,9 @@ func renderOracleCompatibilityVisual(result map[string]interface{}) string {
 		b.WriteString(template)
 		b.WriteString("\n")
 	}
-	if iteration := intValue(result["iteration"]); iteration > 0 {
+	if iteration, maxIterations := intValue(result["iteration"]), intValue(result["max_iterations"]); iteration > 0 || maxIterations > 0 {
 		b.WriteString(fmt.Sprintf("Iteration: %d", iteration))
-		if maxIterations := intValue(result["max_iterations"]); maxIterations > 0 {
+		if maxIterations > 0 {
 			b.WriteString(fmt.Sprintf(" of %d", maxIterations))
 		}
 		b.WriteString("\n")
@@ -689,6 +704,11 @@ func renderOracleCompatibilityVisual(result map[string]interface{}) string {
 	if path := strings.TrimSpace(stringValue(result["research_plan"])); path != "" {
 		b.WriteString("Research Plan: ")
 		b.WriteString(path)
+		b.WriteString("\n")
+	}
+	if logPath := strings.TrimSpace(stringValue(result["log_path"])); logPath != "" {
+		b.WriteString("Log: ")
+		b.WriteString(logPath)
 		b.WriteString("\n")
 	}
 	next := strings.TrimSpace(stringValue(result["next"]))

@@ -226,6 +226,110 @@ EOF
 	}
 }
 
+func TestIsAgentDelegateSession(t *testing.T) {
+	tests := []struct {
+		name     string
+		envVars  map[string]string
+		want     bool
+	}{
+		{
+			name:    "no env vars set",
+			envVars: map[string]string{},
+			want:    false,
+		},
+		{
+			name: "CLAUDE_CODE_SIMPLE=1",
+			envVars: map[string]string{
+				"CLAUDE_CODE_SIMPLE": "1",
+			},
+			want: true,
+		},
+		{
+			name: "OPENCODE_AGENT=1",
+			envVars: map[string]string{
+				"OPENCODE_AGENT": "1",
+			},
+			want: true,
+		},
+		{
+			name: "AETHER_AGENT_DELEGATE=1",
+			envVars: map[string]string{
+				"AETHER_AGENT_DELEGATE": "1",
+			},
+			want: true,
+		},
+		{
+			name: "all three set",
+			envVars: map[string]string{
+				"CLAUDE_CODE_SIMPLE":    "1",
+				"OPENCODE_AGENT":        "1",
+				"AETHER_AGENT_DELEGATE": "1",
+			},
+			want: true,
+		},
+		{
+			name: "CLAUDE_CODE_SIMPLE=0 (disabled)",
+			envVars: map[string]string{
+				"CLAUDE_CODE_SIMPLE": "0",
+			},
+			want: false,
+		},
+		{
+			name: "OPENCODE_AGENT=0 (disabled)",
+			envVars: map[string]string{
+				"OPENCODE_AGENT": "0",
+			},
+			want: false,
+		},
+		{
+			name: "AETHER_AGENT_DELEGATE=0 (disabled)",
+			envVars: map[string]string{
+				"AETHER_AGENT_DELEGATE": "0",
+			},
+			want: false,
+		},
+		{
+			name: "CLAUDE_CODE_SIMPLE= (empty)",
+			envVars: map[string]string{
+				"CLAUDE_CODE_SIMPLE": "",
+			},
+			want: false,
+		},
+		{
+			name: "OPENCODE_AGENT and AETHER_AGENT_DELEGATE set",
+			envVars: map[string]string{
+				"OPENCODE_AGENT":        "1",
+				"AETHER_AGENT_DELEGATE": "1",
+			},
+			want: true,
+		},
+		{
+			name: "unrelated env vars set",
+			envVars: map[string]string{
+				"PATH": "/usr/bin",
+				"HOME": "/tmp",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear all relevant env vars first
+			for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE"} {
+				t.Setenv(key, "")
+			}
+			for k, v := range tt.envVars {
+				t.Setenv(k, v)
+			}
+			got := IsAgentDelegateSession()
+			if got != tt.want {
+				t.Fatalf("IsAgentDelegateSession() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestClassifyHostedExecutionErrorExplainsOpenCodeLocalServerFailure(t *testing.T) {
 	err := classifyHostedExecutionError("opencode", os.ErrNotExist, "POST http://localhost:4000/messages returned 404", false)
 	text := err.Error()
