@@ -46,6 +46,63 @@ func TestWorkerConfig_CustomTimeout(t *testing.T) {
 	}
 }
 
+func TestWorkerClaimsSchemaStrictObjects(t *testing.T) {
+	schema := workerClaimsSchema()
+	if !schema.AdditionalProperties {
+		assertStrictSchemaObject(t, map[string]interface{}{
+			"type":                 schema.Type,
+			"additionalProperties": schema.AdditionalProperties,
+			"properties":           schema.Properties,
+		}, "$")
+		return
+	}
+	t.Fatal("root worker claims schema must disallow additional properties")
+}
+
+func assertStrictSchemaObject(t *testing.T, schema map[string]interface{}, path string) {
+	t.Helper()
+	if schema["type"] == "object" {
+		value, ok := schema["additionalProperties"].(bool)
+		if !ok {
+			t.Fatalf("%s object schema missing additionalProperties=false", path)
+		}
+		if value {
+			t.Fatalf("%s object schema allows additional properties", path)
+		}
+	}
+	props, ok := schema["properties"].(map[string]interface{})
+	if !ok {
+		if schema["type"] == "object" {
+			t.Fatalf("%s object schema missing properties map", path)
+		}
+		return
+	}
+	requiredRaw, ok := schema["required"].([]string)
+	if path == "$" {
+		ok = true
+		requiredRaw = workerClaimsSchema().Required
+	}
+	if !ok {
+		t.Fatalf("%s object schema missing required list", path)
+	}
+	required := map[string]bool{}
+	for _, name := range requiredRaw {
+		required[name] = true
+	}
+	for name := range props {
+		if !required[name] {
+			t.Fatalf("%s object schema required list missing %q", path, name)
+		}
+	}
+	for name, raw := range props {
+		child, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		assertStrictSchemaObject(t, child, path+"."+name)
+	}
+}
+
 // --- FakeInvoker tests ---
 
 func TestFakeInvoker_ReturnsDeterministicResults(t *testing.T) {

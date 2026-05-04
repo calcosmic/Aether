@@ -737,7 +737,7 @@ Return ONLY a single JSON object as your final response.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness.
 - Keep summary concise and concrete.
-- Include artifacts only when the task brief explicitly asks for a named structured artifact.
+- Include artifacts as an object. Use {} unless the task brief gives an explicit schema.
 `, filepath.Clean(root), statusLine))
 }
 
@@ -760,6 +760,7 @@ func workerClaimsSchema() jsonSchema {
 			"files_created",
 			"files_modified",
 			"tests_written",
+			"artifacts",
 			"tool_count",
 			"blockers",
 			"spawns",
@@ -779,7 +780,9 @@ func workerClaimsSchema() jsonSchema {
 			"tests_written":  stringArray,
 			"artifacts": map[string]interface{}{
 				"type":                 "object",
-				"additionalProperties": true,
+				"additionalProperties": false,
+				"properties":           map[string]interface{}{},
+				"required":             []string{},
 			},
 			"tool_count": map[string]interface{}{
 				"type":    "integer",
@@ -790,6 +793,17 @@ func workerClaimsSchema() jsonSchema {
 			"handoff": map[string]interface{}{
 				"type":                 "object",
 				"additionalProperties": false,
+				"required": []string{
+					"changed_files",
+					"commands_run",
+					"verification_status",
+					"known_failures",
+					"open_decisions",
+					"assumptions",
+					"next_worker_instructions",
+					"do_not_repeat",
+					"freshness",
+				},
 				"properties": map[string]interface{}{
 					"changed_files":            stringArray,
 					"commands_run":             stringArray,
