@@ -52,7 +52,7 @@ func extractTarGzImpl(archivePath, stageDir, destDir, bin string) error {
 			if err := os.MkdirAll(targetPath, 0755); err != nil {
 				return fmt.Errorf("mkdir: %w", err)
 			}
-		case tar.TypeReg:
+		case tar.TypeReg, tar.TypeRegA:
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 				return fmt.Errorf("mkdir parent: %w", err)
 			}

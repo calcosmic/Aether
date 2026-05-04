@@ -1,8 +1,10 @@
 package downloader
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bufio"
+	"compress/gzip"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -84,15 +86,15 @@ func TestBuildArchiveURL(t *testing.T) {
 	}{
 		{
 			"1.0.0", "darwin", "amd64",
-			"https://github.com/calcosmic/Aether/releases/download/v1.0.0/aether_v1.0.0_darwin_amd64.tar.gz",
+			"https://github.com/calcosmic/Aether/releases/download/v1.0.0/Aether_1.0.0_darwin_amd64.tar.gz",
 		},
 		{
 			"2.3.0", "linux", "arm64",
-			"https://github.com/calcosmic/Aether/releases/download/v2.3.0/aether_v2.3.0_linux_arm64.tar.gz",
+			"https://github.com/calcosmic/Aether/releases/download/v2.3.0/Aether_2.3.0_linux_arm64.tar.gz",
 		},
 		{
 			"0.1.0", "windows", "amd64",
-			"https://github.com/calcosmic/Aether/releases/download/v0.1.0/aether_v0.1.0_windows_amd64.zip",
+			"https://github.com/calcosmic/Aether/releases/download/v0.1.0/Aether_0.1.0_windows_amd64.tar.gz",
 		},
 	}
 	for _, tc := range tests {
@@ -107,7 +109,7 @@ func TestBuildArchiveURL(t *testing.T) {
 
 func TestBuildChecksumsURL(t *testing.T) {
 	got := buildChecksumsURL("2.5.0")
-	want := "https://github.com/calcosmic/Aether/releases/download/v2.5.0/aether_v2.5.0_checksums.txt"
+	want := "https://github.com/calcosmic/Aether/releases/download/v2.5.0/checksums.txt"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -120,9 +122,9 @@ func TestArchiveFilename(t *testing.T) {
 		arch    string
 		want    string
 	}{
-		{"1.0.0", "darwin", "amd64", "aether_v1.0.0_darwin_amd64.tar.gz"},
-		{"1.0.0", "windows", "amd64", "aether_v1.0.0_windows_amd64.zip"},
-		{"2.0.0", "linux", "arm64", "aether_v2.0.0_linux_arm64.tar.gz"},
+		{"1.0.0", "darwin", "amd64", "Aether_1.0.0_darwin_amd64.tar.gz"},
+		{"1.0.0", "windows", "amd64", "Aether_1.0.0_windows_amd64.tar.gz"},
+		{"2.0.0", "linux", "arm64", "Aether_2.0.0_linux_arm64.tar.gz"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.want, func(t *testing.T) {
@@ -134,12 +136,44 @@ func TestArchiveFilename(t *testing.T) {
 	}
 }
 
+func TestArchiveFilenameCandidatesIncludesLegacyFallback(t *testing.T) {
+	got := archiveFilenameCandidates("1.0.0", "windows", "amd64")
+	want := []string{
+		"Aether_1.0.0_windows_amd64.tar.gz",
+		"aether_v1.0.0_windows_amd64.zip",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d candidates, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("candidate %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestBuildChecksumsURLCandidatesIncludesLegacyFallback(t *testing.T) {
+	got := buildChecksumsURLCandidates("2.5.0")
+	want := []string{
+		"https://github.com/calcosmic/Aether/releases/download/v2.5.0/checksums.txt",
+		"https://github.com/calcosmic/Aether/releases/download/v2.5.0/aether_v2.5.0_checksums.txt",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d candidates, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("candidate %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 // --- Checksum Parsing ---
 
 func TestParseChecksums_Found(t *testing.T) {
-	content := "abc123def  aether_v1.0.0_darwin_amd64.tar.gz\n" +
-		"deadbeef  aether_v1.0.0_linux_amd64.tar.gz\n"
-	hash, err := parseChecksum(content, "aether_v1.0.0_darwin_amd64.tar.gz")
+	content := "abc123def  Aether_1.0.0_darwin_amd64.tar.gz\n" +
+		"deadbeef  Aether_1.0.0_linux_amd64.tar.gz\n"
+	hash, err := parseChecksum(content, "Aether_1.0.0_darwin_amd64.tar.gz")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -500,6 +534,93 @@ func TestExtractZipImpl_WithSubdirs(t *testing.T) {
 
 	destBin := filepath.Join(destDir, binName)
 	data, err := os.ReadFile(destBin)
+	if err != nil {
+		t.Fatalf("read dest binary: %v", err)
+	}
+	if string(data) != binContent {
+		t.Errorf("content mismatch: got %q, want %q", string(data), binContent)
+	}
+}
+
+func createTestTarGz(t *testing.T, archivePath, topDir, binName, content string, typeflag byte) {
+	t.Helper()
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create tar.gz: %v", err)
+	}
+	defer file.Close()
+
+	gz := gzip.NewWriter(file)
+	defer gz.Close()
+	tw := tar.NewWriter(gz)
+	defer tw.Close()
+
+	dirHeader := &tar.Header{Name: topDir + "/", Typeflag: tar.TypeDir, Mode: 0755}
+	if err := tw.WriteHeader(dirHeader); err != nil {
+		t.Fatalf("write dir header: %v", err)
+	}
+	header := &tar.Header{
+		Name:     topDir + "/" + binName,
+		Typeflag: typeflag,
+		Mode:     0755,
+		Size:     int64(len(content)),
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		t.Fatalf("write file header: %v", err)
+	}
+	if _, err := tw.Write([]byte(content)); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+}
+
+func TestExtractTarGzImpl_Basic(t *testing.T) {
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "test.tar.gz")
+	stageDir := filepath.Join(tmpDir, "stage")
+	destDir := filepath.Join(tmpDir, "dest")
+	binContent := "fake binary content"
+
+	if err := os.MkdirAll(stageDir, 0755); err != nil {
+		t.Fatalf("mkdir stage: %v", err)
+	}
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		t.Fatalf("mkdir dest: %v", err)
+	}
+
+	createTestTarGz(t, archivePath, "aether_v1.0.0_darwin_arm64", "aether", binContent, tar.TypeReg)
+
+	if err := extractTarGzImpl(archivePath, stageDir, destDir, "aether"); err != nil {
+		t.Fatalf("extractTarGzImpl returned error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(destDir, "aether"))
+	if err != nil {
+		t.Fatalf("read dest binary: %v", err)
+	}
+	if string(data) != binContent {
+		t.Errorf("content mismatch: got %q, want %q", string(data), binContent)
+	}
+}
+
+func TestExtractTarGzImpl_AcceptsAlternateRegularFileType(t *testing.T) {
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "test.tar.gz")
+	stageDir := filepath.Join(tmpDir, "stage")
+	destDir := filepath.Join(tmpDir, "dest")
+	binContent := "fake binary content"
+
+	if err := os.MkdirAll(stageDir, 0755); err != nil {
+		t.Fatalf("mkdir stage: %v", err)
+	}
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		t.Fatalf("mkdir dest: %v", err)
+	}
+
+	createTestTarGz(t, archivePath, "aether_v1.0.0_darwin_arm64", "aether", binContent, tar.TypeRegA)
+
+	if err := extractTarGzImpl(archivePath, stageDir, destDir, "aether"); err != nil {
+		t.Fatalf("extractTarGzImpl TypeRegA returned error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(destDir, "aether"))
 	if err != nil {
 		t.Fatalf("read dest binary: %v", err)
 	}
