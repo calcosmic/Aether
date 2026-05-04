@@ -43,11 +43,13 @@ Template mapping:
 - best practices, conventions, or patterns: `--template research-brief`
 - otherwise: `--template custom`
 
-Ask the user to choose research depth unless they already gave one:
-- `quick` — fast first pass
-- `balanced` — normal thoroughness
-- `deep` — comprehensive investigation
-- `exhaustive` — near-complete convergence
+Present research depth as selectable options unless the user already gave one:
+- `quick` — fast first pass, up to 5 iterations
+- `balanced` or `standard` — normal thoroughness, up to 15 iterations
+- `deep` — comprehensive investigation, up to 30 iterations
+- `exhaustive` or `marathon` — near-complete convergence, up to 50 iterations
+
+If the user gives an exact iteration cap, pass `--max-iterations <1-50>`.
 
 Ask the user to choose target confidence unless they already gave one:
 - **80% confidence** — good enough for a first pass
@@ -65,8 +67,13 @@ The PRD template/reference is automatic. Do not ask the user to run
 Run the Oracle after the user confirms the refined prompt:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> "<synthesized prompt>"
+AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> --background "<synthesized prompt>"
 ```
+
+Use `--background` for long-running research, especially from OpenCode. The
+runtime detaches a controller, writes progress under `.aether/oracle`, and
+`aether oracle status` remains the inspection path. Omit `--background` only
+when the user explicitly wants foreground execution.
 
 ## Broad Scope And Timeout Handling
 
@@ -87,6 +94,8 @@ aether oracle status
 
 Report that status. Do not assume Oracle failed, and do not bypass it with ad
 hoc agents until the runtime status says it is blocked, stopped, or complete.
+If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic
+Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`.
 
 ## Cross-Platform Drift Guard
 

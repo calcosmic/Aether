@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -32,6 +33,11 @@ var statusCmd = &cobra.Command{
 			return nil
 		}
 
+		mode := strings.ToLower(strings.TrimSpace(os.Getenv("AETHER_OUTPUT_MODE")))
+		if mode == "json" {
+			outputOK(buildStatusResult(state, store))
+			return nil
+		}
 		output := renderDashboard(state, store)
 		fmt.Fprint(stdout, output)
 		return nil
@@ -447,6 +453,67 @@ func guidedActionMaps(actions []guidedAction) []map[string]interface{} {
 		})
 	}
 	return maps
+}
+
+// buildStatusResult constructs the JSON result for the status command.
+func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]interface{} {
+	totalPhases := len(state.Plan.Phases)
+	completedPhases := 0
+	for _, phase := range state.Plan.Phases {
+		if phase.Status == colony.PhaseCompleted {
+			completedPhases++
+		}
+	}
+	phasePosition := completedPhases
+	switch state.State {
+	case colony.StateEXECUTING, colony.StateBUILT:
+		if state.CurrentPhase > phasePosition {
+			phasePosition = state.CurrentPhase
+		}
+	case colony.StateCOMPLETED:
+		phasePosition = totalPhases
+	}
+
+	var tasksCompleted, tasksTotal int
+	var phaseName string
+	displayPhase := recoveryPhase(&state)
+	displayPhaseNum := 0
+	if displayPhase != nil {
+		displayPhaseNum = displayPhase.ID
+		phase := *displayPhase
+		phaseName = phase.Name
+		tasksTotal = len(phase.Tasks)
+		for _, task := range phase.Tasks {
+			if task.Status == colony.TaskCompleted {
+				tasksCompleted++
+			}
+		}
+		if state.State == colony.StateCOMPLETED && phase.Status == colony.PhaseCompleted && tasksCompleted < tasksTotal {
+			tasksCompleted = tasksTotal
+		}
+	}
+
+	result := map[string]interface{}{
+		"goal":                   state.Goal,
+		"state":                  string(state.State),
+		"current_phase":          state.CurrentPhase,
+		"total_phases":           totalPhases,
+		"phases_completed":       phasePosition,
+		"phase_name":             phaseName,
+		"display_phase":          displayPhaseNum,
+		"tasks_completed":        tasksCompleted,
+		"tasks_total":            tasksTotal,
+		"agent_delegate_session": codex.IsAgentDelegateSession(),
+	}
+
+	if s != nil {
+		warnings := computeWarnings(state, s)
+		if len(warnings) > 0 {
+			result["warnings"] = warnings
+		}
+	}
+
+	return result
 }
 
 // renderDashboard produces the full colony status dashboard string.

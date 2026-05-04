@@ -1904,14 +1904,16 @@ func TestResolveOracleDepth(t *testing.T) {
 		wantMax  int
 		wantConf int
 	}{
-		{"quick", "quick", 2, 60},
-		{"balanced", "balanced", 4, 85},
-		{"deep", "deep", 6, 95},
-		{"exhaustive", "exhaustive", 10, 99},
-		{"empty defaults to balanced", "", 4, 85},
-		{"invalid defaults to balanced", "invalid", 4, 85},
-		{"case insensitive", "QUICK", 2, 60},
-		{"whitespace trimmed", "  deep  ", 6, 95},
+		{"quick", "quick", 5, 60},
+		{"balanced", "balanced", 15, 85},
+		{"standard alias", "standard", 15, 85},
+		{"deep", "deep", 30, 95},
+		{"exhaustive", "exhaustive", 50, 99},
+		{"marathon alias", "marathon", 50, 99},
+		{"empty defaults to balanced", "", 15, 85},
+		{"invalid defaults to balanced", "invalid", 15, 85},
+		{"case insensitive", "QUICK", 5, 60},
+		{"whitespace trimmed", "  deep  ", 30, 95},
 	}
 
 	for _, tt := range tests {
@@ -1950,14 +1952,16 @@ func TestOracleDepthFlagSetsMaxIterations(t *testing.T) {
 		t.Fatalf("write oracle agent: %v", err)
 	}
 
+	originalInvoker := newOracleWorkerInvoker
 	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
+	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	rootCmd.SetArgs([]string{"oracle", "--depth", "deep", "release parity"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("oracle with --depth deep returned error: %v", err)
 	}
 
-	// Verify state has MaxIterations=6
+	// Verify state has MaxIterations=30
 	statePath := filepath.Join(root, ".aether", "oracle", "state.json")
 	data, err := os.ReadFile(statePath)
 	if err != nil {
@@ -1967,8 +1971,8 @@ func TestOracleDepthFlagSetsMaxIterations(t *testing.T) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		t.Fatalf("parse oracle state: %v", err)
 	}
-	if state.MaxIterations != 6 {
-		t.Errorf("MaxIterations = %d, want 6 (deep)", state.MaxIterations)
+	if state.MaxIterations != 30 {
+		t.Errorf("MaxIterations = %d, want 30 (deep)", state.MaxIterations)
 	}
 	if state.TargetConfidence != 95 {
 		t.Errorf("TargetConfidence = %d, want 95 (deep)", state.TargetConfidence)

@@ -209,6 +209,15 @@ func (u *UnavailableInvoker) ValidateAgent(path string) error {
 	return fmt.Errorf("worker dispatcher unavailable: %s", describeAvailabilitySet(u.active, u.available))
 }
 
+func IsAgentDelegateSession() bool {
+	for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE"} {
+		if strings.TrimSpace(os.Getenv(key)) == "1" {
+			return true
+		}
+	}
+	return false
+}
+
 func DetectActivePlatform() Platform {
 	if platform := normalizePlatform(os.Getenv(envActivePlatform)); platform != PlatformUnknown {
 		return platform
