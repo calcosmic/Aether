@@ -325,6 +325,13 @@ func TestSyncPlatformHomeAssetsFromHubRefreshesGlobalPlatformHomes(t *testing.T)
 	if err := os.WriteFile(customOpenCodeAgent, []byte("# Custom MDS agent\n"), 0644); err != nil {
 		t.Fatalf("write custom OpenCode agent: %v", err)
 	}
+	customOpenCodeHomeCommand := filepath.Join(homeDir, ".opencode", "command", "custom.md")
+	if err := os.MkdirAll(filepath.Dir(customOpenCodeHomeCommand), 0755); err != nil {
+		t.Fatalf("create custom OpenCode home command parent: %v", err)
+	}
+	if err := os.WriteFile(customOpenCodeHomeCommand, []byte("# Custom command\n"), 0644); err != nil {
+		t.Fatalf("write custom OpenCode home command: %v", err)
+	}
 
 	results, errors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channelStable)
 	if len(errors) > 0 {
@@ -347,12 +354,17 @@ func TestSyncPlatformHomeAssetsFromHubRefreshesGlobalPlatformHomes(t *testing.T)
 
 	assertFileContent(filepath.Join(".claude", "commands", "ant-build.md"), claudeCommand)
 	assertFileContent(filepath.Join(".claude", "agents", "ant", "aether-builder.md"), claudeAgent)
+	assertFileContent(filepath.Join(".opencode", "command", "build.md"), openCodeCommand)
+	assertFileContent(filepath.Join(".opencode", "agent", "aether-builder.md"), openCodeAgent)
 	assertFileContent(filepath.Join(".config", "opencode", "commands", "ant", "build.md"), openCodeCommand)
 	assertFileContent(filepath.Join(".config", "opencode", "agents", "aether-builder.md"), openCodeAgent)
 	assertFileContent(filepath.Join(".codex", "agents", "aether-builder.toml"), codexAgent)
 
 	if _, err := os.Stat(customOpenCodeAgent); err != nil {
 		t.Fatalf("custom OpenCode agent should be preserved: %v", err)
+	}
+	if _, err := os.Stat(customOpenCodeHomeCommand); err != nil {
+		t.Fatalf("custom OpenCode home command should be preserved: %v", err)
 	}
 }
 

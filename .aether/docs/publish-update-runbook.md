@@ -51,7 +51,7 @@ Behavior:
 - Builds the binary (unless `--skip-build-binary`)
 - Validates channel isolation (rejects cross-channel publish, e.g. dev binary targeting stable hub)
 - Syncs companion files to the hub
-- On the stable channel, refreshes user-level Claude/OpenCode/Codex assets from the same source checkout
+- On the stable channel, refreshes user-level Claude/OpenCode/Codex assets from the same source checkout; OpenCode is written to the active `~/.opencode/command` and `~/.opencode/agent` paths plus the legacy `~/.config/opencode/...` paths
 - On the dev channel, intentionally skips user-level platform asset sync so development does not overwrite the stable command surface
 - Verifies binary and hub versions agree after sync
 - Prints a warning if hub version changed
