@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -25,13 +26,19 @@ const (
 var newSwarmWorkerInvoker = codex.NewWorkerInvoker
 
 type swarmWorkerPlan struct {
-	Name      string
-	Caste     string
-	Role      string
-	Task      string
-	AgentName string
-	Wave      int
-	Timeout   time.Duration
+	Stage            string                 `json:"stage,omitempty"`
+	Wave             int                    `json:"wave"`
+	Name             string                 `json:"name"`
+	Caste            string                 `json:"caste"`
+	Role             string                 `json:"role"`
+	Task             string                 `json:"task"`
+	TaskID           string                 `json:"task_id,omitempty"`
+	AgentName        string                 `json:"agent_name"`
+	Brief            string                 `json:"brief,omitempty"`
+	OutputPaths      []string               `json:"output_paths,omitempty"`
+	ResponseContract map[string]interface{} `json:"response_contract,omitempty"`
+	TimeoutSeconds   int                    `json:"timeout_seconds,omitempty"`
+	Timeout          time.Duration          `json:"-"`
 }
 
 type swarmWorkerResponse struct {
@@ -64,6 +71,34 @@ type swarmWorkerExecution struct {
 	ResponsePath string              `json:"response_path,omitempty"`
 }
 
+type swarmManifest struct {
+	Workflow             string                   `json:"workflow"`
+	DispatchMode         string                   `json:"dispatch_mode"`
+	RequiresFinalizer    bool                     `json:"requires_finalizer"`
+	GeneratedAt          string                   `json:"generated_at"`
+	Root                 string                   `json:"root"`
+	SwarmID              string                   `json:"swarm_id"`
+	Target               string                   `json:"target"`
+	WaveCount            int                      `json:"wave_count"`
+	WorkerCount          int                      `json:"worker_count"`
+	RunTimeoutSeconds    int                      `json:"run_timeout_seconds"`
+	WorkerTimeoutSeconds int                      `json:"worker_timeout_seconds"`
+	DispatchContract     map[string]interface{}   `json:"dispatch_contract"`
+	Dispatches           []swarmWorkerPlan        `json:"dispatches"`
+	ExecutionPlan        []map[string]interface{} `json:"execution_plan"`
+	FinalizerCommand     string                   `json:"finalizer_command"`
+}
+
+type externalSwarmCompletion struct {
+	SwarmManifest *swarmManifest         `json:"swarm_manifest,omitempty"`
+	Manifest      *swarmManifest         `json:"manifest,omitempty"`
+	Dispatches    []swarmWorkerExecution `json:"dispatches,omitempty"`
+	Workers       []swarmWorkerExecution `json:"workers,omitempty"`
+	Results       []swarmWorkerExecution `json:"results,omitempty"`
+	Responses     []swarmWorkerResponse  `json:"responses,omitempty"`
+	WorkerResults []codex.WorkerResult   `json:"worker_results,omitempty"`
+}
+
 var swarmCmd = &cobra.Command{
 	Use:   "swarm [problem]",
 	Short: "Launch the Aether swarm bug-destroyer or watch live colony activity",
@@ -75,10 +110,32 @@ var swarmCmd = &cobra.Command{
 		}
 
 		watch, _ := cmd.Flags().GetBool("watch")
+		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		target := strings.TrimSpace(strings.Join(args, " "))
 		root := resolveAetherRootPath()
 
-		result, err := runSwarmCompatibility(root, target, watch)
+		result, err := runSwarmCompatibility(root, target, watch, planOnly)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		outputWorkflow(result, renderSwarmCompatibilityVisual(result))
+		return nil
+	},
+}
+
+var swarmFinalizeCmd = &cobra.Command{
+	Use:   "swarm-finalize",
+	Short: "Record externally spawned swarm workers and write the swarm result",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		completionPath, _ := cmd.Flags().GetString("completion-file")
+		completion, err := loadExternalSwarmCompletion(completionPath)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		result, err := runSwarmFinalize(resolveAetherRootPath(), completion)
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
@@ -90,12 +147,21 @@ var swarmCmd = &cobra.Command{
 
 func init() {
 	swarmCmd.Flags().Bool("watch", false, "Show live colony activity instead of launching a swarm run")
+	swarmCmd.Flags().Bool("plan-only", false, "Print a host-dispatch swarm manifest without running workers")
 	rootCmd.AddCommand(swarmCmd)
+	swarmFinalizeCmd.Flags().String("completion-file", "", "JSON file containing the swarm manifest and external worker results")
+	rootCmd.AddCommand(swarmFinalizeCmd)
 }
 
-func runSwarmCompatibility(root, target string, watch bool) (map[string]interface{}, error) {
+func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[string]interface{}, error) {
 	if watch || strings.TrimSpace(target) == "" {
+		if planOnly && strings.TrimSpace(target) == "" && !watch {
+			return nil, fmt.Errorf("swarm --plan-only requires a problem description")
+		}
 		return buildSwarmWatchResult(target, watch, false), nil
+	}
+	if planOnly || codex.ShouldUseAgentDelegatePath() {
+		return runSwarmPlanOnly(root, target)
 	}
 	return runSwarmDestroy(root, target)
 }
@@ -288,6 +354,179 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	}, nil
 }
 
+func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return nil, fmt.Errorf("swarm --plan-only requires a problem description")
+	}
+
+	dispatchMode := "plan-only"
+	status := "plan-only"
+	if codex.ShouldUseAgentDelegatePath() {
+		dispatchMode = "agent-delegate"
+		status = "agent-delegate"
+	}
+
+	manifest := buildSwarmManifest(root, target, dispatchMode, time.Now().UTC())
+	dispatchMaps := swarmPlanMaps(manifest.Dispatches)
+	return map[string]interface{}{
+		"mode":                  "destroy",
+		"status":                status,
+		"dispatch_mode":         dispatchMode,
+		"requires_finalizer":    true,
+		"execution_owner":       "host-platform",
+		"agent_delegate":        dispatchMode == "agent-delegate",
+		"agent_delegate_reason": strings.TrimSpace(codex.AgentDelegateFallbackReason()),
+		"swarm_id":              manifest.SwarmID,
+		"target":                target,
+		"root":                  root,
+		"swarm_manifest":        manifest,
+		"dispatch_manifest":     manifest,
+		"dispatches":            dispatchMaps,
+		"workers":               dispatchMaps,
+		"worker_count":          len(dispatchMaps),
+		"wave_count":            manifest.WaveCount,
+		"dispatch_contract":     manifest.DispatchContract,
+		"finalizer_command":     manifest.FinalizerCommand,
+		"next":                  "dispatch host swarm workers, then run `aether swarm-finalize --completion-file <file>`",
+		"watch":                 false,
+	}, nil
+}
+
+func buildSwarmManifest(root, target, dispatchMode string, now time.Time) swarmManifest {
+	swarmID := fmt.Sprintf("swarm-%d", now.Unix())
+	dispatches := allSwarmPlans(root, target)
+	for i := range dispatches {
+		dispatches[i] = enrichSwarmPlanForManifest(root, target, swarmID, dispatches[i])
+	}
+	return swarmManifest{
+		Workflow:             "swarm",
+		DispatchMode:         dispatchMode,
+		RequiresFinalizer:    true,
+		GeneratedAt:          now.Format(time.RFC3339),
+		Root:                 root,
+		SwarmID:              swarmID,
+		Target:               strings.TrimSpace(target),
+		WaveCount:            3,
+		WorkerCount:          len(dispatches),
+		RunTimeoutSeconds:    int(defaultSwarmRunTimeout / time.Second),
+		WorkerTimeoutSeconds: int(defaultSwarmWorkerTimeout / time.Second),
+		DispatchContract: map[string]interface{}{
+			"execution_model":        "3 waves: investigation, fix, verification",
+			"wave_count":             3,
+			"worker_count":           len(dispatches),
+			"coordination_path":      ".aether/data/spawn-tree.txt",
+			"artifact_path":          filepath.ToSlash(filepath.Join(".aether", "data", "swarms", swarmID, "result.json")),
+			"completion_shape":       "completion JSON must include swarm_manifest plus dispatches/workers/results",
+			"state_authority":        "runtime finalizer writes swarm artifacts and spawn-tree status",
+			"wrapper_write_policy":   "workers report structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
+			"run_timeout_seconds":    int(defaultSwarmRunTimeout / time.Second),
+			"worker_status_values":   []string{"completed", "passed", "code_written", "blocked", "failed", "timeout"},
+			"required_result_fields": []string{"name", "caste", "role", "task", "status", "summary"},
+		},
+		Dispatches:       dispatches,
+		ExecutionPlan:    swarmPlanMaps(dispatches),
+		FinalizerCommand: "AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <file>",
+	}
+}
+
+func allSwarmPlans(root, target string) []swarmWorkerPlan {
+	plans := append([]swarmWorkerPlan{}, buildSwarmInvestigationPlans(root, target)...)
+	builder := buildSwarmBuilderPlan(root, target)
+	watcher := buildSwarmWatcherPlan(root, target)
+	plans = append(plans, builder, watcher)
+	return plans
+}
+
+func enrichSwarmPlanForManifest(root, target, swarmID string, plan swarmWorkerPlan) swarmWorkerPlan {
+	plan.Stage = swarmStageName(plan.Wave)
+	if strings.TrimSpace(plan.TaskID) == "" {
+		plan.TaskID = fmt.Sprintf("swarm.%s", plan.Role)
+	}
+	if plan.TimeoutSeconds == 0 {
+		plan.TimeoutSeconds = int(firstSwarmTimeout(plan.Timeout) / time.Second)
+	}
+	if len(plan.OutputPaths) == 0 {
+		plan.OutputPaths = []string{
+			filepath.ToSlash(filepath.Join(".aether", "external", "swarm", swarmID, plan.Name+".json")),
+		}
+	}
+	if plan.ResponseContract == nil {
+		plan.ResponseContract = map[string]interface{}{
+			"format": "terminal structured result in wrapper completion JSON",
+			"fields": []string{
+				"name", "caste", "role", "task", "status", "summary",
+				"files", "tests", "blockers", "response",
+			},
+			"response_fields": []string{
+				"role", "status", "summary", "findings", "evidence",
+				"root_cause", "recommendation", "proposed_fix",
+				"files_touched", "tests_written", "verification",
+			},
+		}
+	}
+	if strings.TrimSpace(plan.Brief) == "" {
+		plan.Brief = renderExternalSwarmWorkerBrief(root, target, swarmID, plan)
+	}
+	return plan
+}
+
+func swarmStageName(wave int) string {
+	switch wave {
+	case 1:
+		return "investigation"
+	case 2:
+		return "fix"
+	case 3:
+		return "verification"
+	default:
+		return "swarm"
+	}
+}
+
+func renderExternalSwarmWorkerBrief(root, target, swarmID string, plan swarmWorkerPlan) string {
+	var b strings.Builder
+	b.WriteString("Swarm ID: " + swarmID + "\n")
+	b.WriteString("Target: " + strings.TrimSpace(target) + "\n")
+	b.WriteString("Workspace: " + root + "\n")
+	b.WriteString("Role: " + plan.Role + "\n")
+	b.WriteString("Wave: " + fmt.Sprintf("%d", plan.Wave) + " (" + swarmStageName(plan.Wave) + ")\n\n")
+	b.WriteString("Assignment:\n")
+	b.WriteString(plan.Task)
+	b.WriteString("\n\nReturn a terminal structured result to the wrapper. Do not hand-edit `.aether/data/`; the wrapper will pass your result to `aether swarm-finalize`.\n")
+	b.WriteString("\nRequired result fields: name, caste, role, task, status, summary. Include files/tests/blockers/response when relevant.\n")
+	b.WriteString("Builder may edit code. Tracker, Scout, Archaeologist, and Watcher should stay read-only unless the user explicitly asked otherwise.\n")
+	return strings.TrimSpace(b.String())
+}
+
+func swarmPlanMaps(plans []swarmWorkerPlan) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(plans))
+	for _, plan := range plans {
+		entry := map[string]interface{}{
+			"stage":           plan.Stage,
+			"wave":            plan.Wave,
+			"name":            plan.Name,
+			"caste":           plan.Caste,
+			"role":            plan.Role,
+			"task":            plan.Task,
+			"task_id":         plan.TaskID,
+			"agent_name":      plan.AgentName,
+			"brief":           plan.Brief,
+			"output_paths":    plan.OutputPaths,
+			"status":          "planned",
+			"timeout_seconds": plan.TimeoutSeconds,
+		}
+		if plan.ResponseContract != nil {
+			entry["response_contract"] = plan.ResponseContract
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 func initializeSwarmRun(swarmID string) error {
 	if err := os.MkdirAll(filepath.Join(store.BasePath(), "swarms", swarmID, "responses"), 0755); err != nil {
 		return err
@@ -308,6 +547,277 @@ func initializeSwarmRun(swarmID string) error {
 		SwarmID: swarmID,
 		StartAt: time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func loadExternalSwarmCompletion(path string) (externalSwarmCompletion, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return externalSwarmCompletion{}, fmt.Errorf("flag --completion-file is required")
+	}
+	var data []byte
+	var err error
+	if path == "-" {
+		data, err = io.ReadAll(os.Stdin)
+	} else {
+		data, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return externalSwarmCompletion{}, fmt.Errorf("read completion file: %w", err)
+	}
+
+	var completion externalSwarmCompletion
+	if err := json.Unmarshal(data, &completion); err != nil {
+		return externalSwarmCompletion{}, fmt.Errorf("parse completion file: %w", err)
+	}
+	if completion.activeManifest() != nil {
+		return completion, nil
+	}
+
+	var envelope struct {
+		Result externalSwarmCompletion `json:"result"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return externalSwarmCompletion{}, fmt.Errorf("parse completion envelope: %w", err)
+	}
+	if envelope.Result.activeManifest() == nil {
+		return externalSwarmCompletion{}, fmt.Errorf("completion file must include swarm_manifest")
+	}
+	return envelope.Result, nil
+}
+
+func (c externalSwarmCompletion) activeManifest() *swarmManifest {
+	if c.SwarmManifest != nil {
+		return c.SwarmManifest
+	}
+	return c.Manifest
+}
+
+func (c externalSwarmCompletion) workerResults() []swarmWorkerExecution {
+	results := make([]swarmWorkerExecution, 0, len(c.Dispatches)+len(c.Workers)+len(c.Results)+len(c.Responses)+len(c.WorkerResults))
+	results = append(results, c.Dispatches...)
+	results = append(results, c.Workers...)
+	results = append(results, c.Results...)
+	for _, response := range c.Responses {
+		results = append(results, swarmWorkerExecution{
+			Role:     response.Role,
+			Caste:    response.Role,
+			Status:   response.Status,
+			Summary:  response.Summary,
+			Files:    append([]string{}, response.FilesTouched...),
+			Tests:    append([]string{}, response.TestsWritten...),
+			Response: response,
+		})
+	}
+	for _, workerResult := range c.WorkerResults {
+		results = append(results, swarmWorkerExecution{
+			Name:     workerResult.WorkerName,
+			Caste:    workerResult.Caste,
+			Status:   workerResult.Status,
+			Summary:  workerResult.Summary,
+			Duration: workerResult.Duration.Seconds(),
+			Files:    append(append([]string{}, workerResult.FilesCreated...), workerResult.FilesModified...),
+			Tests:    append([]string{}, workerResult.TestsWritten...),
+			Blockers: append([]string{}, workerResult.Blockers...),
+		})
+	}
+	return results
+}
+
+func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+	manifest := completion.activeManifest()
+	if manifest == nil {
+		return nil, fmt.Errorf("completion file must include swarm_manifest")
+	}
+	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
+		return nil, fmt.Errorf("swarm_manifest must come from `aether swarm --plan-only` or an agent-delegate swarm response")
+	}
+	if len(manifest.Dispatches) == 0 {
+		return nil, fmt.Errorf("swarm_manifest contains no dispatches")
+	}
+	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
+		return nil, fmt.Errorf("swarm_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
+	}
+
+	state, _ := loadColonyState()
+	startedAt := time.Now().UTC()
+	runHandle, err := beginRuntimeSpawnRun("swarm", startedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize swarm run: %w", err)
+	}
+	runStatus := "failed"
+	defer func() {
+		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
+	}()
+
+	swarmID := strings.TrimSpace(manifest.SwarmID)
+	if swarmID == "" {
+		swarmID = fmt.Sprintf("swarm-%d", startedAt.Unix())
+	}
+	if err := initializeSwarmRun(swarmID); err != nil {
+		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
+	}
+
+	runs, err := mergeExternalSwarmResults(*manifest, completion.workerResults())
+	if err != nil {
+		return nil, err
+	}
+	if err := recordExternalSwarmRun(swarmID, runs); err != nil {
+		return nil, err
+	}
+
+	status, recommendation, rootCause, solution, blockers := summarizeSwarmOutcome(runs)
+	runStatus = summarizeRunStatus(status)
+	filesTouched, testsWritten := collectSwarmTouchedFiles(runs)
+	next := swarmNextCommand(state, status)
+
+	if err := store.SaveJSON(filepath.ToSlash(filepath.Join("swarms", swarmID, "result.json")), map[string]interface{}{
+		"swarm_id":       swarmID,
+		"target":         manifest.Target,
+		"status":         status,
+		"root_cause":     rootCause,
+		"solution":       solution,
+		"recommendation": recommendation,
+		"workers":        runs,
+		"files":          filesTouched,
+		"tests":          testsWritten,
+		"blockers":       blockers,
+		"completed_at":   time.Now().UTC().Format(time.RFC3339),
+		"dispatch_mode":  "external-task",
+	}); err != nil {
+		return nil, fmt.Errorf("write swarm result: %w", err)
+	}
+
+	return map[string]interface{}{
+		"mode":                "destroy",
+		"autopilot_available": true,
+		"swarm_id":            swarmID,
+		"target":              manifest.Target,
+		"status":              status,
+		"root_cause":          rootCause,
+		"solution":            solution,
+		"recommendation":      recommendation,
+		"workers":             swarmExecutionsForJSON(runs),
+		"dispatches":          swarmExecutionsForJSON(runs),
+		"worker_count":        len(runs),
+		"wave_count":          manifest.WaveCount,
+		"files_touched":       filesTouched,
+		"tests_written":       testsWritten,
+		"blockers":            blockers,
+		"dispatch_mode":       "external-task",
+		"dispatch_contract":   manifest.DispatchContract,
+		"next":                next,
+		"watch":               false,
+	}, nil
+}
+
+func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExecution) ([]swarmWorkerExecution, error) {
+	resultByName := make(map[string]swarmWorkerExecution, len(results))
+	resultByRole := make(map[string]swarmWorkerExecution, len(results))
+	for _, result := range results {
+		if name := strings.TrimSpace(result.Name); name != "" {
+			resultByName[name] = result
+		}
+		if role := strings.TrimSpace(result.Role); role != "" {
+			resultByRole[role] = result
+		}
+		if result.Response.Role != "" {
+			resultByRole[result.Response.Role] = result
+		}
+	}
+
+	merged := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
+	for _, plan := range manifest.Dispatches {
+		result, ok := resultByName[strings.TrimSpace(plan.Name)]
+		if !ok {
+			result, ok = resultByRole[strings.TrimSpace(plan.Role)]
+		}
+		if !ok {
+			return nil, fmt.Errorf("missing external swarm worker result for %s", plan.Name)
+		}
+
+		execution := swarmWorkerExecution{
+			Name:         plan.Name,
+			Caste:        plan.Caste,
+			Role:         plan.Role,
+			Task:         plan.Task,
+			Status:       normalizeRuntimeDispatchStatus(result.Status),
+			Summary:      strings.TrimSpace(result.Summary),
+			Duration:     result.Duration,
+			Files:        append([]string{}, result.Files...),
+			Tests:        append([]string{}, result.Tests...),
+			Blockers:     append([]string{}, result.Blockers...),
+			Response:     result.Response,
+			ResponsePath: result.ResponsePath,
+		}
+		if strings.TrimSpace(result.Name) != "" {
+			execution.Name = strings.TrimSpace(result.Name)
+		}
+		if strings.TrimSpace(result.Caste) != "" {
+			execution.Caste = strings.TrimSpace(result.Caste)
+		}
+		if strings.TrimSpace(result.Role) != "" {
+			execution.Role = strings.TrimSpace(result.Role)
+		}
+		if strings.TrimSpace(result.Task) != "" {
+			execution.Task = strings.TrimSpace(result.Task)
+		}
+		if execution.Response.Role == "" {
+			execution.Response.Role = execution.Role
+		}
+		if execution.Status == "" || execution.Status == "spawned" {
+			execution.Status = "completed"
+		}
+		if execution.Summary == "" && execution.Response.Summary != "" {
+			execution.Summary = execution.Response.Summary
+		}
+		if execution.Summary == "" && len(execution.Blockers) > 0 {
+			execution.Summary = strings.Join(execution.Blockers, "; ")
+		}
+		if execution.Summary == "" {
+			execution.Summary = fmt.Sprintf("%s worker completed without a structured summary.", execution.Role)
+		}
+		execution.Files = append(execution.Files, execution.Response.FilesTouched...)
+		execution.Tests = append(execution.Tests, execution.Response.TestsWritten...)
+		execution.Files = swarmCompactStrings(execution.Files)
+		execution.Tests = swarmCompactStrings(execution.Tests)
+		execution.Blockers = swarmCompactStrings(execution.Blockers)
+		merged = append(merged, execution)
+	}
+	return merged, nil
+}
+
+func recordExternalSwarmRun(swarmID string, runs []swarmWorkerExecution) error {
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	for _, run := range runs {
+		wave := 1
+		switch run.Role {
+		case "builder":
+			wave = 2
+		case "watcher":
+			wave = 3
+		}
+		if err := spawnTree.RecordSpawn("Swarm", run.Caste, run.Name, run.Task, wave); err != nil {
+			return fmt.Errorf("record swarm spawn %s: %w", run.Name, err)
+		}
+		summary := strings.TrimSpace(run.Summary)
+		if summary == "" {
+			summary = fmt.Sprintf("%s worker finished with status %s", run.Role, run.Status)
+		}
+		if err := spawnTree.UpdateStatus(run.Name, run.Status, summary); err != nil {
+			return fmt.Errorf("complete swarm worker %s: %w", run.Name, err)
+		}
+		if err := updateSwarmDisplayStatus(swarmID, run.Name, run.Status); err != nil {
+			return fmt.Errorf("update swarm display %s: %w", run.Name, err)
+		}
+		response := run.Response
+		if err := recordSwarmFinding(swarmID, run.Name, &response, run); err != nil {
+			return fmt.Errorf("record swarm finding %s: %w", run.Name, err)
+		}
+	}
+	return nil
 }
 
 func buildSwarmInvestigationPlans(root, target string) []swarmWorkerPlan {
@@ -870,6 +1380,31 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 		b.WriteString(renderNextUp(
 			primary,
 			`Run `+"`aether swarm \"describe the problem\"`"+` to launch the bug-destroyer flow.`,
+		))
+		return b.String()
+	}
+
+	dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"]))
+	requiresFinalizer, _ := result["requires_finalizer"].(bool)
+	if requiresFinalizer || dispatchMode == "plan-only" || dispatchMode == "agent-delegate" {
+		b.WriteString("Swarm dispatch manifest ready.\n")
+		if swarmID := strings.TrimSpace(stringValue(result["swarm_id"])); swarmID != "" {
+			b.WriteString("Swarm ID: " + swarmID + "\n")
+		}
+		if target != "" {
+			b.WriteString("Target: " + target + "\n")
+		}
+		if dispatchMode != "" {
+			b.WriteString("Dispatch: " + dispatchMode + "\n")
+		}
+		renderSwarmWorkers(&b, result)
+		finalizer := strings.TrimSpace(stringValue(result["finalizer_command"]))
+		if finalizer == "" {
+			finalizer = "AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <file>"
+		}
+		b.WriteString(renderNextUp(
+			"Host platform should dispatch the swarm workers above, then run `"+finalizer+"`.",
+			"Do not hand-edit `.aether/data/`; the finalizer writes swarm artifacts and status.",
 		))
 		return b.String()
 	}

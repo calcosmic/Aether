@@ -227,6 +227,27 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration colonize, run their literal `aether colonize ...` command.",
 	}
 
+	catalog["swarm"] = commandGuideDefinition{
+		Category:       commandGuideCategoryFullOrchestration,
+		SkillReference: commandGuideSkillBuildCycle,
+		Intent:         "Use the runtime swarm manifest to spawn visible bug-destroyer workers and finalize swarm artifacts without hand-writing data files.",
+		Literal:        false,
+		PreSteps: []string{
+			"If the user provides no problem description, use the generated wrapper's direct watch path: `AETHER_OUTPUT_MODE=visual aether swarm --watch`.",
+			"For bug-destroyer targets, run `AETHER_OUTPUT_MODE=json aether swarm --plan-only $ARGUMENTS` and parse `result.swarm_manifest`.",
+			"Dispatch wave 1 investigation workers through the host platform, then wave 2 builder, then wave 3 watcher.",
+			"Use runtime-provided agent names, castes, roles, waves, task IDs, briefs, and response contracts.",
+			"Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.",
+		},
+		RunCommand: "AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completion JSON>",
+		PostSteps: []string{
+			"Summarize actual workers, root cause, fix or blocker, and verification evidence.",
+			"Route first to the runtime-surfaced `next` command.",
+		},
+		DriftGuards: intelligentCommandDriftGuards("swarm", commandGuideSkillBuildCycle),
+		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration swarm, run their literal `aether swarm ...` command.",
+	}
+
 	catalog["build"] = commandGuideDefinition{
 		Category:       commandGuideCategoryFullOrchestration,
 		SkillReference: commandGuideSkillBuildCycle,
@@ -358,7 +379,6 @@ func commandGuideLiteralCommands() []string {
 		"shelf-promote",
 		"skill-create",
 		"status",
-		"swarm",
 		"tunnels",
 		"update",
 		"verify-castes",

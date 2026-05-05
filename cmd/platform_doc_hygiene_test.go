@@ -269,6 +269,22 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 		},
 		{
+			path: ".claude/commands/ant/swarm.md",
+			required: []string{
+				"Use the Go `aether` CLI as the source of truth.",
+				"AETHER_OUTPUT_MODE=visual aether swarm --watch",
+				"AETHER_OUTPUT_MODE=json aether swarm --plan-only $ARGUMENTS",
+				"result.swarm_manifest",
+				"AETHER_OUTPUT_MODE=json aether spawn-log",
+				"AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file",
+			},
+			forbidden: []string{
+				"AETHER_OUTPUT_MODE=visual aether swarm \"$ARGUMENTS\"",
+				"manually reconstruct swarm artifacts",
+				".aether/aether-utils.sh",
+			},
+		},
+		{
 			path: ".claude/commands/ant/seal.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
