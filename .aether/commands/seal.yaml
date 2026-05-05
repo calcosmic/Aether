@@ -2,12 +2,25 @@ name: ant-seal
 description: "🏺 Seal the colony with Crowned Anthill milestone"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether seal $ARGUMENTS"
+  command: "AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS"
 codex_orchestration:
   category: "semi-intelligent"
   skill: "aether-colony-build-cycle"
   guide: "aether command-guide seal --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+wrapper_contract:
+  manifest: "result.seal_manifest"
+  finalizer: "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>"
+  instructions: |
+    1. Run `AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS`.
+    2. If the runtime returns blockers, surface them and stop.
+    3. Parse `result.seal_manifest` and dispatch the listed final-review workers through the host platform.
+    4. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
+    5. Write a completion packet containing `seal_manifest` plus terminal worker `dispatches`.
+    6. Run `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`.
+    7. Follow the runtime's Porter readiness output; do not deliver unless the user selects delivery actions.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not run `aether seal` without `--plan-only` from Claude/OpenCode orchestration unless the user explicitly asks for raw/no-orchestration."
+  - "Do not run Porter delivery commands unless the user explicitly chooses them after seal-finalize."
   - "If docs and runtime disagree, runtime wins."

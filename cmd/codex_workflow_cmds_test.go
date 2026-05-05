@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -224,5 +225,132 @@ func TestSeal_NoReviewsNoWarnings(t *testing.T) {
 	content := string(data)
 	if strings.Contains(content, "Review Warnings") {
 		t.Errorf("CROWNED-ANTHILL.md should NOT contain 'Review Warnings' when no reviews exist.\nContent:\n%s", content)
+	}
+}
+
+func TestSealPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+
+	goal := "Seal plan-only test"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Complete work",
+			Status: colony.PhaseCompleted,
+		}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"seal", "--plan-only"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("seal --plan-only returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env)
+	}
+	result := env["result"].(map[string]interface{})
+	if result["dispatch_mode"] != "plan-only" {
+		t.Fatalf("dispatch_mode = %v, want plan-only", result["dispatch_mode"])
+	}
+	if result["requires_finalizer"] != true {
+		t.Fatalf("requires_finalizer = %v, want true", result["requires_finalizer"])
+	}
+	if got := int(result["dispatch_count"].(float64)); got != 3 {
+		t.Fatalf("dispatch_count = %d, want 3", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".aether", "CROWNED-ANTHILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("plan-only should not write CROWNED-ANTHILL.md, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "seal", "final-review.json")); !os.IsNotExist(err) {
+		t.Fatalf("plan-only should not write final review report, stat err=%v", err)
+	}
+	var after colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
+		t.Fatalf("load state after plan-only: %v", err)
+	}
+	if after.State != colony.StateREADY || after.Milestone == "Crowned Anthill" {
+		t.Fatalf("plan-only mutated state: %+v", after)
+	}
+}
+
+func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+
+	goal := "Seal finalize test"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Complete work",
+			Status: colony.PhaseCompleted,
+		}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	planResult, err := runSealPlanOnly(root, false)
+	if err != nil {
+		t.Fatalf("run seal plan-only: %v", err)
+	}
+	manifest := planResult["seal_manifest"].(sealPlanManifest)
+	results := append([]codexContinueExternalDispatch{}, manifest.Dispatches...)
+	for i := range results {
+		results[i].Status = "completed"
+		results[i].Summary = results[i].Name + " cleared final review"
+		results[i].Report = "# Final review\n\nNo blockers."
+	}
+	completion := externalSealCompletion{SealManifest: &manifest, Dispatches: results}
+	payload, err := json.MarshalIndent(completion, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	completionPath := filepath.Join(t.TempDir(), "seal-completion.json")
+	if err := os.WriteFile(completionPath, payload, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	stdout.(*bytes.Buffer).Reset()
+	rootCmd.SetArgs([]string{"seal-finalize", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("seal-finalize returned error: %v", err)
+	}
+
+	var after colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
+		t.Fatalf("load sealed state: %v", err)
+	}
+	if after.State != colony.StateCOMPLETED || after.Milestone != "Crowned Anthill" {
+		t.Fatalf("state not sealed: %+v", after)
+	}
+	var report sealFinalReviewReport
+	if err := store.LoadJSON(sealFinalReviewReportRel, &report); err != nil {
+		t.Fatalf("load final review report: %v", err)
+	}
+	if !report.Passed {
+		t.Fatalf("final review report did not pass: %+v", report)
+	}
+	if len(report.Workers) != 3 {
+		t.Fatalf("worker count = %d, want 3", len(report.Workers))
+	}
+	if _, err := os.Stat(filepath.Join(root, ".aether", "CROWNED-ANTHILL.md")); err != nil {
+		t.Fatalf("CROWNED-ANTHILL.md not written: %v", err)
 	}
 }

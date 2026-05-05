@@ -288,10 +288,13 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".claude/commands/ant/seal.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS",
+				"result.seal_manifest",
+				"AETHER_OUTPUT_MODE=json aether spawn-log",
+				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",
 			},
 			forbidden: []string{
-				"CROWNED-ANTHILL.md",
+				"manually update milestone via COLONY_STATE.json",
 				"AskUserQuestion",
 				".aether/aether-utils.sh",
 			},
@@ -578,7 +581,10 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".opencode/commands/ant/seal.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS",
+				"result.seal_manifest",
+				"AETHER_OUTPUT_MODE=json aether spawn-log",
+				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",
 			},
 			forbidden: []string{
 				"archive_dir",
