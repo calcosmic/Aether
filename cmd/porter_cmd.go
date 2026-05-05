@@ -353,6 +353,7 @@ func checkTestStatus() integrityCheck {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "test", "./...", "-count=1")
+	cmd.Env = porterTestEnv(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() == context.DeadlineExceeded {
 		return integrityCheck{
@@ -383,14 +384,37 @@ func checkTestStatus() integrityCheck {
 	}
 }
 
+func porterTestEnv(environ []string) []string {
+	out := make([]string, 0, len(environ)+1)
+	outputModeSet := false
+	for _, entry := range environ {
+		key := entry
+		if idx := strings.IndexByte(entry, '='); idx >= 0 {
+			key = entry[:idx]
+		}
+		if key == "AETHER_OUTPUT_MODE" {
+			if !outputModeSet {
+				out = append(out, "AETHER_OUTPUT_MODE=")
+				outputModeSet = true
+			}
+			continue
+		}
+		out = append(out, entry)
+	}
+	if !outputModeSet {
+		out = append(out, "AETHER_OUTPUT_MODE=")
+	}
+	return out
+}
+
 // checkChangelogCompleteness reads CHANGELOG.md and checks for an entry matching
 // the current source version.
 func checkChangelogCompleteness() integrityCheck {
 	version := resolveSourceVersion()
 	if version == "unknown" {
 		return integrityCheck{
-			Name:   "Changelog completeness",
-			Status: "skip",
+			Name:    "Changelog completeness",
+			Status:  "skip",
 			Message: "Source version unknown, cannot verify changelog",
 		}
 	}
@@ -406,9 +430,9 @@ func checkChangelogCompleteness() integrityCheck {
 			}
 		}
 		return integrityCheck{
-			Name:            "Changelog completeness",
-			Status:          "skip",
-			Message:         fmt.Sprintf("Cannot read CHANGELOG.md: %v", err),
+			Name:    "Changelog completeness",
+			Status:  "skip",
+			Message: fmt.Sprintf("Cannot read CHANGELOG.md: %v", err),
 		}
 	}
 
