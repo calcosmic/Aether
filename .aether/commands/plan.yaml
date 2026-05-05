@@ -25,13 +25,14 @@ wrapper_additions:
   orchestration: |
     Restore real wrapper planning orchestration:
     1. Run `AETHER_OUTPUT_MODE=visual aether status`.
-    2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2>`.
+    2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2>` for normal wrapper planning, or run the user's requested `aether plan --refresh` when refreshing an existing plan.
     3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
-    4. If the result reports `unresolved_clarifications` or `clarification_warning`, pause before spawning workers and route first to `/ant-discuss`; proceed with implicit assumptions only if the user explicitly chooses to continue.
-    5. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `agent_name`, and each dispatch's runtime-provided `skill_section` when present.
-    6. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
-    7. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
-    8. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
+    4. If the runtime reports `dispatch_mode: agent-delegate`, treat it as the same host-dispatch contract: do not run nested subprocess planning; dispatch the manifest workers through the current host platform and finish with `plan-finalize`.
+    5. If the result reports `unresolved_clarifications` or `clarification_warning`, pause before spawning workers and route first to `/ant-discuss`; proceed with implicit assumptions only if the user explicitly chooses to continue.
+    6. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `agent_name`, and each dispatch's runtime-provided `skill_section` when present.
+    7. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
+    8. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
+    9. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
   post_plan: |
     Close from the `plan-finalize` result only:
     1. Summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.

@@ -51,6 +51,8 @@ AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-dept
 
 Parse `result.plan_manifest` or `result.planning_manifest`. This manifest is the only source for worker names, castes, waves, task IDs, briefs, survey context, depth, granularity bounds, and finalizer contract.
 
+If the user requested a refresh and the runtime returns `dispatch_mode: agent-delegate`, do not run nested subprocess planning. Treat the returned manifest as the same host-dispatch contract: dispatch Scout and Route-Setter through the current platform, then finish with `plan-finalize`.
+
 If the runtime returns `existing_plan: true`, do not spawn workers. Summarize the existing plan and route to the runtime-surfaced next command.
 
 ## Clarification Gate

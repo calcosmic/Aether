@@ -108,8 +108,8 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if manifest == nil {
 		return nil, fmt.Errorf("completion file must include plan_manifest")
 	}
-	if manifest.DispatchMode != "plan-only" || !manifest.RequiresFinalizer {
-		return nil, fmt.Errorf("plan_manifest must come from `aether plan --plan-only`")
+	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
+		return nil, fmt.Errorf("plan_manifest must come from `aether plan --plan-only` or an agent-delegate planning response")
 	}
 	if len(manifest.Dispatches) == 0 {
 		return nil, fmt.Errorf("plan_manifest contains no dispatches")

@@ -274,6 +274,80 @@ func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	}
 }
 
+func TestPlanRefreshUsesAgentDelegatePathInsideHostedAgent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "opencode")
+	t.Setenv("OPENCODE_AGENT", "1")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-plan-agent-delegate-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	goal := "Refresh planning without nested subprocess workers"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Stale plan",
+			Status: colony.PhaseInProgress,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Old task", Status: colony.TaskInProgress}},
+		}}},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--refresh", "--depth", "fast"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --refresh returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if result["dispatch_mode"].(string) != "agent-delegate" {
+		t.Fatalf("dispatch_mode = %q, want agent-delegate", result["dispatch_mode"])
+	}
+	if result["agent_delegate"] != true {
+		t.Fatalf("agent_delegate = %v, want true", result["agent_delegate"])
+	}
+	if result["requires_finalizer"] != true {
+		t.Fatalf("requires_finalizer = %v, want true", result["requires_finalizer"])
+	}
+	manifest := result["plan_manifest"].(map[string]interface{})
+	if manifest["dispatch_mode"].(string) != "agent-delegate" || manifest["requires_finalizer"] != true {
+		t.Fatalf("unexpected manifest mode/finalizer: %+v", manifest)
+	}
+	if manifest["refresh"] != true {
+		t.Fatalf("manifest refresh = %v, want true", manifest["refresh"])
+	}
+	dispatches := manifest["dispatches"].([]interface{})
+	if len(dispatches) != 2 {
+		t.Fatalf("expected 2 planning dispatches, got %d", len(dispatches))
+	}
+	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "runtime-spawn-runs.jsonl"} {
+		if _, err := os.Stat(filepath.Join(dataDir, rel)); err == nil {
+			t.Fatalf("agent-delegate plan unexpectedly wrote %s", rel)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.CurrentPhase != 1 || len(state.Plan.Phases) != 1 || state.Plan.Phases[0].Status != colony.PhaseInProgress {
+		t.Fatalf("agent-delegate plan mutated stale phase state before finalize: %+v", state)
+	}
+}
+
 func TestPlanDepthMapsToGranularityBounds(t *testing.T) {
 	tests := []struct {
 		depth       string
@@ -468,6 +542,23 @@ func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
 	}
 	if !strings.Contains(string(contextData), "aether build 1") {
 		t.Fatalf("CONTEXT.md missing next build guidance:\n%s", string(contextData))
+	}
+}
+
+func TestPlanFinalizeAcceptsAgentDelegateManifestMode(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	_, err := runCodexPlanFinalize(t.TempDir(), codexExternalPlanCompletion{
+		PlanManifest: &codexPlanManifest{
+			Goal:              "Agent delegate planning",
+			DispatchMode:      "agent-delegate",
+			RequiresFinalizer: true,
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "contains no dispatches") {
+		t.Fatalf("expected agent-delegate manifest to pass mode validation and fail on dispatches, got %v", err)
 	}
 }
 

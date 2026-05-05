@@ -192,6 +192,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Select planning depth and decomposition depth with the user unless arguments already specify them.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` for current colony context.",
 			"Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice>` and parse `result.plan_manifest` or `result.planning_manifest`.",
+			"If runtime returns `dispatch_mode: agent-delegate`, dispatch Scout and Route-Setter through the host platform instead of nested subprocess workers, then finalize with the returned manifest.",
 			"If runtime reports unresolved clarifications, route to `aether discuss` before spawning planning workers unless the user explicitly approves assumptions.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>",

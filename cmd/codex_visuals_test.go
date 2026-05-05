@@ -1441,6 +1441,34 @@ func TestRenderPlanVisual_SimulatedDispatch(t *testing.T) {
 	}
 }
 
+func TestRenderPlanVisualAgentDelegatePlanOnly(t *testing.T) {
+	result := map[string]interface{}{
+		"plan_only":             true,
+		"agent_delegate":        true,
+		"existing_plan":         false,
+		"goal":                  "Refresh plan through host agents",
+		"granularity":           "sprint",
+		"dispatch_mode":         "agent-delegate",
+		"agent_delegate_reason": "agent-delegate session detected on opencode; host platform must dispatch workers directly",
+		"dispatches": []interface{}{
+			map[string]interface{}{"name": "Seek-40", "caste": "scout", "task": "Survey the repo", "status": "planned"},
+			map[string]interface{}{"name": "Carrier-52", "caste": "route_setter", "task": "Convert findings into phases", "status": "planned"},
+		},
+	}
+
+	output := renderPlanVisual(result)
+	for _, want := range []string{
+		"Agent-Delegate",
+		"host platform must dispatch workers directly",
+		"Host platform should dispatch the JSON `plan_manifest` Scout and Route-Setter workers.",
+		"`aether plan-finalize --completion-file <file>`",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("agent-delegate plan visual missing %q\n%s", want, output)
+		}
+	}
+}
+
 func TestRenderPlanVisual_RealDispatch(t *testing.T) {
 	// When planning workers have "completed" or "failed" status, show execution data.
 	phases := []colony.Phase{

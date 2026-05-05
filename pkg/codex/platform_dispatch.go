@@ -218,6 +218,29 @@ func IsAgentDelegateSession() bool {
 	return false
 }
 
+func ShouldUseAgentDelegatePath() bool {
+	if !IsAgentDelegateSession() {
+		return false
+	}
+	switch DetectActivePlatform() {
+	case PlatformClaude, PlatformOpenCode:
+		return true
+	default:
+		return false
+	}
+}
+
+func AgentDelegateFallbackReason() string {
+	platform := DetectActivePlatform()
+	if platform == PlatformUnknown {
+		return "agent-delegate session detected; active platform is unknown"
+	}
+	if platform != PlatformClaude && platform != PlatformOpenCode {
+		return fmt.Sprintf("agent-delegate session detected on %s; nested worker dispatch remains local", platform)
+	}
+	return fmt.Sprintf("agent-delegate session detected on %s; host platform must dispatch workers directly", platform)
+}
+
 func DetectActivePlatform() Platform {
 	if platform := normalizePlatform(os.Getenv(envActivePlatform)); platform != PlatformUnknown {
 		return platform
