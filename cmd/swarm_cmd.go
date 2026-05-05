@@ -183,6 +183,10 @@ func spawnEntriesToWatchMaps(entries []agent.SpawnEntry) []map[string]interface{
 }
 
 func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
+	if codex.ShouldUseAgentDelegatePath() {
+		return buildSwarmAgentDelegateManifest(root, target), nil
+	}
+
 	invoker := newSwarmWorkerInvoker()
 	if invoker == nil {
 		return nil, fmt.Errorf("swarm worker invoker is not configured")
@@ -364,6 +368,37 @@ func buildSwarmWatcherPlan(root, target string) swarmWorkerPlan {
 		AgentName: "aether-watcher",
 		Wave:      3,
 		Timeout:   defaultSwarmWorkerTimeout,
+	}
+}
+
+func buildSwarmAgentDelegateManifest(root, target string) map[string]interface{} {
+	investigation := buildSwarmInvestigationPlans(root, target)
+	builderPlan := buildSwarmBuilderPlan(root, target)
+	watcherPlan := buildSwarmWatcherPlan(root, target)
+	allPlans := append(append([]swarmWorkerPlan{}, investigation...), builderPlan, watcherPlan)
+	manifestWorkers := make([]map[string]interface{}, 0, len(allPlans))
+	for _, plan := range allPlans {
+		manifestWorkers = append(manifestWorkers, map[string]interface{}{
+			"name":       plan.Name,
+			"caste":      plan.Caste,
+			"role":       plan.Role,
+			"task":       plan.Task,
+			"agent_name": plan.AgentName,
+			"wave":       plan.Wave,
+			"timeout":    plan.Timeout.String(),
+		})
+	}
+	return map[string]interface{}{
+		"mode":                "destroy",
+		"dispatch_mode":       "agent-delegate",
+		"target":              target,
+		"status":              "agent-delegate",
+		"autopilot_available": false,
+		"workers":             manifestWorkers,
+		"worker_count":        len(manifestWorkers),
+		"blockers":            []string{"agent-delegate mode: swarm workers must be dispatched by the host platform"},
+		"next":                "",
+		"watch":               false,
 	}
 }
 
@@ -870,6 +905,29 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 		b.WriteString(renderNextUp(
 			primary,
 			`Run `+"`aether swarm \"describe the problem\"`"+` to launch the bug-destroyer flow.`,
+		))
+		return b.String()
+	}
+
+	if status := strings.TrimSpace(stringValue(result["status"])); status == "agent-delegate" {
+		b.WriteString("Agent-delegate mode active.\n")
+		b.WriteString("Swarm workers must be dispatched by the host platform.\n")
+		if target != "" {
+			b.WriteString("Target: " + target + "\n")
+		}
+		if dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"])); dispatchMode != "" {
+			b.WriteString("Dispatch: " + dispatchMode + "\n")
+		}
+		renderSwarmWorkers(&b, result)
+		if blockers, ok := result["blockers"].([]string); ok && len(blockers) > 0 {
+			b.WriteString("\nBlockers\n")
+			for _, blocker := range blockers {
+				b.WriteString("  - " + blocker + "\n")
+			}
+		}
+		b.WriteString(renderNextUp(
+			"Host platform should dispatch workers from the manifest above.",
+			"Run `aether swarm --watch` to inspect live worker activity.",
 		))
 		return b.String()
 	}

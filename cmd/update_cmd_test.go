@@ -281,6 +281,81 @@ func TestRunUpdateSyncCopiesAllowedClaudeRepoFiles(t *testing.T) {
 	}
 }
 
+func TestSyncPlatformHomeAssetsFromHubRefreshesGlobalPlatformHomes(t *testing.T) {
+	saveGlobals(t)
+
+	hubDir := t.TempDir()
+	homeDir := t.TempDir()
+	systemDir := filepath.Join(hubDir, "system")
+
+	writeHubFile := func(rel string, data []byte) {
+		t.Helper()
+		path := filepath.Join(systemDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatalf("write hub %s: %v", rel, err)
+		}
+	}
+
+	claudeCommand := []byte("<!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->\n# Build from hub\n")
+	claudeAgent := []byte("---\nname: aether-builder\ndescription: Builder agent\n---\n# Claude Builder\n")
+	openCodeCommand := []byte("# OpenCode Build from hub\n")
+	openCodeAgent := []byte("---\n" + validAgentFrontmatter + "\n---\n\n# OpenCode Builder\n")
+	codexAgent := validCodexAgentTOML("aether-builder", "builder")
+
+	writeHubFile(filepath.Join("commands", "claude", "build.md"), claudeCommand)
+	writeHubFile(filepath.Join("agents-claude", "aether-builder.md"), claudeAgent)
+	writeHubFile(filepath.Join("commands", "opencode", "build.md"), openCodeCommand)
+	writeHubFile(filepath.Join("agents", "aether-builder.md"), openCodeAgent)
+	writeHubFile(filepath.Join("codex", "aether-builder.toml"), codexAgent)
+
+	staleClaudeCommand := filepath.Join(homeDir, ".claude", "commands", "ant-build.md")
+	if err := os.MkdirAll(filepath.Dir(staleClaudeCommand), 0755); err != nil {
+		t.Fatalf("create stale Claude command parent: %v", err)
+	}
+	if err := os.WriteFile(staleClaudeCommand, []byte("stale\n"), 0644); err != nil {
+		t.Fatalf("write stale Claude command: %v", err)
+	}
+	customOpenCodeAgent := filepath.Join(homeDir, ".config", "opencode", "agents", "mds-implementer.md")
+	if err := os.MkdirAll(filepath.Dir(customOpenCodeAgent), 0755); err != nil {
+		t.Fatalf("create custom OpenCode agent parent: %v", err)
+	}
+	if err := os.WriteFile(customOpenCodeAgent, []byte("# Custom MDS agent\n"), 0644); err != nil {
+		t.Fatalf("write custom OpenCode agent: %v", err)
+	}
+
+	results, errors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channelStable)
+	if len(errors) > 0 {
+		t.Fatalf("syncPlatformHomeAssetsFromHub errors: %v", errors)
+	}
+	if len(results) == 0 {
+		t.Fatal("expected platform sync results")
+	}
+
+	assertFileContent := func(rel string, want []byte) {
+		t.Helper()
+		got, err := os.ReadFile(filepath.Join(homeDir, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		if string(got) != string(want) {
+			t.Fatalf("%s content mismatch\ngot:\n%s\nwant:\n%s", rel, string(got), string(want))
+		}
+	}
+
+	assertFileContent(filepath.Join(".claude", "commands", "ant-build.md"), claudeCommand)
+	assertFileContent(filepath.Join(".claude", "agents", "ant", "aether-builder.md"), claudeAgent)
+	assertFileContent(filepath.Join(".config", "opencode", "commands", "ant", "build.md"), openCodeCommand)
+	assertFileContent(filepath.Join(".config", "opencode", "agents", "aether-builder.md"), openCodeAgent)
+	assertFileContent(filepath.Join(".codex", "agents", "aether-builder.toml"), codexAgent)
+
+	if _, err := os.Stat(customOpenCodeAgent); err != nil {
+		t.Fatalf("custom OpenCode agent should be preserved: %v", err)
+	}
+}
+
 func TestCheckStalePublishExpectedCounts(t *testing.T) {
 	hubDir := t.TempDir()
 	createHubWithExpectedCounts(t, hubDir)
@@ -311,7 +386,26 @@ func createHubWithExpectedCounts(t *testing.T, hubDir string) {
 			ext = ".toml"
 		}
 		for i := 0; i < count; i++ {
-			if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file_%02d%s", i, ext)), []byte("# test"), 0644); err != nil {
+			content := []byte("# test")
+			if filepath.ToSlash(rel) == "agents" {
+				content = []byte(fmt.Sprintf(`---
+name: aether-fixture-%02d
+description: "OpenCode fixture agent used for update and stale publish tests"
+mode: subagent
+color: "#3b82f6"
+tools:
+  write: true
+  edit: true
+  bash: true
+  grep: true
+  glob: true
+  task: true
+---
+
+# OpenCode fixture agent
+`, i))
+			}
+			if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file_%02d%s", i, ext)), content, 0644); err != nil {
 				t.Fatalf("write %s fixture: %v", rel, err)
 			}
 		}

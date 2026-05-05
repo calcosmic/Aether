@@ -400,6 +400,10 @@ type oracleWorkerEvidence struct {
 }
 
 func runOracleCompatibility(root string, args []string, depth string, confidenceTarget string, oracleOptions ...string) (map[string]interface{}, error) {
+	if codex.ShouldUseAgentDelegatePath() {
+		return buildOracleAgentDelegateManifest(root, args, depth, confidenceTarget, oracleOptions...), nil
+	}
+
 	mode := "status"
 	if len(args) > 0 {
 		mode = strings.ToLower(strings.TrimSpace(args[0]))
@@ -430,6 +434,41 @@ func runOracleCompatibility(root string, args []string, depth string, confidence
 		return resumeOracleLoopCompatibility(root)
 	default:
 		return startOracleCompatibility(root, strings.TrimSpace(strings.Join(args, " ")), depth, confidenceTarget, scope, template, maxIterations, background)
+	}
+}
+
+func buildOracleAgentDelegateManifest(root string, args []string, depth string, confidenceTarget string, oracleOptions ...string) map[string]interface{} {
+	topic := ""
+	if len(args) > 0 {
+		topic = strings.TrimSpace(strings.Join(args, " "))
+	}
+	scope := ""
+	if len(oracleOptions) > 0 {
+		scope = oracleOptions[0]
+	}
+	template := ""
+	if len(oracleOptions) > 1 {
+		template = oracleOptions[1]
+	}
+	if depth == "" {
+		depth = "balanced"
+	}
+	if confidenceTarget == "" {
+		confidenceTarget = "95"
+	}
+	return map[string]interface{}{
+		"mode":                "agent-delegate",
+		"dispatch_mode":       "agent-delegate",
+		"topic":               topic,
+		"depth":               depth,
+		"confidence_target":   confidenceTarget,
+		"scope":               scope,
+		"template":            template,
+		"max_iterations":      1,
+		"autopilot_available": false,
+		"status":              "agent-delegate",
+		"blockers":            []string{"agent-delegate mode: oracle iterations must be dispatched by the host platform"},
+		"next":                "",
 	}
 }
 

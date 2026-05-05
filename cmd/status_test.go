@@ -1490,3 +1490,91 @@ func TestStatusDashboard_OmitsGateSectionWhenNoResults(t *testing.T) {
 		t.Errorf("expected no Gate Status section when no gate-results file, got:\n%s", output)
 	}
 }
+
+func TestStatusJSONOutput(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	var envelope struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("failed to unmarshal JSON output: %v\noutput: %s", err, output)
+	}
+	if !envelope.OK {
+		t.Fatalf("expected ok=true, got: %s", output)
+	}
+
+	// Verify key fields exist
+	for _, key := range []string{"goal", "state", "current_phase", "total_phases", "phases_completed", "phase_name", "display_phase", "tasks_completed", "tasks_total", "agent_delegate_session"} {
+		if _, ok := envelope.Result[key]; !ok {
+			t.Errorf("missing key %q in JSON result", key)
+		}
+	}
+
+	// agent_delegate_session should be a boolean
+	if _, ok := envelope.Result["agent_delegate_session"].(bool); !ok {
+		t.Errorf("agent_delegate_session should be a boolean, got %T", envelope.Result["agent_delegate_session"])
+	}
+}
+
+func TestStatusJSONOutput_AgentDelegateTrue(t *testing.T) {
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	t.Setenv("AETHER_AGENT_DELEGATE", "1")
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	var envelope struct {
+		OK     bool                   `json:"ok"`
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("failed to unmarshal JSON output: %v\noutput: %s", err, output)
+	}
+
+	val, ok := envelope.Result["agent_delegate_session"].(bool)
+	if !ok {
+		t.Fatalf("agent_delegate_session should be a boolean, got %T", envelope.Result["agent_delegate_session"])
+	}
+	if !val {
+		t.Errorf("expected agent_delegate_session=true when AETHER_AGENT_DELEGATE=1, got false")
+	}
+}

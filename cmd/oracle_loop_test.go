@@ -335,6 +335,62 @@ func TestOracleCommandInvalidConfidenceReturnsRenderedError(t *testing.T) {
 	}
 }
 
+func TestOracleAgentDelegateReturnsManifest(t *testing.T) {
+	t.Setenv("AETHER_AGENT_DELEGATE", "1")
+	result, err := runOracleCompatibility("/tmp", []string{"test topic"}, "balanced", "95")
+	if err != nil {
+		t.Fatalf("runOracleCompatibility returned error: %v", err)
+	}
+	if result["dispatch_mode"] != "agent-delegate" {
+		t.Errorf("dispatch_mode = %v, want agent-delegate", result["dispatch_mode"])
+	}
+	if result["status"] != "agent-delegate" {
+		t.Errorf("status = %v, want agent-delegate", result["status"])
+	}
+	if result["max_iterations"] != 1 {
+		t.Errorf("max_iterations = %v, want 1", result["max_iterations"])
+	}
+	if result["topic"] != "test topic" {
+		t.Errorf("topic = %v, want test topic", result["topic"])
+	}
+}
+
+func TestOracleAgentDelegateProceedsNormallyWhenGuardIsFalse(t *testing.T) {
+	// Ensure env vars are cleared
+	os.Unsetenv("AETHER_AGENT_DELEGATE")
+	os.Unsetenv("CLAUDE_CODE_SIMPLE")
+	os.Unsetenv("OPENCODE_AGENT")
+
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	withWorkingDir(t, root)
+
+	agentsDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/oracle-normal\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
+		t.Fatalf("write oracle agent: %v", err)
+	}
+
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
+	defer func() { newOracleWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"oracle", "normal topic"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("oracle returned error: %v", err)
+	}
+}
+
 func TestOracleConfidenceTargetQuickDepthPreset(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

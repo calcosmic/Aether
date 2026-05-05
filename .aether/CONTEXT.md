@@ -8,10 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-03T21:09:09Z |
-| **Current Phase** | 2 |
-| **Phase Name** | Interactive selection UX |
-| **Phase Status** | ready |
+| **Last Updated** | 2026-05-05T01:41:05Z |
+| **Current Phase** | 4 |
+| **Phase Name** | Agent-Delegate for oracle Command |
+| **Phase Status** | pending |
 | **Milestone** | First Mound |
 | **Colony Status** | READY |
 | **Safe to Clear?** | YES — Plan persisted, ready for the next command |
@@ -20,13 +20,13 @@
 
 ## Current Goal
 
-Implement intent-aware interactive orchestration with Queen recommendations, workflow profile choices, final colony review wave, and safe force recovery flags
+Fix agent dispatch platform mismatch for Claude Code and OpenCode agent sessions
 
 ---
 
 ## What's In Progress
 
-Pre-compact snapshot (auto): state=READY phase=2 goal=Implement intent-aware interactive orchestration with Queen recommendations, workflow profile choices, final colony review wave, and safe force recovery flags task=Interactive selection UX
+Pre-compact snapshot (auto): state=READY phase=4 goal=Fix agent dispatch platform mismatch for Claude Code and OpenCode agent sessions task=Agent-Delegate for oracle Command
 
 ---
 
@@ -34,13 +34,15 @@ Pre-compact snapshot (auto): state=READY phase=2 goal=Implement intent-aware int
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
+| Do not change NewWorkerInvoker() to return FakeInvoker inside agents — that produces synthetic results. The correct path is plan-only + host-agent dispatch +... | pheromone | active |
+| Do not modify --plan-only or -finalize code paths — they already work. Build agent-delegate as a thin routing layer on top. | pheromone | active |
 | Do not solve reviewer timeouts by increasing timeouts or deleting the specialist reviewer agents; solve it with intent-aware orchestration and advisory-vs-bl... | pheromone | active |
 
 ---
 
 ## Active Pheromones
 
-- FOCUS: Interactive workflow profile choices with Queen recommendations; default fast phase execution, with a heavier final colony review wave after the last phase.
+*None active*
 
 ---
 
@@ -52,10 +54,11 @@ Pre-compact snapshot (auto): state=READY phase=2 goal=Implement intent-aware int
 
 ---
 
-## Tasks For Phase 2 — Interactive selection UX
+## Tasks For Phase 4 — Agent-Delegate for oracle Command
 
-- [ ] Implement an interactive workflow choice surface with Queen-recommended defaults
-- [ ] Persist selected workflow options so build, continue, run, and seal use the same policy
+- [ ] Add agent-delegate guard in oracle_loop.go before invoker call
+- [ ] Tests for oracle agent-delegate guard
+- [ ] Update .claude/commands/ant/oracle.md and .opencode/commands/ant/oracle.md for agent-delegate
 
 ---
 
@@ -69,18 +72,18 @@ Pre-compact snapshot (auto): state=READY phase=2 goal=Implement intent-aware int
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-02T16:02:57Z|build_dispatched|build|Dispatched 5 workers for phase 1
-- 2026-05-02T16:03:03Z|build_completed|build-finalize|Phase 1 external Task workers recorded
-- 2026-05-02T16:05:12Z|verification_passed|continue|Build verification passed for phase 1
-- 2026-05-02T16:05:12Z|gate_passed|continue|Continue gates passed for phase 1
-- 2026-05-02T16:05:12Z|phase_advanced|continue|Completed phase 1, ready for phase 2
+- 2026-05-04T23:48:38Z|build_dispatched|build|Dispatched 6 workers for phase 2
+- 2026-05-05T00:01:14Z|build_completed|build-finalize|Phase 2 external Task workers recorded
+- 2026-05-05T00:05:58Z|phase_started|build|Phase 3: Agent-Delegate for swarm Command
+- 2026-05-05T00:05:58Z|build_dispatched|build|Dispatched 6 workers for phase 3
+- 2026-05-05T01:07:09Z|build_completed|build-finalize|Phase 3 external Task workers recorded
 
 ---
 
 ## Next Steps
 
-1. Run `aether build 2`
-2. Run `aether phase --number 2` to inspect the tracked phase details
+1. Run `aether build 4`
+2. Run `aether phase --number 4` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---
@@ -92,5 +95,6 @@ Pre-compact snapshot (auto): state=READY phase=2 goal=Implement intent-aware int
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
-- Implement an interactive workflow choice surface with Queen-recommended defaults
-- Persist selected workflow options so build, continue, run, and seal use the same policy
+- Add agent-delegate guard in oracle_loop.go before invoker call
+- Tests for oracle agent-delegate guard
+- Update .claude/commands/ant/oracle.md and .opencode/commands/ant/oracle.md for agent-delegate

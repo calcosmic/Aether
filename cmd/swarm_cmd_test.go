@@ -235,3 +235,218 @@ func TestSwarmDestroySurfacesBlockedWorkers(t *testing.T) {
 		t.Fatalf("unexpected blocker payload: %v", blockers)
 	}
 }
+
+// --- SwarmAgentDelegate tests ---
+
+// panicInvoker panics if IsAvailable is called, proving the guard is before it.
+type panicInvoker struct{}
+
+func (p *panicInvoker) Invoke(_ context.Context, _ codex.WorkerConfig) (codex.WorkerResult, error) {
+	panic("Invoke should not be called in agent-delegate mode")
+}
+func (p *panicInvoker) IsAvailable(_ context.Context) bool {
+	panic("IsAvailable should not be called in agent-delegate mode")
+}
+func (p *panicInvoker) ValidateAgent(_ string) error {
+	panic("ValidateAgent should not be called in agent-delegate mode")
+}
+
+func TestSwarmAgentDelegateReturnsManifestWhenAgentDelegatePathIsTrue(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	// Set agent-delegate session env vars + claude platform
+	for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE", "AETHER_ACTIVE_PLATFORM", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_EXECPATH", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+		os.Unsetenv(key)
+	}
+	t.Setenv("AETHER_AGENT_DELEGATE", "1")
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "claude")
+
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return &panicInvoker{} }
+	defer func() { newSwarmWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"swarm", "Auth panic when session is missing"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	if got := result["mode"]; got != "destroy" {
+		t.Fatalf("mode = %v, want destroy", got)
+	}
+	if got := result["dispatch_mode"]; got != "agent-delegate" {
+		t.Fatalf("dispatch_mode = %v, want agent-delegate", got)
+	}
+	if got := result["status"]; got != "agent-delegate" {
+		t.Fatalf("status = %v, want agent-delegate", got)
+	}
+	if got := result["autopilot_available"]; got != false {
+		t.Fatalf("autopilot_available = %v, want false", got)
+	}
+	workers, ok := result["workers"].([]interface{})
+	if !ok || len(workers) != 5 {
+		t.Fatalf("expected 5 workers in manifest, got %v", result["workers"])
+	}
+	blockers, ok := result["blockers"].([]interface{})
+	if !ok || len(blockers) == 0 {
+		t.Fatalf("expected blockers in result, got %v", result["blockers"])
+	}
+	if !strings.Contains(stringValue(blockers[0]), "agent-delegate mode") {
+		t.Fatalf("expected agent-delegate blocker, got %v", blockers)
+	}
+}
+
+func TestSwarmAgentDelegateReturnsManifestForOpenCodePlatform(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE", "AETHER_ACTIVE_PLATFORM", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_EXECPATH", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+		os.Unsetenv(key)
+	}
+	t.Setenv("AETHER_AGENT_DELEGATE", "1")
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "opencode")
+
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return &panicInvoker{} }
+	defer func() { newSwarmWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"swarm", "Race condition in worker pool"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	if got := result["dispatch_mode"]; got != "agent-delegate" {
+		t.Fatalf("dispatch_mode = %v, want agent-delegate", got)
+	}
+	if got := result["status"]; got != "agent-delegate" {
+		t.Fatalf("status = %v, want agent-delegate", got)
+	}
+}
+
+func TestSwarmAgentDelegateProceedsNormallyWhenGuardIsFalse(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Destroy a stubborn auth bug"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	// Ensure agent-delegate is NOT active
+	for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE", "AETHER_ACTIVE_PLATFORM", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_EXECPATH", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+		os.Unsetenv(key)
+	}
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+
+	originalInvoker := newSwarmWorkerInvoker
+	invoker := &swarmTestInvoker{}
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	defer func() { newSwarmWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"swarm", "Auth panic when session is missing"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	// Should be normal destroy mode, NOT agent-delegate manifest
+	if got := result["mode"]; got != "destroy" {
+		t.Fatalf("mode = %v, want destroy", got)
+	}
+	if _, hasDispatchMode := result["dispatch_mode"]; hasDispatchMode {
+		t.Fatalf("expected no dispatch_mode in normal mode, got %v", result["dispatch_mode"])
+	}
+	if got := result["status"]; got != "completed" {
+		t.Fatalf("status = %v, want completed", got)
+	}
+	if got := result["worker_count"]; got != float64(5) {
+		t.Fatalf("worker_count = %v, want 5", got)
+	}
+	if len(invoker.configs) != 5 {
+		t.Fatalf("expected 5 worker configs, got %d", len(invoker.configs))
+	}
+}
+
+func TestSwarmAgentDelegateGuardIsBeforeInvokerIsAvailable(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	// Set agent-delegate session env vars + claude platform
+	for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE", "AETHER_ACTIVE_PLATFORM", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_EXECPATH", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+		os.Unsetenv(key)
+	}
+	t.Setenv("AETHER_AGENT_DELEGATE", "1")
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "claude")
+
+	// Use panicInvoker: if IsAvailable were called, the test would panic
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return &panicInvoker{} }
+	defer func() { newSwarmWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"swarm", "Guard ordering test"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	if got := result["dispatch_mode"]; got != "agent-delegate" {
+		t.Fatalf("dispatch_mode = %v, want agent-delegate", got)
+	}
+	// If we got here without panic, the guard was before invoker.IsAvailable()
+}

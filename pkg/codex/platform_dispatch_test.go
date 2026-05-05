@@ -330,6 +330,143 @@ func TestIsAgentDelegateSession(t *testing.T) {
 	}
 }
 
+func TestShouldUseAgentDelegatePath(t *testing.T) {
+	tests := []struct {
+		name           string
+		agentDelegate  bool
+		activePlatform string
+		want           bool
+	}{
+		{
+			name:           "no agent-delegate session",
+			agentDelegate:  false,
+			activePlatform: "claude",
+			want:           false,
+		},
+		{
+			name:           "agent-delegate with claude platform",
+			agentDelegate:  true,
+			activePlatform: "claude",
+			want:           true,
+		},
+		{
+			name:           "agent-delegate with opencode platform",
+			agentDelegate:  true,
+			activePlatform: "opencode",
+			want:           true,
+		},
+		{
+			name:           "agent-delegate with codex platform",
+			agentDelegate:  true,
+			activePlatform: "codex",
+			want:           false,
+		},
+		{
+			name:           "agent-delegate with unknown platform",
+			agentDelegate:  true,
+			activePlatform: "unknown",
+			want:           false,
+		},
+		{
+			name:           "no agent-delegate with codex platform",
+			agentDelegate:  false,
+			activePlatform: "codex",
+			want:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear all relevant env vars first, including any that detectPlatformFromEnv checks.
+			// Use os.Unsetenv before t.Setenv because t.Setenv adds the var to os.Environ
+			// even when set to empty, and hasEnvPrefix matches on the prefix of the key name.
+			for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE", envActivePlatform, "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_EXECPATH", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+				os.Unsetenv(key)
+			}
+			if tt.agentDelegate {
+				t.Setenv("AETHER_AGENT_DELEGATE", "1")
+			}
+			if tt.activePlatform != "" {
+				t.Setenv(envActivePlatform, tt.activePlatform)
+			}
+
+			got := ShouldUseAgentDelegatePath()
+			if got != tt.want {
+				t.Fatalf("ShouldUseAgentDelegatePath() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAgentDelegateFallbackReason(t *testing.T) {
+	tests := []struct {
+		name           string
+		agentDelegate  bool
+		activePlatform string
+		wantEmpty      bool
+		wantContains   string
+	}{
+		{
+			name:           "not an agent-delegate session",
+			agentDelegate:  false,
+			activePlatform: "claude",
+			wantEmpty:      false,
+			wantContains:   "not an agent-delegate session",
+		},
+		{
+			name:           "agent-delegate with claude platform",
+			agentDelegate:  true,
+			activePlatform: "claude",
+			wantEmpty:      true,
+		},
+		{
+			name:           "agent-delegate with opencode platform",
+			agentDelegate:  true,
+			activePlatform: "opencode",
+			wantEmpty:      true,
+		},
+		{
+			name:           "agent-delegate with codex platform",
+			agentDelegate:  true,
+			activePlatform: "codex",
+			wantEmpty:      false,
+			wantContains:   "platform is codex",
+		},
+		{
+			name:           "agent-delegate with unknown platform",
+			agentDelegate:  true,
+			activePlatform: "",
+			wantEmpty:      false,
+			wantContains:   "platform is",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE", envActivePlatform, "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_EXECPATH", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+				os.Unsetenv(key)
+			}
+			if tt.agentDelegate {
+				t.Setenv("AETHER_AGENT_DELEGATE", "1")
+			}
+			if tt.activePlatform != "" {
+				t.Setenv(envActivePlatform, tt.activePlatform)
+			}
+
+			got := AgentDelegateFallbackReason()
+			if tt.wantEmpty {
+				if got != "" {
+					t.Fatalf("AgentDelegateFallbackReason() = %q, want empty", got)
+				}
+			} else {
+				if !strings.Contains(got, tt.wantContains) {
+					t.Fatalf("AgentDelegateFallbackReason() = %q, want containing %q", got, tt.wantContains)
+				}
+			}
+		})
+	}
+}
+
 func TestClassifyHostedExecutionErrorExplainsOpenCodeLocalServerFailure(t *testing.T) {
 	err := classifyHostedExecutionError("opencode", os.ErrNotExist, "POST http://localhost:4000/messages returned 404", false)
 	text := err.Error()

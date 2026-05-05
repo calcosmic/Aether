@@ -12,3 +12,6 @@ archive/
 backups/
 oracle/
 temp/
+
+# Stale plan backups — belt-and-braces against leaking contaminated artifacts
+*.bak

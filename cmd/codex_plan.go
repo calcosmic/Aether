@@ -298,7 +298,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		invoker := newCodexWorkerInvoker()
 		if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
 			dispatchMode = "fallback"
-			planningWarning = fmt.Sprintf("Real planning workers were unavailable, so Aether fell back to local synthesis. Cause: %s", dispatchAvailabilityMessage(invoker))
+			planningWarning = fmt.Sprintf("Real planning workers were unavailable, so the saved plan is a generic survey-derived skeleton — not a goal-specific plan. Re-run plan once worker agents are available to get a real plan. Cause: %s", dispatchAvailabilityMessage(invoker))
 		} else {
 			realDispatches, dispatchErr := dispatchRealPlanningWorkersWithTimeout(context.Background(), root, survey, invoker, opts.WorkerTimeout)
 			if realDispatches != nil {
@@ -309,7 +309,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 					dispatchMode = "simulated"
 				} else {
 					dispatchMode = "fallback"
-					planningWarning = fmt.Sprintf("Real planning workers did not finish cleanly, so Aether fell back to local synthesis. Cause: %s", dispatchErr.Error())
+					planningWarning = fmt.Sprintf("Real planning workers did not finish cleanly, so the saved plan is a generic survey-derived skeleton — not a goal-specific plan. Re-run plan once worker agents are available to get a real plan. Cause: %s", dispatchErr.Error())
 				}
 			} else if realDispatches != nil {
 				if _, ok := invoker.(*codex.FakeInvoker); ok {
@@ -1112,29 +1112,39 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("- Survey docs to read first: none detected; inspect repo files only when the survey is missing or ambiguous.\n")
 	}
 	if spec.Caste == "route_setter" {
-		b.WriteString("- Read scout output before drafting phases: ")
+		b.WriteString("- Read scout output before drafting phases if it exists: ")
 		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
+		b.WriteString("; if it is missing, proceed from the survey context and note the missing scout artifact in blockers only if it prevents a useful plan.")
 		b.WriteString("\n")
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
 	b.WriteString("- Avoid high-noise paths unless directly relevant: .aether/backups/, .aether/chambers/, .aether/data/build/, .git/, node_modules/, dist/, build/, vendor/.\n")
+	if spec.Caste == "scout" {
+		b.WriteString("- Scout scope rule: stay read-only, do not spawn subagents, and stop after the survey docs plus targeted confirmation reads are enough to summarize planning risks.\n")
+	}
 	graphTargets := append(append([]string{}, survey.EntryPoints...), survey.TestFiles...)
 	if graphContext := renderCodegraphContextForText(root, graphTargets, codegraphWorkerContextBudgetChars); graphContext != "" {
 		b.WriteString("\n")
 		b.WriteString(graphContext)
 		b.WriteString("\n\n")
 	}
-	b.WriteString("Write planning outputs directly into the repository.\n")
-	b.WriteString("- Primary outputs: ")
-	b.WriteString(strings.Join(primaryOutputs, ", "))
-	b.WriteString("\n")
-	b.WriteString("- Planning dir: ")
-	b.WriteString(planningDir)
-	b.WriteString("\n")
-	b.WriteString("- Phase research dir: ")
-	b.WriteString(phaseResearchDir)
-	b.WriteString("\n")
-	if spec.Caste == "route_setter" {
+	if spec.Caste == "scout" {
+		b.WriteString("Return planning findings in the final worker claims JSON only.\n")
+		b.WriteString("- Do not write files; Scout is read-only on every supported platform.\n")
+		b.WriteString("- Aether will persist the scout artifact after the worker completes: ")
+		b.WriteString(strings.Join(primaryOutputs, ", "))
+		b.WriteString("\n")
+	} else {
+		b.WriteString("Write planning outputs directly into the repository.\n")
+		b.WriteString("- Primary outputs: ")
+		b.WriteString(strings.Join(primaryOutputs, ", "))
+		b.WriteString("\n")
+		b.WriteString("- Planning dir: ")
+		b.WriteString(planningDir)
+		b.WriteString("\n")
+		b.WriteString("- Phase research dir: ")
+		b.WriteString(phaseResearchDir)
+		b.WriteString("\n")
 		b.WriteString("- Also write a machine-readable plan artifact at ")
 		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "phase-plan.json")))
 		b.WriteString(" using this JSON shape:\n")
@@ -1337,387 +1347,89 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 }
 
 func planningTemplates(goal string, survey codexSurveyContext, report codexScoutReport) []phaseTemplate {
-	goalLower := strings.ToLower(goal)
-	switch {
-	case containsAny(goalLower, []string{"parity", "orchestrat", "workflow", "command", "spawn"}):
-		return []phaseTemplate{
-			{
-				Name:        "Contract and gap mapping",
-				Description: "Lock the expected ant-process behavior against the current Go command surface.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Compare the documented ant workflow with the current Codex command behavior",
-						Constraints:     []string{"Use Claude/OpenCode command specs as the external contract", "Keep the Go binary as the execution source of truth"},
-						Hints:           []string{".claude/commands/ant/colonize.md", ".claude/commands/ant/plan.md", "cmd/codex_workflow_cmds.go"},
-						SuccessCriteria: []string{"The parity gaps are explicit", "The next implementation slices are dependency-ordered"},
-					},
-					{
-						Goal:            "Decide the observable ant-process outputs Codex must emit during each core command",
-						Constraints:     []string{"Do not claim capabilities the Go binary does not actually perform"},
-						Hints:           append(commonHints(survey), report.StudyFiles...),
-						SuccessCriteria: []string{"Each command has a concrete dispatch contract", "Spawn tree and artifacts are part of the contract"},
-					},
+	// planningTemplates returns a generic, survey-driven skeleton. Real goal-awareness
+	// belongs in LLM-driven planning workers — substring matching against the user's
+	// goal historically leaked Aether-internal phase names and file paths into other
+	// repos' plans, so we deliberately do not switch on goal keywords here.
+	_ = goal
+	return []phaseTemplate{
+		{
+			Name:        "Discovery and boundaries",
+			Description: "Map the relevant code paths, constraints, and success criteria before implementation.",
+			Tasks: []phaseTaskTemplate{
+				{
+					Goal:            "Read the current implementation paths relevant to the goal",
+					Constraints:     commonConstraints(survey),
+					Hints:           commonHints(survey),
+					SuccessCriteria: []string{"The working surface is explicit", "Key dependencies and boundaries are known"},
 				},
-				SuccessCriteria: []string{"The parity contract is explicit", "The colony has an honest execution target"},
-			},
-			{
-				Name:        "Colonize orchestration",
-				Description: "Deliver surveyor-driven territory mapping that writes usable survey artifacts and spawn records.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Implement the surveyor workflow for Codex colonize",
-						Constraints:     commonConstraints(survey),
-						Hints:           []string{"cmd/codex_colonize.go", "spawn-tree.txt", ".aether/data/survey/"},
-						SuccessCriteria: []string{"Survey artifacts are written", "Surveyor spawns are recorded and completed"},
-					},
-					{
-						Goal:            "Keep survey artifacts stable enough for planning to consume",
-						Constraints:     []string{"Avoid polluting reports with cache or generated artifacts"},
-						Hints:           []string{"PATHOGENS.md should only mention real repo concerns"},
-						SuccessCriteria: []string{"Survey artifacts are reusable inputs for plan", "Noise from generated/cache files is excluded"},
-					},
+				{
+					Goal:            "Capture risks, constraints, and a testable target state",
+					Constraints:     []string{"Keep the scope bounded to the requested outcome"},
+					Hints:           survey.Issues,
+					SuccessCriteria: []string{"Success criteria are explicit", "Known risks are visible before coding"},
 				},
-				SuccessCriteria: []string{"Territory survey is reliable", "Planning can trust the survey output"},
 			},
-			{
-				Name:        "Planning orchestration",
-				Description: "Add a scout plus route-setter planning pass that produces artifacts and a grounded phase plan.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Implement a scout planning pass that summarizes survey findings into buildable guidance",
-						Constraints:     []string{"Scout output must be persisted as a planning artifact", "Planning must still work when survey docs are missing"},
-						Hints:           []string{"SCOUT.md", "phase-research/", "cmd/codex_plan.go"},
-						SuccessCriteria: []string{"Planning produces a scout artifact", "The route-setter consumes scout output and survey context"},
-					},
-					{
-						Goal:            "Generate a route-setter plan with task constraints, hints, and success criteria",
-						Constraints:     []string{"The first phase must become ready", "The saved plan must match the displayed plan"},
-						Hints:           []string{"COLONY_STATE.json", "renderPlanVisual"},
-						SuccessCriteria: []string{"Plan generation is grounded in repo context", "Spawn records show scout and route-setter activity"},
-					},
+			SuccessCriteria: []string{"The colony has a bounded target", "Implementation risks are known"},
+		},
+		{
+			Name:        "Architecture and interfaces",
+			Description: "Lock the first architecture boundary, ownership surface, and integration path before deeper coding.",
+			Tasks: []phaseTaskTemplate{
+				{
+					Goal:            "Define the primary architecture boundary or module surface for the change",
+					Constraints:     []string{"Prefer a narrow first ownership surface", "Keep the design anchored to the existing repo shape"},
+					Hints:           append(commonHints(survey), report.StudyFiles...),
+					SuccessCriteria: []string{"The implementation surface is chosen", "The integration path is explicit"},
 				},
-				SuccessCriteria: []string{"Plan generation is ant-driven", "The colony has a grounded next phase"},
-			},
-			{
-				Name:        "Build orchestration",
-				Description: "Replace visual-only build dispatch with real worker execution slices and artifact handling.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Define and implement the builder, watcher, and specialist work sequence for build",
-						Constraints:     []string{"Keep command behavior inside Go", "Recorded spawns must reflect real work performed"},
-						Hints:           []string{"cmd/codex_workflow_cmds.go", "cmd/codex_visuals.go", ".claude/commands/ant/build.md"},
-						SuccessCriteria: []string{"Build does more than set state", "The spawn plan matches actual command behavior"},
-					},
-					{
-						Goal:            "Persist build artifacts and phase context needed by continue",
-						Constraints:     []string{"Continue must not rely on implied work that never happened"},
-						Hints:           commonHints(survey),
-						SuccessCriteria: []string{"Continue can verify concrete outputs", "Phase state stays consistent across reruns"},
-					},
+				{
+					Goal:            "Identify the interfaces, contracts, or data boundaries that the implementation must respect",
+					Constraints:     []string{"Document the boundaries before broad code changes begin"},
+					Hints:           survey.Dependencies,
+					SuccessCriteria: []string{"Key interfaces are explicit", "The build phase has a stable target"},
 				},
-				SuccessCriteria: []string{"Build behavior matches its visuals", "Continue has real evidence to consume"},
 			},
-			{
-				Name:        "Continue orchestration",
-				Description: "Make continue perform the real verification and advancement work instead of only flipping statuses.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Implement watcher-led verification and housekeeping before phase advancement",
-						Constraints:     []string{"Signal housekeeping should stay wired into continue finalize", "Completed phases must only advance after verification"},
-						Hints:           []string{"cmd/signal_housekeeping.go", ".claude/commands/ant/continue.md"},
-						SuccessCriteria: []string{"Continue verifies actual artifacts", "Advance only happens after verification succeeds"},
-					},
-					{
-						Goal:            "Record the continue worker flow in state, spawn logs, and user-facing output",
-						Constraints:     []string{"The Next Up block must stay valid for the resulting state"},
-						Hints:           []string{"renderContinueVisual", "print-next-up"},
-						SuccessCriteria: []string{"Continue output matches actual work", "The next phase becomes ready when appropriate"},
-					},
+			SuccessCriteria: []string{"The architecture surface is explicit", "The implementation can proceed without guessing boundaries"},
+		},
+		{
+			Name:        "Implementation",
+			Description: "Make the core changes required to land the goal.",
+			Tasks: []phaseTaskTemplate{
+				{
+					Goal:            "Implement the main behavior changes required by the goal",
+					Constraints:     commonConstraints(survey),
+					Hints:           commonHints(survey),
+					SuccessCriteria: []string{"The main behavior lands", "The change integrates cleanly with the existing structure"},
 				},
-				SuccessCriteria: []string{"Continue is no longer a pure state flip", "Phase advancement is defensible"},
-			},
-			{
-				Name:        "End-to-end verification",
-				Description: "Run the colony from init through seal and prove the Codex ant process is now honest.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Add tests that prove colonize, plan, build, and continue record real worker activity",
-						Constraints:     []string{"Test the user path, not just helper functions"},
-						Hints:           append([]string{"cmd/codex_colonize_test.go"}, survey.TestFiles...),
-						SuccessCriteria: []string{"Core parity regressions are caught by tests", "Spawn tree entries are asserted in tests"},
-					},
-					{
-						Goal:            "Run a live colony loop and compare its outputs with the documented ant process",
-						Constraints:     []string{"Call out any remaining parity gap explicitly"},
-						Hints:           []string{"spawn-tree.txt", "COLONY_STATE.json", ".aether/data/survey/"},
-						SuccessCriteria: []string{"The live loop proves the implemented parity", "Remaining gaps are small and explicit"},
-					},
+				{
+					Goal:            "Update or add focused automated coverage",
+					Constraints:     []string{"Use existing test patterns where possible"},
+					Hints:           survey.TestFiles,
+					SuccessCriteria: []string{"The new behavior is covered", "Important adjacent behavior is exercised"},
 				},
-				SuccessCriteria: []string{"The live colony loop is credible", "The remaining parity gap is narrow and testable"},
 			},
-		}
-	case isLanguageDesignGoal(goalLower):
-		return []phaseTemplate{
-			{
-				Name:        "Research charter and communication target",
-				Description: "Define what the language or protocol is for, who writes it, and what efficiency or expressiveness problem it must solve.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Define the communication problem, target agents, and success criteria for the language",
-						Constraints:     []string{"Keep the first charter narrow enough to prototype quickly", "State what efficiency or context-saving win should be measurable"},
-						Hints:           append([]string{"README.md", "SCOUT.md"}, report.StudyFiles...),
-						SuccessCriteria: []string{"The language has a bounded first mission", "Non-goals and evaluation criteria are explicit"},
-					},
-					{
-						Goal:            "Capture the core semantic primitives the language needs to express",
-						Constraints:     []string{"Separate semantics from syntax", "Avoid inventing syntax before the information model is clear"},
-						Hints:           []string{"Grammar sketch", "Message categories", "Information density targets"},
-						SuccessCriteria: []string{"Core message categories are named", "The minimum expressive set is explicit"},
-					},
+			SuccessCriteria: []string{"The goal is implemented", "Coverage exists for the changed behavior"},
+		},
+		{
+			Name:        "Verification and polish",
+			Description: "Verify the result, tighten loose ends, and prepare the colony for seal.",
+			Tasks: []phaseTaskTemplate{
+				{
+					Goal:            "Run focused verification and address regressions",
+					Constraints:     []string{"Prefer the smallest verification set that proves the result"},
+					Hints:           survey.TestFiles,
+					SuccessCriteria: []string{"Relevant verification is green", "Regressions are addressed"},
 				},
-				SuccessCriteria: []string{"The language charter is explicit", "The research target is narrow enough to explore concretely"},
-			},
-			{
-				Name:        "Representation and grammar design",
-				Description: "Design the structural representation, encoding rules, and grammar needed to carry the chosen semantic primitives.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Choose the first representation model for messages and state transitions",
-						Constraints:     []string{"Prefer one reference representation first", "Document how the representation optimizes context or token use"},
-						Hints:           []string{"Abstract syntax tree", "Schema sketch", "Field density trade-offs"},
-						SuccessCriteria: []string{"A first representation model exists", "Trade-offs are recorded"},
-					},
-					{
-						Goal:            "Draft the first grammar, syntax, or encoding rules for that representation",
-						Constraints:     []string{"Keep the first grammar intentionally small", "Show at least one end-to-end example message"},
-						Hints:           []string{"Parser/lexer sketch", "Serialization rules", "Example transcripts"},
-						SuccessCriteria: []string{"The first grammar can encode representative examples", "Syntax and semantics stay aligned"},
-					},
+				{
+					Goal:            "Capture decisions, follow-ups, and user-visible changes",
+					Constraints:     []string{"Do not hide residual risk"},
+					Hints:           survey.Issues,
+					SuccessCriteria: []string{"Key decisions are documented", "Remaining follow-ups are explicit"},
 				},
-				SuccessCriteria: []string{"The representation is concrete", "The grammar is specific enough to prototype"},
 			},
-			{
-				Name:        "Reference prototype and translation path",
-				Description: "Build the smallest reference implementation that can read, write, or validate the first slice of the language.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Create a minimal reference prototype for parsing, validating, or emitting the first message slice",
-						Constraints:     []string{"Prototype only the first useful slice", "Prefer a small reference tool over a full compiler/runtime"},
-						Hints:           append(commonHints(survey), "Parser", "Validator", "Encoder"),
-						SuccessCriteria: []string{"A concrete prototype exists", "Examples can flow through the prototype"},
-					},
-					{
-						Goal:            "Create worked examples that demonstrate the language's communication advantage",
-						Constraints:     []string{"Examples must compare the new format with a plain-language baseline"},
-						Hints:           []string{"Before/after transcripts", "Compression examples", "Agent-to-agent exchange"},
-						SuccessCriteria: []string{"Representative examples exist", "The examples expose strengths and weaknesses honestly"},
-					},
-				},
-				SuccessCriteria: []string{"The language is no longer only conceptual", "There is a concrete translation path for examples"},
-			},
-			{
-				Name:        "Evaluation and next design loop",
-				Description: "Evaluate the first prototype, capture what worked, and turn the findings into the next research or implementation slice.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Evaluate the prototype against the original communication and efficiency criteria",
-						Constraints:     []string{"Do not hide unresolved ambiguities or poor trade-offs"},
-						Hints:           []string{"Token count comparison", "Ambiguity review", "Error cases"},
-						SuccessCriteria: []string{"The prototype is assessed against explicit criteria", "Weak points are visible"},
-					},
-					{
-						Goal:            "Record design decisions, open questions, and the next experimental slice",
-						Constraints:     []string{"Keep follow-ups framed as concrete experiments"},
-						Hints:           survey.Issues,
-						SuccessCriteria: []string{"The next iteration path is explicit", "The colony can continue from a grounded base"},
-					},
-				},
-				SuccessCriteria: []string{"The first design loop is evaluated", "The next iteration is specific and evidence-driven"},
-			},
-		}
-	case isGreenfieldResearchGoal(goalLower, survey):
-		return []phaseTemplate{
-			{
-				Name:        "Problem framing and boundaries",
-				Description: "Define the research target, the first hard constraints, and what a meaningful outcome would look like.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Turn the raw goal into a bounded research charter with explicit outcomes",
-						Constraints:     []string{"Do not jump into implementation before the research target is concrete"},
-						Hints:           append([]string{"README.md", "SCOUT.md"}, report.StudyFiles...),
-						SuccessCriteria: []string{"The goal is narrowed into a research charter", "The first outcome is testable"},
-					},
-					{
-						Goal:            "Identify the hardest unknowns and the assumptions most likely to invalidate the project",
-						Constraints:     []string{"Surface the unknowns before structure ossifies"},
-						Hints:           survey.Issues,
-						SuccessCriteria: []string{"High-risk unknowns are explicit", "The next phase is shaped by the hardest questions"},
-					},
-				},
-				SuccessCriteria: []string{"The problem is bounded", "The riskiest unknowns are visible"},
-			},
-			{
-				Name:        "Research model and architecture groundwork",
-				Description: "Design the first information model, architecture boundary, or experimental structure required to explore the goal.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Choose the first architecture or information model to explore the goal",
-						Constraints:     []string{"Prefer a minimal model that exposes the core trade-offs"},
-						Hints:           []string{"System boundaries", "Core entities", "Flow diagram"},
-						SuccessCriteria: []string{"The core architecture is sketched", "Dependencies and interfaces are explicit"},
-					},
-					{
-						Goal:            "Document the exploration structure and the artifacts the prototype will need",
-						Constraints:     []string{"Keep the first artifact set lean"},
-						Hints:           []string{"Spec doc", "Reference implementation", "Examples"},
-						SuccessCriteria: []string{"The groundwork is concrete enough to build from", "The prototype path is explicit"},
-					},
-				},
-				SuccessCriteria: []string{"The research has a concrete structure", "The first build slice is grounded"},
-			},
-			{
-				Name:        "Prototype the first end-to-end slice",
-				Description: "Build the smallest possible slice that exercises the core idea end to end.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Implement a minimal prototype for the first meaningful slice",
-						Constraints:     []string{"Keep scope tight", "Demonstrate the core idea, not every edge case"},
-						Hints:           commonHints(survey),
-						SuccessCriteria: []string{"A first end-to-end slice exists", "The prototype exposes the real trade-offs"},
-					},
-					{
-						Goal:            "Capture examples, inputs, and outputs that explain what the prototype is proving",
-						Constraints:     []string{"Examples must be understandable without hidden context"},
-						Hints:           []string{"Example inputs", "Example outputs", "Reference walkthrough"},
-						SuccessCriteria: []string{"The prototype is explainable", "The experiment can be repeated"},
-					},
-				},
-				SuccessCriteria: []string{"There is a real prototype", "The prototype demonstrates the core claim"},
-			},
-			{
-				Name:        "Evaluate, document, and re-scope",
-				Description: "Evaluate the first results, capture decisions, and choose the next slice based on evidence.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Evaluate what the first prototype proved and where it failed",
-						Constraints:     []string{"Do not overstate the result"},
-						Hints:           []string{"Limitations", "Unexpected findings", "Operational risks"},
-						SuccessCriteria: []string{"The result is judged honestly", "Evidence and limitations are both visible"},
-					},
-					{
-						Goal:            "Record the next iteration path, including what to deepen, abandon, or test next",
-						Constraints:     []string{"Next steps should be concrete experiments or build slices"},
-						Hints:           survey.Issues,
-						SuccessCriteria: []string{"The next loop is explicit", "The colony can continue from a stronger foundation"},
-					},
-				},
-				SuccessCriteria: []string{"The first research loop is closed honestly", "The next loop is evidence-driven"},
-			},
-		}
-	default:
-		return []phaseTemplate{
-			{
-				Name:        "Discovery and boundaries",
-				Description: "Map the relevant code paths, constraints, and success criteria before implementation.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Read the current implementation paths relevant to the goal",
-						Constraints:     commonConstraints(survey),
-						Hints:           commonHints(survey),
-						SuccessCriteria: []string{"The working surface is explicit", "Key dependencies and boundaries are known"},
-					},
-					{
-						Goal:            "Capture risks, constraints, and a testable target state",
-						Constraints:     []string{"Keep the scope bounded to the requested outcome"},
-						Hints:           survey.Issues,
-						SuccessCriteria: []string{"Success criteria are explicit", "Known risks are visible before coding"},
-					},
-				},
-				SuccessCriteria: []string{"The colony has a bounded target", "Implementation risks are known"},
-			},
-			{
-				Name:        "Architecture and interfaces",
-				Description: "Lock the first architecture boundary, ownership surface, and integration path before deeper coding.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Define the primary architecture boundary or module surface for the change",
-						Constraints:     []string{"Prefer a narrow first ownership surface", "Keep the design anchored to the existing repo shape"},
-						Hints:           append(commonHints(survey), report.StudyFiles...),
-						SuccessCriteria: []string{"The implementation surface is chosen", "The integration path is explicit"},
-					},
-					{
-						Goal:            "Identify the interfaces, contracts, or data boundaries that the implementation must respect",
-						Constraints:     []string{"Document the boundaries before broad code changes begin"},
-						Hints:           survey.Dependencies,
-						SuccessCriteria: []string{"Key interfaces are explicit", "The build phase has a stable target"},
-					},
-				},
-				SuccessCriteria: []string{"The architecture surface is explicit", "The implementation can proceed without guessing boundaries"},
-			},
-			{
-				Name:        "Implementation",
-				Description: "Make the core changes required to land the goal.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Implement the main behavior changes required by the goal",
-						Constraints:     commonConstraints(survey),
-						Hints:           commonHints(survey),
-						SuccessCriteria: []string{"The main behavior lands", "The change integrates cleanly with the existing structure"},
-					},
-					{
-						Goal:            "Update or add focused automated coverage",
-						Constraints:     []string{"Use existing test patterns where possible"},
-						Hints:           survey.TestFiles,
-						SuccessCriteria: []string{"The new behavior is covered", "Important adjacent behavior is exercised"},
-					},
-				},
-				SuccessCriteria: []string{"The goal is implemented", "Coverage exists for the changed behavior"},
-			},
-			{
-				Name:        "Verification and polish",
-				Description: "Verify the result, tighten loose ends, and prepare the colony for seal.",
-				Tasks: []phaseTaskTemplate{
-					{
-						Goal:            "Run focused verification and address regressions",
-						Constraints:     []string{"Prefer the smallest verification set that proves the result"},
-						Hints:           survey.TestFiles,
-						SuccessCriteria: []string{"Relevant verification is green", "Regressions are addressed"},
-					},
-					{
-						Goal:            "Capture decisions, follow-ups, and user-visible changes",
-						Constraints:     []string{"Do not hide residual risk"},
-						Hints:           survey.Issues,
-						SuccessCriteria: []string{"Key decisions are documented", "Remaining follow-ups are explicit"},
-					},
-				},
-				SuccessCriteria: []string{"The result is verified", "The colony can move toward seal cleanly"},
-			},
-		}
+			SuccessCriteria: []string{"The result is verified", "The colony can move toward seal cleanly"},
+		},
 	}
-}
-
-func isLanguageDesignGoal(goalLower string) bool {
-	return containsAny(goalLower, []string{
-		"language", "grammar", "syntax", "parser", "lexer", "compiler", "transpil", "dsl",
-		"protocol", "serialization", "encode", "decode", "format", "schema", "spec",
-		"communication", "token efficien", "context efficien", "ai-to-ai",
-	})
-}
-
-func isGreenfieldResearchGoal(goalLower string, survey codexSurveyContext) bool {
-	if !containsAny(goalLower, []string{"research", "discover", "invent", "foundation", "groundwork", "architecture", "explore", "investigat", "design"}) {
-		return false
-	}
-	return len(survey.EntryPoints) == 0 && len(survey.Dependencies) == 0 && len(survey.TestFiles) == 0 && len(survey.Frameworks) == 0
-}
-
-func containsAny(text string, needles []string) bool {
-	for _, needle := range needles {
-		if strings.Contains(text, needle) {
-			return true
-		}
-	}
-	return false
 }
 
 func commonConstraints(survey codexSurveyContext) []string {
@@ -1835,6 +1547,19 @@ func clearFallbackPlanningArtifacts(root string) {
 			}
 		}
 		os.Remove(f)
+	}
+	// Sweep stale .bak files in the planning dir. These are leftovers from older
+	// plan runs (e.g. phase-plan.json.bak) and have leaked Aether-internal phase
+	// content into other repos in the past. They are never authoritative.
+	if planningEntries, err := os.ReadDir(planningDir); err == nil {
+		for _, entry := range planningEntries {
+			if entry.IsDir() {
+				continue
+			}
+			if strings.HasSuffix(entry.Name(), ".bak") {
+				os.Remove(filepath.Join(planningDir, entry.Name()))
+			}
+		}
 	}
 	// Clear phase-research directory contents but keep the directory
 	researchDir := filepath.Join(root, ".aether", "data", "phase-research")

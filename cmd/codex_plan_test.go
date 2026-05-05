@@ -859,7 +859,12 @@ func TestPlanFallsBackWhenRealPlanningDispatchFails(t *testing.T) {
 	}
 }
 
-func TestPlanFallbackForLanguageDesignGoalIsGoalAware(t *testing.T) {
+func TestPlanFallbackForUIGoalIsNotContaminated(t *testing.T) {
+	// Regression: a goal that *only* mentions UI / design concerns must NEVER receive
+	// Aether-internal phase content. The trigger here is the substring "command"
+	// (as in "command palette") which previously fired a hardcoded Aether-self-referential
+	// template that referenced cmd/codex_workflow_cmds.go and .claude/commands/ant/*.md
+	// in another repo's plan.
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -867,7 +872,7 @@ func TestPlanFallbackForLanguageDesignGoalIsGoalAware(t *testing.T) {
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
 
-	goal := "Create Soliditas, a language for AI-to-AI communication with better token and context efficiency"
+	goal := "Visual overhaul of the Cosmic Dashboard command palette with animated card entrances"
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:         "3.0",
 		Goal:            &goal,
@@ -890,42 +895,58 @@ func TestPlanFallbackForLanguageDesignGoalIsGoalAware(t *testing.T) {
 	if got := result["dispatch_mode"]; got != "fallback" {
 		t.Fatalf("dispatch_mode = %v, want fallback", got)
 	}
-	if got := int(result["count"].(float64)); got < 4 {
-		t.Fatalf("fallback count = %d, want at least 4 phases for milestone granularity", got)
-	}
 
 	phases := result["phases"].([]interface{})
-	names := make([]string, 0, len(phases))
 	blob := ""
+	names := make([]string, 0, len(phases))
 	for _, raw := range phases {
 		phase := raw.(map[string]interface{})
-		name := phase["name"].(string)
+		name, _ := phase["name"].(string)
 		names = append(names, name)
 		blob += name + "\n"
-		tasks := phase["tasks"].([]interface{})
+		if desc, ok := phase["description"].(string); ok {
+			blob += desc + "\n"
+		}
+		tasks, _ := phase["tasks"].([]interface{})
 		for _, taskRaw := range tasks {
 			task := taskRaw.(map[string]interface{})
-			blob += task["goal"].(string) + "\n"
+			if g, ok := task["goal"].(string); ok {
+				blob += g + "\n"
+			}
+			if hints, ok := task["hints"].([]interface{}); ok {
+				for _, h := range hints {
+					if s, ok := h.(string); ok {
+						blob += s + "\n"
+					}
+				}
+			}
 		}
 	}
 
-	for _, want := range []string{
-		"Research charter and communication target",
-		"Representation and grammar design",
-		"Reference prototype and translation path",
-		"Evaluation and next design loop",
-		"communication problem",
-		"grammar",
-		"prototype",
-	} {
-		if !strings.Contains(blob, want) {
-			t.Fatalf("goal-aware fallback missing %q\nphase names: %v\n%s", want, names, blob)
+	leakedPhaseNames := []string{
+		"Contract and gap mapping",
+		"Colonize orchestration",
+		"Planning orchestration",
+		"Build orchestration",
+		"Continue orchestration",
+		"End-to-end verification",
+	}
+	for _, leaked := range leakedPhaseNames {
+		if strings.Contains(blob, leaked) {
+			t.Fatalf("UI-flavored fallback plan leaked Aether-internal phase %q\nphases: %v", leaked, names)
 		}
 	}
 
-	for _, unwanted := range []string{"Discovery and boundaries", "Implementation", "Verification and polish"} {
-		if strings.Contains(blob, unwanted) {
-			t.Fatalf("goal-aware fallback should not collapse to generic template %q\nphase names: %v\n%s", unwanted, names, blob)
+	leakedHints := []string{
+		"cmd/codex_",
+		".claude/commands/ant/",
+		"cmd/signal_housekeeping",
+		"renderPlanVisual",
+		"renderContinueVisual",
+	}
+	for _, leaked := range leakedHints {
+		if strings.Contains(blob, leaked) {
+			t.Fatalf("UI-flavored fallback plan leaked Aether-internal hint substring %q\nphases: %v", leaked, names)
 		}
 	}
 }
@@ -1088,13 +1109,21 @@ developer_instructions = "test instructions"`), 0644); err != nil {
 		".aether/data/build/",
 		".git/",
 		"node_modules/",
+		"Scout is read-only",
+		"do not spawn subagents",
 	} {
 		if !strings.Contains(invoker.briefs[0], want) {
 			t.Fatalf("scout brief missing %q:\n%s", want, invoker.briefs[0])
 		}
 	}
+	if strings.Contains(invoker.briefs[0], "Write planning outputs directly into the repository.") {
+		t.Fatalf("scout brief must not ask read-only Scout to write files:\n%s", invoker.briefs[0])
+	}
 	if !strings.Contains(invoker.briefs[1], ".aether/data/planning/SCOUT.md") {
 		t.Fatalf("route-setter brief missing scout artifact guidance:\n%s", invoker.briefs[1])
+	}
+	if !strings.Contains(invoker.briefs[1], "if it is missing, proceed from the survey context") {
+		t.Fatalf("route-setter brief should not hard-block on missing scout artifact:\n%s", invoker.briefs[1])
 	}
 }
 

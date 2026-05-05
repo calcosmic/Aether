@@ -10,6 +10,20 @@ Use the Go `aether` CLI as the source of truth.
 - For inspection or control, prefer `aether oracle status` and `aether oracle stop`.
 - Do not describe legacy loop control files or shell-managed orchestration from this command spec.
 - Report the CLI result directly.
+- When running inside an agent-delegate session (Claude Code or OpenCode), the runtime returns a single-iteration plan manifest with `dispatch_mode: agent-delegate` instead of running the autonomous loop in a subprocess. The wrapper should read the manifest and dispatch a Scout agent per iteration directly through the host platform's Task/subagent mechanism.
+
+## Agent-Delegate Mode
+
+When the runtime detects an agent-delegate session, the oracle command returns a manifest describing a single Scout iteration to run, rather than executing the autonomous RALF loop in a subprocess. The wrapper is responsible for spawning Scouts.
+
+For each iteration manifest returned by the runtime:
+
+1. Run `aether spawn-log --parent "Queen" --caste "scout" --name "{scout_name}" --task "{iteration_task}" --depth 1` before spawning.
+2. Spawn a Scout agent using the platform's Task tool with `subagent_type="aether-scout"`. Inject the iteration's research target, context capsule, prior findings, gaps, and any active pheromone signals from the manifest.
+3. After the Scout returns, run `aether spawn-complete --name "{scout_name}" --status "{status}" --summary "{summary}"`.
+4. Pass the Scout's structured response back to the runtime so it can update plan/state and decide whether another iteration is needed. Re-invoke `aether oracle` with the same topic to receive the next iteration manifest, or stop when the runtime reports `status: complete`, `max_iterations_reached`, or a hard blocker.
+
+In normal (non-agent-delegate) sessions, the autonomous loop continues to run inside the runtime as before — the wrapper does not need to spawn Scouts itself.
 
 ## Intent Refinement
 

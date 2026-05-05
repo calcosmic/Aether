@@ -218,6 +218,25 @@ func IsAgentDelegateSession() bool {
 	return false
 }
 
+func ShouldUseAgentDelegatePath() bool {
+	if !IsAgentDelegateSession() {
+		return false
+	}
+	platform := DetectActivePlatform()
+	return platform == PlatformClaude || platform == PlatformOpenCode
+}
+
+func AgentDelegateFallbackReason() string {
+	if !IsAgentDelegateSession() {
+		return "not an agent-delegate session"
+	}
+	platform := DetectActivePlatform()
+	if platform == PlatformClaude || platform == PlatformOpenCode {
+		return ""
+	}
+	return fmt.Sprintf("agent-delegate session detected but platform is %s (not claude/opencode)", platform)
+}
+
 func DetectActivePlatform() Platform {
 	if platform := normalizePlatform(os.Getenv(envActivePlatform)); platform != PlatformUnknown {
 		return platform
