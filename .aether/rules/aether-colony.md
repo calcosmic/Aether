@@ -47,7 +47,7 @@ This only applies to genuinely new conversations, not after /clear.
 | `/ant-flags` | List active flags |
 | `/ant-flag "<title>"` | Create a flag |
 | `/ant-history` | Browse colony events |
-| `/ant-watch` | Live tmux monitoring |
+| `/ant-watch` | Colony watch dashboard / compatibility view |
 | `/ant-memory-details` | Drill-down memory view |
 | `/ant-patrol` | System health check |
 | `/ant-help` | List available commands |
@@ -56,7 +56,7 @@ This only applies to genuinely new conversations, not after /clear.
 | Command | Purpose |
 |---------|---------|
 | `/ant-pause-colony` | Save state and create handoff |
-| `/ant-resume-colony` | Restore from pause |
+| `/ant-resume-colony` | Restore from pause with the full recovery view |
 | `/ant-resume` | Quick session restore |
 
 ### Lifecycle
@@ -105,13 +105,14 @@ Starting a colony:
    /ant-run                                (or use autopilot for all phases)
 
 After /clear or session break:
-8. /ant-resume-colony                      (restore full context)
-9. /ant-status                             (see where you left off)
+8. /ant-resume                             (quick restore)
+9. /ant-resume-colony                      (full recovery view if needed)
+10. /ant-status                            (see where you left off)
 
 After completing a colony:
-10. /ant-seal                              (mark as complete)
-11. /ant-entomb                            (archive to chambers)
-12. /ant-init "next project goal"          (start fresh colony)
+11. /ant-seal                              (mark as complete)
+12. /ant-entomb                            (archive to chambers)
+13. /ant-init "next project goal"          (start fresh colony)
 ```
 
 ## Worker Castes
