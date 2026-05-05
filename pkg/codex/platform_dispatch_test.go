@@ -228,9 +228,9 @@ EOF
 
 func TestIsAgentDelegateSession(t *testing.T) {
 	tests := []struct {
-		name     string
-		envVars  map[string]string
-		want     bool
+		name    string
+		envVars map[string]string
+		want    bool
 	}{
 		{
 			name:    "no env vars set",
@@ -325,6 +325,55 @@ func TestIsAgentDelegateSession(t *testing.T) {
 			got := IsAgentDelegateSession()
 			if got != tt.want {
 				t.Fatalf("IsAgentDelegateSession() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShouldUseAgentDelegatePath(t *testing.T) {
+	tests := []struct {
+		name     string
+		envVars  map[string]string
+		platform string
+		want     bool
+	}{
+		{
+			name:     "claude agent session",
+			envVars:  map[string]string{"CLAUDE_CODE_SIMPLE": "1"},
+			platform: "claude",
+			want:     true,
+		},
+		{
+			name:     "opencode agent session",
+			envVars:  map[string]string{"OPENCODE_AGENT": "1"},
+			platform: "opencode",
+			want:     true,
+		},
+		{
+			name:     "codex session stays local",
+			envVars:  map[string]string{"AETHER_AGENT_DELEGATE": "1"},
+			platform: "codex",
+			want:     false,
+		},
+		{
+			name:     "claude platform without delegate marker",
+			envVars:  map[string]string{},
+			platform: "claude",
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, key := range []string{"CLAUDE_CODE_SIMPLE", "OPENCODE_AGENT", "AETHER_AGENT_DELEGATE"} {
+				t.Setenv(key, "")
+			}
+			t.Setenv(envActivePlatform, tt.platform)
+			for key, value := range tt.envVars {
+				t.Setenv(key, value)
+			}
+			if got := ShouldUseAgentDelegatePath(); got != tt.want {
+				t.Fatalf("ShouldUseAgentDelegatePath() = %v, want %v", got, tt.want)
 			}
 		})
 	}

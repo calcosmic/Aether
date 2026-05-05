@@ -225,6 +225,10 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}, nil
 	}
 
+	if codex.ShouldUseAgentDelegatePath() {
+		return runCodexPlanAgentDelegate(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+	}
+
 	if opts.Refresh {
 		if state.CurrentPhase > 0 {
 			hasCompletedPhase := false
@@ -477,6 +481,33 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		statuses = append(statuses, dispatch.Status)
 	}
 	runStatus = summarizeRunStatus(statuses...)
+	return result, nil
+}
+
+func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
+	result, err := runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+	if err != nil {
+		return nil, err
+	}
+	manifest, ok := result["plan_manifest"].(codexPlanManifest)
+	if !ok {
+		return result, nil
+	}
+	manifest.DispatchMode = "agent-delegate"
+	result["plan_manifest"] = manifest
+	result["planning_manifest"] = manifest
+	result["agent_delegate"] = true
+	result["status"] = "agent-delegate"
+	result["dispatch_mode"] = "agent-delegate"
+	result["requires_finalizer"] = true
+	result["agent_delegate_reason"] = codex.AgentDelegateFallbackReason()
+	result["next"] = "dispatch host planning agents, then run `aether plan-finalize --completion-file <file>`"
+	if contract, ok := result["wrapper_contract"].(map[string]interface{}); ok {
+		contract["source_command"] = "AETHER_OUTPUT_MODE=json aether plan --refresh"
+		contract["dispatch_mode"] = "agent-delegate"
+		contract["finalize_command"] = "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>"
+		result["wrapper_contract"] = contract
+	}
 	return result, nil
 }
 

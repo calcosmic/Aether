@@ -963,6 +963,19 @@ func renderPlanVisual(result map[string]interface{}) string {
 	}
 	if planOnly, _ := result["plan_only"].(bool); planOnly {
 		if existing, _ := result["existing_plan"].(bool); !existing {
+			if agentDelegate, _ := result["agent_delegate"].(bool); agentDelegate || strings.TrimSpace(stringValue(result["dispatch_mode"])) == "agent-delegate" {
+				if reason := strings.TrimSpace(stringValue(result["agent_delegate_reason"])); reason != "" {
+					b.WriteString("Agent-Delegate\n")
+					b.WriteString("  - ")
+					b.WriteString(reason)
+					b.WriteString("\n\n")
+				}
+				b.WriteString(renderNextUp(
+					`Host platform should dispatch the JSON `+"`plan_manifest`"+` Scout and Route-Setter workers.`,
+					`After they finish, run `+"`aether plan-finalize --completion-file <file>`"+` to write the plan.`,
+				))
+				return b.String()
+			}
 			b.WriteString(renderNextUp(
 				`Use the JSON `+"`plan_manifest`"+` to spawn wrapper Scout and Route-Setter agents.`,
 				`This surface is read-only; pair it with the plan finalizer before replacing the normal `+"`aether plan`"+` flow.`,
