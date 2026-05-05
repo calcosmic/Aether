@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -39,15 +40,15 @@ func TestPorterCheckIncludesIntegrityChecks(t *testing.T) {
 	// Running inside the Aether source repo, so source checks apply
 	checks := buildPorterChecks("stable", true)
 	expectedNames := map[string]bool{
-		"Source version":        false,
-		"Binary version":        false,
-		"Hub version":           false,
-		"Hub companion files":   false,
-		"Downstream simulation": false,
-		"Git status":            false,
-		"Git stashes":           false,
-		"Git worktrees":         false,
-		"Test status":           false,
+		"Source version":         false,
+		"Binary version":         false,
+		"Hub version":            false,
+		"Hub companion files":    false,
+		"Downstream simulation":  false,
+		"Git status":             false,
+		"Git stashes":            false,
+		"Git worktrees":          false,
+		"Test status":            false,
 		"Changelog completeness": false,
 	}
 	for _, c := range checks {
@@ -153,6 +154,30 @@ func TestCheckGitWorktreesFunction(t *testing.T) {
 	}
 	if result.Status == "fail" && result.RecoveryCommand == "" {
 		t.Error("failed git worktrees check should have recovery command")
+	}
+}
+
+func TestPorterTestEnvClearsOutputMode(t *testing.T) {
+	env := porterTestEnv([]string{
+		"KEEP_ME=1",
+		"AETHER_OUTPUT_MODE=json",
+		"AETHER_OUTPUT_MODE=visual",
+	})
+
+	if !containsString(env, "KEEP_ME=1") {
+		t.Fatal("expected unrelated environment variable to be preserved")
+	}
+	count := 0
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "AETHER_OUTPUT_MODE=") {
+			count++
+			if entry != "AETHER_OUTPUT_MODE=" {
+				t.Fatalf("expected AETHER_OUTPUT_MODE to be cleared, got %q", entry)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected one cleared AETHER_OUTPUT_MODE entry, got %d in %v", count, env)
 	}
 }
 

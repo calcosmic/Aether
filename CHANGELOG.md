@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Docs
 - AGENTS.md: add Runtime Lifecycle mermaid diagram (under Architecture Overview) and Wisdom Pipeline mermaid diagram (under Wisdom Pipeline). Model-agnostic, shows both `in-repo` and `worktree` parallel modes, and contains the `skill-match` sub-graph.
 
+## [1.0.28] - 2026-05-05
+
+Stabilize hosted-agent planning, Oracle runtime, and hub-backed platform updates.
+
+### Fixed
+- `aether plan --refresh` now returns an agent-delegate manifest inside hosted Claude Code and OpenCode agent sessions instead of spawning nested planning workers.
+- `aether oracle` now auto-detaches from hosted Claude/OpenCode agent sessions and no longer falls back to fake Oracle worker completion when no real dispatcher is available.
+- `aether update --force` now refreshes global Claude, OpenCode, and Codex platform assets from the hub while preserving custom user agents.
+- Oracle process handling now works across Unix and Windows snapshot builds.
+- Porter test verification now clears inherited `AETHER_OUTPUT_MODE` before running `go test`, avoiding false failures when Porter itself is rendered as JSON.
+
 ## [1.0.20] - 2026-04-23
 
 Truth recovery and platform parity checkpoint release.
