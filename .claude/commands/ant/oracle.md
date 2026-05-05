@@ -75,6 +75,11 @@ runtime detaches a controller, writes progress under `.aether/oracle`, and
 `aether oracle status` remains the inspection path. Omit `--background` only
 when the user explicitly wants foreground execution.
 
+When the runtime detects a hosted Claude/OpenCode agent session and the command
+is not already backgrounded, it auto-detaches the Oracle controller. Treat that
+as a normal background run: report the PID/log path and inspect progress through
+`aether oracle status`.
+
 ## Broad Scope And Timeout Handling
 
 If the user asks for "everything", "all of the above", a full-system audit, or a
@@ -96,6 +101,8 @@ Report that status. Do not assume Oracle failed, and do not bypass it with ad
 hoc agents until the runtime status says it is blocked, stopped, or complete.
 If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic
 Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`.
+Do not fake Oracle worker completion; if the runtime reports no dispatcher,
+preserve the Oracle workspace and surface the blocker plainly.
 
 ## Cross-Platform Drift Guard
 
