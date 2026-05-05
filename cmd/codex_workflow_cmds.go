@@ -310,6 +310,18 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
+		planOnly, _ := cmd.Flags().GetBool("plan-only")
+		if planOnly {
+			forceFlag, _ := cmd.Flags().GetBool("force")
+			result, err := runSealPlanOnly(resolveAetherRootPath(), forceFlag)
+			if err != nil {
+				renderRecoveryMenu("seal", err.Error(), nil)
+				return nil
+			}
+			outputWorkflow(result, renderSealPlanOnlyVisual(result))
+			return nil
+		}
+
 		state, err := loadActiveColonyState()
 		if err != nil {
 			renderRecoveryMenu("seal", colonyStateLoadMessage(err), nil)
@@ -341,126 +353,130 @@ var sealCmd = &cobra.Command{
 			fmt.Fprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
 		}
 
-		// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md and Hive Brain (D-08, CERE-02)
-		var repoName string
-		if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
-			remote := strings.TrimSpace(string(out))
-			// Extract repo name from remote URL (handles both https and ssh)
-			parts := strings.Split(remote, "/")
-			if len(parts) > 0 {
-				repoName = strings.TrimSuffix(parts[len(parts)-1], ".git")
-			}
-		}
-		if repoName == "" {
-			if cwd, err := os.Getwd(); err == nil {
-				repoName = filepath.Base(cwd)
-			}
-		}
-		var promotedInstinctNames []string
-		var hiveEligibleCount int
-		var hivePromotedCount int
-		var hivePromotionFailures int
-		if entries, err := loadActiveInstinctEntriesFromStore(store); err == nil {
-			for _, entry := range entries {
-				if entry.Confidence >= 0.8 && entry.Action != "" {
-					if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
-						promotedInstinctNames = append(promotedInstinctNames, entry.ID)
-					}
-				}
-				if entry.Confidence >= 0.8 && entry.Action != "" {
-					hiveEligibleCount++
-					// Hive Brain promotion (non-blocking per CERE-02)
-					domain := entry.Domain
-					if domain == "" {
-						domain = "general"
-					}
-					if err := promoteToHive(entry.Action, domain, repoName, entry.Confidence); err != nil {
-						log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
-						hivePromotionFailures++
-					} else {
-						hivePromotedCount++
-					}
-				}
-			}
-		}
-
-		// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
-		if hivePromotedCount > 0 {
-			fmt.Fprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
-		}
-		if hivePromotionFailures > 0 {
-			fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
-		}
-
-		// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
-		expiredFOCUSCount := expireSignalsByType(store, "FOCUS")
-
-		now := time.Now().UTC().Format(time.RFC3339)
-		state.State = colony.StateCOMPLETED
-		state.Milestone = "Crowned Anthill"
-		state.MilestoneUpdatedAt = &now
-		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
-
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
-			return nil
-		}
-
-		// Shelf candidate detection (before archiving)
-		candidates, _ := detectShelfCandidates(state, store)
-		if len(candidates) > 0 {
-			fmt.Fprintln(stdout, shelfCandidateSummary(candidates))
-		}
-
-		// Scan for high-severity open findings before building summary
-		warnings := scanHighSeverityOpen(store)
-
-		// Archive reviews directory alongside CROWNED-ANTHILL.md
-		aetherDir := filepath.Dir(store.BasePath())
-		_ = copyDirIfExists(filepath.Join(filepath.Dir(store.BasePath()), "data", "reviews"), filepath.Join(aetherDir, "reviews-archive"))
-
-		// Build enrichment data for CROWNED-ANTHILL.md
-		enrichment := sealEnrichment{
-			LearningsCount:        len(state.Memory.PhaseLearnings),
-			InstinctsPromoted:     promotedInstinctNames,
-			HiveEligible:          hiveEligibleCount,
-			HivePromoted:          hivePromotedCount,
-			HivePromotionFailures: hivePromotionFailures,
-			SignalsExpired:        expiredFOCUSCount,
-			FlagsResolved:         countResolvedFlags(store),
-			ShelfCandidates:       candidates,
-		}
-
-		summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
-		summary := buildSealSummary(state, now, warnings, enrichment)
-		if err := os.WriteFile(summaryPath, []byte(summary), 0644); err != nil {
-			outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
-			return nil
-		}
-		emitLifecycleCeremony(events.CeremonyTopicChamberSeal, events.CeremonyPayload{
-			Phase:     state.CurrentPhase,
-			PhaseName: "Crowned Anthill",
-			Status:    "sealed",
-			Message:   "Colony sealed at Crowned Anthill",
-			Completed: completedPhaseCount(state),
-			Total:     len(state.Plan.Phases),
-		}, "aether-seal")
-		updateSessionSummary("seal", "aether entomb", "Colony sealed")
-
-		result := map[string]interface{}{
-			"sealed":    true,
-			"milestone": state.Milestone,
-			"summary":   summaryPath,
-		}
-		outputWorkflow(result, renderSealVisual(state, summaryPath))
-
-		// Post-seal Porter readiness summary
-		fmt.Fprint(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
-		readinessSummary := buildPorterReadinessSummary()
-		fmt.Fprint(stdout, readinessSummary)
-		fmt.Fprintln(stdout, "\nRun `/ant-porter` or `aether porter check` to validate and deliver.")
-		return nil
+		return completeSealRuntime(state)
 	},
+}
+
+func completeSealRuntime(state colony.ColonyState) error {
+	// Ceremony Step 1: Promote high-confidence instincts to LOCAL QUEEN.md and Hive Brain (D-08, CERE-02)
+	var repoName string
+	if out, err := exec.Command("git", "remote", "get-url", "origin").Output(); err == nil {
+		remote := strings.TrimSpace(string(out))
+		// Extract repo name from remote URL (handles both https and ssh)
+		parts := strings.Split(remote, "/")
+		if len(parts) > 0 {
+			repoName = strings.TrimSuffix(parts[len(parts)-1], ".git")
+		}
+	}
+	if repoName == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			repoName = filepath.Base(cwd)
+		}
+	}
+	var promotedInstinctNames []string
+	var hiveEligibleCount int
+	var hivePromotedCount int
+	var hivePromotionFailures int
+	if entries, err := loadActiveInstinctEntriesFromStore(store); err == nil {
+		for _, entry := range entries {
+			if entry.Confidence >= 0.8 && entry.Action != "" {
+				if err := promoteInstinctLocal(store, entry.ID, entry.Action); err == nil {
+					promotedInstinctNames = append(promotedInstinctNames, entry.ID)
+				}
+			}
+			if entry.Confidence >= 0.8 && entry.Action != "" {
+				hiveEligibleCount++
+				// Hive Brain promotion (non-blocking per CERE-02)
+				domain := entry.Domain
+				if domain == "" {
+					domain = "general"
+				}
+				if err := promoteToHive(entry.Action, domain, repoName, entry.Confidence); err != nil {
+					log.Printf("seal: hive-promote failed for %s: %v", entry.ID, err)
+					hivePromotionFailures++
+				} else {
+					hivePromotedCount++
+				}
+			}
+		}
+	}
+
+	// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
+	if hivePromotedCount > 0 {
+		fmt.Fprintln(stdout, fmt.Sprintf("Promoted %d instinct(s) to Hive Brain", hivePromotedCount))
+	}
+	if hivePromotionFailures > 0 {
+		fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
+	}
+
+	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
+	expiredFOCUSCount := expireSignalsByType(store, "FOCUS")
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	state.State = colony.StateCOMPLETED
+	state.Milestone = "Crowned Anthill"
+	state.MilestoneUpdatedAt = &now
+	state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
+
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
+		return nil
+	}
+
+	// Shelf candidate detection (before archiving)
+	candidates, _ := detectShelfCandidates(state, store)
+	if len(candidates) > 0 {
+		fmt.Fprintln(stdout, shelfCandidateSummary(candidates))
+	}
+
+	// Scan for high-severity open findings before building summary
+	warnings := scanHighSeverityOpen(store)
+
+	// Archive reviews directory alongside CROWNED-ANTHILL.md
+	aetherDir := filepath.Dir(store.BasePath())
+	_ = copyDirIfExists(filepath.Join(filepath.Dir(store.BasePath()), "data", "reviews"), filepath.Join(aetherDir, "reviews-archive"))
+
+	// Build enrichment data for CROWNED-ANTHILL.md
+	enrichment := sealEnrichment{
+		LearningsCount:        len(state.Memory.PhaseLearnings),
+		InstinctsPromoted:     promotedInstinctNames,
+		HiveEligible:          hiveEligibleCount,
+		HivePromoted:          hivePromotedCount,
+		HivePromotionFailures: hivePromotionFailures,
+		SignalsExpired:        expiredFOCUSCount,
+		FlagsResolved:         countResolvedFlags(store),
+		ShelfCandidates:       candidates,
+	}
+
+	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
+	summary := buildSealSummary(state, now, warnings, enrichment)
+	if err := os.WriteFile(summaryPath, []byte(summary), 0644); err != nil {
+		outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
+		return nil
+	}
+	emitLifecycleCeremony(events.CeremonyTopicChamberSeal, events.CeremonyPayload{
+		Phase:     state.CurrentPhase,
+		PhaseName: "Crowned Anthill",
+		Status:    "sealed",
+		Message:   "Colony sealed at Crowned Anthill",
+		Completed: completedPhaseCount(state),
+		Total:     len(state.Plan.Phases),
+	}, "aether-seal")
+	updateSessionSummary("seal", "aether entomb", "Colony sealed")
+
+	result := map[string]interface{}{
+		"sealed":    true,
+		"milestone": state.Milestone,
+		"summary":   summaryPath,
+	}
+	outputWorkflow(result, renderSealVisual(state, summaryPath))
+
+	// Post-seal Porter readiness summary
+	fmt.Fprint(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
+	readinessSummary := buildPorterReadinessSummary()
+	fmt.Fprint(stdout, readinessSummary)
+	fmt.Fprintln(stdout, "\nRun `/ant-porter` or `aether porter check` to validate and deliver.")
+	return nil
 }
 
 var focusCmd = newSignalShortcutCommand("focus", "FOCUS", "Guide colony attention")
@@ -1002,6 +1018,8 @@ func init() {
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
 	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")
+	sealCmd.Flags().Bool("plan-only", false, "Print the final seal review manifest without mutating colony state or spawning workers")
+	sealFinalizeCmd.Flags().String("completion-file", "", "JSON file containing seal_manifest and external review worker results (use - for stdin)")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
 	rootCmd.AddCommand(layEggsCmd)
@@ -1015,6 +1033,7 @@ func init() {
 	rootCmd.AddCommand(continueFinalizeCmd)
 	rootCmd.AddCommand(skipPhaseCmd)
 	rootCmd.AddCommand(sealCmd)
+	rootCmd.AddCommand(sealFinalizeCmd)
 	rootCmd.AddCommand(focusCmd)
 	rootCmd.AddCommand(redirectCmd)
 	rootCmd.AddCommand(feedbackCmd)

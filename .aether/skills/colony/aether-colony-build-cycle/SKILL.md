@@ -130,13 +130,23 @@ AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completi
 2. Run:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether seal <args>
+AETHER_OUTPUT_MODE=json aether seal --plan-only <args>
 ```
 
-3. Summarize blockers, shelf candidates, or delivery guidance from runtime
-   output. Do not inspect or modify state files directly.
-4. Run or recommend Porter delivery readiness only when runtime seal output asks
-   for it or seal succeeds.
+3. If the runtime returns blockers or recovery guidance, surface that and stop.
+4. Parse `result.seal_manifest` and dispatch the Gatekeeper, Auditor, and Probe
+   final-review workers through the host platform.
+5. Use runtime-provided names, castes, task IDs, briefs, and skill sections.
+6. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+   each terminal result.
+7. Finalize through:
+
+```bash
+AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <worker completion JSON>
+```
+
+8. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
+   Do not run delivery commands unless the user chooses them.
 
 ## Guardrails
 

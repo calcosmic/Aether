@@ -1,68 +1,120 @@
 <!-- Generated from .aether/commands/seal.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-seal
-description: "🏺 Seal the colony with Crowned Anthill milestone"
+description: "🏺 Seal the colony with visible final review workers"
 ---
 
-You are the **Queen**. Seal the colony through the runtime CLI.
+You are the **Queen**. Seal the colony through the runtime manifest/finalizer contract.
 
-Use the Go `aether` CLI as the source of truth.
+Use the Go `aether` CLI as the source of truth. The wrapper only dispatches host-platform agents and reports their terminal results back to the runtime.
 
-- Execute `AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS` directly.
-- Do not write ceremony files, milestone state, or archive data by hand from this command spec.
-- Do not ask for separate confirmation unless the CLI itself does.
+## Raw Bypass
 
-## Blocker Handling
+If the user explicitly asks for raw, exact, direct, or no-orchestration seal, run:
 
-If `aether seal` exits with an error (non-zero exit code), check whether the output contains a blocker table:
+```bash
+AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS
+```
 
-- If blockers are listed, relay the blocker table to the user showing each blocker ID, description, and resolution command: `aether flag <id> --resolve`
-- Suggest the user either resolves blockers first or re-runs with the --force flag: `/ant-seal --force`
-- The `--force` flag passes through to the runtime via `$ARGUMENTS`
+Otherwise use the hosted review flow below.
 
-## Shelf Candidate Detection
+## Seal Manifest
 
-After the blocker check and before archive creation, the runtime automatically detects shelf candidates:
+Run:
 
-1. Run `aether shelf-detect` to get candidate JSON
-2. If candidates exist, present them in a tick-to-approve checkbox list:
-   ```
-   [ ] {category}: {text} (auto-detected)
-   [ ] {category}: {text} (auto-detected)
-   ```
-3. Include a "Permanent guidance candidates" section for recurring REDIRECTs
-4. User ticks which ones to shelf; unticked items are discarded
-5. If any approved: run `aether shelf-add --text "..." --category ...` for each
-6. If no candidates exist, skip silently
+```bash
+AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS
+```
 
-## Post-Seal Report
+Parse `result.seal_manifest`. If the runtime returns blockers or recovery guidance, surface that output and stop. Do not fabricate review results.
 
-After seal succeeds, report what the runtime did:
+Expected manifest:
 
-- "Instincts promoted to local QUEEN.md: {count from output}"
-- "Hive Brain promotions: {count promoted} instinct(s) promoted to Hive Brain"
-- If any hive promotions failed, relay the warning: "N hive promotion(s) failed (see log)"
-- "FOCUS signals expired: {count}"
-- If shelf candidates were detected: "Shelf candidates: {N} (X instincts, Y pheromones, Z flags, W redirects)"
+- `dispatch_mode`: `plan-only` or `agent-delegate`
+- `requires_finalizer`: `true`
+- `dispatches`: Gatekeeper, Auditor, and Probe final-review workers
+- `finalizer_command`: `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`
 
-## Post-Seal: Porter Delivery
+## Worker Dispatch
 
-The colony is sealed. Now deliver the work to the outside world.
+Dispatch the runtime-provided workers through the host platform in manifest wave order.
 
-1. Run `AETHER_OUTPUT_MODE=visual aether porter check` to validate pipeline readiness.
-2. Review the check results. If all checks pass, proceed to step 3.
-3. Ask the user which delivery actions to perform:
-   - **Publish to hub**: `aether publish` (builds binary, syncs companion files, verifies version)
-   - **Push to git remote**: `git push origin HEAD` (push current branch to remote)
-   - **Create GitHub release**: `goreleaser release --clean` (creates release with binary artifacts)
-   - **Skip for now**: No delivery actions, exit gracefully
-4. Execute each selected action sequentially (stops on first failure, user decides retry/skip/abort).
-5. Report clear success/failure for each completed action.
+For each dispatch:
+
+1. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1`.
+2. Spawn the host agent using `agent_name` as the subagent type.
+3. Give the worker the exact `brief` from the manifest.
+4. Tell the worker this is final review before seal and it must not modify repo source files.
+5. Collect a terminal result with:
+   - `name`
+   - `caste`
+   - `stage`
+   - `wave`
+   - `task_id`
+   - `status`
+   - `summary`
+   - `blockers`
+   - `report`
+6. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
+
+Terminal statuses are `completed`, `passed`, `blocked`, `failed`, or `timeout`.
+
+## Completion Packet
+
+Write a JSON completion packet:
+
+```json
+{
+  "seal_manifest": { "...": "the exact manifest from result.seal_manifest" },
+  "dispatches": [
+    {
+      "stage": "seal-review",
+      "wave": 1,
+      "caste": "gatekeeper",
+      "name": "Gate-12",
+      "task_id": "seal-review-gatekeeper",
+      "status": "completed",
+      "summary": "No release blockers found.",
+      "blockers": [],
+      "report": "..."
+    }
+  ]
+}
+```
+
+Then run:
+
+```bash
+AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <completion_file>
+```
+
+Branch strictly on `seal-finalize` output:
+
+- If blocked, report the runtime blocker text and stop.
+- If sealed, summarize the workers and the runtime seal result.
+- Follow the runtime's Porter readiness output.
+
+## Post-Seal Delivery
+
+Do not run delivery commands automatically. If the runtime says the colony is sealed and shows Porter readiness, ask the user which delivery actions to perform:
+
+- publish to hub
+- push to git remote
+- create GitHub release
+- skip delivery for now
+
+Run selected delivery actions sequentially and stop on first failure.
+
+## Guardrails
+
+- Do NOT write colony state files, session files, review reports, pheromone files, or archive files by hand.
+- Do NOT parse visual output as truth; use JSON output for programmatic data.
+- Do NOT run `aether seal` without `--plan-only` from this wrapper unless the user explicitly asks for raw/no-orchestration.
+- Do NOT run Porter delivery commands unless the user explicitly chooses them after `seal-finalize`.
+- Runtime output wins if this wrapper and the runtime disagree.
 
 ## Cross-Platform Drift Guard
 
-If you change blocker handling, shelf candidate handling, Porter delivery, or
-closeout behavior here, update `.aether/commands/seal.yaml`,
-`cmd/command_guide.go`, and the Codex skill `aether-colony-build-cycle` in the
-same change. Verify `aether command-guide seal --platform codex` still describes
-the matching Codex flow.
+If you change seal review, blocker handling, Porter delivery, or closeout behavior here, update `.aether/commands/seal.yaml`, both platform wrappers, `cmd/command_guide.go`, and the Codex skill `aether-colony-build-cycle` in the same change.
+
+Verify `aether command-guide seal --platform codex` still describes the same flow.

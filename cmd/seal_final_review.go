@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,6 +13,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -38,6 +42,102 @@ type sealFinalReviewGate struct {
 	Reused    bool
 }
 
+type sealPlanManifest struct {
+	Workflow           string                          `json:"workflow"`
+	Phase              int                             `json:"phase"`
+	PhaseName          string                          `json:"phase_name,omitempty"`
+	Root               string                          `json:"root"`
+	GeneratedAt        string                          `json:"generated_at"`
+	ReviewDepth        string                          `json:"review_depth"`
+	DispatchMode       string                          `json:"dispatch_mode"`
+	RequiresFinalizer  bool                            `json:"requires_finalizer"`
+	FinalizeSurface    string                          `json:"finalize_surface"`
+	FinalizerCommand   string                          `json:"finalizer_command"`
+	Force              bool                            `json:"force,omitempty"`
+	WorkerTimeout      int                             `json:"worker_timeout_seconds,omitempty"`
+	Dispatches         []codexContinueExternalDispatch `json:"dispatches"`
+	DispatchContract   map[string]interface{}          `json:"dispatch_contract,omitempty"`
+	PostSealDirectives []string                        `json:"post_seal_directives,omitempty"`
+}
+
+type externalSealCompletion struct {
+	SealManifest *sealPlanManifest               `json:"seal_manifest,omitempty"`
+	Manifest     *sealPlanManifest               `json:"manifest,omitempty"`
+	Dispatches   []codexContinueExternalDispatch `json:"dispatches,omitempty"`
+	Results      []codexContinueExternalDispatch `json:"results,omitempty"`
+	Workers      []codexContinueExternalDispatch `json:"workers,omitempty"`
+}
+
+var sealFinalizeCmd = &cobra.Command{
+	Use:   "seal-finalize",
+	Short: "Record externally spawned seal review workers and seal the colony",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		completionPath, _ := cmd.Flags().GetString("completion-file")
+		completion, err := loadExternalSealCompletion(completionPath)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		if err := runSealFinalize(resolveAetherRootPath(), completion); err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
+		return nil
+	},
+}
+
+func loadExternalSealCompletion(path string) (externalSealCompletion, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return externalSealCompletion{}, fmt.Errorf("flag --completion-file is required")
+	}
+	var data []byte
+	var err error
+	if path == "-" {
+		data, err = io.ReadAll(os.Stdin)
+	} else {
+		data, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return externalSealCompletion{}, fmt.Errorf("read completion file: %w", err)
+	}
+
+	var completion externalSealCompletion
+	if err := json.Unmarshal(data, &completion); err != nil {
+		return externalSealCompletion{}, fmt.Errorf("parse completion file: %w", err)
+	}
+	if completion.activeManifest() != nil {
+		return completion, nil
+	}
+
+	var envelope struct {
+		Result externalSealCompletion `json:"result"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return externalSealCompletion{}, fmt.Errorf("parse completion envelope: %w", err)
+	}
+	if envelope.Result.activeManifest() == nil {
+		return externalSealCompletion{}, fmt.Errorf("completion file must include seal_manifest")
+	}
+	return envelope.Result, nil
+}
+
+func (c externalSealCompletion) activeManifest() *sealPlanManifest {
+	if c.SealManifest != nil {
+		return c.SealManifest
+	}
+	return c.Manifest
+}
+
+func (c externalSealCompletion) workerResults() []codexContinueExternalDispatch {
+	results := make([]codexContinueExternalDispatch, 0, len(c.Dispatches)+len(c.Results)+len(c.Workers))
+	results = append(results, c.Dispatches...)
+	results = append(results, c.Results...)
+	results = append(results, c.Workers...)
+	return results
+}
+
 func ensureSealFinalReview(root string, state colony.ColonyState, workerTimeout time.Duration) (sealFinalReviewGate, error) {
 	finalPhase, ok := finalCompletedPhase(state)
 	if !ok {
@@ -61,6 +161,213 @@ func finalCompletedPhase(state colony.ColonyState) (colony.Phase, bool) {
 	}
 	phase := state.Plan.Phases[len(state.Plan.Phases)-1]
 	return phase, phase.Status == colony.PhaseCompleted
+}
+
+func runSealPlanOnly(root string, force bool) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+	state, err := validateSealReady(force)
+	if err != nil {
+		return nil, err
+	}
+	phase, ok := finalCompletedPhase(state)
+	if !ok {
+		return nil, fmt.Errorf("no completed final phase found for seal review")
+	}
+
+	now := time.Now().UTC()
+	invoker := newCodexWorkerInvoker()
+	if invoker == nil {
+		invoker = &codex.FakeInvoker{}
+	}
+	dispatches := plannedExternalSealReviewDispatches(root, state, phase, invoker, 0)
+	dispatchMode := "plan-only"
+	status := "plan-only"
+	if codex.ShouldUseAgentDelegatePath() {
+		dispatchMode = "agent-delegate"
+		status = "agent-delegate"
+	}
+	manifest := sealPlanManifest{
+		Workflow:          "seal",
+		Phase:             phase.ID,
+		PhaseName:         phase.Name,
+		Root:              root,
+		GeneratedAt:       now.Format(time.RFC3339),
+		ReviewDepth:       string(colony.VerificationDepthHeavy),
+		DispatchMode:      dispatchMode,
+		RequiresFinalizer: true,
+		FinalizeSurface:   "awaiting_wrapper_completion",
+		FinalizerCommand:  "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>",
+		Force:             force,
+		WorkerTimeout:     int(effectiveContinueReviewTimeout(0) / time.Second),
+		Dispatches:        dispatches,
+		DispatchContract: map[string]interface{}{
+			"execution_model":        "single final review wave before runtime seal",
+			"worker_count":           len(dispatches),
+			"required_castes":        append([]string{}, sealFinalReviewRequiredCastes...),
+			"state_authority":        "runtime finalizer writes final review, sealed state, Crowned Anthill summary, and post-seal readiness output",
+			"wrapper_write_policy":   "workers return structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
+			"worker_status_values":   []string{"completed", "passed", "blocked", "failed", "timeout"},
+			"required_result_fields": []string{"name", "caste", "task", "status", "summary"},
+		},
+		PostSealDirectives: []string{
+			"After seal-finalize succeeds, follow the runtime's Porter readiness output.",
+			"Do not run delivery commands unless the user chooses them.",
+		},
+	}
+
+	return map[string]interface{}{
+		"status":                status,
+		"dispatch_mode":         dispatchMode,
+		"requires_finalizer":    true,
+		"execution_owner":       "host-platform",
+		"agent_delegate":        dispatchMode == "agent-delegate",
+		"agent_delegate_reason": strings.TrimSpace(codex.AgentDelegateFallbackReason()),
+		"seal_manifest":         manifest,
+		"dispatch_manifest":     manifest,
+		"dispatches":            dispatches,
+		"workers":               dispatches,
+		"dispatch_count":        len(dispatches),
+		"worker_count":          len(dispatches),
+		"wave_count":            countContinueExternalWaves(dispatches),
+		"phase":                 phase.ID,
+		"phase_name":            phase.Name,
+		"review_depth":          string(colony.VerificationDepthHeavy),
+		"finalizer_command":     manifest.FinalizerCommand,
+		"next":                  "spawn seal review workers, then run `aether seal-finalize --completion-file <file>`",
+	}, nil
+}
+
+func validateSealReady(force bool) (colony.ColonyState, error) {
+	state, err := loadActiveColonyState()
+	if err != nil {
+		return state, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	if len(state.Plan.Phases) == 0 {
+		return state, fmt.Errorf("No project plan. Run `aether plan` first.")
+	}
+	for _, phase := range state.Plan.Phases {
+		if phase.Status != colony.PhaseCompleted {
+			return state, fmt.Errorf("all phases must be completed before sealing the colony")
+		}
+	}
+	blockers, _ := checkSealBlockers(store)
+	if len(blockers) > 0 && !force {
+		return state, fmt.Errorf("%s", renderBlockerSummary(blockers, nil))
+	}
+	return state, nil
+}
+
+func plannedExternalSealReviewDispatches(root string, state colony.ColonyState, phase colony.Phase, invoker codex.WorkerInvoker, workerTimeout time.Duration) []codexContinueExternalDispatch {
+	dispatches := plannedSealFinalReviewDispatches(root, state, phase, invoker, workerTimeout)
+	external := make([]codexContinueExternalDispatch, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		external = append(external, codexContinueExternalDispatch{
+			Stage:        "seal-review",
+			Wave:         dispatch.Wave,
+			Caste:        dispatch.Caste,
+			AgentName:    dispatch.AgentName,
+			Name:         dispatch.WorkerName,
+			Task:         sealFinalReviewTaskForCaste(dispatch.Caste),
+			TaskID:       dispatch.TaskID,
+			Timeout:      int(dispatch.Timeout / time.Second),
+			Status:       "planned",
+			Brief:        dispatch.TaskBrief,
+			SkillSection: dispatch.SkillSection,
+		})
+	}
+	return external
+}
+
+func runSealFinalize(root string, completion externalSealCompletion) error {
+	if store == nil {
+		return fmt.Errorf("no store initialized")
+	}
+	manifest := completion.activeManifest()
+	if manifest == nil {
+		return fmt.Errorf("completion file must include seal_manifest")
+	}
+	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
+		return fmt.Errorf("seal_manifest must come from `aether seal --plan-only` or an agent-delegate seal response")
+	}
+	if len(manifest.Dispatches) == 0 {
+		return fmt.Errorf("seal_manifest contains no dispatches")
+	}
+	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
+		return fmt.Errorf("seal_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
+	}
+
+	state, err := validateSealReady(manifest.Force)
+	if err != nil {
+		return err
+	}
+	phase, ok := finalCompletedPhase(state)
+	if !ok {
+		return fmt.Errorf("no completed final phase found for seal review")
+	}
+	if manifest.Phase != phase.ID {
+		return fmt.Errorf("seal_manifest phase = %d, current final phase = %d", manifest.Phase, phase.ID)
+	}
+
+	flow, err := mergeExternalSealReviewResults(*manifest, completion.workerResults())
+	if err != nil {
+		return err
+	}
+	report := sealFinalReviewReport{
+		Phase:       phase.ID,
+		PhaseName:   phase.Name,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		ReviewDepth: string(colony.VerificationDepthHeavy),
+		Source:      "seal-finalize",
+		Workers:     flow,
+	}
+	blockers := sealReviewBlockingIssues(flow)
+	report.BlockingIssues = uniqueSortedStrings(blockers)
+	report.Passed = sealFinalReviewSatisfiesGate(len(report.BlockingIssues) == 0, report.Workers)
+	if !report.Passed && len(report.BlockingIssues) == 0 {
+		report.BlockingIssues = []string{"final seal review did not produce completed Gatekeeper, Auditor, and Probe evidence"}
+	}
+	if err := store.SaveJSON(sealFinalReviewReportRel, report); err != nil {
+		return fmt.Errorf("failed to write seal final review report: %w", err)
+	}
+	if !report.Passed && !manifest.Force {
+		return fmt.Errorf("%s", renderSealFinalReviewBlockers(sealFinalReviewGate{Report: report, ReportRel: sealFinalReviewReportRel, Ran: true}))
+	}
+	return completeSealRuntime(state)
+}
+
+func mergeExternalSealReviewResults(manifest sealPlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {
+	return mergeExternalContinueResults(codexContinuePlanManifest{
+		Phase:             manifest.Phase,
+		PhaseName:         manifest.PhaseName,
+		Root:              manifest.Root,
+		GeneratedAt:       manifest.GeneratedAt,
+		Dispatches:        manifest.Dispatches,
+		DispatchMode:      manifest.DispatchMode,
+		RequiresFinalizer: manifest.RequiresFinalizer,
+		ReviewDepth:       manifest.ReviewDepth,
+	}, results)
+}
+
+func sealReviewBlockingIssues(flow []codexContinueWorkerFlowStep) []string {
+	blockers := []string{}
+	for _, step := range flow {
+		status := normalizeRuntimeDispatchStatus(step.Status)
+		for _, blocker := range step.Blockers {
+			if strings.TrimSpace(blocker) != "" {
+				blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", step.Name, blocker))
+			}
+		}
+		if status != "completed" {
+			summary := strings.TrimSpace(step.Summary)
+			if summary == "" {
+				summary = status
+			}
+			blockers = append(blockers, fmt.Sprintf("%s final review did not complete cleanly: %s", step.Name, summary))
+		}
+	}
+	return blockers
 }
 
 func loadFreshSealFinalReview(state colony.ColonyState, now time.Time) (sealFinalReviewReport, string, bool) {
@@ -344,5 +651,49 @@ func renderSealFinalReviewBlockers(gate sealFinalReviewGate) string {
 		b.WriteString("\n")
 	}
 	b.WriteString("Resolve the blockers and rerun `aether seal`, or rerun with `aether seal --force` only if you intentionally accept the risk.")
+	return b.String()
+}
+
+func renderSealPlanOnlyVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("seal"), "Seal Review Dispatch"))
+	b.WriteString("Seal final review manifest ready.\n")
+	if phase := intValue(result["phase"]); phase > 0 {
+		b.WriteString(fmt.Sprintf("Final phase: %d", phase))
+		if name := strings.TrimSpace(stringValue(result["phase_name"])); name != "" {
+			b.WriteString(" — " + name)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	if dispatches, ok := result["dispatches"].([]codexContinueExternalDispatch); ok && len(dispatches) > 0 {
+		b.WriteString("Planned Seal Review Workers\n")
+		lastWave := 0
+		for _, dispatch := range dispatches {
+			if dispatch.Wave != lastWave {
+				if lastWave > 0 {
+					b.WriteString("\n")
+				}
+				b.WriteString(fmt.Sprintf("Wave %d\n", dispatch.Wave))
+				lastWave = dispatch.Wave
+			}
+			b.WriteString("  ")
+			b.WriteString(casteIdentity(dispatch.Caste))
+			b.WriteString(" ")
+			b.WriteString(dispatch.Name)
+			b.WriteString("  ")
+			b.WriteString(strings.TrimSpace(dispatch.Task))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+	finalizer := strings.TrimSpace(stringValue(result["finalizer_command"]))
+	if finalizer == "" {
+		finalizer = "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>"
+	}
+	b.WriteString(renderNextUp(
+		"Dispatch the final review workers through the host platform.",
+		"Then run `"+finalizer+"`.",
+	))
 	return b.String()
 }
