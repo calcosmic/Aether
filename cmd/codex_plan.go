@@ -1112,29 +1112,39 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("- Survey docs to read first: none detected; inspect repo files only when the survey is missing or ambiguous.\n")
 	}
 	if spec.Caste == "route_setter" {
-		b.WriteString("- Read scout output before drafting phases: ")
+		b.WriteString("- Read scout output before drafting phases if it exists: ")
 		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
+		b.WriteString("; if it is missing, proceed from the survey context and note the missing scout artifact in blockers only if it prevents a useful plan.")
 		b.WriteString("\n")
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
 	b.WriteString("- Avoid high-noise paths unless directly relevant: .aether/backups/, .aether/chambers/, .aether/data/build/, .git/, node_modules/, dist/, build/, vendor/.\n")
+	if spec.Caste == "scout" {
+		b.WriteString("- Scout scope rule: stay read-only, do not spawn subagents, and stop after the survey docs plus targeted confirmation reads are enough to summarize planning risks.\n")
+	}
 	graphTargets := append(append([]string{}, survey.EntryPoints...), survey.TestFiles...)
 	if graphContext := renderCodegraphContextForText(root, graphTargets, codegraphWorkerContextBudgetChars); graphContext != "" {
 		b.WriteString("\n")
 		b.WriteString(graphContext)
 		b.WriteString("\n\n")
 	}
-	b.WriteString("Write planning outputs directly into the repository.\n")
-	b.WriteString("- Primary outputs: ")
-	b.WriteString(strings.Join(primaryOutputs, ", "))
-	b.WriteString("\n")
-	b.WriteString("- Planning dir: ")
-	b.WriteString(planningDir)
-	b.WriteString("\n")
-	b.WriteString("- Phase research dir: ")
-	b.WriteString(phaseResearchDir)
-	b.WriteString("\n")
-	if spec.Caste == "route_setter" {
+	if spec.Caste == "scout" {
+		b.WriteString("Return planning findings in the final worker claims JSON only.\n")
+		b.WriteString("- Do not write files; Scout is read-only on every supported platform.\n")
+		b.WriteString("- Aether will persist the scout artifact after the worker completes: ")
+		b.WriteString(strings.Join(primaryOutputs, ", "))
+		b.WriteString("\n")
+	} else {
+		b.WriteString("Write planning outputs directly into the repository.\n")
+		b.WriteString("- Primary outputs: ")
+		b.WriteString(strings.Join(primaryOutputs, ", "))
+		b.WriteString("\n")
+		b.WriteString("- Planning dir: ")
+		b.WriteString(planningDir)
+		b.WriteString("\n")
+		b.WriteString("- Phase research dir: ")
+		b.WriteString(phaseResearchDir)
+		b.WriteString("\n")
 		b.WriteString("- Also write a machine-readable plan artifact at ")
 		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "phase-plan.json")))
 		b.WriteString(" using this JSON shape:\n")

@@ -491,6 +491,57 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel) 
 	return results, syncErrors
 }
 
+func syncPlatformHomeAssetsFromHub(hubDir, homeDir string, channel runtimeChannel) ([]map[string]interface{}, []string) {
+	results := []map[string]interface{}{}
+	var syncErrors []string
+
+	if !shouldSyncPlatformHomes(channel) {
+		return append(results, map[string]interface{}{
+			"label":   "Platform homes",
+			"src":     "hub/system",
+			"dest":    "skipped",
+			"copied":  0,
+			"skipped": 0,
+			"note":    "Dev channel leaves global Claude/OpenCode/Codex home assets untouched by default.",
+		}), syncErrors
+	}
+
+	hubSystem := filepath.Join(hubDir, "system")
+	for _, pair := range platformHomeHubSyncPairs() {
+		srcDir := filepath.Join(hubSystem, filepath.FromSlash(pair.srcRel))
+		destDir := filepath.Join(homeDir, filepath.FromSlash(pair.destRel))
+
+		result := syncDir(srcDir, destDir, syncOptions{
+			cleanup:              pair.cleanup,
+			preserveLocalChanges: pair.preserveLocalChanges,
+			validate:             pair.validate,
+			include:              pair.include,
+			mapRelPath:           pair.mapRelPath,
+			cleanupInclude:       pair.cleanupInclude,
+		})
+		if pair.cleanupLegacyClaude && pair.cleanup {
+			removed, errors := removeLegacyClaudeCommandNamespace(destDir)
+			result.removed = append(result.removed, removed...)
+			result.errors = append(result.errors, errors...)
+		}
+		entry := map[string]interface{}{
+			"label":   pair.label,
+			"src":     filepath.ToSlash(filepath.Join("system", pair.srcRel)),
+			"dest":    pair.destRel,
+			"copied":  result.copied,
+			"skipped": result.skipped,
+			"removed": len(result.removed),
+		}
+		if len(result.errors) > 0 {
+			entry["errors"] = result.errors
+			syncErrors = append(syncErrors, result.errors...)
+		}
+		results = append(results, entry)
+	}
+
+	return results, syncErrors
+}
+
 func filterSyncFiles(relPaths []string, include syncFilter) []string {
 	if include == nil {
 		return relPaths

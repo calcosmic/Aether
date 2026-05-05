@@ -6,7 +6,9 @@ locks/
 agents/
 chambers/
 midden/
-rules/
+rules/*
+!rules/
+!rules/aether-colony.md
 settings/
 archive/
 backups/

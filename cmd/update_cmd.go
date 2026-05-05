@@ -97,6 +97,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 				"Ensure repo-local .aether/data, dreams, oracle, locks, QUEEN.md, and .gitignore",
 				"Prune stale generated repo-local agents, commands, and shipped skills",
 				"Refresh repo-level platform guidance (AGENTS.md, .codex/CODEX.md, .opencode/OPENCODE.md) when managed by Aether",
+				"Refresh global Claude/OpenCode/Codex commands and agents from the hub",
 				"Sync .claude/settings.json",
 				fmt.Sprintf("Do not change the installed %s binary unless --download-binary is also used", defaultBinaryName(channel)),
 			},
@@ -137,6 +138,24 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		syncResult.skipped += docSkipped
 		if len(docErrors) > 0 {
 			syncResult.errors = append(syncResult.errors, docErrors...)
+			outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
+				"hub_version":         hubVersion,
+				"local_version":       resolveVersion(),
+				"force":               force,
+				"details":             syncResult.details,
+				"binary_refresh_mode": binaryMode,
+				"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
+			})
+			return nil
+		}
+		platformResults, platformErrors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channel)
+		syncResult.details = append(syncResult.details, platformResults...)
+		for _, entry := range platformResults {
+			syncResult.copied += intValue(entry["copied"])
+			syncResult.skipped += intValue(entry["skipped"])
+		}
+		if len(platformErrors) > 0 {
+			syncResult.errors = append(syncResult.errors, platformErrors...)
 			outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
 				"hub_version":         hubVersion,
 				"local_version":       resolveVersion(),
