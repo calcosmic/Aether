@@ -235,3 +235,142 @@ func TestSwarmDestroySurfacesBlockedWorkers(t *testing.T) {
 		t.Fatalf("unexpected blocker payload: %v", blockers)
 	}
 }
+
+func TestSwarmPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Plan visible swarm workers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	rootCmd.SetArgs([]string{"swarm", "--plan-only", "Auth panic when session is missing"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm --plan-only returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["dispatch_mode"]; got != "plan-only" {
+		t.Fatalf("dispatch_mode = %v, want plan-only", got)
+	}
+	if got, _ := result["requires_finalizer"].(bool); !got {
+		t.Fatalf("requires_finalizer = %v, want true", result["requires_finalizer"])
+	}
+	manifest := result["swarm_manifest"].(map[string]interface{})
+	if got := manifest["finalizer_command"]; !strings.Contains(stringValue(got), "swarm-finalize") {
+		t.Fatalf("finalizer_command = %v", got)
+	}
+	workers := result["workers"].([]interface{})
+	if len(workers) != 5 {
+		t.Fatalf("workers = %d, want 5", len(workers))
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "swarms")); !os.IsNotExist(err) {
+		t.Fatalf("plan-only should not create swarm artifacts, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "spawn-tree.txt")); !os.IsNotExist(err) {
+		t.Fatalf("plan-only should not write spawn-tree, stat err=%v", err)
+	}
+}
+
+func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Finalize visible swarm workers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	planResult, err := runSwarmPlanOnly(root, "Auth panic when session is missing")
+	if err != nil {
+		t.Fatalf("runSwarmPlanOnly: %v", err)
+	}
+	manifest := planResult["swarm_manifest"].(swarmManifest)
+	dispatches := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
+	for _, plan := range manifest.Dispatches {
+		response := swarmWorkerResponse{
+			Role:           plan.Role,
+			Status:         "completed",
+			Summary:        plan.Role + " completed externally.",
+			Recommendation: "Continue with the active colony lifecycle.",
+			Verification:   []string{"go test ./..."},
+		}
+		if plan.Role == "tracker" {
+			response.RootCause = "missing session guard"
+		}
+		if plan.Role == "builder" {
+			response.ProposedFix = "restore the missing session guard"
+			response.FilesTouched = []string{"pkg/auth/handler.go"}
+			response.TestsWritten = []string{"pkg/auth/handler_test.go"}
+		}
+		dispatches = append(dispatches, swarmWorkerExecution{
+			Name:     plan.Name,
+			Caste:    plan.Caste,
+			Role:     plan.Role,
+			Task:     plan.Task,
+			Status:   "completed",
+			Summary:  response.Summary,
+			Files:    append([]string{}, response.FilesTouched...),
+			Tests:    append([]string{}, response.TestsWritten...),
+			Response: response,
+		})
+	}
+
+	completionPath := filepath.Join(t.TempDir(), "swarm-completion.json")
+	data, err := json.Marshal(map[string]interface{}{
+		"swarm_manifest": manifest,
+		"dispatches":     dispatches,
+	})
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	if err := os.WriteFile(completionPath, data, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"swarm-finalize", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm-finalize returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["dispatch_mode"]; got != "external-task" {
+		t.Fatalf("dispatch_mode = %v, want external-task", got)
+	}
+	if got := result["status"]; got != "completed" {
+		t.Fatalf("status = %v, want completed", got)
+	}
+	resultPath := filepath.Join(dataDir, "swarms", manifest.SwarmID, "result.json")
+	if _, err := os.Stat(resultPath); err != nil {
+		t.Fatalf("expected swarm result artifact: %v", err)
+	}
+	spawnTreeData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
+	if err != nil {
+		t.Fatalf("read spawn-tree: %v", err)
+	}
+	for _, caste := range []string{"tracker", "scout", "archaeologist", "builder", "watcher"} {
+		if !strings.Contains(string(spawnTreeData), "|Swarm|"+caste+"|") {
+			t.Fatalf("spawn tree missing %s entry:\n%s", caste, string(spawnTreeData))
+		}
+	}
+}

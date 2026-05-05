@@ -1,12 +1,12 @@
 ---
 source: shipped
 name: aether-colony-build-cycle
-description: Use when Codex is asked to plan, build, continue, or seal an Aether colony and must mirror wrapper orchestration safely
+description: Use when Codex is asked to plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely
 type: colony
-domains: [aether, codex, planning, build, verification, seal, orchestration]
-agent_roles: [queen, builder, watcher, scout, route_setter, auditor, probe]
-workflow_triggers: [plan, build, continue, seal]
-task_keywords: [aether plan, aether build, aether continue, aether seal, dispatch manifest, plan-only, finalize]
+domains: [aether, codex, planning, build, verification, swarm, seal, orchestration]
+agent_roles: [queen, builder, watcher, scout, route_setter, tracker, archaeologist, auditor, probe]
+workflow_triggers: [plan, build, continue, swarm, seal]
+task_keywords: [aether plan, aether build, aether continue, aether swarm, aether seal, dispatch manifest, plan-only, finalize]
 priority: high
 version: "1.0"
 ---
@@ -16,7 +16,7 @@ version: "1.0"
 ## Purpose
 
 Give Codex the wrapper-equivalent behavior for the lifecycle commands where AI
-orchestration matters: `plan`, `build`, `continue`, and `seal`. Runtime JSON
+orchestration matters: `plan`, `build`, `continue`, `swarm`, and `seal`. Runtime JSON
 manifests remain authoritative. Codex may spawn workers and summarize results,
 but it must not invent state or write state files by hand.
 
@@ -28,7 +28,7 @@ can coordinate helpers, but it must use the recipe the runtime gave it.
 Run or inspect the guide for the command being handled:
 
 ```bash
-aether command-guide <plan|build|continue|seal> --platform codex
+aether command-guide <plan|build|continue|swarm|seal> --platform codex
 ```
 
 If this skill and `command-guide` disagree, follow `command-guide` and update
@@ -96,6 +96,33 @@ Use external review orchestration only when the user explicitly requested heavy
 review or the runtime asks for wrapper-spawned review workers. In that case,
 request the runtime manifest, spawn only the planned reviewers, collect results,
 and finalize through `aether continue-finalize`.
+
+## Swarm Flow
+
+Watch mode stays direct:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether swarm --watch
+```
+
+For bug-destroyer targets, use the external worker contract:
+
+```bash
+AETHER_OUTPUT_MODE=json aether swarm --plan-only <problem>
+```
+
+1. Parse `result.swarm_manifest`. Never parse visual output as state.
+2. Preserve manifest wave order: investigation workers first, then builder,
+   then watcher.
+3. Use runtime-provided names, castes, roles, task IDs, briefs, and response
+   contracts.
+4. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+   each terminal result.
+5. Finalize through:
+
+```bash
+AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completion JSON>
+```
 
 ## Seal Flow
 
