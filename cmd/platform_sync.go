@@ -60,6 +60,16 @@ func installSyncPairs() []installSyncPair {
 	}
 }
 
+func platformHomeHubSyncPairs() []installSyncPair {
+	return []installSyncPair{
+		{srcRel: "commands/claude", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
+		{srcRel: "agents-claude", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
+		{srcRel: "commands/opencode", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true},
+		{srcRel: "agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
+		{srcRel: "codex", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
+	}
+}
+
 func repoSyncPairs() []repoSyncPair {
 	return []repoSyncPair{
 		{

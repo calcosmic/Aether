@@ -1088,13 +1088,21 @@ developer_instructions = "test instructions"`), 0644); err != nil {
 		".aether/data/build/",
 		".git/",
 		"node_modules/",
+		"Scout is read-only",
+		"do not spawn subagents",
 	} {
 		if !strings.Contains(invoker.briefs[0], want) {
 			t.Fatalf("scout brief missing %q:\n%s", want, invoker.briefs[0])
 		}
 	}
+	if strings.Contains(invoker.briefs[0], "Write planning outputs directly into the repository.") {
+		t.Fatalf("scout brief must not ask read-only Scout to write files:\n%s", invoker.briefs[0])
+	}
 	if !strings.Contains(invoker.briefs[1], ".aether/data/planning/SCOUT.md") {
 		t.Fatalf("route-setter brief missing scout artifact guidance:\n%s", invoker.briefs[1])
+	}
+	if !strings.Contains(invoker.briefs[1], "if it is missing, proceed from the survey context") {
+		t.Fatalf("route-setter brief should not hard-block on missing scout artifact:\n%s", invoker.briefs[1])
 	}
 }
 
