@@ -234,6 +234,131 @@ func TestColonizeIncludesDispatchContract(t *testing.T) {
 	}
 }
 
+func TestColonizePlanOnlyRequiresFinalizerAndDoesNotWriteSurvey(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-colonize-plan-only-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goal := "Survey with host-visible workers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"colonize", "--plan-only"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colonize --plan-only returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["dispatch_mode"]; got != "plan-only" {
+		t.Fatalf("dispatch_mode = %v, want plan-only", got)
+	}
+	if got, _ := result["requires_finalizer"].(bool); !got {
+		t.Fatalf("requires_finalizer = %v, want true", result["requires_finalizer"])
+	}
+	manifest := result["colonize_manifest"].(map[string]interface{})
+	if got := manifest["finalizer_command"]; !strings.Contains(stringValue(got), "colonize-finalize") {
+		t.Fatalf("finalizer_command = %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "survey", "PROVISIONS.md")); !os.IsNotExist(err) {
+		t.Fatalf("plan-only should not write survey artifacts, stat err=%v", err)
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.TerritorySurveyed != nil {
+		t.Fatalf("plan-only mutated TerritorySurveyed: %v", *state.TerritorySurveyed)
+	}
+}
+
+func TestColonizeFinalizeRecordsExternalSurveyors(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-colonize-finalize-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goal := "Survey with external host workers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	result, err := runCodexColonizePlanOnly(root, codexColonizeOptions{PlanOnly: true})
+	if err != nil {
+		t.Fatalf("runCodexColonizePlanOnly: %v", err)
+	}
+	manifest := result["colonize_manifest"].(codexColonizeManifest)
+	dispatches := make([]codexSurveyorDispatch, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		dispatch.Status = "completed"
+		dispatch.Summary = "survey complete"
+		dispatches = append(dispatches, dispatch)
+	}
+
+	completionPath := filepath.Join(t.TempDir(), "colonize-completion.json")
+	data, err := json.Marshal(map[string]interface{}{
+		"colonize_manifest": manifest,
+		"dispatches":        dispatches,
+	})
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	if err := os.WriteFile(completionPath, data, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	stdout = &bytes.Buffer{}
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+	rootCmd.SetArgs([]string{"colonize-finalize", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colonize-finalize returned error: %v", err)
+	}
+	if strings.TrimSpace(stdout.(*bytes.Buffer).String()) == "" {
+		t.Fatalf("colonize-finalize wrote no stdout; stderr=%s", errBuf.String())
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	finalizeResult := env["result"].(map[string]interface{})
+	if got := finalizeResult["dispatch_mode"]; got != "external-task" {
+		t.Fatalf("dispatch_mode = %v, want external-task", got)
+	}
+	for _, name := range []string{"PROVISIONS.md", "TRAILS.md", "BLUEPRINT.md", "CHAMBERS.md", "DISCIPLINES.md", "SENTINEL-PROTOCOLS.md", "PATHOGENS.md"} {
+		if _, err := os.Stat(filepath.Join(dataDir, "survey", name)); err != nil {
+			t.Fatalf("expected survey file %s: %v", name, err)
+		}
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.TerritorySurveyed == nil || *state.TerritorySurveyed == "" {
+		t.Fatal("expected TerritorySurveyed to be set after finalize")
+	}
+}
+
 func TestSurveyDispatchContractWithTimeoutOverride(t *testing.T) {
 	contract := surveyDispatchContractWithTimeout(6 * time.Minute)
 	if got, ok := contract["worker_timeout_seconds"].(int); !ok || got != 360 {

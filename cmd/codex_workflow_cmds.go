@@ -33,6 +33,7 @@ var colonizeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		forceResurvey, _ := cmd.Flags().GetBool("force-resurvey")
 		forceAlias, _ := cmd.Flags().GetBool("force")
+		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -41,6 +42,7 @@ var colonizeCmd = &cobra.Command{
 		result, err := runCodexColonizeWithOptions(skillWorkspaceRoot(), codexColonizeOptions{
 			ForceResurvey: forceResurvey || forceAlias,
 			WorkerTimeout: workerTimeout,
+			PlanOnly:      planOnly,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -960,6 +962,7 @@ func init() {
 	layEggsCmd.Flags().String("home-dir", "", "User home directory (default: $HOME)")
 	colonizeCmd.Flags().Bool("force-resurvey", false, "Refresh survey artifacts even when an existing survey is present")
 	colonizeCmd.Flags().Bool("force", false, "Alias for --force-resurvey")
+	colonizeCmd.Flags().Bool("plan-only", false, "Print the surveyor dispatch manifest without mutating colony state or spawning workers")
 	colonizeCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real surveyor dispatches (e.g. 5m)")
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
@@ -970,6 +973,7 @@ func init() {
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results (use - for stdin)")
+	colonizeFinalizeCmd.Flags().String("completion-file", "", "JSON file containing colonize_manifest and external surveyor worker results (use - for stdin)")
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("force", false, "Force redispatch of the current active phase after an interrupted build")
 	buildCmd.Flags().Bool("plan-only", false, "Print the build dispatch manifest without mutating colony state or spawning workers")
@@ -1002,6 +1006,7 @@ func init() {
 
 	rootCmd.AddCommand(layEggsCmd)
 	rootCmd.AddCommand(colonizeCmd)
+	rootCmd.AddCommand(colonizeFinalizeCmd)
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(planFinalizeCmd)
 	rootCmd.AddCommand(buildCmd)

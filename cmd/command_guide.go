@@ -206,6 +206,27 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration plan, run their literal `aether plan ...` command.",
 	}
 
+	catalog["colonize"] = commandGuideDefinition{
+		Category:       commandGuideCategoryFullOrchestration,
+		SkillReference: commandGuideSkillBuildCycle,
+		Intent:         "Use the runtime survey manifest to spawn visible platform surveyors and finalize survey state without hand-writing data files.",
+		Literal:        false,
+		PreSteps: []string{
+			"Use the generated platform slash-command wrapper for `colonize`; do not copy repo-local legacy commands back into target repos.",
+			"Run `AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS` and parse `result.colonize_manifest`.",
+			"If runtime returns `dispatch_mode: agent-delegate`, dispatch the four Surveyor workers through the host platform instead of nested subprocess workers.",
+			"Use runtime-provided agent names, castes, task IDs, briefs, output_paths, and skill_section values.",
+			"Call `aether spawn-log` before each surveyor and `aether spawn-complete` after each terminal result.",
+		},
+		RunCommand: "AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <worker completion JSON>",
+		PostSteps: []string{
+			"Summarize actual surveyors, survey files, and any runtime-surfaced warning.",
+			"Route first to `aether plan`.",
+		},
+		DriftGuards: intelligentCommandDriftGuards("colonize", commandGuideSkillBuildCycle),
+		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration colonize, run their literal `aether colonize ...` command.",
+	}
+
 	catalog["build"] = commandGuideDefinition{
 		Category:       commandGuideCategoryFullOrchestration,
 		SkillReference: commandGuideSkillBuildCycle,
@@ -294,7 +315,6 @@ func commandGuideLiteralCommands() []string {
 		"assumptions",
 		"bump-version",
 		"chaos",
-		"colonize",
 		"council",
 		"data-clean",
 		"dream",
