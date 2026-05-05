@@ -636,6 +636,9 @@ func renderOracleCompatibilityVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\n")
 	}
+	if boolValue(result["auto_background"]) {
+		b.WriteString("Auto-Background: hosted agent session detected; Oracle detached the controller.\n")
+	}
 	if phase := strings.TrimSpace(stringValue(result["phase"])); phase != "" {
 		b.WriteString("Phase: ")
 		b.WriteString(phase)

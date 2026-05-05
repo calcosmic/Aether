@@ -165,6 +165,98 @@ func TestOracleRunLoopModeResumesInitializedWorkspace(t *testing.T) {
 	}
 }
 
+func TestOracleAutoBackgroundInsideHostedAgent(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "opencode")
+	t.Setenv("OPENCODE_AGENT", "1")
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	withWorkingDir(t, root)
+
+	originalStart := startOracleBackgroundController
+	startOracleBackgroundController = func(paths oraclePaths) (int, string, error) {
+		if strings.TrimSpace(paths.Root) != root {
+			t.Fatalf("background root = %q, want %q", paths.Root, root)
+		}
+		return os.Getpid(), filepath.Join(paths.Dir, "oracle.log"), nil
+	}
+	defer func() { startOracleBackgroundController = originalStart }()
+
+	result, err := runOracleCompatibility(root, []string{"hosted oracle topic"}, "deep", "95", "both", "architecture-review", "30", "")
+	if err != nil {
+		t.Fatalf("runOracleCompatibility returned error: %v", err)
+	}
+	if result["background"] != true {
+		t.Fatalf("background = %v, want true", result["background"])
+	}
+	if result["auto_background"] != true {
+		t.Fatalf("auto_background = %v, want true", result["auto_background"])
+	}
+	if result["agent_delegate"] != true {
+		t.Fatalf("agent_delegate = %v, want true", result["agent_delegate"])
+	}
+	if result["next"] != "aether oracle status" {
+		t.Fatalf("next = %v, want aether oracle status", result["next"])
+	}
+}
+
+func TestOracleRunLoopNilInvokerFailsClosed(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	root := filepath.Dir(filepath.Dir(s.BasePath()))
+	withWorkingDir(t, root)
+
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		t.Fatalf("ensure oracle workspace: %v", err)
+	}
+	state := oracleStateFile{
+		Version:          "1.1",
+		Topic:            "nil invoker topic",
+		Scope:            "repo",
+		Template:         "custom",
+		Phase:            "survey",
+		Iteration:        0,
+		MaxIterations:    1,
+		TargetConfidence: 60,
+		Status:           "active",
+		Strategy:         defaultOracleStrategy,
+		Platform:         "codex",
+	}
+	plan := oraclePlanFile{
+		Version: "1.1",
+		Sources: map[string]oracleSource{},
+		Questions: []oracleQuestion{{
+			ID:     "q1",
+			Text:   "What should fail closed?",
+			Status: "open",
+		}},
+	}
+	if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	if err := writeOraclePlanFile(paths.PlanPath, plan); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return nil }
+	defer func() { newOracleWorkerInvoker = originalInvoker }()
+
+	_, err := runOracleCompatibility(root, []string{"run-loop"}, "", "")
+	if err == nil || !strings.Contains(err.Error(), "no worker dispatcher is available") {
+		t.Fatalf("expected fail-closed nil invoker error, got %v", err)
+	}
+}
+
 func TestResolveOracleTemplate(t *testing.T) {
 	tests := []struct {
 		name      string

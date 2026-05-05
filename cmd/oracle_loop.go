@@ -212,6 +212,7 @@ func validateOracleConfidenceTarget(value string) string {
 
 var newOracleWorkerInvoker = newDefaultOracleWorkerInvoker
 var oracleAttemptPolicyForPhase = defaultOracleAttemptPolicy
+var startOracleBackgroundController = startOracleBackgroundLoop
 
 func newDefaultOracleWorkerInvoker() codex.WorkerInvoker {
 	if oracleAllowsOpenCodeDispatch() || strings.EqualFold(strings.TrimSpace(os.Getenv("AETHER_WORKER_PLATFORM")), "opencode") {
@@ -555,6 +556,11 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	if strings.TrimSpace(topic) == "" {
 		return oracleStatusResult(root)
 	}
+	autoBackground := false
+	if !background && codex.ShouldUseAgentDelegatePath() {
+		background = true
+		autoBackground = true
+	}
 
 	paths := oracleWorkspacePaths(root)
 	if fileExists(paths.LoopPath) {
@@ -651,7 +657,7 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	}
 
 	if background {
-		pid, logPath, err := startOracleBackgroundLoop(paths)
+		pid, logPath, err := startOracleBackgroundController(paths)
 		if err != nil {
 			return nil, err
 		}
@@ -671,6 +677,12 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 		result["mode"] = "run"
 		result["started"] = true
 		result["background"] = true
+		if autoBackground {
+			result["auto_background"] = true
+			result["agent_delegate"] = true
+			result["agent_delegate_reason"] = codex.AgentDelegateFallbackReason()
+			result["summary"] = fmt.Sprintf("Oracle loop auto-detached from hosted agent context as PID %d.", pid)
+		}
 		result["log_path"] = logPath
 		result["next"] = "aether oracle status"
 		return result, nil
@@ -800,9 +812,9 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 	invoker := newOracleWorkerInvoker()
 	if invoker == nil {
-		invoker = &codex.FakeInvoker{}
+		return nil, fmt.Errorf("oracle loop cannot start because no worker dispatcher is available")
 	}
-	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(ctx) {
+	if !invoker.IsAvailable(ctx) {
 		return nil, fmt.Errorf("oracle loop cannot start because %s", dispatchAvailabilityMessage(invoker))
 	}
 	agentPath := dispatchAgentPath(paths.Root, invoker, paths.AgentName)

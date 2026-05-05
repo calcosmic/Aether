@@ -1435,6 +1435,10 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 	if err := os.WriteFile(phasePlan, []byte(`{"fallback": true}`), 0644); err != nil {
 		t.Fatalf("failed to write fallback phase-plan: %v", err)
 	}
+	phasePlanBackup := filepath.Join(planningDir, "phase-plan.json.bak")
+	if err := os.WriteFile(phasePlanBackup, []byte(`{"stale_backup": true}`), 0644); err != nil {
+		t.Fatalf("failed to write stale fallback backup: %v", err)
+	}
 
 	// Verify fallback artifacts exist before force-replan.
 	if _, err := os.Stat(fallbackMarker); err != nil {
@@ -1472,6 +1476,9 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 		if strings.Contains(string(content), `"fallback": true`) {
 			t.Fatal("expected fallback phase-plan to be replaced, but it still contains fallback content")
 		}
+	}
+	if _, err := os.Stat(phasePlanBackup); !os.IsNotExist(err) {
+		t.Fatal("expected stale phase-plan backup to be removed after force-replan")
 	}
 
 	// Verify colony state is no longer stuck at EXECUTING phase 1.

@@ -366,6 +366,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		// Real or simulated dispatch succeeded — remove any stale marker.
 		os.Remove(filepath.Join(planningDir, ".fallback-marker"))
 	}
+	clearPlanningBackupArtifacts(planningDir)
 
 	for i := range dispatches {
 		status := dispatches[i].Status
@@ -1877,6 +1878,7 @@ func clearFallbackPlanningArtifacts(root string) {
 		}
 		os.Remove(f)
 	}
+	clearPlanningBackupArtifacts(planningDir)
 	// Clear phase-research directory contents but keep the directory
 	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
 	entries, err := os.ReadDir(researchDir)
@@ -1885,6 +1887,14 @@ func clearFallbackPlanningArtifacts(root string) {
 	}
 	for _, entry := range entries {
 		os.Remove(filepath.Join(researchDir, entry.Name()))
+	}
+}
+
+func clearPlanningBackupArtifacts(planningDir string) {
+	if bakFiles, err := filepath.Glob(filepath.Join(planningDir, "*.bak")); err == nil {
+		for _, f := range bakFiles {
+			os.Remove(f)
+		}
 	}
 }
 
