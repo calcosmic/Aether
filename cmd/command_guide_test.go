@@ -56,6 +56,7 @@ func TestCommandGuideIntelligentCommandsHaveOrchestration(t *testing.T) {
 	}{
 		"init":     {commandGuideCategoryFullOrchestration, commandGuideSkillCreation},
 		"oracle":   {commandGuideCategoryFullOrchestration, commandGuideSkillResearch},
+		"colonize": {commandGuideCategoryFullOrchestration, commandGuideSkillBuildCycle},
 		"plan":     {commandGuideCategoryFullOrchestration, commandGuideSkillBuildCycle},
 		"build":    {commandGuideCategoryFullOrchestration, commandGuideSkillBuildCycle},
 		"continue": {commandGuideCategorySemiIntelligent, commandGuideSkillBuildCycle},
@@ -153,7 +154,7 @@ func TestCommandGuideYamlCodexMetadataMatches(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	for _, command := range []string{"init", "oracle", "plan", "build", "continue", "seal", "discuss"} {
+	for _, command := range []string{"init", "oracle", "colonize", "plan", "build", "continue", "seal", "discuss"} {
 		guide, err := buildCommandGuide(command, "codex")
 		if err != nil {
 			t.Fatalf("buildCommandGuide(%q): %v", command, err)
@@ -181,7 +182,7 @@ func TestIntelligentWrappersCarryCodexDriftGuard(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	commands := []string{"init", "oracle", "plan", "build", "continue", "seal", "discuss"}
+	commands := []string{"init", "oracle", "colonize", "plan", "build", "continue", "seal", "discuss"}
 	wrapperDirs := []string{
 		filepath.Join(repoRoot, ".claude", "commands", "ant"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant"),

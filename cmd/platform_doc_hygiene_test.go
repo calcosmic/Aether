@@ -258,7 +258,9 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".claude/commands/ant/colonize.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether colonize $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file",
+				"colonize_manifest",
 			},
 			forbidden: []string{
 				"Write a minimal COLONY_STATE.json",
@@ -547,11 +549,12 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".opencode/commands/ant/colonize.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether colonize $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file",
+				"colonize_manifest",
 			},
 			forbidden: []string{
 				"Write a minimal COLONY_STATE.json",
-				"Spawn 4 Surveyor Ants in parallel",
 				".aether/aether-utils.sh",
 			},
 		},

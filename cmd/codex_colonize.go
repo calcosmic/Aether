@@ -17,14 +17,24 @@ import (
 )
 
 type codexSurveyorDispatch struct {
-	Caste    string   `json:"caste"`
-	Name     string   `json:"name"`
-	Task     string   `json:"task"`
-	Outputs  []string `json:"outputs"`
-	Status   string   `json:"status"`
-	Summary  string   `json:"summary,omitempty"`
-	Duration float64  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
-	Claimed  []string `json:"-"`
+	Stage         string   `json:"stage,omitempty"`
+	Wave          int      `json:"wave,omitempty"`
+	Caste         string   `json:"caste"`
+	Name          string   `json:"name"`
+	Task          string   `json:"task"`
+	TaskID        string   `json:"task_id,omitempty"`
+	AgentName     string   `json:"agent_name,omitempty"`
+	Brief         string   `json:"brief,omitempty"`
+	Outputs       []string `json:"outputs"`
+	OutputPaths   []string `json:"output_paths,omitempty"`
+	Status        string   `json:"status"`
+	Summary       string   `json:"summary,omitempty"`
+	Blockers      []string `json:"blockers,omitempty"`
+	Duration      float64  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
+	FilesCreated  []string `json:"files_created,omitempty"`
+	FilesModified []string `json:"files_modified,omitempty"`
+	SkillSection  string   `json:"skill_section,omitempty"`
+	Claimed       []string `json:"-"`
 }
 
 type codexWorkspaceFacts struct {
@@ -51,6 +61,29 @@ type codexWorkspaceFacts struct {
 type codexColonizeOptions struct {
 	ForceResurvey bool
 	WorkerTimeout time.Duration
+	PlanOnly      bool
+}
+
+type codexColonizeManifest struct {
+	Workflow             string                           `json:"workflow"`
+	DispatchMode         string                           `json:"dispatch_mode"`
+	RequiresFinalizer    bool                             `json:"requires_finalizer"`
+	GeneratedAt          string                           `json:"generated_at"`
+	Root                 string                           `json:"root"`
+	DetectedType         string                           `json:"detected_type"`
+	Languages            []string                         `json:"languages"`
+	Frameworks           []string                         `json:"frameworks"`
+	Domains              []string                         `json:"domains"`
+	EntryPoints          []string                         `json:"entry_points"`
+	KeyDirs              []string                         `json:"key_dirs"`
+	ExistingSurvey       bool                             `json:"existing_survey"`
+	ForceResurvey        bool                             `json:"force_resurvey"`
+	WorkerTimeoutSeconds int                              `json:"worker_timeout_seconds"`
+	DispatchContract     map[string]interface{}           `json:"dispatch_contract"`
+	Dispatches           []codexSurveyorDispatch          `json:"dispatches"`
+	Snapshots            map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
+	FinalizerCommand     string                           `json:"finalizer_command"`
+	Stats                map[string]interface{}           `json:"stats,omitempty"`
 }
 
 // logActivity appends an entry to the activity log. It is a no-op if the
@@ -74,6 +107,10 @@ func runCodexColonize(root string, force bool) (map[string]interface{}, error) {
 func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
+	}
+
+	if opts.PlanOnly || codex.ShouldUseAgentDelegatePath() {
+		return runCodexColonizePlanOnly(root, opts)
 	}
 
 	facts, err := surveyWorkspace(root)
@@ -177,23 +214,7 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 	}
 	updateSessionSummary("colonize", "aether plan", fmt.Sprintf("Territory surveyed (%d documents)", len(surveyFiles)))
 
-	dispatchMaps := make([]map[string]interface{}, 0, len(dispatches))
-	for _, dispatch := range dispatches {
-		entry := map[string]interface{}{
-			"caste":   dispatch.Caste,
-			"name":    dispatch.Name,
-			"task":    dispatch.Task,
-			"outputs": dispatch.Outputs,
-			"status":  dispatch.Status,
-		}
-		if summary := strings.TrimSpace(dispatch.Summary); summary != "" {
-			entry["summary"] = summary
-		}
-		if dispatch.Duration > 0 {
-			entry["duration"] = dispatch.Duration
-		}
-		dispatchMaps = append(dispatchMaps, entry)
-	}
+	dispatchMaps := surveyorDispatchMaps(dispatches)
 
 	result := map[string]interface{}{
 		"root":               facts.Root,
@@ -238,6 +259,49 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 	return result, nil
 }
 
+func surveyorDispatchMaps(dispatches []codexSurveyorDispatch) []map[string]interface{} {
+	dispatchMaps := make([]map[string]interface{}, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		entry := map[string]interface{}{
+			"stage":      dispatch.Stage,
+			"wave":       dispatch.Wave,
+			"caste":      dispatch.Caste,
+			"name":       dispatch.Name,
+			"task":       dispatch.Task,
+			"task_id":    dispatch.TaskID,
+			"agent_name": dispatch.AgentName,
+			"outputs":    dispatch.Outputs,
+			"status":     dispatch.Status,
+		}
+		if len(dispatch.OutputPaths) > 0 {
+			entry["output_paths"] = dispatch.OutputPaths
+		}
+		if brief := strings.TrimSpace(dispatch.Brief); brief != "" {
+			entry["brief"] = brief
+		}
+		if skillSection := strings.TrimSpace(dispatch.SkillSection); skillSection != "" {
+			entry["skill_section"] = skillSection
+		}
+		if summary := strings.TrimSpace(dispatch.Summary); summary != "" {
+			entry["summary"] = summary
+		}
+		if len(dispatch.Blockers) > 0 {
+			entry["blockers"] = dispatch.Blockers
+		}
+		if dispatch.Duration > 0 {
+			entry["duration"] = dispatch.Duration
+		}
+		if len(dispatch.FilesCreated) > 0 {
+			entry["files_created"] = dispatch.FilesCreated
+		}
+		if len(dispatch.FilesModified) > 0 {
+			entry["files_modified"] = dispatch.FilesModified
+		}
+		dispatchMaps = append(dispatchMaps, entry)
+	}
+	return dispatchMaps
+}
+
 func runColonizeCodebaseGraph(root string) (*codegraph.Stats, string) {
 	stats, err := runCodebaseScanFromColonize(root, nil)
 	if err != nil {
@@ -248,6 +312,106 @@ func runColonizeCodebaseGraph(root string) (*codegraph.Stats, string) {
 		logActivity("colonize", fmt.Sprintf("codebase graph scanned %d files, %d edges", stats.FilesScanned, stats.EdgesFound))
 	}
 	return stats, ""
+}
+
+func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		return nil, err
+	}
+
+	surveyDir := filepath.Join(store.BasePath(), "survey")
+	existingSurvey := surveyDocsExist(surveyDir)
+	if existingSurvey && !opts.ForceResurvey {
+		return nil, fmt.Errorf("existing territory survey found; rerun with `aether colonize --force-resurvey` to refresh it")
+	}
+
+	dispatchMode := "plan-only"
+	status := "plan-only"
+	next := "dispatch host surveyor agents, then run `aether colonize-finalize --completion-file <file>`"
+	if codex.ShouldUseAgentDelegatePath() {
+		dispatchMode = "agent-delegate"
+		status = "agent-delegate"
+	}
+
+	manifest := buildCodexColonizeManifest(root, facts, opts, dispatchMode, existingSurvey, snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))))
+	dispatchMaps := surveyorDispatchMaps(manifest.Dispatches)
+	result := map[string]interface{}{
+		"status":                status,
+		"root":                  facts.Root,
+		"detected_type":         facts.DetectedType,
+		"languages":             facts.Languages,
+		"frameworks":            facts.Frameworks,
+		"domains":               facts.Domains,
+		"entry_points":          facts.EntryPoints,
+		"key_dirs":              facts.TopLevelDirs,
+		"existing_survey":       existingSurvey,
+		"force_resurvey":        opts.ForceResurvey,
+		"dispatch_mode":         dispatchMode,
+		"dispatch_contract":     manifest.DispatchContract,
+		"colonize_manifest":     manifest,
+		"dispatches":            dispatchMaps,
+		"surveyors":             dispatchMaps,
+		"requires_finalizer":    true,
+		"finalizer_command":     manifest.FinalizerCommand,
+		"execution_owner":       "host-platform",
+		"agent_delegate":        dispatchMode == "agent-delegate",
+		"agent_delegate_reason": strings.TrimSpace(codex.AgentDelegateFallbackReason()),
+		"stats":                 manifest.Stats,
+		"next":                  next,
+	}
+	return result, nil
+}
+
+func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts codexColonizeOptions, dispatchMode string, existingSurvey bool, snapshots map[string]codexArtifactSnapshot) codexColonizeManifest {
+	workerTimeout := effectiveSurveyorDispatchTimeout(opts.WorkerTimeout)
+	dispatches := plannedSurveyors(root)
+	for i := range dispatches {
+		dispatches[i].Stage = "survey"
+		dispatches[i].Wave = 1
+		if dispatches[i].TaskID == "" {
+			dispatches[i].TaskID = fmt.Sprintf("survey-%d", i)
+		}
+		outputPaths := make([]string, 0, len(dispatches[i].Outputs))
+		for _, output := range dispatches[i].Outputs {
+			outputPaths = append(outputPaths, filepath.ToSlash(filepath.Join(".aether", "data", "survey", output)))
+		}
+		dispatches[i].OutputPaths = outputPaths
+		if dispatches[i].Brief == "" {
+			dispatches[i].Brief = fmt.Sprintf("Survey task: %s\n\nWrite these survey outputs in the repo: %s\n\nSurvey the territory at %s", dispatches[i].Task, strings.Join(outputPaths, ", "), root)
+		}
+		if dispatches[i].SkillSection == "" {
+			dispatches[i].SkillSection = resolveSkillSectionForWorkflow("colonize", dispatches[i].Caste, dispatches[i].Task)
+		}
+	}
+	return codexColonizeManifest{
+		Workflow:             "colonize",
+		DispatchMode:         dispatchMode,
+		RequiresFinalizer:    true,
+		GeneratedAt:          time.Now().UTC().Format(time.RFC3339),
+		Root:                 facts.Root,
+		DetectedType:         facts.DetectedType,
+		Languages:            facts.Languages,
+		Frameworks:           facts.Frameworks,
+		Domains:              facts.Domains,
+		EntryPoints:          facts.EntryPoints,
+		KeyDirs:              facts.TopLevelDirs,
+		ExistingSurvey:       existingSurvey,
+		ForceResurvey:        opts.ForceResurvey,
+		WorkerTimeoutSeconds: int(workerTimeout / time.Second),
+		DispatchContract:     surveyDispatchContractWithTimeout(opts.WorkerTimeout),
+		Dispatches:           dispatches,
+		Snapshots:            snapshots,
+		FinalizerCommand:     "AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <file>",
+		Stats: map[string]interface{}{
+			"files":       facts.FileCount,
+			"directories": facts.DirectoryCount,
+		},
+	}
 }
 
 func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
@@ -410,32 +574,48 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 func plannedSurveyors(root string) []codexSurveyorDispatch {
 	return []codexSurveyorDispatch{
 		{
-			Caste:   "surveyor-provisions",
-			Name:    deterministicAntName("surveyor", root+"|provisions"),
-			Task:    "Map provisions and external trails",
-			Outputs: []string{"PROVISIONS.md", "TRAILS.md"},
-			Status:  "spawned",
+			Stage:     "survey",
+			Wave:      1,
+			Caste:     "surveyor-provisions",
+			Name:      deterministicAntName("surveyor", root+"|provisions"),
+			Task:      "Map provisions and external trails",
+			TaskID:    "survey-0",
+			AgentName: "aether-surveyor-provisions",
+			Outputs:   []string{"PROVISIONS.md", "TRAILS.md"},
+			Status:    "spawned",
 		},
 		{
-			Caste:   "surveyor-nest",
-			Name:    deterministicAntName("surveyor", root+"|nest"),
-			Task:    "Map architecture and chamber layout",
-			Outputs: []string{"BLUEPRINT.md", "CHAMBERS.md"},
-			Status:  "spawned",
+			Stage:     "survey",
+			Wave:      1,
+			Caste:     "surveyor-nest",
+			Name:      deterministicAntName("surveyor", root+"|nest"),
+			Task:      "Map architecture and chamber layout",
+			TaskID:    "survey-1",
+			AgentName: "aether-surveyor-nest",
+			Outputs:   []string{"BLUEPRINT.md", "CHAMBERS.md"},
+			Status:    "spawned",
 		},
 		{
-			Caste:   "surveyor-disciplines",
-			Name:    deterministicAntName("surveyor", root+"|disciplines"),
-			Task:    "Map disciplines and sentinel protocols",
-			Outputs: []string{"DISCIPLINES.md", "SENTINEL-PROTOCOLS.md"},
-			Status:  "spawned",
+			Stage:     "survey",
+			Wave:      1,
+			Caste:     "surveyor-disciplines",
+			Name:      deterministicAntName("surveyor", root+"|disciplines"),
+			Task:      "Map disciplines and sentinel protocols",
+			TaskID:    "survey-2",
+			AgentName: "aether-surveyor-disciplines",
+			Outputs:   []string{"DISCIPLINES.md", "SENTINEL-PROTOCOLS.md"},
+			Status:    "spawned",
 		},
 		{
-			Caste:   "surveyor-pathogens",
-			Name:    deterministicAntName("surveyor", root+"|pathogens"),
-			Task:    "Identify pathogens and fragile boundaries",
-			Outputs: []string{"PATHOGENS.md"},
-			Status:  "spawned",
+			Stage:     "survey",
+			Wave:      1,
+			Caste:     "surveyor-pathogens",
+			Name:      deterministicAntName("surveyor", root+"|pathogens"),
+			Task:      "Identify pathogens and fragile boundaries",
+			TaskID:    "survey-3",
+			AgentName: "aether-surveyor-pathogens",
+			Outputs:   []string{"PATHOGENS.md"},
+			Status:    "spawned",
 		},
 	}
 }
@@ -537,11 +717,15 @@ func convertDispatchResults(results []codex.DispatchResult, specs []surveyorSpec
 		name := deterministicAntName("surveyor", seed)
 
 		d := codexSurveyorDispatch{
-			Caste:   spec.Caste,
-			Name:    name,
-			Task:    spec.Task,
-			Outputs: spec.Outputs,
-			Status:  "spawned",
+			Stage:     "survey",
+			Wave:      1,
+			Caste:     spec.Caste,
+			Name:      name,
+			Task:      spec.Task,
+			TaskID:    fmt.Sprintf("survey-%d", i),
+			AgentName: fmt.Sprintf("aether-surveyor-%s", spec.AgentSuffix),
+			Outputs:   spec.Outputs,
+			Status:    "spawned",
 		}
 
 		if i < len(results) {
@@ -553,11 +737,14 @@ func convertDispatchResults(results []codex.DispatchResult, specs []surveyorSpec
 			d.Status = normalizeRuntimeDispatchStatus(r.Status)
 			if r.WorkerResult != nil {
 				d.Duration = r.WorkerResult.Duration.Seconds()
-				d.Claimed = append(d.Claimed, r.WorkerResult.FilesCreated...)
-				d.Claimed = append(d.Claimed, r.WorkerResult.FilesModified...)
+				d.FilesCreated = append(d.FilesCreated, r.WorkerResult.FilesCreated...)
+				d.FilesModified = append(d.FilesModified, r.WorkerResult.FilesModified...)
+				d.Claimed = append(d.Claimed, d.FilesCreated...)
+				d.Claimed = append(d.Claimed, d.FilesModified...)
 				d.Claimed = uniqueSortedStrings(d.Claimed)
 				d.Summary = strings.TrimSpace(r.WorkerResult.Summary)
 				if d.Summary == "" && len(r.WorkerResult.Blockers) > 0 {
+					d.Blockers = append(d.Blockers, r.WorkerResult.Blockers...)
 					d.Summary = strings.Join(r.WorkerResult.Blockers, "; ")
 				}
 			}

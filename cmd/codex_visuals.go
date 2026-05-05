@@ -592,7 +592,13 @@ func renderColonizeVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("colonize"), "Colonize"))
 	b.WriteString(visualDivider)
-	b.WriteString("Territory survey complete.\n")
+	dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"]))
+	requiresFinalizer, _ := result["requires_finalizer"].(bool)
+	if requiresFinalizer || dispatchMode == "agent-delegate" || dispatchMode == "plan-only" {
+		b.WriteString("Territory survey manifest ready.\n")
+	} else {
+		b.WriteString("Territory survey complete.\n")
+	}
 	b.WriteString("Root: ")
 	b.WriteString(stringValue(result["root"]))
 	b.WriteString("\n")
@@ -625,7 +631,6 @@ func renderColonizeVisual(result map[string]interface{}) string {
 	if surveyors, ok := result["surveyors"].([]interface{}); ok && len(surveyors) > 0 {
 		dispatches := parseSurveyorMaps(surveyors)
 		hasRealData := hasRealExecutionData(dispatches)
-		dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"]))
 		if dispatchMode == "" {
 			if hasRealData {
 				dispatchMode = "real"
@@ -663,7 +668,18 @@ func renderColonizeVisual(result map[string]interface{}) string {
 	b.WriteString("\nCoordination: ")
 	b.WriteString(displayDataPath("spawn-tree.txt"))
 	b.WriteString("\n")
-	b.WriteString(renderNextUp(`Run ` + "`aether plan`" + ` to turn this scan into a phase plan.`))
+	if requiresFinalizer || dispatchMode == "agent-delegate" || dispatchMode == "plan-only" {
+		finalizer := strings.TrimSpace(stringValue(result["finalizer_command"]))
+		if finalizer == "" {
+			finalizer = "aether colonize-finalize --completion-file <file>"
+		}
+		b.WriteString(renderNextUp(
+			`Host platform should dispatch the surveyors above, then run `+"`"+finalizer+"`"+`.`,
+			`Do not hand-edit `+"`.aether/data/`"+`; the finalizer writes survey state.`,
+		))
+	} else {
+		b.WriteString(renderNextUp(`Run ` + "`aether plan`" + ` to turn this scan into a phase plan.`))
+	}
 	return b.String()
 }
 
@@ -699,12 +715,14 @@ func parseSurveyorMaps(surveyors []interface{}) []codexSurveyorDispatch {
 			continue
 		}
 		d := codexSurveyorDispatch{
-			Caste:    stringValue(entry["caste"]),
-			Name:     stringValue(entry["name"]),
-			Task:     stringValue(entry["task"]),
-			Status:   stringValue(entry["status"]),
-			Summary:  stringValue(entry["summary"]),
-			Duration: floatValue(entry["duration"]),
+			Caste:     stringValue(entry["caste"]),
+			Name:      stringValue(entry["name"]),
+			Task:      stringValue(entry["task"]),
+			TaskID:    stringValue(entry["task_id"]),
+			AgentName: stringValue(entry["agent_name"]),
+			Status:    stringValue(entry["status"]),
+			Summary:   stringValue(entry["summary"]),
+			Duration:  floatValue(entry["duration"]),
 		}
 		if outputs, ok := entry["outputs"].([]interface{}); ok {
 			for _, o := range outputs {
