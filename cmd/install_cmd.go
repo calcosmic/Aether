@@ -33,8 +33,8 @@ var installCmd = &cobra.Command{
 		"Copies:\n" +
 		"  .claude/commands/ant/  -> ~/.claude/commands/ant-*.md\n" +
 		"  .claude/agents/ant/    -> ~/.claude/agents/ant/\n" +
-		"  .opencode/commands/ant/ -> ~/.config/opencode/commands/ant/\n" +
-		"  .opencode/agents/      -> ~/.config/opencode/agents/\n" +
+		"  .opencode/commands/ant/ -> ~/.opencode/command/ and ~/.config/opencode/commands/ant/\n" +
+		"  .opencode/agents/      -> ~/.opencode/agent/ and ~/.config/opencode/agents/\n" +
 		"  .codex/agents/         -> ~/.codex/agents/\n" +
 		"  generated Codex shims  -> ~/.codex/skills/aether/\n\n" +
 		"Also creates the selected hub directory (~/.aether/ for stable, ~/.aether-dev/ for dev) for cross-repo coordination.",
