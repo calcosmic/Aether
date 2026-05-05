@@ -995,6 +995,61 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 	}
 }
 
+func TestOracleCompatibilityEnforcesAttemptWatchdog(t *testing.T) {
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/oracle-watchdog-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	blocking := &oracleBlockingUntilCancelledInvoker{}
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return blocking }
+	defer func() { newOracleWorkerInvoker = originalInvoker }()
+
+	originalPolicy := oracleAttemptPolicyForPhase
+	oracleAttemptPolicyForPhase = func(phase string, attempt int) oracleAttemptPolicy {
+		return oracleAttemptPolicy{
+			ReasoningEffort: "low",
+			Timeout:         40 * time.Millisecond,
+			Heartbeat:       5 * time.Millisecond,
+		}
+	}
+	defer func() { oracleAttemptPolicyForPhase = originalPolicy }()
+
+	type oracleRunResult struct {
+		result map[string]interface{}
+		err    error
+	}
+	done := make(chan oracleRunResult, 1)
+	go func() {
+		result, err := runOracleCompatibility(root, []string{"watchdog test"}, "quick", "", defaultOracleScope, defaultOracleTemplate, "1", "false")
+		done <- oracleRunResult{result: result, err: err}
+	}()
+
+	var run oracleRunResult
+	select {
+	case run = <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("oracle run did not enforce the attempt watchdog")
+	}
+
+	if run.err != nil {
+		t.Fatalf("runOracleCompatibility returned error: %v", run.err)
+	}
+	if got := run.result["status"]; got != "blocked" {
+		t.Fatalf("status = %v, want blocked", got)
+	}
+	if got := run.result["stop_reason"]; got != "worker_timeout" {
+		t.Fatalf("stop_reason = %v, want worker_timeout", got)
+	}
+	if atomic.LoadInt32(&blocking.cancelled) == 0 {
+		t.Fatal("expected watchdog deadline to cancel the blocked oracle worker")
+	}
+}
+
 func TestOracleCompatibilityShortCircuitsOnValidResponseFile(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1351,6 +1406,26 @@ func (i *oracleSlowCompletingInvoker) Invoke(ctx context.Context, cfg codex.Work
 
 func (i *oracleSlowCompletingInvoker) IsAvailable(ctx context.Context) bool { return true }
 func (i *oracleSlowCompletingInvoker) ValidateAgent(path string) error      { return nil }
+
+type oracleBlockingUntilCancelledInvoker struct {
+	cancelled int32
+}
+
+func (i *oracleBlockingUntilCancelledInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	<-ctx.Done()
+	atomic.AddInt32(&i.cancelled, 1)
+	return codex.WorkerResult{
+		WorkerName: cfg.WorkerName,
+		Caste:      cfg.Caste,
+		TaskID:     cfg.TaskID,
+		Status:     "timeout",
+		Summary:    "Oracle test worker waited until the controller cancelled the attempt.",
+		Error:      ctx.Err(),
+	}, ctx.Err()
+}
+
+func (i *oracleBlockingUntilCancelledInvoker) IsAvailable(ctx context.Context) bool { return true }
+func (i *oracleBlockingUntilCancelledInvoker) ValidateAgent(path string) error      { return nil }
 
 type oracleRetryInvoker struct {
 	calls int

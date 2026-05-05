@@ -1151,8 +1151,10 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
 	b.WriteString("- Avoid high-noise paths unless directly relevant: .aether/backups/, .aether/chambers/, .aether/data/build/, .git/, node_modules/, dist/, build/, vendor/.\n")
+	b.WriteString("- Loop guard: read each file at most once, do not reread the same command or wrapper file for confidence, and stop searching when you have enough evidence to produce the requested terminal result.\n")
 	if spec.Caste == "scout" {
 		b.WriteString("- Scout scope rule: stay read-only, do not spawn subagents, and stop after the survey docs plus targeted confirmation reads are enough to summarize planning risks.\n")
+		b.WriteString("- Scout read budget: read survey docs first, then at most 8 targeted repository files. If evidence is still incomplete, record the gap instead of continuing to search.\n")
 	}
 	graphTargets := append(append([]string{}, survey.EntryPoints...), survey.TestFiles...)
 	if graphContext := renderCodegraphContextForText(root, graphTargets, codegraphWorkerContextBudgetChars); graphContext != "" {
@@ -1163,11 +1165,14 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 	if spec.Caste == "scout" {
 		b.WriteString("Return planning findings in the final worker claims JSON only.\n")
 		b.WriteString("- Do not write files; Scout is read-only on every supported platform.\n")
+		b.WriteString("- Final result must include scout_report with findings, gaps, confidence, and study_files. Keep it compact enough for the Route-Setter to consume directly.\n")
 		b.WriteString("- Aether will persist the scout artifact after the worker completes: ")
 		b.WriteString(strings.Join(primaryOutputs, ", "))
 		b.WriteString("\n")
 	} else {
 		b.WriteString("Write planning outputs directly into the repository.\n")
+		b.WriteString("- Route-Setter read budget: consume the manifest survey context and the Scout terminal result provided by the wrapper, then read at most 6 targeted repository files. Do not redo the Scout survey.\n")
+		b.WriteString("- If the Scout result is missing, continue from the manifest survey context and list that as a gap only if it blocks a useful plan.\n")
 		b.WriteString("- Primary outputs: ")
 		b.WriteString(strings.Join(primaryOutputs, ", "))
 		b.WriteString("\n")

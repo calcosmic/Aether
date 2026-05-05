@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -961,18 +962,24 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 			emitVisualProgress(renderOracleRetryPreview(state))
 		}
 		if invokeErr != nil {
+			stopReason := "worker_error"
+			if oracleWorkerAttemptTimedOut(result, invokeErr) {
+				stopReason = "worker_timeout"
+			}
 			state.Status = "blocked"
-			state.StopReason = "worker_error"
+			state.StopReason = stopReason
 			state.Summary = oracleWorkerFailureSummary(result, invokeErr, artifactPath)
 			state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
 			if err := writeOracleStateFile(paths.StatePath, state); err != nil {
 				return nil, err
 			}
-			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "blocked", "worker_error", "aether oracle status")
+			return finalizeOracleLoop(paths, state, plan, detectedType, languages, frameworks, iterationsRun, "blocked", stopReason, "aether oracle status")
 		}
 		if result.Error != nil || strings.TrimSpace(result.Status) == "failed" || strings.TrimSpace(result.Status) == "blocked" {
 			state.Status = "blocked"
-			if result.Error != nil {
+			if oracleWorkerAttemptTimedOut(result, result.Error) {
+				state.StopReason = "worker_timeout"
+			} else if result.Error != nil {
 				state.StopReason = "worker_error"
 			} else {
 				state.StopReason = "worker_blocked"
@@ -1299,7 +1306,11 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 }
 
 func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker, paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, target oracleQuestion, attempt int, policy oracleAttemptPolicy, responsePath string) (codex.WorkerResult, error) {
-	attemptCtx, cancel := context.WithCancel(ctx)
+	attemptTimeout := policy.Timeout
+	if attemptTimeout <= 0 {
+		attemptTimeout = defaultOracleTimeout
+	}
+	attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
 	defer cancel()
 
 	type oracleAttemptResult struct {
@@ -1326,16 +1337,21 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 		select {
 		case attemptResult := <-resultCh:
 			return attemptResult.result, attemptResult.err
-		case <-ctx.Done():
+		case <-attemptCtx.Done():
 			cancel()
+			err := attemptCtx.Err()
+			summary := fmt.Sprintf("Oracle attempt stopped: %v", err)
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+				summary = fmt.Sprintf("Oracle attempt timed out after %s watchdog.", oracleDurationLabel(attemptTimeout))
+			}
 			return codex.WorkerResult{
 				Caste:    "oracle",
 				TaskID:   fmt.Sprintf("oracle.%d", state.Iteration),
 				Status:   "timeout",
-				Summary:  fmt.Sprintf("Oracle attempt stopped: %v", ctx.Err()),
+				Summary:  summary,
 				Duration: time.Since(startedAt),
-				Error:    ctx.Err(),
-			}, ctx.Err()
+				Error:    err,
+			}, err
 		case <-ticker.C:
 			elapsed := time.Since(startedAt)
 			if response, err := loadOracleWorkerResponse(responsePath, target); err == nil {
@@ -1357,7 +1373,7 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 				defaultOracleMaxAttempts,
 				oracleQuestionLabel(target),
 				oracleDurationLabel(elapsed),
-				oracleDurationLabel(policy.Timeout),
+				oracleDurationLabel(attemptTimeout),
 				policy.ReasoningEffort,
 			)
 			if err := writeOracleStateFile(paths.StatePath, state); err != nil {
@@ -1366,6 +1382,12 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 			}
 		}
 	}
+}
+
+func oracleWorkerAttemptTimedOut(result codex.WorkerResult, err error) bool {
+	return strings.EqualFold(strings.TrimSpace(result.Status), "timeout") ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(result.Error, context.DeadlineExceeded)
 }
 
 func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, target oracleQuestion, attempt int, policy oracleAttemptPolicy, responsePath string) (codex.WorkerResult, error) {

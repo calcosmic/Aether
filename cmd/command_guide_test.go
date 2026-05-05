@@ -302,6 +302,18 @@ func TestCodexLifecycleSkillsLiveOnlyInAetherSource(t *testing.T) {
 	}
 }
 
+func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
+	shims := map[string]bool{}
+	for _, shim := range codexSkillShims() {
+		shims[shim.Name] = true
+	}
+	for _, skill := range []string{commandGuideSkillCreation, commandGuideSkillResearch, commandGuideSkillBuildCycle} {
+		if !shims[skill] {
+			t.Fatalf("codex generated shims missing command-guide skill %q", skill)
+		}
+	}
+}
+
 func yamlCommandNamesForGuideTest(t *testing.T) []string {
 	t.Helper()
 	repoRoot, err := repoRootForCommandSourceTest()
