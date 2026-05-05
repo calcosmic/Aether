@@ -123,6 +123,12 @@ func codexSkillShims() []codexSkillShim {
 			Description: "Use when running Oracle or discuss flows in Codex; scope research before persistence begins.",
 			Body:        "For `aether oracle` or `aether discuss`, use `aether command-guide <oracle|discuss> --platform codex`, clarify output shape, scope, depth, and confidence, then run the runtime flow.",
 		},
+		{
+			Dir:         "aether-colony-build-cycle",
+			Name:        "aether-colony-build-cycle",
+			Description: "Use when Codex is asked to plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely.",
+			Body:        "For `aether plan`, `build`, `continue`, `swarm`, or `seal`, run `aether command-guide <command> --platform codex`, use runtime JSON manifests and finalizers, pass worker briefs verbatim, honor loop guards, and never hand-edit `.aether/data`.",
+		},
 	}
 }
 

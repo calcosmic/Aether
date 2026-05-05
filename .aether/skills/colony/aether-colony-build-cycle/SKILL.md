@@ -57,7 +57,13 @@ AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-dept
    unless the user explicitly approves continuing with assumptions.
 6. Spawn the runtime-specified Scout and Route-Setter workers using manifest
    names, castes, task IDs, briefs, and `skill_section` values.
-7. Finalize through:
+7. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
+   loop guard, output contract, and stop condition. If a planning worker keeps
+   rereading the same file or command, mark it `blocked` with a concrete
+   blocker instead of manually reconciling it as completed.
+8. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
+   consumes Scout findings directly instead of re-running the survey.
+9. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>

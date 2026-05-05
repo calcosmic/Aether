@@ -73,8 +73,11 @@ For each dispatch in the manifest, execute the planned workers by wave:
 2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
 3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the selected depth, planning depth selection, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
-5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
-6. After each worker returns, run:
+5. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
+6. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
+7. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
+8. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
+9. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
 
 Wave 1 Scout must complete before wave 2 Route-Setter starts. The Route-Setter result must include `phase_plan` using the manifest's required `phase-plan.json` schema:

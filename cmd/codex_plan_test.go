@@ -1762,3 +1762,36 @@ func TestPlanningWorkerBriefIncludesCodegraphContext(t *testing.T) {
 		t.Fatalf("planning brief missing related dependency file:\n%s", brief)
 	}
 }
+
+func TestPlanningWorkerBriefIncludesLoopGuards(t *testing.T) {
+	root := t.TempDir()
+	survey := codexSurveyContext{
+		SurveyDocs: []string{"BLUEPRINT.md", "PATHOGENS.md"},
+	}
+
+	scoutBrief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[0])
+	for _, want := range []string{
+		"Loop guard: read each file at most once",
+		"Scout read budget",
+		"at most 8 targeted repository files",
+		"record the gap instead of continuing to search",
+		"Final result must include scout_report",
+	} {
+		if !strings.Contains(scoutBrief, want) {
+			t.Fatalf("scout planning brief missing %q:\n%s", want, scoutBrief)
+		}
+	}
+
+	routeBrief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+	for _, want := range []string{
+		"Loop guard: read each file at most once",
+		"Route-Setter read budget",
+		"at most 6 targeted repository files",
+		"Do not redo the Scout survey",
+		"phase-plan.json",
+	} {
+		if !strings.Contains(routeBrief, want) {
+			t.Fatalf("route-setter planning brief missing %q:\n%s", want, routeBrief)
+		}
+	}
+}

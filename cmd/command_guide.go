@@ -196,6 +196,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice>` and parse `result.plan_manifest` or `result.planning_manifest`.",
 			"If runtime returns `dispatch_mode: agent-delegate`, dispatch Scout and Route-Setter through the host platform instead of nested subprocess workers, then finalize with the returned manifest.",
 			"If runtime reports unresolved clarifications, route to `aether discuss` before spawning planning workers unless the user explicitly approves assumptions.",
+			"Pass each dispatch `brief` verbatim, honor its read budget and no-repeat loop guard, and mark workers blocked rather than manually reconciling read loops as completed.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>",
 		PostSteps: []string{
