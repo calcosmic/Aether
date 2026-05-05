@@ -1071,6 +1071,76 @@ func TestPlanFallbackDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
 	}
 }
 
+func TestPlanFallbackDoesNotTreatCommandCenterAsAetherCommandWork(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Redesign the dashboard as a premium personal command center"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:         "3.0",
+		Goal:            &goal,
+		State:           colony.StateREADY,
+		PlanGranularity: colony.GranularityMilestone,
+		Plan:            colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &failingPlanningInvoker{} }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["dispatch_mode"]; got != "fallback" {
+		t.Fatalf("dispatch_mode = %v, want fallback", got)
+	}
+
+	blob := ""
+	for _, raw := range result["phases"].([]interface{}) {
+		phase := raw.(map[string]interface{})
+		blob += phase["name"].(string) + "\n"
+		for _, taskRaw := range phase["tasks"].([]interface{}) {
+			task := taskRaw.(map[string]interface{})
+			blob += task["goal"].(string) + "\n"
+		}
+	}
+
+	for _, unwanted := range []string{
+		"Contract and gap mapping",
+		"Colonize orchestration",
+		"Planning orchestration",
+		"Build orchestration",
+		"Continue orchestration",
+		"Codex command behavior",
+		"ant workflow",
+	} {
+		if strings.Contains(blob, unwanted) {
+			t.Fatalf("command-center fallback should not produce Aether orchestration plan containing %q:\n%s", unwanted, blob)
+		}
+	}
+	if strings.TrimSpace(blob) == "" {
+		t.Fatal("expected command-center fallback to produce non-empty non-Aether plan")
+	}
+}
+
+func TestPlanFallbackStillSupportsExplicitAetherCommandWork(t *testing.T) {
+	templates := planningTemplates("Fix Codex command orchestration parity for Aether workers", codexSurveyContext{}, codexScoutReport{})
+	if len(templates) == 0 {
+		t.Fatal("expected templates")
+	}
+	if templates[0].Name != "Contract and gap mapping" {
+		t.Fatalf("first template = %q, want Contract and gap mapping", templates[0].Name)
+	}
+}
+
 // --- dispatchRealPlanningWorkers tests ---
 
 func TestDispatchRealPlanningWorkers_NilInvoker_ReturnsNil(t *testing.T) {

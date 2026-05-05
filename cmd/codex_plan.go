@@ -1381,7 +1381,7 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 func planningTemplates(goal string, survey codexSurveyContext, report codexScoutReport) []phaseTemplate {
 	goalLower := strings.ToLower(goal)
 	switch {
-	case containsAny(goalLower, []string{"parity", "orchestrat", "workflow", "command", "spawn"}):
+	case isAetherOrchestrationGoal(goalLower):
 		return []phaseTemplate{
 			{
 				Name:        "Contract and gap mapping",
@@ -1743,6 +1743,17 @@ func isLanguageDesignGoal(goalLower string) bool {
 		"language", "grammar", "syntax", "parser", "lexer", "compiler", "transpil", "dsl",
 		"protocol", "serialization", "encode", "decode", "format", "schema", "spec",
 		"communication", "token efficien", "context efficien", "ai-to-ai",
+	})
+}
+
+func isAetherOrchestrationGoal(goalLower string) bool {
+	if !containsAny(goalLower, []string{"parity", "orchestrat", "workflow", "command", "spawn"}) {
+		return false
+	}
+	return containsAny(goalLower, []string{
+		"aether", "codex", "claude", "opencode", "colony", "ant",
+		"worker", "watcher", "builder", "scout", "route-setter",
+		"plan-only", "finalize", "spawn tree", "dispatch",
 	})
 }
 
