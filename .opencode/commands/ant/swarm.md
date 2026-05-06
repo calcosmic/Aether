@@ -28,6 +28,17 @@ Parse `result.swarm_manifest`. This manifest is the only source for worker names
 
 If the runtime returns `dispatch_mode: agent-delegate`, this is the expected hosted-agent path. Do not run nested subprocess swarm workers. Dispatch the manifest workers through the current platform.
 
+## Live Worker Ceremony
+
+The visible live Task/subagent stack is part of the Aether ceremony.
+
+- Issue same-wave swarm workers as visible Task/subagent calls, not background-only dispatches.
+- Do not set `run_in_background`.
+- Do not describe workers as `background agents` or say you will be notified later.
+- Do not replace the live stack with a markdown worker table.
+- Each worker description parameter must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+- Preserve platform agent caste color/icon metadata by using the manifest `agent_name` as `subagent_type`.
+
 ## Wave Execution
 
 For each dispatch in `swarm_manifest.dispatches`:
@@ -35,7 +46,7 @@ For each dispatch in `swarm_manifest.dispatches`:
 1. Run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Swarm" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 2. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
-3. Use a concise agent description: `🔥 Swarm {name}: {role}`.
+3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the dispatch `brief`, `response_contract`, active signals, and exact task metadata.
 5. Require every worker to return a terminal structured result with: `name`, `caste`, `role`, `task`, `status`, `summary`, `files`, `tests`, `blockers`, `response`, and `duration`.
 6. After each worker returns, run:
@@ -120,4 +131,5 @@ If you change swarm manifest handling, worker spawning, finalization, or closeou
 - Do NOT hand-edit `.aether/data/`, `COLONY_STATE.json`, `session.json`, or pheromone files.
 - Do NOT copy command wrappers into target repos; Aether commands are published globally.
 - Do NOT invent worker names, castes, roles, waves, task IDs, or outputs; use `swarm_manifest`.
+- Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table.
 - If docs and runtime disagree, runtime wins.

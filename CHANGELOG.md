@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Docs
 - AGENTS.md: add Runtime Lifecycle mermaid diagram (under Architecture Overview) and Wisdom Pipeline mermaid diagram (under Wisdom Pipeline). Model-agnostic, shows both `in-repo` and `worktree` parallel modes, and contains the `skill-match` sub-graph.
 
+## [1.0.30] - 2026-05-06
+
+Restore the live host-worker ceremony that sits on top of runtime command visuals.
+
+### Changed
+- Build, plan, colonize, continue, seal, and swarm wrappers now require visible live Task/subagent panels with caste-labelled descriptions instead of background-only dispatch summaries.
+- Build wrappers now render the forced-color runtime spawn ceremony before platform worker dispatch, while still using JSON plan/finalizer contracts for state.
+- The build-wave playbook and Codex command guide now explicitly preserve platform-native agent color/icon metadata and live stacked worker panels.
+
+### Added
+- Added wrapper contract tests that fail if host-orchestrated lifecycle commands lose the live worker ceremony or fall back to markdown-only worker tables.
+
 ## [1.0.29] - 2026-05-06
 
 Restore visual command ceremony while keeping runtime-owned behavior.

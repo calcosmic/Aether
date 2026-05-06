@@ -35,6 +35,17 @@ Expected manifest:
 - `dispatches`: Gatekeeper, Auditor, and Probe final-review workers
 - `finalizer_command`: `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`
 
+## Live Worker Ceremony
+
+The visible live Task/subagent stack is part of the Aether ceremony.
+
+- Issue same-wave final-review workers as visible Task/subagent calls, not background-only dispatches.
+- Do not set `run_in_background`.
+- Do not describe reviewers as `background agents` or say you will be notified later.
+- Do not replace the live stack with a markdown worker table.
+- Each reviewer description parameter must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+- Preserve platform agent caste color/icon metadata by using the manifest `agent_name` as `subagent_type`.
+
 ## Worker Dispatch
 
 Dispatch the runtime-provided workers through the host platform in manifest wave order.
@@ -43,9 +54,10 @@ For each dispatch:
 
 1. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1`.
 2. Spawn the host agent using `agent_name` as the subagent type.
-3. Give the worker the exact `brief` from the manifest.
-4. Tell the worker this is final review before seal and it must not modify repo source files.
-5. Collect a terminal result with:
+3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+4. Give the worker the exact `brief` from the manifest.
+5. Tell the worker this is final review before seal and it must not modify repo source files.
+6. Collect a terminal result with:
    - `name`
    - `caste`
    - `stage`
@@ -55,7 +67,7 @@ For each dispatch:
    - `summary`
    - `blockers`
    - `report`
-6. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
+7. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 
 Terminal statuses are `completed`, `passed`, `blocked`, `failed`, or `timeout`.
 
@@ -118,6 +130,7 @@ Run selected delivery actions sequentially and stop on first failure.
 - Do NOT parse visual output as truth; use JSON output for programmatic data.
 - Do NOT run `aether seal` without `--plan-only` from this wrapper unless the user explicitly asks for raw/no-orchestration.
 - Do NOT run Porter delivery commands unless the user explicitly chooses them after `seal-finalize`.
+- Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
 - Runtime output wins if this wrapper and the runtime disagree.
 
 ## Cross-Platform Drift Guard

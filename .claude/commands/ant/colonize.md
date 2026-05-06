@@ -22,6 +22,17 @@ If the runtime returns `dispatch_mode: agent-delegate`, this is the expected hos
 
 If the runtime reports an existing survey, follow the runtime recovery guidance before spawning workers.
 
+## Live Worker Ceremony
+
+The visible live Task/subagent stack is part of the Aether ceremony.
+
+- Issue parallel surveyors as visible Task/subagent calls, not background-only dispatches.
+- Do not set `run_in_background`.
+- Do not describe surveyors as `background agents` or say you will be notified later.
+- Do not replace the live stack with a markdown worker table.
+- Each surveyor description parameter must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+- Preserve platform agent caste color/icon metadata by using the manifest `agent_name` as `subagent_type`.
+
 ## Wave Execution
 
 For each dispatch in `colonize_manifest.dispatches`:
@@ -29,7 +40,7 @@ For each dispatch in `colonize_manifest.dispatches`:
 1. Run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 2. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
-3. Use a concise agent description: `🗺️ Surveyor {name}: {task}`.
+3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the dispatch `brief`, `output_paths`, active signals, `skill_section` when present, and exact task metadata.
 5. Require every surveyor to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `blockers`, and `duration`.
 6. After each worker returns, run:
@@ -94,4 +105,5 @@ If you change colonize manifest handling, worker spawning, finalization, or clos
 - Do NOT hand-edit `.aether/data/`, `COLONY_STATE.json`, `session.json`, or pheromone files.
 - Do NOT copy command wrappers into target repos; Aether commands are published globally.
 - Do NOT invent worker names, castes, task IDs, or outputs; use `colonize_manifest`.
+- Do NOT describe platform surveyors as background agents or replace the live worker stack with a markdown table.
 - If docs and runtime disagree, runtime wins.

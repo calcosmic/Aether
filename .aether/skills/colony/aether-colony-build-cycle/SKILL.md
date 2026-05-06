@@ -40,6 +40,14 @@ If the user explicitly says raw, exact, no orchestration, or "just run this
 exact command", run the literal CLI command they provided. Say briefly that the
 Codex orchestration layer was bypassed.
 
+## Live Worker Ceremony
+
+For wrapper-orchestrated worker flows, the visible live agent stack is part of
+the user experience. Spawn same-wave workers as visible Task/subagent panels
+with caste-labelled descriptions. Do not use background-only dispatch as the
+ceremony, do not say you will be notified later, and do not replace the live
+stack with a markdown worker table.
+
 ## Plan Flow
 
 1. Select planning depth and decomposition depth unless arguments already make
@@ -55,7 +63,8 @@ AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-dept
    visual output as state.
 5. If runtime reports unresolved clarifications, route to `aether discuss`
    unless the user explicitly approves continuing with assumptions.
-6. Spawn the runtime-specified Scout and Route-Setter workers using manifest
+6. Spawn the runtime-specified Scout and Route-Setter workers using visible
+   live Task/subagent panels with caste-labelled descriptions, manifest
    names, castes, task IDs, briefs, and `skill_section` values.
 7. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
    loop guard, output contract, and stop condition. If a planning worker keeps
@@ -86,11 +95,20 @@ AETHER_OUTPUT_MODE=json aether build <phase> --plan-only
 ```
 
 4. Parse `result.dispatch_manifest`.
-5. Follow the installed build-wave playbook. Use runtime-provided agent names,
+5. Render the user-facing spawn ceremony:
+
+```bash
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build <phase> --plan-only
+```
+
+6. Follow the installed build-wave playbook. Use runtime-provided agent names,
    castes, task IDs, briefs, and skill sections.
-6. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+7. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
+   descriptions. Do not use background-only dispatch as the ceremony, and do not
+   replace the live stack with a markdown worker table.
+8. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-7. Finalize through:
+9. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>
@@ -112,8 +130,9 @@ AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth s
 
 Use external review orchestration only when the user explicitly requested heavy
 review or the runtime asks for wrapper-spawned review workers. In that case,
-request the runtime manifest, spawn only the planned reviewers, collect results,
-finalize through `aether continue-finalize`, then render:
+request the runtime manifest, spawn only the planned reviewers as visible live
+Task/subagent panels with caste-labelled descriptions, collect results, finalize
+through `aether continue-finalize`, then render:
 
 ```bash
 AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <worker completion JSON>
@@ -138,9 +157,11 @@ AETHER_OUTPUT_MODE=json aether swarm --plan-only <problem>
    then watcher.
 3. Use runtime-provided names, castes, roles, task IDs, briefs, and response
    contracts.
-4. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+4. Spawn each same-wave group as visible live Task/subagent panels with
+   caste-labelled descriptions.
+5. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-5. Finalize through:
+6. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completion JSON>
@@ -165,21 +186,23 @@ AETHER_OUTPUT_MODE=json aether seal --plan-only <args>
 4. Parse `result.seal_manifest` and dispatch the Gatekeeper, Auditor, and Probe
    final-review workers through the host platform.
 5. Use runtime-provided names, castes, task IDs, briefs, and skill sections.
-6. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+6. Spawn final-review workers as visible live Task/subagent panels with
+   caste-labelled descriptions.
+7. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-7. Finalize through:
+8. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <worker completion JSON>
 ```
 
-8. Render the wrapper closeout:
+9. Render the wrapper closeout:
 
 ```bash
 AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <worker completion JSON>
 ```
 
-9. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
+10. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
    Do not run delivery commands unless the user chooses them.
 
 ## Guardrails

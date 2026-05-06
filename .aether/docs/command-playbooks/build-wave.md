@@ -78,6 +78,24 @@ Total: {N} Builders + 1 Watcher{if colony_depth == "full": " + 1 Chaos"}{if colo
 **Add to Caste Emoji Legend:**
 - 🔌🐜 Ambassador (blue if color enabled) — external integration specialist
 
+### Live Platform Stack Contract
+
+The live platform worker stack is part of the visual ceremony. Do not collapse a
+parallel wave into a plain markdown table or a background-only manager entry.
+
+- In Claude Code, issue every parallel worker as a Task tool call in the same
+  assistant message. In OpenCode, use the equivalent visible agent-spawn
+  mechanism for the platform.
+- Do not set `run_in_background` for build-wave workers.
+- Do not say "background agents launched" or "I'll be notified later" as the
+  primary ceremony. Stay in the build turn and wait for terminal worker results.
+- Every Task `description` must begin with the caste emoji and caste label:
+  `🔨 Builder {name}: {task}`, `🔍 Scout {name}: {task}`,
+  `👁️ Watcher {name}: {task}`, `🔮 Oracle {name}: {task}`,
+  `🏛️ Architect {name}: {task}`, or `🔌 Ambassador {name}: {task}`.
+- Use the manifest-provided `agent_name` as `subagent_type` so platform
+  agent color/icon metadata is preserved.
+
 ### Step 5.0.1: Oracle Research Step (Non-Blocking)
 
 **DEPTH CHECK: Skip if colony depth is "light" or "standard".**
@@ -314,7 +332,7 @@ Store `worktree_allocations` for use in builder prompts (Task 5.2 handles the ac
 
 ### Step 5.1: Spawn Wave 1 Workers (Parallel)
 
-**CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple Task tool calls.**
+**CRITICAL: Spawn ALL Wave 1 workers in a SINGLE message using multiple visible Task tool calls.**
 
 **Announce the wave before spawning:**
 
@@ -503,7 +521,7 @@ If `count == 0`, set `midden_context` to empty.
 
 > **Platform note**: In Claude Code, use `Task tool with subagent_type`. In OpenCode, use the equivalent agent spawning mechanism for your platform (e.g., invoke the agent definition from `.opencode/agents/`).
 
-For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` (DO NOT use run_in_background - multiple Task calls in a single message run in parallel and block until complete):
+For each Wave 1 task, use Task tool with `subagent_type="aether-builder"`, include `description: "🔨 Builder {Ant-Name}: {task_description}"` exactly (DO NOT use `run_in_background` - multiple visible Task calls in a single message run in parallel and block until terminal results return):
 
 **PER WORKER:** Build graveyard caution context automatically:
 - Identify explicit repo file paths from the task metadata (`files`, `hints`, `constraints`, and description when a concrete path is present).

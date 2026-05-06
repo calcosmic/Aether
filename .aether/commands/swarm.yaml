@@ -17,11 +17,13 @@ wrapper_additions:
     Restore host-visible bug-destroyer orchestration:
     1. Run `AETHER_OUTPUT_MODE=json aether swarm --plan-only $ARGUMENTS`.
     2. Parse `result.swarm_manifest`; do not parse visual output.
-    3. For each manifest dispatch, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject the dispatch `brief`, `response_contract`, active signals, and exact task metadata, then call `aether spawn-complete`.
-    4. Preserve the runtime wave order: investigation workers in wave 1 may run together, builder wave 2 waits for wave 1 summaries, watcher wave 3 waits for builder completion.
-    5. Collect terminal worker results into a completion JSON file containing the original `swarm_manifest` and a `dispatches` array.
-    6. Run `AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <file>` to let the runtime write swarm artifacts, spawn-tree status, and the final result.
-    7. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout swarm --completion-file <file>` for the user-facing ceremony.
+    3. Use visible live Task/subagent panels as the swarm ceremony. Do not set `run_in_background`, do not describe swarm workers as background agents, and do not replace the live stack with a markdown worker table.
+    4. For each manifest dispatch, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject the dispatch `brief`, `response_contract`, active signals, and exact task metadata, then call `aether spawn-complete`.
+    5. Each spawned worker description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+    6. Preserve the runtime wave order: investigation workers in wave 1 may run together, builder wave 2 waits for wave 1 summaries, watcher wave 3 waits for builder completion.
+    7. Collect terminal worker results into a completion JSON file containing the original `swarm_manifest` and a `dispatches` array.
+    8. Run `AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <file>` to let the runtime write swarm artifacts, spawn-tree status, and the final result.
+    9. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout swarm --completion-file <file>` for the user-facing ceremony.
   post_swarm: |
     Close from `swarm-finalize` output only:
     1. Run the visual closeout command first; use its next-step line as the source of truth.
@@ -33,4 +35,5 @@ guardrails:
   - "Do not copy command wrappers into target repos; commands are published globally through the platform homes."
   - "Do NOT parse visual output as authoritative state."
   - "Do NOT run `aether swarm` without `--plan-only` from Claude/OpenCode bug-destroyer orchestration unless the user explicitly asks for raw/no-orchestration."
+  - "Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table."
   - "If docs and runtime disagree, runtime wins."
