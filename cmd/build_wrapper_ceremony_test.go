@@ -32,8 +32,17 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"Asking the runtime for the dispatch manifest...",
 		"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
 		"result.dispatch_manifest",
+		"## Runtime Spawn Ceremony",
+		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS --plan-only",
+		"caste-colored spawn plan",
 		"## Playbook Procedure",
 		"~/.aether/system/docs/command-playbooks/build-wave.md",
+		"## Live Worker Ceremony",
+		"visible live Task/subagent stack",
+		"Do not set `run_in_background`",
+		"Do not describe the wave as `background agents launched`",
+		"Do not replace the live stack with a markdown worker table",
+		"Each worker description parameter must be exactly caste-labelled",
 		"## Wave Execution",
 		"dispatch_manifest.execution_plan",
 		"execution_wave",
@@ -55,7 +64,10 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"## Phase Framing",
 		"## Dispatch Manifest",
 		"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
+		"## Runtime Spawn Ceremony",
+		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS --plan-only",
 		"## Playbook Procedure",
+		"## Live Worker Ceremony",
 		"## Wave Execution",
 		"dispatch_manifest.execution_plan",
 		"## Completion Packet",
@@ -79,7 +91,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		assertSubstringsInOrder(t, wrapperPath, text, inOrder)
 		for _, forbidden := range []string{
 			"Do NOT load playbooks",
-			"AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS",
+			"\nAETHER_OUTPUT_MODE=visual aether build $ARGUMENTS\n",
 		} {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s still contains old pass-through contract %q", wrapperPath, forbidden)

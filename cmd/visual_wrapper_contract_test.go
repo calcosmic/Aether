@@ -32,6 +32,36 @@ func TestLifecycleWrappersHaveVisualCloseoutAfterJSONFinalizer(t *testing.T) {
 	}
 }
 
+func TestWrapperOrchestratedCommandsPreserveLiveWorkerCeremony(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	commands := []string{"build", "plan", "colonize", "continue", "seal", "swarm"}
+	for _, platformDir := range []string{".claude/commands/ant", ".opencode/commands/ant"} {
+		for _, command := range commands {
+			wrapperPath := filepath.Join(repoRoot, platformDir, command+".md")
+			content, err := os.ReadFile(wrapperPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", wrapperPath, err)
+			}
+			text := string(content)
+			for _, want := range []string{
+				"visible live Task/subagent",
+				"caste-labelled",
+				"Do not set `run_in_background`",
+				"background agents",
+				"markdown worker table",
+			} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing live worker ceremony contract %q", wrapperPath, want)
+				}
+			}
+		}
+	}
+}
+
 func TestRuntimeOwnedWrappersDelegateVisually(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {

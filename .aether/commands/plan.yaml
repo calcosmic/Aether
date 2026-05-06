@@ -29,14 +29,16 @@ wrapper_additions:
     3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
     4. If the runtime reports `dispatch_mode: agent-delegate`, treat it as the same host-dispatch contract: do not run nested subprocess planning; dispatch the manifest workers through the current host platform and finish with `plan-finalize`.
     5. If the result reports `unresolved_clarifications` or `clarification_warning`, pause before spawning workers and route first to `/ant-discuss`; proceed with implicit assumptions only if the user explicitly chooses to continue.
-    6. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `agent_name`, and each dispatch's runtime-provided `skill_section` when present.
-    7. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
-    8. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
-    9. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
-    10. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
-    11. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
-    12. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
-    13. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <file>` for the user-facing ceremony.
+    6. Use visible live Task/subagent panels as the worker ceremony. Do not set `run_in_background`, do not describe workers as background agents, and do not replace the live stack with a markdown worker table.
+    7. Spawn Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `agent_name`, and each dispatch's runtime-provided `skill_section` when present.
+    8. Each spawned worker description must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+    9. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
+    10. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
+    11. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
+    12. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
+    13. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
+    14. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
+    15. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <file>` for the user-facing ceremony.
   post_plan: |
     Close from the `plan-finalize` result only:
     1. Run the visual closeout command first; use its next-step line as the source of truth.
@@ -49,4 +51,5 @@ guardrails:
   - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."
   - "Do NOT parse visual output as authoritative state."
   - "Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`."
+  - "Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table."
   - "If docs and runtime disagree, runtime wins."

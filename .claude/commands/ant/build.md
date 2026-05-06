@@ -48,9 +48,30 @@ AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only
 
 Parse `result.dispatch_manifest`. This manifest is the only source for worker names, castes, execution waves, task waves, task IDs, playbooks, selected tasks, and success criteria. Do not parse visual output.
 
+## Runtime Spawn Ceremony
+
+Immediately after parsing the JSON manifest, render the runtime-owned spawn ceremony for the user:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS --plan-only
+```
+
+This visual output is for the user only. Do not parse it as state. It should show the caste-colored spawn plan before live workers appear.
+
 ## Playbook Procedure
 
 Load the build-wave playbook from the installed hub (`~/.aether/system/docs/command-playbooks/build-wave.md`, or the matching dev hub when using `aether-dev`) and use it as the spawning procedure. The runtime owns the dispatch manifest; the playbook owns the wrapper ceremony and prompt structure.
+
+## Live Worker Ceremony
+
+The visible live Task/subagent stack is part of the Aether ceremony.
+
+- Issue all parallel-wave Task calls in one assistant message so the platform shows workers stacked together.
+- Do not set `run_in_background`.
+- Do not describe the wave as `background agents launched` or say you will be notified later.
+- Do not replace the live stack with a markdown worker table. The runtime spawn ceremony plus live Task panels are the display.
+- Each worker description parameter must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+- Preserve platform agent caste color/icon metadata by using the manifest `agent_name` as `subagent_type`.
 
 ## Wave Execution
 
@@ -59,7 +80,7 @@ For each step in `dispatch_manifest.execution_plan`, execute the matching `dispa
 1. Before spawning, run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
-3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
+3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the phase objective, task metadata, dependencies, success criteria, active signals, the dispatch `skill_section` when present, relevant playbook instructions, and any specialist findings already collected.
 5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `tool_count`, `blockers`, and `duration`.
 6. After each worker returns, run:
@@ -138,6 +159,7 @@ flow.
 
 - Do NOT run `aether build` without `--plan-only` from this wrapper.
 - Do NOT run `aether build --synthetic` after real agent workers complete.
+- Do NOT describe parallel workers as background agents or say you will be notified later; keep the live worker stack visible until terminal results return.
 - Do NOT read or write colony state files by hand.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, or pheromone files.
 - Do NOT parse visual output as authoritative state.

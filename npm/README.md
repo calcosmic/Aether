@@ -63,7 +63,7 @@ npx --yes aether-colony@latest -- init "Build feature X"
 - `aether-colony` is the bootstrap and discovery path.
 - The real runtime is the Go `aether` binary.
 - After the first install, users should normally run `aether ...` directly.
-- `aether-colony@1.0.29` is expected to bootstrap Aether `1.0.29`.
+- `aether-colony@1.0.30` is expected to bootstrap Aether `1.0.30`.
 
 ## Source and docs
 

@@ -54,11 +54,12 @@ Only use this path when the user explicitly requests `--verification-depth heavy
 1. Run:
    `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS`
 2. Parse `result.continue_manifest`; do not parse visual output.
-3. For each dispatch in `continue_manifest.dispatches`, run `AETHER_OUTPUT_MODE=json aether spawn-log`, spawn the matching platform agent using `subagent_type="{agent_name}"` or equivalent, then run `AETHER_OUTPUT_MODE=json aether spawn-complete`.
-4. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.
-5. Finalize with:
+3. Use visible live Task/subagent panels with caste-labelled descriptions as the heavy-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
+4. For each dispatch in `continue_manifest.dispatches`, run `AETHER_OUTPUT_MODE=json aether spawn-log`, spawn the matching platform agent using `subagent_type="{agent_name}"` or equivalent with description `{caste emoji} {Caste} {name}: {task}`, then run `AETHER_OUTPUT_MODE=json aether spawn-complete`.
+5. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.
+6. Finalize with:
    `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <completion_file>`
-6. Render the user-facing closeout:
+7. Render the user-facing closeout:
    `AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <completion_file>`
 
 ## Learning Extraction
@@ -111,5 +112,6 @@ Codex flow.
 - Do NOT read or write colony state files by hand.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, `HANDOFF.md`, or pheromone files.
 - Do NOT invent worker names, castes, or waves; use `continue_manifest` only in the explicit heavy external review path.
+- Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
 - Do NOT add extra option menus or manual state surgery unless the runtime explicitly asks.
 - If docs and runtime disagree, runtime wins.

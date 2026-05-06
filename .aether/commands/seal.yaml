@@ -15,13 +15,16 @@ wrapper_contract:
     1. Run `AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS`.
     2. If the runtime returns blockers, surface them and stop.
     3. Parse `result.seal_manifest` and dispatch the listed final-review workers through the host platform.
-    4. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
-    5. Write a completion packet containing `seal_manifest` plus terminal worker `dispatches`.
-    6. Run `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`.
-    7. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <file>` for the user-facing ceremony.
-    8. Follow the runtime's Porter readiness output from visual mode; do not deliver unless the user selects delivery actions.
+    4. Use visible live Task/subagent panels as the final-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
+    5. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
+    6. Each spawned reviewer description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+    7. Write a completion packet containing `seal_manifest` plus terminal worker `dispatches`.
+    8. Run `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`.
+    9. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <file>` for the user-facing ceremony.
+    10. Follow the runtime's Porter readiness output from visual mode; do not deliver unless the user selects delivery actions.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "Do not run `aether seal` without `--plan-only` from Claude/OpenCode orchestration unless the user explicitly asks for raw/no-orchestration."
   - "Do not run Porter delivery commands unless the user explicitly chooses them after seal-finalize."
+  - "Do not describe platform reviewers as background agents or replace the live worker stack with a markdown table."
   - "If docs and runtime disagree, runtime wins."

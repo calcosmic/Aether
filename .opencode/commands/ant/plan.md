@@ -64,6 +64,17 @@ Before spawning planning workers, inspect the runtime result for `unresolved_cla
 - Proceed with implicit assumptions only if the user explicitly chooses to continue despite the warning.
 - If the user proceeds, carry that choice into the Scout and Route-Setter prompts as a known planning constraint.
 
+## Live Worker Ceremony
+
+The visible live Task/subagent stack is part of the Aether ceremony.
+
+- Issue parallel planning workers as visible Task/subagent calls, not background-only dispatches.
+- Do not set `run_in_background`.
+- Do not describe workers as `background agents` or say you will be notified later.
+- Do not replace the live stack with a markdown worker table.
+- Each worker description parameter must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+- Preserve platform agent caste color/icon metadata by using the manifest `agent_name` as `subagent_type`.
+
 ## Wave Execution
 
 For each dispatch in the manifest, execute the planned workers by wave:
@@ -71,7 +82,7 @@ For each dispatch in the manifest, execute the planned workers by wave:
 1. Before spawning, run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
-3. Use a concise agent description: `{caste emoji} {Caste} {name}: {task}`.
+3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
 4. Inject the selected depth, planning depth selection, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
 5. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
 6. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
@@ -204,5 +215,6 @@ the matching Codex flow.
 - Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand.
 - Do NOT parse visual output as authoritative state.
 - Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`.
+- Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table.
 - Do NOT write `.aether/data/planning` as the authority path; pass results to `plan-finalize`.
 - If docs and runtime disagree, runtime wins.
