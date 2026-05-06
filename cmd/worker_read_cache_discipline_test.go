@@ -10,7 +10,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-func TestBuilderAgentsIncludeReadCacheDiscipline(t *testing.T) {
+func TestBuilderAndWatcherAgentsIncludeReadCacheDiscipline(t *testing.T) {
 	repoRoot, err := findRepoRoot()
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)
@@ -18,11 +18,44 @@ func TestBuilderAgentsIncludeReadCacheDiscipline(t *testing.T) {
 
 	for _, rel := range []string{
 		".claude/agents/ant/aether-builder.md",
+		".claude/agents/ant/aether-watcher.md",
 		".opencode/agents/aether-builder.md",
+		".opencode/agents/aether-watcher.md",
 		".codex/agents/aether-builder.toml",
+		".codex/agents/aether-watcher.toml",
 		".aether/codex/aether-builder.toml",
+		".aether/codex/aether-watcher.toml",
 	} {
 		assertReadCacheDiscipline(t, filepath.Join(repoRoot, filepath.FromSlash(rel)), rel)
+	}
+}
+
+func TestWatcherFreshEvidencePreservesReadCacheDiscipline(t *testing.T) {
+	repoRoot, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	for _, rel := range []string{
+		".claude/agents/ant/aether-watcher.md",
+		".opencode/agents/aether-watcher.md",
+		".codex/agents/aether-watcher.toml",
+		".aether/codex/aether-watcher.toml",
+	} {
+		content, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		text := string(content)
+		for _, want := range []string{
+			"Fresh evidence means fresh command output",
+			"It does not mean re-reading unchanged files",
+			"Do not re-read the same unchanged file for confidence",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing watcher fresh-evidence/read-cache marker %q", rel, want)
+			}
+		}
 	}
 }
 

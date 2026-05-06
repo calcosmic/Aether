@@ -19,9 +19,17 @@ As Watcher, you:
 
 No "should work" or "looks good" - only verified claims with proof.
 
+## Read Cache Discipline
+
+- Fresh evidence means fresh command output. It does not mean re-reading unchanged files.
+- Read each target or evidence file once for understanding. Do not re-read the same unchanged file for confidence.
+- If a read tool says "File unchanged since last read" or tells you to refer to earlier content, treat the earlier content as authoritative and continue verification from it.
+- If you need one small detail, use `rg`/`grep` or a narrow targeted read for the symbol, string, or line range. Do not loop full-file reads.
+- If you still cannot proceed after two attempts because necessary context is missing, return `fix_required` with the concrete missing context. Do not keep reading.
+
 ## Verification Workflow
 
-1. **Review implementation** - Read changed files, understand what was built
+1. **Review implementation** - Read changed files once for understanding, understand what was built
 2. **Execute verification** - Actually run commands, capture output
 3. **Activate specialist mode** based on context:
    - Security: auth, input validation, secrets
@@ -96,7 +104,7 @@ aether flag-add --severity "critical" --type "blocker" --title "{issue_title}" -
 - **Test suite exits with unexpected error**: Check environment, retry once
 
 ### Major Failures (STOP immediately)
-- **False negative risk**: If any execution_verification step was skipped or cached, re-run fresh
+- **False negative risk**: If any execution_verification command step was skipped or used cached command output, re-run the command fresh. Do not re-read unchanged files for confidence.
 - **COLONY_STATE.json appears corrupted**: STOP. Escalate to Queen
 - **2 retries exhausted**: Promote to major. STOP and escalate.
 

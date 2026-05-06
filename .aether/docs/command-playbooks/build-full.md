@@ -1062,10 +1062,16 @@ Files to verify:
 Use colony-flavored language, 4-8 words, trailing ellipsis.
 
 Verification:
-1. Check files exist (Read each)
+1. Check files exist (Read each once)
 2. Run build/type-check
 3. Run tests if they exist
 4. Check success criteria: {list}
+
+Read Cache Discipline:
+- Fresh evidence means fresh command output. It does not mean re-reading unchanged files.
+- If the Read tool says "File unchanged since last read" or tells you to refer to earlier content, treat the earlier content as authoritative and continue verification from it.
+- Use Grep or a narrow targeted read for one small detail. Do not loop full-file reads.
+- If necessary context is still missing after two attempts, return `recommendation: "fix_required"` with the missing context in `issues_found`.
 
 Spawn sub-workers if needed:
 - Log spawn using Bash tool with description
