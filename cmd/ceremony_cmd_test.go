@@ -154,6 +154,75 @@ func TestCeremonyCloseoutRendersOldStyleSummary(t *testing.T) {
 	}
 }
 
+func TestCeremonyPlanCloseoutRendersPhaseDetails(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Improve RytmBox UI"
+	confidence := 0.86
+	taskID := "1.1"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Milestone:    "Open Chambers",
+		Plan: colony.Plan{
+			Confidence: &confidence,
+			Phases: []colony.Phase{
+				{
+					ID:          1,
+					Name:        "Mixer layout overhaul",
+					Description: "Make the mixer fill the panel with usable controls.",
+					Tasks: []colony.Task{
+						{ID: &taskID, Goal: "Remove padding and scrollbars so the mixer fills the whole panel"},
+						{Goal: "Widen faders with bigger, grabbable thumbs", Hints: []string{"Use recessed tracks with raised thumbs"}},
+					},
+				},
+				{
+					ID:          2,
+					Name:        "Automation lane clarity",
+					Description: "Make parameter automation readable for humans.",
+					Tasks: []colony.Task{
+						{Goal: "Rename P-LOCK and add tooltips for cryptic labels"},
+					},
+				},
+			},
+		},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"plan_manifest": map[string]interface{}{"goal": goal},
+		"dispatches": []map[string]interface{}{
+			{"name": "Track-80", "caste": "scout", "status": "completed", "summary": "Mapped UI gaps"},
+			{"name": "Route-12", "caste": "route_setter", "status": "completed", "summary": "Produced focused phases"},
+		},
+	})
+
+	_, visual := renderCeremonyCloseout("plan", completionFile)
+	for _, want := range []string{
+		"P L A N   S U M M A R Y",
+		"Planned Phases (2)",
+		"Plan shape: 2 phases, 3 tasks",
+		"Confidence: 86%",
+		"Phase 1: Mixer layout overhaul",
+		"Purpose: Make the mixer fill the panel with usable controls.",
+		"1.1: Remove padding and scrollbars so the mixer fills the whole panel",
+		"Hint: Use recessed tracks with raised thumbs",
+		"Phase 2: Automation lane clarity",
+		"Rename P-LOCK and add tooltips for cryptic labels",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("plan closeout missing %q\n%s", want, visual)
+		}
+	}
+}
+
 func ceremonyTestManifest() map[string]interface{} {
 	return map[string]interface{}{
 		"phase":      2,

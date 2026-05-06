@@ -173,6 +173,10 @@ func closeoutCompletionDetails(path string) map[string]interface{} {
 	details["completion_blocked"] = blocked
 	details["completion_blockers"] = uniqueSortedStrings(blockers)
 	details["completion_artifacts"] = uniqueSortedStrings(artifacts)
+	if phases := ceremonyPhaseSummariesFromCompletion(raw); len(phases) > 0 {
+		details["completion_phases"] = phases
+		details["completion_phase_count"] = len(phases)
+	}
 	return details
 }
 
