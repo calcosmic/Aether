@@ -267,6 +267,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build <phase> --plan-only` for the caste-colored spawn ceremony.",
 			"Follow the installed build-wave playbook and use runtime-provided agent names, castes, task IDs, briefs, and skill_section values.",
 			"Spawn parallel waves as visible live Task/subagent panels with caste-labelled descriptions; do not use background-only dispatch as the ceremony.",
+			"Pass worker briefs verbatim and enforce read cache discipline: if a worker keeps re-reading the same unchanged file, mark it blocked with the missing context instead of waiting for another loop.",
 			"Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>",
@@ -289,6 +290,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and frame continue as verification, not another build pass.",
 			"Use the default runtime path unless the user requested `--verification-depth heavy` or runtime asks for wrapper-spawned review workers.",
 			"For heavy external review, spawn reviewers as visible live Task/subagent panels with caste-labelled descriptions; do not use background-only dispatch as the ceremony.",
+			"Pass reviewer briefs verbatim and enforce read cache discipline: if a reviewer keeps re-reading the same unchanged file or artifact, mark it blocked with the missing context.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 		PostSteps: []string{

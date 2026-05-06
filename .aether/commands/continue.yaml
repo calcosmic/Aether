@@ -23,11 +23,12 @@ wrapper_additions:
     1. Only when the user explicitly requested `--verification-depth heavy` or `--heavy`, or the runtime specifically asks for wrapper-spawned review workers, run `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS`.
     2. Parse `result.continue_manifest`; do not parse visual output.
     3. Use visible live Task/subagent panels as the heavy-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
-    4. For each planned dispatch, call `aether spawn-log`, spawn the matching platform agent using `agent_name`, then call `aether spawn-complete`.
-    5. Each spawned reviewer description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
-    6. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
-    7. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`.
-    8. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <file>` for the user-facing ceremony.
+    4. Pass each dispatch's runtime-provided `brief` verbatim. The brief includes read cache discipline; if a reviewer keeps re-reading the same unchanged file or artifact, stop waiting and mark that reviewer `blocked` with the concrete missing context.
+    5. For each planned dispatch, call `aether spawn-log`, spawn the matching platform agent using `agent_name`, then call `aether spawn-complete`.
+    6. Each spawned reviewer description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+    7. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
+    8. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`.
+    9. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <file>` for the user-facing ceremony.
   post_continue: |
     Close from runtime output only:
     1. For the heavy external review path, run the visual closeout command first and use its next-step line as the source of truth.
@@ -52,6 +53,7 @@ guardrails:
   - "Do NOT parse visual output as authoritative state."
   - "Do NOT invent worker names, castes, or waves; use `continue_manifest`."
   - "Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table."
+  - "Do NOT let reviewers loop on unchanged file reads; pass their brief verbatim and mark stuck reviewers blocked with the missing context."
   - "Do NOT add extra option menus or manual state surgery unless the runtime explicitly asks."
   - "If docs and runtime disagree, runtime wins."
 follow_up:

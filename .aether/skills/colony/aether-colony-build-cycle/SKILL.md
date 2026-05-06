@@ -106,9 +106,12 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build <phase> --plan-only
 7. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
    descriptions. Do not use background-only dispatch as the ceremony, and do not
    replace the live stack with a markdown worker table.
-8. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+8. Enforce read cache discipline for every worker: pass runtime briefs verbatim,
+   treat "File unchanged since last read" as an instruction to use earlier content,
+   and mark workers `blocked` if they keep re-reading the same unchanged file.
+9. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-9. Finalize through:
+10. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>
@@ -132,7 +135,10 @@ Use external review orchestration only when the user explicitly requested heavy
 review or the runtime asks for wrapper-spawned review workers. In that case,
 request the runtime manifest, spawn only the planned reviewers as visible live
 Task/subagent panels with caste-labelled descriptions, collect results, finalize
-through `aether continue-finalize`, then render:
+through `aether continue-finalize`, then render. Pass each reviewer brief
+verbatim; it contains read cache discipline. If a reviewer keeps re-reading the
+same unchanged file or artifact, mark it `blocked` with the missing context
+instead of waiting through another loop.
 
 ```bash
 AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <worker completion JSON>

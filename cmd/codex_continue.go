@@ -1166,6 +1166,8 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	} else {
 		b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
 	}
+	b.WriteString(renderWorkerReadCacheDiscipline())
+	b.WriteString("\n")
 	b.WriteString("Evidence to inspect:\n")
 	if manifest.Present {
 		b.WriteString("- Build manifest: ")
@@ -1456,6 +1458,8 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 	b.WriteString("Confirm whether this phase is safe to advance right now.\n")
 	b.WriteString("This is a read-only verification pass. Do not modify repo files. Return status `completed` only if the current workspace and recorded artifacts justify advancement. Return status `blocked` if anything is missing, stale, or misleading.\n\n")
 	b.WriteString("The Fresh Evidence rule from your agent definition is SUSPENDED for this task — the verification commands below were executed by the runtime moments ago. Trust their output. Do NOT re-run the test suite or build commands.\n\n")
+	b.WriteString(renderWorkerReadCacheDiscipline())
+	b.WriteString("\n")
 	b.WriteString("Evidence to inspect:\n")
 	if manifest.Present {
 		b.WriteString("- Build manifest: ")

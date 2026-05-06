@@ -11,6 +11,15 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
+## Continue Worker Read Cache Discipline
+
+Every worker spawned by continue verification must receive this discipline in its task prompt:
+
+- Read each target or evidence file once for understanding. Do not re-read the same unchanged file for confidence.
+- If the Read tool says "File unchanged since last read" or tells you to refer to earlier content, treat the earlier content as authoritative and continue from it.
+- If one detail is missing, use Grep/rg or a narrow targeted read for the symbol or line range. Do not loop full-file reads.
+- If the context is still insufficient after two attempts, return `blocked` with the missing context. Do not keep reading.
+
 ### Step 1: Read State
 
 Read `.aether/data/COLONY_STATE.json`.
