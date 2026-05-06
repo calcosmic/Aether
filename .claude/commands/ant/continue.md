@@ -55,11 +55,12 @@ Only use this path when the user explicitly requests `--verification-depth heavy
    `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS`
 2. Parse `result.continue_manifest`; do not parse visual output.
 3. Use visible live Task/subagent panels with caste-labelled descriptions as the heavy-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
-4. For each dispatch in `continue_manifest.dispatches`, run `AETHER_OUTPUT_MODE=json aether spawn-log`, spawn the matching platform agent using `subagent_type="{agent_name}"` or equivalent with description `{caste emoji} {Caste} {name}: {task}`, then run `AETHER_OUTPUT_MODE=json aether spawn-complete`.
-5. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.
-6. Finalize with:
+4. Pass each dispatch's runtime-provided `brief` verbatim. The brief includes read cache discipline; if a reviewer keeps re-reading the same unchanged file or artifact, stop waiting and mark that reviewer `blocked` with the concrete missing context.
+5. For each dispatch in `continue_manifest.dispatches`, run `AETHER_OUTPUT_MODE=json aether spawn-log`, spawn the matching platform agent using `subagent_type="{agent_name}"` or equivalent with description `{caste emoji} {Caste} {name}: {task}`, then run `AETHER_OUTPUT_MODE=json aether spawn-complete`.
+6. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.
+7. Finalize with:
    `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <completion_file>`
-7. Render the user-facing closeout:
+8. Render the user-facing closeout:
    `AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <completion_file>`
 
 ## Learning Extraction
@@ -113,5 +114,6 @@ Codex flow.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, `HANDOFF.md`, or pheromone files.
 - Do NOT invent worker names, castes, or waves; use `continue_manifest` only in the explicit heavy external review path.
 - Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
+- Do NOT let reviewers loop on unchanged file reads; pass their brief verbatim and mark stuck reviewers blocked with the missing context.
 - Do NOT add extra option menus or manual state surgery unless the runtime explicitly asks.
 - If docs and runtime disagree, runtime wins.

@@ -1,5 +1,14 @@
 ### Step 5.3.5: Generate Compact Review Context for Review Cycles
 
+## Build Verification Read Cache Discipline
+
+Every worker spawned by build verification must receive this discipline in its task prompt:
+
+- Read each target or evidence file once for understanding. Do not re-read the same unchanged file for confidence.
+- If the Read tool says "File unchanged since last read" or tells you to refer to earlier content, treat the earlier content as authoritative and continue from it.
+- If one detail is missing, use Grep/rg or a narrow targeted read for the symbol or line range. Do not loop full-file reads.
+- If the context is still insufficient after two attempts, return `blocked` with the missing context. Do not keep reading.
+
 Before spawning review agents, generate compact colony context for CI/autopilot agent review cycles.
 
 Run using the Bash tool with description "Generating compact review context...":

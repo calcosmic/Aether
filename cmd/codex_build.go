@@ -1592,6 +1592,10 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	b.WriteString(strings.TrimSpace(dispatch.Task))
 	b.WriteString("\n")
 
+	b.WriteString("\n")
+	b.WriteString(renderWorkerReadCacheDiscipline())
+	b.WriteString("\n")
+
 	if strings.TrimSpace(phase.Description) != "" {
 		b.WriteString("\n## Phase Objective\n\n")
 		b.WriteString(strings.TrimSpace(phase.Description))

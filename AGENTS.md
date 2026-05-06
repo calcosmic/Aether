@@ -1,6 +1,6 @@
 # AGENTS.md -- Aether Development Guide (Codex CLI)
 
-> **Current Version:** v1.0.30
+> **Current Version:** v1.0.31
 > **Last Updated:** 2026-05-06
 > **Platform:** Codex CLI (OpenAI)
 
@@ -20,7 +20,7 @@ OpenCode, and Codex CLI.
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.30 |
+| Version | v1.0.31 |
 | Agent definitions | 25 (TOML in `.codex/agents/`) |
 | Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -915,4 +915,4 @@ data files clean, and test coverage comprehensive as features evolve.
 
 ---
 
-*Updated for Aether v1.0.30 -- 2026-05-06*
+*Updated for Aether v1.0.31 -- 2026-05-06*
