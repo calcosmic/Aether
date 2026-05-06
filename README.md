@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-25-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-50-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.31-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.32-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -121,7 +121,7 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.31` bootstraps Aether `1.0.31`.
+`aether-colony@1.0.32` bootstraps Aether `1.0.32`.
 
 **Option 1: Go binary**
 
@@ -1076,7 +1076,13 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.31 -- Released (Current)
+### 🎉 v1.0.32 -- Released (Current)
+
+- Watcher agents now have their own read-cache discipline, so their fresh-evidence rule requires fresh command output without repeatedly reading unchanged files.
+- Build verification prompts now tell Watchers to read target files once, treat "File unchanged since last read" as authoritative cached context, and return `fix_required` if context is genuinely missing.
+- Regression tests now cover Builder and Watcher read-loop guardrails across Claude, OpenCode, Codex, and Aether source surfaces.
+
+### 🎉 v1.0.31 -- Released
 
 - Worker read-loop guardrails now ship across Builder agents, build playbooks, continue review waves, and Codex runtime-generated briefs.
 - Workers are instructed to treat "File unchanged since last read" as a cache hit, continue from earlier content, and avoid confidence re-read loops.
