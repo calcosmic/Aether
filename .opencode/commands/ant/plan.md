@@ -174,13 +174,20 @@ AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <completion_file>
 
 The runtime writes canonical planning artifacts, updates `COLONY_STATE.json`, records spawn-tree statuses, updates session/CONTEXT/HANDOFF, and emits next-step truth.
 
+Render the user-facing closeout after the JSON finalizer succeeds:
+
+```
+AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <completion_file>
+```
+
 ## After Planning
 
 Branch strictly on the `plan-finalize` result:
 
-1. If planning succeeded, summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.
-2. Route first to `/ant-build 1` or the exact runtime-surfaced next build command.
-3. If planning blocked, translate the blocker into plain language and follow the runtime recovery command first.
+1. If planning succeeded, use the visual closeout's next-step line as the source of truth.
+2. Summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.
+3. Route first to `/ant-build 1` or the exact runtime-surfaced next build command.
+4. If planning blocked, translate the blocker into plain language and follow the runtime recovery command first.
 
 ## Cross-Platform Drift Guard
 

@@ -189,7 +189,8 @@ func checkHubCompanionSync(hubDir string) integrityCheck {
 }
 
 func renderPorterResult(cmd *cobra.Command, result integrityResult) error {
-	if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
+	jsonOut, _ := cmd.Flags().GetBool("json")
+	if jsonOut || !shouldRenderVisualOutput(stdout) {
 		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON: %w", err)

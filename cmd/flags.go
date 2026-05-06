@@ -30,13 +30,15 @@ var flagsCmd = &cobra.Command{
 		// Try both file names for compatibility
 		if err := store.LoadJSON("pending-decisions.json", &flags); err != nil {
 			if err2 := store.LoadJSON("flags.json", &flags); err2 != nil {
+				result := map[string]interface{}{
+					"flags": []colony.FlagEntry{},
+					"total": 0,
+				}
 				if flagListJSON {
-					outputOK(map[string]interface{}{
-						"flags": []colony.FlagEntry{},
-					})
+					outputOK(result)
 					return nil
 				}
-				fmt.Fprintln(stdout, "No flags found.")
+				outputWorkflow(result, renderFlagsVisual(result))
 				return nil
 			}
 		}
@@ -48,18 +50,12 @@ var flagsCmd = &cobra.Command{
 			if filtered == nil {
 				filtered = []colony.FlagEntry{}
 			}
-			outputOK(map[string]interface{}{
-				"flags": filtered,
-			})
+			outputOK(map[string]interface{}{"flags": filtered, "total": len(filtered)})
 			return nil
 		}
 
-		if len(filtered) == 0 {
-			fmt.Fprintln(stdout, "No flags found.")
-			return nil
-		}
-
-		renderFlagsTable(filtered)
+		result := map[string]interface{}{"flags": filtered, "total": len(filtered)}
+		outputWorkflow(result, renderFlagsVisual(result))
 		return nil
 	},
 }

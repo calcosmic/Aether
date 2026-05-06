@@ -64,12 +64,13 @@ var referenceIndexCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		refs, root := loadReferenceLibrary()
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"root":       root,
 			"total":      len(refs),
 			"categories": referenceCategoryCounts(refs),
 			"references": referenceSummaries(refs),
-		})
+		}
+		outputWorkflow(result, renderReferenceIndexVisual(result))
 		return nil
 	},
 }
@@ -81,11 +82,12 @@ var referenceListCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		refs, root := loadReferenceLibrary()
 		refs = filterReferences(refs, referenceListCategory, referenceListKind)
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"root":       root,
 			"total":      len(refs),
 			"references": referenceSummaries(refs),
-		})
+		}
+		outputWorkflow(result, renderReferenceListVisual(result))
 		return nil
 	},
 }
@@ -106,7 +108,7 @@ var referenceMatchCmd = &cobra.Command{
 			OutputType: referenceMatchOutput,
 			Limit:      referenceMatchLimit,
 		})
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"root":        root,
 			"total":       len(matches),
 			"role":        referenceMatchRole,
@@ -114,7 +116,8 @@ var referenceMatchCmd = &cobra.Command{
 			"workflow":    referenceMatchWorkflow,
 			"output_type": referenceMatchOutput,
 			"references":  referenceSummaries(matches),
-		})
+		}
+		outputWorkflow(result, renderReferenceMatchVisual(result))
 		return nil
 	},
 }

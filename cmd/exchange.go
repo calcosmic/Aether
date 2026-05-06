@@ -57,7 +57,8 @@ func runExportPheromones(cmd *cobra.Command, args []string) error {
 
 	var file colony.PheromoneFile
 	if err := store.LoadJSON("pheromones.json", &file); err != nil {
-		outputOK(map[string]interface{}{"xml": nil, "count": 0})
+		result := map[string]interface{}{"xml": nil, "count": 0}
+		outputWorkflow(result, renderExportSignalsVisual(result))
 		return nil
 	}
 
@@ -73,7 +74,8 @@ func runExportPheromones(cmd *cobra.Command, args []string) error {
 			outputErrorMessage(fmt.Sprintf("write file: %v", err))
 			return nil
 		}
-		outputOK(map[string]interface{}{"file": outputFile, "count": len(file.Signals)})
+		result := map[string]interface{}{"file": outputFile, "count": len(file.Signals)}
+		outputWorkflow(result, renderExportSignalsVisual(result))
 	} else {
 		fmt.Fprintf(stdout, "%s\n", string(data))
 	}
@@ -372,10 +374,23 @@ func runImportPheromones(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	signals, err := exchange.ImportPheromones(xmlData)
+	result, err := importPheromonesData(inputPath, xmlData, "")
 	if err != nil {
 		outputErrorMessage(fmt.Sprintf("import pheromones: %v", err))
 		return nil
+	}
+	outputWorkflow(result, renderImportSignalsVisual(result))
+	return nil
+}
+
+func importPheromonesData(inputPath string, xmlData []byte, sourcePrefix string) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no colony initialized")
+	}
+
+	signals, err := exchange.ImportPheromones(xmlData)
+	if err != nil {
+		return nil, err
 	}
 
 	sourcePath := filepath.ToSlash(strings.TrimSpace(inputPath))
@@ -437,6 +452,12 @@ func runImportPheromones(cmd *cobra.Command, args []string) error {
 			warnings = append(warnings, fmt.Sprintf("blocked suspicious imported signal %s from %s: %s", sig.ID, sourcePath, record.Findings[0].Message))
 			continue
 		}
+		if prefix := sanitizeImportedSignalPrefix(sourcePrefix); prefix != "" {
+			sig.ID = prefix + ":" + strings.TrimPrefix(sig.ID, prefix+":")
+			if strings.TrimSpace(sig.Source) == "" {
+				sig.Source = prefix
+			}
+		}
 		sig.Content = json.RawMessage(newContent)
 		sanitized = append(sanitized, sig)
 	}
@@ -450,19 +471,53 @@ func runImportPheromones(cmd *cobra.Command, args []string) error {
 	file.Signals = append(file.Signals, sanitized...)
 
 	if err := store.SaveJSON("pheromones.json", file); err != nil {
-		outputErrorMessage(fmt.Sprintf("save pheromones: %v", err))
-		return nil
+		return nil, fmt.Errorf("save pheromones: %w", err)
 	}
 
 	emitPromptIntegrityEvents("import.pheromones", integrity)
-	outputOK(map[string]interface{}{
+	result := map[string]interface{}{
 		"imported":  len(sanitized),
 		"total":     len(file.Signals),
 		"source":    inputPath,
 		"warnings":  warnings,
 		"integrity": integrity,
-	})
-	return nil
+	}
+	if prefix := sanitizeImportedSignalPrefix(sourcePrefix); prefix != "" {
+		result["source_colony"] = prefix
+		result["id_prefix"] = prefix + ":"
+	}
+	return result, nil
+}
+
+func sanitizeImportedSignalPrefix(prefix string) string {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer("/", "-", "\\", "-", " ", "-", ":", "-", "\t", "-", "\n", "-")
+	prefix = strings.ToLower(replacer.Replace(prefix))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range prefix {
+		ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_'
+		if !ok {
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+			continue
+		}
+		if r == '-' {
+			if lastDash {
+				continue
+			}
+			lastDash = true
+		} else {
+			lastDash = false
+		}
+		b.WriteRune(r)
+	}
+	return strings.Trim(b.String(), "-_")
 }
 
 var importWisdomCmd = &cobra.Command{

@@ -32,9 +32,9 @@ func TestChamberCompareWithRealData(t *testing.T) {
 		"total_phases":     3,
 	}
 	manifestData, marshalErr := json.MarshalIndent(manifest, "", "  ")
-		if marshalErr != nil {
-			t.Fatalf("failed to marshal manifest: %v", marshalErr)
-		}
+	if marshalErr != nil {
+		t.Fatalf("failed to marshal manifest: %v", marshalErr)
+	}
 	os.WriteFile(filepath.Join(chamberDir, "manifest.json"), manifestData, 0644)
 
 	// Create a colony state with matching goal but different phases_completed (2 vs 1)
@@ -176,9 +176,9 @@ func TestChamberCompareMatchingState(t *testing.T) {
 		"total_phases":     3,
 	}
 	manifestData, marshalErr := json.MarshalIndent(manifest, "", "  ")
-		if marshalErr != nil {
-			t.Fatalf("failed to marshal manifest: %v", marshalErr)
-		}
+	if marshalErr != nil {
+		t.Fatalf("failed to marshal manifest: %v", marshalErr)
+	}
 	os.WriteFile(filepath.Join(chamberDir, "manifest.json"), manifestData, 0644)
 
 	// Create a colony state with identical goal and phases_completed = 3, total_phases = 3
@@ -242,9 +242,9 @@ func TestChamberCompareNoColonyState(t *testing.T) {
 		"total_phases":     0,
 	}
 	manifestData, marshalErr := json.MarshalIndent(manifest, "", "  ")
-		if marshalErr != nil {
-			t.Fatalf("failed to marshal manifest: %v", marshalErr)
-		}
+	if marshalErr != nil {
+		t.Fatalf("failed to marshal manifest: %v", marshalErr)
+	}
 	os.WriteFile(filepath.Join(chamberDir, "manifest.json"), manifestData, 0644)
 
 	rootCmd.SetArgs([]string{"chamber-compare", "--name", "no-state-chamber"})
@@ -266,5 +266,115 @@ func TestChamberCompareNoColonyState(t *testing.T) {
 	errMsg, ok := result["error"].(string)
 	if !ok || !strings.Contains(errMsg, "colony state not available") {
 		t.Errorf("error = %v, want 'colony state not available'", result["error"])
+	}
+}
+
+func TestTunnelsCompareTwoChambers(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	store = s
+
+	for _, chamber := range []struct {
+		name      string
+		goal      string
+		milestone string
+		phases    int
+		entombed  string
+	}{
+		{name: "first", goal: "Initial release", milestone: "Sealed Chambers", phases: 2, entombed: "2026-05-01T00:00:00Z"},
+		{name: "second", goal: "Visual restoration", milestone: "Crowned Anthill", phases: 4, entombed: "2026-05-03T00:00:00Z"},
+	} {
+		chamberDir := filepath.Join(tmpDir, ".aether", "chambers", chamber.name)
+		if err := os.MkdirAll(chamberDir, 0755); err != nil {
+			t.Fatalf("mkdir chamber: %v", err)
+		}
+		manifest := map[string]interface{}{
+			"name":             chamber.name,
+			"goal":             chamber.goal,
+			"milestone":        chamber.milestone,
+			"phases_completed": chamber.phases,
+			"total_phases":     chamber.phases,
+			"entombed_at":      chamber.entombed,
+		}
+		data, err := json.Marshal(manifest)
+		if err != nil {
+			t.Fatalf("marshal manifest: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(chamberDir, "manifest.json"), data, 0644); err != nil {
+			t.Fatalf("write manifest: %v", err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"tunnels", "first", "second"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("tunnels returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["mode"] != "compare" {
+		t.Fatalf("mode = %v, want compare", result["mode"])
+	}
+	growth := result["growth"].(map[string]interface{})
+	if got := growth["phases_diff"]; got != float64(2) {
+		t.Fatalf("phases_diff = %v, want 2", got)
+	}
+}
+
+func TestTunnelsImportSignalsFromChamberArchive(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStoreWithRoot(t)
+	store = s
+
+	chamberDir := filepath.Join(tmpDir, ".aether", "chambers", "source-chamber")
+	if err := os.MkdirAll(chamberDir, 0755); err != nil {
+		t.Fatalf("mkdir chamber: %v", err)
+	}
+	manifest := []byte(`{"name":"source-chamber","goal":"source","milestone":"Crowned Anthill","phases_completed":1,"total_phases":1}`)
+	if err := os.WriteFile(filepath.Join(chamberDir, "manifest.json"), manifest, 0644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	archive := `<?xml version="1.0" encoding="UTF-8"?>
+<colony-archive xmlns="http://aether.colony/schemas/archive/1.0" colony_id="source-chamber" sealed_at="2026-05-01T00:00:00Z" version="1.0">
+  <pheromones xmlns="http://aether.colony/schemas/pheromones" version="1.0" generated_at="2026-05-01T00:00:00Z" count="1">
+    <signal id="sig-1" type="FOCUS" priority="normal" source="source" created_at="2026-05-01T00:00:00Z" active="true">
+      <content><text>Carry this signal forward</text></content>
+    </signal>
+  </pheromones>
+</colony-archive>`
+	if err := os.WriteFile(filepath.Join(chamberDir, "colony-archive.xml"), []byte(archive), 0644); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"tunnels", "source-chamber", "--import-signals"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("tunnels returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["mode"] != "import" {
+		t.Fatalf("mode = %v, want import", result["mode"])
+	}
+	if result["imported"] != float64(1) {
+		t.Fatalf("imported = %v, want 1", result["imported"])
+	}
+	var pheromones colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pheromones); err != nil {
+		t.Fatalf("load pheromones: %v", err)
+	}
+	if len(pheromones.Signals) != 1 {
+		t.Fatalf("signals = %d, want 1", len(pheromones.Signals))
+	}
+	if !strings.HasPrefix(pheromones.Signals[0].ID, "source-chamber:") {
+		t.Fatalf("signal id = %q, want chamber prefix", pheromones.Signals[0].ID)
 	}
 }

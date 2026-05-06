@@ -113,65 +113,91 @@ var casteLabelMap = map[string]string{
 }
 
 var commandEmojiMap = map[string]string{
-	"init":              "🥚",
-	"colonize":          "🗺️",
-	"plan":              "📋",
-	"build":             "🔨",
-	"continue":          "👁️",
-	"continue-blocked":  "⛔",
-	"seal":              "🏺",
-	"install":           "📦",
-	"lay-eggs":          "🥚",
-	"update":            "🔄",
-	"pause":             "💾",
-	"resume":            "💾",
-	"patrol":            "📊",
-	"phase":             "🧱",
-	"skip-phase":        "⏭️",
-	"history":           "📜",
-	"spawn-plan":        "🐜",
-	"swarm":             "🔥",
-	"run":               "⚡",
-	"oracle":            "🔮",
-	"status":            "📊",
-	"artifacts":         "🗂️",
-	"next-up":           "🐜",
-	"colonize-dispatch": "🗺️",
-	"plan-dispatch":     "📋",
-	"build-dispatch":    "🔨",
-	"entomb":            "⚰️",
-	"tunnels":           "🕳️",
-	"watch":             "👁️",
-	"pheromones":        "🎯",
-	"flags":             "🚩",
-	"focus":             "🔦",
-	"redirect":          "🚫",
-	"feedback":          "💬",
-	"dream":             "💭",
-	"chaos":             "🎲",
-	"archaeology":       "🏺",
-	"organize":          "🧹",
-	"council":           "📜",
-	"interpret":         "🔍",
-	"maturity":          "👑",
-	"memory-details":    "📜",
-	"verify-castes":     "✓",
-	"flag":              "🚩",
-	"help":              "🐜",
-	"preferences":       "🧠",
-	"profile":           "🧠",
-	"assumptions":       "📐",
-	"discuss":           "💬",
-	"migrate-state":     "🚚",
-	"bump-version":      "🚀",
-	"insert-phase":      "➕",
-	"quick":             "⚡",
-	"skill-create":      "🧪",
-	"data-clean":        "🧹",
-	"export-signals":    "📤",
-	"import-signals":    "📥",
-	"swarm-display":     "🔥",
-	"medic":             "🩹",
+	"init":                   "🥚",
+	"colonize":               "🗺️",
+	"plan":                   "📋",
+	"build":                  "🔨",
+	"continue":               "👁️",
+	"continue-blocked":       "⛔",
+	"seal":                   "🏺",
+	"install":                "📦",
+	"lay-eggs":               "🥚",
+	"update":                 "🔄",
+	"pause":                  "💾",
+	"resume":                 "💾",
+	"patrol":                 "📊",
+	"phase":                  "🧱",
+	"skip-phase":             "⏭️",
+	"history":                "📜",
+	"spawn-plan":             "🐜",
+	"swarm":                  "🔥",
+	"run":                    "⚡",
+	"oracle":                 "🔮",
+	"status":                 "📊",
+	"closeout":               "🏁",
+	"artifacts":              "🗂️",
+	"next-up":                "🐜",
+	"print-next-up":          "🐜",
+	"colonize-dispatch":      "🗺️",
+	"plan-dispatch":          "📋",
+	"build-dispatch":         "🔨",
+	"entomb":                 "⚰️",
+	"tunnels":                "🕳️",
+	"watch":                  "👁️",
+	"pheromones":             "🎯",
+	"flags":                  "🚩",
+	"focus":                  "🔦",
+	"redirect":               "🚫",
+	"feedback":               "💬",
+	"dream":                  "💭",
+	"chaos":                  "🎲",
+	"archaeology":            "🏺",
+	"organize":               "🧹",
+	"council":                "📜",
+	"interpret":              "🔍",
+	"maturity":               "👑",
+	"memory-details":         "📜",
+	"memory-metrics":         "📈",
+	"verify-castes":          "✓",
+	"versions":               "🏷️",
+	"flag":                   "🚩",
+	"help":                   "🐜",
+	"preferences":            "🧠",
+	"profile":                "🧠",
+	"assumptions":            "📐",
+	"discuss":                "💬",
+	"migrate-state":          "🚚",
+	"bump-version":           "🚀",
+	"insert-phase":           "➕",
+	"quick":                  "⚡",
+	"skill-create":           "🧪",
+	"data-clean":             "🧹",
+	"export-signals":         "📤",
+	"import-signals":         "📥",
+	"reference-index":        "📇",
+	"reference-list":         "📋",
+	"reference-match":        "🔍",
+	"shelf":                  "📚",
+	"shelf-list":             "📚",
+	"shelf-add":              "📝",
+	"shelf-promote":          "⬆️",
+	"shelf-dismiss":          "🗑️",
+	"queen-init":             "👑",
+	"queen-read":             "👑",
+	"queen-promote":          "👑",
+	"queen-thresholds":       "📊",
+	"queen-compose":          "📝",
+	"queen-migrate":          "🚚",
+	"queen-seed-from-hive":   "🍯",
+	"queen-promote-instinct": "🧠",
+	"queen-write-learnings":  "🧠",
+	"charter-write":          "📜",
+	"porter":                 "📦",
+	"source-check":           "🔎",
+	"proof":                  "🧾",
+	"recipes":                "🍳",
+	"swarm-display":          "🔥",
+	"medic":                  "🩹",
 }
 
 func commandEmoji(command string) string {
@@ -854,7 +880,7 @@ func renderPlanningWorkerResults(workers []codexPlanningDispatch) string {
 
 func dispatchStatusIcon(status string) string {
 	switch normalizeRuntimeDispatchStatus(status) {
-	case "completed", "manually-reconciled":
+	case "completed", "passed", "success", "manually-reconciled":
 		return "\u2713"
 	case "blocked":
 		return "!"
@@ -2389,6 +2415,687 @@ func writeHistoryEntry(b *strings.Builder, entry map[string]interface{}) {
 		b.WriteString(msg)
 		b.WriteString("\n")
 	}
+}
+
+func renderReferenceIndexVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("reference-index"), "Reference Index"))
+	b.WriteString(visualDivider)
+	b.WriteString(fmt.Sprintf("Library: %s\n", emptyFallback(stringValue(result["root"]), "not found")))
+	b.WriteString(fmt.Sprintf("References indexed: %d\n", intValue(result["total"])))
+	if categories := categoryCountsValue(result["categories"]); len(categories) > 0 {
+		b.WriteString("\nCategories\n")
+		for _, name := range sortedMapKeys(categories) {
+			b.WriteString(fmt.Sprintf("  - %s: %d\n", name, categories[name]))
+		}
+	}
+	b.WriteString(renderNextUp(
+		`Run `+"`aether reference-list`"+` to browse installed references.`,
+		`Run `+"`aether reference-match --task \"...\"`"+` to match references to work.`,
+	))
+	return b.String()
+}
+
+func renderReferenceListVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("reference-list"), "Reference Library"))
+	b.WriteString(visualDivider)
+	b.WriteString(fmt.Sprintf("Library: %s\n", emptyFallback(stringValue(result["root"]), "not found")))
+	refs := mapSliceValue(result["references"])
+	if len(refs) == 0 {
+		b.WriteString("No references matched the current filters.\n")
+	} else {
+		b.WriteString(fmt.Sprintf("References: %d\n\n", len(refs)))
+		writeReferenceSummaryLines(&b, refs)
+	}
+	b.WriteString(renderNextUp(
+		`Run ` + "`aether reference-match --task \"...\"`" + ` to select references for a worker task.`,
+	))
+	return b.String()
+}
+
+func renderReferenceMatchVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("reference-match"), "Reference Match"))
+	b.WriteString(visualDivider)
+	if task := strings.TrimSpace(stringValue(result["task"])); task != "" {
+		b.WriteString("Task: ")
+		b.WriteString(task)
+		b.WriteString("\n")
+	}
+	if role := strings.TrimSpace(stringValue(result["role"])); role != "" {
+		b.WriteString("Role: ")
+		b.WriteString(role)
+		b.WriteString("\n")
+	}
+	refs := mapSliceValue(result["references"])
+	if len(refs) == 0 {
+		b.WriteString("No matching references found.\n")
+	} else {
+		b.WriteString(fmt.Sprintf("\nMatches: %d\n", len(refs)))
+		writeReferenceSummaryLines(&b, refs)
+	}
+	b.WriteString(renderNextUp(
+		`Use the matched reference paths as worker context.`,
+		`Run `+"`aether reference-list`"+` to browse the full library.`,
+	))
+	return b.String()
+}
+
+func writeReferenceSummaryLines(b *strings.Builder, refs []map[string]interface{}) {
+	limit := len(refs)
+	if limit > 8 {
+		limit = 8
+	}
+	for i := 0; i < limit; i++ {
+		ref := refs[i]
+		title := emptyFallback(stringValue(ref["title"]), stringValue(ref["id"]))
+		path := strings.TrimSpace(stringValue(ref["path"]))
+		category := strings.TrimSpace(stringValue(ref["category"]))
+		score := intValue(ref["score"])
+		b.WriteString("  - ")
+		b.WriteString(title)
+		if category != "" {
+			b.WriteString(" [")
+			b.WriteString(category)
+			b.WriteString("]")
+		}
+		if score > 0 {
+			b.WriteString(fmt.Sprintf(" score=%d", score))
+		}
+		if path != "" {
+			b.WriteString("\n    ")
+			b.WriteString(path)
+		}
+		b.WriteString("\n")
+	}
+	if len(refs) > limit {
+		b.WriteString(fmt.Sprintf("  ... %d more\n", len(refs)-limit))
+	}
+}
+
+func renderFlagsVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("flags"), "Flags"))
+	b.WriteString(visualDivider)
+	entries := flagEntriesValue(result["flags"])
+	if len(entries) == 0 {
+		b.WriteString("No flags found.\n")
+	} else {
+		b.WriteString(fmt.Sprintf("Flags: %d\n\n", len(entries)))
+		for _, entry := range entries {
+			status := "active"
+			if entry.Resolved {
+				status = "resolved"
+			}
+			b.WriteString(fmt.Sprintf("  - %s [%s/%s] %s", emptyFallback(entry.ID, "(no id)"), entry.Type, status, emptyFallback(entry.Description, "(no description)")))
+			if entry.Phase != nil && *entry.Phase > 0 {
+				b.WriteString(fmt.Sprintf("  phase %d", *entry.Phase))
+			}
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString(renderNextUp(
+		`Run `+"`aether flag \"...\"`"+` to create a new flag.`,
+		`Run `+"`aether flag-resolve --id <id>`"+` after a blocker or issue is handled.`,
+	))
+	return b.String()
+}
+
+func renderFlagActionVisual(command, title string, result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji(command), title))
+	b.WriteString(visualDivider)
+	if flag, ok := result["flag"].(colony.FlagEntry); ok {
+		b.WriteString(fmt.Sprintf("ID: %s\n", flag.ID))
+		b.WriteString(fmt.Sprintf("Type: %s\n", flag.Type))
+		b.WriteString(fmt.Sprintf("Description: %s\n", emptyFallback(flag.Description, "(none)")))
+		if flag.Phase != nil && *flag.Phase > 0 {
+			b.WriteString(fmt.Sprintf("Phase: %d\n", *flag.Phase))
+		}
+	} else if id := strings.TrimSpace(stringValue(result["id"])); id != "" {
+		b.WriteString(fmt.Sprintf("ID: %s\n", id))
+	}
+	for _, key := range []string{"created", "resolved", "acknowledged", "max_days", "total"} {
+		if _, ok := result[key]; ok {
+			b.WriteString(fmt.Sprintf("%s: %s\n", humanizeKey(key), stringValue(result[key])))
+		}
+	}
+	if message := strings.TrimSpace(stringValue(result["message"])); message != "" {
+		b.WriteString("Message: ")
+		b.WriteString(message)
+		b.WriteString("\n")
+	}
+	b.WriteString(renderNextUp(`Run ` + "`aether flags`" + ` to inspect active flags.`))
+	return b.String()
+}
+
+func renderShelfListVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("shelf-list"), "Shelf"))
+	b.WriteString(visualDivider)
+	if status := strings.TrimSpace(stringValue(result["status"])); status != "" {
+		b.WriteString("Filter: ")
+		b.WriteString(status)
+		b.WriteString("\n")
+	}
+	entries := shelfEntriesValue(result["entries"])
+	if len(entries) == 0 {
+		b.WriteString("No shelf entries found.\n")
+	} else {
+		b.WriteString(fmt.Sprintf("Entries: %d\n\n", len(entries)))
+		for _, entry := range entries {
+			mark := "[ ]"
+			switch entry.Status {
+			case colony.ShelfPromoted:
+				mark = "[+]"
+			case colony.ShelfDismissed:
+				mark = "[-]"
+			}
+			b.WriteString(fmt.Sprintf("  %s %s", mark, emptyFallback(entry.Text, "(empty entry)")))
+			if entry.Category != "" {
+				b.WriteString(fmt.Sprintf("  %s", entry.Category))
+			}
+			if entry.ID != "" {
+				b.WriteString(fmt.Sprintf("  {%s}", entry.ID))
+			}
+			if entry.PromotedTo != "" {
+				b.WriteString(fmt.Sprintf("\n    promoted to: %s", entry.PromotedTo))
+			}
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString(renderNextUp(
+		`Run `+"`aether shelf-add --text \"...\"`"+` to capture a deferred signal.`,
+		`Run `+"`aether shelf-promote --id <id> --to <target>`"+` when an entry should become active work.`,
+	))
+	return b.String()
+}
+
+func renderShelfActionVisual(command, title string, result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji(command), title))
+	b.WriteString(visualDivider)
+	if entry, ok := result["entry"].(colony.ShelfEntry); ok {
+		b.WriteString(fmt.Sprintf("Entry: %s\n", emptyFallback(entry.Text, "(empty entry)")))
+		b.WriteString(fmt.Sprintf("Category: %s\n", entry.Category))
+		if entry.ID != "" {
+			b.WriteString(fmt.Sprintf("ID: %s\n", entry.ID))
+		}
+	} else if id := strings.TrimSpace(stringValue(result["id"])); id != "" {
+		b.WriteString(fmt.Sprintf("ID: %s\n", id))
+	}
+	if to := strings.TrimSpace(stringValue(result["to"])); to != "" {
+		b.WriteString(fmt.Sprintf("Target: %s\n", to))
+	}
+	if total := intValue(result["total"]); total > 0 {
+		b.WriteString(fmt.Sprintf("Shelf total: %d\n", total))
+	}
+	b.WriteString(renderNextUp(`Run ` + "`aether shelf-list`" + ` to inspect the shelf.`))
+	return b.String()
+}
+
+func renderQueenActionVisual(command, title string, result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji(command), title))
+	b.WriteString(visualDivider)
+	if path := strings.TrimSpace(stringValue(result["path"])); path != "" {
+		b.WriteString("Path: ")
+		b.WriteString(path)
+		b.WriteString("\n")
+	}
+	if target := strings.TrimSpace(stringValue(result["target"])); target != "" {
+		b.WriteString("Target: ")
+		b.WriteString(target)
+		b.WriteString("\n")
+	}
+	if reason := strings.TrimSpace(stringValue(result["reason"])); reason != "" {
+		b.WriteString("Reason: ")
+		b.WriteString(reason)
+		b.WriteString("\n")
+	}
+	for _, key := range []string{"created", "local_created", "written", "promoted", "migrated", "seeded", "skipped", "total", "size"} {
+		if _, ok := result[key]; ok {
+			b.WriteString(fmt.Sprintf("%s: %s\n", humanizeKey(key), stringValue(result[key])))
+		}
+	}
+	if sections := stringSliceValue(result["sections"]); len(sections) > 0 {
+		b.WriteString("Sections: ")
+		b.WriteString(strings.Join(sections, ", "))
+		b.WriteString("\n")
+	}
+	if boolValue(result["needs_input"]) {
+		b.WriteString("\nInput needed before writing project memory.\n")
+	}
+	if _, ok := result["trust_promote_threshold"]; ok {
+		b.WriteString("\nThresholds\n")
+		for _, key := range []string{"trust_promote_threshold", "trust_hive_threshold", "trust_decay_half_life", "trust_floor", "max_instincts", "max_wisdom_entries"} {
+			b.WriteString(fmt.Sprintf("  - %s: %s\n", humanizeKey(key), stringValue(result[key])))
+		}
+	}
+	b.WriteString(renderNextUp(
+		`Run `+"`aether queen-read`"+` to inspect Queen memory.`,
+		`Run `+"`aether status`"+` to return to colony state.`,
+	))
+	return b.String()
+}
+
+func renderExportSignalsVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("export-signals"), "Signals Exported"))
+	b.WriteString(visualDivider)
+	b.WriteString(fmt.Sprintf("Signals: %d\n", intValue(result["count"])))
+	if file := strings.TrimSpace(stringValue(result["file"])); file != "" {
+		b.WriteString("File: ")
+		b.WriteString(file)
+		b.WriteString("\n")
+	} else if result["xml"] == nil {
+		b.WriteString("No pheromone file found; exported an empty signal set.\n")
+	}
+	b.WriteString(renderNextUp(
+		`Share the XML with another colony, then run ` + "`aether import-signals --file <path>`" + ` there.`,
+	))
+	return b.String()
+}
+
+func renderImportSignalsVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("import-signals"), "Signals Imported"))
+	b.WriteString(visualDivider)
+	b.WriteString(fmt.Sprintf("Imported: %d\n", intValue(result["imported"])))
+	b.WriteString(fmt.Sprintf("Total active file entries: %d\n", intValue(result["total"])))
+	if source := strings.TrimSpace(stringValue(result["source"])); source != "" {
+		b.WriteString("Source: ")
+		b.WriteString(source)
+		b.WriteString("\n")
+	}
+	if warnings := stringSliceValue(result["warnings"]); len(warnings) > 0 {
+		b.WriteString("\nWarnings\n")
+		b.WriteString(renderIndentedList(warnings))
+	}
+	b.WriteString(renderNextUp(
+		`Run ` + "`aether pheromones`" + ` to inspect active steering signals.`,
+	))
+	return b.String()
+}
+
+func renderTunnelsVisual(result map[string]interface{}) string {
+	switch strings.ToLower(strings.TrimSpace(stringValue(result["mode"]))) {
+	case "list":
+		return renderTunnelsListVisual(result)
+	case "compare":
+		return renderTunnelsCompareVisual(result)
+	case "import":
+		return renderTunnelsImportVisual(result)
+	default:
+		return renderTunnelsDetailVisual(result)
+	}
+}
+
+func renderTunnelsListVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("tunnels"), "Colony Timeline"))
+	b.WriteString(visualDivider)
+	total := intValue(result["total"])
+	b.WriteString(fmt.Sprintf("%d colonies archived\n", total))
+	chambers := mapSliceValue(result["chambers"])
+	if len(chambers) == 0 {
+		b.WriteString("\nThe tunnel network is empty.\n")
+		b.WriteString(renderNextUp(`Run ` + "`aether entomb`" + ` after sealing a colony to preserve it.`))
+		return b.String()
+	}
+	b.WriteString("\n")
+	for _, chamber := range chambers {
+		name := emptyFallback(stringValue(chamber["name"]), "(unnamed chamber)")
+		date := strings.TrimSpace(stringValue(chamber["entombed_at"]))
+		if len(date) >= 10 {
+			date = date[:10]
+		}
+		if date == "" {
+			date = "unknown-date"
+		}
+		milestone := emptyFallback(stringValue(chamber["milestone"]), "unknown milestone")
+		goal := truncateString(emptyFallback(stringValue(chamber["goal"]), "No goal recorded"), 72)
+		fmt.Fprintf(&b, "[%s] %s %s\n", date, milestoneIcon(milestone), name)
+		fmt.Fprintf(&b, "           %s\n", goal)
+		fmt.Fprintf(&b, "           %d/%d phases | %s\n", intValue(chamber["phases_completed"]), intValue(chamber["total_phases"]), milestone)
+	}
+	b.WriteString(renderNextUp(
+		`Run `+"`aether tunnels <chamber>`"+` to view a sealed chamber.`,
+		`Run `+"`aether tunnels <chamber_a> <chamber_b>`"+` to compare two colonies.`,
+	))
+	return b.String()
+}
+
+func renderTunnelsDetailVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	chamber := emptyFallback(stringValue(result["chamber"]), "unknown")
+	b.WriteString(renderBanner(commandEmoji("tunnels"), "Chamber Details"))
+	b.WriteString(visualDivider)
+	b.WriteString(fmt.Sprintf("Chamber: %s\n", chamber))
+	if manifest := mapValue(result["manifest"]); len(manifest) > 0 {
+		if goal := strings.TrimSpace(stringValue(manifest["goal"])); goal != "" {
+			b.WriteString("Goal: ")
+			b.WriteString(goal)
+			b.WriteString("\n")
+		}
+		if milestone := strings.TrimSpace(stringValue(manifest["milestone"])); milestone != "" {
+			b.WriteString("Milestone: ")
+			b.WriteString(milestone)
+			b.WriteString("\n")
+		}
+	}
+	files := stringSliceValue(result["files"])
+	if len(files) > 0 {
+		b.WriteString(fmt.Sprintf("\nFiles: %d\n", len(files)))
+		b.WriteString(renderIndentedList(files))
+	}
+	if summary := strings.TrimSpace(stringValue(result["seal_summary"])); summary != "" {
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Seal Summary"))
+		b.WriteString(summary)
+		if !strings.HasSuffix(summary, "\n") {
+			b.WriteString("\n")
+		}
+	}
+	next := []string{`Run ` + "`aether tunnels`" + ` to list sealed chambers.`}
+	if importCommand := strings.TrimSpace(stringValue(result["import_command"])); importCommand != "" {
+		next = append([]string{`Run ` + "`" + importCommand + "`" + ` to import this chamber's pheromone signals.`}, next...)
+	}
+	next = append(next, `Run `+"`aether tunnels "+chamber+" <other_chamber>`"+` to compare chambers.`)
+	b.WriteString(renderNextUp(next[0], next[1:]...))
+	return b.String()
+}
+
+func renderTunnelsCompareVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	leftName := emptyFallback(stringValue(result["chamber_a"]), "left")
+	rightName := emptyFallback(stringValue(result["chamber_b"]), "right")
+	left := mapValue(result["manifest_a"])
+	right := mapValue(result["manifest_b"])
+	leftSummary := mapValue(result["summary_a"])
+	rightSummary := mapValue(result["summary_b"])
+	growth := mapValue(result["growth"])
+
+	b.WriteString(renderBanner(commandEmoji("tunnels"), "Chamber Comparison"))
+	b.WriteString(visualDivider)
+	fmt.Fprintf(&b, "%s  vs  %s\n\n", leftName, rightName)
+	b.WriteString(fmt.Sprintf("%-18s | %s\n", "Goal", ""))
+	b.WriteString(fmt.Sprintf("  %-16s | %s\n", leftName, truncateString(stringValue(left["goal"]), 64)))
+	b.WriteString(fmt.Sprintf("  %-16s | %s\n", rightName, truncateString(stringValue(right["goal"]), 64)))
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "Milestone: %s -> %s\n", emptyFallback(stringValue(left["milestone"]), "unknown"), emptyFallback(stringValue(right["milestone"]), "unknown"))
+	fmt.Fprintf(&b, "Phases: %d/%d -> %d/%d\n",
+		intValue(left["phases_completed"]), intValue(left["total_phases"]),
+		intValue(right["phases_completed"]), intValue(right["total_phases"]),
+	)
+	fmt.Fprintf(&b, "Decisions: %d -> %d\n", intValue(leftSummary["decisions"]), intValue(rightSummary["decisions"]))
+	fmt.Fprintf(&b, "Learnings: %d -> %d\n", intValue(leftSummary["learnings"]), intValue(rightSummary["learnings"]))
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("Growth"))
+	fmt.Fprintf(&b, "Phases: %+d\n", intValue(growth["phases_diff"]))
+	fmt.Fprintf(&b, "Decisions: %+d\n", intValue(growth["decisions_diff"]))
+	fmt.Fprintf(&b, "Learnings: %+d\n", intValue(growth["learnings_diff"]))
+	if days := intValue(growth["days_between"]); days > 0 {
+		fmt.Fprintf(&b, "Time: %d days apart\n", days)
+	}
+	b.WriteString(renderNextUp(
+		`Run `+"`aether tunnels`"+` to see all chambers.`,
+		`Run `+"`aether tunnels <chamber>`"+` to view a single seal document.`,
+	))
+	return b.String()
+}
+
+func renderTunnelsImportVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("import-signals"), "Signals Imported"))
+	b.WriteString(visualDivider)
+	fmt.Fprintf(&b, "Chamber: %s\n", emptyFallback(stringValue(result["chamber"]), "unknown"))
+	fmt.Fprintf(&b, "Imported: %d pheromone signals\n", intValue(result["imported"]))
+	if prefix := strings.TrimSpace(stringValue(result["id_prefix"])); prefix != "" {
+		fmt.Fprintf(&b, "Tagged with: %s\n", prefix)
+	}
+	if archive := strings.TrimSpace(stringValue(result["archive"])); archive != "" {
+		fmt.Fprintf(&b, "Archive: %s\n", archive)
+	}
+	if warnings := stringSliceValue(result["warnings"]); len(warnings) > 0 {
+		b.WriteString("\nWarnings\n")
+		b.WriteString(renderIndentedList(warnings))
+	}
+	b.WriteString(renderNextUp(
+		`Run `+"`aether pheromones`"+` to inspect active steering signals.`,
+		`Run `+"`aether tunnels`"+` to return to the chamber timeline.`,
+	))
+	return b.String()
+}
+
+func milestoneIcon(milestone string) string {
+	switch strings.ToLower(strings.TrimSpace(milestone)) {
+	case "crowned anthill":
+		return "👑"
+	case "sealed chambers":
+		return "🔒"
+	default:
+		return "•"
+	}
+}
+
+func renderCloseoutVisual(result map[string]interface{}) string {
+	var b strings.Builder
+	workflow := emptyFallback(stringValue(result["workflow"]), "workflow")
+	b.WriteString(renderBanner(commandEmoji("closeout"), fmt.Sprintf("%s Closeout", strings.Title(workflow))))
+	b.WriteString(visualDivider)
+	if !boolValue(result["state_available"]) {
+		b.WriteString(emptyFallback(stringValue(result["message"]), "No colony state available."))
+		b.WriteString("\n")
+		b.WriteString(renderNextUp(`Run ` + "`aether status`" + ` when a colony is active.`))
+		return b.String()
+	}
+	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
+		b.WriteString("Goal: ")
+		b.WriteString(goal)
+		b.WriteString("\n")
+	}
+	b.WriteString(fmt.Sprintf("State: %s\n", emptyFallback(stringValue(result["state"]), "unknown")))
+	total := intValue(result["total_phases"])
+	current := intValue(result["current_phase"])
+	if total > 0 {
+		b.WriteString(fmt.Sprintf("Progress: %d/%d phases complete\n", intValue(result["completed_phases"]), total))
+	}
+	if current > 0 {
+		b.WriteString(fmt.Sprintf("Current phase: %d", current))
+		if phaseName := strings.TrimSpace(stringValue(result["phase_name"])); phaseName != "" && phaseName != "(unnamed)" {
+			b.WriteString(" - ")
+			b.WriteString(phaseName)
+		}
+		b.WriteString("\n")
+	}
+	if completionFile := strings.TrimSpace(stringValue(result["completion_file"])); completionFile != "" {
+		b.WriteString("Completion packet: ")
+		b.WriteString(completionFile)
+		b.WriteString("\n")
+	}
+	renderCloseoutCompletionSection(&b, result)
+	if readiness := strings.TrimSpace(stringValue(result["porter_readiness"])); readiness != "" {
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Post-Seal: Delivery Readiness"))
+		b.WriteString(readiness)
+		if !strings.HasSuffix(readiness, "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString("\nRun `/ant-porter` or `aether porter check` to validate and deliver.\n")
+	}
+	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
+	b.WriteString(renderNextUp(next))
+	return b.String()
+}
+
+func renderCloseoutCompletionSection(b *strings.Builder, result map[string]interface{}) {
+	if !boolValue(result["completion_loaded"]) && strings.TrimSpace(stringValue(result["completion_error"])) == "" {
+		return
+	}
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("Worker Results"))
+	if errText := strings.TrimSpace(stringValue(result["completion_error"])); errText != "" {
+		b.WriteString(errText)
+		b.WriteString("\n")
+		return
+	}
+	workerCount := intValue(result["completion_worker_count"])
+	dispatchCount := intValue(result["completion_dispatch_count"])
+	if dispatchCount > 0 {
+		fmt.Fprintf(b, "Dispatches: %d\n", dispatchCount)
+	}
+	fmt.Fprintf(b, "Workers: %d completed, %d blocked, %d failed",
+		intValue(result["completion_completed"]),
+		intValue(result["completion_blocked"]),
+		intValue(result["completion_failed"]),
+	)
+	if workerCount > 0 {
+		fmt.Fprintf(b, " (%d total)", workerCount)
+	}
+	b.WriteString("\n")
+	if phase := intValue(result["completion_phase"]); phase > 0 {
+		fmt.Fprintf(b, "Phase: %d", phase)
+		if phaseName := strings.TrimSpace(stringValue(result["completion_phase_name"])); phaseName != "" {
+			b.WriteString(" - ")
+			b.WriteString(phaseName)
+		}
+		b.WriteString("\n")
+	}
+	for _, worker := range mapSliceValue(result["completion_workers"]) {
+		name := emptyFallback(stringValue(worker["name"]), stringValue(worker["agent_name"]))
+		if name == "" {
+			name = emptyFallback(stringValue(worker["ant_name"]), "worker")
+		}
+		status := emptyFallback(stringValue(worker["status"]), "unknown")
+		caste := stringValue(worker["caste"])
+		fmt.Fprintf(b, "  %s %s  %s", dispatchStatusIcon(normalizeRuntimeDispatchStatus(status)), casteIdentity(caste), name)
+		if summary := strings.TrimSpace(stringValue(worker["summary"])); summary != "" {
+			b.WriteString(" - ")
+			b.WriteString(summary)
+		}
+		b.WriteString("\n")
+	}
+	if blockers := stringSliceValue(result["completion_blockers"]); len(blockers) > 0 {
+		b.WriteString("\nBlockers\n")
+		b.WriteString(renderIndentedList(blockers))
+	}
+	if artifacts := stringSliceValue(result["completion_artifacts"]); len(artifacts) > 0 {
+		b.WriteString("\nArtifacts\n")
+		limit := artifacts
+		if len(limit) > 8 {
+			limit = limit[:8]
+		}
+		b.WriteString(renderIndentedList(limit))
+		if len(artifacts) > len(limit) {
+			fmt.Fprintf(b, "  - ...and %d more\n", len(artifacts)-len(limit))
+		}
+	}
+}
+
+func categoryCountsValue(raw interface{}) map[string]int {
+	out := map[string]int{}
+	switch v := raw.(type) {
+	case map[string]int:
+		for key, value := range v {
+			out[key] = value
+		}
+	case map[string]interface{}:
+		for key, value := range v {
+			out[key] = intValue(value)
+		}
+	}
+	return out
+}
+
+func sortedMapKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func mapSliceValue(raw interface{}) []map[string]interface{} {
+	switch v := raw.(type) {
+	case []map[string]interface{}:
+		return v
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if mapped, ok := item.(map[string]interface{}); ok {
+				out = append(out, mapped)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func shelfEntriesValue(raw interface{}) []colony.ShelfEntry {
+	switch v := raw.(type) {
+	case []colony.ShelfEntry:
+		return v
+	case []interface{}:
+		out := make([]colony.ShelfEntry, 0, len(v))
+		for _, item := range v {
+			entryMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			out = append(out, colony.ShelfEntry{
+				ID:         stringValue(entryMap["id"]),
+				Text:       stringValue(entryMap["text"]),
+				Category:   colony.ShelfCategory(stringValue(entryMap["category"])),
+				Status:     colony.ShelfStatus(stringValue(entryMap["status"])),
+				PromotedTo: stringValue(entryMap["promoted_to"]),
+			})
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func flagEntriesValue(raw interface{}) []colony.FlagEntry {
+	switch v := raw.(type) {
+	case []colony.FlagEntry:
+		return v
+	case []interface{}:
+		out := make([]colony.FlagEntry, 0, len(v))
+		for _, item := range v {
+			entryMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			var phase *int
+			if phaseValue := intValue(entryMap["phase"]); phaseValue > 0 {
+				phase = &phaseValue
+			}
+			out = append(out, colony.FlagEntry{
+				ID:          stringValue(entryMap["id"]),
+				Type:        stringValue(entryMap["type"]),
+				Description: stringValue(entryMap["description"]),
+				Source:      stringValue(entryMap["source"]),
+				Phase:       phase,
+				Resolved:    boolValue(entryMap["resolved"]),
+			})
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func humanizeKey(key string) string {
+	key = strings.ReplaceAll(key, "_", " ")
+	if key == "" {
+		return ""
+	}
+	return strings.ToUpper(key[:1]) + key[1:]
 }
 
 func resultSignalHousekeeping(result map[string]interface{}) *signalHousekeepingResult {

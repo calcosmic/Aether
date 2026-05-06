@@ -69,6 +69,12 @@ AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-dept
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>
 ```
 
+Then render the wrapper closeout:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <worker completion JSON>
+```
+
 ## Build Flow
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
@@ -90,6 +96,12 @@ AETHER_OUTPUT_MODE=json aether build <phase> --plan-only
 AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>
 ```
 
+Then render the wrapper closeout:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether closeout build --completion-file <worker completion JSON>
+```
+
 ## Continue Flow
 
 Default path:
@@ -101,7 +113,11 @@ AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth s
 Use external review orchestration only when the user explicitly requested heavy
 review or the runtime asks for wrapper-spawned review workers. In that case,
 request the runtime manifest, spawn only the planned reviewers, collect results,
-and finalize through `aether continue-finalize`.
+finalize through `aether continue-finalize`, then render:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <worker completion JSON>
+```
 
 ## Swarm Flow
 
@@ -130,6 +146,12 @@ AETHER_OUTPUT_MODE=json aether swarm --plan-only <problem>
 AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completion JSON>
 ```
 
+Then render the wrapper closeout:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether closeout swarm --completion-file <worker completion JSON>
+```
+
 ## Seal Flow
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
@@ -151,7 +173,13 @@ AETHER_OUTPUT_MODE=json aether seal --plan-only <args>
 AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <worker completion JSON>
 ```
 
-8. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
+8. Render the wrapper closeout:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <worker completion JSON>
+```
+
+9. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
    Do not run delivery commands unless the user chooses them.
 
 ## Guardrails

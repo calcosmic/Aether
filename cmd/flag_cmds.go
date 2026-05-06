@@ -112,11 +112,12 @@ var flagAddCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"created": true,
 			"flag":    flag,
 			"total":   len(ff.Decisions),
-		})
+		}
+		outputWorkflow(result, renderFlagActionVisual("flag", "Flag Created", result))
 		return nil
 	},
 }
@@ -166,12 +167,13 @@ var flagResolveCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"resolved":  true,
 			"id":        id,
 			"message":   message,
 			"timestamp": ff.Decisions[0].ResolvedAt,
-		})
+		}
+		outputWorkflow(result, renderFlagActionVisual("flags", "Flag Resolved", result))
 		return nil
 	},
 }
@@ -270,11 +272,12 @@ var flagAcknowledgeCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"acknowledged": true,
 			"id":           id,
 			"at":           time.Now().UTC().Format(time.RFC3339),
-		})
+		}
+		outputWorkflow(result, renderFlagActionVisual("flags", "Flag Acknowledged", result))
 		return nil
 	},
 }
@@ -297,7 +300,8 @@ var flagAutoResolveCmd = &cobra.Command{
 		var ff colony.FlagsFile
 		if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
 			if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
-				outputOK(map[string]interface{}{"resolved": 0})
+				result := map[string]interface{}{"resolved": 0}
+				outputWorkflow(result, renderFlagActionVisual("flags", "Flags Auto-Resolved", result))
 				return nil
 			}
 		}
@@ -326,10 +330,11 @@ var flagAutoResolveCmd = &cobra.Command{
 			}
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"resolved": resolved,
 			"max_days": maxDays,
-		})
+		}
+		outputWorkflow(result, renderFlagActionVisual("flags", "Flags Auto-Resolved", result))
 		return nil
 	},
 }

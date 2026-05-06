@@ -36,11 +36,13 @@ wrapper_additions:
     10. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
     11. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
     12. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
+    13. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <file>` for the user-facing ceremony.
   post_plan: |
     Close from the `plan-finalize` result only:
-    1. Summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.
-    2. Route first to `/ant-build 1` or the runtime-surfaced next build command.
-    3. If finalization blocks, follow the runtime recovery command first.
+    1. Run the visual closeout command first; use its next-step line as the source of truth.
+    2. Summarize selected depth and planning depth, phase count, confidence, and which planning agents ran.
+    3. Route first to `/ant-build 1` or the runtime-surfaced next build command.
+    4. If finalization blocks, follow the runtime recovery command first.
 guardrails:
   - "Do NOT run `aether plan` without `--plan-only` from Claude/OpenCode wrapper orchestration."
   - "Do NOT run `aether plan --synthetic` after real wrapper Task agents complete."

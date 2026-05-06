@@ -88,11 +88,18 @@ Then run:
 AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <completion_file>
 ```
 
+Render the user-facing closeout after the JSON finalizer succeeds:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <completion_file>
+```
+
 Branch strictly on `seal-finalize` output:
 
 - If blocked, report the runtime blocker text and stop.
-- If sealed, summarize the workers and the runtime seal result.
-- Follow the runtime's Porter readiness output.
+- If sealed, use the visual closeout's next-step line as the source of truth.
+- Summarize the workers and the runtime seal result.
+- Follow the runtime's Porter readiness output in visual mode.
 
 ## Post-Seal Delivery
 

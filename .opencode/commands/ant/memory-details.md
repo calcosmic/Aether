@@ -4,74 +4,9 @@ name: ant-memory-details
 description: "📜 Show detailed colony memory — wisdom, pending promotions, and recent failures"
 ---
 
-# /ant-memory-details — Colony Memory Details
+Use the Go `aether` CLI as the source of truth.
 
-Drill-down view of accumulated colony wisdom, pending promotions, and recent failures.
-
-## Usage
-
-```bash
-/ant-memory-details
-```
-
-## Implementation
-
-### Step 1: Load Memory Data
-
-Run using the Bash tool with description "Loading colony memory...":
-```bash
-aether memory-metrics
-```
-
-### Step 2: Display Wisdom (from QUEEN.md)
-
-Read .aether/QUEEN.md and display entries by category:
-- Philosophies
-- Patterns
-- Redirects
-- Stack
-- Decrees
-
-Format:
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-COLONY WISDOM (X entries)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📜 Philosophies (N)
-   - Entry 1...
-   - Entry 2...
-
-🔧 Patterns (N)
-   - Entry 1...
-```
-
-### Step 3: Display Pending Promotions
-
-Show observations meeting threshold but not yet promoted:
-```
-⏳ Pending Promotions (N)
-   - [type] Content... (X observations)
-```
-
-Show deferred proposals:
-```
-💤 Deferred Proposals (N)
-   - [type] Content... (deferred YYYY-MM-DD)
-```
-
-### Step 4: Display Recent Failures
-
-Show last 5 failures from midden:
-```
-⚠️ Recent Failures (N)
-   [YYYY-MM-DD HH:MM] Source: context
-   Content...
-```
-
-### Step 5: Summary
-
-Show counts summary and reminder command:
-```
-Run /ant-status for quick overview
-```
+- Execute `AETHER_OUTPUT_MODE=visual aether memory-details $ARGUMENTS` directly.
+- If lower-level metrics are needed, execute `AETHER_OUTPUT_MODE=visual aether memory-metrics`.
+- Do not read QUEEN.md, instincts, midden, or state files by hand from this command spec.
+- Report the CLI result directly.

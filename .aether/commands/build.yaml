@@ -24,12 +24,14 @@ wrapper_additions:
     4. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
     5. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
     6. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.
+    7. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout build --completion-file <file>` for the user-facing ceremony.
     Note: The runtime accepts `--verification-depth <light|standard|heavy>` to control review depth during continue. This flag does not affect the build command itself but is passed through to subsequent continue review.
   post_build: |
     Close with a short colony-language synthesis:
-    1. Summarize what moved forward and which workers/castes actually ran.
-    2. Note only the most relevant signal or risk.
-    3. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
+    1. Run the visual closeout command first; use its next-step line as the source of truth.
+    2. Summarize what moved forward and which workers/castes actually ran.
+    3. Note only the most relevant signal or risk.
+    4. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
 guardrails:
   - "Do NOT read or write colony state files by hand."
   - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."

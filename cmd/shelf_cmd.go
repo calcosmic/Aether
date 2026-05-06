@@ -35,30 +35,18 @@ var shelfListCmd = &cobra.Command{
 		}
 
 		filtered := filterShelfEntries(sf.Entries, shelfStatusFilter)
+		result := map[string]interface{}{
+			"entries": filtered,
+			"total":   len(filtered),
+			"status":  shelfStatusFilter,
+		}
 
 		if shelfListJSON {
-			outputOK(map[string]interface{}{
-				"entries": filtered,
-				"total":   len(filtered),
-			})
+			outputOK(result)
 			return nil
 		}
 
-		if len(filtered) == 0 {
-			fmt.Fprintln(stdout, "No shelf entries found.")
-			return nil
-		}
-
-		for _, e := range filtered {
-			statusMark := "○"
-			switch e.Status {
-			case colony.ShelfPromoted:
-				statusMark = "↑"
-			case colony.ShelfDismissed:
-				statusMark = "✗"
-			}
-			fmt.Fprintf(stdout, "%s [%s] %s (%s) %s\n", statusMark, e.Category, e.Text, e.Status, e.ID)
-		}
+		outputWorkflow(result, renderShelfListVisual(result))
 		return nil
 	},
 }
@@ -115,11 +103,12 @@ var shelfAddCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"created": true,
 			"entry":   entry,
 			"total":   len(sf.Entries),
-		})
+		}
+		outputWorkflow(result, renderShelfActionVisual("shelf-add", "Shelf Entry Added", result))
 		return nil
 	},
 }
@@ -170,10 +159,12 @@ var shelfPromoteCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"promoted": true,
 			"id":       id,
-		})
+			"to":       to,
+		}
+		outputWorkflow(result, renderShelfActionVisual("shelf-promote", "Shelf Entry Promoted", result))
 		return nil
 	},
 }
@@ -219,10 +210,11 @@ var shelfDismissCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"dismissed": true,
 			"id":        id,
-		})
+		}
+		outputWorkflow(result, renderShelfActionVisual("shelf-dismiss", "Shelf Entry Dismissed", result))
 		return nil
 	},
 }

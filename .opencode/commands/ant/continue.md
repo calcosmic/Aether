@@ -58,6 +58,8 @@ Only use this path when the user explicitly requests `--verification-depth heavy
 4. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.
 5. Finalize with:
    `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <completion_file>`
+6. Render the user-facing closeout:
+   `AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <completion_file>`
 
 ## Learning Extraction
 
@@ -71,9 +73,10 @@ Use only runtime output as the learning source:
 
 ### If the phase advanced
 
-1. Summarize what the runtime verified and learned
-2. Route the user first to `/ant-build N+1`
-3. If the runtime surfaced signal housekeeping, explain what expired, what remained active, and what that means for the next phase in one short steering sentence
+1. Use the visual closeout's next-step line as the source of truth on the heavy path.
+2. Summarize what the runtime verified and learned.
+3. Route the user first to `/ant-build N+1`.
+4. If the runtime surfaced signal housekeeping, explain what expired, what remained active, and what that means for the next phase in one short steering sentence.
 4. The runtime emits context-clear guidance automatically — do not duplicate it
 
 ### If continue is blocked

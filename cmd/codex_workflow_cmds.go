@@ -471,11 +471,12 @@ func completeSealRuntime(state colony.ColonyState) error {
 	}
 	outputWorkflow(result, renderSealVisual(state, summaryPath))
 
-	// Post-seal Porter readiness summary
-	fmt.Fprint(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
-	readinessSummary := buildPorterReadinessSummary()
-	fmt.Fprint(stdout, readinessSummary)
-	fmt.Fprintln(stdout, "\nRun `/ant-porter` or `aether porter check` to validate and deliver.")
+	if shouldRenderVisualOutput(stdout) {
+		fmt.Fprint(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
+		readinessSummary := buildPorterReadinessSummary()
+		fmt.Fprint(stdout, readinessSummary)
+		fmt.Fprintln(stdout, "\nRun `/ant-porter` or `aether porter check` to validate and deliver.")
+	}
 	return nil
 }
 

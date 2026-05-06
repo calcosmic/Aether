@@ -70,12 +70,19 @@ Then finalize through the runtime:
 AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <completion_file>
 ```
 
+Render the user-facing closeout after the JSON finalizer succeeds:
+
+```
+AETHER_OUTPUT_MODE=visual aether closeout colonize --completion-file <completion_file>
+```
+
 ## After Colonize
 
 Branch strictly on `colonize-finalize` output:
 
-1. Summarize which surveyors ran and which survey files were written.
-2. Route first to `/ant-plan` or the runtime-surfaced next command.
+1. Use the visual closeout's next-step line as the source of truth.
+2. Summarize which surveyors ran and which survey files were written.
+3. Route first to `/ant-plan` or the runtime-surfaced next command.
 
 ## Cross-Platform Drift Guard
 
