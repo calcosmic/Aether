@@ -18,9 +18,21 @@ AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS
 
 Parse `result.colonize_manifest`. This manifest is the only source for worker names, castes, task IDs, agent names, briefs, output paths, skill sections, and finalizer contract.
 
+Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the surveyor display uses the same runtime manifest.
+
 If the runtime returns `dispatch_mode: agent-delegate`, this is the expected hosted-agent path. Do not run nested subprocess surveyors. Dispatch the manifest workers through the current platform.
 
 If the runtime reports an existing survey, follow the runtime recovery guidance before spawning workers.
+
+## Runtime Spawn Ceremony
+
+Before spawning surveyors, render the runtime-owned old-style survey ceremony:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest_file>
+```
+
+This output is display-only; do not parse it as state.
 
 ## Live Worker Ceremony
 
@@ -37,14 +49,18 @@ The visible live Task/subagent stack is part of the Aether ceremony.
 
 For each dispatch in `colonize_manifest.dispatches`:
 
-1. Run:
+1. Before each manifest wave, render:
+   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow colonize --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
+2. Run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
-2. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
-3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-4. Inject the dispatch `brief`, `output_paths`, active signals, `skill_section` when present, and exact task metadata.
-5. Require every surveyor to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `blockers`, and `duration`.
-6. After each worker returns, run:
+3. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Inject the dispatch `brief`, `output_paths`, active signals, `skill_section` when present, and exact task metadata.
+6. Require every surveyor to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `blockers`, and `duration`.
+7. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
+8. Write that one terminal result to a temporary worker JSON file and render:
+   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow colonize --worker-file <worker_file>`
 
 Surveyors are independent read-only repo explorers except for their assigned survey outputs under `.aether/data/survey/`.
 
@@ -84,7 +100,7 @@ AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <completion_f
 Render the user-facing closeout after the JSON finalizer succeeds:
 
 ```
-AETHER_OUTPUT_MODE=visual aether closeout colonize --completion-file <completion_file>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --completion-file <completion_file>
 ```
 
 ## After Colonize

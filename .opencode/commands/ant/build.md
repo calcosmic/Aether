@@ -48,12 +48,14 @@ AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only
 
 Parse `result.dispatch_manifest`. This manifest is the only source for worker names, castes, execution waves, task waves, task IDs, playbooks, selected tasks, and success criteria. Do not parse visual output.
 
+Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the old visual stack comes from the same runtime manifest you parsed.
+
 ## Runtime Spawn Ceremony
 
 Immediately after parsing the JSON manifest, render the runtime-owned spawn ceremony for the user:
 
 ```
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS --plan-only
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
 ```
 
 This visual output is for the user only. Do not parse it as state. It should show the caste-colored spawn plan before live workers appear.
@@ -77,14 +79,18 @@ The visible live Task/subagent stack is part of the Aether ceremony.
 
 For each step in `dispatch_manifest.execution_plan`, execute the matching `dispatch_manifest.dispatches` entries whose `execution_wave` matches that step:
 
-1. Before spawning, run:
+1. Before spawning a manifest step, render the old-style wave banner:
+   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
+2. Then run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
-2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
-3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-4. Inject the phase objective, task metadata, dependencies, success criteria, active signals, the dispatch `skill_section` when present, relevant playbook instructions, and any specialist findings already collected.
-5. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `tool_count`, `blockers`, and `duration`.
-6. After each worker returns, run:
+3. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Inject the phase objective, task metadata, dependencies, success criteria, active signals, the dispatch `skill_section` when present, relevant playbook instructions, and any specialist findings already collected.
+6. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `tool_count`, `blockers`, and `duration`.
+7. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
+8. Write that one terminal result to a temporary worker JSON file and render:
+   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`
 
 Multiple agent calls issued in one assistant message may run in parallel when the platform supports it. Respect `dispatch_manifest.execution_plan`: serial steps stay serial; parallel steps may spawn together. Pre-wave specialists such as Archaeologist, Oracle, Architect, or Ambassador must complete before builder/scout task waves. Post-wave specialists such as Probe, Watcher, Measurer, or Chaos must run after builder/scout task waves.
 
@@ -129,7 +135,7 @@ The runtime records `dispatch_mode: external-task`, claims, spawn-tree statuses,
 Render the user-facing closeout after the JSON finalizer succeeds:
 
 ```
-AETHER_OUTPUT_MODE=visual aether closeout build --completion-file <completion_file>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <completion_file>
 ```
 
 ## After the Build

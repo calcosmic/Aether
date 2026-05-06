@@ -26,10 +26,15 @@ func TestSealWrapperCeremonyContract(t *testing.T) {
 			required := []string{
 				"AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS",
 				"result.seal_manifest",
+				"temporary manifest file outside `.aether/data/`",
+				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>",
+				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal",
 				"Gatekeeper, Auditor, and Probe",
 				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether spawn-complete",
+				"AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>",
 				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",
+				"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file",
 				"Do NOT run `aether seal` without `--plan-only`",
 			}
 			for _, needle := range required {

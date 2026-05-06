@@ -26,8 +26,36 @@ func TestLifecycleWrappersHaveVisualCloseoutAfterJSONFinalizer(t *testing.T) {
 			if workflow == "build" {
 				finalizer = "AETHER_OUTPUT_MODE=json aether build-finalize"
 			}
-			closeout := "AETHER_OUTPUT_MODE=visual aether closeout " + workflow
+			closeout := "AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow " + workflow
 			assertSubstringsInOrder(t, wrapperPath, text, []string{finalizer, closeout})
+		}
+	}
+}
+
+func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	workflows := []string{"build", "plan", "colonize", "continue", "seal", "swarm"}
+	for _, platformDir := range []string{".claude/commands/ant", ".opencode/commands/ant"} {
+		for _, workflow := range workflows {
+			wrapperPath := filepath.Join(repoRoot, platformDir, workflow+".md")
+			content, err := os.ReadFile(wrapperPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", wrapperPath, err)
+			}
+			text := string(content)
+			for _, want := range []string{
+				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow " + workflow,
+				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow " + workflow,
+				"AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow " + workflow,
+			} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing runtime ceremony call %q", wrapperPath, want)
+				}
+			}
 		}
 	}
 }

@@ -26,7 +26,19 @@ AETHER_OUTPUT_MODE=json aether swarm --plan-only $ARGUMENTS
 
 Parse `result.swarm_manifest`. This manifest is the only source for worker names, castes, roles, waves, task IDs, agent names, briefs, response contracts, and finalizer contract.
 
+Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the bug-destroyer display uses the same runtime manifest.
+
 If the runtime returns `dispatch_mode: agent-delegate`, this is the expected hosted-agent path. Do not run nested subprocess swarm workers. Dispatch the manifest workers through the current platform.
+
+## Runtime Spawn Ceremony
+
+Before spawning swarm workers, render the runtime-owned old-style bug-destroyer ceremony:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow swarm --manifest-file <manifest_file>
+```
+
+This output is display-only; do not parse it as state.
 
 ## Live Worker Ceremony
 
@@ -43,14 +55,18 @@ The visible live Task/subagent stack is part of the Aether ceremony.
 
 For each dispatch in `swarm_manifest.dispatches`:
 
-1. Run:
+1. Before each manifest wave, render:
+   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow swarm --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
+2. Run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Swarm" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
-2. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
-3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-4. Inject the dispatch `brief`, `response_contract`, active signals, and exact task metadata.
-5. Require every worker to return a terminal structured result with: `name`, `caste`, `role`, `task`, `status`, `summary`, `files`, `tests`, `blockers`, `response`, and `duration`.
-6. After each worker returns, run:
+3. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Inject the dispatch `brief`, `response_contract`, active signals, and exact task metadata.
+6. Require every worker to return a terminal structured result with: `name`, `caste`, `role`, `task`, `status`, `summary`, `files`, `tests`, `blockers`, `response`, and `duration`.
+7. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
+8. Write that one terminal result to a temporary worker JSON file and render:
+   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow swarm --worker-file <worker_file>`
 
 Preserve the runtime wave order:
 
@@ -108,7 +124,7 @@ AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <completion_file
 Render the user-facing closeout after the JSON finalizer succeeds:
 
 ```
-AETHER_OUTPUT_MODE=visual aether closeout swarm --completion-file <completion_file>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow swarm --completion-file <completion_file>
 ```
 
 ## After Swarm

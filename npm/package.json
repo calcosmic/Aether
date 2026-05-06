@@ -40,5 +40,5 @@
   "scripts": {
     "test": "node --test test/*.test.js"
   },
-  "version": "1.0.32"
+  "version": "1.0.33"
 }

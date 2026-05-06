@@ -18,16 +18,18 @@ wrapper_additions:
     5. Immediately before requesting the manifest, say: `Asking the runtime for the dispatch manifest...`
   orchestration: |
     Restore real wrapper orchestration:
-    1. Run `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only`.
+    1. Run `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     2. Parse `result.dispatch_manifest`; do not parse visual output.
-    3. Immediately render the runtime-owned spawn ceremony for the user with `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build $ARGUMENTS --plan-only`; do not parse this output.
+    3. Immediately render the runtime-owned old-style spawn ceremony for the user with `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>`; do not parse this output.
     4. Load the build-wave playbook from the installed hub (`~/.aether/system/docs/command-playbooks/build-wave.md`, or the matching dev hub when using `aether-dev`) as the spawning procedure.
     5. Use visible live Task/subagent panels as the worker ceremony: issue all parallel-wave Task calls in one assistant message, do not set `run_in_background`, and do not replace the live stack with a markdown worker table.
-    6. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
-    7. Each spawned worker description must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`. Preserve the platform agent's caste color/icon metadata.
-    8. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
-    9. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.
-    10. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout build --completion-file <file>` for the user-facing ceremony.
+    6. Before each step in `dispatch_manifest.execution_plan`, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave <execution_wave>` so the user sees the stacked caste-colored wave banner.
+    7. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
+    8. After each terminal worker result, write that one worker result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>` before moving on.
+    9. Each spawned worker description must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`. Preserve the platform agent's caste color/icon metadata.
+    10. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
+    11. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.
+    12. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <file>` for the user-facing ceremony.
     Note: The runtime accepts `--verification-depth <light|standard|heavy>` to control review depth during continue. This flag does not affect the build command itself but is passed through to subsequent continue review.
   post_build: |
     Close with a short colony-language synthesis:

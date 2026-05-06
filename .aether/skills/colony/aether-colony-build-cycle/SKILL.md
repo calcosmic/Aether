@@ -1,12 +1,12 @@
 ---
 source: shipped
 name: aether-colony-build-cycle
-description: Use when Codex is asked to plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely
+description: Use when Codex is asked to colonize, plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely
 type: colony
-domains: [aether, codex, planning, build, verification, swarm, seal, orchestration]
+domains: [aether, codex, colonize, planning, build, verification, swarm, seal, orchestration]
 agent_roles: [queen, builder, watcher, scout, route_setter, tracker, archaeologist, auditor, probe]
-workflow_triggers: [plan, build, continue, swarm, seal]
-task_keywords: [aether plan, aether build, aether continue, aether swarm, aether seal, dispatch manifest, plan-only, finalize]
+workflow_triggers: [colonize, plan, build, continue, swarm, seal]
+task_keywords: [aether colonize, aether plan, aether build, aether continue, aether swarm, aether seal, dispatch manifest, plan-only, finalize]
 priority: high
 version: "1.0"
 ---
@@ -16,7 +16,7 @@ version: "1.0"
 ## Purpose
 
 Give Codex the wrapper-equivalent behavior for the lifecycle commands where AI
-orchestration matters: `plan`, `build`, `continue`, `swarm`, and `seal`. Runtime JSON
+orchestration matters: `colonize`, `plan`, `build`, `continue`, `swarm`, and `seal`. Runtime JSON
 manifests remain authoritative. Codex may spawn workers and summarize results,
 but it must not invent state or write state files by hand.
 
@@ -28,7 +28,7 @@ can coordinate helpers, but it must use the recipe the runtime gave it.
 Run or inspect the guide for the command being handled:
 
 ```bash
-aether command-guide <plan|build|continue|swarm|seal> --platform codex
+aether command-guide <colonize|plan|build|continue|swarm|seal> --platform codex
 ```
 
 If this skill and `command-guide` disagree, follow `command-guide` and update
@@ -59,20 +59,31 @@ stack with a markdown worker table.
 AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice>
 ```
 
-4. Parse `result.plan_manifest` or `result.planning_manifest`. Never parse
+4. Save the full JSON envelope to a temporary manifest file outside
+   `.aether/data/`.
+5. Parse `result.plan_manifest` or `result.planning_manifest`. Never parse
    visual output as state.
-5. If runtime reports unresolved clarifications, route to `aether discuss`
+6. If runtime reports unresolved clarifications, route to `aether discuss`
    unless the user explicitly approves continuing with assumptions.
-6. Spawn the runtime-specified Scout and Route-Setter workers using visible
+7. Render the runtime-owned spawn ceremony:
+
+```bash
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>
+```
+
+8. Spawn the runtime-specified Scout and Route-Setter workers using visible
    live Task/subagent panels with caste-labelled descriptions, manifest
    names, castes, task IDs, briefs, and `skill_section` values.
-7. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
+9. Before each manifest wave, render `aether ceremony wave-start` for that
+   workflow and execution wave.
+10. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
    loop guard, output contract, and stop condition. If a planning worker keeps
    rereading the same file or command, mark it `blocked` with a concrete
    blocker instead of manually reconciling it as completed.
-8. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
+11. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
    consumes Scout findings directly instead of re-running the survey.
-9. Finalize through:
+12. After each terminal result, render `aether ceremony worker-complete`.
+13. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>
@@ -81,7 +92,43 @@ AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completio
 Then render the wrapper closeout:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <worker completion JSON>
+```
+
+## Colonize Flow
+
+1. Run:
+
+```bash
+AETHER_OUTPUT_MODE=json aether colonize --plan-only <args>
+```
+
+2. Save the full JSON envelope to a temporary manifest file outside
+   `.aether/data/`.
+3. Parse `result.colonize_manifest`. Never parse visual output as state.
+4. Render the runtime-owned survey ceremony:
+
+```bash
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest file>
+```
+
+5. Dispatch the runtime-specified Surveyor workers through the host platform
+   with caste-labelled descriptions, runtime names, briefs, output paths, and
+   skill sections.
+6. Render `aether ceremony wave-start` before each surveyor wave.
+7. Call `aether spawn-log` before each surveyor and `aether spawn-complete`
+   after each terminal result.
+8. After each terminal result, render `aether ceremony worker-complete`.
+9. Finalize through:
+
+```bash
+AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <worker completion JSON>
+```
+
+Then render the wrapper closeout:
+
+```bash
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --completion-file <worker completion JSON>
 ```
 
 ## Build Flow
@@ -94,24 +141,29 @@ AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <worker complet
 AETHER_OUTPUT_MODE=json aether build <phase> --plan-only
 ```
 
-4. Parse `result.dispatch_manifest`.
-5. Render the user-facing spawn ceremony:
+4. Save the full JSON envelope to a temporary manifest file outside
+   `.aether/data/`.
+5. Parse `result.dispatch_manifest`.
+6. Render the user-facing spawn ceremony:
 
 ```bash
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether build <phase> --plan-only
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest file>
 ```
 
-6. Follow the installed build-wave playbook. Use runtime-provided agent names,
+7. Follow the installed build-wave playbook. Use runtime-provided agent names,
    castes, task IDs, briefs, and skill sections.
-7. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
+8. Before each manifest wave, render `aether ceremony wave-start` for the build
+   workflow and execution wave.
+9. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
    descriptions. Do not use background-only dispatch as the ceremony, and do not
    replace the live stack with a markdown worker table.
-8. Enforce read cache discipline for every worker: pass runtime briefs verbatim,
+10. Enforce read cache discipline for every worker: pass runtime briefs verbatim,
    treat "File unchanged since last read" as an instruction to use earlier content,
    and mark workers `blocked` if they keep re-reading the same unchanged file.
-9. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+11. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-10. Finalize through:
+12. After each terminal result, render `aether ceremony worker-complete`.
+13. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>
@@ -120,7 +172,7 @@ AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker 
 Then render the wrapper closeout:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether closeout build --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <worker completion JSON>
 ```
 
 ## Continue Flow
@@ -135,13 +187,15 @@ Use external review orchestration only when the user explicitly requested heavy
 review or the runtime asks for wrapper-spawned review workers. In that case,
 request the runtime manifest, spawn only the planned reviewers as visible live
 Task/subagent panels with caste-labelled descriptions, collect results, finalize
-through `aether continue-finalize`, then render. Pass each reviewer brief
-verbatim; it contains read cache discipline. If a reviewer keeps re-reading the
+through `aether continue-finalize`, then render. Save the JSON manifest envelope
+to a temporary file and use `aether ceremony spawn-plan`, `aether ceremony
+wave-start`, and `aether ceremony worker-complete` around the live reviewers.
+Pass each reviewer brief verbatim; it contains read cache discipline. If a reviewer keeps re-reading the
 same unchanged file or artifact, mark it `blocked` with the missing context
 instead of waiting through another loop.
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file <worker completion JSON>
 ```
 
 ## Swarm Flow
@@ -158,16 +212,20 @@ For bug-destroyer targets, use the external worker contract:
 AETHER_OUTPUT_MODE=json aether swarm --plan-only <problem>
 ```
 
-1. Parse `result.swarm_manifest`. Never parse visual output as state.
-2. Preserve manifest wave order: investigation workers first, then builder,
+1. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+2. Parse `result.swarm_manifest`. Never parse visual output as state.
+3. Render the runtime-owned spawn ceremony with `aether ceremony spawn-plan`.
+4. Preserve manifest wave order: investigation workers first, then builder,
    then watcher.
-3. Use runtime-provided names, castes, roles, task IDs, briefs, and response
+5. Use runtime-provided names, castes, roles, task IDs, briefs, and response
    contracts.
-4. Spawn each same-wave group as visible live Task/subagent panels with
+6. Render `aether ceremony wave-start` before each same-wave group.
+7. Spawn each same-wave group as visible live Task/subagent panels with
    caste-labelled descriptions.
-5. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+8. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-6. Finalize through:
+9. After each terminal result, render `aether ceremony worker-complete`.
+10. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completion JSON>
@@ -176,7 +234,7 @@ AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completi
 Then render the wrapper closeout:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether closeout swarm --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow swarm --completion-file <worker completion JSON>
 ```
 
 ## Seal Flow
@@ -189,26 +247,30 @@ AETHER_OUTPUT_MODE=json aether seal --plan-only <args>
 ```
 
 3. If the runtime returns blockers or recovery guidance, surface that and stop.
-4. Parse `result.seal_manifest` and dispatch the Gatekeeper, Auditor, and Probe
+4. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+5. Parse `result.seal_manifest` and dispatch the Gatekeeper, Auditor, and Probe
    final-review workers through the host platform.
-5. Use runtime-provided names, castes, task IDs, briefs, and skill sections.
-6. Spawn final-review workers as visible live Task/subagent panels with
+6. Render the runtime-owned spawn ceremony with `aether ceremony spawn-plan`.
+7. Use runtime-provided names, castes, task IDs, briefs, and skill sections.
+8. Render `aether ceremony wave-start` before each final-review wave.
+9. Spawn final-review workers as visible live Task/subagent panels with
    caste-labelled descriptions.
-7. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+10. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-8. Finalize through:
+11. After each terminal result, render `aether ceremony worker-complete`.
+12. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <worker completion JSON>
 ```
 
-9. Render the wrapper closeout:
+13. Render the wrapper closeout:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file <worker completion JSON>
 ```
 
-10. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
+14. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
    Do not run delivery commands unless the user chooses them.
 
 ## Guardrails
