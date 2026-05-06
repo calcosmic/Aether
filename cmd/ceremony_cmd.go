@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
 
@@ -41,6 +42,25 @@ type ceremonyExecutionPlan struct {
 	Strategy      string
 	WorkerCount   int
 	Reason        string
+}
+
+type ceremonyPhaseSummary struct {
+	ID              int                   `json:"id"`
+	Name            string                `json:"name"`
+	Description     string                `json:"description,omitempty"`
+	Status          string                `json:"status,omitempty"`
+	Tasks           []ceremonyTaskSummary `json:"tasks,omitempty"`
+	SuccessCriteria []string              `json:"success_criteria,omitempty"`
+}
+
+type ceremonyTaskSummary struct {
+	ID              string   `json:"id,omitempty"`
+	Goal            string   `json:"goal"`
+	Status          string   `json:"status,omitempty"`
+	Constraints     []string `json:"constraints,omitempty"`
+	Hints           []string `json:"hints,omitempty"`
+	SuccessCriteria []string `json:"success_criteria,omitempty"`
+	DependsOn       []string `json:"depends_on,omitempty"`
 }
 
 var ceremonyCmd = &cobra.Command{
@@ -202,6 +222,10 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		result["completed_phases"] = completedPhaseCount(state)
 		result["milestone"] = state.Milestone
 		result["phase_name"] = lookupPhaseName(state, state.CurrentPhase)
+		result["state_phases"] = ceremonyPhaseSummariesFromColony(state.Plan.Phases)
+		if state.Plan.Confidence != nil {
+			result["plan_confidence_percent"] = int(*state.Plan.Confidence * 100)
+		}
 		if state.Goal != nil {
 			result["goal"] = *state.Goal
 		}
@@ -323,6 +347,7 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 		b.WriteString("\n")
 	}
 	writeCeremonyWorkerSummary(&b, result)
+	writeCeremonyPlanSummary(&b, result)
 	if readiness := strings.TrimSpace(stringValue(result["porter_readiness"])); readiness != "" {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Post-Seal: Delivery Readiness"))
@@ -334,6 +359,87 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
 	b.WriteString(renderNextUp(next))
 	return b.String()
+}
+
+func writeCeremonyPlanSummary(b *strings.Builder, result map[string]interface{}) {
+	if normalizedCeremonyWorkflow(stringValue(result["workflow"])) != "plan" {
+		return
+	}
+	phases := ceremonyPhaseSummariesFromAny(result["completion_phases"])
+	if len(phases) == 0 {
+		phases = ceremonyPhaseSummariesFromAny(result["state_phases"])
+	}
+	if len(phases) == 0 {
+		return
+	}
+
+	taskCount := 0
+	for _, phase := range phases {
+		taskCount += len(phase.Tasks)
+	}
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker(fmt.Sprintf("Planned Phases (%d)", len(phases))))
+	if taskCount > 0 {
+		fmt.Fprintf(b, "Plan shape: %d phases, %d tasks\n", len(phases), taskCount)
+	} else {
+		fmt.Fprintf(b, "Plan shape: %d phases\n", len(phases))
+	}
+	if confidence := intValue(result["plan_confidence_percent"]); confidence > 0 {
+		fmt.Fprintf(b, "Confidence: %d%%\n", confidence)
+	}
+	b.WriteString("\n")
+
+	for _, phase := range phases {
+		phaseName := emptyFallback(strings.TrimSpace(phase.Name), "(unnamed)")
+		if phase.ID > 0 {
+			fmt.Fprintf(b, "Phase %d: %s\n", phase.ID, phaseName)
+		} else {
+			fmt.Fprintf(b, "Phase: %s\n", phaseName)
+		}
+		if description := strings.TrimSpace(phase.Description); description != "" {
+			fmt.Fprintf(b, "  Purpose: %s\n", description)
+		}
+		if status := strings.TrimSpace(phase.Status); status != "" {
+			fmt.Fprintf(b, "  Status: %s\n", status)
+		}
+		if len(phase.Tasks) > 0 {
+			limit := phase.Tasks
+			if len(limit) > 5 {
+				limit = limit[:5]
+			}
+			for _, task := range limit {
+				taskGoal := strings.TrimSpace(task.Goal)
+				if taskGoal == "" {
+					continue
+				}
+				b.WriteString("  - ")
+				if id := strings.TrimSpace(task.ID); id != "" {
+					b.WriteString(id)
+					b.WriteString(": ")
+				}
+				b.WriteString(taskGoal)
+				if status := strings.TrimSpace(task.Status); status != "" {
+					b.WriteString(" [")
+					b.WriteString(status)
+					b.WriteString("]")
+				}
+				b.WriteString("\n")
+				for _, hint := range limitStrings(task.Hints, 2) {
+					if strings.TrimSpace(hint) != "" {
+						fmt.Fprintf(b, "    Hint: %s\n", hint)
+					}
+				}
+			}
+			if len(phase.Tasks) > len(limit) {
+				fmt.Fprintf(b, "  - ...and %d more task(s)\n", len(phase.Tasks)-len(limit))
+			}
+		} else if len(phase.SuccessCriteria) > 0 {
+			for _, criterion := range limitStrings(phase.SuccessCriteria, 3) {
+				fmt.Fprintf(b, "  - %s\n", criterion)
+			}
+		}
+		b.WriteString("\n")
+	}
 }
 
 func writeCeremonyWorkerSummary(b *strings.Builder, result map[string]interface{}) {
@@ -439,6 +545,104 @@ func ceremonyDispatchesFromManifest(manifest map[string]interface{}) []ceremonyD
 		dispatches = append(dispatches, ceremonyDispatchFromMap(raw))
 	}
 	return dispatches
+}
+
+func ceremonyPhaseSummariesFromCompletion(raw map[string]interface{}) []ceremonyPhaseSummary {
+	for _, candidate := range []map[string]interface{}{raw, mapValue(raw["phase_plan"]), mapValue(raw["plan"])} {
+		if len(candidate) == 0 {
+			continue
+		}
+		if phases := ceremonyPhaseSummariesFromAny(candidate["phases"]); len(phases) > 0 {
+			return phases
+		}
+	}
+	for _, worker := range closeoutWorkerMaps(raw) {
+		for _, candidate := range []map[string]interface{}{
+			mapValue(worker["phase_plan"]),
+			mapValue(worker["plan"]),
+			mapValue(worker["response"]),
+		} {
+			if len(candidate) == 0 {
+				continue
+			}
+			if phases := ceremonyPhaseSummariesFromAny(candidate["phases"]); len(phases) > 0 {
+				return phases
+			}
+		}
+	}
+	return nil
+}
+
+func ceremonyPhaseSummariesFromColony(phases []colony.Phase) []ceremonyPhaseSummary {
+	out := make([]ceremonyPhaseSummary, 0, len(phases))
+	for _, phase := range phases {
+		tasks := make([]ceremonyTaskSummary, 0, len(phase.Tasks))
+		for _, task := range phase.Tasks {
+			taskID := ""
+			if task.ID != nil {
+				taskID = *task.ID
+			}
+			tasks = append(tasks, ceremonyTaskSummary{
+				ID:              taskID,
+				Goal:            task.Goal,
+				Status:          task.Status,
+				Constraints:     task.Constraints,
+				Hints:           task.Hints,
+				SuccessCriteria: task.SuccessCriteria,
+				DependsOn:       task.DependsOn,
+			})
+		}
+		out = append(out, ceremonyPhaseSummary{
+			ID:              phase.ID,
+			Name:            phase.Name,
+			Description:     phase.Description,
+			Status:          phase.Status,
+			Tasks:           tasks,
+			SuccessCriteria: phase.SuccessCriteria,
+		})
+	}
+	return out
+}
+
+func ceremonyPhaseSummariesFromAny(value interface{}) []ceremonyPhaseSummary {
+	if typed, ok := value.([]ceremonyPhaseSummary); ok {
+		return typed
+	}
+	rawPhases := mapSliceValue(value)
+	if len(rawPhases) == 0 {
+		return nil
+	}
+	phases := make([]ceremonyPhaseSummary, 0, len(rawPhases))
+	for idx, raw := range rawPhases {
+		phaseID := intValue(raw["id"])
+		if phaseID <= 0 {
+			phaseID = intValue(raw["phase"])
+		}
+		if phaseID <= 0 {
+			phaseID = idx + 1
+		}
+		tasks := []ceremonyTaskSummary{}
+		for _, rawTask := range mapSliceValue(raw["tasks"]) {
+			tasks = append(tasks, ceremonyTaskSummary{
+				ID:              emptyFallback(stringValue(rawTask["id"]), stringValue(rawTask["task_id"])),
+				Goal:            emptyFallback(stringValue(rawTask["goal"]), stringValue(rawTask["task"])),
+				Status:          stringValue(rawTask["status"]),
+				Constraints:     stringSliceValue(rawTask["constraints"]),
+				Hints:           stringSliceValue(rawTask["hints"]),
+				SuccessCriteria: stringSliceValue(rawTask["success_criteria"]),
+				DependsOn:       stringSliceValue(rawTask["depends_on"]),
+			})
+		}
+		phases = append(phases, ceremonyPhaseSummary{
+			ID:              phaseID,
+			Name:            stringValue(raw["name"]),
+			Description:     stringValue(raw["description"]),
+			Status:          stringValue(raw["status"]),
+			Tasks:           tasks,
+			SuccessCriteria: stringSliceValue(raw["success_criteria"]),
+		})
+	}
+	return phases
 }
 
 func ceremonyDispatchFromMap(raw map[string]interface{}) ceremonyDispatch {
