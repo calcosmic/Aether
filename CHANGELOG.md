@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Docs
 - AGENTS.md: add Runtime Lifecycle mermaid diagram (under Architecture Overview) and Wisdom Pipeline mermaid diagram (under Wisdom Pipeline). Model-agnostic, shows both `in-repo` and `worktree` parallel modes, and contains the `skill-match` sub-graph.
 
+## [1.0.29] - 2026-05-06
+
+Restore visual command ceremony while keeping runtime-owned behavior.
+
+### Added
+- Added runtime closeout rendering for lifecycle wrapper finalizers so `build`, `plan`, `colonize`, `continue`, `seal`, and `swarm` keep JSON completion contracts and still show visual completion ceremony.
+- Added visual renderers for additional runtime-owned command families including reference, queen, shelf, signal exchange, tunnels, medic, and porter surfaces.
+
+### Changed
+- Simplified Claude and OpenCode wrappers to delegate duplicated behavior back to the Go runtime while forcing visual mode for user-facing command output.
+- Updated wrapper/source contract tests to catch missing visual mode, missing lifecycle closeouts, and generated wrapper drift.
+
 ## [1.0.28] - 2026-05-05
 
 Stabilize hosted-agent planning, Oracle runtime, and hub-backed platform updates.

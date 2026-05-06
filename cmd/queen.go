@@ -51,9 +51,10 @@ var queenInitCmd = &cobra.Command{
 		}
 		queenPath := filepath.Join(resolveHubPath(), "QUEEN.md")
 		globalCreated := false
+		reason := ""
 
 		if _, err := os.Stat(queenPath); err == nil {
-			outputOK(map[string]interface{}{"created": false, "reason": "already exists", "path": queenPath})
+			reason = "already exists"
 		} else {
 			if err := s.AtomicWrite("QUEEN.md", []byte(queenDefaultContent)); err != nil {
 				outputError(2, fmt.Sprintf("failed to write QUEEN.md: %v", err), nil)
@@ -75,7 +76,11 @@ var queenInitCmd = &cobra.Command{
 			}
 		}
 
-		outputOK(map[string]interface{}{"created": globalCreated, "path": queenPath, "local_created": localCreated, "local_path": localPath})
+		result := map[string]interface{}{"created": globalCreated, "path": queenPath, "local_created": localCreated, "local_path": localPath}
+		if reason != "" {
+			result["reason"] = reason
+		}
+		outputWorkflow(result, renderQueenActionVisual("queen-init", "Queen Initialized", result))
 		return nil
 	},
 }
@@ -99,11 +104,12 @@ var queenReadCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"content": string(data),
 			"path":    queenPath,
 			"size":    len(data),
-		})
+		}
+		outputWorkflow(result, renderQueenActionVisual("queen-read", "Queen Read", result))
 		return nil
 	},
 }
@@ -148,7 +154,8 @@ var queenPromoteCmd = &cobra.Command{
 			Message: sanitizeQueenInline(content),
 		}, "aether-queen")
 
-		outputOK(map[string]interface{}{"promoted": true, "section": section})
+		result := map[string]interface{}{"promoted": true, "section": section}
+		outputWorkflow(result, renderQueenActionVisual("queen-promote", "Queen Wisdom Promoted", result))
 		return nil
 	},
 }
@@ -160,14 +167,15 @@ var queenThresholdsCmd = &cobra.Command{
 	Short: "Return wisdom thresholds configuration",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"trust_promote_threshold": 0.75,
 			"trust_hive_threshold":    0.80,
 			"trust_decay_half_life":   60,
 			"trust_floor":             0.2,
 			"max_instincts":           50,
 			"max_wisdom_entries":      200,
-		})
+		}
+		outputWorkflow(result, renderQueenActionVisual("queen-thresholds", "Queen Thresholds", result))
 		return nil
 	},
 }
@@ -205,7 +213,8 @@ var queenWriteLearningsCmd = &cobra.Command{
 		}
 
 		if len(entries) == 0 {
-			outputOK(map[string]interface{}{"written": 0})
+			result := map[string]interface{}{"written": 0}
+			outputWorkflow(result, renderQueenActionVisual("queen-write-learnings", "Queen Learnings", result))
 			return nil
 		}
 
@@ -216,7 +225,8 @@ var queenWriteLearningsCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{"written": len(entries), "target": "local"})
+		result := map[string]interface{}{"written": len(entries), "target": "local"}
+		outputWorkflow(result, renderQueenActionVisual("queen-write-learnings", "Queen Learnings Written", result))
 		return nil
 	},
 }
@@ -298,11 +308,12 @@ var queenPromoteInstinctCmd = &cobra.Command{
 			Message: sanitizeQueenInline(action),
 		}, "aether-queen")
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"promoted":    true,
 			"instinct_id": instinctID,
 			"hub_written": true,
-		})
+		}
+		outputWorkflow(result, renderQueenActionVisual("queen-promote-instinct", "Queen Instinct Promoted", result))
 		return nil
 	},
 }
@@ -334,7 +345,8 @@ var queenSeedFromHiveCmd = &cobra.Command{
 		}
 
 		if len(wisdom.Entries) == 0 {
-			outputOK(map[string]interface{}{"seeded": 0, "reason": "no hive wisdom entries"})
+			result := map[string]interface{}{"seeded": 0, "reason": "no hive wisdom entries"}
+			outputWorkflow(result, renderQueenActionVisual("queen-seed-from-hive", "Queen Hive Seed", result))
 			return nil
 		}
 
@@ -369,11 +381,12 @@ var queenSeedFromHiveCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"seeded":  len(newEntries),
 			"skipped": skippedCount,
 			"total":   len(entries),
-		})
+		}
+		outputWorkflow(result, renderQueenActionVisual("queen-seed-from-hive", "Queen Hive Seeded", result))
 		return nil
 	},
 }
@@ -397,7 +410,8 @@ var queenMigrateCmd = &cobra.Command{
 
 		// Check if already v2 (has Colony Charter section)
 		if strings.Contains(text, "## Colony Charter") {
-			outputOK(map[string]interface{}{"migrated": false, "reason": "already v2"})
+			result := map[string]interface{}{"migrated": false, "reason": "already v2"}
+			outputWorkflow(result, renderQueenActionVisual("queen-migrate", "Queen Already Current", result))
 			return nil
 		}
 
@@ -409,7 +423,8 @@ var queenMigrateCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{"migrated": true})
+		result := map[string]interface{}{"migrated": true}
+		outputWorkflow(result, renderQueenActionVisual("queen-migrate", "Queen Migrated", result))
 		return nil
 	},
 }
@@ -446,7 +461,8 @@ var charterWriteCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{"written": true, "name": name, "target": "local"})
+		result := map[string]interface{}{"written": true, "name": name, "target": "local"}
+		outputWorkflow(result, renderQueenActionVisual("charter-write", "Charter Written", result))
 		return nil
 	},
 }
@@ -564,7 +580,7 @@ var queenComposeCmd = &cobra.Command{
 		if !written {
 			result["questions"] = queenComposeQuestions()
 		}
-		outputOK(result)
+		outputWorkflow(result, renderQueenActionVisual("queen-compose", "Queen Compose", result))
 		return nil
 	},
 }

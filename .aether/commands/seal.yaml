@@ -18,7 +18,8 @@ wrapper_contract:
     4. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
     5. Write a completion packet containing `seal_manifest` plus terminal worker `dispatches`.
     6. Run `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`.
-    7. Follow the runtime's Porter readiness output; do not deliver unless the user selects delivery actions.
+    7. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <file>` for the user-facing ceremony.
+    8. Follow the runtime's Porter readiness output from visual mode; do not deliver unless the user selects delivery actions.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "Do not run `aether seal` without `--plan-only` from Claude/OpenCode orchestration unless the user explicitly asks for raw/no-orchestration."

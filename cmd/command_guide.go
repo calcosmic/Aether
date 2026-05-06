@@ -200,6 +200,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>",
 		PostSteps: []string{
+			"After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <worker completion JSON>`.",
 			"Summarize depth, phase count, planning confidence, and actual planning workers.",
 			"Route to `aether build 1` or the runtime-surfaced next build command.",
 		},
@@ -221,6 +222,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <worker completion JSON>",
 		PostSteps: []string{
+			"After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout colonize --completion-file <worker completion JSON>`.",
 			"Summarize actual surveyors, survey files, and any runtime-surfaced warning.",
 			"Route first to `aether plan`.",
 		},
@@ -242,6 +244,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completion JSON>",
 		PostSteps: []string{
+			"After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout swarm --completion-file <worker completion JSON>`.",
 			"Summarize actual workers, root cause, fix or blocker, and verification evidence.",
 			"Route first to the runtime-surfaced `next` command.",
 		},
@@ -263,6 +266,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>",
 		PostSteps: []string{
+			"After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout build --completion-file <worker completion JSON>`.",
 			"Summarize actual workers, completed tasks, and the most relevant signal or risk.",
 			"Route first to `aether continue`.",
 		},
@@ -282,6 +286,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 		PostSteps: []string{
+			"For heavy external review, after `continue-finalize` succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout continue --completion-file <worker completion JSON>`.",
 			"If phase advanced, summarize verification and route to the next `aether build <phase>`.",
 			"If blocked, follow the runtime recovery command first.",
 			"If complete, route to `aether seal`.",
@@ -305,6 +310,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <worker completion JSON>",
 		PostSteps: []string{
+			"After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <worker completion JSON>`.",
 			"Summarize actual final-review workers, blockers if any, and the runtime seal result.",
 			"Follow the runtime's Porter readiness output, but do not run delivery commands unless the user selects them.",
 		},

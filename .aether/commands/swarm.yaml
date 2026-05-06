@@ -21,10 +21,12 @@ wrapper_additions:
     4. Preserve the runtime wave order: investigation workers in wave 1 may run together, builder wave 2 waits for wave 1 summaries, watcher wave 3 waits for builder completion.
     5. Collect terminal worker results into a completion JSON file containing the original `swarm_manifest` and a `dispatches` array.
     6. Run `AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <file>` to let the runtime write swarm artifacts, spawn-tree status, and the final result.
+    7. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout swarm --completion-file <file>` for the user-facing ceremony.
   post_swarm: |
     Close from `swarm-finalize` output only:
-    1. Summarize which workers actually ran, the root cause, the fix or blocker, and verification evidence.
-    2. Route first to the runtime-surfaced next command.
+    1. Run the visual closeout command first; use its next-step line as the source of truth.
+    2. Summarize which workers actually ran, the root cause, the fix or blocker, and verification evidence.
+    3. Route first to the runtime-surfaced next command.
 guardrails:
   - "Do NOT run nested subprocess swarm workers from Claude/OpenCode wrapper orchestration."
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."

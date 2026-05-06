@@ -3,6 +3,11 @@ description: "🕳️ Explore tunnels (browse archived colonies, compare chamber
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether tunnels $ARGUMENTS"
+runtime_capabilities:
+  - "No arguments lists the chamber timeline."
+  - "One chamber argument renders chamber detail and seal summary."
+  - "Two chamber arguments compare archived colonies."
+  - "`--import-signals` imports pheromone signals from a chamber archive into the current colony with chamber-prefixed IDs."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

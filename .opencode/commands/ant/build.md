@@ -105,14 +105,21 @@ AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <comp
 
 The runtime records `dispatch_mode: external-task`, claims, spawn-tree statuses, state transition to `BUILT`, and next-step truth.
 
+Render the user-facing closeout after the JSON finalizer succeeds:
+
+```
+AETHER_OUTPUT_MODE=visual aether closeout build --completion-file <completion_file>
+```
+
 ## After the Build
 
 Once `build-finalize` succeeds:
 
-1. Summarize what moved forward and which workers/castes actually ran.
-2. Note only the most relevant signal or risk that should stay in view.
-3. Guide the user first to `/ant-continue` as the next command.
-4. Keep the closeout tight — one clear next move is better than an option menu.
+1. Use the visual closeout's next-step line as the source of truth.
+2. Summarize what moved forward and which workers/castes actually ran.
+3. Note only the most relevant signal or risk that should stay in view.
+4. Guide the user first to `/ant-continue` as the next command.
+5. Keep the closeout tight — one clear next move is better than an option menu.
 
 ## Verification Depth
 

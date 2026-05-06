@@ -1,8 +1,11 @@
 name: ant-bump-version
-description: "🚀 Bump version across all files, rebuild, push, and tag for release"
+description: "🚀 Bump version across runtime files, docs, hub publish, commit, push, and tag for release"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether bump-version $ARGUMENTS"
+release_flow: |
+  Run the runtime bump first. If it succeeds, preserve the historical release workflow:
+  update human-facing version references in CLAUDE.md, AGENTS.md, README.md, and docs/phase3-section-roadmap.md when matching old-version markers exist; run go test ./...; publish with aether publish --channel stable --binary-dest "$HOME/.local/bin"; verify version agreement; commit the version/docs changes; push the branch; tag v<version>; push the tag.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

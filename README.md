@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-25-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-50-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.28-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.29-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -121,7 +121,7 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.28` bootstraps Aether `1.0.28`.
+`aether-colony@1.0.29` bootstraps Aether `1.0.29`.
 
 **Option 1: Go binary**
 
@@ -1076,9 +1076,11 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.28 -- Released (Current)
+### 🎉 v1.0.29 -- Released (Current)
 
-- One public Aether version now governs the Go runtime, npm bootstrap package, README badges, changelog, and operator docs: `1.0.28`
+- Visual command ceremony is restored across lifecycle, signal, reference, shelf, queen, tunnels, medic, and porter surfaces while preserving runtime-owned state changes.
+- Lifecycle wrappers now keep JSON finalizers for machine contracts and add visual closeouts for user-facing completion.
+- One public Aether version now governs the Go runtime, npm bootstrap package, README badges, changelog, and operator docs: `1.0.29`
 - `npx --yes aether-colony@latest` remains a thin bootstrap, not a second runtime, and now stays explicitly documented as matching the published Go release version
 - The npm bootstrap now matches the actual GitHub release asset names and checksum filename, so `latest` no longer points at a package that asks GitHub for files that do not exist
 - The publish/update runbook now treats `aether install --package-dir "$PWD"`, downstream `aether update --force`, `--download-binary`, and npm publishing as one release system instead of disconnected steps

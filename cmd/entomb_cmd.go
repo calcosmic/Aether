@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/exchange"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -185,19 +187,51 @@ var entombCmd = &cobra.Command{
 }
 
 var tunnelsCmd = &cobra.Command{
-	Use:   "tunnels [chamber]",
+	Use:   "tunnels [chamber] [other_chamber]",
 	Short: "Browse archived chambers",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		aetherRoot := resolveAetherRootPath()
 		chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+		importSignals, _ := cmd.Flags().GetBool("import-signals")
 
 		if len(args) == 0 {
-			return chamberListCmd.RunE(cmd, args)
+			chambers, byScope, err := loadChamberManifests(chambersDir)
+			if err != nil {
+				outputError(1, fmt.Sprintf("failed to read chambers directory: %v", err), nil)
+				return nil
+			}
+			result := map[string]interface{}{
+				"mode":     "list",
+				"chambers": chambers,
+				"by_scope": byScope,
+				"total":    len(chambers),
+			}
+			outputWorkflow(result, renderTunnelsVisual(result))
+			return nil
 		}
 
 		chamberName := strings.TrimSpace(args[0])
 		chamberDir := filepath.Join(chambersDir, chamberName)
+		if importSignals {
+			result, err := importSignalsFromChamber(chamberName, chamberDir)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return nil
+			}
+			outputWorkflow(result, renderTunnelsVisual(result))
+			return nil
+		}
+		if len(args) == 2 {
+			result, err := compareChambers(chambersDir, chamberName, strings.TrimSpace(args[1]))
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return nil
+			}
+			outputWorkflow(result, renderTunnelsVisual(result))
+			return nil
+		}
+
 		manifestPath := filepath.Join(chamberDir, "manifest.json")
 		data, err := os.ReadFile(manifestPath)
 		if err != nil {
@@ -224,14 +258,188 @@ var tunnelsCmd = &cobra.Command{
 			sealSummary = string(raw)
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
+			"mode":         "detail",
 			"chamber":      chamberName,
 			"manifest":     manifest,
 			"files":        files,
 			"seal_summary": sealSummary,
-		})
+		}
+		if _, err := os.Stat(filepath.Join(chamberDir, "colony-archive.xml")); err == nil {
+			result["archive_xml"] = filepath.ToSlash(filepath.Join(".aether", "chambers", chamberName, "colony-archive.xml"))
+			result["import_command"] = fmt.Sprintf("aether tunnels %s --import-signals", chamberName)
+		}
+		outputWorkflow(result, renderTunnelsVisual(result))
 		return nil
 	},
+}
+
+func loadChamberManifests(chambersDir string) ([]map[string]interface{}, map[string][]interface{}, error) {
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []map[string]interface{}{}, emptyChamberScopeGroups(), nil
+		}
+		return nil, nil, err
+	}
+	chambers := []map[string]interface{}{}
+	byScope := emptyChamberScopeGroups()
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		manifestPath := filepath.Join(chambersDir, entry.Name(), "manifest.json")
+		data, err := os.ReadFile(manifestPath)
+		if err != nil {
+			continue
+		}
+		var manifest map[string]interface{}
+		if err := json.Unmarshal(data, &manifest); err != nil {
+			continue
+		}
+		manifest = manifestWithEffectiveScope(manifest)
+		chambers = append(chambers, manifest)
+		scope := string(chamberManifestScope(manifest))
+		byScope[scope] = append(byScope[scope], manifest)
+	}
+	sort.SliceStable(chambers, func(i, j int) bool {
+		return stringValue(chambers[i]["entombed_at"]) > stringValue(chambers[j]["entombed_at"])
+	})
+	return chambers, byScope, nil
+}
+
+func readChamberManifest(chambersDir, name string) (map[string]interface{}, string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, "", fmt.Errorf("chamber name is required")
+	}
+	chamberDir := filepath.Join(chambersDir, name)
+	manifestPath := filepath.Join(chamberDir, "manifest.json")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("chamber %q not found", name)
+	}
+	var manifest map[string]interface{}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, "", fmt.Errorf("chamber %q has invalid manifest", name)
+	}
+	return manifestWithEffectiveScope(manifest), chamberDir, nil
+}
+
+func compareChambers(chambersDir, leftName, rightName string) (map[string]interface{}, error) {
+	left, leftDir, err := readChamberManifest(chambersDir, leftName)
+	if err != nil {
+		return nil, err
+	}
+	right, rightDir, err := readChamberManifest(chambersDir, rightName)
+	if err != nil {
+		return nil, err
+	}
+	leftSummary := chamberStateMemorySummary(leftDir)
+	rightSummary := chamberStateMemorySummary(rightDir)
+
+	leftPhases := intValue(left["phases_completed"])
+	rightPhases := intValue(right["phases_completed"])
+	leftDecisions := intValue(leftSummary["decisions"])
+	rightDecisions := intValue(rightSummary["decisions"])
+	leftLearnings := intValue(leftSummary["learnings"])
+	rightLearnings := intValue(rightSummary["learnings"])
+
+	growth := map[string]interface{}{
+		"phases_diff":    rightPhases - leftPhases,
+		"decisions_diff": rightDecisions - leftDecisions,
+		"learnings_diff": rightLearnings - leftLearnings,
+		"milestone_from": stringValue(left["milestone"]),
+		"milestone_to":   stringValue(right["milestone"]),
+	}
+	if days := daysBetweenChambers(stringValue(left["entombed_at"]), stringValue(right["entombed_at"])); days != 0 {
+		growth["days_between"] = days
+	}
+
+	return map[string]interface{}{
+		"mode":          "compare",
+		"chamber_a":     leftName,
+		"chamber_b":     rightName,
+		"manifest_a":    left,
+		"manifest_b":    right,
+		"summary_a":     leftSummary,
+		"summary_b":     rightSummary,
+		"growth":        growth,
+		"compare_count": 4,
+	}, nil
+}
+
+func chamberStateMemorySummary(chamberDir string) map[string]interface{} {
+	summary := map[string]interface{}{
+		"decisions": 0,
+		"learnings": 0,
+	}
+	data, err := os.ReadFile(filepath.Join(chamberDir, "COLONY_STATE.json"))
+	if err != nil {
+		return summary
+	}
+	var state colony.ColonyState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return summary
+	}
+	learnings := 0
+	for _, phase := range state.Memory.PhaseLearnings {
+		learnings += len(phase.Learnings)
+	}
+	summary["decisions"] = len(state.Memory.Decisions)
+	summary["learnings"] = learnings
+	return summary
+}
+
+func daysBetweenChambers(left, right string) int {
+	leftTime, leftErr := time.Parse(time.RFC3339, strings.TrimSpace(left))
+	rightTime, rightErr := time.Parse(time.RFC3339, strings.TrimSpace(right))
+	if leftErr != nil || rightErr != nil {
+		return 0
+	}
+	diff := rightTime.Sub(leftTime)
+	if diff < 0 {
+		diff = -diff
+	}
+	return int(diff.Hours() / 24)
+}
+
+func importSignalsFromChamber(chamberName, chamberDir string) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no colony initialized")
+	}
+	archivePath := filepath.Join(chamberDir, "colony-archive.xml")
+	data, err := os.ReadFile(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("chamber %q has no colony-archive.xml", chamberName)
+	}
+	pheromoneXML, err := extractPheromonesFromArchiveXML(data)
+	if err != nil {
+		return nil, err
+	}
+	result, err := importPheromonesData(filepath.ToSlash(archivePath), pheromoneXML, chamberName)
+	if err != nil {
+		return nil, err
+	}
+	result["mode"] = "import"
+	result["chamber"] = chamberName
+	result["archive"] = filepath.ToSlash(archivePath)
+	return result, nil
+}
+
+func extractPheromonesFromArchiveXML(data []byte) ([]byte, error) {
+	var archive exchange.ColonyArchiveXML
+	if err := xml.Unmarshal(data, &archive); err != nil {
+		return nil, fmt.Errorf("parse colony archive XML: %w", err)
+	}
+	if archive.Pheromones == nil {
+		return nil, fmt.Errorf("archive has no pheromones section")
+	}
+	pheromoneData, err := xml.MarshalIndent(archive.Pheromones, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal pheromones XML: %w", err)
+	}
+	return append([]byte(xml.Header), pheromoneData...), nil
 }
 
 func uniqueChamberName(chambersRoot string, scope colony.ColonyScope, goal string, now time.Time) string {
@@ -703,6 +911,7 @@ func renderEntombVisual(result map[string]interface{}) string {
 }
 
 func init() {
+	tunnelsCmd.Flags().Bool("import-signals", false, "Import pheromone signals from the chamber's colony-archive.xml")
 	rootCmd.AddCommand(entombCmd)
 	rootCmd.AddCommand(tunnelsCmd)
 }

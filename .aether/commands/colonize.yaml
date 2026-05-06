@@ -16,10 +16,12 @@ wrapper_additions:
     3. For each manifest dispatch, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject the dispatch `brief`, `output_paths`, active signals, and `skill_section`, then call `aether spawn-complete`.
     4. Collect terminal surveyor results into a completion JSON file containing the original `colonize_manifest` and a `dispatches` array.
     5. Run `AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <file>` to let the runtime write survey artifacts, spawn-tree status, session, and colony state.
+    6. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether closeout colonize --completion-file <file>` for the user-facing ceremony.
   post_colonize: |
     Close from `colonize-finalize` output only:
-    1. Summarize which surveyors actually ran and which survey files were written.
-    2. Route first to `/ant-plan`, keeping `aether plan` as the runtime source of truth beneath the wrapper.
+    1. Run the visual closeout command first; use its next-step line as the source of truth.
+    2. Summarize which surveyors actually ran and which survey files were written.
+    3. Route first to `/ant-plan`, keeping `aether plan` as the runtime source of truth beneath the wrapper.
 guardrails:
   - "Do NOT run nested subprocess surveyors from Claude/OpenCode wrapper orchestration."
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
