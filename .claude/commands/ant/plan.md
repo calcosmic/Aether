@@ -51,6 +51,8 @@ AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-dept
 
 Parse `result.plan_manifest` or `result.planning_manifest`. This manifest is the only source for worker names, castes, waves, task IDs, briefs, survey context, depth, granularity bounds, and finalizer contract.
 
+Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the visual plan stays tied to the same runtime manifest.
+
 If the user requested a refresh and the runtime returns `dispatch_mode: agent-delegate`, do not run nested subprocess planning. Treat the returned manifest as the same host-dispatch contract: dispatch Scout and Route-Setter through the current platform, then finish with `plan-finalize`.
 
 If the runtime returns `existing_plan: true`, do not spawn workers. Summarize the existing plan and route to the runtime-surfaced next command.
@@ -63,6 +65,16 @@ Before spawning planning workers, inspect the runtime result for `unresolved_cla
 - Route first to `/ant-discuss` so the user can resolve the questions through the runtime.
 - Proceed with implicit assumptions only if the user explicitly chooses to continue despite the warning.
 - If the user proceeds, carry that choice into the Scout and Route-Setter prompts as a known planning constraint.
+
+## Runtime Spawn Ceremony
+
+Before spawning Scout and Route-Setter workers, render the runtime-owned old-style planning ceremony:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest_file>
+```
+
+This output is for display only. Do not parse it as state.
 
 ## Live Worker Ceremony
 
@@ -79,17 +91,21 @@ The visible live Task/subagent stack is part of the Aether ceremony.
 
 For each dispatch in the manifest, execute the planned workers by wave:
 
-1. Before spawning, run:
+1. Before spawning a manifest wave, render:
+   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
+2. Then run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
-2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
-3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-4. Inject the selected depth, planning depth selection, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
-5. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
-6. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
-7. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
-8. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
-9. After each worker returns, run:
+3. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Inject the selected depth, planning depth selection, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
+6. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
+7. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
+8. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
+9. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
+10. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
+11. Write that one terminal result to a temporary worker JSON file and render:
+   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`
 
 Wave 1 Scout must complete before wave 2 Route-Setter starts. The Route-Setter result must include `phase_plan` using the manifest's required `phase-plan.json` schema:
 
@@ -188,7 +204,7 @@ The runtime writes canonical planning artifacts, updates `COLONY_STATE.json`, re
 Render the user-facing closeout after the JSON finalizer succeeds:
 
 ```
-AETHER_OUTPUT_MODE=visual aether closeout plan --completion-file <completion_file>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <completion_file>
 ```
 
 ## After Planning

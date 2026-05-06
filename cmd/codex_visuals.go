@@ -135,6 +135,7 @@ var commandEmojiMap = map[string]string{
 	"oracle":                 "🔮",
 	"status":                 "📊",
 	"closeout":               "🏁",
+	"ceremony":               "🐜",
 	"artifacts":              "🗂️",
 	"next-up":                "🐜",
 	"print-next-up":          "🐜",

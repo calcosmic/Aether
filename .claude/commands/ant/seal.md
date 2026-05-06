@@ -28,12 +28,24 @@ AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS
 
 Parse `result.seal_manifest`. If the runtime returns blockers or recovery guidance, surface that output and stop. Do not fabricate review results.
 
+Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the final-review display uses the same runtime manifest.
+
 Expected manifest:
 
 - `dispatch_mode`: `plan-only` or `agent-delegate`
 - `requires_finalizer`: `true`
 - `dispatches`: Gatekeeper, Auditor, and Probe final-review workers
 - `finalizer_command`: `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`
+
+## Runtime Spawn Ceremony
+
+Before spawning final-review workers, render the runtime-owned old-style seal ceremony:
+
+```bash
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>
+```
+
+This output is display-only; do not parse it as state.
 
 ## Live Worker Ceremony
 
@@ -52,12 +64,13 @@ Dispatch the runtime-provided workers through the host platform in manifest wave
 
 For each dispatch:
 
-1. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1`.
-2. Spawn the host agent using `agent_name` as the subagent type.
-3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-4. Give the worker the exact `brief` from the manifest.
-5. Tell the worker this is final review before seal and it must not modify repo source files.
-6. Collect a terminal result with:
+1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1`.
+3. Spawn the host agent using `agent_name` as the subagent type.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Give the worker the exact `brief` from the manifest.
+6. Tell the worker this is final review before seal and it must not modify repo source files.
+7. Collect a terminal result with:
    - `name`
    - `caste`
    - `stage`
@@ -67,7 +80,8 @@ For each dispatch:
    - `summary`
    - `blockers`
    - `report`
-7. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
+8. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
+9. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`.
 
 Terminal statuses are `completed`, `passed`, `blocked`, `failed`, or `timeout`.
 
@@ -103,7 +117,7 @@ AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <completion_file>
 Render the user-facing closeout after the JSON finalizer succeeds:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether closeout seal --completion-file <completion_file>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file <completion_file>
 ```
 
 Branch strictly on `seal-finalize` output:
