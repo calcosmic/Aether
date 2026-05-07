@@ -32,17 +32,17 @@
 
 - [x] **DATA-01**: Every artifact in .aether/data/ (COLONY_STATE, pheromones, midden, instincts, session, handoffs, review ledgers) is traced to a downstream consumer or explicitly documented as write-only-for-async
 - [x] **DATA-02**: QUEEN.md, Hive Brain, and graph/survey artifacts are wired into colony-prime context injection or explicitly pruned
-- [ ] **DATA-03**: Review ledgers accumulate across phases and survive session resets
+- [x] **DATA-03**: Review ledgers accumulate across phases and survive session resets
 
 ### Release Integrity (REL)
 
-- [ ] **REL-01**: Version bumping, binary publishing, hub sync, npm metadata, install/update behavior, and stale-file cleanup operate as one verified coherent system
-- [ ] **REL-02**: Published user experience matches the source checkout (no stale hub files, no version mismatches)
+- [x] **REL-01**: Version bumping, binary publishing, hub sync, npm metadata, install/update behavior, and stale-file cleanup operate as one verified coherent system
+- [x] **REL-02**: Published user experience matches the source checkout (no stale hub files, no version mismatches)
 
 ### Test Contracts (TEST)
 
-- [ ] **TEST-01**: Structural snapshot tests freeze verified command contracts so future drift fails loudly
-- [ ] **TEST-02**: Regression test suite covers command contracts, wrapper parity, output modes, worker guardrails, data flow, and publish/update behavior
+- [x] **TEST-01**: Structural snapshot tests freeze verified command contracts so future drift fails loudly
+- [x] **TEST-02**: Regression test suite covers command contracts, wrapper parity, output modes, worker guardrails, data flow, and publish/update behavior
 - [ ] **TEST-03**: `go test ./...`, `go vet ./...`, and source/wrapper checks pass consistently
 
 ## Out of Scope
@@ -73,11 +73,11 @@
 | VIZ-02 | Phase 102 | Complete |
 | DATA-01 | Phase 103 | Complete |
 | DATA-02 | Phase 103 | Complete |
-| DATA-03 | Phase 104 | Pending |
-| REL-01 | Phase 104 | Pending |
-| REL-02 | Phase 104 | Pending |
-| TEST-01 | Phase 104 | Pending |
-| TEST-02 | Phase 104 | Pending |
+| DATA-03 | Phase 104 | Complete |
+| REL-01 | Phase 104 | Complete |
+| REL-02 | Phase 104 | Complete |
+| TEST-01 | Phase 104 | Complete |
+| TEST-02 | Phase 104 | Complete |
 | TEST-03 | Phase 105 | Pending |
 
 **Coverage:**
