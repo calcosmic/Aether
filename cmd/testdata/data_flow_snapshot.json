@@ -1,0 +1,253 @@
+{
+  "artifacts": [
+    {
+      "name": "COLONY_STATE.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["state", "review_depth", "decisions", "learnings"],
+      "capsule_sections": ["state", "decisions"],
+      "dead_end": false
+    },
+    {
+      "name": "pheromones.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["pheromones"],
+      "capsule_sections": ["signals"],
+      "dead_end": false
+    },
+    {
+      "name": "instincts.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["instincts"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "pending-decisions.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["clarified_intent", "blockers"],
+      "capsule_sections": ["risks"],
+      "dead_end": false
+    },
+    {
+      "name": "flags.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["blockers"],
+      "capsule_sections": ["risks"],
+      "dead_end": false
+    },
+    {
+      "name": "session.json",
+      "classification": "cli-consumed",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "handoffs/worker-handoffs.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["worker_handoffs"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "entries.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["learned_memory"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "midden.json",
+      "classification": "capsule-injected",
+      "colony_prime_sections": [],
+      "capsule_sections": ["midden"],
+      "dead_end": false
+    },
+    {
+      "name": "event-bus.jsonl",
+      "classification": "async-pipeline",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "behavior-observations.jsonl",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "profile.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "rolling-summary.log",
+      "classification": "capsule-injected",
+      "colony_prime_sections": [],
+      "capsule_sections": ["recent_narrative"],
+      "dead_end": false
+    },
+    {
+      "name": "constraints.json",
+      "classification": "dead-end",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": true
+    },
+    {
+      "name": "assumptions.json",
+      "classification": "cli-consumed",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "medic-last-scan.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["medic_health"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "colony.db",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "spawn-tree.txt",
+      "classification": "async-pipeline",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "runtime-spawn-runs.jsonl",
+      "classification": "async-pipeline",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "survey/blueprint.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "survey/chambers.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "survey/disciplines.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "survey/provisions.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "survey/pathogens.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "codebase-graph.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "instinct-graph.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "reviews/{domain}/ledger.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["prior_reviews"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "reviews/_summary_cache.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["prior_reviews"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "~/.aether/QUEEN.md",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["global_queen_md", "user_preferences"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "repo/.aether/QUEEN.md",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["local_queen_wisdom", "user_preferences"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "~/.aether/hive/wisdom.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["hive_wisdom"],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "~/.aether/registry/registry.json",
+      "classification": "specialized-consumer",
+      "colony_prime_sections": [],
+      "capsule_sections": [],
+      "dead_end": false
+    },
+    {
+      "name": "~/.aether/eternal/memory.json",
+      "classification": "colony-prime-injected",
+      "colony_prime_sections": ["hive_wisdom"],
+      "capsule_sections": [],
+      "dead_end": false
+    }
+  ],
+  "colony_prime_section_count": 16,
+  "capsule_section_count": 5,
+  "dead_end_artifacts": ["constraints.json"],
+  "ghost_files": ["constraints.json"],
+  "not_wired_to_colony_prime": [
+    "survey/blueprint.json",
+    "survey/chambers.json",
+    "survey/disciplines.json",
+    "survey/provisions.json",
+    "survey/pathogens.json",
+    "codebase-graph.json",
+    "instinct-graph.json"
+  ],
+  "findings_count": {
+    "critical": 0,
+    "warning": 2,
+    "info": 5
+  }
+}
