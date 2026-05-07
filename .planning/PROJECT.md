@@ -36,6 +36,7 @@ That means:
 
 - Go runtime is healthy, v1.0.27 shipped
 - Milestone v1.14 Queen Authority complete (shipped 2026-05-04)
+- Milestone v1.15 in progress: Phases 100, 102 complete; audit phases documenting framework coherence
 - 2900+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
 - Queen coordinates phases autonomously — gate classification, auto-recovery, wave lifecycle
@@ -251,4 +252,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Findings must be persisted into docs, review ledgers, Queen memory, tests, or code
 - 7 specialist reviews: Runtime Contract, Platform Parity, Worker Economy, Memory/Graph, Release, Test Contract, Final Architect
 
-*Last updated: 2026-05-07 — milestone initialized*
+*Last updated: 2026-05-07 after roadmap approved (6 phases, 19 requirements)*
