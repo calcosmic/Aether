@@ -1,210 +1,172 @@
 # Project Research Summary
 
-**Project:** Aether v1.14 -- Queen Authority
-**Domain:** Autonomous queen coordination for multi-agent colony framework
-**Researched:** 2026-05-03
+**Project:** Aether v1.15 -- Framework Coherence, Efficiency, and Ship Readiness
+**Domain:** Internal audit and hardening of a Go/Cobra multi-agent CLI framework (80+ subcommands, 3 platform surfaces, 7 data subsystems)
+**Researched:** 2026-05-07
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Queen Authority transforms the Aether queen from narrator into autonomous coordinator. The core insight from all four research streams is that the Go runtime already contains nearly every component needed -- circuit breaker, Fixer dispatch, gate evaluation, retry logic, wave management, and process tracking -- but these components require manual triggering. v1.14 wires them together into a self-driving coordination loop so the queen can detect failures, classify severity, apply bounded recovery, and escalate only when genuinely stuck.
+Aether v1.15 is a systematic coherence audit of an 80+ subcommand Go CLI framework with three platform surfaces (Claude Code, OpenCode, Codex runtime-native), 60 YAML source-of-truth command definitions, and 7 data subsystems spanning the init-to-seal lifecycle. The audit must verify that every command has a contract, every spawned worker has justified purpose, every data artifact is consumed or pruned, and every platform surface agrees on what exists. This is not a feature milestone; it is an integrity milestone that locks in the accumulated work of v1.0 through v1.14 before the system grows further.
 
-The recommended approach is a phased build: start with gate classification and recovery data infrastructure (low risk, everything depends on it), then the smart gate pipeline and recovery orchestrator, then queen-led build/continue integration, and finally output filtering as the presentation layer. No new external dependencies are needed. The estimated new code is approximately 1,300 lines across a new `pkg/queen/` package plus modifications to existing `cmd/` files.
+The recommended approach is a layered scanner pattern. Layer 1 inventories what exists (317 Cobra commands, 60 YAML definitions, 12 lifecycle wrappers, 27 agent definitions). Layer 2 cross-references surfaces for parity violations (YAML vs wrappers vs command-guide vs runtime). Layer 3 traces data flow through the full lifecycle to find dead-end artifacts. Layer 4 writes regression tests that freeze the verified contracts so future drift fails CI. Aether already has partial audit infrastructure (`source-check`, `command_parity_test.go`, `visual_wrapper_contract_test.go`) that should be extended rather than replaced.
 
-The key risks are cascading fix-fail cycles (queen retries a fundamentally broken task endlessly), smart gates auto-resolving legitimate security findings, and output filtering hiding critical errors from the user. All three are mitigated by the same principle: the queen advises, the Go runtime decides. Hard-block gates (watcher_veto, gatekeeper, flags, loop_detection) must never be auto-resolved. Every queen decision must be logged to an audit trail. Recovery must be bounded by a per-phase budget with mandatory human escalation when exhausted.
+The key risks are (1) the audit surface is large -- 317 commands across ~100 source files means manual verification is infeasible, requiring automated cataloging first; (2) the existing parity tests cover Claude/OpenCode body agreement but leave YAML-to-command-guide and YAML-to-wrapper-contract gaps unverified; and (3) regression tests must be structurally sound (checking properties, not string snapshots) to avoid alert fatigue from cosmetic changes.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Zero new external dependencies. Every capability the queen needs already exists in the Go runtime.
+The milestone requires zero new dependencies. The audit uses Go's testing package, Cobra's command tree introspection, and existing test infrastructure in `cmd/`. All findings come from direct source code analysis.
 
-**Core technologies (existing, no version changes):**
-- `pkg/codex/dispatch.go` (`DispatchBatchWithObserver`): wave-based worker dispatch with observer callbacks -- the queen's sensory input for lifecycle events
-- `cmd/codex_dispatch_contract.go` (`recommendQueenWorkflowProfile`): profile recommendation engine -- the queen applies her recommendation directly instead of emitting advice
-- `cmd/circuit_breaker.go`: per-worker failure tracking with threshold-based tripping and same-caste peer redistribution
-- `cmd/gate.go`: 11 named gates with per-phase persistence and recovery templates
-- `cmd/fixer_dispatch.go`: Fixer dispatch with attempt caps and circuit breaker integration
-- `cmd/immune.go`: error diagnosis and exponential backoff retry (`2^attempt * 2` seconds)
-- `pkg/codex/process_tracker.go`: PID registry, stale worker detection, graceful termination
-- `pkg/colony/state_machine.go`: state transitions and phase advancement
-- `pkg/storage.Store` (`UpdateJSONAtomically`): file-locked atomic state mutations
-
-**Rejected additions (and why):**
-- `thejerf/suture` (supervisor trees) -- workers are short-lived subprocesses, not long-running services; existing dispatch + circuit breaker already handles this
-- `oklog/run` (actor group) -- queen loop is sequential, not concurrent; wave-internal concurrency already handled by `DispatchWaveWithObserver`
-- External backoff libraries -- single formula (`2^attempt * 2`) already implemented in `cmd/immune.go`
-- State machine libraries -- `pkg/colony/state_machine.go` already exists and is tested
+**Core technologies:**
+- **Go 1.24 + Cobra v1.10.2:** Command registration and tree walking via `rootCmd.Commands()` -- provides the complete command surface for cataloging
+- **Existing test infrastructure:** `source-check`, `command_parity_test.go`, `command_source_hygiene_test.go`, `visual_wrapper_contract_test.go` -- extend, do not replace
+- **YAML source-of-truth chain:** 60 `.aether/commands/*.yaml` files define the canonical command set; wrappers and command-guide are derived surfaces
+- **pkg/storage.Store:** All state mutations use `UpdateJSONAtomically`; the audit verifies store initialization for every data-touching command
 
 ### Expected Features
 
-**Must have (table stakes -- core recovery loop):**
-- A1: Failure Classification Engine -- distinguish recoverable vs non-recoverable before acting
-- A2: Bounded Auto-Retry with Exponential Backoff -- retry transient failures with MaxR/MaxT bounds
-- A3: Peer Redistribution on Worker Failure -- use `findSameCastePeer` automatically when circuit breaker trips
-- A4: Queen-Driven Fixer Dispatch -- call `dispatchFixer` automatically for `requires-attempt` failures
-- A5: Escalation Protocol with Human Handoff -- generate structured escalation summary when recovery exhausted
+**Must have (table stakes for audit integrity):**
+- **Command catalog scanner** -- walks all 317 registered Cobra commands, produces structured JSON catalog with metadata (flags, output mode, store requirement, YAML source match)
+- **Three-surface parity verification** -- YAML, Claude wrappers, OpenCode wrappers, and Codex command-guide all agree on what commands exist and their contracts
+- **Data flow lifecycle trace** -- every artifact in `.aether/data/` has at least one writer and one reader; dead-end (write-only) artifacts are flagged
+- **Regression test suite** -- snapshot-based tests that catch future command removal, parity drift, and data flow disconnection
 
-**Should have (competitive differentiators):**
-- B1: Gate Severity Classification -- add `critical`/`high`/`medium`/`low`/`info` to `GateCheckResult`
-- B2: Non-Blocking Advisory Gates -- low/info severity findings logged but don't block advancement
-- B4: Gate Dependency Graph -- skip dependent gates when prerequisite fails (use existing `not-reached` status)
-- C1: Output Severity Filtering -- default display shows warnings and above; verbose shows everything
-- C2: Phase Completion Summary -- Go runtime generates structured summary (tasks, gates, duration, next action)
+**Should have (efficiency and polish):**
+- **Worker economy audit** -- every agent definition has a caste assignment, a clear output, and is referenced by at least one command
+- **Gate system integrity check** -- all 11 gates have explicit classification (hard_block/soft_block/advisory) with no unclassified gates
+- **Visual ceremony audit** -- all 12 lifecycle wrappers (6 workflows x 2 platforms) call all four ceremony surfaces in correct order
+- **Command contract completeness** -- every command has non-empty `Short`, registered flags match `RunE` usage, output mode is explicit
 
-**Defer (v2+):**
-- B3: Auto-Resolution for Known Recoverable Patterns -- pattern matching logic needs careful safety bounds
-- C3: Progressive Disclosure -- UX refinement, not core functionality
-- D1-D3: Full Wave Lifecycle Ownership, Inter-Wave Decision Making, Phase Completion Decision -- highest architectural integration risk, prove the recovery loop first
-- Learned severity thresholds -- requires multi-colony data
-- Cross-phase pattern learning -- complexity not justified until core loop proven
-- User-defined recovery strategies -- YAGNI
-
-**Anti-features (never implement):**
-- Silent auto-recovery without logging -- destroys user visibility
-- Queen overriding circuit breaker thresholds -- defeats the safety mechanism
-- LLM-based failure classification -- non-deterministic, hard to debug; use rule-based classification
-- Auto-advance without confirmation in manual mode -- violates user expectations
-- Auto-resolving critical severity gates -- security/safety gates must always block
-- Queen modifying worker code directly -- breaks audit trail and worker autonomy
-- Infinite recovery loops -- Erlang/OTP lesson: bounded recovery with mandatory escalation
+**Defer (post-audit):**
+- Performance benchmarking of the scanner itself
+- Automated fix generation (audit finds, humans fix)
+- Cross-milestone drift monitoring (future CI integration)
 
 ### Architecture Approach
 
-The architecture follows a strict authority model: the Queen (wrapper layer) makes decisions, the Go runtime (authoritative) executes them. The Queen cannot write COLONY_STATE.json directly, cannot skip hard-block gates, and cannot force phase advance without verification. This preserves the existing wrapper-runtime contract.
+The audit follows a catalog-first scanner pattern: build a complete inventory, then cross-reference, then trace flows, then freeze verified state. The critical constraint is that the audit must not change runtime behavior -- it reads and cross-references only. Fixes are separate phases.
 
 **Major components:**
-
-1. **`pkg/queen/` (new package)** -- coordinator loop that assembles existing components into an autonomous decision chain: dispatch wave, monitor via `DispatchObserver`, evaluate results, run gates with classification, apply recovery, filter output, advance or escalate
-2. **`cmd/gate.go` (modified)** -- add `gateClassification` (hard_block/soft_block/advisory), `AutoRecoverable` field, classification-aware `runCodexContinueGates()` that processes soft-block and advisory failures differently from hard blocks
-3. **`cmd/recovery.go` (new file)** -- recovery orchestrator with `attemptAutoRecovery()` that runs between gate failure and blocking; strategy per gate (re-run verification, skip spawn in queen-led mode, retry tests)
-4. **`cmd/codex_build.go` (modified)** -- add `RecoveryAttempts`, `LastFailureReason` to `codexBuildDispatch`; add `codexRecoveryPolicy` to manifest
-5. **`cmd/codex_continue.go` (modified)** -- add `runCodexContinuePlanOnly()` (gates without state mutation) and `runCodexContinueFinalize()` (commit with recovery context); add `codexContinueSummary` struct
-6. **Wrapper playbooks (modified)** -- `build-wave.md` Step 5.2 reads recovery metadata and executes recovery tiers 1-3; `continue-gates.md` adds queen-led conditional branches per gate
+1. **CommandCatalogScanner** -- walks the Cobra command tree, produces `map[string]CommandCatalogEntry` with name, flags, output mode, store requirement, YAML source, guide presence, data reads/writes
+2. **YAMLGuideAlignmentScanner** -- reads all YAML `codex_orchestration` entries, reads `commandGuideCatalog()`, reports mismatches (currently untested gap)
+3. **LifecycleDataFlowScanner** -- traces write/read relationships for all `.aether/data/` artifacts across the init->colonize->plan->build->continue->seal lifecycle
+4. **ThreeSurfaceParityScanner** -- extends existing Claude/OpenCode parity to include Codex command-guide coverage
+5. **Regression test suite** -- structural snapshot tests (command count >= N, parity exact match, data flow edges present)
 
 ### Critical Pitfalls
 
-1. **Cascading fix-fail cycles** -- queen re-spawns a worker with a new name, circuit breaker sees a fresh worker, same underlying failure repeats. Prevention: classify failures as retryable vs non-retryable BEFORE recovery; track task-level attempt count (not just worker-level); per-phase recovery budget (max 3); when skipping a task, check downstream dependencies.
-2. **Smart gates auto-resolving legitimate findings** -- queen marks a real security/quality issue as "false positive." Prevention: NEVER auto-resolve security gates (gatekeeper, anti_pattern) or watcher_veto; preserve original failure detail in `queen_gate_decisions.json` audit log; require queen to read source code before auto-resolving; flag if auto-resolution rate exceeds 30%.
-3. **Output filtering hiding critical information** -- real errors suppressed as "noise." Prevention: two-tier output (summary + always-show errors); `--verbose` default for first phase; persist full output to `queen-output-{phase}.json`; never filter lines containing "error", "failed", "panic", "fatal", "blocked", "veto", "critical".
-4. **Queen as single point of failure** -- crash corrupts coordination state; decision loop becomes bottleneck. Prevention: queen ADVISES not COMMANDS (existing Go functions remain decision makers); persist coordination state to COLONY_STATE.json; separate 12K char context budget for queen (don't reuse colony-prime's 8K); write decision logic as pure functions for testability.
-5. **Silent failure mode** -- smooth auto-recovery masks real problems so user never knows anything went wrong. Prevention: log every queen decision to persistent file; phase-end activity summary ("Queen made 3 auto-recovery decisions -- review with `/ant-queen-log`"); transparency mode prints one line per autonomous decision by default; dual-flagged findings (two independent gates agree) always block.
+1. **Audit that modifies behavior** -- The audit must be read-only. Findings and fixes are separate phases with separate tests. Mixing them destroys reproducibility.
+
+2. **Brittle snapshot tests** -- Snapshot entire command bodies or YAML strings and any formatting change breaks CI. Instead, snapshot structural properties (command count, flag count, ceremony presence). Use `>=` for counts, exact match for parity.
+
+3. **Testing wrappers instead of contracts** -- Asserting exact text in generated markdown wrappers is fragile. Assert structural contracts: generated-from header exists, ceremony calls present, finalizer/closeout ordering correct.
+
+4. **Missing store initialization checks** -- Commands that access data without a store will panic. Verify every data-touching command either checks store or is listed in `skipStoreInit()`.
+
+5. **Existing parity test gaps** -- `command_parity_test.go` covers Claude/OpenCode body agreement but leaves three gaps: (a) YAML `codex_orchestration` vs `commandGuideCatalog()` alignment, (b) YAML `wrapper_contract` fields vs actual runtime subcommands, (c) YAML `guardrails` presence. These gaps are where drift silently accumulates.
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Gate Classification Infrastructure
-**Rationale:** Every subsequent phase depends on knowing which gates are hard-block vs soft-block vs advisory. This is the foundation everything else builds on. Additive changes only -- no existing behavior changes until consumers are added.
-**Delivers:** `gateClassification` type, `gateClassifications` map, `AutoRecoverable` field on `gateCheck`, `Severity` field on `GateCheckResult`
-**Addresses:** B1 (Gate Severity Classification), B4 (Gate Dependency Graph -- trivial since `not-reached` status already exists)
-**Avoids:** Pitfall 2 (smart gates auto-resolving) -- hard-block classification is defined here
-**Modifies:** `cmd/gate.go`
-**Risk:** Low
+### Phase 1: Command Inventory and Catalog
+**Rationale:** Every subsequent phase needs to know what commands exist. This is the foundation for all cross-referencing.
+**Delivers:** Structured JSON catalog of all 317 registered Cobra commands with metadata; `audit-catalog` runtime command.
+**Addresses:** Lifecycle coherence -- every command has a contract and durable output.
+**Avoids:** Audit-that-modifies-behavior pitfall; catalog is read-only.
 
-### Phase 2: Recovery Data Model
-**Rationale:** Auto-recovery logic needs somewhere to store state. Add recovery fields to existing structs and create the `aether recovery-record` subcommand. All changes are backward-compatible with `omitempty`.
-**Delivers:** `RecoveryAttempts` and `LastFailureReason` on `codexBuildDispatch`; `RecoveryLog` on `ColonyState`; `codexRecoveryPolicy` on manifest; `aether recovery-record` subcommand
-**Addresses:** A1 (Failure Classification -- data structures), A5 (Escalation Protocol -- persistence)
-**Avoids:** Pitfall 4 (single point of failure) -- recovery state persisted to COLONY_STATE.json via existing atomic writes
-**Modifies:** `cmd/codex_build.go`, `pkg/colony/colony.go`, new `cmd/recovery.go`
-**Risk:** Low
+### Phase 2: YAML-to-Wrapper Parity Verification
+**Rationale:** With the catalog complete, cross-reference the 60 YAML source definitions against generated wrappers and command-guide. Extends existing parity tests to cover known gaps.
+**Delivers:** Complete three-surface parity report (YAML, Claude, OpenCode, Codex); regression tests that freeze alignment.
+**Addresses:** Platform parity -- Go runtime, YAML, Claude, OpenCode, Codex all agree.
+**Avoids:** Testing-wrappers-instead-of-contracts pitfall; check structural properties, not exact text.
+**Uses:** Command catalog from Phase 1; extends `source-check`, `command_parity_test.go`.
 
-### Phase 3: Smart Gate Pipeline and Recovery Orchestrator
-**Rationale:** This is the core of queen authority. Combines gate classification (Phase 1) with recovery data (Phase 2) into an autonomous recovery loop. The queen can now auto-recover from soft-block gates before blocking.
-**Delivers:** `attemptAutoRecovery()` in `cmd/recovery.go`; classification-aware `runCodexContinueGates()`; `codexSmartGateSummary` struct; per-gate recovery strategies
-**Addresses:** A2 (Bounded Auto-Retry), A3 (Peer Redistribution), A4 (Queen-Driven Fixer), B2 (Non-Blocking Advisory Gates)
-**Avoids:** Pitfall 1 (cascading fix-fail) via circuit breaker integration; Pitfall 2 (auto-resolving) via hard-block preservation
-**Modifies:** `cmd/codex_continue.go`, `cmd/recovery.go`, `cmd/gate.go`
-**Risk:** Medium -- changes gate evaluation logic, must preserve existing hard-block behavior
+### Phase 3: Data Flow Lifecycle Trace
+**Rationale:** With command catalog available, trace which commands read and write which data artifacts. Identify dead-end artifacts that are written but never consumed.
+**Delivers:** Data flow map showing producer-consumer relationships for all `.aether/data/` artifacts; dead-end report.
+**Addresses:** Data wiring -- every artifact consumed or pruned.
+**Avoids:** Missing store initialization pitfall; every data-touching command must have store or be in skipStoreInit.
+**Uses:** Command catalog from Phase 1; source analysis of cmd/*.go.
 
-### Phase 4: Queen-Led Continue Integration
-**Rationale:** Enables the queen-led continue flow by splitting `aether continue` into `--plan-only` (evaluate without mutating) and `--finalize` (commit with recovery context). This gives the queen the information she needs to make recovery decisions without side effects.
-**Delivers:** `aether continue --plan-only`, `aether continue --finalize`, queen-led conditional branches in `continue-gates.md`
-**Addresses:** Queen-led mode activation for playbook gates (relaxed thresholds, auto-skip runtime, lower watcher veto threshold)
-**Avoids:** Pitfall 4 (queen mutating state directly) -- plan-only is read-only; Pitfall 3 (anti-pattern 3) -- relaxed thresholds only when `QueenLedMode` is true
-**Modifies:** `cmd/codex_continue.go`, `continue-gates.md`, `.claude/commands/ant/continue.md`
-**Risk:** Medium -- new code paths but isolated behind flags
+### Phase 4: Worker Economy and Ceremony Audit
+**Rationale:** Verify that the 27 agent definitions across 3 platforms have caste assignments, clear outputs, and are referenced by commands. Verify ceremony surface integrity.
+**Delivers:** Worker economy report; ceremony integrity report; gate classification completeness check.
+**Addresses:** Worker economy -- every spawned worker has justified purpose; visual ceremony backed by real state.
+**Avoids:** Brittle snapshot tests; check structural properties (caste assigned, output defined, referenced).
+**Uses:** Command catalog and data flow map from prior phases.
 
-### Phase 5: Queen-Led Build Recovery
-**Rationale:** Wrapper-layer changes that consume the infrastructure from Phases 1-4. The Queen agent now reads recovery metadata from dispatch results and executes recovery tiers 1-3 (retry, reassign, escalate) automatically during build waves.
-**Delivers:** Modified `build-wave.md` Step 5.2 with recovery logic; updated Queen agent with recovery-aware spawning; `/ant-queen-log` command for reviewing decisions
-**Addresses:** Full Category A (Auto-Recovery Loop), queen Fixer coordination, transparency/audit trail
-**Avoids:** Pitfall 6 (queen vs Fixer conflict) -- queen is sole recovery coordinator, Fixer checks recovery lock
-**Modifies:** `build-wave.md`, `.claude/agents/ant/aether-queen.md`, `.opencode/agents/aether-queen.md`
-**Risk:** Medium -- changes wrapper behavior, but Go runtime is the safety net
+### Phase 5: Regression Test Suite and Release Integrity
+**Rationale:** With all findings verified, write regression tests that freeze the contracts. These become the CI gate for future development.
+**Delivers:** New test files in `cmd/` covering command catalog snapshot, data flow edges, parity state, and gate classification.
+**Addresses:** Test contracts -- regression gates against drift; release integrity -- one coherent system.
+**Avoids:** Brittle snapshot tests by checking structural properties, not string content.
+**Uses:** Verified findings from all prior phases.
 
-### Phase 6: Output Filtering and Phase Summary
-**Rationale:** Pure presentation layer, no dependencies on recovery/gating logic beyond reading their output. This is the polish phase that makes queen authority feel clean rather than noisy.
-**Delivers:** `renderPhaseSummary()` and `renderSmartGateSummary()` in `cmd/codex_visuals.go`; `codexContinueSummary` struct; `codexBuildSummary` struct; filtered wrapper markdown
-**Addresses:** C1 (Output Severity Filtering), C2 (Phase Completion Summary)
-**Avoids:** Pitfall 3 (hiding critical info) via two-tier output, `--verbose` default, never-filter keywords, persistent full output
-**Modifies:** `cmd/codex_visuals.go`, `cmd/codex_build.go`, `cmd/codex_continue.go`, wrapper markdown
-**Risk:** Low -- additive, existing detailed output remains available via `--verbose`
+### Phase 6: Findings Remediation
+**Rationale:** The audit phases produce findings but do not fix them. This phase acts on the findings: fixing parity gaps, pruning dead-end artifacts, completing missing contracts.
+**Delivers:** All audit findings resolved; regression tests pass clean.
+**Addresses:** Release integrity -- one coherent system that ships.
+**Avoids:** All pitfalls apply; fixes are separate from findings with separate verification.
 
 ### Phase Ordering Rationale
 
-- Phases 1 and 2 are pure infrastructure with no behavior changes -- they create the foundation
-- Phase 3 is the highest-value phase (autonomous recovery becomes real) but depends on 1 and 2
-- Phase 4 splits continue into plan/finalize, enabling the queen-led flow that Phase 5 consumes
-- Phase 5 wires everything together in the wrapper layer
-- Phase 6 is presentation polish that can ship anytime after Phase 3
+- **Catalog first:** You cannot verify coherence without knowing what exists. Phase 1 is the prerequisite for everything else.
+- **Parallelism after catalog:** Phases 2 and 3 both depend on the catalog but are independent of each other; they can run in parallel.
+- **Worker audit after data flow:** Phase 4 needs both the command catalog and the data flow map to verify that agents are referenced by commands that actually dispatch them.
+- **Regression last:** Phase 5 needs all findings verified before freezing them as test assertions. Freezing premature findings wastes effort.
+- **Remediation after audit:** Phase 6 is the only phase that modifies behavior. Keeping it separate preserves audit integrity.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3:** Gate recovery strategies need per-gate research -- what exactly constitutes "auto-recoverable" for each of the 11 gates requires understanding each gate's failure semantics in detail
-- **Phase 5:** Queen agent prompt engineering for recovery decisions -- how to give the queen enough context to make good recovery choices without exceeding her context budget
+- **Phase 3 (Data Flow):** Tracing data reads/writes across ~100 source files requires careful source analysis. The exact set of data artifacts and their lifecycle transitions need verification during execution.
+- **Phase 4 (Worker Economy):** Agent-to-command reference tracking requires understanding the dispatch contract system. The exact mapping between agent names, caste assignments, and dispatch invocations needs runtime verification.
+- **Phase 6 (Remediation):** The scope of fixes is unknown until the audit completes. This phase may need sub-phasing based on finding severity.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** Struct field additions and static map lookups -- well-understood
-- **Phase 2:** Data model extensions with `omitempty` -- standard Go pattern
-- **Phase 4:** CLI flag additions and code path splitting -- standard cobra pattern
-- **Phase 6:** Output formatting and rendering -- standard visual system pattern
+- **Phase 1 (Catalog):** Walking the Cobra command tree is well-documented and Aether already does it in tests.
+- **Phase 2 (Parity):** Extends existing parity tests with known, documented patterns.
+- **Phase 5 (Regression):** Writing structural snapshot tests is a standard Go testing pattern.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All findings from direct source code inspection; zero new dependencies means no integration risk |
-| Features | HIGH | Every feature maps to existing infrastructure; confidence backed by Erlang/OTP, LangGraph, Google ADK, CrewAI patterns |
-| Architecture | HIGH | Authority model (queen advises, runtime decides) preserves existing wrapper-runtime contract; all integration points identified with line numbers |
-| Pitfalls | HIGH | All 12 pitfalls derived from direct codebase analysis of the actual files that will be modified; prevention strategies reference specific existing functions |
+| Stack | HIGH | Zero new dependencies. All components are existing Go/Cobra infrastructure. Verified against source code and go.mod. |
+| Features | HIGH | Features are audit operations (catalog, cross-reference, trace, snapshot). Each maps to a specific, existing integration point in the codebase. |
+| Architecture | HIGH | Scanner pattern is well-established. Aether already has partial audit infrastructure. Direct source analysis confirms the gap map. |
+| Pitfalls | HIGH | Pitfalls come from direct codebase analysis and prior milestone experience. The "audit must not modify behavior" constraint is learned from v1.11/v1.12 regressions. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Gate-specific recovery strategies (Phase 3):** Research identified that each gate has different failure semantics, but the exact recovery strategy per gate needs to be defined during Phase 3 planning. The classification map provides the framework, but "what does auto-recovery look like for `tests_pass` vs `implementation_evidence`?" needs phase-level detail.
-- **Queen context budget tuning (Phase 5):** Research recommends 12K chars for queen coordination context, but the exact contents and trim order need to be validated empirically during implementation.
-- **Recovery budget defaults (Phase 3):** Research suggests max 3 auto-recovery attempts per phase, but the right number depends on colony size and phase complexity. Should be configurable with sensible defaults.
-- **Watcher veto threshold in queen-led mode:** Research suggests lowering from 7 to 5, but this needs user testing. The threshold should be configurable via queen autonomy level.
+- **Exact command count verification:** The research references 317 commands but this needs runtime verification during Phase 1. The count may have drifted since research.
+- **Command-guide catalog coverage:** No existing test verifies that `commandGuideCatalog()` covers all YAML commands. The gap size is unknown until Phase 2 runs.
+- **Dead-end artifact count:** The number of write-only artifacts in `.aether/data/` is unknown. Phase 3 will reveal the scope. Prior milestones added artifacts without always wiring consumers.
+- **Agent dispatch mapping completeness:** The mapping from agent definitions to actual dispatch invocations across all three platforms needs runtime verification in Phase 4.
+- **Regression test baseline:** The structural properties to snapshot (minimum command count, required flags per command, data flow edges) need to be determined during Phases 1-4 before Phase 5 can freeze them.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Aether source code: `cmd/gate.go`, `cmd/circuit_breaker.go`, `cmd/fixer_dispatch.go`, `cmd/immune.go`, `cmd/autopilot.go`, `cmd/codex_dispatch_contract.go`, `cmd/codex_build.go`, `cmd/codex_continue.go`, `cmd/colony_prime_context.go`, `cmd/codex_visuals.go`, `cmd/recovery.go` (new)
-- Aether source code: `pkg/codex/dispatch.go`, `pkg/codex/worker.go`, `pkg/codex/process_tracker.go`, `pkg/colony/colony.go`, `pkg/colony/state_machine.go`, `pkg/storage/storage.go`
-- Aether playbooks: `.aether/docs/command-playbooks/build-wave.md`, `.aether/docs/command-playbooks/continue-gates.md`
-- Aether agents: `.claude/agents/ant/aether-queen.md`, `.claude/agents/ant/aether-fixer.md`
-- Erlang/OTP Supervisor Behaviour (erlang.org/doc/apps/stdlib/supervisor.html) -- bounded restart patterns
+- Direct source analysis: `cmd/root.go`, `cmd/codex_workflow_cmds.go`, `cmd/command_guide.go`, `cmd/source_check.go`, `cmd/ceremony_cmd.go`, `cmd/gate.go`, `cmd/fixer_dispatch.go`, `cmd/circuit_breaker.go`, `cmd/codex_dispatch_contract.go`
+- Test infrastructure: `cmd/command_parity_test.go`, `cmd/command_source_hygiene_test.go`, `cmd/visual_wrapper_contract_test.go`, `cmd/codex_e2e_test.go`
+- Data structures: `pkg/colony/colony.go`, `pkg/storage/storage.go`
+- YAML definitions: `.aether/commands/*.yaml` (60 files)
+- Go module: `go.mod` (Go 1.24, Cobra v1.10.2, modernc.org/sqlite v1.50.0)
 
 ### Secondary (MEDIUM confidence)
-- Google ADK Multi-Agent Patterns (developers.googleblog.com, 2025-12-16) -- coordinator pattern, human-in-the-loop
-- LangGraph Multi-Agent Patterns (langchain-ai.github.io/langgraph/concepts/multi_agent/) -- retryable vs non-retryable exceptions
-- CrewAI Hierarchical Process (docs.crewai.com/en/learn/hierarchical-process) -- result validation
-- OpenAI Swarm Handoff Patterns (github.com/openai/swarm) -- experimental but relevant
-- AutoGen Error Handling (github.com/microsoft/autogen) -- typed state transitions
-- EAGER: Efficient Failure Management (arxiv.org/abs/2603.21522, IJCAI 2025) -- historical failure patterns
-- Error Cascades in Multi-Agent Systems (arxiv.org/html/2603.04474v1) -- noise amplification
-- RCAFlow: Hierarchical Planning (ojs.aaai.org, AAAI) -- multi-agent noise reduction
-- Agent Response Filtering -- Upsonic AI (upsonic.ai/lexicon/agent-response-filtering) -- over-filtering risks
-- Establishing Trust in AI Agents -- Medium -- monitoring, control layers
-- Agentic AI Security: Threats, Defenses, Evaluation -- arXiv 2510.23883v1 -- output filtering vs sandboxing
+- Prior milestone audit reports: `.planning/v1.10-MILESTONE-AUDIT.md` through `v1.14-MILESTONE-AUDIT.md` -- patterns for what drifts between milestones
+- Project context: `.planning/PROJECT.md` -- milestone history, key decisions, architecture patterns
+- Feature research references: Erlang/OTP Supervisor, Google ADK, LangGraph multi-agent patterns -- informed the feature categories from FEATURES.md
 
 ### Tertiary (LOW confidence)
-- None -- all sources are either direct codebase analysis (HIGH) or established framework documentation/published research (MEDIUM)
+- Pitfall research from v1.13 (SQLite integration, process lifecycle) -- these are from an older milestone scope but contain still-relevant patterns for data integrity and cross-platform behavior
 
 ---
-*Research completed: 2026-05-03*
+*Research completed: 2026-05-07*
 *Ready for roadmap: yes*
