@@ -12,7 +12,7 @@
 |----------|-------|
 | Critical | 0     |
 | Warning  | 2     |
-| Info     | 8     |
+| Info     | 9     |
 
 ---
 
@@ -46,9 +46,9 @@
 | Caste | Status | Dispatch Location | Purpose | Durable Output | Downstream Consumer |
 |-------|--------|-------------------|---------|----------------|---------------------|
 | queen | defined-only | never dispatched | Colony orchestrator, decision layer | Colony state mutations (owns orchestration, not dispatched as worker) | Not applicable -- queen dispatches workers, is not dispatched |
+| surveyor | defined-only | never dispatched (subtypes dispatched instead) | Base surveyor caste; subtypes (surveyor-provisions, surveyor-nest, surveyor-disciplines, surveyor-pathogens) are dispatched | chat-only (base caste never spawned) | none identified |
 | colonizer | defined-only | never dispatched | Codebase exploration | chat-only | none identified |
 | chronicler | defined-only | never dispatched | Documentation specialist | chat-only | none identified |
-| sage | defined-only (CLAUDE.md only) | never dispatched | Analysis specialist | chat-only | none identified |
 | keeper | defined-only | never dispatched | Knowledge preservation | chat-only | none identified |
 | weaver | defined-only | never dispatched | Refactoring specialist | chat-only | none identified |
 | includer | defined-only | never dispatched | Accessibility specialist | chat-only | none identified |
@@ -157,19 +157,19 @@ Note: `sealFinalReviewRequiredCastes = []string{"gatekeeper", "auditor", "probe"
 
 ### I-01: CLAUDE.md claims 27 agents but runtime defines 26 castes
 
-The CLAUDE.md "The 27 Agents" table lists 27 entries including Sage, but the authoritative runtime registry in `cmd/codex_visuals.go` defines only 26 entries across `casteEmojiMap`, `casteColorMap`, and `casteLabelMap`. The "sage" caste has a Claude agent definition (`.claude/agents/ant/aether-sage.md`) but no entry in any of the three runtime caste maps.
+The CLAUDE.md "The 27 Agents" table lists 27 entries including Sage, but the authoritative runtime registry in `cmd/codex_visuals.go` defines only 26 entries across `casteEmojiMap`, `casteColorMap`, and `casteLabelMap`. The "sage" caste has a Claude agent definition (`.claude/agents/ant/aether-sage.md`) but no entry in any of the three runtime caste maps. Sage is referenced in `cmd/council.go` and in session command maps, but is not part of the visual caste identity system.
 
-Severity: Info because sage has an agent definition and is referenced in documentation, but the runtime maps that govern caste identity rendering do not include it.
+Severity: Info because sage exists in documentation and has non-visual runtime references, but the authoritative visual identity registry has 26 entries, not 27.
 
-### I-02: Nine castes defined but never dispatched
+### I-02: Ten castes defined but never dispatched
 
-The following castes appear in `casteEmojiMap` but have no `Caste: "name"` struct literal in any production cmd/*.go dispatch planning code: colonizer, chronicler, keeper, weaver, includer, guardian, dreamer, medic, fixer. These castes have agent definitions but the runtime never spawns them as workers.
+The following castes appear in `casteEmojiMap` but have no `Caste: "name"` struct literal in any production cmd/*.go dispatch planning code: surveyor, colonizer, chronicler, keeper, weaver, includer, guardian, dreamer, medic, fixer. These castes have agent definitions but the runtime never spawns them as workers. Note: "surveyor" base caste is defined but only its subtypes (surveyor-provisions, surveyor-nest, surveyor-disciplines, surveyor-pathogens) are dispatched.
 
 Severity: Info because these castes may be used through wrapper markdown dispatch or reserved for future use. They are documented findings, not violations.
 
-### W-01: Seven defined-only castes produce no durable output
+### W-01: Eight defined-only castes produce no durable output
 
-The castes colonizer, chronicler, keeper, weaver, includer, guardian, and dreamer are defined in the runtime caste registry and have agent definitions, but they are never dispatched by the Go runtime. If invoked through wrapper markdown, they have no enforced output contract (no review-ledger-write instructions in their dispatch paths). This is a WORK-02 concern: workers that only read and return chat without persisting.
+The castes surveyor, colonizer, chronicler, keeper, weaver, includer, guardian, and dreamer are defined in the runtime caste registry and have agent definitions, but they are never dispatched by the Go runtime. If invoked through wrapper markdown, they have no enforced output contract (no review-ledger-write instructions in their dispatch paths). This is a WORK-02 concern: workers that only read and return chat without persisting.
 
 Severity: Warning because if any wrapper or future dispatch path invokes these castes, they would produce no persisted artifacts, violating the principle that every spawned worker must produce durable output.
 
@@ -197,19 +197,25 @@ The `suggestedBuildCaste()` function in `codex_visuals.go:3255-3270` returns "sc
 
 Severity: Info because this is intentional behavior (task-keyword-based caste selection) but it means scout has more dispatch paths than the plan-only wave shape suggests.
 
-### I-06: casteColorMap has same count as casteEmojiMap (26 entries)
+### I-06: Surveyor base caste defined but only subtypes dispatched
+
+The "surveyor" base caste appears in all three runtime maps (`casteEmojiMap`, `casteColorMap`, `casteLabelMap`) but is never dispatched as a worker. Instead, four surveyor subtypes are dispatched during colonize: surveyor-provisions, surveyor-nest, surveyor-disciplines, and surveyor-pathogens. These subtypes use `Caste: "surveyor-*"` in dispatch code and have dedicated agent definition files.
+
+Severity: Info because the base caste name exists for display/identity purposes while the subtypes handle actual dispatch. The colonize wave shape table correctly shows the four subtypes.
+
+### I-07: casteColorMap has same count as casteEmojiMap (26 entries)
 
 The research doc claimed casteColorMap had 26 entries while casteEmojiMap had 27, suggesting porter was added later. In reality, all three maps (casteEmojiMap, casteColorMap, casteLabelMap) have 26 entries with identical key sets. Porter is present in all three maps.
 
 Severity: Info because this corrects the research assumption about a count mismatch between maps.
 
-### I-07: medic caste runs as CLI self-check, not worker dispatch
+### I-08: medic caste runs as CLI self-check, not worker dispatch
 
 The medic caste is defined in the runtime maps and has an agent definition, but it is never dispatched as a worker through the standard dispatch pipeline. Instead, medic functionality runs as a CLI self-check command (`aether patrol`). This is a different execution model from the worker dispatch pattern used by other castes.
 
 Severity: Info because medic's health-check behavior is correctly implemented through CLI commands rather than worker dispatch.
 
-### I-08: fixer caste only dispatched in e2e tests
+### I-09: fixer caste only dispatched in e2e tests
 
 The fixer caste has a runtime map entry and agent definition but is only dispatched in end-to-end test code, never in production dispatch paths. The auto-recovery orchestrator in v1.14 was designed to dispatch fixer workers, but the current production code does not include this dispatch site.
 
@@ -221,9 +227,9 @@ Severity: Info because fixer is documented as part of the auto-recovery system b
 
 | Category | Count | Notes |
 |----------|-------|-------|
-| Total defined castes | 26 | From casteEmojiMap (not 27 as documented in CLAUDE.md) |
+| Total defined castes | 26 | From casteEmojiMap (not 27 as documented in CLAUDE.md; see I-01) |
 | Actively dispatched (production) | 18 | Found via Caste: string literals in cmd/*.go non-test files |
-| Defined but never dispatched | 8 | colonizer, chronicler, keeper, weaver, includer, guardian, dreamer, medic |
+| Defined but never dispatched | 9 | surveyor, colonizer, chronicler, keeper, weaver, includer, guardian, dreamer, medic |
 | Porter (special dispatch) | 1 | Dispatched through seal closeout, not standard caste dispatch |
 | Fixer (test-only dispatch) | 1 | Dispatched in e2e tests, not production paths |
 | Visual elements traced | 10 | From codex_visuals.go render functions |
