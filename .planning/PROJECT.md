@@ -85,6 +85,7 @@ That means:
 - [x] v1.12 Safe Colony -- Phases 80-87 (shipped 2026-05-01)
 - [x] v1.13 Recovery Hardening & Hive Learning -- Phases 88-92 (shipped 2026-05-03)
 - [x] v1.14 Queen Authority -- Phases 93-99 (shipped 2026-05-04)
+- [ ] v1.15 Framework Coherence, Efficiency, and Ship Readiness -- Phases 100+
 
 ## Requirements
 
@@ -127,7 +128,25 @@ That means:
 
 ### Active
 
-(None — start next milestone with /gsd-new-milestone)
+- [ ] LIFE-01: Lifecycle commands have documented contracts (inputs, outputs, state mutations, exit conditions)
+- [ ] LIFE-02: Command catalog scan verifies all 317 Cobra commands produce structured output
+- [ ] LIFE-03: No command produces dead-end artifacts
+- [ ] WORK-01: Every worker caste has documented purpose, durable output, and downstream consumer
+- [ ] WORK-02: No worker spawns that only read and chat without persisting
+- [ ] WORK-03: Wave shapes documented and each spawn justified
+- [ ] PLAT-01: Go runtime, YAML, Claude, OpenCode, Codex command-guide all agree
+- [ ] PLAT-02: Parity tests extended to close 3 known gaps
+- [ ] PLAT-03: No wrapper describes unsupported runtime behavior
+- [ ] VIZ-01: Visual ceremony reflects real runtime state
+- [ ] VIZ-02: No decorative output hiding missing behavior
+- [ ] DATA-01: All .aether/data artifacts traced to consumers or documented as async-write-only
+- [ ] DATA-02: QUEEN.md, Hive Brain, graph/survey wired into colony-prime or pruned
+- [ ] DATA-03: Review ledgers accumulate across phases, survive session resets
+- [ ] REL-01: Version/publish/hub/binary/npm/update as one coherent system
+- [ ] REL-02: Published experience matches source checkout
+- [ ] TEST-01: Structural snapshot tests freeze verified contracts
+- [ ] TEST-02: Regression suite covers all audit dimensions
+- [ ] TEST-03: go test/vet/checks pass consistently
 
 ### Out of Scope
 
@@ -167,7 +186,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Execute v1.14 with `/gsd-discuss-phase 93`.
+Execute v1.15 with `/gsd-discuss-phase 100`.
 
 ## Evolution
 
@@ -210,16 +229,26 @@ This document evolves at phase transitions and milestone boundaries.
 
 *Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*
 
-## Current Milestone: v1.14 Queen Authority
+## Current Milestone: v1.15 Framework Coherence, Efficiency, and Ship Readiness
 
-**Goal:** The queen coordinates phases autonomously — she dispatches workers, monitors progress, auto-recovers from failures, and only escalates to you when she's genuinely stuck. You stop babysitting.
+**Goal:** Audit and harden Aether end-to-end so every command, worker, artifact, platform wrapper, release tool, and quality gate is coherent, necessary, and wired into the lifecycle — not wasteful or decorative.
 
-**Target features:**
-- Queen auto-recovery — workers that stall or fail get re-spawned, re-assigned, or skipped without human intervention
-- Smart gates — non-critical findings auto-resolve, only genuine problems block advancement
-- Clean output — filtered, summarized status instead of raw worker noise
-- Queen phase coordination — within a phase, queen manages the wave lifecycle end-to-end
+**Target areas:**
+1. Lifecycle Coherence — every command has a clear contract, durable output, no dead-end artifacts
+2. Worker Economy — every spawned worker has justified purpose and durable output; no read-only chat-only workers
+3. Runtime / Wrapper / Guide Parity — Go runtime, YAML, Claude, OpenCode, Codex all agree
+4. Visual Ceremony With Substance — visuals reflect real state, no decorative output hiding gaps
+5. State / Memory / Graph / Queen Wiring — every artifact is consumed downstream or explicitly pruned
+6. Release and Update Integrity — version, publish, hub, binary, npm as one coherent system
+7. Test Contracts — regression gates so future drift fails loudly
 
-**Key context:** The infrastructure exists (4-tier escalation, 11 gates, wave dispatch). This milestone wires the queen into that infrastructure so she can actually drive it, not just narrate it.
+**Core principle:** Every part answers: what does it do, who consumes it, who owns it, is it necessary, what test prevents drift?
 
-*Last updated: 2026-05-04 after v1.14 Queen Authority milestone shipped*
+**Key context:**
+- Uncommitted seal-review changes are in-scope (do not overwrite)
+- No blind rollbacks to old versions; use old tags only as historical evidence
+- No new ceremony without real state backing it
+- Findings must be persisted into docs, review ledgers, Queen memory, tests, or code
+- 7 specialist reviews: Runtime Contract, Platform Parity, Worker Economy, Memory/Graph, Release, Test Contract, Final Architect
+
+*Last updated: 2026-05-07 — milestone initialized*

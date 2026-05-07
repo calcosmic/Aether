@@ -1,45 +1,43 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.14
-milestone_name: Queen Authority
-status: completed
-stopped_at: context exhaustion at 75% (2026-05-04)
-last_updated: "2026-05-04T02:30:08.666Z"
-last_activity: 2026-05-04 -- Phase 99 marked complete
+milestone: v1.15
+milestone_name: Framework Coherence, Efficiency, and Ship Readiness
+status: roadmap_created
+last_updated: "2026-05-07T12:00:00.000Z"
+last_activity: 2026-05-07 -- Roadmap created for v1.15 (6 phases, 19 requirements)
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-03)
+See: .planning/PROJECT.md (updated 2026-05-07)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 99 — output-filtering-phase-summary
+**Current focus:** Phase 100 -- Command Inventory & Lifecycle Contracts
 
 ## Current Position
 
-Phase: 99 — COMPLETE
-Next phase: 97 (queen-led-continue)
-Plan: 3 of 3
-Status: Phase 99 complete
-Last activity: 2026-05-04 -- Phase 99 marked complete
+Phase: 100 of 105 (Command Inventory & Lifecycle Contracts)
+Plan: -- of --
+Status: Ready to plan
+Last activity: 2026-05-07 -- Roadmap created
 
-Progress: [======    ] 57%
+Progress: [          ] 0%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 7 (v1.14)
-- Average duration: ~10 min
-- Total execution time: 1.5 hours
+- Total plans completed: 0 (v1.15)
+- Average duration: --
+- Total execution time: --
 
 *Updated after each plan completion*
 
@@ -50,18 +48,11 @@ Progress: [======    ] 57%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- 96-01: Orchestrator is a pure function (classify, decide, log, return) -- no goroutine or daemon
-- 96-01: Budget uses total-used counter (retries + reassigns + fixer) against total_budget, not per-type limits
-- 96-01: RecoveryLogFile.RecoveryBudget uses omitempty for backward compatibility with Phase 94 files
-- 96-02: Continue finalize orchestrator runs AFTER Phase 95's dispatchFixer, providing context without dual-dispatch
-- 96-02: Hard block gates bypass orchestrator entirely, escalate immediately (D-04)
-- 96-02: Gate failures use status "failed" which maps to RequiresAttempt classification
-- v1.14: 7-phase roadmap: infrastructure first (gate classification + recovery data model), then core value (smart gates + auto-recovery), then integration (queen-led continue + wave lifecycle), then polish (output filtering)
-- v1.14: Phase 93 and 94 are independent infrastructure phases but executed sequentially for simplicity
-- v1.14: Gate classification (GATE-01) is the foundation -- everything else depends on knowing which gates are hard_block vs soft_block vs advisory
-- v1.14: Heavy depth multiplier is 0.0 (no auto-resolve) -- user asked for thorough checking, soft_block gates stay blocked
-- v1.14: Binary gates auto-resolve based on depth multiplier only (not numeric threshold); threshold 0.0 is normal for pass/fail gates
-- v1.13: LOOP requirements woven into gate recovery phases, not isolated
+- v1.15: Framework audit milestone -- every component must justify its existence with durable output
+- v1.15: Specialist reviews produce distinct persisted findings, not chat
+- v1.15: Uncommitted seal-review changes are in-scope
+- v1.15: Audit phases (100-104) are read-only; Phase 105 is the only write phase
+- v1.15: Phases 101, 102, 103 depend only on Phase 100 and can be parallelized
 
 ### Pending Todos
 
@@ -69,10 +60,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Research flag (Phase 96): Gate-specific recovery strategies need per-gate research -- what constitutes "auto-recoverable" for each of the 11 gates requires understanding each gate's failure semantics
-- Research flag (Phase 98): Queen agent prompt engineering for recovery decisions -- how to give the queen enough context to make good recovery choices without exceeding her context budget
-- Risk: Cascading fix-fail cycles (queen retries fundamentally broken task) -- mitigated by failure classification before recovery and per-phase budget cap
-- Risk: Smart gates auto-resolving legitimate findings -- mitigated by never auto-resolving hard_block gates and preserving original findings in audit trail
+- None yet.
 
 ## Deferred Items
 
@@ -96,6 +84,6 @@ Items acknowledged and carried forward from previous milestones:
 
 ## Session Continuity
 
-Last session: 2026-05-04T02:30:08.657Z
-Stopped at: context exhaustion at 75% (2026-05-04)
+Last session: 2026-05-07T12:00:00.000Z
+Stopped at: Roadmap created. Next step: plan Phase 100.
 Resume file: None
