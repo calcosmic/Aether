@@ -1,0 +1,40 @@
+{
+  "audit_dimensions": {
+    "command_contracts": {
+      "command_count": 377,
+      "lifecycle_contracts": 16,
+      "output_modes": [
+        "json",
+        "visual",
+        "json+visual",
+        "text",
+        "unknown"
+      ]
+    },
+    "worker_economy": {
+      "documented_castes": 26,
+      "dispatched_castes": 18,
+      "chat_only_castes": 0,
+      "visual_functions": 9
+    },
+    "data_flow": {
+      "artifact_count": 33,
+      "colony_prime_sections": 16,
+      "capsule_sections": 5,
+      "dead_end_artifacts": [
+        "constraints.json"
+      ]
+    },
+    "release_integrity": {
+      "sync_pair_count": 7,
+      "home_sync_pair_count": 7
+    },
+    "gate_classifications": {
+      "total_gates": 13,
+      "hard_block": 5,
+      "soft_block": 6,
+      "advisory": 2
+    }
+  },
+  "version": "1.0.34"
+}
