@@ -17,6 +17,7 @@
 - **v1.12 Safe Colony** - Phases 80-87 (shipped 2026-05-01)
 - **v1.13 Recovery Hardening & Hive Learning** - Phases 88-92 (shipped 2026-05-03)
 - **v1.14 Queen Authority** - Phases 93-99 (shipped 2026-05-04)
+- **v1.15 Framework Coherence, Efficiency, and Ship Readiness** - Phases 100-105 (in progress)
 
 ## Phases
 
@@ -205,19 +206,26 @@
 </details>
 
 <details>
-<summary>✅ v1.14 Queen Authority (Phases 93-99) — SHIPPED 2026-05-04</summary>
+<summary>v1.14 Queen Authority (Phases 93-99) -- SHIPPED 2026-05-04</summary>
 
-- [x] Phase 93: Gate Classification Infrastructure (1 plan) — completed 2026-05-03
-- [x] Phase 94: Recovery Data Model (2 plans) — completed 2026-05-03
-- [x] Phase 95: Smart Gate Pipeline (2 plans) — completed 2026-05-03
-- [x] Phase 96: Auto-Recovery Orchestrator (2 plans) — completed 2026-05-03
-- [x] Phase 97: Queen-Led Continue (2 plans) — completed 2026-05-03
-- [x] Phase 98: Queen Wave Lifecycle (2 plans) — completed 2026-05-04
-- [x] Phase 99: Output Filtering & Phase Summary (3 plans) — completed 2026-05-04
-
-See `.planning/milestones/v1.14-ROADMAP.md` for full phase details.
+- [x] Phase 93: Gate Classification Infrastructure (1 plan) -- completed 2026-05-03
+- [x] Phase 94: Recovery Data Model (2 plans) -- completed 2026-05-03
+- [x] Phase 95: Smart Gate Pipeline (2 plans) -- completed 2026-05-03
+- [x] Phase 96: Auto-Recovery Orchestrator (2 plans) -- completed 2026-05-03
+- [x] Phase 97: Queen-Led Continue (2 plans) -- completed 2026-05-03
+- [x] Phase 98: Queen Wave Lifecycle (2 plans) -- completed 2026-05-04
+- [x] Phase 99: Output Filtering & Phase Summary (3 plans) -- completed 2026-05-04
 
 </details>
+
+### v1.15 Framework Coherence, Efficiency, and Ship Readiness (In Progress)
+
+- [ ] **Phase 100: Command Inventory & Lifecycle Contracts** -- Catalog all Cobra commands, document lifecycle command contracts
+- [ ] **Phase 101: Platform Parity Verification** -- Verify five-surface agreement and extend parity tests
+- [ ] **Phase 102: Worker Economy & Visual Ceremony Audit** -- Audit worker spawn justification and visual ceremony integrity
+- [ ] **Phase 103: Data Flow & Artifact Wiring** -- Trace all data artifacts to consumers, flag dead ends
+- [ ] **Phase 104: Release Integrity & Regression Test Suite** -- Verify release pipeline, freeze verified contracts as tests
+- [ ] **Phase 105: Findings Remediation & Final Validation** -- Act on all audit findings, final pass/fail validation
 
 ## Phase Details
 
@@ -235,103 +243,178 @@ See `.planning/milestones/v1.13-ROADMAP.md` for full phase details.
 
 </details>
 
+<details>
+<summary>v1.14 Phase Details (archived)</summary>
+
+See `.planning/milestones/v1.14-ROADMAP.md` for full phase details.
+
 ### Phase 93: Gate Classification Infrastructure
-**Goal**: Every gate has a deterministic classification (hard_block, soft_block, advisory) and every auto-resolution preserves the original finding in an audit trail -- the foundation all smart gate behavior builds on.
-**Depends on**: Nothing (first phase of milestone)
+**Goal**: Every gate has a deterministic classification (hard_block, soft_block, advisory) and every auto-resolution preserves the original finding in an audit trail
+**Depends on**: Nothing (first phase of v1.14)
 **Requirements**: GATE-01, GATE-02, GATE-05
 **Success Criteria** (what must be TRUE):
-  1. Running `aether gate-classify` (or equivalent subcommand) prints all 11 gates with their classification and a brief rationale
-  2. Security gates (gatekeeper) and watcher veto are hardcoded as hard_block and no configuration can change that classification
-  3. When a gate finding is annotated with a queen decision, the original finding text, fix hint, and recovery options remain intact in the audit trail
+  1. Running `aether gate-classify` prints all 11 gates with their classification and rationale
+  2. Security gates and watcher veto are hardcoded as hard_block
+  3. Queen-annotated findings preserve original text, fix hint, and recovery options
 **Plans**: 1 plan
 
 Plans:
-- [x] 93-01-PLAN.md -- Classification registry, QueenAnnotation struct, gate-classify CLI command, and tests
+- [x] 93-01-PLAN.md
 
 ### Phase 94: Recovery Data Model
-**Goal**: Worker failures have a deterministic classification system (recoverable, requires-attempt, blocking), transient failures are distinguished from systemic failures, and every recovery action is logged to a phase-scoped file.
-**Depends on**: Nothing (parallel to Phase 93, no shared dependencies)
+**Goal**: Worker failures have deterministic classification, transient failures are distinguished from systemic, and every recovery action is logged
+**Depends on**: Nothing (parallel to Phase 93)
 **Requirements**: RECV-01, RECV-05, RECV-06
 **Success Criteria** (what must be TRUE):
-  1. A worker failure produces a structured failure record containing classification (recoverable/requires-attempt/blocking), failure type (transient/systemic), original error, and timestamp
-  2. Transient failures (timeout, context overflow) and systemic failures (bad task spec, missing dependency) are classified by deterministic rules, not by LLM inference
-  3. After a phase with recovery activity, a phase-scoped recovery log file exists containing every auto-recovery action with original error, action taken, and outcome
+  1. Worker failure produces structured record with classification, failure type, original error, timestamp
+  2. Transient vs systemic classification uses deterministic rules
+  3. Phase-scoped recovery log exists after recovery activity
 **Plans**: 2 plans
 
 Plans:
-- [x] 94-01-PLAN.md -- Failure classification types, registry, classifyWorkerFailure function, persistence, and CLI commands
-- [x] 94-02-PLAN.md -- Comprehensive tests for classification rules, JSON roundtrips, backward compatibility, and CLI commands
+- [x] 94-01-PLAN.md
+- [x] 94-02-PLAN.md
 
 ### Phase 95: Smart Gate Pipeline
-**Goal**: Soft_block gates auto-resolve when the queen verifies the finding is non-critical, with configurable severity thresholds and documented safe defaults -- hard_block gates remain untouched.
-**Depends on**: Phase 93 (gate classifications must exist before the pipeline can use them)
+**Goal**: Soft_block gates auto-resolve when queen verifies finding is non-critical, hard_block gates untouched
+**Depends on**: Phase 93
 **Requirements**: GATE-03, GATE-04
 **Success Criteria** (what must be TRUE):
-  1. When a soft_block gate fails during continue, the queen evaluates the finding and either auto-resolves it (with logged rationale) or escalates to the user -- the user is never blocked by a soft_block gate without the queen attempting resolution first
-  2. Running `aether gate-auto-resolve` shows the current thresholds for each soft_block gate with their documented safe defaults and depth-adjusted values
-  3. Hard_block gates (security, watcher veto) continue to block advancement exactly as they do today -- no behavioral change for hard blocks
+  1. Soft_block gate failure triggers queen evaluation before user escalation
+  2. `aether gate-auto-resolve` shows thresholds and safe defaults
+  3. Hard_block gates block advancement exactly as today
 **Plans**: 2 plans
 
 Plans:
-- [x] 95-01-PLAN.md -- Auto-resolve threshold map, evaluation function, depth multiplier, annotation, and gate-auto-resolve CLI command
-- [x] 95-02-PLAN.md -- Wire auto-resolve into continue finalize flow with recovery logging and Fixer dispatch
+- [x] 95-01-PLAN.md
+- [x] 95-02-PLAN.md
 
 ### Phase 96: Auto-Recovery Orchestrator
-**Goal**: Failed workers are automatically retried within a per-phase budget, tasks are redistributed to peer workers before spawning new ones, and the Fixer agent is dispatched automatically on gate failures -- all bounded and logged.
-**Depends on**: Phase 93 (gate classification for deciding which gates trigger Fixer), Phase 94 (recovery data model for failure records and logging)
+**Goal**: Failed workers auto-retried within budget, tasks redistributed to peers, Fixer dispatched on gate failures
+**Depends on**: Phase 93, Phase 94
 **Requirements**: RECV-02, RECV-03, RECV-04
 **Success Criteria** (what must be TRUE):
-  1. When a worker fails with a recoverable classification, the queen automatically retries up to the per-phase budget (default 3) before escalating to the user
-  2. On worker failure, the failed task is reassigned to a same-caste peer with available capacity before a new worker is created
-  3. When a gate failure occurs during continue, the Fixer agent is dispatched automatically to attempt repair -- the user sees the Fixer was dispatched and the outcome, without being asked to trigger it manually
+  1. Recoverable failures auto-retry up to per-phase budget
+  2. Failed tasks reassigned to same-caste peers before new worker creation
+  3. Gate failure triggers automatic Fixer dispatch
 **Plans**: 2 plans
 
 Plans:
-- [x] 96-01-PLAN.md -- Core orchestrator function with classification-dependent sequences, RecoveryBudget, and comprehensive unit tests
-- [x] 96-02-PLAN.md -- Wire orchestrator into build finalize and continue finalize with integration tests
+- [x] 96-01-PLAN.md
+- [x] 96-02-PLAN.md
 
 ### Phase 97: Queen-Led Continue
-**Goal**: The continue command splits into a read-only plan-only phase (queen evaluates gates, decides actions) and a finalize phase (queen executes approved actions), with the queen operating as a single-invocation coordinator that respects the circuit breaker.
-**Depends on**: Phase 95 (smart gate pipeline for evaluation), Phase 96 (auto-recovery for action execution)
+**Goal**: Continue splits into plan-only (queen evaluates) and finalize (queen executes), queen as single-invocation coordinator
+**Depends on**: Phase 95, Phase 96
 **Requirements**: COORD-02, COORD-03, COORD-04
 **Success Criteria** (what must be TRUE):
-  1. Running `aether continue --plan-only` evaluates all gates and produces a decision list (auto-resolve, escalate, fix) without mutating colony state
-  2. Running `aether continue --finalize` executes the approved actions from the plan-only phase, including any recovery context from auto-recovery
-  3. When the circuit breaker trips, the queen logs the escalation and returns control to the user -- she never overrides or resets breaker state
+  1. `aether continue --plan-only` evaluates gates without mutating state
+  2. `aether continue --finalize` executes approved actions
+  3. Circuit breaker trips log escalation and return control to user
 **Plans**: 2 plans
 
 Plans:
-- [x] 97-01-PLAN.md -- Queen decision types, pure function, state persistence, and escalation logging
-- [x] 97-02-PLAN.md -- Wire queen decisions into plan-only output and finalize advisory context
+- [x] 97-01-PLAN.md
+- [x] 97-02-PLAN.md
 
 ### Phase 98: Queen Wave Lifecycle
-**Goal**: The queen manages the full wave lifecycle end-to-end within a phase -- dispatching waves, monitoring worker progress, handling failures within waves, and advancing to the next wave when ready.
-**Depends on**: Phase 96 (auto-recovery for failure handling), Phase 97 (queen-led continue for advancement decisions)
+**Goal**: Queen manages full wave lifecycle end-to-end, dispatching, monitoring, handling failures, advancing
+**Depends on**: Phase 96, Phase 97
 **Requirements**: COORD-01
 **Success Criteria** (what must be TRUE):
-  1. During a build phase, the queen dispatches a wave, monitors worker completion, and when all workers finish (or fail with recovery), she decides whether to advance to the next wave or escalate -- the user sees a summary of wave status between waves
-  2. When a worker fails mid-wave, the queen handles the failure (retry, reassign, or skip) without waiting for user input, and the wave continues with remaining workers
-  3. After all waves in a phase complete, the queen produces a wave lifecycle summary showing waves dispatched, workers per wave, failures encountered, and recovery actions taken
+  1. Queen dispatches wave, monitors completion, decides to advance or escalate
+  2. Mid-wave failures handled without user input
+  3. Wave lifecycle summary produced after all waves complete
 **Plans**: 2 plans
 
 Plans:
-- [x] 98-01-PLAN.md -- Queen wave lifecycle function with always-advance policy, between-wave recovery, ceremony events, and wave summary (TDD)
-- [x] 98-02-PLAN.md -- Wire queen wave lifecycle into build command with integration tests
+- [x] 98-01-PLAN.md
+- [x] 98-02-PLAN.md
 
 ### Phase 99: Output Filtering & Phase Summary
-**Goal**: Build output defaults to filtered summary mode showing only what matters, queen decisions are logged to a persistent audit file, and phase-end summaries replace raw worker noise with actionable information.
-**Depends on**: Phase 96 (recovery activity to summarize), Phase 98 (wave lifecycle data for summaries)
+**Goal**: Build output defaults to filtered summary, queen decisions logged to persistent audit, phase-end summaries replace raw noise
+**Depends on**: Phase 96, Phase 98
 **Requirements**: OUT-01, OUT-02, OUT-03
 **Success Criteria** (what must be TRUE):
-  1. Running `aether build` without `--verbose` shows a concise summary of what was attempted, what succeeded, what failed and how it was recovered, and what needs human attention -- raw worker output is suppressed
-  2. Running `aether build --verbose` shows full worker output for debugging or trust calibration
-  3. A queen activity audit file (JSON) exists after any phase with queen decisions, containing timestamp, decision type, input finding, action taken, and rationale for every autonomous decision
+  1. `aether build` without `--verbose` shows concise summary
+  2. `aether build --verbose` shows full worker output
+  3. Queen activity audit file (JSON) exists after phases with queen decisions
 **Plans**: 3 plans
 
 Plans:
-- [ ] 99-01-PLAN.md -- Output filter with --verbose flag, filteredPrintln/filteredFprintf functions, and build command wiring (OUT-03)
-- [ ] 99-02-PLAN.md -- Queen audit consolidation from 3 source files with QueenAuditFile schema (OUT-02)
-- [ ] 99-03-PLAN.md -- Phase-end summary renderer with actions-needed section and build command wiring (OUT-01)
+- [x] 99-01-PLAN.md
+- [x] 99-02-PLAN.md
+- [x] 99-03-PLAN.md
+
+</details>
+
+### Phase 100: Command Inventory & Lifecycle Contracts
+**Goal**: Every command in the system is cataloged with metadata and every major lifecycle command has a documented contract specifying what goes in, what comes out, and what state changes
+**Depends on**: Nothing (first phase of v1.15)
+**Requirements**: LIFE-01, LIFE-02
+**Success Criteria** (what must be TRUE):
+  1. Running `go test` produces a structured JSON catalog of all registered Cobra commands with name, flags, output mode, and short description -- no command is missing
+  2. Every major lifecycle command (init, discuss, colonize, plan, build, continue, seal, entomb, publish, update, recover, status, resume, watch, patrol, profile) has a contract document specifying inputs, outputs, state mutations, and exit conditions
+  3. The catalog count matches runtime registration exactly -- no phantom commands and no missing commands
+**Plans**: 2 plans
+
+Plans:
+- [ ] 100-01-PLAN.md -- Audit catalog command and golden test
+- [ ] 100-02-PLAN.md -- Lifecycle contract documents and validation test
+
+### Phase 101: Platform Parity Verification
+**Goal**: Go runtime, YAML definitions, Claude wrappers, OpenCode wrappers, and Codex command-guide all agree on what commands exist and what they do
+**Depends on**: Phase 100
+**Requirements**: PLAT-01, PLAT-02, PLAT-03
+**Success Criteria** (what must be TRUE):
+  1. Parity tests pass that verify all five surfaces (Go runtime, YAML, Claude wrappers, OpenCode wrappers, Codex command-guide) agree on command names and flags
+  2. Three known parity gaps are closed: command-guide alignment with YAML definitions, wrapper contract field verification, and Codex coverage
+  3. No platform wrapper describes behavior the Go runtime does not support -- verified by automated check, not manual review
+**Plans**: TBD
+
+### Phase 102: Worker Economy & Visual Ceremony Audit
+**Goal**: Every spawned worker has justified purpose and durable output; every visual element reflects real runtime state, not decoration
+**Depends on**: Phase 100
+**Requirements**: WORK-01, WORK-02, WORK-03, VIZ-01, VIZ-02
+**Success Criteria** (what must be TRUE):
+  1. Every worker caste has a documented purpose, expected durable output type, and at least one downstream consumer identified
+  2. No worker type is spawned that only reads and returns chat without persisting findings, state, or artifacts
+  3. Build/continue/seal/colonize/plan wave shapes are documented with each spawn justified by a downstream need
+  4. Caste colors, stage markers, and closeout banners in runtime output trace to real state transitions -- no decorative-only output
+**Plans**: TBD
+
+### Phase 103: Data Flow & Artifact Wiring
+**Goal**: Every data artifact is consumed downstream or explicitly documented as async-write-only; no dead-end artifacts remain unidentified
+**Depends on**: Phase 100
+**Requirements**: LIFE-03, DATA-01, DATA-02
+**Success Criteria** (what must be TRUE):
+  1. Every artifact in `.aether/data/` has at least one identified writer command and one identified reader or consumer
+  2. Artifacts with no consumer are either documented as intentional async-write-only or flagged for pruning in remediation
+  3. QUEEN.md, Hive Brain, and graph/survey artifacts are confirmed wired into colony-prime context injection (or explicitly pruned)
+**Plans**: TBD
+
+### Phase 104: Release Integrity & Regression Test Suite
+**Goal**: The release pipeline operates as one verified coherent system and regression tests freeze all verified contracts so future drift fails CI
+**Depends on**: Phase 100, Phase 101, Phase 102, Phase 103
+**Requirements**: DATA-03, REL-01, REL-02, TEST-01, TEST-02
+**Success Criteria** (what must be TRUE):
+  1. Version bumping, binary publishing, hub sync, npm metadata, install/update, and stale-file cleanup pass as one end-to-end verified pipeline
+  2. Published hub experience matches source checkout -- no stale files, no version mismatches -- verified by automated comparison
+  3. Review ledgers accumulate across phases and survive session resets -- verified by test
+  4. Structural snapshot tests exist that freeze command counts, parity state, data flow edges, and gate classifications
+  5. Regression suite covers all six audit dimensions: command contracts, wrapper parity, output modes, worker guardrails, data flow, and publish/update behavior
+**Plans**: TBD
+
+### Phase 105: Findings Remediation & Final Validation
+**Goal**: All audit findings from Phases 100-104 are resolved and the full test suite passes clean -- the system is coherent and ready to ship
+**Depends on**: Phase 100, Phase 101, Phase 102, Phase 103, Phase 104
+**Requirements**: TEST-03
+**Success Criteria** (what must be TRUE):
+  1. `go test ./... -race` passes with zero failures
+  2. `go vet ./...` passes clean
+  3. All source-check and wrapper-contract checks pass
+  4. All findings from Phases 100-104 are either resolved or explicitly documented as accepted tech debt with a reason
+**Plans**: TBD
 
 ## Progress
 
@@ -349,3 +432,9 @@ Plans:
 | 97. Queen-Led Continue | v1.14 | 2/2 | Complete | 2026-05-03 |
 | 98. Queen Wave Lifecycle | v1.14 | 2/2 | Complete | 2026-05-04 |
 | 99. Output Filtering & Phase Summary | v1.14 | 3/3 | Complete | 2026-05-04 |
+| 100. Command Inventory & Lifecycle Contracts | v1.15 | 0/2 | Ready to execute | - |
+| 101. Platform Parity Verification | v1.15 | 0/? | Not started | - |
+| 102. Worker Economy & Visual Ceremony Audit | v1.15 | 0/? | Not started | - |
+| 103. Data Flow & Artifact Wiring | v1.15 | 0/? | Not started | - |
+| 104. Release Integrity & Regression Test Suite | v1.15 | 0/? | Not started | - |
+| 105. Findings Remediation & Final Validation | v1.15 | 0/? | Not started | - |

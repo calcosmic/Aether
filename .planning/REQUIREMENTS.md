@@ -1,90 +1,90 @@
-# Requirements: Aether v1.14 Queen Authority
+# Requirements: Aether v1.15
 
-**Defined:** 2026-05-03
-**Core Value:** Aether should feel alive and truthful at runtime — the queen makes it feel alive by coordinating autonomously, and truthful by logging every decision.
+**Defined:** 2026-05-07
+**Core Value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
 
-## v1.14 Requirements
+## v1.15 Requirements
 
-### Auto-Recovery
+### Lifecycle Coherence (LIFE)
 
-- [x] **RECV-01**: Queen classifies worker failures as recoverable, requires-attempt, or blocking using deterministic rules (not LLM inference)
-- [x] **RECV-02**: Failed workers are automatically retried up to a configurable per-phase budget (default: 3 retries per phase) before escalating to user
-- [x] **RECV-03**: On worker failure, queen redistributes the failed task to a peer worker with available capacity before creating a new worker
-- [x] **RECV-04**: On gate failure during continue, queen dispatches the Fixer agent automatically to attempt repair before blocking advancement
-- [x] **RECV-05**: Queen distinguishes transient failures (timeout, context overflow) from systemic failures (bad task spec, missing dependency) — transient failures retry, systemic failures escalate immediately
-- [x] **RECV-06**: All auto-recovery actions are logged to a phase-scoped recovery log with original error, recovery action taken, and outcome
+- [ ] **LIFE-01**: Every major lifecycle command (init, discuss, colonize, plan, build, continue, seal, entomb, publish, update) has a documented contract specifying inputs, outputs, state mutations, and exit conditions
+- [ ] **LIFE-02**: A command catalog scan verifies all 317 Cobra commands produce structured output (help text, error codes, state artifacts where applicable)
+- [ ] **LIFE-03**: No command produces dead-end artifacts that are never consumed by later commands or user-facing output
 
-### Smart Gates
+### Worker Economy (WORK)
 
-- [ ] **GATE-01**: All 11 existing gates are classified as hard_block, soft_block, or advisory — hard_block gates always require user intervention, soft_block gates auto-resolve when safe, advisory gates log but never block
-- [ ] **GATE-02**: Security gates (gatekeeper CVE findings) and watcher veto are classified as hard_block and are NEVER auto-resolved, regardless of severity or configuration
-- [x] **GATE-03**: Soft_block gates (auditor score below threshold, complexity gate, TDD evidence) auto-resolve after queen verifies the finding is non-critical and logs the decision
-- [ ] **GATE-04**: Gate severity thresholds (watcher veto score, auditor minimum score) are configurable via colony config, with documented safe defaults
-- [ ] **GATE-05**: Every gate auto-resolution preserves the original finding in an audit trail — original detail, fix hint, and recovery options are never deleted, only annotated with queen's decision
+- [ ] **WORK-01**: Every spawned worker caste has a documented purpose, expected durable output, and downstream consumer
+- [ ] **WORK-02**: No worker type is spawned that only reads and returns chat without persisting findings, state, or artifacts
+- [ ] **WORK-03**: Build/continue/seal/colonize/plan wave shapes are documented and each spawn is justified
 
-### Clean Output
+### Platform Parity (PLAT)
 
-- [ ] **OUT-01**: At phase end, queen produces a concise summary (not raw worker output) showing: what was attempted, what succeeded, what failed and how it was recovered, what needs human attention
-- [ ] **OUT-02**: Every queen decision during a phase is logged to a queen activity audit file (JSON) with timestamp, decision type, input finding, action taken, and rationale
-- [ ] **OUT-03**: Build output defaults to filtered mode (summary only); `--verbose` flag shows full worker output for debugging or trust calibration
+- [ ] **PLAT-01**: Go runtime behavior, YAML definitions, Claude wrappers, OpenCode wrappers, and Codex command-guide output agree on command names, flags, and behavior descriptions
+- [ ] **PLAT-02**: Existing parity tests (source-check, command_parity_test, command_source_hygiene_test) are extended to close 3 known gaps (command-guide alignment, wrapper contract fields, Codex coverage)
+- [ ] **PLAT-03**: No platform wrapper describes behavior the runtime does not support
 
-### Queen Coordination
+### Visual Ceremony (VIZ)
 
-- [ ] **COORD-01**: Queen manages the wave lifecycle end-to-end — she dispatches waves, monitors worker progress, handles failures within waves, and advances to next wave when ready
-- [ ] **COORD-02**: Continue command splits into plan-only phase (queen evaluates gates and decides actions) and finalize phase (queen executes approved actions), with the queen making the transition decision
-- [ ] **COORD-03**: Queen operates as single-invocation (not long-running daemon) — she runs, makes decisions, persists state, and returns control to the user between phases
-- [ ] **COORD-04**: Queen recovery decisions respect the existing circuit breaker — she never overrides or resets breaker state, and escalates when the breaker trips
+- [ ] **VIZ-01**: Caste colors, stage markers, live worker stacking, and closeout banners reflect real runtime state
+- [ ] **VIZ-02**: No decorative output exists that hides missing behavior or pretends a state transition happened when it didn't
 
-## v2 Requirements
+### Data Wiring (DATA)
 
-### Deferred
+- [ ] **DATA-01**: Every artifact in .aether/data/ (COLONY_STATE, pheromones, midden, instincts, session, handoffs, review ledgers) is traced to a downstream consumer or explicitly documented as write-only-for-async
+- [ ] **DATA-02**: QUEEN.md, Hive Brain, and graph/survey artifacts are wired into colony-prime context injection or explicitly pruned
+- [ ] **DATA-03**: Review ledgers accumulate across phases and survive session resets
 
-- **QUEEN-01**: Queen autonomy levels (full/advisory/manual) — needs user testing to define thresholds
-- **QUEEN-02**: Cross-phase queen continuity — queen remembers patterns across phases within a milestone
-- **QUEEN-03**: Queen context budget is configurable per-colony — currently proposed at 12K characters
-- **QUEEN-04**: Queen coordinates across phase boundaries (automatic build→continue→build transitions)
+### Release Integrity (REL)
+
+- [ ] **REL-01**: Version bumping, binary publishing, hub sync, npm metadata, install/update behavior, and stale-file cleanup operate as one verified coherent system
+- [ ] **REL-02**: Published user experience matches the source checkout (no stale hub files, no version mismatches)
+
+### Test Contracts (TEST)
+
+- [ ] **TEST-01**: Structural snapshot tests freeze verified command contracts so future drift fails loudly
+- [ ] **TEST-02**: Regression test suite covers command contracts, wrapper parity, output modes, worker guardrails, data flow, and publish/update behavior
+- [ ] **TEST-03**: `go test ./...`, `go vet ./...`, and source/wrapper checks pass consistently
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| LLM-based failure classification | Must be deterministic — LLM classification is unreliable and contradicts Aether's "runtime truth" core value |
-| Auto-resolving security gates | Security findings require human judgment — auto-resolving them would undermine the colony's trust model |
-| Auto-resolving watcher veto | Watcher has final say by design — overriding it turns Watcher into advisory role, contradicting colony principles |
-| Queen as long-running daemon | Workers are short-lived subprocess invocations, not services — daemon mode adds complexity without value |
-| New external dependencies | All infrastructure exists in Go runtime — adding libraries creates maintenance burden for a wiring problem |
-| Override circuit breaker thresholds | Breaker exists to prevent cascading failures — queen must respect it, not bypass it |
+| New user-facing features | This is a hardening audit, not feature development |
+| Performance optimization | Not the goal; audit is about correctness and coherence |
+| Cross-colony ledger sharing | Findings contain code-specific paths that go stale across repos |
+| Auto-block on critical findings | Conflicts with existing continue-review blocking |
+| Web UI for audit results | CLI-only for now |
+| Full security audit | Security-specific findings are in scope, but this is not a dedicated security audit |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RECV-01 | Phase 94 | Complete |
-| RECV-02 | Phase 96 | Pending |
-| RECV-03 | Phase 96 | Pending |
-| RECV-04 | Phase 96 | Pending |
-| RECV-05 | Phase 94 | Complete |
-| RECV-06 | Phase 94 | Complete |
-| GATE-01 | Phase 93 | Pending |
-| GATE-02 | Phase 93 | Pending |
-| GATE-03 | Phase 95 | Complete |
-| GATE-04 | Phase 95 | Pending |
-| GATE-05 | Phase 93 | Pending |
-| OUT-01 | Phase 99 | Pending |
-| OUT-02 | Phase 99 | Pending |
-| OUT-03 | Phase 99 | Pending |
-| COORD-01 | Phase 98 | Pending |
-| COORD-02 | Phase 97 | Pending |
-| COORD-03 | Phase 97 | Pending |
-| COORD-04 | Phase 97 | Pending |
+| LIFE-01 | Phase 100 | Pending |
+| LIFE-02 | Phase 100 | Pending |
+| LIFE-03 | Phase 103 | Pending |
+| WORK-01 | Phase 102 | Pending |
+| WORK-02 | Phase 102 | Pending |
+| WORK-03 | Phase 102 | Pending |
+| PLAT-01 | Phase 101 | Pending |
+| PLAT-02 | Phase 101 | Pending |
+| PLAT-03 | Phase 101 | Pending |
+| VIZ-01 | Phase 102 | Pending |
+| VIZ-02 | Phase 102 | Pending |
+| DATA-01 | Phase 103 | Pending |
+| DATA-02 | Phase 103 | Pending |
+| DATA-03 | Phase 104 | Pending |
+| REL-01 | Phase 104 | Pending |
+| REL-02 | Phase 104 | Pending |
+| TEST-01 | Phase 104 | Pending |
+| TEST-02 | Phase 104 | Pending |
+| TEST-03 | Phase 105 | Pending |
 
 **Coverage:**
-- v1.14 requirements: 18 total
-- Mapped to phases: 18
+- v1.15 requirements: 19 total
+- Mapped to phases: 19
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-05-03*
-*Last updated: 2026-05-03 after roadmap creation*
+*Requirements defined: 2026-05-07*
+*Last updated: 2026-05-07 after roadmap creation*
