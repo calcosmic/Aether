@@ -9,7 +9,7 @@
 
 - [ ] **LIFE-01**: Every major lifecycle command (init, discuss, colonize, plan, build, continue, seal, entomb, publish, update) has a documented contract specifying inputs, outputs, state mutations, and exit conditions
 - [ ] **LIFE-02**: A command catalog scan verifies all 317 Cobra commands produce structured output (help text, error codes, state artifacts where applicable)
-- [ ] **LIFE-03**: No command produces dead-end artifacts that are never consumed by later commands or user-facing output
+- [x] **LIFE-03**: No command produces dead-end artifacts that are never consumed by later commands or user-facing output
 
 ### Worker Economy (WORK)
 
@@ -30,8 +30,8 @@
 
 ### Data Wiring (DATA)
 
-- [ ] **DATA-01**: Every artifact in .aether/data/ (COLONY_STATE, pheromones, midden, instincts, session, handoffs, review ledgers) is traced to a downstream consumer or explicitly documented as write-only-for-async
-- [ ] **DATA-02**: QUEEN.md, Hive Brain, and graph/survey artifacts are wired into colony-prime context injection or explicitly pruned
+- [x] **DATA-01**: Every artifact in .aether/data/ (COLONY_STATE, pheromones, midden, instincts, session, handoffs, review ledgers) is traced to a downstream consumer or explicitly documented as write-only-for-async
+- [x] **DATA-02**: QUEEN.md, Hive Brain, and graph/survey artifacts are wired into colony-prime context injection or explicitly pruned
 - [ ] **DATA-03**: Review ledgers accumulate across phases and survive session resets
 
 ### Release Integrity (REL)
@@ -62,7 +62,7 @@
 |-------------|-------|--------|
 | LIFE-01 | Phase 100 | Pending |
 | LIFE-02 | Phase 100 | Pending |
-| LIFE-03 | Phase 103 | Pending |
+| LIFE-03 | Phase 103 | Complete |
 | WORK-01 | Phase 102 | Complete |
 | WORK-02 | Phase 102 | Complete |
 | WORK-03 | Phase 102 | Complete |
@@ -71,8 +71,8 @@
 | PLAT-03 | Phase 101 | Pending |
 | VIZ-01 | Phase 102 | Complete |
 | VIZ-02 | Phase 102 | Complete |
-| DATA-01 | Phase 103 | Pending |
-| DATA-02 | Phase 103 | Pending |
+| DATA-01 | Phase 103 | Complete |
+| DATA-02 | Phase 103 | Complete |
 | DATA-03 | Phase 104 | Pending |
 | REL-01 | Phase 104 | Pending |
 | REL-02 | Phase 104 | Pending |
