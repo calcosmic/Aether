@@ -220,7 +220,7 @@
 
 ### v1.15 Framework Coherence, Efficiency, and Ship Readiness (In Progress)
 
-- [ ] **Phase 100: Command Inventory & Lifecycle Contracts** -- Catalog all Cobra commands, document lifecycle command contracts
+- [x] **Phase 100: Command Inventory & Lifecycle Contracts** -- Catalog all Cobra commands, document lifecycle command contracts (completed 2026-05-07)
 - [ ] **Phase 101: Platform Parity Verification** -- Verify five-surface agreement and extend parity tests
 - [ ] **Phase 102: Worker Economy & Visual Ceremony Audit** -- Audit worker spawn justification and visual ceremony integrity
 - [ ] **Phase 103: Data Flow & Artifact Wiring** -- Trace all data artifacts to consumers, flag dead ends
@@ -359,8 +359,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 100-01-PLAN.md -- Audit catalog command and golden test
-- [ ] 100-02-PLAN.md -- Lifecycle contract documents and validation test
+- [x] 100-01-PLAN.md -- Audit catalog command and golden test
+- [x] 100-02-PLAN.md -- Lifecycle contract documents and validation test
 
 ### Phase 101: Platform Parity Verification
 **Goal**: Go runtime, YAML definitions, Claude wrappers, OpenCode wrappers, and Codex command-guide all agree on what commands exist and what they do
@@ -432,7 +432,7 @@ Plans:
 | 97. Queen-Led Continue | v1.14 | 2/2 | Complete | 2026-05-03 |
 | 98. Queen Wave Lifecycle | v1.14 | 2/2 | Complete | 2026-05-04 |
 | 99. Output Filtering & Phase Summary | v1.14 | 3/3 | Complete | 2026-05-04 |
-| 100. Command Inventory & Lifecycle Contracts | v1.15 | 0/2 | Ready to execute | - |
+| 100. Command Inventory & Lifecycle Contracts | v1.15 | 2/2 | Complete | 2026-05-07 |
 | 101. Platform Parity Verification | v1.15 | 0/? | Not started | - |
 | 102. Worker Economy & Visual Ceremony Audit | v1.15 | 0/? | Not started | - |
 | 103. Data Flow & Artifact Wiring | v1.15 | 0/? | Not started | - |
