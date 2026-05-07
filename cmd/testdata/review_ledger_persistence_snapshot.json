@@ -1,0 +1,7 @@
+{
+  "domains": ["security", "quality", "performance", "resilience", "testing", "history", "bugs"],
+  "domain_count": 7,
+  "max_findings_per_write": 50,
+  "ledger_path_pattern": ".aether/data/reviews/{domain}/ledger.json",
+  "expected_entry_fields": ["phase", "finding_id", "severity", "description", "timestamp"]
+}
