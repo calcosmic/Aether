@@ -193,7 +193,7 @@ var rootCmd = &cobra.Command{
 func skipStoreInit(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "command-guide", "completion", "version", "help":
+		case "command-guide", "completion", "version", "help", "audit-catalog":
 			return true
 		}
 	}
