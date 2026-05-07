@@ -13,9 +13,9 @@
 
 ### Worker Economy (WORK)
 
-- [ ] **WORK-01**: Every spawned worker caste has a documented purpose, expected durable output, and downstream consumer
-- [ ] **WORK-02**: No worker type is spawned that only reads and returns chat without persisting findings, state, or artifacts
-- [ ] **WORK-03**: Build/continue/seal/colonize/plan wave shapes are documented and each spawn is justified
+- [x] **WORK-01**: Every spawned worker caste has a documented purpose, expected durable output, and downstream consumer
+- [x] **WORK-02**: No worker type is spawned that only reads and returns chat without persisting findings, state, or artifacts
+- [x] **WORK-03**: Build/continue/seal/colonize/plan wave shapes are documented and each spawn is justified
 
 ### Platform Parity (PLAT)
 
@@ -25,8 +25,8 @@
 
 ### Visual Ceremony (VIZ)
 
-- [ ] **VIZ-01**: Caste colors, stage markers, live worker stacking, and closeout banners reflect real runtime state
-- [ ] **VIZ-02**: No decorative output exists that hides missing behavior or pretends a state transition happened when it didn't
+- [x] **VIZ-01**: Caste colors, stage markers, live worker stacking, and closeout banners reflect real runtime state
+- [x] **VIZ-02**: No decorative output exists that hides missing behavior or pretends a state transition happened when it didn't
 
 ### Data Wiring (DATA)
 
@@ -63,14 +63,14 @@
 | LIFE-01 | Phase 100 | Pending |
 | LIFE-02 | Phase 100 | Pending |
 | LIFE-03 | Phase 103 | Pending |
-| WORK-01 | Phase 102 | Pending |
-| WORK-02 | Phase 102 | Pending |
-| WORK-03 | Phase 102 | Pending |
+| WORK-01 | Phase 102 | Complete |
+| WORK-02 | Phase 102 | Complete |
+| WORK-03 | Phase 102 | Complete |
 | PLAT-01 | Phase 101 | Pending |
 | PLAT-02 | Phase 101 | Pending |
 | PLAT-03 | Phase 101 | Pending |
-| VIZ-01 | Phase 102 | Pending |
-| VIZ-02 | Phase 102 | Pending |
+| VIZ-01 | Phase 102 | Complete |
+| VIZ-02 | Phase 102 | Complete |
 | DATA-01 | Phase 103 | Pending |
 | DATA-02 | Phase 103 | Pending |
 | DATA-03 | Phase 104 | Pending |
