@@ -370,7 +370,11 @@ Plans:
   1. Parity tests pass that verify all five surfaces (Go runtime, YAML, Claude wrappers, OpenCode wrappers, Codex command-guide) agree on command names and flags
   2. Three known parity gaps are closed: command-guide alignment with YAML definitions, wrapper contract field verification, and Codex coverage
   3. No platform wrapper describes behavior the Go runtime does not support -- verified by automated check, not manual review
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 101-01-PLAN.md -- Combined 5-surface parity test with golden file
+- [ ] 101-02-PLAN.md -- Severity-classified KNOWN-GAPS.md report
 
 ### Phase 102: Worker Economy & Visual Ceremony Audit
 **Goal**: Every spawned worker has justified purpose and durable output; every visual element reflects real runtime state, not decoration
@@ -433,7 +437,7 @@ Plans:
 | 98. Queen Wave Lifecycle | v1.14 | 2/2 | Complete | 2026-05-04 |
 | 99. Output Filtering & Phase Summary | v1.14 | 3/3 | Complete | 2026-05-04 |
 | 100. Command Inventory & Lifecycle Contracts | v1.15 | 2/2 | Complete | 2026-05-07 |
-| 101. Platform Parity Verification | v1.15 | 0/? | Not started | - |
+| 101. Platform Parity Verification | v1.15 | 0/2 | Not started | - |
 | 102. Worker Economy & Visual Ceremony Audit | v1.15 | 0/? | Not started | - |
 | 103. Data Flow & Artifact Wiring | v1.15 | 0/? | Not started | - |
 | 104. Release Integrity & Regression Test Suite | v1.15 | 0/? | Not started | - |
