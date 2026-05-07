@@ -1,0 +1,3914 @@
+[
+  {
+    "name": "activity-log",
+    "short_description": "Append an entry to the activity log",
+    "flags": [
+      "command",
+      "details",
+      "phase",
+      "result"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "activity-log-init",
+    "short_description": "Initialize an empty activity log",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "activity-log-read",
+    "short_description": "Read all entries from the activity log",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "assumption-list",
+    "short_description": "List persisted plan assumptions",
+    "flags": [
+      "phase",
+      "unvalidated"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "assumption-validate",
+    "short_description": "Mark one persisted assumption as validated",
+    "flags": [
+      "id",
+      "note"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "assumptions-analyze",
+    "short_description": "Analyze plan assumptions, persist them, and emit steering signals",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "audit-catalog",
+    "short_description": "Produce structured catalog of all registered commands",
+    "flags": [
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "autofix-checkpoint",
+    "short_description": "Create a checkpoint before autofix attempt",
+    "flags": [
+      "issue"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autofix-rollback",
+    "short_description": "Rollback to a checkpoint",
+    "flags": [
+      "checkpoint-id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autopilot-check-replan",
+    "short_description": "Check if replan is recommended",
+    "flags": [
+      "interval"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autopilot-headless-check",
+    "short_description": "Check if running in headless mode",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autopilot-init",
+    "short_description": "Initialize autopilot state for N phases",
+    "flags": [
+      "phases"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autopilot-set-headless",
+    "short_description": "Set headless mode",
+    "flags": [
+      "value"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autopilot-status",
+    "short_description": "Return current autopilot state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autopilot-stop",
+    "short_description": "Stop autopilot and save state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "autopilot-update",
+    "short_description": "Update autopilot phase status",
+    "flags": [
+      "phase",
+      "status"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "backup-prune-global",
+    "short_description": "Prune old backups to a cap",
+    "flags": [
+      "cap"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "behavior-observe",
+    "short_description": "Append a behavioral observation for the active colony",
+    "flags": [
+      "command",
+      "dimension",
+      "evidence",
+      "signal",
+      "strength"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "binary-download",
+    "short_description": "Download the aether Go binary from GitHub Releases",
+    "flags": [
+      "channel",
+      "dest",
+      "version"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "bootstrap-system",
+    "short_description": "Copy system files from hub to colony",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "build",
+    "short_description": "Dispatch a real Codex build packet with worker briefs, claims, and spawn tracking",
+    "flags": [
+      "circuit-breaker-threshold",
+      "force",
+      "heavy",
+      "light",
+      "no-suggest",
+      "plan-only",
+      "synthetic",
+      "task",
+      "verbose",
+      "verification-depth",
+      "worker-timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "build-finalize",
+    "short_description": "Record externally spawned wrapper build workers as the phase build packet",
+    "flags": [
+      "completion-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "bump-version",
+    "short_description": "Bump Aether source and npm package versions",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "cache-clean",
+    "short_description": "Remove all session cache files from the data directory",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "cache-clean-stale",
+    "short_description": "Remove session cache files older than 24 hours",
+    "flags": [
+      "max-age"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "ceremony",
+    "short_description": "Render runtime-owned wrapper ceremony surfaces",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "chamber-compare",
+    "short_description": "Compare chamber archive with current colony state",
+    "flags": [
+      "name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "chamber-create",
+    "short_description": "Create a chamber archive entry",
+    "flags": [
+      "goal",
+      "milestone",
+      "name",
+      "phases-completed",
+      "total-phases"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "chamber-list",
+    "short_description": "List all chambers",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "chamber-verify",
+    "short_description": "Verify chamber integrity",
+    "flags": [
+      "name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "changelog-append",
+    "short_description": "Append an entry to CHANGELOG.md",
+    "flags": [
+      "date",
+      "entry",
+      "phase",
+      "plan"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "changelog-collect-plan-data",
+    "short_description": "Extract plan data for changelog entry",
+    "flags": [
+      "plan-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "charter-write",
+    "short_description": "Write colony charter to QUEEN.md",
+    "flags": [
+      "domains",
+      "goal",
+      "goals",
+      "governance",
+      "intent",
+      "name",
+      "vision"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "check-antipattern",
+    "short_description": "Scan a file for security antipatterns",
+    "flags": [
+      "file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "clash-check",
+    "short_description": "Check if file is modified in another worktree",
+    "flags": [
+      "file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "clash-setup",
+    "short_description": "Install clash detection hooks and merge driver",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "closeout",
+    "short_description": "Render the visual closeout for wrapper-driven lifecycle commands",
+    "flags": [
+      "completion-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "codebase-query",
+    "short_description": "Query the codebase dependency graph",
+    "flags": [
+      "depth",
+      "file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "codebase-scan",
+    "short_description": "Scan codebase file dependencies and build import graph",
+    "flags": [
+      "langs"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "colonize",
+    "short_description": "Survey the repository, write territory reports, and record surveyor dispatches",
+    "flags": [
+      "force",
+      "force-resurvey",
+      "plan-only",
+      "worker-timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "colonize-finalize",
+    "short_description": "Record externally spawned surveyor workers as the territory survey",
+    "flags": [
+      "completion-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "colony-archive-xml",
+    "short_description": "Export complete colony archive to XML (alias for export archive)",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "colony-depth",
+    "short_description": "Get or set colony depth",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "colony-name",
+    "short_description": "Get the colony name from state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "colony-prime",
+    "short_description": "Assemble full colony context for worker prompt injection",
+    "flags": [
+      "compact"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "colony-vital-signs",
+    "short_description": "Show colony vital signs",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "command-guide",
+    "short_description": "Return platform orchestration guidance for an Aether command",
+    "flags": [
+      "platform"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "completion",
+    "short_description": "Generate shell completion script",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "consolidation-phase-end",
+    "short_description": "Run phase-end consolidation: decay, archive, check promotions",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "consolidation-seal",
+    "short_description": "Run full seal consolidation: curation + decay + archive + event",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "context-capsule",
+    "short_description": "Assemble worker context for prompt injection",
+    "flags": [
+      "compact",
+      "json",
+      "max-decisions",
+      "max-risks",
+      "max-signals",
+      "max-words"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "context-update",
+    "short_description": "Update colony context summary",
+    "flags": [
+      "append",
+      "content",
+      "key",
+      "section",
+      "summary"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "continue",
+    "short_description": "Verify the active build packet, close dispatched workers, and advance honestly",
+    "flags": [
+      "heavy",
+      "light",
+      "no-learn",
+      "plan-only",
+      "reconcile-task",
+      "skip-watchers",
+      "synthetic",
+      "verification-depth",
+      "verification-timeout",
+      "worker-timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "continue-finalize",
+    "short_description": "Record externally spawned wrapper continue workers and advance through runtime gates",
+    "flags": [
+      "completion-file",
+      "no-learn",
+      "verification-timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council",
+    "short_description": "Multi-perspective deliberation system",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-advocate",
+    "short_description": "Submit advocate position on a topic",
+    "flags": [
+      "position",
+      "topic"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-budget-check",
+    "short_description": "Return remaining budget for council deliberations",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-challenger",
+    "short_description": "Submit challenger position on a topic",
+    "flags": [
+      "challenge",
+      "topic"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-deliberate",
+    "short_description": "Initiate council deliberation on a topic",
+    "flags": [
+      "topic"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-history",
+    "short_description": "Return council deliberation history",
+    "flags": [
+      "topic"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-sage",
+    "short_description": "Submit sage advice on a topic",
+    "flags": [
+      "topic",
+      "wisdom"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-archivist",
+    "short_description": "Run archivist curation ant (low-trust instinct archival)",
+    "flags": [
+      "dry-run",
+      "threshold"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-critic",
+    "short_description": "Run critic curation ant (contradiction detection)",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-herald",
+    "short_description": "Run herald curation ant (high-confidence instinct promotion)",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-janitor",
+    "short_description": "Run janitor curation ant (expired event cleanup)",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-librarian",
+    "short_description": "Run librarian curation ant (inventory statistics)",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-nurse",
+    "short_description": "Run nurse curation ant (trust score recalculation)",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-run",
+    "short_description": "Run all 8 curation ants in sequence",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-scribe",
+    "short_description": "Run scribe curation ant (report generation)",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "curation-sentinel",
+    "short_description": "Run sentinel curation ant (data integrity check)",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "data-clean",
+    "short_description": "Remove test artifacts from colony data files",
+    "flags": [
+      "confirm"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "data-safety-stats",
+    "short_description": "Display data integrity statistics",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "discuss",
+    "short_description": "Surface intent clarifications before planning and record resolved answers",
+    "flags": [
+      "answer",
+      "dry-run",
+      "max-questions",
+      "resolve"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "discuss-analyze",
+    "short_description": "Analyze codebase and generate suggested discussion questions",
+    "flags": [
+      "goal",
+      "target"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "domain-detect",
+    "short_description": "Detect project domain from file patterns",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "emoji-audit",
+    "short_description": "Audit emoji usage in command files",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "entomb",
+    "short_description": "Archive a sealed colony into chambers and reset the active state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "entropy-score",
+    "short_description": "Compute colony health/entropy score",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "error-add",
+    "short_description": "Add an error record to COLONY_STATE.json",
+    "flags": [
+      "category",
+      "description",
+      "phase",
+      "severity"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "error-flag-pattern",
+    "short_description": "Create or update a recurring error pattern",
+    "flags": [
+      "description",
+      "name",
+      "severity"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "error-summary",
+    "short_description": "Summarize error records by category and severity",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "eternal-init",
+    "short_description": "Initialize eternal memory fallback storage",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "eternal-store",
+    "short_description": "Store a high-value signal in eternal memory",
+    "flags": [
+      "category",
+      "confidence",
+      "content"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "event-bus-cleanup",
+    "short_description": "Remove expired events from the event bus JSONL file",
+    "flags": [
+      "dry-run",
+      "timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "event-bus-publish",
+    "short_description": "Publish a typed event to the event bus",
+    "flags": [
+      "payload",
+      "source",
+      "timeout",
+      "topic"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "event-bus-query",
+    "short_description": "Query events from the event bus matching a topic pattern",
+    "flags": [
+      "limit",
+      "pattern",
+      "since",
+      "timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "event-bus-replay",
+    "short_description": "Replay persisted events for a specific topic in chronological order",
+    "flags": [
+      "limit",
+      "since",
+      "timeout",
+      "topic"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "event-bus-subscribe",
+    "short_description": "Stream persisted event bus events as NDJSON",
+    "flags": [
+      "filter",
+      "limit",
+      "max-events",
+      "poll-interval",
+      "since",
+      "stream",
+      "timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "export",
+    "short_description": "Export colony data to XML format",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "failure-classify",
+    "short_description": "Show failure classification rules and rationale",
+    "flags": [
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "feedback",
+    "short_description": "Add gentle corrective feedback",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "flag-acknowledge",
+    "short_description": "Acknowledge a flag by ID",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "flag-add",
+    "short_description": "Create a new flag",
+    "flags": [
+      "description",
+      "phase",
+      "severity",
+      "source",
+      "title",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "flag-auto-resolve",
+    "short_description": "Auto-resolve flags matching patterns (e.g., old flags)",
+    "flags": [
+      "max-days"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "flag-check-blockers",
+    "short_description": "Check for active critical flags (blockers)",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "flag-list",
+    "short_description": "List all flags",
+    "flags": [
+      "json",
+      "phase",
+      "status",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "flag-resolve",
+    "short_description": "Resolve a flag by ID",
+    "flags": [
+      "id",
+      "message"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "focus",
+    "short_description": "Guide colony attention",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "force-unlock",
+    "short_description": "Emergency release of a file lock",
+    "flags": [
+      "file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "gate-auto-resolve",
+    "short_description": "Show gate auto-resolve thresholds and rationale",
+    "flags": [
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "gate-check",
+    "short_description": "Validate whether a state transition is allowed",
+    "flags": [
+      "action",
+      "phase",
+      "task"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "gate-classify",
+    "short_description": "Show gate classification tiers and rationale",
+    "flags": [
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "gate-recovery-template",
+    "short_description": "Get the recovery template for a gate type",
+    "flags": [
+      "name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "gate-results-read",
+    "short_description": "Read gate results from COLONY_STATE.json",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "gate-results-write",
+    "short_description": "Write a gate result entry to COLONY_STATE.json",
+    "flags": [
+      "detail",
+      "name",
+      "passed"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "generate-ant-name",
+    "short_description": "Generate a random ant name for the given caste",
+    "flags": [
+      "seed"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "generate-commit-message",
+    "short_description": "Generate a template-based commit message",
+    "flags": [
+      "body",
+      "scope",
+      "subject",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "generate-progress-bar",
+    "short_description": "Render a terminal progress bar",
+    "flags": [
+      "current",
+      "total",
+      "width"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "generate-threshold-bar",
+    "short_description": "Render a threshold indicator bar",
+    "flags": [
+      "max",
+      "threshold",
+      "value",
+      "width"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "graph-cluster",
+    "short_description": "Detect cycles in the instinct graph",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "graph-link",
+    "short_description": "Create an edge between two nodes in the instinct graph",
+    "flags": [
+      "relationship",
+      "source",
+      "target",
+      "weight"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "graph-neighbors",
+    "short_description": "Query neighbors of a node in the instinct graph",
+    "flags": [
+      "direction",
+      "min-weight",
+      "node",
+      "relationship"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "graph-reach",
+    "short_description": "Find all nodes reachable from a node within max hops",
+    "flags": [
+      "max-hops",
+      "min-weight",
+      "node"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "grave-add",
+    "short_description": "Record a grave entry",
+    "flags": [
+      "agent",
+      "phase",
+      "reason"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "grave-check",
+    "short_description": "Check if agent has a grave entry",
+    "flags": [
+      "agent"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "history",
+    "short_description": "Show colony event history",
+    "flags": [
+      "filter",
+      "json",
+      "limit"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "hive-abstract",
+    "short_description": "Abstract repo-specific text into generalized wisdom",
+    "flags": [
+      "instinct",
+      "source-repo"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "hive-init",
+    "short_description": "Initialize hive directory and empty wisdom file",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "hive-promote",
+    "short_description": "End-to-end abstract + store pipeline for wisdom promotion",
+    "flags": [
+      "confidence",
+      "domain",
+      "source-repo",
+      "text"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "hive-read",
+    "short_description": "Read wisdom entries with optional domain and confidence filtering",
+    "flags": [
+      "domain",
+      "min-confidence"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "hive-search",
+    "short_description": "Search colony learning with full-text search",
+    "flags": [
+      "classification",
+      "limit",
+      "min-confidence"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "hive-store",
+    "short_description": "Store a wisdom entry with deduplication and LRU cap",
+    "flags": [
+      "domain",
+      "source-repo",
+      "text"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "immune-auto-scar",
+    "short_description": "Auto-detect failure patterns from midden",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "import",
+    "short_description": "Import colony data from XML format",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "incident-rule-add",
+    "short_description": "Add a rule to decree, constraint, or gate file",
+    "flags": [
+      "priority",
+      "rule",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "init",
+    "short_description": "Initialize a new colony in the current directory",
+    "flags": [
+      "charter-json",
+      "scope"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "init-ceremony",
+    "short_description": "Run the full colony init ceremony (scan, charter, brief, approve)",
+    "flags": [
+      "scope",
+      "target"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "init-research",
+    "short_description": "Perform initial research for colony setup",
+    "flags": [
+      "goal",
+      "target"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "install",
+    "short_description": "Install platform assets and refresh the shared Aether hub",
+    "flags": [
+      "binary-dest",
+      "binary-version",
+      "channel",
+      "download-binary",
+      "home-dir",
+      "package-dir",
+      "skip-build-binary"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "instinct-apply",
+    "short_description": "Mark an instinct as applied and update stats",
+    "flags": [
+      "success"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "instinct-archive",
+    "short_description": "Archive an instinct by ID",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "instinct-create",
+    "short_description": "Create or reinforce an instinct entry",
+    "flags": [
+      "action",
+      "confidence",
+      "domain",
+      "evidence",
+      "source",
+      "trigger"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "instinct-decay-all",
+    "short_description": "Apply trust decay to all non-archived instincts",
+    "flags": [
+      "days",
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "instinct-read",
+    "short_description": "Read an instinct by ID",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "instinct-read-trusted",
+    "short_description": "Read instincts filtered by minimum trust score",
+    "flags": [
+      "domain",
+      "limit",
+      "min-score"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "integrity",
+    "short_description": "Validate the full release pipeline chain",
+    "flags": [
+      "channel",
+      "json",
+      "source"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "lay-eggs",
+    "short_description": "Set up Aether in the current directory from the hub",
+    "flags": [
+      "home-dir",
+      "repo-dir"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learn-export",
+    "short_description": "Export learning entries as a portable pack",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learn-import",
+    "short_description": "Import learning entries from a portable pack",
+    "flags": [
+      "pack",
+      "preview"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-approve-proposals",
+    "short_description": "Approve pending learning proposals",
+    "flags": [
+      "all",
+      "deferred",
+      "ids",
+      "verbose"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-check-promotion",
+    "short_description": "Check if an observation is eligible for promotion",
+    "flags": [
+      "all",
+      "observation-id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-defer-proposals",
+    "short_description": "Defer pending learning proposals",
+    "flags": [
+      "all",
+      "ids"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-display-proposals",
+    "short_description": "Display pending learning proposals",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-extract-fallback",
+    "short_description": "Extract learning with fallback to simpler approach",
+    "flags": [
+      "category",
+      "content",
+      "fallback"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-inject",
+    "short_description": "Directly inject a learning observation",
+    "flags": [
+      "category",
+      "content",
+      "source",
+      "trust-score"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-observe",
+    "short_description": "Capture a learning observation",
+    "flags": [
+      "colony-name",
+      "content",
+      "evidence-type",
+      "source-type",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-promote",
+    "short_description": "Promote an observation to an instinct",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-promote-auto",
+    "short_description": "Auto-promote eligible observations to instincts",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-select-proposals",
+    "short_description": "Select specific proposals for interactive review",
+    "flags": [
+      "category"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "learning-undo-promotions",
+    "short_description": "Revert recent instinct promotions",
+    "flags": [
+      "count"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "load-state",
+    "short_description": "Load COLONY_STATE.json and return it",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "maturity",
+    "short_description": "View colony maturity journey",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "medic",
+    "short_description": "Diagnose colony health",
+    "flags": [
+      "deep",
+      "fix",
+      "force",
+      "json",
+      "trace"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "medic-auto-spawn-check",
+    "short_description": "Check whether Medic should auto-spawn",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "memory-capture",
+    "short_description": "Capture a memory observation (simplified learning-observe)",
+    "flags": [
+      "content",
+      "evidence-type",
+      "source-type",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "memory-metrics",
+    "short_description": "Show memory health metrics",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-acknowledge",
+    "short_description": "Mark entries as acknowledged by ID or category",
+    "flags": [
+      "category",
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-collect",
+    "short_description": "Collect branch failures into main midden",
+    "flags": [
+      "branch",
+      "merge-sha"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-cross-pr-analysis",
+    "short_description": "Detect failure patterns across multiple PRs",
+    "flags": [
+      "window"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-handle-revert",
+    "short_description": "Tag entries affected by a revert",
+    "flags": [
+      "sha"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-prune",
+    "short_description": "Remove entries older than N days",
+    "flags": [
+      "days"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-recent-failures",
+    "short_description": "Return recent failure entries, newest first",
+    "flags": [
+      "limit"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-review",
+    "short_description": "Return unacknowledged entries grouped by category",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-search",
+    "short_description": "Search failure entries by text",
+    "flags": [
+      "query"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-tag",
+    "short_description": "Add a tag to a failure entry",
+    "flags": [
+      "id",
+      "tag"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "midden-write",
+    "short_description": "Write a failure record to the midden",
+    "flags": [
+      "category",
+      "message",
+      "source"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "migrate-state",
+    "short_description": "Migrate COLONY_STATE.json to the current runtime schema",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "milestone-detect",
+    "short_description": "Detect current milestone from colony state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "normalize-args",
+    "short_description": "Normalize arguments from environment or positional params",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "oracle",
+    "short_description": "Run the autonomous Oracle RALF research loop",
+    "flags": [
+      "background",
+      "confidence-target",
+      "depth",
+      "max-iterations",
+      "scope",
+      "template"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "parallel-mode",
+    "short_description": "Get or set parallel execution mode",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "patrol-check",
+    "short_description": "Run colony health checks (JSON validity, stale signals, interrupted builds)",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pause-colony",
+    "short_description": "Save colony state and write a handoff for later resumption",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pending-decision-add",
+    "short_description": "Record a pending decision",
+    "flags": [
+      "description",
+      "phase",
+      "source",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pending-decision-list",
+    "short_description": "List pending decisions",
+    "flags": [
+      "type",
+      "unresolved"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pending-decision-resolve",
+    "short_description": "Resolve a pending decision",
+    "flags": [
+      "id",
+      "resolution"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "phase",
+    "short_description": "Display current phase details",
+    "flags": [
+      "json",
+      "number"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "phase-insert",
+    "short_description": "Insert a corrective phase into the active plan",
+    "flags": [
+      "after",
+      "description",
+      "name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-count",
+    "short_description": "Count active pheromone signals",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-display",
+    "short_description": "Display active pheromone signals in formatted table",
+    "flags": [
+      "active-only",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-expire",
+    "short_description": "Expire a pheromone signal by ID",
+    "flags": [
+      "id",
+      "phase-end-only"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-export-xml",
+    "short_description": "Export pheromone signals to XML (alias for export pheromones)",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-import-xml",
+    "short_description": "Import pheromone signals from XML (alias for import pheromones)",
+    "flags": [
+      "file",
+      "input"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-merge-back",
+    "short_description": "Merge pheromone changes from one repo/worktree root back into another",
+    "flags": [
+      "export-file",
+      "source-root",
+      "target-root"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-prime",
+    "short_description": "Format active pheromone signals for prompt injection",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-read",
+    "short_description": "Read pheromone signals",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-snapshot-inject",
+    "short_description": "Copy active pheromone signals from one repo/worktree root into another",
+    "flags": [
+      "source-root",
+      "target-root"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-validate-xml",
+    "short_description": "Validate pheromone XML structure (placeholder)",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromone-write",
+    "short_description": "Create a new pheromone signal",
+    "flags": [
+      "content",
+      "priority",
+      "reason",
+      "source",
+      "strength",
+      "tag",
+      "ttl",
+      "type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "plan",
+    "short_description": "Generate or review a survey-aware phase plan for the current colony goal",
+    "flags": [
+      "depth",
+      "force",
+      "plan-only",
+      "planning-depth",
+      "refresh",
+      "synthetic",
+      "verification-depth",
+      "worker-timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "plan-finalize",
+    "short_description": "Record externally spawned wrapper planning workers as the colony plan",
+    "flags": [
+      "completion-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "plan-granularity",
+    "short_description": "Get or set planning granularity",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "porter",
+    "short_description": "Deliver colony work to the outside world",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pr-context",
+    "short_description": "Assemble CI agent context from multiple data sources",
+    "flags": [
+      "branch",
+      "ci-run-id",
+      "compact"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "preferences",
+    "short_description": "Read or write user preferences stored in QUEEN.md",
+    "flags": [
+      "list"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "print-next-up",
+    "short_description": "Display next steps based on colony state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "privacy-scan",
+    "short_description": "Scan content for secrets and private paths",
+    "flags": [
+      "content"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "profile-read",
+    "short_description": "Read the hub-level behavioral profile",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "profile-update",
+    "short_description": "Consolidate observations into the hub profile and promote top profiled directives",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "proof",
+    "short_description": "Inspect runtime context proof and skill proof for the active colony",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "publish",
+    "short_description": "Publish Aether from source to the shared hub",
+    "flags": [
+      "binary-dest",
+      "channel",
+      "home-dir",
+      "package-dir",
+      "skip-build-binary"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-compose",
+    "short_description": "Create or improve the repo-local QUEEN.md project brain",
+    "flags": [
+      "audience",
+      "commands",
+      "communication",
+      "constraints",
+      "current-work",
+      "plain-english",
+      "priorities",
+      "project",
+      "stack",
+      "verification"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-init",
+    "short_description": "Create QUEEN.md with standard sections if not exists",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-migrate",
+    "short_description": "Migrate QUEEN.md from v1 to v2 format",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-promote",
+    "short_description": "Write content to a QUEEN.md section",
+    "flags": [
+      "content",
+      "section"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-promote-instinct",
+    "short_description": "Promote an instinct to QUEEN.md",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-read",
+    "short_description": "Read and return QUEEN.md content",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-seed-from-hive",
+    "short_description": "Seed QUEEN.md with relevant hive wisdom",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-thresholds",
+    "short_description": "Return wisdom thresholds configuration",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "queen-write-learnings",
+    "short_description": "Write learning entries to QUEEN.md",
+    "flags": [
+      "learnings"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "quick",
+    "short_description": "Run a lightweight Scout query without build ceremony",
+    "flags": [
+      "timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "recipes",
+    "short_description": "Show copyable Aether workflow recipes",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "recover",
+    "short_description": "Rescue a stuck colony",
+    "flags": [
+      "apply",
+      "force",
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "recovery-log-read",
+    "short_description": "Read the recovery log for a phase",
+    "flags": [
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "recovery-log-write",
+    "short_description": "Write a recovery log entry for a phase",
+    "flags": [
+      "action",
+      "attempt",
+      "error",
+      "outcome",
+      "phase",
+      "status",
+      "worker"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "redirect",
+    "short_description": "Add a hard constraint for the colony",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "reference-index",
+    "short_description": "Build the global reference library index",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "reference-list",
+    "short_description": "List installed global references",
+    "flags": [
+      "category",
+      "kind"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "reference-match",
+    "short_description": "Match global references to a worker role, task, and optional output type",
+    "flags": [
+      "limit",
+      "output-type",
+      "role",
+      "task",
+      "workflow"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "registry-add",
+    "short_description": "Register a colony repository",
+    "flags": [
+      "active",
+      "domain",
+      "goal",
+      "path",
+      "repo",
+      "tags"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "registry-export-xml",
+    "short_description": "Export colony registry to XML (alias for export registry)",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "registry-import-xml",
+    "short_description": "Import colony registry from XML (alias for import registry)",
+    "flags": [
+      "input"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "registry-list",
+    "short_description": "List all registered colonies",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "resume-colony",
+    "short_description": "Restore colony context from handoff and mark the session resumed",
+    "flags": [
+      "no-handoff"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "resume-dashboard",
+    "short_description": "Show session recovery information without restoring handoff state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "review-ledger-read",
+    "short_description": "Read entries from a domain review ledger",
+    "flags": [
+      "domain",
+      "phase",
+      "status"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "review-ledger-resolve",
+    "short_description": "Mark a ledger entry as resolved",
+    "flags": [
+      "domain",
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "review-ledger-summary",
+    "short_description": "Summarize all domain review ledgers",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "review-ledger-write",
+    "short_description": "Write findings to a domain review ledger",
+    "flags": [
+      "agent",
+      "agent-name",
+      "domain",
+      "findings",
+      "phase",
+      "phase-name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "run",
+    "short_description": "Run remaining phases through the Codex build and continue loop",
+    "flags": [
+      "continue",
+      "dry-run",
+      "headless",
+      "max-phases",
+      "replan-interval",
+      "timeout",
+      "verbose",
+      "worker-timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "scar-add",
+    "short_description": "Record a failure pattern for future avoidance",
+    "flags": [
+      "error",
+      "pattern"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "scar-check",
+    "short_description": "Check if command matches any scar pattern",
+    "flags": [
+      "command"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "scar-list",
+    "short_description": "Return all recorded scars",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "seal",
+    "short_description": "Seal a completed colony and write a summary artifact",
+    "flags": [
+      "force",
+      "plan-only"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "seal-finalize",
+    "short_description": "Record externally spawned seal review workers and seal the colony",
+    "flags": [
+      "completion-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "serve",
+    "short_description": "Start an SSE/WebSocket server for agent stream consumption",
+    "flags": [
+      "host",
+      "keepalive",
+      "port",
+      "ws-local-only"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "session-clear",
+    "short_description": "Clear command-scoped session files",
+    "flags": [
+      "command",
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "session-init",
+    "short_description": "Initialize a new colony session",
+    "flags": [
+      "goal",
+      "session-id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "session-mark-resumed",
+    "short_description": "Mark session as resumed",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "session-read",
+    "short_description": "Read session data",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "session-update",
+    "short_description": "Update session data",
+    "flags": [
+      "command",
+      "suggested-next",
+      "summary"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "session-verify-fresh",
+    "short_description": "Detect stale files by mtime comparison",
+    "flags": [
+      "command",
+      "force"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "setup",
+    "short_description": "Set up Aether in the current directory from hub",
+    "flags": [
+      "channel",
+      "home-dir",
+      "repo-dir"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shelf-add",
+    "short_description": "Add a new shelf entry",
+    "flags": [
+      "category",
+      "source",
+      "tag",
+      "text"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shelf-detect",
+    "short_description": "Detect shelf candidates from colony state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shelf-dismiss",
+    "short_description": "Dismiss a shelf entry by ID",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shelf-dismiss-batch",
+    "short_description": "Dismiss multiple shelf entries by ID",
+    "flags": [
+      "ids"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shelf-list",
+    "short_description": "List all shelf entries",
+    "flags": [
+      "json",
+      "status"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "shelf-promote",
+    "short_description": "Promote a shelf entry by ID",
+    "flags": [
+      "id",
+      "to"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shelf-promote-batch",
+    "short_description": "Promote multiple shelf entries by ID",
+    "flags": [
+      "colony",
+      "ids"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "should-skip-gate",
+    "short_description": "Check whether a gate should be skipped based on prior results",
+    "flags": [
+      "name",
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "signal-housekeeping",
+    "short_description": "Expire stale and low-value pheromone signals",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "signature-match",
+    "short_description": "Match regex pattern against file content",
+    "flags": [
+      "file",
+      "pattern"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "signature-scan",
+    "short_description": "Scan a file for a named signature pattern",
+    "flags": [
+      "file",
+      "name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-archive",
+    "short_description": "Archive a skill (recoverable, never deleted)",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-cache-rebuild",
+    "short_description": "Force rebuild of skills index cache",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-create",
+    "short_description": "Create a new repo-local pheromone skill",
+    "flags": [
+      "content",
+      "pin"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-curator-run",
+    "short_description": "Run the Keeper Curator to transition unused skills through lifecycle stages",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-detect",
+    "short_description": "Detect domain skills matching codebase file patterns",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-diff",
+    "short_description": "Compare user skill with shipped version",
+    "flags": [
+      "skill"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-index",
+    "short_description": "Build skills index from installed skills",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-index-read",
+    "short_description": "Read cached skills index",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-inject",
+    "short_description": "Load matched skills into prompt section text",
+    "flags": [
+      "budget",
+      "compact",
+      "role",
+      "task",
+      "workflow"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-is-user-created",
+    "short_description": "Check if a skill was user-created or shipped",
+    "flags": [
+      "skill"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-list",
+    "short_description": "List all installed skills",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-list-lifecycle",
+    "short_description": "List all skills with lifecycle metadata",
+    "flags": [
+      "stage"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-manifest-read",
+    "short_description": "Read the skills manifest",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-match",
+    "short_description": "Match skills to worker role and task",
+    "flags": [
+      "role",
+      "task",
+      "workflow"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-parse-frontmatter",
+    "short_description": "Parse SKILL.md frontmatter and return as JSON",
+    "flags": [
+      "file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-patch",
+    "short_description": "Update an existing skill's content",
+    "flags": [
+      "content"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-pin",
+    "short_description": "Pin a skill to prevent auto-transitions and agent writes",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-promote",
+    "short_description": "Promote a repo-local skill to hive-shareable domain skills",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-recover",
+    "short_description": "Recover an archived skill back to active",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skill-view",
+    "short_description": "View a skill's full content",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skip-phase",
+    "short_description": "Emergency-skip an active or ready phase after an unrecoverable build",
+    "flags": [
+      "force",
+      "reason"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "source-check",
+    "short_description": "Verify source-of-truth and generated wrapper parity",
+    "flags": [
+      "json",
+      "root"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "spawn-can-spawn",
+    "short_description": "Check if spawning is allowed at given depth",
+    "flags": [
+      "depth"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-can-spawn-swarm",
+    "short_description": "Check if budget allows swarm spawning",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-complete",
+    "short_description": "Mark a spawned agent as completed",
+    "flags": [
+      "name",
+      "status",
+      "summary"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-efficiency",
+    "short_description": "Calculate spawn completion efficiency",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-get-depth",
+    "short_description": "Get current spawn depth for a named ant",
+    "flags": [
+      "name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-log",
+    "short_description": "Record a new agent spawn entry",
+    "flags": [
+      "caste",
+      "depth",
+      "description",
+      "id",
+      "name",
+      "parent",
+      "task"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-track",
+    "short_description": "Track agent spawn times for timeout enforcement",
+    "flags": [
+      "action",
+      "agent",
+      "task",
+      "timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-tree-active",
+    "short_description": "List active (non-completed) spawn entries",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-tree-depth",
+    "short_description": "Get the maximum spawn depth",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-tree-load",
+    "short_description": "Load and return the full spawn tree as JSON",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "state-checkpoint",
+    "short_description": "Save current COLONY_STATE.json as a named checkpoint",
+    "flags": [
+      "name"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "state-mutate",
+    "short_description": "Atomically mutate COLONY_STATE.json (supports --field/--value and jq-like expressions)",
+    "flags": [
+      "arg",
+      "argjson",
+      "field",
+      "guard",
+      "revert",
+      "value",
+      "verify-only"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "state-read",
+    "short_description": "Read COLONY_STATE.json",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "state-read-field",
+    "short_description": "Read a specific field from COLONY_STATE.json",
+    "flags": [
+      "field"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "state-write",
+    "short_description": "Direct write to COLONY_STATE.json (bypasses transition validation)",
+    "flags": [
+      "field",
+      "value"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "status",
+    "short_description": "Display colony dashboard",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "suggest-analyze",
+    "short_description": "Analyze codebase for patterns worth capturing as pheromone suggestions",
+    "flags": [
+      "dry-run",
+      "target"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "suggest-approve",
+    "short_description": "Review and approve pheromone suggestions from suggest-analyze",
+    "flags": [
+      "approve",
+      "dismiss",
+      "dismiss-all",
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "survey-load",
+    "short_description": "Load survey results from territory survey",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "survey-verify",
+    "short_description": "Verify survey data integrity",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm",
+    "short_description": "Launch the Aether swarm bug-destroyer or watch live colony activity",
+    "flags": [
+      "plan-only",
+      "watch"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-activity-log",
+    "short_description": "Log swarm activity",
+    "flags": [
+      "message",
+      "severity"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-cleanup",
+    "short_description": "Remove swarm data files",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-display-get",
+    "short_description": "Read current swarm display state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-display-init",
+    "short_description": "Initialize display state for a swarm",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-display-inline",
+    "short_description": "Render a single-line status summary",
+    "flags": [
+      "section"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-display-render",
+    "short_description": "Render ASCII tree from colony state with configurable format",
+    "flags": [
+      "format",
+      "max-depth"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-display-text",
+    "short_description": "Render a multi-line text block for terminal display",
+    "flags": [
+      "max-width",
+      "section"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-display-update",
+    "short_description": "Update agent status in swarm display",
+    "flags": [
+      "agent",
+      "id",
+      "status"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-finalize",
+    "short_description": "Record externally spawned swarm workers and write the swarm result",
+    "flags": [
+      "completion-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-findings-add",
+    "short_description": "Append a finding to a swarm",
+    "flags": [
+      "agent",
+      "finding",
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-findings-init",
+    "short_description": "Create an empty findings file for a swarm",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-findings-read",
+    "short_description": "Return all findings for a swarm",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-solution-set",
+    "short_description": "Set the solution for a swarm",
+    "flags": [
+      "id",
+      "solution"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-timing-eta",
+    "short_description": "Compute estimated completion time for a swarm",
+    "flags": [
+      "id",
+      "progress"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-timing-get",
+    "short_description": "Return elapsed time for a swarm",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "swarm-timing-start",
+    "short_description": "Record start time for a swarm",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "temp-clean",
+    "short_description": "Remove temp files older than 7 days",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trace-export",
+    "short_description": "Export trace entries for a run to JSON",
+    "flags": [
+      "level",
+      "output",
+      "run-id",
+      "since"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trace-inspect",
+    "short_description": "Inspect a focused timeline from a trace run",
+    "flags": [
+      "focus",
+      "run-id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trace-replay",
+    "short_description": "Replay trace entries for a run",
+    "flags": [
+      "level",
+      "limit",
+      "run-id",
+      "since"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trace-rotate",
+    "short_description": "Rotate trace.jsonl if it exceeds max size",
+    "flags": [
+      "max-size-mb"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trace-summary",
+    "short_description": "Summarize trace entries for a run",
+    "flags": [
+      "run-id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trophallaxis-diagnose",
+    "short_description": "Analyze error and suggest retry strategy",
+    "flags": [
+      "error"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trophallaxis-retry",
+    "short_description": "Record retry attempt with backoff info",
+    "flags": [
+      "attempt",
+      "command"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trust-score-compute",
+    "short_description": "Compute a trust score from source, evidence, and days-since inputs",
+    "flags": [
+      "days-since",
+      "evidence",
+      "source-type"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trust-score-decay",
+    "short_description": "Apply half-life decay to an existing trust score",
+    "flags": [
+      "days",
+      "score"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "trust-tier",
+    "short_description": "Return the trust tier name and index for a given score",
+    "flags": [
+      "score"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "tunnels",
+    "short_description": "Browse archived chambers",
+    "flags": [
+      "import-signals"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "unblock",
+    "short_description": "Show gate failure summary and recovery options for the current phase",
+    "flags": [
+      "dispatch",
+      "fixer-mode",
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "unload-state",
+    "short_description": "Release state lock (placeholder)",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "update",
+    "short_description": "Update Aether companion files and optionally the binary",
+    "flags": [
+      "binary-version",
+      "channel",
+      "download-binary",
+      "dry-run",
+      "force"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "update-progress",
+    "short_description": "Update phase progress in colony state",
+    "flags": [
+      "phase",
+      "status",
+      "task"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "validate-oracle-state",
+    "short_description": "Validate oracle-specific state structure",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "validate-state",
+    "short_description": "Validate COLONY_STATE.json structure",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "validate-worker-response",
+    "short_description": "Validate a worker response for basic correctness",
+    "flags": [
+      "expect-json",
+      "response"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "verify-castes",
+    "short_description": "Verify colony caste surfaces and counts",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "verify-claims",
+    "short_description": "Verify claims in COLONY_STATE.json are consistent with actual file state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "version",
+    "short_description": "Print aether version",
+    "flags": [
+      "check"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "version-check-cached",
+    "short_description": "Display version with caching",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "versions",
+    "short_description": "Show version information for binary, hub, and repo",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "view-state-collapse",
+    "short_description": "Collapse a section",
+    "flags": [
+      "section"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "view-state-expand",
+    "short_description": "Expand a collapsed section",
+    "flags": [
+      "section"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "view-state-get",
+    "short_description": "Get a view state value",
+    "flags": [
+      "key"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "view-state-init",
+    "short_description": "Initialize view state file",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "view-state-set",
+    "short_description": "Set a view state value",
+    "flags": [
+      "key",
+      "value"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "view-state-toggle",
+    "short_description": "Toggle a boolean view state",
+    "flags": [
+      "key"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "visuals-dump",
+    "short_description": "Dump shared visual identity metadata",
+    "flags": [
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  },
+  {
+    "name": "watch",
+    "short_description": "Compatibility alias for live worker activity",
+    "flags": [
+      "interval",
+      "once"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "wisdom-export-xml",
+    "short_description": "Export queen wisdom to XML (alias for export wisdom)",
+    "flags": [
+      "colony",
+      "min-confidence",
+      "output"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "wisdom-import-xml",
+    "short_description": "Import queen wisdom from XML (alias for import wisdom)",
+    "flags": [
+      "input"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "worktree-allocate",
+    "short_description": "Create worktree with enforced naming and state tracking",
+    "flags": [
+      "agent",
+      "branch",
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "worktree-cleanup",
+    "short_description": "Clean up worktree after merge",
+    "flags": [
+      "branch"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "worktree-create",
+    "short_description": "Create worktree with pheromone injection",
+    "flags": [
+      "branch"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "worktree-list",
+    "short_description": "List tracked worktrees with lifecycle status",
+    "flags": [
+      "status"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "worktree-merge-back",
+    "short_description": "Merge a worktree branch back to main with safety gates",
+    "flags": [
+      "branch"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "worktree-orphan-scan",
+    "short_description": "Detect orphaned or stale worktrees",
+    "flags": [
+      "threshold"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "closeout",
+    "short_description": "Render an old-style lifecycle summary from a completion JSON file",
+    "flags": [
+      "completion-file",
+      "workflow"
+    ],
+    "parent_command": "ceremony",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spawn-plan",
+    "short_description": "Render a visual spawn plan from a lifecycle manifest JSON file",
+    "flags": [
+      "manifest-file",
+      "workflow"
+    ],
+    "parent_command": "ceremony",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "wave-start",
+    "short_description": "Render a visual wave-start banner from a lifecycle manifest JSON file",
+    "flags": [
+      "execution-wave",
+      "manifest-file",
+      "workflow"
+    ],
+    "parent_command": "ceremony",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "worker-complete",
+    "short_description": "Render a visual worker completion line from a worker result JSON file",
+    "flags": [
+      "worker-file",
+      "workflow"
+    ],
+    "parent_command": "ceremony",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "get",
+    "short_description": "Get current colony depth",
+    "flags": [],
+    "parent_command": "colony-depth",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "set",
+    "short_description": "Set colony depth",
+    "flags": [
+      "depth"
+    ],
+    "parent_command": "colony-depth",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-advocate",
+    "short_description": "Submit advocate position on a topic",
+    "flags": [
+      "position",
+      "topic"
+    ],
+    "parent_command": "council",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-budget-check",
+    "short_description": "Return remaining budget for council deliberations",
+    "flags": [],
+    "parent_command": "council",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-challenger",
+    "short_description": "Submit challenger position on a topic",
+    "flags": [
+      "challenge",
+      "topic"
+    ],
+    "parent_command": "council",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-deliberate",
+    "short_description": "Initiate council deliberation on a topic",
+    "flags": [
+      "topic"
+    ],
+    "parent_command": "council",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-history",
+    "short_description": "Return council deliberation history",
+    "flags": [
+      "topic"
+    ],
+    "parent_command": "council",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "council-sage",
+    "short_description": "Submit sage advice on a topic",
+    "flags": [
+      "topic",
+      "wisdom"
+    ],
+    "parent_command": "council",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "archive",
+    "short_description": "Export complete colony archive to XML",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "export",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromones",
+    "short_description": "Export pheromone signals to XML",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "export",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "registry",
+    "short_description": "Export colony registry to XML",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "export",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "wisdom",
+    "short_description": "Export queen wisdom to XML",
+    "flags": [
+      "colony",
+      "min-confidence",
+      "output"
+    ],
+    "parent_command": "export",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "pheromones",
+    "short_description": "Import pheromone signals from XML",
+    "flags": [],
+    "parent_command": "import",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "registry",
+    "short_description": "Import colony registry from XML",
+    "flags": [],
+    "parent_command": "import",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "wisdom",
+    "short_description": "Import queen wisdom from XML",
+    "flags": [],
+    "parent_command": "import",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "get",
+    "short_description": "Get current parallel mode",
+    "flags": [],
+    "parent_command": "parallel-mode",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "set",
+    "short_description": "Set parallel mode",
+    "flags": [
+      "mode"
+    ],
+    "parent_command": "parallel-mode",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "get",
+    "short_description": "Get current planning granularity",
+    "flags": [],
+    "parent_command": "plan-granularity",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "set",
+    "short_description": "Set planning granularity",
+    "flags": [
+      "granularity"
+    ],
+    "parent_command": "plan-granularity",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "check",
+    "short_description": "Validate pipeline readiness for delivery",
+    "flags": [
+      "channel",
+      "json"
+    ],
+    "parent_command": "porter",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
+  }
+]
