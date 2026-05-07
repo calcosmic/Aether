@@ -418,9 +418,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 104-01-PLAN.md -- Release pipeline E2E verification test (REL-01, REL-02)
-- [ ] 104-02-PLAN.md -- Structural snapshot regression tests (TEST-01, TEST-02)
-- [ ] 104-03-PLAN.md -- Review ledger persistence tests (DATA-03)
+- [x] 104-01-PLAN.md -- Release pipeline E2E verification test (REL-01, REL-02) (completed 2026-05-08)
+- [x] 104-02-PLAN.md -- Structural snapshot regression tests (TEST-01, TEST-02) (completed 2026-05-08)
+- [x] 104-03-PLAN.md -- Review ledger persistence tests (DATA-03) (completed 2026-05-08)
 
 ### Phase 105: Findings Remediation & Final Validation
 **Goal**: All audit findings from Phases 100-104 are resolved and the full test suite passes clean -- the system is coherent and ready to ship
@@ -453,5 +453,5 @@ Plans:
 | 101. Platform Parity Verification | v1.15 | 0/2 | Not started | - |
 | 102. Worker Economy & Visual Ceremony Audit | v1.15 | 2/2 | Complete | 2026-05-07 |
 | 103. Data Flow & Artifact Wiring | v1.15 | 2/2 | Complete | 2026-05-07 |
-| 104. Release Integrity & Regression Test Suite | v1.15 | 0/3 | Planned | - |
+| 104. Release Integrity & Regression Test Suite | v1.15 | 3/3 | Complete | 2026-05-08 |
 | 105. Findings Remediation & Final Validation | v1.15 | 0/? | Not started | - |
