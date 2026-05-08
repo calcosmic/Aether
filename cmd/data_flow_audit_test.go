@@ -293,11 +293,38 @@ func TestDataFlowReportAccuracy(t *testing.T) {
 		}
 	}
 
-	if sectionCount == 0 {
-		t.Log("could not count colony-prime sections from table rows (report format may differ)")
-	} else {
-		t.Logf("found %d colony-prime sections in report table (snapshot expects %d)",
-			sectionCount, snap.ColonyPrimeSectionCount)
+	if sectionCount != snap.ColonyPrimeSectionCount {
+		t.Errorf("colony-prime section count = %d, want %d (from golden snapshot)", sectionCount, snap.ColonyPrimeSectionCount)
+	}
+
+	// Verify the context capsule section map count.
+	capsuleSection := extractSection(report, "## 3. Context Capsule Section Map")
+	if capsuleSection == "" {
+		t.Fatal("Context Capsule Section Map section (## 3.) not found in DATA-FLOW.md")
+	}
+	capsuleCount := 0
+	for _, line := range strings.Split(capsuleSection, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "| ") && !strings.HasPrefix(line, "| #") && !strings.HasPrefix(line, "|---") {
+			fields := strings.Split(line, "|")
+			if len(fields) >= 2 {
+				cell := strings.TrimSpace(fields[1])
+				if cell != "" && cell != "#" {
+					capsuleCount++
+				}
+			}
+		}
+	}
+	if capsuleCount != snap.CapsuleSectionCount {
+		t.Errorf("capsule section count = %d, want %d (from golden snapshot)", capsuleCount, snap.CapsuleSectionCount)
+	}
+
+	// Verify total artifact count from snapshot.
+	if len(snap.Artifacts) == 0 {
+		t.Error("golden snapshot has no artifacts")
+	}
+	if len(snap.Artifacts) != 33 {
+		t.Errorf("artifact count in snapshot = %d, want 33", len(snap.Artifacts))
 	}
 
 	// Verify the report explicitly states the total section count.

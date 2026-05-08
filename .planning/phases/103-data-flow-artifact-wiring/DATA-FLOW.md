@@ -206,7 +206,7 @@ Severity: Info because the artifact is consumed by a user-facing CLI command but
 
 | Category | Count | Notes |
 |----------|-------|-------|
-| Total artifacts inventoried | 30 | Core (17) + survey (5) + graph (2) + review (2) + hub (5) + transient (2) excludes directories |
+| Total artifacts inventoried | 33 | Core (17) + survey (5) + graph (2) + review (2) + hub (5) + transient (2) excludes directories |
 | Colony-prime injected | 12 | COLONY_STATE, pheromones, instincts, pending-decisions (clarified_intent + blockers), entries, handoffs, hive_wisdom, global_queen_md, user_preferences, prior_reviews, local_queen_wisdom, medic-last-scan |
 | Capsule injected (not colony-prime) | 3 | rolling-summary.log, midden.json, flags.json (some also colony-prime) |
 | CLI consumed | 4 | session.json, assumptions.json, profile.json, behavior-observations.jsonl |
