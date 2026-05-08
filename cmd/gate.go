@@ -632,6 +632,56 @@ func isHardBlockGate(gateName string) bool {
 	return tier == hardBlock
 }
 
+// phaseModeAwareGateClassify returns the classification tier for a gate name,
+// potentially relaxed based on the phase mode. Discovery phases get the lightest
+// treatment; prototype and maintenance get relaxed treatment; production keeps
+// the default.
+func phaseModeAwareGateClassify(gateName string, mode colony.PhaseMode) (GateClassificationTier, string) {
+	baseTier, rationale := gateClassify(gateName)
+
+	// Production keeps base classification.
+	if mode == colony.PhaseModeProduction {
+		return baseTier, rationale
+	}
+
+	switch gateName {
+	case "gatekeeper":
+		if mode == colony.PhaseModeDiscovery {
+			return advisory, "Security gating is advisory for discovery phases"
+		}
+		return softBlock, "Security gating is soft for prototype/maintenance phases"
+	case "auditor":
+		if mode == colony.PhaseModeDiscovery {
+			return advisory, "Quality audit is advisory for discovery phases"
+		}
+		return softBlock, "Quality audit is soft for prototype/maintenance phases"
+	case "probe":
+		if mode == colony.PhaseModeDiscovery {
+			return "", "Probe skipped for discovery phases"
+		}
+		return softBlock, "Coverage probe is soft for prototype/maintenance phases"
+	case "complexity":
+		if mode == colony.PhaseModeDiscovery {
+			return "", "Complexity check skipped for discovery phases"
+		}
+		return softBlock, "Complexity is soft for prototype/maintenance phases"
+	case "tdd_evidence":
+		if mode == colony.PhaseModeDiscovery {
+			return "", "TDD evidence skipped for discovery phases"
+		}
+		return softBlock, "TDD evidence is soft for prototype/maintenance phases"
+	}
+
+	return baseTier, rationale
+}
+
+// isGateSkippedForMode returns true if the gate should not run at all for the
+// given phase mode (e.g. probe for discovery phases).
+func isGateSkippedForMode(gateName string, mode colony.PhaseMode) bool {
+	tier, _ := phaseModeAwareGateClassify(gateName, mode)
+	return tier == ""
+}
+
 // --- Auto-Resolve Engine (Phase 95) ---
 
 // gateAutoResolveThreshold defines the auto-resolve threshold for a soft_block gate.
@@ -739,7 +789,7 @@ func annotateGateResult(phaseNum int, gateName string, annotation QueenAnnotatio
 // Returns the updated gate report and a list of auto-resolved gate names.
 // The caller is responsible for persisting the updated report and dispatching
 // the Fixer for remaining failures.
-func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, reviewDepth string) (codexContinueGateReport, []string) {
+func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, reviewDepth string, mode colony.PhaseMode) (codexContinueGateReport, []string) {
 	depth := colony.NormalizeVerificationDepth(reviewDepth)
 	multiplier := autoResolveDepthMultiplier(depth)
 	thresholds := effectiveGateAutoResolveThresholds()
@@ -752,7 +802,7 @@ func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, revi
 			continue
 		}
 
-		tier, _ := gateClassify(check.Name)
+		tier, _ := phaseModeAwareGateClassify(check.Name, mode)
 
 		// Per D-04: only auto-resolve soft_block gates
 		if tier != softBlock {
@@ -764,6 +814,13 @@ func autoResolveSoftBlockGates(phaseNum int, gates codexContinueGateReport, revi
 		if !ok {
 			// Unclassified soft_block gate (should not happen, but safe default)
 			remainingBlockers = append(remainingBlockers, check.Detail)
+			continue
+		}
+
+		// For discovery phases, all soft_block gates auto-resolve regardless of depth.
+		if mode == colony.PhaseModeDiscovery {
+			gates.Checks[i].Passed = true
+			autoResolved = append(autoResolved, check.Name)
 			continue
 		}
 
