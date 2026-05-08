@@ -93,9 +93,13 @@ func extractCommandGuideNames() []string {
 // extractRuntimeNames returns sorted command names from the Cobra runtime.
 func extractRuntimeNames() []string {
 	catalog := buildAuditCatalog(rootCmd)
+	seen := make(map[string]bool, len(catalog))
 	names := make([]string, 0, len(catalog))
 	for _, entry := range catalog {
-		names = append(names, entry.Name)
+		if !seen[entry.Name] {
+			seen[entry.Name] = true
+			names = append(names, entry.Name)
+		}
 	}
 	sort.Strings(names)
 	return names
@@ -171,6 +175,14 @@ func TestPlatformParityGolden(t *testing.T) {
 		t.Errorf("parity snapshot golden mismatch; run with -update-golden to refresh")
 		t.Logf("  got  %d bytes", len(got))
 		t.Logf("  want %d bytes", len(want))
+		gotLines := strings.Split(got, "\n")
+		wantLines := strings.Split(want, "\n")
+		for i := 0; i < len(gotLines) && i < len(wantLines); i++ {
+			if gotLines[i] != wantLines[i] {
+				t.Logf("first diff at line %d:\n  got:  %s\n  want: %s", i+1, gotLines[i], wantLines[i])
+				break
+			}
+		}
 	}
 }
 
@@ -595,4 +607,99 @@ func TestCodexCoverageByDesign(t *testing.T) {
 	// We verify it's non-empty rather than asserting exactly 60, because the
 	// guide may contain intelligent entries beyond literal YAML mappings.
 	t.Logf("commandGuideCatalog() covers %d entries", len(guide))
+}
+
+// --- Phase 105-03 Review Findings ---
+
+// TestNoOrphanRuntimeCommands checks that every runtime command which is the
+// target of an alias in yamlToRuntimeName has a corresponding YAML source.
+// This verifies the reverse direction of the alias map without requiring every
+// runtime command to have a YAML wrapper (the runtime has 300+ commands, most
+// are internal subcommands intentionally not surfaced).
+func TestNoOrphanRuntimeCommands(t *testing.T) {
+	yamlNames := extractYAMLNames(t)
+	yamlSet := make(map[string]bool, len(yamlNames))
+	for _, name := range yamlNames {
+		yamlSet[name] = true
+	}
+
+	runtimeNames := extractRuntimeNames()
+	runtimeSet := make(map[string]bool, len(runtimeNames))
+	for _, name := range runtimeNames {
+		runtimeSet[name] = true
+	}
+
+	// Build reverse alias map and verify each aliased runtime command exists
+	// and maps back to a valid YAML source.
+	var orphans []string
+	for yamlName, runtimeName := range yamlToRuntimeName {
+		if !runtimeSet[runtimeName] {
+			orphans = append(orphans, fmt.Sprintf("alias target %q (from YAML %q) not in runtime", runtimeName, yamlName))
+			continue
+		}
+		if !yamlSet[yamlName] {
+			orphans = append(orphans, fmt.Sprintf("YAML source %q for alias target %q not found", yamlName, runtimeName))
+		}
+	}
+
+	if len(orphans) > 0 {
+		t.Errorf("orphan runtime commands detected:\n%s", strings.Join(orphans, "\n"))
+	}
+}
+
+// TestPromptOnlyCommandsAreCurrent validates that promptOnlyCommands and
+// cobraBuiltinCommands exclusion lists contain only actual YAML commands.
+func TestPromptOnlyCommandsAreCurrent(t *testing.T) {
+	yamlNames := extractYAMLNames(t)
+	yamlSet := make(map[string]bool, len(yamlNames))
+	for _, name := range yamlNames {
+		yamlSet[name] = true
+	}
+
+	for name := range promptOnlyCommands {
+		if !yamlSet[name] {
+			t.Errorf("promptOnlyCommands entry %q not found in YAML catalog (stale entry?)", name)
+		}
+	}
+
+	for name := range cobraBuiltinCommands {
+		if !yamlSet[name] {
+			t.Errorf("cobraBuiltinCommands entry %q not found in YAML catalog (stale entry?)", name)
+		}
+	}
+}
+
+// TestAliasMapCompleteness checks that every YAML command (except prompt-only
+// and builtins) either exists directly in the runtime or has an alias entry.
+func TestAliasMapCompleteness(t *testing.T) {
+	yamlNames := extractYAMLNames(t)
+	runtimeNames := extractRuntimeNames()
+	runtimeSet := make(map[string]bool, len(runtimeNames))
+	for _, name := range runtimeNames {
+		runtimeSet[name] = true
+	}
+
+	var missing []string
+	for _, yamlName := range yamlNames {
+		// Skip prompt-only and builtin commands.
+		if promptOnlyCommands[yamlName] || cobraBuiltinCommands[yamlName] {
+			continue
+		}
+
+		// Check if YAML name exists in runtime directly.
+		if runtimeSet[yamlName] {
+			continue
+		}
+
+		// Check if YAML name has an alias.
+		if _, hasAlias := yamlToRuntimeName[yamlName]; hasAlias {
+			continue
+		}
+
+		missing = append(missing, yamlName)
+	}
+
+	if len(missing) > 0 {
+		t.Errorf("%d YAML commands have no runtime mapping (missing alias?): %v", len(missing), missing)
+	}
 }
