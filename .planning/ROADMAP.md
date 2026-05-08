@@ -225,7 +225,7 @@
 - [x] **Phase 102: Worker Economy & Visual Ceremony Audit** -- Audit worker spawn justification and visual ceremony integrity (completed 2026-05-07)
 - [x] **Phase 103: Data Flow & Artifact Wiring** -- Trace all data artifacts to consumers, flag dead ends (completed 2026-05-07)
 - [ ] **Phase 104: Release Integrity & Regression Test Suite** -- Verify release pipeline, freeze verified contracts as tests
-- [ ] **Phase 105: Findings Remediation & Final Validation** -- Act on all audit findings, final pass/fail validation
+- [x] **Phase 105: Findings Remediation & Final Validation** -- Act on all audit findings, final pass/fail validation (completed 2026-05-08)
 
 ## Phase Details
 
@@ -431,7 +431,12 @@ Plans:
   2. `go vet ./...` passes clean
   3. All source-check and wrapper-contract checks pass
   4. All findings from Phases 100-104 are either resolved or explicitly documented as accepted tech debt with a reason
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [x] 105-01-PLAN.md -- Fix failing tests (complexity gate + seal expectations)
+- [x] 105-02-PLAN.md -- Close parity gaps and Phase 103 minor issues
+- [x] 105-03-PLAN.md -- Address review findings and final validation
 
 ## Progress
 
@@ -454,4 +459,4 @@ Plans:
 | 102. Worker Economy & Visual Ceremony Audit | v1.15 | 2/2 | Complete | 2026-05-07 |
 | 103. Data Flow & Artifact Wiring | v1.15 | 2/2 | Complete | 2026-05-07 |
 | 104. Release Integrity & Regression Test Suite | v1.15 | 3/3 | Complete | 2026-05-08 |
-| 105. Findings Remediation & Final Validation | v1.15 | 0/? | Not started | - |
+| 105. Findings Remediation & Final Validation | v1.15 | 3/3 | Complete | 2026-05-08 |
