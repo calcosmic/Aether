@@ -244,6 +244,7 @@ func TestSealPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 			ID:     1,
 			Name:   "Complete work",
 			Status: colony.PhaseCompleted,
+			Mode:   colony.PhaseModeProduction,
 		}}},
 	}
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -300,6 +301,7 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 			ID:     1,
 			Name:   "Complete work",
 			Status: colony.PhaseCompleted,
+			Mode:   colony.PhaseModeProduction,
 		}}},
 	}
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -316,6 +318,29 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		results[i].Status = "completed"
 		results[i].Summary = results[i].Name + " cleared final review"
 		results[i].Report = "# Final review\n\nNo blockers."
+		switch results[i].Caste {
+		case "gatekeeper":
+			results[i].Findings = []codexReviewFinding{{
+				Domain:      "security",
+				Severity:    "LOW",
+				Category:    "release-integrity",
+				Description: "Release provenance should be signed before public distribution.",
+				Suggestion:  "Add signed provenance in the next release hardening pass.",
+			}}
+			results[i].ReusableLessons = []string{"Keep release provenance checks in the final seal review."}
+		case "auditor":
+			results[i].Issues = []codexReviewFinding{{
+				Domain:      "quality",
+				Severity:    "MEDIUM",
+				File:        "README.md",
+				Line:        1,
+				Category:    "documentation",
+				Description: "Seal summary should link final-review evidence for later operators.",
+				Suggestion:  "Keep CROWNED-ANTHILL.md connected to final-review.json.",
+			}}
+		case "probe":
+			results[i].WeakSpots = []string{"Add a smoke test for the post-seal delivery chooser."}
+		}
 	}
 	completion := externalSealCompletion{SealManifest: &manifest, Dispatches: results}
 	payload, err := json.MarshalIndent(completion, "", "  ")
@@ -350,7 +375,49 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 	if len(report.Workers) != 3 {
 		t.Fatalf("worker count = %d, want 3", len(report.Workers))
 	}
+	if len(report.Findings) != 3 {
+		t.Fatalf("structured findings = %d, want 3: %+v", len(report.Findings), report.Findings)
+	}
+	if len(report.PostSealBacklog) != 3 {
+		t.Fatalf("post-seal backlog = %d, want 3: %+v", len(report.PostSealBacklog), report.PostSealBacklog)
+	}
+	if report.LedgerWrites["security"] != 1 || report.LedgerWrites["quality"] != 1 || report.LedgerWrites["testing"] != 1 {
+		t.Fatalf("ledger writes = %+v, want security/quality/testing writes", report.LedgerWrites)
+	}
+	if report.QueenLearningsWritten != 1 {
+		t.Fatalf("queen learnings written = %d, want 1", report.QueenLearningsWritten)
+	}
+	var securityLedger colony.ReviewLedgerFile
+	if err := store.LoadJSON("reviews/security/ledger.json", &securityLedger); err != nil {
+		t.Fatalf("load security review ledger: %v", err)
+	}
+	if securityLedger.Summary.Open != 1 || !strings.Contains(securityLedger.Entries[0].Description, "Release provenance") {
+		t.Fatalf("unexpected security ledger: %+v", securityLedger)
+	}
+	var testingLedger colony.ReviewLedgerFile
+	if err := store.LoadJSON("reviews/testing/ledger.json", &testingLedger); err != nil {
+		t.Fatalf("load testing review ledger: %v", err)
+	}
+	if testingLedger.Summary.Open != 1 || !strings.Contains(testingLedger.Entries[0].Description, "post-seal delivery chooser") {
+		t.Fatalf("unexpected testing ledger: %+v", testingLedger)
+	}
+	queenData, err := os.ReadFile(filepath.Join(root, ".aether", "QUEEN.md"))
+	if err != nil {
+		t.Fatalf("read local QUEEN.md: %v", err)
+	}
+	if !strings.Contains(string(queenData), "Keep release provenance checks in the final seal review.") {
+		t.Fatalf("local QUEEN.md missing reusable seal lesson:\n%s", string(queenData))
+	}
 	if _, err := os.Stat(filepath.Join(root, ".aether", "CROWNED-ANTHILL.md")); err != nil {
 		t.Fatalf("CROWNED-ANTHILL.md not written: %v", err)
+	}
+	summaryData, err := os.ReadFile(filepath.Join(root, ".aether", "CROWNED-ANTHILL.md"))
+	if err != nil {
+		t.Fatalf("read CROWNED-ANTHILL.md: %v", err)
+	}
+	for _, want := range []string{"Final Review Evidence", "Structured findings captured: 3", "Post-Seal Review Backlog"} {
+		if !strings.Contains(string(summaryData), want) {
+			t.Fatalf("seal summary missing %q:\n%s", want, string(summaryData))
+		}
 	}
 }
