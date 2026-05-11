@@ -572,52 +572,23 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 }
 
 func plannedSurveyors(root string) []codexSurveyorDispatch {
-	return []codexSurveyorDispatch{
-		{
+	specs := queenSurveyorSpecs()
+	dispatches := make([]codexSurveyorDispatch, 0, len(specs))
+	for i, spec := range specs {
+		seed := fmt.Sprintf("%s|%s", root, spec.AgentSuffix)
+		dispatches = append(dispatches, codexSurveyorDispatch{
 			Stage:     "survey",
 			Wave:      1,
-			Caste:     "surveyor-provisions",
-			Name:      deterministicAntName("surveyor", root+"|provisions"),
-			Task:      "Map provisions and external trails",
-			TaskID:    "survey-0",
-			AgentName: "aether-surveyor-provisions",
-			Outputs:   []string{"PROVISIONS.md", "TRAILS.md"},
+			Caste:     spec.Caste,
+			Name:      deterministicAntName("surveyor", seed),
+			Task:      spec.Task,
+			TaskID:    fmt.Sprintf("survey-%d", i),
+			AgentName: fmt.Sprintf("aether-surveyor-%s", spec.AgentSuffix),
+			Outputs:   append([]string{}, spec.Outputs...),
 			Status:    "spawned",
-		},
-		{
-			Stage:     "survey",
-			Wave:      1,
-			Caste:     "surveyor-nest",
-			Name:      deterministicAntName("surveyor", root+"|nest"),
-			Task:      "Map architecture and chamber layout",
-			TaskID:    "survey-1",
-			AgentName: "aether-surveyor-nest",
-			Outputs:   []string{"BLUEPRINT.md", "CHAMBERS.md"},
-			Status:    "spawned",
-		},
-		{
-			Stage:     "survey",
-			Wave:      1,
-			Caste:     "surveyor-disciplines",
-			Name:      deterministicAntName("surveyor", root+"|disciplines"),
-			Task:      "Map disciplines and sentinel protocols",
-			TaskID:    "survey-2",
-			AgentName: "aether-surveyor-disciplines",
-			Outputs:   []string{"DISCIPLINES.md", "SENTINEL-PROTOCOLS.md"},
-			Status:    "spawned",
-		},
-		{
-			Stage:     "survey",
-			Wave:      1,
-			Caste:     "surveyor-pathogens",
-			Name:      deterministicAntName("surveyor", root+"|pathogens"),
-			Task:      "Identify pathogens and fragile boundaries",
-			TaskID:    "survey-3",
-			AgentName: "aether-surveyor-pathogens",
-			Outputs:   []string{"PATHOGENS.md"},
-			Status:    "spawned",
-		},
+		})
 	}
+	return dispatches
 }
 
 // surveyorSpec defines a single surveyor for real dispatch.
@@ -636,6 +607,22 @@ var surveyorSpecs = []surveyorSpec{
 	{Caste: "surveyor-pathogens", AgentSuffix: "pathogens", Task: "Identify pathogens and fragile boundaries", Outputs: []string{"PATHOGENS.md"}},
 }
 
+func queenSurveyorSpecs() []surveyorSpec {
+	phase := colony.Phase{
+		Name:        "Colonize repository",
+		Description: "Survey architecture, provisions, disciplines, and pathogens",
+		Mode:        colony.PhaseModeDiscovery,
+	}
+	selected := queenBuildCasteSet(queenOrchestrate(phase, "colonize", colony.ColonyState{}))
+	specs := make([]surveyorSpec, 0, len(surveyorSpecs))
+	for _, spec := range surveyorSpecs {
+		if selected[spec.Caste] {
+			specs = append(specs, spec)
+		}
+	}
+	return specs
+}
+
 // dispatchRealSurveyors attempts real worker invocation for surveyors.
 // If the invoker is not available, it falls back to plannedSurveyors.
 // The invoker parameter allows injection for testing.
@@ -648,11 +635,12 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 		return plannedSurveyors(root), nil
 	}
 
-	dispatches := make([]codex.WorkerDispatch, 0, len(surveyorSpecs))
+	specs := queenSurveyorSpecs()
+	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	capsule := resolveCodexWorkerContext()
 	pheromoneSection := resolvePheromoneSection()
 	workerTimeout := effectiveSurveyorDispatchTimeout(timeoutOverride)
-	for i, spec := range surveyorSpecs {
+	for i, spec := range specs {
 		tomlFile := fmt.Sprintf("aether-surveyor-%s.toml", spec.AgentSuffix)
 
 		seed := fmt.Sprintf("%s|%s", root, spec.AgentSuffix)
@@ -700,11 +688,11 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 	}
 	for _, result := range results {
 		if result.Status != "completed" {
-			return convertDispatchResults(results, surveyorSpecs, root), fmt.Errorf("surveyor %s did not complete: %s", result.WorkerName, result.Status)
+			return convertDispatchResults(results, specs, root), fmt.Errorf("surveyor %s did not complete: %s", result.WorkerName, result.Status)
 		}
 	}
 
-	return convertDispatchResults(results, surveyorSpecs, root), nil
+	return convertDispatchResults(results, specs, root), nil
 }
 
 // convertDispatchResults maps a slice of DispatchResult to codexSurveyorDispatch.

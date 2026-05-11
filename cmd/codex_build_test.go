@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,9 +20,15 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
+func forceBuildJSONOutput(t *testing.T) {
+	t.Helper()
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+}
+
 func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceBuildJSONOutput(t)
 
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
@@ -149,7 +156,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|architect|", "|Queen|watcher|", "|Queen|archaeologist|", "|Queen|probe|"} {
+	for _, want := range []string{"|Queen|builder|", "|Queen|oracle|", "|Queen|watcher|", "|Queen|probe|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
 		}
@@ -223,6 +230,7 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceBuildJSONOutput(t)
 	setupRuntimeSkillAssignmentHub(t)
 
 	dataDir := setupBuildFlowTest(t)
@@ -281,6 +289,9 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if got := result["dispatch_mode"].(string); got != "plan-only" {
 		t.Fatalf("dispatch_mode = %q, want plan-only", got)
 	}
+	if got := result["colony_mode"].(string); got != "colony" {
+		t.Fatalf("colony_mode = %q, want colony", got)
+	}
 	if got := int(result["dispatch_count"].(float64)); got != 7 {
 		t.Fatalf("dispatch_count = %d, want 7", got)
 	}
@@ -309,6 +320,9 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if manifest["dispatch_mode"].(string) != "plan-only" {
 		t.Fatalf("manifest dispatch_mode = %q, want plan-only", manifest["dispatch_mode"])
 	}
+	if manifest["colony_mode"].(string) != "colony" {
+		t.Fatalf("manifest colony_mode = %q, want colony", manifest["colony_mode"])
+	}
 	if manifest["checkpoint"].(string) != "" || manifest["claims_path"].(string) != "" {
 		t.Fatalf("plan-only manifest should not claim artifact paths: %+v", manifest)
 	}
@@ -321,7 +335,7 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if len(executionPlan) != 7 {
 		t.Fatalf("execution_plan = %d, want 7 steps: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"prep", "research", "design", "wave", "wave", "probe", "verification"}
+	wantStages := []string{"design", "wave", "wave", "probe", "verification", "measurement", "resilience"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -417,9 +431,288 @@ func TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases(t *testing.T) {
 	}
 }
 
+func TestBuildPlanOnlyUsesQueenSelectedSecurityCastes(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Secure auth refresh"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Auth token rotation",
+				Description: "Implement secure token refresh and rotation",
+				Mode:        colony.PhaseModeProduction,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Implement token rotation endpoint with crypto",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	for _, caste := range []string{"architect", "gatekeeper"} {
+		if !buildManifestHasCaste(manifest, caste) {
+			t.Fatalf("expected Queen-selected %s dispatch for security phase, got %v", caste, buildManifestCastes(manifest))
+		}
+	}
+}
+
+func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Build a routine settings panel"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          3,
+				Name:        "Settings UI panel",
+				Description: "Build a settings panel for user preferences",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Implement SettingsPanel component with form controls",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	if got, want := buildManifestCastes(manifest), []string{"builder", "probe", "watcher", "measurer", "chaos"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("dispatch castes = %v, want lean Queen plan %v", got, want)
+	}
+	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper"} {
+		if buildManifestHasCaste(manifest, caste) {
+			t.Fatalf("routine UI phase should not include %s; got %v", caste, buildManifestCastes(manifest))
+		}
+	}
+}
+
+func TestBuildPlanOnlyStandardReviewSuppressesQueenPerformanceCastes(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Optimize query performance"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Performance optimization",
+				Description: "Optimize query latency and reduce memory usage",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Benchmark and optimize slow queries",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	for _, caste := range []string{"measurer", "chaos"} {
+		if buildManifestHasCaste(manifest, caste) {
+			t.Fatalf("standard review should suppress Queen-selected %s, got %v", caste, buildManifestCastes(manifest))
+		}
+	}
+}
+
+func TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Optimize query performance"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          4,
+				Name:        "Performance optimization",
+				Description: "Optimize query latency and reduce memory usage",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Benchmark and optimize slow queries",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	for _, caste := range []string{"measurer", "chaos"} {
+		if !buildManifestHasCaste(manifest, caste) {
+			t.Fatalf("heavy full-depth review should allow policy %s, got %v", caste, buildManifestCastes(manifest))
+		}
+	}
+}
+
+func TestBuildPlanOnlyCLIForwardsVerificationDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Optimize query performance"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          4,
+				Name:        "Performance optimization",
+				Description: "Optimize query latency and reduce memory usage",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Benchmark and optimize slow queries",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--verification-depth", "heavy"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --plan-only --verification-depth returned error: %v", err)
+	}
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if result["review_depth"].(string) != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
+	}
+	for _, caste := range []string{"measurer", "chaos"} {
+		if !buildEnvelopeHasCaste(result, caste) {
+			t.Fatalf("expected CLI plan-only to forward heavy depth and include %s, got %v", caste, buildEnvelopeCastes(result))
+		}
+	}
+}
+
+func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Optimize query performance"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Performance optimization",
+				Description: "Optimize query latency and reduce memory usage",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Benchmark and optimize slow queries",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--verification-depth", "heavy"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --verification-depth returned error: %v", err)
+	}
+	rawOutput := stdout.(*bytes.Buffer).String()
+	if strings.TrimSpace(rawOutput) == "" {
+		t.Fatalf("expected build JSON output on stdout, got empty; stderr: %s", stderr.(*bytes.Buffer).String())
+	}
+	env := parseEnvelope(t, rawOutput)
+	result := env["result"].(map[string]interface{})
+	if result["review_depth"].(string) != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
+	}
+	for _, caste := range []string{"measurer", "chaos"} {
+		if !buildEnvelopeHasCaste(result, caste) {
+			t.Fatalf("expected CLI build to forward heavy depth and include %s, got %v", caste, buildEnvelopeCastes(result))
+		}
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	dispatchCount := int(result["dispatch_count"].(float64))
+	eventText := strings.Join(state.Events, "\n")
+	wantEvent := fmt.Sprintf("Dispatched %d workers for phase 1", dispatchCount)
+	if !strings.Contains(eventText, wantEvent) {
+		t.Fatalf("build_dispatched event should match actual dispatch count %q, got %v", wantEvent, state.Events)
+	}
+}
+
 func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceBuildJSONOutput(t)
 
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
@@ -456,6 +749,7 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	manifest.ColonyMode = ""
 	if err := os.WriteFile(filepath.Join(root, "wrapper-evidence.txt"), []byte("external work\n"), 0644); err != nil {
 		t.Fatalf("failed to write claimed file: %v", err)
 	}
@@ -634,6 +928,7 @@ func TestBuildWaveExecutionPlansRespectParallelMode(t *testing.T) {
 func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceBuildJSONOutput(t)
 
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
@@ -716,6 +1011,162 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	}
 	if state.Plan.Phases[0].Tasks[1].Status != colony.TaskCompleted {
 		t.Fatalf("task 2 status = %s, want completed", state.Plan.Phases[0].Tasks[1].Status)
+	}
+}
+
+func TestBuildRepairsCompletedPriorPhaseTasksFromTrustedManifest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Repair completed phase task statuses before next build"
+	phaseOneTaskID := "1.1"
+	phaseOneSecondTaskID := "1.2"
+	phaseTwoTaskID := "2.1"
+	now := time.Now().UTC()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		ColonyDepth:  "light",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Already closed phase",
+					Status: colony.PhaseCompleted,
+					Tasks: []colony.Task{
+						{ID: &phaseOneTaskID, Goal: "Finish the first prior task", Status: colony.TaskPending},
+						{ID: &phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskInProgress, DependsOn: []string{phaseOneTaskID}},
+					},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &phaseTwoTaskID, Goal: "Start only after prior tasks are reconciled", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("build/phase-1/manifest.json", codexBuildManifest{
+		Phase:        1,
+		PhaseName:    "Already closed phase",
+		Goal:         goal,
+		Root:         root,
+		ColonyDepth:  "light",
+		DispatchMode: "external-task",
+		GeneratedAt:  now.Format(time.RFC3339),
+		State:        string(colony.StateBUILT),
+		ClaimsPath:   displayDataPath("last-build-claims.json"),
+		Tasks: []codexBuildTaskPlan{
+			{ID: phaseOneTaskID, Goal: "Finish the first prior task", Status: colony.TaskCompleted},
+			{ID: phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskCompleted, DependsOn: []string{phaseOneTaskID}},
+		},
+		Dispatches: []codexBuildDispatch{
+			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-prior-1", Task: "Finish the first prior task", Status: "completed", TaskID: phaseOneTaskID, Outputs: []string{"main.go"}},
+			{Stage: "wave", Wave: 2, Caste: "builder", Name: "Forge-prior-2", Task: "Finish the second prior task", Status: "completed", TaskID: phaseOneSecondTaskID, Outputs: []string{"main.go"}},
+			{Stage: "verification", Caste: "watcher", Name: "Keen-prior-3", Task: "Verify prior phase", Status: "completed", Outputs: []string{"main_test.go"}},
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed prior manifest: %v", err)
+	}
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		FilesModified: []string{"main.go"},
+		BuildPhase:    1,
+		Timestamp:     now.Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("failed to seed prior claims: %v", err)
+	}
+
+	if _, err := runCodexBuild(root, 2, nil, true); err != nil {
+		t.Fatalf("build phase 2 returned error: %v", err)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	prior := state.Plan.Phases[0]
+	if prior.Tasks[0].Status != colony.TaskCompleted || prior.Tasks[1].Status != colony.TaskCompleted {
+		t.Fatalf("prior completed phase task statuses = %s/%s, want completed/completed", prior.Tasks[0].Status, prior.Tasks[1].Status)
+	}
+}
+
+func TestBuildRejectsSimulatedPriorPhaseManifestForTaskRepair(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Reject simulated completed phase task repair"
+	phaseOneTaskID := "1.1"
+	phaseTwoTaskID := "2.1"
+	now := time.Now().UTC()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		ColonyDepth:  "light",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Simulated prior phase",
+					Status: colony.PhaseCompleted,
+					Tasks:  []colony.Task{{ID: &phaseOneTaskID, Goal: "Do not trust simulated work", Status: colony.TaskPending}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &phaseTwoTaskID, Goal: "Start only after real prior evidence", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("build/phase-1/manifest.json", codexBuildManifest{
+		Phase:        1,
+		PhaseName:    "Simulated prior phase",
+		Goal:         goal,
+		Root:         root,
+		ColonyDepth:  "light",
+		DispatchMode: "simulated",
+		GeneratedAt:  now.Format(time.RFC3339),
+		State:        string(colony.StateBUILT),
+		Tasks:        []codexBuildTaskPlan{{ID: phaseOneTaskID, Goal: "Do not trust simulated work", Status: colony.TaskCompleted}},
+		Dispatches: []codexBuildDispatch{
+			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Fake-prior-1", Task: "Do not trust simulated work", Status: "completed", TaskID: phaseOneTaskID, Outputs: []string{"main.go"}},
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed simulated prior manifest: %v", err)
+	}
+
+	_, err := runCodexBuild(root, 2, nil, true)
+	if err == nil {
+		t.Fatal("expected build phase 2 to reject simulated prior manifest, got nil error")
+	}
+	if !strings.Contains(err.Error(), "simulated") || !strings.Contains(err.Error(), "cannot repair persisted task state") {
+		t.Fatalf("error = %q, want simulated repair rejection", err.Error())
+	}
+
+	var state colony.ColonyState
+	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
+		t.Fatalf("failed to reload state: %v", loadErr)
+	}
+	if state.Plan.Phases[0].Tasks[0].Status == colony.TaskCompleted {
+		t.Fatal("simulated manifest should not mark prior task completed")
 	}
 }
 
@@ -1485,6 +1936,49 @@ func assertDispatchHasRuntimeSkillAssignment(t *testing.T, dispatch map[string]i
 	if section := strings.TrimSpace(stringValue(dispatch["skill_section"])); !strings.Contains(section, "### Skill: runtime-assignment") {
 		t.Fatalf("dispatch missing runtime skill section: %+v", dispatch)
 	}
+}
+
+func buildManifestHasCaste(manifest codexBuildManifest, caste string) bool {
+	for _, dispatch := range manifest.Dispatches {
+		if dispatch.Caste == caste {
+			return true
+		}
+	}
+	return false
+}
+
+func buildManifestCastes(manifest codexBuildManifest) []string {
+	castes := make([]string, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		castes = append(castes, dispatch.Caste)
+	}
+	return castes
+}
+
+func buildEnvelopeHasCaste(result map[string]interface{}, caste string) bool {
+	for _, got := range buildEnvelopeCastes(result) {
+		if got == caste {
+			return true
+		}
+	}
+	return false
+}
+
+func buildEnvelopeCastes(result map[string]interface{}) []string {
+	rawDispatches, _ := result["dispatches"].([]interface{})
+	castes := make([]string, 0, len(rawDispatches))
+	for _, raw := range rawDispatches {
+		dispatch, _ := raw.(map[string]interface{})
+		if dispatch == nil {
+			continue
+		}
+		caste, _ := dispatch["caste"].(string)
+		if caste == "" {
+			continue
+		}
+		castes = append(castes, caste)
+	}
+	return castes
 }
 
 // TestBuildInRepo_VerifiesGitClaimsForCompletedWorkers proves that in-repo

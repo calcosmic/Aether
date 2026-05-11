@@ -85,6 +85,13 @@ The Go runtime owns state mutations, verification, persistence, file locking,
 phase transitions, and visual rendering. Wrapper markdown may add platform
 presentation, but it must not duplicate runtime state logic.
 
+For Orchestrator Mode lifecycle boundaries, the runtime also owns
+`orchestrator_boundary_guidance`. Claude/OpenCode wrappers and Codex lifecycle
+skills must inspect that JSON guidance before spawning workers. When it routes
+to `aether discuss`, wrappers stop, tell the user to rerun
+`after_discuss_next`, and request a fresh plan-only manifest after the answer is
+resolved.
+
 Codex does not use slash-command wrapper markdown. Codex UX comes from the
 `aether` CLI, Codex TOML agent definitions, and Codex lifecycle skills for the
 commands that need wrapper-equivalent AI orchestration. The drift-sensitive

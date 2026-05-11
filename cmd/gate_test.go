@@ -1072,7 +1072,7 @@ func TestAutoResolveSoftBlock(t *testing.T) {
 		BlockingIssues: []string{"quality score below threshold"},
 	}
 
-	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if len(resolved) != 1 || resolved[0] != "auditor" {
 		t.Errorf("expected auditor in resolved list, got %v", resolved)
@@ -1095,7 +1095,7 @@ func TestAutoResolveHardBlockNever(t *testing.T) {
 		BlockingIssues: []string{"CVE found"},
 	}
 
-	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if len(resolved) != 0 {
 		t.Errorf("expected empty resolved list for hard_block gate, got %v", resolved)
@@ -1118,7 +1118,7 @@ func TestAutoResolveAdvisoryIgnored(t *testing.T) {
 		BlockingIssues: []string{"health issue"},
 	}
 
-	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if len(resolved) != 0 {
 		t.Errorf("expected empty resolved list for advisory gate, got %v", resolved)
@@ -1151,7 +1151,7 @@ func TestAutoResolveHeavySkipsAll(t *testing.T) {
 		BlockingIssues: []string{"quality score below threshold", "too complex"},
 	}
 
-	updated, resolved := autoResolveSoftBlockGates(1, report, "heavy")
+	updated, resolved := autoResolveSoftBlockGates(1, report, "heavy", colony.PhaseModePrototype)
 
 	if len(resolved) != 0 {
 		t.Errorf("expected no auto-resolved gates at heavy depth, got %v", resolved)
@@ -1240,7 +1240,7 @@ func TestAutoResolveMixedResults(t *testing.T) {
 		BlockingIssues: []string{"quality issue", "too complex", "CVE found"},
 	}
 
-	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	// Two soft_block gates should be resolved
 	if len(resolved) != 2 {
@@ -1275,7 +1275,7 @@ func TestAutoResolveUnclassifiedGate(t *testing.T) {
 		BlockingIssues: []string{"something failed"},
 	}
 
-	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if len(resolved) != 0 {
 		t.Errorf("expected empty resolved for unclassified gate, got %v", resolved)
@@ -1293,7 +1293,7 @@ func TestAutoResolveEmptyReport(t *testing.T) {
 		BlockingIssues: nil,
 	}
 
-	updated, resolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, resolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if len(resolved) != 0 {
 		t.Errorf("expected empty resolved for all-passed report, got %v", resolved)
@@ -1499,7 +1499,7 @@ func TestContinueFinalizeAutoResolve_AllSoftBlockResolved(t *testing.T) {
 	}
 
 	// Run auto-resolve at standard depth
-	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if !updated.Passed {
 		t.Error("expected report.Passed=true after auto-resolving all soft_block gates at standard depth")
@@ -1534,7 +1534,7 @@ func TestContinueFinalizeAutoResolve_MixedHardBlockAndSoftBlock(t *testing.T) {
 		BlockingIssues: []string{"security CVE found", "quality check failed", "complexity threshold exceeded"},
 	}
 
-	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	// Hard block gate should still block
 	if updated.Passed {
@@ -1570,7 +1570,7 @@ func TestContinueFinalizeAutoResolve_HeavyDepthBlocksAutoResolve(t *testing.T) {
 		BlockingIssues: []string{"quality check failed"},
 	}
 
-	updated, autoResolved := autoResolveSoftBlockGates(1, report, "heavy")
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "heavy", colony.PhaseModePrototype)
 
 	if updated.Passed {
 		t.Error("expected report.Passed=false at heavy depth (no auto-resolve)")
@@ -1609,7 +1609,7 @@ func TestContinueFinalizeAutoResolve_AnnotationPersisted(t *testing.T) {
 		Passed:         false,
 		BlockingIssues: []string{"quality check failed"},
 	}
-	_, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+	_, autoResolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if len(autoResolved) != 1 {
 		t.Fatalf("expected 1 gate resolved, got %v", autoResolved)
@@ -1731,7 +1731,7 @@ func TestContinueFinalizeAutoResolve_AllPassNoAutoResolve(t *testing.T) {
 		BlockingIssues: nil,
 	}
 
-	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard")
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "standard", colony.PhaseModePrototype)
 
 	if !updated.Passed {
 		t.Error("expected report.Passed=true when all gates already pass")
@@ -1766,7 +1766,7 @@ func TestContinueFinalizeAutoResolve_LightDepthMostAggressive(t *testing.T) {
 		BlockingIssues: []string{"quality check failed", "complexity exceeded", "missing test", "anti-pattern found", "verification failed", "spawn failed"},
 	}
 
-	updated, autoResolved := autoResolveSoftBlockGates(1, report, "light")
+	updated, autoResolved := autoResolveSoftBlockGates(1, report, "light", colony.PhaseModePrototype)
 
 	if !updated.Passed {
 		t.Error("expected report.Passed=true at light depth with only soft_block gates")

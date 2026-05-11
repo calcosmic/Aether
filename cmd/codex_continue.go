@@ -18,16 +18,29 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+// VerificationErrorClass classifies why a verification step failed.
+type VerificationErrorClass string
+
+const (
+	ErrorClassProduct     VerificationErrorClass = "product"     // real code/test failure
+	ErrorClassEnvironment VerificationErrorClass = "environment" // EPERM, EADDRINUSE, missing DB, etc.
+	ErrorClassTimeout     VerificationErrorClass = "timeout"
+	ErrorClassSkipped     VerificationErrorClass = "skipped"
+)
+
+const watcherStatusEnvironmentBlocked = "environment_blocked"
+
 type codexVerificationStep struct {
-	Name           string `json:"name"`
-	Command        string `json:"command,omitempty"`
-	Passed         bool   `json:"passed"`
-	Skipped        bool   `json:"skipped,omitempty"`
-	TimedOut       bool   `json:"timed_out,omitempty"`
-	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
-	ExitCode       int    `json:"exit_code,omitempty"`
-	Summary        string `json:"summary"`
-	Output         string `json:"output,omitempty"`
+	Name           string                 `json:"name"`
+	Command        string                 `json:"command,omitempty"`
+	Passed         bool                   `json:"passed"`
+	Skipped        bool                   `json:"skipped,omitempty"`
+	TimedOut       bool                   `json:"timed_out,omitempty"`
+	TimeoutSeconds int                    `json:"timeout_seconds,omitempty"`
+	ExitCode       int                    `json:"exit_code,omitempty"`
+	ErrorClass     VerificationErrorClass `json:"error_class,omitempty"`
+	Summary        string                 `json:"summary"`
+	Output         string                 `json:"output,omitempty"`
 }
 
 type codexClaimVerification struct {
@@ -315,6 +328,49 @@ func missingBuildPacketBlockedResult(state colony.ColonyState, phase colony.Phas
 	return result
 }
 
+func manifestTaskSetBlockedResult(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, options codexContinueOptions) (map[string]interface{}, bool) {
+	err := validateBuildManifestTaskSetForPhase(manifest, phase, true)
+	if err == nil {
+		return nil, false
+	}
+
+	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
+	now := time.Now().UTC()
+	runHandle, _ := beginRuntimeSpawnRun("continue", now)
+	nextCommand := buildForceRedispatchCommand(phase.ID)
+	summary := fmt.Sprintf("%s; run `%s` to regenerate the build manifest before `aether continue`", err.Error(), nextCommand)
+	recovery := codexContinueRecoveryPlan{
+		RedispatchCommand: nextCommand,
+		SkipCommand:       buildSkipPhaseCommand(phase.ID),
+	}
+	continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
+	_ = store.SaveJSON(continueReportRel, codexContinueReport{
+		Phase:               phase.ID,
+		GeneratedAt:         now.Format(time.RFC3339),
+		Manifest:            displayOptionalDataPath(manifest.Path),
+		Summary:             summary,
+		Recovery:            recovery,
+		Advanced:            false,
+		Completed:           false,
+		Next:                nextCommand,
+		LastContinueOptions: continueOptionsToJSON(options),
+	})
+	updateSessionSummary("continue", nextCommand, summary)
+	finishRuntimeSpawnRun(runHandle, "blocked-manifest-task-set", now)
+	return map[string]interface{}{
+		"advanced":        false,
+		"blocked":         true,
+		"current_phase":   state.CurrentPhase,
+		"phase_name":      phase.Name,
+		"state":           state.State,
+		"recovery":        recovery,
+		"next":            nextCommand,
+		"continue_report": displayDataPath(continueReportRel),
+		"review_depth":    string(reviewDepth),
+		"blocking_issues": []string{summary},
+	}, true
+}
+
 // cleanupStaleContinueReports removes stale report files from a phase's build
 // directory before verification runs. This prevents confusing users with
 // leftover artifacts from previous continue attempts.
@@ -371,15 +427,32 @@ type codexContinueClosedWorker struct {
 }
 
 type codexContinueWorkerFlowStep struct {
-	Stage    string   `json:"stage,omitempty"`
-	Caste    string   `json:"caste,omitempty"`
-	Name     string   `json:"name"`
-	Task     string   `json:"task,omitempty"`
-	Status   string   `json:"status"`
-	Summary  string   `json:"summary,omitempty"`
-	Blockers []string `json:"blockers,omitempty"`
-	Duration float64  `json:"duration,omitempty"`
-	Report   string   `json:"report,omitempty"`
+	Stage           string               `json:"stage,omitempty"`
+	Caste           string               `json:"caste,omitempty"`
+	Name            string               `json:"name"`
+	Task            string               `json:"task,omitempty"`
+	Status          string               `json:"status"`
+	Summary         string               `json:"summary,omitempty"`
+	Blockers        []string             `json:"blockers,omitempty"`
+	Duration        float64              `json:"duration,omitempty"`
+	Report          string               `json:"report,omitempty"`
+	Findings        []codexReviewFinding `json:"findings,omitempty"`
+	Recommendations []string             `json:"recommendations,omitempty"`
+	WeakSpots       []string             `json:"weak_spots,omitempty"`
+	EdgeCases       []string             `json:"edge_cases_discovered,omitempty"`
+	ReusableLessons []string             `json:"reusable_lessons,omitempty"`
+}
+
+type codexReviewFinding struct {
+	Domain      string `json:"domain,omitempty"`
+	Severity    string `json:"severity,omitempty"`
+	File        string `json:"file,omitempty"`
+	Line        int    `json:"line,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Suggestion  string `json:"suggestion,omitempty"`
+	Blocking    bool   `json:"blocking,omitempty"`
 }
 
 type codexContinueReviewReport struct {
@@ -444,6 +517,9 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	manifest := loadCodexContinueManifest(phase.ID)
 	if !manifest.Present {
 		return missingBuildPacketBlockedResult(state, phase, options), state, phase, nil, nil, false, nil
+	}
+	if result, blocked := manifestTaskSetBlockedResult(state, phase, manifest, options); blocked {
+		return result, state, phase, nil, nil, false, nil
 	}
 	if changed, reconcileErr := reconcileContinueCompletedBuildTasks(&state, &phase, &manifest); reconcileErr != nil {
 		if errors.Is(reconcileErr, errRuntimeStateSuperseded) {
@@ -1024,6 +1100,83 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 	},
 }
 
+func queenContinueDispatches(phase colony.Phase, reviewDepth colony.VerificationDepth) []CasteDispatch {
+	return queenOrchestrate(phase, "continue", colony.ColonyState{
+		VerificationDepth: string(reviewDepth),
+	})
+}
+
+func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
+	for _, dispatch := range dispatches {
+		if dispatch.Caste == caste {
+			return true
+		}
+	}
+	return false
+}
+
+func queenContinueReviewSpecs(phase colony.Phase, reviewDepth colony.VerificationDepth) []codexContinueReviewSpec {
+	queenDispatches := queenContinueDispatches(phase, reviewDepth)
+	specs := make([]codexContinueReviewSpec, 0, len(queenDispatches))
+	for _, dispatch := range queenDispatches {
+		if dispatch.Caste == "watcher" {
+			continue
+		}
+		spec, ok := continueReviewSpecForCaste(dispatch.Caste)
+		if !ok {
+			continue
+		}
+		specs = append(specs, spec)
+	}
+	return specs
+}
+
+func continueReviewSpecForCaste(caste string) (codexContinueReviewSpec, bool) {
+	for _, spec := range codexContinueReviewSpecs {
+		if spec.Caste == caste {
+			return spec, true
+		}
+	}
+	switch caste {
+	case "measurer":
+		return codexContinueReviewSpec{
+			Caste: "measurer",
+			Task:  "Review whether the completed phase introduces performance, latency, memory, or cost regressions. Return blocked only for concrete regression evidence that makes advancement unsafe.",
+		}, true
+	case "chaos":
+		return codexContinueReviewSpec{
+			Caste: "chaos",
+			Task:  "Probe resilience and failure-handling evidence for the completed phase. Return blocked only for reproducible failure paths or missing recovery behavior that make advancement unsafe.",
+		}, true
+	case "includer":
+		return codexContinueReviewSpec{
+			Caste: "includer",
+			Task:  "Review accessibility and inclusive-use risks for the completed phase. Return blocked only for concrete accessibility regressions or missing required affordances.",
+		}, true
+	case "keeper":
+		return codexContinueReviewSpec{
+			Caste: "keeper",
+			Task:  "Review whether important conventions, decisions, or knowledge from the phase were preserved for future workers. Return blocked only if missing knowledge creates immediate advancement risk.",
+		}, true
+	case "sage":
+		return codexContinueReviewSpec{
+			Caste: "sage",
+			Task:  "Synthesize cross-phase learning and advancement risk from the verification evidence. Return blocked only if the evidence shows a concrete unresolved decision or contradiction.",
+		}, true
+	case "medic":
+		return codexContinueReviewSpec{
+			Caste: "medic",
+			Task:  "Diagnose colony and runtime health before advancement. Return blocked only for state, manifest, or recovery issues that would make continue unsafe.",
+		}, true
+	case "fixer":
+		return codexContinueReviewSpec{
+			Caste: "fixer",
+			Task:  "Review recoverable blockers and propose the smallest safe repair path. This review is read-only; return blocked only when a concrete repair is required before advancement.",
+		}, true
+	}
+	return codexContinueReviewSpec{}, false
+}
+
 func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
@@ -1078,13 +1231,6 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				} else if summary := strings.TrimSpace(result.WorkerResult.Summary); summary != "" && !strings.HasPrefix(summary, "FakeInvoker completed task") {
 					step.Summary = summary
 				}
-				if len(result.WorkerResult.Blockers) > 0 {
-					for _, blocker := range result.WorkerResult.Blockers {
-						if strings.TrimSpace(blocker) != "" {
-							blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", result.WorkerName, blocker))
-						}
-					}
-				}
 				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
 				step.Duration = result.WorkerResult.Duration.Seconds()
 				step.Report = strings.TrimSpace(result.WorkerResult.RawOutput)
@@ -1095,7 +1241,16 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 			if step.Summary == "" {
 				step.Summary = continueReviewFlowSummary(step)
 			}
-			if step.Status != "completed" {
+			if verification.ChecksPassed && continueWorkerFlowEnvironmentBlocked(step) {
+				step.Status = watcherStatusEnvironmentBlocked
+				step.Summary = environmentBlockedLaunchSummary(step.Summary)
+			}
+			if continueReviewStepBlocks(step, verification) {
+				for _, blocker := range step.Blockers {
+					if strings.TrimSpace(blocker) != "" {
+						blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", result.WorkerName, blocker))
+					}
+				}
 				blockers = append(blockers, fmt.Sprintf("%s review did not complete cleanly: %s", result.WorkerName, step.Status))
 			}
 		}
@@ -1112,18 +1267,7 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 	capsule := resolveCodexWorkerContext()
 	pheromoneSection := resolvePheromoneSection()
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
-	var specs []codexContinueReviewSpec
-	switch reviewDepth {
-	case colony.VerificationDepthLight:
-		specs = []codexContinueReviewSpec{}
-	case colony.VerificationDepthStandard:
-		// Probe only (index 2 in codexContinueReviewSpecs)
-		specs = codexContinueReviewSpecs[2:]
-	case colony.VerificationDepthHeavy:
-		specs = codexContinueReviewSpecs
-	default:
-		specs = codexContinueReviewSpecs
-	}
+	specs := queenContinueReviewSpecs(phase, reviewDepth)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)
@@ -1166,6 +1310,9 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	} else {
 		b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
 	}
+	if spec.Caste == "probe" {
+		b.WriteString("Coverage guidance: if runtime verification checks passed, package-wide line coverage below an aspirational threshold is advisory by itself. Block only for red verification commands, missing focused regression coverage for changed behavior, or concrete unexercised edge cases that make advancement unsafe.\n\n")
+	}
 	b.WriteString(renderWorkerReadCacheDiscipline())
 	b.WriteString("\n")
 	b.WriteString("Evidence to inspect:\n")
@@ -1200,11 +1347,27 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	}
 	if len(assessment.OperationalIssues) > 0 {
 		b.WriteString("\nOperational issues already observed:\n")
-		for _, issue := range assessment.OperationalIssues {
-			b.WriteString("- ")
-			b.WriteString(issue)
-			b.WriteString("\n")
+		b.WriteString(trimBriefList("", assessment.OperationalIssues, 5))
+	}
+	return b.String()
+}
+
+// trimBriefList truncates a list of items for inclusion in a worker brief.
+// If there are more than max items, it shows the first max and a summary.
+func trimBriefList(prefix string, items []string, max int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i, item := range items {
+		if i >= max {
+			b.WriteString(fmt.Sprintf("%s... and %d more (see assessment report)\n", prefix, len(items)-max))
+			break
 		}
+		b.WriteString(prefix)
+		b.WriteString("- ")
+		b.WriteString(item)
+		b.WriteString("\n")
 	}
 	return b.String()
 }
@@ -1247,6 +1410,8 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	var watcherFlow *codexContinueWorkerFlowStep
 	if skipWatchers {
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
+	} else if shellChecksPassed && isEnvironmentBlockedWatcher(buildWatcher) {
+		continueWatcher = buildWatcher
 	} else if shellChecksPassed && !isCodexWorkerAvailable() {
 		// Auto-skip: shell verification passed but Codex CLI is unavailable.
 		// No point spawning a watcher that will immediately fail.
@@ -1268,10 +1433,22 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 
 	checksPassed := shellChecksPassed
 	blockers := []string{}
+	warnings := []string{}
 	if !shellChecksPassed {
 		for _, step := range steps {
 			if !step.Passed && !step.Skipped {
-				blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
+				if step.ErrorClass == ErrorClassEnvironment && phase.Mode != colony.PhaseModeProduction {
+					warnings = append(warnings, fmt.Sprintf("%s environment issue (not blocking for %s phase): %s", step.Name, phase.Mode, step.Summary))
+				} else {
+					blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
+				}
+			}
+		}
+		// If all failures were environment warnings, allow checks to pass.
+		if len(blockers) == 0 && len(warnings) > 0 {
+			checksPassed = true
+			for _, w := range warnings {
+				fmt.Fprintf(os.Stderr, "⚠ %s\n", w)
 			}
 		}
 	}
@@ -1285,6 +1462,8 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 			// passed independently. Treat as warning, not a hard block.
 			blockers = append(blockers, fmt.Sprintf(
 				"watcher %s timed out; runtime verification passed independently", watcher.Worker))
+		} else if checksPassed && isEnvironmentBlockedWatcher(watcher) {
+			watcher = environmentBlockedWatcher(watcher)
 		} else {
 			checksPassed = false
 			blockers = append(blockers, summary)
@@ -1505,14 +1684,20 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 			b.WriteString("\n")
 		}
 	}
+	b.WriteString("\nFull verification output: see .aether/data/build/phase-")
+	b.WriteString(fmt.Sprintf("%d/verification.json\n", phase.ID))
 	if len(phase.Tasks) > 0 {
 		b.WriteString("\nPhase tasks:\n")
-		for idx, task := range phase.Tasks {
-			b.WriteString("- ")
-			b.WriteString(buildTaskID(task, idx))
-			b.WriteString(": ")
-			b.WriteString(strings.TrimSpace(task.Goal))
-			b.WriteString("\n")
+		if phase.Mode == colony.PhaseModeDiscovery && len(phase.Tasks) > 5 {
+			b.WriteString(fmt.Sprintf("- %d tasks total (see manifest for full list)\n", len(phase.Tasks)))
+		} else {
+			for idx, task := range phase.Tasks {
+				b.WriteString("- ")
+				b.WriteString(buildTaskID(task, idx))
+				b.WriteString(": ")
+				b.WriteString(strings.TrimSpace(task.Goal))
+				b.WriteString("\n")
+			}
 		}
 	}
 	return b.String()
@@ -1538,15 +1723,49 @@ func evaluateContinueWatcherVerification(manifest codexContinueManifest) codexWa
 				summary = fmt.Sprintf("watcher verification did not complete cleanly: %s", status)
 			}
 		}
-		return codexWatcherVerification{
+		watcher := codexWatcherVerification{
 			Present: true,
 			Passed:  status == "completed" || status == "manually-reconciled",
 			Status:  status,
 			Worker:  strings.TrimSpace(dispatch.Name),
 			Summary: summary,
 		}
+		if isEnvironmentBlockedLaunchVerification(strings.Join(append([]string{summary}, dispatch.Blockers...), "\n")) {
+			return environmentBlockedWatcher(watcher)
+		}
+		return watcher
 	}
 	return codexWatcherVerification{}
+}
+
+func isEnvironmentBlockedWatcher(watcher codexWatcherVerification) bool {
+	if !watcher.Present {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(watcher.Status), watcherStatusEnvironmentBlocked) {
+		return true
+	}
+	return isEnvironmentBlockedLaunchVerification(watcher.Summary)
+}
+
+func environmentBlockedWatcher(watcher codexWatcherVerification) codexWatcherVerification {
+	watcher.Present = true
+	watcher.Passed = true
+	watcher.Status = watcherStatusEnvironmentBlocked
+	watcher.Summary = environmentBlockedLaunchSummary(watcher.Summary)
+	return watcher
+}
+
+func environmentBlockedLaunchSummary(original string) string {
+	summary := "launch verification environment_blocked: local socket binding is denied in this host; external launch proof is required from an environment that permits socket binding"
+	original = strings.TrimSpace(original)
+	if original == "" || strings.Contains(strings.ToLower(original), "environment_blocked") {
+		if original != "" {
+			return original
+		}
+		return summary
+	}
+	return summary + ": " + original
 }
 
 func validateContinueReconcileTasks(phase colony.Phase, reconcileTaskIDs []string) error {
@@ -2326,6 +2545,11 @@ func runVerificationStep(ctx context.Context, root, name, command string, timeou
 	}
 	if err != nil {
 		step.Summary = failureSummaryForStep(name, exitCode, output, err, timedOut, timeout)
+		if timedOut {
+			step.ErrorClass = ErrorClassTimeout
+		} else {
+			step.ErrorClass = classifyVerificationError(output, exitCode)
+		}
 	}
 	return step
 }
@@ -2343,6 +2567,13 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 			Passed:  !manifestRequiresBuilderClaims(manifest),
 			Skipped: !manifestRequiresBuilderClaims(manifest),
 			Summary: missingClaimsSummary(manifest),
+		}
+	}
+	if manifest.Present && manifest.Data.Phase > 0 && claims.BuildPhase != manifest.Data.Phase {
+		return codexClaimVerification{
+			Present: true,
+			Passed:  false,
+			Summary: fmt.Sprintf("builder claims build_phase %d does not match manifest phase %d; run `%s` to regenerate claims before `aether continue`", claims.BuildPhase, manifest.Data.Phase, buildForceRedispatchCommand(manifest.Data.Phase)),
 		}
 	}
 
@@ -2646,6 +2877,29 @@ func continueWorkerFlowStatus(status string) string {
 	return status
 }
 
+func continueReviewStatusBlocks(status string) bool {
+	switch continueWorkerFlowStatus(status) {
+	case "completed", "manually-reconciled", watcherStatusEnvironmentBlocked:
+		return false
+	default:
+		return true
+	}
+}
+
+func continueReviewStepBlocks(step codexContinueWorkerFlowStep, verification codexContinueVerificationReport) bool {
+	status := continueWorkerFlowStatus(step.Status)
+	if status == "timeout" && verification.ChecksPassed {
+		return false
+	}
+	return continueReviewStatusBlocks(status)
+}
+
+func continueWorkerFlowEnvironmentBlocked(step codexContinueWorkerFlowStep) bool {
+	parts := []string{step.Summary}
+	parts = append(parts, step.Blockers...)
+	return isEnvironmentBlockedLaunchVerification(strings.Join(parts, "\n"))
+}
+
 func continueWatcherDefaultSummary(status string) string {
 	switch continueWorkerFlowStatus(status) {
 	case "completed", "manually-reconciled":
@@ -2860,6 +3114,20 @@ func continueReviewTaskForCaste(caste string) string {
 		return "Auditor continue review"
 	case "probe":
 		return "Probe continue review"
+	case "measurer":
+		return "Measurer continue review"
+	case "chaos":
+		return "Chaos continue review"
+	case "includer":
+		return "Includer continue review"
+	case "keeper":
+		return "Keeper continue review"
+	case "sage":
+		return "Sage continue review"
+	case "medic":
+		return "Medic continue review"
+	case "fixer":
+		return "Fixer continue review"
 	default:
 		return "Continue review"
 	}
@@ -2962,6 +3230,57 @@ func successSummaryForStep(name string, exitCode int, err error) string {
 	default:
 		return fmt.Sprintf("%s passed", name)
 	}
+}
+
+// classifyVerificationError inspects command output and exit code to determine
+// whether a failure is a product issue or an environment issue (missing DB,
+// port conflicts, permission errors, etc.).
+func classifyVerificationError(output string, exitCode int) VerificationErrorClass {
+	lower := strings.ToLower(output)
+	envPatterns := []string{
+		"eperm", "eacces", "permission denied",
+		"eaddrinuse", "address already in use", "listen tcp", "bind: address already in use",
+		"econnrefused", "connection refused", "dial tcp", "connect: connection refused",
+		"postgres", "psql", "database", "connect",
+		"no such file or directory", "command not found",
+		"module not found", "cannot find module",
+	}
+	for _, p := range envPatterns {
+		if strings.Contains(lower, p) {
+			return ErrorClassEnvironment
+		}
+	}
+	return ErrorClassProduct
+}
+
+func isEnvironmentBlockedLaunchVerification(text string) bool {
+	lower := strings.ToLower(text)
+	if strings.TrimSpace(lower) == "" {
+		return false
+	}
+	hasPermissionDenial := strings.Contains(lower, "eperm") ||
+		strings.Contains(lower, "eacces") ||
+		strings.Contains(lower, "permission denied")
+	if !hasPermissionDenial {
+		return false
+	}
+	hasSocketBind := strings.Contains(lower, "listen") ||
+		strings.Contains(lower, "bind") ||
+		strings.Contains(lower, "socket")
+	if !hasSocketBind {
+		return false
+	}
+	hasRawPreflight := strings.Contains(lower, "raw bind") ||
+		strings.Contains(lower, "raw local socket") ||
+		strings.Contains(lower, "raw socket") ||
+		strings.Contains(lower, "raw node") ||
+		strings.Contains(lower, "minimal socket") ||
+		strings.Contains(lower, "socket preflight") ||
+		strings.Contains(lower, "node http bind")
+	if !hasRawPreflight {
+		return false
+	}
+	return true
 }
 
 func failureSummaryForStep(name string, exitCode int, output string, err error, timedOut bool, timeout time.Duration) string {

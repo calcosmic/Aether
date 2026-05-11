@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -1029,6 +1030,589 @@ func TestResolveVerificationDepthSmart_InvalidValue(t *testing.T) {
 				t.Errorf("resolveVerificationDepthSmart(%q, ...) = %q, want %q", tt.depth, got, tt.expected)
 			}
 		})
+	}
+}
+
+// --- Task 3.1: comprehensive table tests for verification depth resolution ---
+
+func TestResolveReviewDepth_Table(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    colony.Phase
+		total    int
+		light    bool
+		heavy    bool
+		expected ReviewDepth
+	}{
+		// Explicit --heavy flag overrides everything
+		{"heavy flag on non-final non-keyword", colony.Phase{ID: 2, Name: "Feature work"}, 5, false, true, ReviewDepthHeavy},
+		{"heavy flag on keyword phase", colony.Phase{ID: 2, Name: "Security audit"}, 5, false, true, ReviewDepthHeavy},
+		{"heavy flag on final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, true, ReviewDepthHeavy},
+
+		// Explicit --light flag overrides keyword/final defaults
+		{"light flag on final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, true, false, ReviewDepthLight},
+		{"light flag on keyword phase", colony.Phase{ID: 2, Name: "Security audit"}, 5, true, false, ReviewDepthLight},
+		{"light flag on intermediate", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, false, ReviewDepthLight},
+
+		// Both flags: heavy wins (heavier is safer)
+		{"both flags heavy wins on intermediate", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, true, ReviewDepthHeavy},
+		{"both flags heavy wins on final", colony.Phase{ID: 5, Name: "Final polish"}, 5, true, true, ReviewDepthHeavy},
+
+		// No flags: final phase defaults to heavy
+		{"no flags final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, ReviewDepthHeavy},
+		{"no flags single phase plan", colony.Phase{ID: 1, Name: "Only phase"}, 1, false, false, ReviewDepthHeavy},
+
+		// No flags: keyword detection
+		{"keyword security no flags", colony.Phase{ID: 2, Name: "Security hardening"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword release no flags", colony.Phase{ID: 3, Name: "Release v2.0"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword deploy no flags", colony.Phase{ID: 2, Name: "Deploy pipeline"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword auth no flags", colony.Phase{ID: 4, Name: "Auth middleware"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword crypto no flags", colony.Phase{ID: 2, Name: "Crypto utils"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword compliance no flags", colony.Phase{ID: 3, Name: "Compliance check"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword production no flags", colony.Phase{ID: 3, Name: "Production config"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword ship no flags", colony.Phase{ID: 3, Name: "Ship it"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword launch no flags", colony.Phase{ID: 3, Name: "Launch prep"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword secrets no flags", colony.Phase{ID: 2, Name: "Secrets rotation"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword permissions no flags", colony.Phase{ID: 2, Name: "Permissions refactor"}, 5, false, false, ReviewDepthHeavy},
+		{"keyword audit no flags", colony.Phase{ID: 2, Name: "Audit trail"}, 5, false, false, ReviewDepthHeavy},
+
+		// No flags: default to light for intermediate non-keyword
+		{"no flags intermediate non-keyword", colony.Phase{ID: 2, Name: "Feature work"}, 5, false, false, ReviewDepthLight},
+		{"no flags early non-keyword", colony.Phase{ID: 1, Name: "Project setup"}, 5, false, false, ReviewDepthLight},
+		{"no flags late non-keyword", colony.Phase{ID: 4, Name: "UI polish"}, 5, false, false, ReviewDepthLight},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveReviewDepth(tt.phase, tt.total, tt.light, tt.heavy)
+			if got != tt.expected {
+				t.Errorf("resolveReviewDepth(%+v, %d, light=%v, heavy=%v) = %q, want %q",
+					tt.phase, tt.total, tt.light, tt.heavy, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveVerificationDepth_Table(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    colony.Phase
+		total    int
+		light    bool
+		heavy    bool
+		depthStr string
+		expected colony.VerificationDepth
+	}{
+		// Explicit --heavy flag overrides everything
+		{"heavy flag overrides string heavy", colony.Phase{ID: 2, Name: "Feature work"}, 5, false, true, "light", colony.VerificationDepthHeavy},
+		{"heavy flag on final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, true, "", colony.VerificationDepthHeavy},
+		{"heavy flag on keyword phase", colony.Phase{ID: 2, Name: "Security audit"}, 5, false, true, "light", colony.VerificationDepthHeavy},
+
+		// Explicit --light flag overrides keyword/final/smart defaults
+		{"light flag on final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, true, false, "", colony.VerificationDepthLight},
+		{"light flag on keyword phase", colony.Phase{ID: 2, Name: "Security audit"}, 5, true, false, "", colony.VerificationDepthLight},
+		{"light flag overrides depth string", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, false, "heavy", colony.VerificationDepthLight},
+
+		// Both flags: heavy wins
+		{"both flags heavy wins", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, true, "light", colony.VerificationDepthHeavy},
+
+		// Explicit --verification-depth string (no boolean flags)
+		{"explicit depth light", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "light", colony.VerificationDepthLight},
+		{"explicit depth heavy", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "heavy", colony.VerificationDepthHeavy},
+		{"explicit depth standard", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "standard", colony.VerificationDepthStandard},
+		{"explicit depth overrides final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "light", colony.VerificationDepthLight},
+		{"explicit depth overrides keyword", colony.Phase{ID: 2, Name: "Security audit"}, 5, false, false, "light", colony.VerificationDepthLight},
+
+		// Aliases for depth strings
+		{"alias minimal maps to light", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "minimal", colony.VerificationDepthLight},
+		{"alias coarse maps to light", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "coarse", colony.VerificationDepthLight},
+		{"alias full maps to heavy", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "full", colony.VerificationDepthHeavy},
+		{"alias thorough maps to heavy", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "thorough", colony.VerificationDepthHeavy},
+
+		// No flags, no string: keyword detection
+		{"keyword security no flags", colony.Phase{ID: 2, Name: "Security hardening"}, 5, false, false, "", colony.VerificationDepthHeavy},
+		{"keyword release no flags", colony.Phase{ID: 3, Name: "Release v2.0"}, 5, false, false, "", colony.VerificationDepthHeavy},
+		{"keyword auth no flags", colony.Phase{ID: 2, Name: "Auth middleware"}, 5, false, false, "", colony.VerificationDepthHeavy},
+		{"keyword deploy no flags", colony.Phase{ID: 3, Name: "Deploy pipeline"}, 5, false, false, "", colony.VerificationDepthHeavy},
+		{"keyword crypto no flags", colony.Phase{ID: 2, Name: "Crypto utils"}, 5, false, false, "", colony.VerificationDepthHeavy},
+
+		// No flags, no string: smart default fallback
+		{"no flags early phase gets light", colony.Phase{ID: 1, Name: "Feature work"}, 6, false, false, "", colony.VerificationDepthLight},
+		{"no flags intermediate phase gets standard", colony.Phase{ID: 3, Name: "More features"}, 6, false, false, "", colony.VerificationDepthStandard},
+		{"no flags late phase gets standard", colony.Phase{ID: 5, Name: "Polish work"}, 6, false, false, "", colony.VerificationDepthStandard},
+		{"no flags final phase gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", colony.VerificationDepthHeavy},
+
+		// Invalid depth values: NormalizeVerificationDepth maps unknown to standard
+		{"invalid depth ultra", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "ultra", colony.VerificationDepthStandard},
+		{"invalid depth unknown", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "unknown", colony.VerificationDepthStandard},
+		{"invalid depth number string", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "42", colony.VerificationDepthStandard},
+		{"invalid depth random text", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "whatever", colony.VerificationDepthStandard},
+
+		// Empty/whitespace depth string: treated as empty, falls through to smart default
+		{"empty depth string uses smart default", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", colony.VerificationDepthStandard},
+		{"whitespace depth string treated as empty", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "  ", colony.VerificationDepthStandard},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveVerificationDepth(tt.phase, tt.total, tt.light, tt.heavy, tt.depthStr)
+			if got != tt.expected {
+				t.Errorf("resolveVerificationDepth(%+v, %d, light=%v, heavy=%v, depth=%q) = %q, want %q",
+					tt.phase, tt.total, tt.light, tt.heavy, tt.depthStr, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveEffectiveContinueDepth_Table(t *testing.T) {
+	tests := []struct {
+		name      string
+		phase     colony.Phase
+		total     int
+		light     bool
+		heavy     bool
+		depthStr  string
+		stateDepth string
+		expected  colony.VerificationDepth
+	}{
+		// CLI heavy flag overrides persisted state
+		{"CLI heavy overrides persisted light", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, true, "", "light", colony.VerificationDepthHeavy},
+		{"CLI heavy overrides persisted standard", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, true, "", "standard", colony.VerificationDepthHeavy},
+		{"CLI heavy overrides persisted heavy", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, true, "", "heavy", colony.VerificationDepthHeavy},
+
+		// CLI light flag overrides persisted state
+		{"CLI light overrides persisted heavy", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, false, "", "heavy", colony.VerificationDepthLight},
+		{"CLI light overrides persisted standard", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, false, "", "standard", colony.VerificationDepthLight},
+
+		// CLI explicit --verification-depth overrides persisted state
+		{"CLI depth string overrides persisted light", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "heavy", "light", colony.VerificationDepthHeavy},
+		{"CLI depth string overrides persisted heavy", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "light", "heavy", colony.VerificationDepthLight},
+
+		// No CLI flags: persisted state depth is used
+		{"persisted heavy with no CLI flags", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "heavy", colony.VerificationDepthHeavy},
+		{"persisted light with no CLI flags", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "light", colony.VerificationDepthLight},
+		{"persisted standard with no CLI flags", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "standard", colony.VerificationDepthStandard},
+
+		// No CLI flags, no persisted state: falls through to smart default
+		{"no CLI no persisted uses smart default", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "", colony.VerificationDepthStandard},
+		{"no CLI no persisted early gets light", colony.Phase{ID: 1, Name: "Setup"}, 6, false, false, "", "", colony.VerificationDepthLight},
+		{"no CLI no persisted final gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", "", colony.VerificationDepthHeavy},
+
+		// Both CLI flags: heavy wins even with persisted state
+		{"both CLI flags heavy wins over persisted", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, true, "", "light", colony.VerificationDepthHeavy},
+
+		// Persisted state with keyword phase: keyword triggers heavy when no CLI and no persisted
+		{"keyword phase no CLI no persisted", colony.Phase{ID: 2, Name: "Security audit"}, 5, false, false, "", "", colony.VerificationDepthHeavy},
+		// Persisted state light overrides keyword (user previously chose light)
+		{"persisted light overrides keyword", colony.Phase{ID: 2, Name: "Security audit"}, 5, false, false, "", "light", colony.VerificationDepthLight},
+
+		// Whitespace persisted state treated as empty
+		{"whitespace persisted state uses smart default", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "  ", colony.VerificationDepthStandard},
+
+		// Invalid persisted state falls through to NormalizeVerificationDepth (maps to standard)
+		{"invalid persisted state maps to standard", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "ultra", colony.VerificationDepthStandard},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveEffectiveContinueDepth(tt.phase, tt.total, tt.light, tt.heavy, tt.depthStr, tt.stateDepth)
+			if got != tt.expected {
+				t.Errorf("resolveEffectiveContinueDepth(%+v, %d, light=%v, heavy=%v, depth=%q, state=%q) = %q, want %q",
+					tt.phase, tt.total, tt.light, tt.heavy, tt.depthStr, tt.stateDepth, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveVerificationDepthFlag_Table(t *testing.T) {
+	tests := []struct {
+		name     string
+		light    bool
+		heavy    bool
+		depthStr string
+		want     string
+	}{
+		// Boolean flags take priority
+		{"heavy flag alone", false, true, "", "heavy"},
+		{"light flag alone", true, false, "", "light"},
+		{"both flags heavy wins", true, true, "light", "heavy"},
+		{"both flags heavy wins no string", true, true, "", "heavy"},
+
+		// No boolean flags: string passed through
+		{"no flags string standard", false, false, "standard", "standard"},
+		{"no flags string light", false, false, "light", "light"},
+		{"no flags string heavy", false, false, "heavy", "heavy"},
+		{"no flags empty string", false, false, "", ""},
+
+		// Boolean flag overrides string value
+		{"heavy overrides light string", false, true, "light", "heavy"},
+		{"light overrides heavy string", true, false, "heavy", "light"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveVerificationDepthFlag(tt.light, tt.heavy, tt.depthStr)
+			if got != tt.want {
+				t.Errorf("resolveVerificationDepthFlag(%v, %v, %q) = %q, want %q",
+					tt.light, tt.heavy, tt.depthStr, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveReviewDepth_PrecedenceOrder(t *testing.T) {
+	// Comprehensive precedence test: heavy > light > final > keyword > default
+	// Uses a single phase that would trigger multiple rules to prove priority
+	finalKeywordPhase := colony.Phase{ID: 5, Name: "Security release"}
+
+	// 1. heavy flag wins over everything
+	got := resolveReviewDepth(finalKeywordPhase, 5, true, true)
+	if got != ReviewDepthHeavy {
+		t.Errorf("precedence: both flags on final+keyword phase = %q, want heavy", got)
+	}
+
+	// 2. light flag overrides final+keyword defaults
+	got = resolveReviewDepth(finalKeywordPhase, 5, true, false)
+	if got != ReviewDepthLight {
+		t.Errorf("precedence: light flag on final+keyword phase = %q, want light", got)
+	}
+
+	// 3. No flags: final phase is heavy
+	got = resolveReviewDepth(finalKeywordPhase, 5, false, false)
+	if got != ReviewDepthHeavy {
+		t.Errorf("precedence: no flags on final+keyword phase = %q, want heavy", got)
+	}
+
+	// 4. Keyword-only non-final triggers heavy
+	keywordPhase := colony.Phase{ID: 3, Name: "Security audit"}
+	got = resolveReviewDepth(keywordPhase, 5, false, false)
+	if got != ReviewDepthHeavy {
+		t.Errorf("precedence: keyword non-final = %q, want heavy", got)
+	}
+
+	// 5. Default for non-final non-keyword is light
+	plainPhase := colony.Phase{ID: 3, Name: "Feature work"}
+	got = resolveReviewDepth(plainPhase, 5, false, false)
+	if got != ReviewDepthLight {
+		t.Errorf("precedence: plain intermediate = %q, want light", got)
+	}
+}
+
+func TestResolveVerificationDepth_PrecedenceOrder(t *testing.T) {
+	// Comprehensive precedence: heavy flag > light flag > explicit depth string > keyword > smart default
+	finalKeywordPhase := colony.Phase{ID: 5, Name: "Security release"}
+
+	// 1. heavy flag wins over everything
+	got := resolveVerificationDepth(finalKeywordPhase, 5, false, true, "light")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("precedence: heavy+depth=light on final+keyword = %q, want heavy", got)
+	}
+
+	// 2. light flag overrides final+keyword+explicit depth
+	got = resolveVerificationDepth(finalKeywordPhase, 5, true, false, "heavy")
+	if got != colony.VerificationDepthLight {
+		t.Errorf("precedence: light+depth=heavy on final+keyword = %q, want light", got)
+	}
+
+	// 3. Explicit depth string overrides keyword/final defaults
+	got = resolveVerificationDepth(finalKeywordPhase, 5, false, false, "light")
+	if got != colony.VerificationDepthLight {
+		t.Errorf("precedence: depth=light on final+keyword = %q, want light", got)
+	}
+
+	// 4. No flags, no string: keyword triggers heavy
+	got = resolveVerificationDepth(finalKeywordPhase, 5, false, false, "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("precedence: no flags on final+keyword = %q, want heavy", got)
+	}
+
+	// 5. Smart default for plain intermediate
+	plainPhase := colony.Phase{ID: 3, Name: "Feature work"}
+	got = resolveVerificationDepth(plainPhase, 5, false, false, "")
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("precedence: plain intermediate smart default = %q, want standard", got)
+	}
+}
+
+func TestResolveEffectiveContinueDepth_PrecedenceOrder(t *testing.T) {
+	// Comprehensive precedence: CLI heavy > CLI light > CLI depth string > persisted state > keyword > smart default
+	finalKeywordPhase := colony.Phase{ID: 5, Name: "Security release"}
+
+	// 1. CLI heavy flag overrides persisted + keyword + final
+	got := resolveEffectiveContinueDepth(finalKeywordPhase, 5, false, true, "", "light")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("continue precedence: CLI heavy+state=light = %q, want heavy", got)
+	}
+
+	// 2. CLI light flag overrides persisted heavy
+	got = resolveEffectiveContinueDepth(finalKeywordPhase, 5, true, false, "", "heavy")
+	if got != colony.VerificationDepthLight {
+		t.Errorf("continue precedence: CLI light+state=heavy = %q, want light", got)
+	}
+
+	// 3. CLI depth string overrides persisted state
+	got = resolveEffectiveContinueDepth(finalKeywordPhase, 5, false, false, "light", "heavy")
+	if got != colony.VerificationDepthLight {
+		t.Errorf("continue precedence: CLI depth=light+state=heavy = %q, want light", got)
+	}
+
+	// 4. Persisted state used when no CLI flags
+	got = resolveEffectiveContinueDepth(colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "heavy")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("continue precedence: no CLI+state=heavy = %q, want heavy", got)
+	}
+
+	// 5. No CLI, no persisted: keyword triggers heavy
+	got = resolveEffectiveContinueDepth(colony.Phase{ID: 2, Name: "Security audit"}, 5, false, false, "", "")
+	if got != colony.VerificationDepthHeavy {
+		t.Errorf("continue precedence: no CLI+no state+keyword = %q, want heavy", got)
+	}
+
+	// 6. No CLI, no persisted, no keyword: smart default
+	got = resolveEffectiveContinueDepth(colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "")
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("continue precedence: no CLI+no state+no keyword = %q, want standard", got)
+	}
+}
+
+// --- Task 3.2: build/continue depth parity and light-mode verification tests ---
+
+func TestBuildAndContinueEmitMatchingDepthMetadata(t *testing.T) {
+	tests := []struct {
+		name      string
+		phase     colony.Phase
+		total     int
+		light     bool
+		heavy     bool
+		depthStr  string
+		stateDepth string
+	}{
+		{"final phase no flags", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", ""},
+		{"intermediate no flags", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", ""},
+		{"light flag on final", colony.Phase{ID: 5, Name: "Final polish"}, 5, true, false, "", ""},
+		{"heavy flag on intermediate", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, true, "", ""},
+		{"explicit depth string", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "light", ""},
+		{"keyword phase no flags", colony.Phase{ID: 2, Name: "Security audit"}, 5, false, false, "", ""},
+		{"persisted state depth", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "heavy"},
+		{"both flags heavy wins", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, true, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build path depth resolution (mirrors recommendQueenExecutionPolicy logic)
+			buildEffectiveDepth := resolveVerificationDepthFlag(tt.light, tt.heavy, tt.depthStr)
+			if buildEffectiveDepth == "" {
+				buildEffectiveDepth = strings.TrimSpace(tt.stateDepth)
+			}
+			buildDepth := resolveVerificationDepth(tt.phase, tt.total, tt.light, tt.heavy, buildEffectiveDepth)
+
+			// Continue path depth resolution
+			continueDepth := resolveEffectiveContinueDepth(tt.phase, tt.total, tt.light, tt.heavy, tt.depthStr, tt.stateDepth)
+
+			if buildDepth != continueDepth {
+				t.Errorf("build depth = %q, continue depth = %q -- mismatch for phase %+v (total=%d, light=%v, heavy=%v, depth=%q, state=%q)",
+					buildDepth, continueDepth, tt.phase, tt.total, tt.light, tt.heavy, tt.depthStr, tt.stateDepth)
+			}
+		})
+	}
+}
+
+func TestRecommendQueenExecutionPolicyMatchesContinueDepth(t *testing.T) {
+	tests := []struct {
+		name      string
+		phase     colony.Phase
+		total     int
+		light     bool
+		heavy     bool
+		depthStr  string
+		stateVD   string
+	}{
+		{"final phase no flags", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", ""},
+		{"intermediate no flags", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", ""},
+		{"keyword phase no flags", colony.Phase{ID: 2, Name: "Security audit"}, 5, false, false, "", ""},
+		{"persisted heavy no CLI", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "heavy"},
+		{"CLI light overrides persisted", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, false, "", "heavy"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := colony.ColonyState{VerificationDepth: tt.stateVD}
+			policy := recommendQueenExecutionPolicy(state, tt.phase, tt.total, codexQueenExecutionPolicyInput{
+				LightFlag:         tt.light,
+				HeavyFlag:         tt.heavy,
+				VerificationDepth: tt.depthStr,
+			})
+			buildDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
+			continueDepth := resolveEffectiveContinueDepth(tt.phase, tt.total, tt.light, tt.heavy, tt.depthStr, tt.stateVD)
+
+			if buildDepth != continueDepth {
+				t.Errorf("build policy depth = %q, continue depth = %q -- mismatch", buildDepth, continueDepth)
+			}
+		})
+	}
+}
+
+func TestLightContinueFinalizationRecordsVerificationEvidence(t *testing.T) {
+	// When skip_watchers is true and review_depth is light, the continue
+	// finalization should still produce a verification report with evidence.
+	// The runtime verification steps (build, types, lint, tests) must run
+	// regardless of watcher skip.
+	saveGlobals(t)
+	_ = setupBuildFlowTest(t)
+
+	phase := colony.Phase{ID: 3, Name: "Feature work"}
+	now := time.Now().UTC()
+
+	// Simulate a light continue verification snapshot with skipWatchers=true
+	verification := runCodexContinueVerificationSnapshot("/tmp", phase, codexContinueManifest{}, now, 30*time.Second, true)
+
+	// Runtime verification steps should still be present
+	if len(verification.Steps) == 0 {
+		t.Error("light mode with skip_watchers should still run runtime verification steps")
+	}
+
+	// Watcher should be marked as skipped, not absent
+	if !verification.Watcher.Present {
+		t.Error("watcher should be present (skipped) even in light mode")
+	}
+	if verification.Watcher.Status != "skipped" {
+		t.Errorf("watcher status = %q, want %q", verification.Watcher.Status, "skipped")
+	}
+
+	// ChecksPassed should reflect runtime verification, not watcher
+	// (steps may fail in /tmp env, but the watcher should not affect ChecksPassed)
+	if verification.Watcher.Passed != true {
+		t.Error("skipped watcher should be marked as passed")
+	}
+}
+
+func TestWatcherTimeoutAdvisoryWhenRuntimePassed(t *testing.T) {
+	// When a watcher times out but runtime verification (build, types, lint, tests)
+	// passed, the watcher timeout should be treated as advisory, not a hard block.
+	verification := codexContinueVerificationReport{
+		Phase:        3,
+		ChecksPassed: true,
+		Passed:       true,
+		Steps:        []codexVerificationStep{
+			{Name: "build", Passed: true},
+			{Name: "types", Passed: true},
+			{Name: "lint", Passed: true},
+			{Name: "tests", Passed: true},
+		},
+		Watcher: codexWatcherVerification{
+			Present: true,
+			Passed:  false,
+			Status:  "timeout",
+			Worker:  "Watcher-42",
+			Summary: "watcher timed out",
+		},
+	}
+
+	workerFlow := []codexContinueWorkerFlowStep{
+		{
+			Stage:  "verification",
+			Caste:  "watcher",
+			Name:   "Watcher-42",
+			Status: "timeout",
+			Summary: "watcher timed out",
+		},
+	}
+
+	resultVerification, _ := attachExternalContinueWatcher(verification, workerFlow)
+
+	// ChecksPassed should remain true because runtime verification passed
+	// and watcher timeout is advisory
+	if !resultVerification.ChecksPassed {
+		t.Error("watcher timeout with runtime checks passed should keep ChecksPassed = true (advisory)")
+	}
+
+	// Should have a blocking issue mentioning the timeout (advisory message)
+	found := false
+	for _, issue := range resultVerification.BlockingIssues {
+		if strings.Contains(issue, "timed out") && strings.Contains(issue, "runtime verification passed") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected advisory blocking issue about watcher timeout, got: %v", resultVerification.BlockingIssues)
+	}
+}
+
+func TestWatcherFailureBlocksWhenRuntimeFailed(t *testing.T) {
+	// When a watcher fails (not timeout) AND runtime verification also failed,
+	// the watcher failure should be a hard block.
+	verification := codexContinueVerificationReport{
+		Phase:        3,
+		ChecksPassed: false,
+		Passed:       false,
+		Steps: []codexVerificationStep{
+			{Name: "build", Passed: false, Summary: "build failed"},
+		},
+		Watcher: codexWatcherVerification{
+			Present: true,
+			Passed:  false,
+			Status:  "failed",
+			Worker:  "Watcher-42",
+			Summary: "watcher found critical issues",
+		},
+	}
+
+	workerFlow := []codexContinueWorkerFlowStep{
+		{
+			Stage:  "verification",
+			Caste:  "watcher",
+			Name:   "Watcher-42",
+			Status: "failed",
+			Summary: "watcher found critical issues",
+		},
+	}
+
+	resultVerification, _ := attachExternalContinueWatcher(verification, workerFlow)
+
+	// ChecksPassed should be false
+	if resultVerification.ChecksPassed {
+		t.Error("watcher failure should set ChecksPassed = false")
+	}
+	if resultVerification.Passed {
+		t.Error("watcher failure should set Passed = false")
+	}
+}
+
+func TestContinueFinalizeResultIncludesReviewDepth(t *testing.T) {
+	// Verify that continue finalize blocked result includes review_depth.
+	// Both the blocked and advance result maps must carry the normalized
+	// verification depth so that callers (visual renderer, wrappers) can
+	// display it without re-resolving.
+	saveGlobals(t)
+	_ = setupBuildFlowTest(t)
+
+	phase := colony.Phase{ID: 3, Name: "Feature work"}
+	state := colony.ColonyState{
+		State:        colony.StateBUILT,
+		CurrentPhase: 3,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Done", Status: colony.PhaseCompleted, Tasks: []colony.Task{{Goal: "done", Status: colony.TaskCompleted}}},
+				{ID: 2, Name: "Done", Status: colony.PhaseCompleted, Tasks: []colony.Task{{Goal: "done", Status: colony.TaskCompleted}}},
+				{ID: 3, Name: "Feature work", Status: colony.PhaseInProgress, Tasks: []colony.Task{{Goal: "work", Status: colony.TaskCompleted}}},
+			},
+		},
+	}
+	verification := codexContinueVerificationReport{Phase: 3, ChecksPassed: true, Passed: true}
+	assessment := codexContinueAssessment{PartialSuccess: false}
+	gates := codexContinueGateReport{Passed: false, BlockingIssues: []string{"test gate failed"}}
+	now := time.Now().UTC()
+
+	result, _, err := finalizeBlockedExternalContinue(state, phase, codexContinueManifest{}, verification, assessment, gates, nil, "", nil, now, "verification.json", "gates.json", nil, colony.VerificationDepthLight)
+	if err != nil {
+		t.Fatalf("finalizeBlockedExternalContinue returned error: %v", err)
+	}
+
+	rd, hasReviewDepth := result["review_depth"]
+	if !hasReviewDepth {
+		t.Fatal("finalizeBlockedExternalContinue must include review_depth in result map")
+	}
+	rdStr, ok := rd.(string)
+	if !ok {
+		t.Fatalf("review_depth is not a string: %T", rd)
+	}
+	if rdStr != "light" {
+		t.Errorf("review_depth = %q, want %q (default when plan.ReviewDepth is empty)", rdStr, "light")
 	}
 }
 

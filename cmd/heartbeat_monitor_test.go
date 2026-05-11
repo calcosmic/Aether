@@ -45,7 +45,7 @@ func TestHeartbeatFileMarshalUnmarshal(t *testing.T) {
 
 func TestHeartbeatScanValidNotStale(t *testing.T) {
 	saveGlobals(t)
-	t.Setenv("AETHER_FORCE_VISUAL", "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	tmpDir := t.TempDir()
 	hf := HeartbeatFile{
@@ -68,7 +68,7 @@ func TestHeartbeatScanValidNotStale(t *testing.T) {
 
 func TestHeartbeatScanDetectsStale(t *testing.T) {
 	saveGlobals(t)
-	t.Setenv("AETHER_FORCE_VISUAL", "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	tmpDir := t.TempDir()
 	// Create a heartbeat file with a timestamp 2 minutes old (past the 90s threshold)
@@ -96,7 +96,7 @@ func TestHeartbeatScanDetectsStale(t *testing.T) {
 
 func TestHeartbeatScanSkipsNonHeartbeatFiles(t *testing.T) {
 	saveGlobals(t)
-	t.Setenv("AETHER_FORCE_VISUAL", "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	tmpDir := t.TempDir()
 	// Create a non-heartbeat file
@@ -125,7 +125,7 @@ func TestHeartbeatScanSkipsNonHeartbeatFiles(t *testing.T) {
 
 func TestHeartbeatScanSkipsMalformedJSON(t *testing.T) {
 	saveGlobals(t)
-	t.Setenv("AETHER_FORCE_VISUAL", "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	tmpDir := t.TempDir()
 	// Create a malformed heartbeat file

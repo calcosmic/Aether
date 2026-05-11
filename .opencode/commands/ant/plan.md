@@ -59,7 +59,12 @@ If the runtime returns `existing_plan: true`, do not spawn workers. Summarize th
 
 ## Clarification Gate
 
-Before spawning planning workers, inspect the runtime result for `unresolved_clarifications` or `clarification_warning`.
+Before spawning planning workers or rendering spawn ceremonies, inspect the runtime result for `orchestrator_boundary_guidance`, `unresolved_clarifications`, and `clarification_warning`.
+
+- If `orchestrator_boundary_guidance.active` is true or `next` is `aether discuss`, pause the planning ceremony and surface its summary plainly.
+- Route first to `aether discuss` so the user can resolve the runtime-owned questions.
+- Tell the user to rerun `after_discuss_next` after the answers are resolved.
+- After a guided answer is resolved, request a fresh plan-only manifest. Do not reuse the pre-discuss manifest and do not ask, answer, or store boundary questions in wrapper markdown.
 
 - If unresolved clarifications exist, pause the planning ceremony and surface the warning plainly.
 - Route first to `/ant-discuss` so the user can resolve the questions through the runtime.

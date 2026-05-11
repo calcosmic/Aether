@@ -1,0 +1,90 @@
+{
+  "entries": [
+    {
+      "id": "hst-1-001",
+      "phase": 1,
+      "phase_name": "Backwards-Compatible Mode Contract",
+      "agent": "archaeologist",
+      "agent_name": "Shard-82",
+      "generated_at": "2026-05-08T14:02:04Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "pkg/colony/colony.go",
+      "line": 192,
+      "category": "compatibility-pattern",
+      "description": "History shows optional state fields are safest when legacy empty or invalid values are interpreted by an Effective helper, as with ColonyScope and effectiveParallelMode. Reuse that shape for ColonyMode rather than making JSON unmarshal reject old state.",
+      "suggestion": "Add ColonyMode as an omitempty state field with Valid and EffectiveColonyMode semantics that default missing legacy state to colony mode."
+    },
+    {
+      "id": "hst-1-002",
+      "phase": 1,
+      "phase_name": "Backwards-Compatible Mode Contract",
+      "agent": "archaeologist",
+      "agent_name": "Shard-82",
+      "generated_at": "2026-05-08T14:02:04Z",
+      "status": "open",
+      "severity": "MEDIUM",
+      "file": "cmd/codex_build.go",
+      "line": 54,
+      "category": "runtime-manifest-contract",
+      "description": "Plan, build, continue, and seal manifests are runtime-owned contracts with recent churn around dispatch_mode, review_depth, finalizer requirements, and owner metadata. Mode metadata should be additive only in default mode.",
+      "suggestion": "Expose colony_mode through existing manifest structs and top-level result maps without changing dispatch lists, phase status, requires_finalizer, or finalize_surface in default Colony Mode."
+    },
+    {
+      "id": "hst-1-003",
+      "phase": 1,
+      "phase_name": "Backwards-Compatible Mode Contract",
+      "agent": "archaeologist",
+      "agent_name": "Shard-82",
+      "generated_at": "2026-05-08T14:02:04Z",
+      "status": "open",
+      "severity": "MEDIUM",
+      "file": "cmd/command_guide.go",
+      "line": 267,
+      "category": "wrapper-parity",
+      "description": "Recent commits restored runtime ceremony wrappers and added parity tests across YAML, Claude, OpenCode, command-guide, and runtime surfaces. Wrapper text has drifted before when runtime contract changes were not mirrored.",
+      "suggestion": "If mode wording affects lifecycle guidance, update command-guide, YAML, Claude, and OpenCode surfaces together and verify parity instead of teaching wrappers to own mode state."
+    },
+    {
+      "id": "hst-1-004",
+      "phase": 1,
+      "phase_name": "Backwards-Compatible Mode Contract",
+      "agent": "archaeologist",
+      "agent_name": "Shard-82",
+      "generated_at": "2026-05-08T14:02:04Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/state_load.go",
+      "line": 40,
+      "category": "legacy-state-incidents",
+      "description": "Prior state incidents include COLONY_STATE events corruption, legacy numeric string repair, PAUSED normalization, and legacy memory and confidence decoders. This area is stable because compatibility repair is centralized and tested.",
+      "suggestion": "Add focused legacy JSON tests for missing colony_mode, explicit colony mode, orchestrator mode, and unknown mode fallback before touching broader state loaders."
+    },
+    {
+      "id": "hst-1-005",
+      "phase": 1,
+      "phase_name": "Backwards-Compatible Mode Contract",
+      "agent": "archaeologist",
+      "agent_name": "Shard-82",
+      "generated_at": "2026-05-08T14:02:04Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": ".aether/data/recovery-log-1.json",
+      "line": 1,
+      "category": "failed-attempt-context",
+      "description": "Same-phase handoffs show builder, probe, and watcher failures were timeouts, context cancellations, and exit status 143 rather than recorded semantic objections. No durable failed design was found in commits.",
+      "suggestion": "Keep the implementation slice small and use targeted tests so future workers do not repeat long retry loops."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "open": 5,
+    "resolved": 0,
+    "by_severity": {
+      "high": 0,
+      "medium": 2,
+      "low": 2,
+      "info": 1
+    }
+  }
+}

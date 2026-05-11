@@ -22,16 +22,17 @@ wrapper_additions:
     Heavy external review path:
     1. Only when the user explicitly requested `--verification-depth heavy` or `--heavy`, or the runtime specifically asks for wrapper-spawned review workers, run `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     2. Parse `result.continue_manifest`; do not parse visual output.
-    3. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>` so the user sees the heavy-review spawn plan before reviewers appear.
-    4. Use visible live Task/subagent panels as the heavy-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
-    5. Pass each dispatch's runtime-provided `brief` verbatim. The brief includes read cache discipline; if a reviewer keeps re-reading the same unchanged file or artifact, stop waiting and mark that reviewer `blocked` with the concrete missing context.
-    6. Before each execution wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave <execution_wave>`.
-    7. For each planned dispatch, call `aether spawn-log`, spawn the matching platform agent using `agent_name`, then call `aether spawn-complete`.
-    8. After each terminal reviewer result, write that one result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>`.
-    9. Each spawned reviewer description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
-    10. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
-    11. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`.
-    12. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file <file>` for the user-facing ceremony.
+    3. Before rendering spawn ceremonies or spawning reviewers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the heavy-review flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
+    4. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>` so the user sees the heavy-review spawn plan before reviewers appear.
+    5. Use visible live Task/subagent panels as the heavy-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
+    6. Pass each dispatch's runtime-provided `brief` verbatim. The brief includes read cache discipline; if a reviewer keeps re-reading the same unchanged file or artifact, stop waiting and mark that reviewer `blocked` with the concrete missing context.
+    7. Before each execution wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave <execution_wave>`.
+    8. For each planned dispatch, call `aether spawn-log`, spawn the matching platform agent using `agent_name`, then call `aether spawn-complete`.
+    9. After each terminal reviewer result, write that one result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>`.
+    10. Each spawned reviewer description must be caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
+    11. Collect terminal worker results into a completion JSON file containing the original `continue_manifest` and a `dispatches` array.
+    12. Run `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <file>`.
+    13. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file <file>` for the user-facing ceremony.
   post_continue: |
     Close from runtime output only:
     1. For the heavy external review path, run the visual closeout command first and use its next-step line as the source of truth.

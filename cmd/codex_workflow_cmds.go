@@ -106,9 +106,17 @@ var buildCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		lightFlag, _ := cmd.Flags().GetBool("light")
+		heavyFlag, _ := cmd.Flags().GetBool("heavy")
+		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		if planOnly {
-			result, state, phase, dispatches, err := runCodexBuildPlanOnly(skillWorkspaceRoot(), phaseNum, selectedTasks)
+			result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, codexBuildOptions{
+				WorkerTimeout:     workerTimeout,
+				LightFlag:         lightFlag,
+				HeavyFlag:         heavyFlag,
+				VerificationDepth: verificationDepth,
+			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
 				return nil
@@ -119,8 +127,6 @@ var buildCmd = &cobra.Command{
 		}
 
 		syntheticBuild, _ := cmd.Flags().GetBool("synthetic")
-		lightFlag, _ := cmd.Flags().GetBool("light")
-		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		cbThreshold, _ := cmd.Flags().GetInt("circuit-breaker-threshold")
 		verboseFlag, _ := cmd.Flags().GetBool("verbose")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
@@ -128,6 +134,7 @@ var buildCmd = &cobra.Command{
 			Force:                   forceBuild,
 			LightFlag:               lightFlag,
 			HeavyFlag:               heavyFlag,
+			VerificationDepth:       verificationDepth,
 			CircuitBreakerThreshold: cbThreshold,
 			Verbose:                 verboseFlag,
 		})
@@ -431,6 +438,8 @@ func completeSealRuntime(state colony.ColonyState) error {
 
 	// Scan for high-severity open findings before building summary
 	warnings := scanHighSeverityOpen(store)
+	finalReview := loadSealFinalReviewForSummary(store)
+	reviewBacklog := collectOpenReviewBacklog(store, 10)
 
 	// Archive reviews directory alongside CROWNED-ANTHILL.md
 	aetherDir := filepath.Dir(store.BasePath())
@@ -446,6 +455,8 @@ func completeSealRuntime(state colony.ColonyState) error {
 		SignalsExpired:        expiredFOCUSCount,
 		FlagsResolved:         countResolvedFlags(store),
 		ShelfCandidates:       candidates,
+		FinalReview:           finalReview,
+		ReviewBacklog:         reviewBacklog,
 	}
 
 	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
@@ -468,7 +479,9 @@ func completeSealRuntime(state colony.ColonyState) error {
 		"sealed":    true,
 		"milestone": state.Milestone,
 		"summary":   summaryPath,
+		"next":      "aether entomb",
 	}
+	addOrchestratorBoundaryGuidance(result, "seal", state, "aether entomb", nil)
 	outputWorkflow(result, renderSealVisual(state, summaryPath))
 
 	if shouldRenderVisualOutput(stdout) {
@@ -802,6 +815,40 @@ func scanHighSeverityOpen(s *storage.Store) []string {
 	return warnings
 }
 
+func loadSealFinalReviewForSummary(s *storage.Store) *sealFinalReviewReport {
+	if s == nil {
+		return nil
+	}
+	var report sealFinalReviewReport
+	if err := s.LoadJSON(sealFinalReviewReportRel, &report); err != nil {
+		return nil
+	}
+	return &report
+}
+
+func collectOpenReviewBacklog(s *storage.Store, limit int) []colony.ReviewLedgerEntry {
+	if s == nil || limit <= 0 {
+		return nil
+	}
+	backlog := []colony.ReviewLedgerEntry{}
+	for _, domain := range colony.DomainOrder {
+		var lf colony.ReviewLedgerFile
+		if err := s.LoadJSON(fmt.Sprintf("reviews/%s/ledger.json", domain), &lf); err != nil {
+			continue
+		}
+		for _, entry := range lf.Entries {
+			if entry.Status != "open" {
+				continue
+			}
+			backlog = append(backlog, entry)
+			if len(backlog) >= limit {
+				return backlog
+			}
+		}
+	}
+	return backlog
+}
+
 // checkSealBlockers loads flags from pending-decisions.json (fallback flags.json),
 // splits unresolved entries into blockers and issues.
 func checkSealBlockers(s *storage.Store) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
@@ -876,6 +923,8 @@ type sealEnrichment struct {
 	SignalsExpired        int
 	FlagsResolved         int
 	ShelfCandidates       []colony.ShelfEntry
+	FinalReview           *sealFinalReviewReport
+	ReviewBacklog         []colony.ReviewLedgerEntry
 }
 
 func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []string, enrichment sealEnrichment) string {
@@ -896,6 +945,47 @@ func buildSealSummary(state colony.ColonyState, sealedAt string, warnings []stri
 		b.WriteString(fmt.Sprintf("\n## Review Warnings\nWARNING: %d high-severity unresolved finding(s):\n", len(warnings)))
 		for _, w := range warnings {
 			b.WriteString(w + "\n")
+		}
+	}
+
+	if enrichment.FinalReview != nil {
+		review := enrichment.FinalReview
+		b.WriteString("\n## Final Review Evidence\n")
+		b.WriteString(fmt.Sprintf("- Passed: %t\n", review.Passed))
+		b.WriteString(fmt.Sprintf("- Workers reviewed: %d\n", len(review.Workers)))
+		b.WriteString(fmt.Sprintf("- Structured findings captured: %d\n", len(review.Findings)))
+		if len(review.LedgerWrites) > 0 {
+			b.WriteString("- Ledger writes:")
+			for _, domain := range colony.DomainOrder {
+				if count := review.LedgerWrites[domain]; count > 0 {
+					b.WriteString(fmt.Sprintf(" %s=%d", domain, count))
+				}
+			}
+			b.WriteString("\n")
+		}
+		if review.QueenLearningsWritten > 0 {
+			b.WriteString(fmt.Sprintf("- Reusable lessons promoted to QUEEN.md: %d\n", review.QueenLearningsWritten))
+		}
+		if len(review.BlockingIssues) > 0 {
+			b.WriteString("- Blocking review issues:\n")
+			for _, issue := range limitStrings(review.BlockingIssues, 5) {
+				b.WriteString(fmt.Sprintf("  - %s\n", issue))
+			}
+		}
+	}
+
+	if len(enrichment.ReviewBacklog) > 0 {
+		b.WriteString("\n## Post-Seal Review Backlog\n")
+		for _, entry := range enrichment.ReviewBacklog {
+			location := entry.File
+			if location != "" && entry.Line > 0 {
+				location = fmt.Sprintf("%s:%d", entry.File, entry.Line)
+			}
+			if location != "" {
+				b.WriteString(fmt.Sprintf("- [%s/%s] %s: %s (%s)\n", entry.Agent, entry.Severity, entry.ID, entry.Description, location))
+			} else {
+				b.WriteString(fmt.Sprintf("- [%s/%s] %s: %s\n", entry.Agent, entry.Severity, entry.ID, entry.Description))
+			}
 		}
 	}
 

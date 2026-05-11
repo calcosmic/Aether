@@ -790,6 +790,150 @@ func TestInitCmd_ParallelModeDefault(t *testing.T) {
 	}
 }
 
+func TestInitCmd_ColonyModeDefaultWhenSkipped(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "Colony mode default test"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.ColonyMode != colony.ColonyModeColony {
+		t.Fatalf("colony_mode = %q, want %q", state.ColonyMode, colony.ColonyModeColony)
+	}
+
+	result := parseEnvelope(t, buf.String())["result"].(map[string]interface{})
+	if result["colony_mode"] != string(colony.ColonyModeColony) {
+		t.Fatalf("result.colony_mode = %v, want colony", result["colony_mode"])
+	}
+}
+
+func TestInitCmd_ColonyModeOrchestratorSelection(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "--colony-mode", "orchestrator", "Orchestrator mode test"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.ColonyMode != colony.ColonyModeOrchestrator {
+		t.Fatalf("colony_mode = %q, want %q", state.ColonyMode, colony.ColonyModeOrchestrator)
+	}
+
+	result := parseEnvelope(t, buf.String())["result"].(map[string]interface{})
+	if result["colony_mode"] != string(colony.ColonyModeOrchestrator) {
+		t.Fatalf("result.colony_mode = %v, want orchestrator", result["colony_mode"])
+	}
+}
+
+func TestInitCmd_ColonyModeDefaultsWithoutStdinInput(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	os.MkdirAll(dataDir, 0755)
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	oldStdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+	w.Close()
+
+	rootCmd.SetArgs([]string{"init", "No stdin mode default test"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("init returned error: %v", err)
+	}
+
+	s, _ := storage.NewStore(dataDir)
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.ColonyMode != colony.ColonyModeColony {
+		t.Fatalf("colony_mode = %q, want %q", state.ColonyMode, colony.ColonyModeColony)
+	}
+}
+
+func TestInitCmd_InvalidColonyModeSelectionFailsWithoutState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	var errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".aether", "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("mkdir data dir: %v", err)
+	}
+
+	origDir := os.Getenv("COLONY_DATA_DIR")
+	os.Setenv("COLONY_DATA_DIR", dataDir)
+	defer os.Setenv("COLONY_DATA_DIR", origDir)
+
+	rootCmd.SetArgs([]string{"init", "--colony-mode", "sideways", "Invalid mode test"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("init should report invalid mode through the JSON envelope, got Execute error: %v", err)
+	}
+	env := parseEnvelope(t, errBuf.String())
+	if env["ok"] != false {
+		t.Fatalf("ok = %v, want false", env["ok"])
+	}
+	if env["code"] != float64(1) {
+		t.Fatalf("code = %v, want 1", env["code"])
+	}
+	if !strings.Contains(stringValue(env["error"]), colony.ErrInvalidColonyMode.Error()) {
+		t.Fatalf("error = %v, want invalid colony mode", env["error"])
+	}
+	if _, statErr := os.Stat(filepath.Join(dataDir, "COLONY_STATE.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("invalid colony mode should not create COLONY_STATE.json, stat err=%v", statErr)
+	}
+}
+
 func TestInitCmd_CleansWorktreesOnReInit(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

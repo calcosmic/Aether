@@ -82,7 +82,7 @@ func resolveVerificationDepth(phase colony.Phase, totalPhases int, lightFlag, he
 	if phaseHasHeavyKeywords(phase.Name) {
 		return colony.VerificationDepthHeavy
 	}
-	// Smart default based on phase position + code change risk.
+	// Mode-aware smart default based on phase position + code change risk.
 	return resolveSmartVerificationDepth(phase, totalPhases)
 }
 
@@ -205,10 +205,25 @@ func resolveSmartPlanningDepth(phase colony.Phase, totalPhases int) colony.Plann
 	return colony.PlanningDepthStandard
 }
 
-// resolveSmartVerificationDepth combines position and risk signals to select
+// resolveSmartVerificationDepth combines mode, position, and risk signals to select
 // verification depth. Same logic as resolveSmartPlanningDepth but returns
 // verification depth values (heavy instead of deep).
 func resolveSmartVerificationDepth(phase colony.Phase, totalPhases int) colony.VerificationDepth {
+	// Mode overrides position/risk for discovery and production.
+	switch phase.Mode {
+	case colony.PhaseModeDiscovery:
+		return colony.VerificationDepthLight
+	case colony.PhaseModeProduction:
+		// Production always gets at least standard, heavy for final/high-risk.
+		risk := phaseRiskLevel(phase)
+		position := phasePositionLevel(phase.ID, totalPhases)
+		if risk == "high" || position == "final" {
+			return colony.VerificationDepthHeavy
+		}
+		return colony.VerificationDepthStandard
+	}
+
+	// Prototype and maintenance use position + risk.
 	risk := phaseRiskLevel(phase)
 	position := phasePositionLevel(phase.ID, totalPhases)
 

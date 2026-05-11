@@ -218,14 +218,23 @@
 
 </details>
 
-### v1.15 Framework Coherence, Efficiency, and Ship Readiness (In Progress)
+### v1.15 Framework Coherence, Efficiency, and Ship Readiness (Shipped 2026-05-08)
 
 - [x] **Phase 100: Command Inventory & Lifecycle Contracts** -- Catalog all Cobra commands, document lifecycle command contracts (completed 2026-05-07)
-- [ ] **Phase 101: Platform Parity Verification** -- Verify five-surface agreement and extend parity tests
+- [x] **Phase 101: Platform Parity Verification** -- Verify five-surface agreement and extend parity tests (completed 2026-05-08)
 - [x] **Phase 102: Worker Economy & Visual Ceremony Audit** -- Audit worker spawn justification and visual ceremony integrity (completed 2026-05-07)
 - [x] **Phase 103: Data Flow & Artifact Wiring** -- Trace all data artifacts to consumers, flag dead ends (completed 2026-05-07)
-- [ ] **Phase 104: Release Integrity & Regression Test Suite** -- Verify release pipeline, freeze verified contracts as tests
+- [x] **Phase 104: Release Integrity & Regression Test Suite** -- Verify release pipeline, freeze verified contracts as tests (completed 2026-05-08)
 - [x] **Phase 105: Findings Remediation & Final Validation** -- Act on all audit findings, final pass/fail validation (completed 2026-05-08)
+
+### v1.16 Queen-Owned Adaptive Caste Orchestration (In Progress)
+
+- [ ] **Phase 106: Caste Relevance Engine** -- Build keyword/condition registry scoring all 26 castes against phase content
+- [ ] **Phase 107: Queen Orchestrate Function** -- Central `queenOrchestrate()` decision core replacing static depth switches
+- [ ] **Phase 108: Wire Into Build Flow** -- Replace `plannedBuildDispatchesForSelection` with adaptive dispatch
+- [ ] **Phase 109: Wire Into Continue Flow** -- Replace `codexContinueReviewSpecs` with adaptive review dispatch
+- [ ] **Phase 110: Wire Into Other Flows** -- Plan, colonize, swarm, seal all use Queen orchestration
+- [ ] **Phase 111: Verification & Regression** -- Tests proving correct castes spawn for known phase types
 
 ## Phase Details
 
@@ -460,3 +469,75 @@ Plans:
 | 103. Data Flow & Artifact Wiring | v1.15 | 2/2 | Complete | 2026-05-07 |
 | 104. Release Integrity & Regression Test Suite | v1.15 | 3/3 | Complete | 2026-05-08 |
 | 105. Findings Remediation & Final Validation | v1.15 | 3/3 | Complete | 2026-05-08 |
+
+## Phase Details: v1.16
+
+### Phase 106: Caste Relevance Engine
+**Goal**: Build a keyword/condition registry that scores every caste against phase content (name, description, tasks, criteria) to determine relevance
+**Depends on**: Nothing (first phase of v1.16)
+**Requirements**: ORCH-01
+**Success Criteria** (what must be TRUE):
+  1. Every caste has a relevance profile: keywords, conditions, score weights
+  2. `casteRelevanceScore(phase, caste)` returns 0-100 score for any phase/caste pair
+  3. Score thresholds defined: >=60 spawn, 30-59 spawn if depth>=standard, <30 skip
+  4. Special rules documented: Builder always for implementation, Watcher always for verification, Oracle for discovery mode, etc.
+**Plans**: 2 plans
+
+### Phase 107: Queen Orchestrate Function
+**Goal**: Create the central `queenOrchestrate(phase, flowType, state)` function that replaces static depth-based agent lists
+**Depends on**: Phase 106
+**Requirements**: ORCH-02
+**Success Criteria** (what must be TRUE):
+  1. `queenOrchestrate` returns ordered dispatch list with rationale per caste
+  2. Function handles all flow types: build, continue, plan, colonize, swarm, seal
+  3. Depth flags still respected as override (explicit --light/--heavy bypass Queen)
+  4. Queen reads phase mode, risk level, position, and existing signals
+**Plans**: 2 plans
+
+### Phase 108: Wire Into Build Flow
+**Goal**: Replace `plannedBuildDispatchesForSelection` static depth blocks with adaptive Queen dispatch
+**Depends on**: Phase 107
+**Requirements**: ORCH-03
+**Success Criteria** (what must be TRUE):
+  1. Build flow calls `queenOrchestrate` instead of static depth strings
+  2. `phaseNeedsAmbassador` logic merged into relevance registry
+  3. `suggestedBuildCaste` removed — Queen decides builder vs scout per task
+  4. No regression: existing build tests pass, depth flags still work
+**Plans**: 2 plans
+
+### Phase 109: Wire Into Continue Flow
+**Goal**: Replace `codexContinueReviewSpecs` static list with adaptive Queen review dispatch
+**Depends on**: Phase 107
+**Requirements**: ORCH-04
+**Success Criteria** (what must be TRUE):
+  1. Continue flow calls `queenOrchestrate` with flowType="continue"
+  2. Gatekeeper/Auditor/Probe only spawn when phase content justifies them
+  3. `queenDecide` references original orchestration decision for context
+  4. No regression: existing continue tests pass
+**Plans**: 2 plans
+
+### Phase 110: Wire Into Other Flows
+**Goal**: Plan, colonize, swarm, and seal flows all use `queenOrchestrate`
+**Depends on**: Phase 108, Phase 109
+**Requirements**: ORCH-05
+**Success Criteria** (what must be TRUE):
+  1. Plan flow: Queen decides if Scout+Route-setter sufficient or Oracle/Architect needed
+  2. Colonize flow: Queen decides which surveyor subtypes are relevant
+  3. Swarm flow: Queen decides Tracker+Scout+Archaeologist vs just Tracker
+  4. Seal flow: Queen decides which final review castes to run
+**Plans**: 2 plans
+
+### Phase 111: Verification & Regression
+**Goal**: Tests proving correct castes spawn for known phase types; no regressions in existing behavior
+**Depends on**: Phase 108, Phase 109, Phase 110
+**Requirements**: ORCH-06, ORCH-07, ORCH-08
+**Success Criteria** (what must be TRUE):
+  1. Test: "Settings UI panel" → Builder + Watcher only
+  2. Test: "Auth token rotation" → Builder + Watcher + Gatekeeper + Probe + Architect
+  3. Test: "Database migration" → Builder + Watcher + Auditor + Architect
+  4. Test: "Performance optimization" → Builder + Watcher + Measurer + Probe
+  5. Test: "Refactor legacy parser" → Weaver + Archaeologist + Builder + Watcher
+  6. Test: "Discovery spike on vector DB" → Oracle + Scout + Architect (no Builder, no Watcher)
+  7. Full test suite passes, no depth flag regressions
+  8. CLAUDE.md updated to reflect adaptive dispatch model
+**Plans**: 3 plans

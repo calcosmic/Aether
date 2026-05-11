@@ -713,12 +713,6 @@ func clearActiveColonyRuntimeFiles(aetherRoot, dataDir string) error {
 		}
 	}
 
-	xmlMatches, _ := filepath.Glob(filepath.Join(aetherRoot, ".aether", "exchange", "*.xml"))
-	for _, path := range xmlMatches {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
 	if err := os.RemoveAll(filepath.Join(dataDir, "colonies")); err != nil {
 		return err
 	}

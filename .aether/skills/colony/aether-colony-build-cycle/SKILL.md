@@ -48,6 +48,17 @@ with caste-labelled descriptions. Do not use background-only dispatch as the
 ceremony, do not say you will be notified later, and do not replace the live
 stack with a markdown worker table.
 
+## Guided Boundary Gate
+
+For `plan`, `build`, heavy external-review `continue`, and `seal`, inspect
+`result.orchestrator_boundary_guidance` and the matching manifest
+`orchestrator_boundary_guidance` before any spawn ceremony, worker dispatch, or
+finalizer packet. If guidance is active or `next` is `aether discuss`, stop the
+lifecycle flow, show the guidance summary, route to `aether discuss`, and tell
+the user to rerun `after_discuss_next` after the answer is resolved. Then request
+a fresh plan-only manifest; never reuse the pre-discuss manifest, and never ask,
+answer, or store boundary questions in Codex chat or wrapper state.
+
 ## Plan Flow
 
 1. Select planning depth and decomposition depth unless arguments already make
@@ -63,27 +74,29 @@ AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-dept
    `.aether/data/`.
 5. Parse `result.plan_manifest` or `result.planning_manifest`. Never parse
    visual output as state.
-6. If runtime reports unresolved clarifications, route to `aether discuss`
+6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
+   planning workers.
+7. If runtime reports unresolved clarifications, route to `aether discuss`
    unless the user explicitly approves continuing with assumptions.
-7. Render the runtime-owned spawn ceremony:
+8. Render the runtime-owned spawn ceremony:
 
 ```bash
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>
 ```
 
-8. Spawn the runtime-specified Scout and Route-Setter workers using visible
+9. Spawn the runtime-specified Scout and Route-Setter workers using visible
    live Task/subagent panels with caste-labelled descriptions, manifest
    names, castes, task IDs, briefs, and `skill_section` values.
-9. Before each manifest wave, render `aether ceremony wave-start` for that
+10. Before each manifest wave, render `aether ceremony wave-start` for that
    workflow and execution wave.
-10. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
+11. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
    loop guard, output contract, and stop condition. If a planning worker keeps
    rereading the same file or command, mark it `blocked` with a concrete
    blocker instead of manually reconciling it as completed.
-11. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
+12. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
    consumes Scout findings directly instead of re-running the survey.
-12. After each terminal result, render `aether ceremony worker-complete`.
-13. Finalize through:
+13. After each terminal result, render `aether ceremony worker-complete`.
+14. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>
@@ -144,26 +157,28 @@ AETHER_OUTPUT_MODE=json aether build <phase> --plan-only
 4. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
 5. Parse `result.dispatch_manifest`.
-6. Render the user-facing spawn ceremony:
+6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
+   build workers.
+7. Render the user-facing spawn ceremony:
 
 ```bash
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest file>
 ```
 
-7. Follow the installed build-wave playbook. Use runtime-provided agent names,
+8. Follow the installed build-wave playbook. Use runtime-provided agent names,
    castes, task IDs, briefs, and skill sections.
-8. Before each manifest wave, render `aether ceremony wave-start` for the build
+9. Before each manifest wave, render `aether ceremony wave-start` for the build
    workflow and execution wave.
-9. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
+10. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
    descriptions. Do not use background-only dispatch as the ceremony, and do not
    replace the live stack with a markdown worker table.
-10. Enforce read cache discipline for every worker: pass runtime briefs verbatim,
+11. Enforce read cache discipline for every worker: pass runtime briefs verbatim,
    treat "File unchanged since last read" as an instruction to use earlier content,
    and mark workers `blocked` if they keep re-reading the same unchanged file.
-11. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+12. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-12. After each terminal result, render `aether ceremony worker-complete`.
-13. Finalize through:
+13. After each terminal result, render `aether ceremony worker-complete`.
+14. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <worker completion JSON>
@@ -188,8 +203,9 @@ review or the runtime asks for wrapper-spawned review workers. In that case,
 request the runtime manifest, spawn only the planned reviewers as visible live
 Task/subagent panels with caste-labelled descriptions, collect results, finalize
 through `aether continue-finalize`, then render. Save the JSON manifest envelope
-to a temporary file and use `aether ceremony spawn-plan`, `aether ceremony
-wave-start`, and `aether ceremony worker-complete` around the live reviewers.
+to a temporary file, apply the Guided Boundary Gate before rendering spawn
+ceremonies or spawning reviewers, and use `aether ceremony spawn-plan`, `aether
+ceremony wave-start`, and `aether ceremony worker-complete` around the live reviewers.
 Pass each reviewer brief verbatim; it contains read cache discipline. If a reviewer keeps re-reading the
 same unchanged file or artifact, mark it `blocked` with the missing context
 instead of waiting through another loop.
@@ -248,29 +264,30 @@ AETHER_OUTPUT_MODE=json aether seal --plan-only <args>
 
 3. If the runtime returns blockers or recovery guidance, surface that and stop.
 4. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
-5. Parse `result.seal_manifest` and dispatch the Gatekeeper, Auditor, and Probe
-   final-review workers through the host platform.
-6. Render the runtime-owned spawn ceremony with `aether ceremony spawn-plan`.
-7. Use runtime-provided names, castes, task IDs, briefs, and skill sections.
-8. Render `aether ceremony wave-start` before each final-review wave.
-9. Spawn final-review workers as visible live Task/subagent panels with
+5. Parse `result.seal_manifest`.
+6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
+   final-review workers.
+7. Render the runtime-owned spawn ceremony with `aether ceremony spawn-plan`.
+8. Use runtime-provided names, castes, task IDs, briefs, and skill sections.
+9. Render `aether ceremony wave-start` before each final-review wave.
+10. Spawn final-review workers as visible live Task/subagent panels with
    caste-labelled descriptions.
-10. Call `aether spawn-log` before each worker and `aether spawn-complete` after
+11. Call `aether spawn-log` before each worker and `aether spawn-complete` after
    each terminal result.
-11. After each terminal result, render `aether ceremony worker-complete`.
-12. Finalize through:
+12. After each terminal result, render `aether ceremony worker-complete`.
+13. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <worker completion JSON>
 ```
 
-13. Render the wrapper closeout:
+14. Render the wrapper closeout:
 
 ```bash
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file <worker completion JSON>
 ```
 
-14. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
+15. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
    Do not run delivery commands unless the user chooses them.
 
 ## Guardrails

@@ -13,45 +13,57 @@ import (
 )
 
 type codexContinueExternalDispatch struct {
-	Stage         string              `json:"stage"`
-	Wave          int                 `json:"wave"`
-	Caste         string              `json:"caste"`
-	AgentName     string              `json:"agent_name,omitempty"`
-	Name          string              `json:"name"`
-	Task          string              `json:"task"`
-	TaskID        string              `json:"task_id"`
-	Timeout       int                 `json:"timeout_seconds,omitempty"`
-	Status        string              `json:"status"`
-	Summary       string              `json:"summary,omitempty"`
-	Blockers      []string            `json:"blockers,omitempty"`
-	Duration      float64             `json:"duration,omitempty"`
-	Report        string              `json:"report,omitempty"`
-	Brief         string              `json:"brief,omitempty"`
-	SkillSection  string              `json:"skill_section,omitempty"`
-	SkillCount    int                 `json:"skill_count,omitempty"`
-	ColonySkills  int                 `json:"colony_skill_count,omitempty"`
-	DomainSkills  int                 `json:"domain_skill_count,omitempty"`
-	MatchedSkills []string            `json:"matched_skills,omitempty"`
-	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
+	Stage           string               `json:"stage"`
+	Wave            int                  `json:"wave"`
+	Caste           string               `json:"caste"`
+	AgentName       string               `json:"agent_name,omitempty"`
+	Name            string               `json:"name"`
+	Task            string               `json:"task"`
+	TaskID          string               `json:"task_id"`
+	Timeout         int                  `json:"timeout_seconds,omitempty"`
+	Status          string               `json:"status"`
+	Summary         string               `json:"summary,omitempty"`
+	Blockers        []string             `json:"blockers,omitempty"`
+	Duration        float64              `json:"duration,omitempty"`
+	Report          string               `json:"report,omitempty"`
+	Findings        []codexReviewFinding `json:"findings,omitempty"`
+	Issues          []codexReviewFinding `json:"issues,omitempty"`
+	Recommendations []string             `json:"recommendations,omitempty"`
+	WeakSpots       []string             `json:"weak_spots,omitempty"`
+	EdgeCases       []string             `json:"edge_cases_discovered,omitempty"`
+	ReusableLessons []string             `json:"reusable_lessons,omitempty"`
+	Brief           string               `json:"brief,omitempty"`
+	SkillSection    string               `json:"skill_section,omitempty"`
+	SkillCount      int                  `json:"skill_count,omitempty"`
+	ColonySkills    int                  `json:"colony_skill_count,omitempty"`
+	DomainSkills    int                  `json:"domain_skill_count,omitempty"`
+	MatchedSkills   []string             `json:"matched_skills,omitempty"`
+	Handoff         codex.WorkerHandoff  `json:"handoff,omitempty"`
 }
 
 type codexContinuePlanManifest struct {
-	Phase               int                             `json:"phase"`
-	PhaseName           string                          `json:"phase_name"`
-	Root                string                          `json:"root"`
-	GeneratedAt         string                          `json:"generated_at"`
-	BuildManifest       string                          `json:"build_manifest,omitempty"`
-	Verification        codexContinueVerificationReport `json:"verification"`
-	Assessment          codexContinueAssessment         `json:"assessment"`
-	ReconcileTaskIDs    []string                        `json:"reconcile_task_ids,omitempty"`
-	WorkerTimeout       int                             `json:"worker_timeout_seconds,omitempty"`
-	VerificationTimeout int                             `json:"verification_timeout_seconds,omitempty"`
-	SkipWatchers        bool                            `json:"skip_watchers,omitempty"`
-	Dispatches          []codexContinueExternalDispatch `json:"dispatches"`
-	DispatchMode        string                          `json:"dispatch_mode"`
-	FinalizeSurface     string                          `json:"finalize_surface"`
-	RequiresFinalizer   bool                            `json:"requires_finalizer"`
-	ReviewDepth         string                          `json:"review_depth,omitempty"`
+	Phase                     int                             `json:"phase"`
+	PhaseName                 string                          `json:"phase_name"`
+	Root                      string                          `json:"root"`
+	GeneratedAt               string                          `json:"generated_at"`
+	ColonyMode                string                          `json:"colony_mode,omitempty"`
+	BuildManifest             string                          `json:"build_manifest,omitempty"`
+	Verification              codexContinueVerificationReport `json:"verification"`
+	Assessment                codexContinueAssessment         `json:"assessment"`
+	ReconcileTaskIDs          []string                        `json:"reconcile_task_ids,omitempty"`
+	WorkerTimeout             int                             `json:"worker_timeout_seconds,omitempty"`
+	VerificationTimeout       int                             `json:"verification_timeout_seconds,omitempty"`
+	SkipWatchers              bool                            `json:"skip_watchers,omitempty"`
+	Dispatches                []codexContinueExternalDispatch `json:"dispatches"`
+	DispatchMode              string                          `json:"dispatch_mode"`
+	FinalizeSurface           string                          `json:"finalize_surface"`
+	RequiresFinalizer         bool                            `json:"requires_finalizer"`
+	ReviewDepth               string                          `json:"review_depth,omitempty"`
+	BoundaryQuestions         []discussQuestion               `json:"boundary_questions,omitempty"`
+	BoundaryQuestionCount     int                             `json:"boundary_question_count,omitempty"`
+	BoundaryQuestionsCreated  int                             `json:"boundary_questions_created,omitempty"`
+	BoundaryQuestionsExisting int                             `json:"boundary_questions_existing,omitempty"`
+	OrchestratorGuidance      *orchestratorBoundaryGuidance   `json:"orchestrator_boundary_guidance,omitempty"`
 }
 
 func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexContinueExternalDispatch, error) {
@@ -95,6 +107,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
 	reviewDepth := resolveEffectiveContinueDepth(phase, len(state.Plan.Phases), options.LightFlag, options.HeavyFlag, options.VerificationDepth, state.VerificationDepth)
+	effectiveSkipWatchers := options.SkipWatchers || (verification.ChecksPassed && isEnvironmentBlockedWatcher(verification.Watcher))
 
 	// Phase 97: Queen decision layer for plan-only gate evaluation (D-09, D-11)
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
@@ -117,30 +130,40 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		fmt.Fprintf(os.Stderr, "warning: failed to persist queen state: %v\n", err)
 	}
 
-	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, effectiveSkipWatchers)
 	plan := codexContinuePlanManifest{
 		Phase:               phase.ID,
 		PhaseName:           phase.Name,
 		Root:                root,
 		GeneratedAt:         now.Format(time.RFC3339),
+		ColonyMode:          string(state.EffectiveColonyMode()),
 		BuildManifest:       displayOptionalDataPath(manifest.Path),
 		Verification:        verification,
 		Assessment:          assessment,
 		ReconcileTaskIDs:    append([]string{}, options.ReconcileTaskIDs...),
 		WorkerTimeout:       int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
 		VerificationTimeout: int(verificationTimeout / time.Second),
-		SkipWatchers:        options.SkipWatchers,
+		SkipWatchers:        effectiveSkipWatchers,
 		Dispatches:          dispatches,
 		DispatchMode:        "plan-only",
 		FinalizeSurface:     "awaiting_wrapper_completion",
 		RequiresFinalizer:   true,
 		ReviewDepth:         string(reviewDepth),
 	}
+	boundary, err := materializeOrchestratorBoundaryQuestions("continue", state, phase, continueBoundaryQuestionCandidates(phase, verification, assessment))
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	plan.BoundaryQuestions = boundary.Questions
+	plan.BoundaryQuestionCount = len(boundary.Questions)
+	plan.BoundaryQuestionsCreated = boundary.Created
+	plan.BoundaryQuestionsExisting = boundary.Existing
 
 	result := map[string]interface{}{
 		"plan_only":                    true,
 		"phase":                        phase.ID,
 		"phase_name":                   phase.Name,
+		"colony_mode":                  string(state.EffectiveColonyMode()),
 		"state":                        state.State,
 		"continue_manifest":            plan,
 		"verification":                 verification,
@@ -151,7 +174,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		"dispatch_mode":                "plan-only",
 		"next":                         "spawn wrapper continue agents, then record completion",
 		"review_depth":                 string(reviewDepth),
-		"skip_watchers":                options.SkipWatchers,
+		"skip_watchers":                effectiveSkipWatchers,
 		"verification_timeout_seconds": int(verificationTimeout / time.Second),
 		"queen_decisions":              queenDecisions,
 		"queen_state_file":             fmt.Sprintf("queen-state-%d.json", phase.ID),
@@ -164,6 +187,11 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 			"finalize_surface":             "awaiting_wrapper_completion",
 			"runtime_verification_only":    true,
 		},
+	}
+	addBoundaryQuestionResultFields(result, boundary)
+	if guidance, ok := addOrchestratorBoundaryGuidance(result, "continue", state, "aether continue", boundary.Questions); ok {
+		plan.OrchestratorGuidance = &guidance
+		result["continue_manifest"] = plan
 	}
 	return result, state, phase, dispatches, nil
 }
@@ -215,7 +243,8 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	dispatches := []codexContinueExternalDispatch{}
-	if !skipWatchers {
+	queenDispatches := queenContinueDispatches(phase, reviewDepth)
+	if !skipWatchers && queenContinueHasCaste(queenDispatches, "watcher") {
 		watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
 		dispatches = append(dispatches, codexContinueExternalDispatch{
 			Stage:         "verification",
@@ -235,13 +264,7 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
 		})
 	}
-	reviewSpecs := codexContinueReviewSpecs
-	switch reviewDepth {
-	case colony.VerificationDepthLight:
-		reviewSpecs = []codexContinueReviewSpec{}
-	case colony.VerificationDepthStandard:
-		reviewSpecs = codexContinueReviewSpecs[2:] // probe only
-	}
+	reviewSpecs := queenContinueReviewSpecs(phase, reviewDepth)
 	reviewWave := 2
 	if skipWatchers {
 		reviewWave = 1

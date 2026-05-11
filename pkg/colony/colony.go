@@ -172,6 +172,35 @@ func (m ParallelMode) Valid() bool {
 // ErrInvalidParallelMode is returned when a parallel mode value is not recognized.
 var ErrInvalidParallelMode = fmt.Errorf("invalid parallel mode")
 
+// ColonyMode represents the top-level execution posture for a colony.
+type ColonyMode string
+
+const (
+	ColonyModeColony       ColonyMode = "colony"
+	ColonyModeOrchestrator ColonyMode = "orchestrator"
+)
+
+// Valid reports whether m is a recognized colony mode.
+func (m ColonyMode) Valid() bool {
+	switch m {
+	case ColonyModeColony, ColonyModeOrchestrator:
+		return true
+	}
+	return false
+}
+
+// Effective returns the compatibility-safe colony mode.
+// Legacy no-mode colonies are treated as standard colony-mode colonies.
+func (m ColonyMode) Effective() ColonyMode {
+	if m.Valid() {
+		return m
+	}
+	return ColonyModeColony
+}
+
+// ErrInvalidColonyMode is returned when a colony mode value is not recognized.
+var ErrInvalidColonyMode = fmt.Errorf("invalid colony mode")
+
 // ColonyScope represents the identity scope of a colony.
 type ColonyScope string
 
@@ -256,7 +285,7 @@ type Charter struct {
 // PendingSuggestion holds an unreviewed pheromone suggestion from suggest-analyze.
 type PendingSuggestion struct {
 	ID          string `json:"id"`
-	Type        string `json:"type"`        // FOCUS, REDIRECT, or FEEDBACK
+	Type        string `json:"type"` // FOCUS, REDIRECT, or FEEDBACK
 	Content     string `json:"content"`
 	Reason      string `json:"reason"`
 	ContentHash string `json:"content_hash"`
@@ -270,42 +299,48 @@ type PendingSuggestion struct {
 
 // ColonyState is the top-level colony state matching COLONY_STATE.json.
 type ColonyState struct {
-	Version            string          `json:"version"`
-	Goal               *string         `json:"goal"`
-	Scope              ColonyScope     `json:"scope,omitempty"`
-	ColonyName         *string         `json:"colony_name"`
-	ColonyVersion      int             `json:"colony_version"`
-	State              State           `json:"state"`
-	CurrentPhase       int             `json:"current_phase"`
-	SessionID          *string         `json:"session_id"`
-	InitializedAt      *time.Time      `json:"initialized_at"`
-	BuildStartedAt     *time.Time      `json:"build_started_at"`
-	Plan               Plan            `json:"plan"`
-	Memory             Memory          `json:"memory"`
-	Errors             Errors          `json:"errors"`
-	Signals            []Signal        `json:"signals"`
-	Graveyards         []Graveyard     `json:"graveyards"`
-	Events             []string        `json:"events"`
-	ColonyDepth        string          `json:"colony_depth,omitempty"`
-	VerificationDepth  string          `json:"verification_depth,omitempty"`
-	PlanGranularity    PlanGranularity `json:"plan_granularity,omitempty"`
-	ParallelMode       ParallelMode    `json:"parallel_mode,omitempty"`
-	TerritorySurveyed  *string         `json:"territory_surveyed,omitempty"`
-	Milestone          string          `json:"milestone"`
-	MilestoneUpdatedAt *string         `json:"milestone_updated_at,omitempty"`
-	Paused             bool            `json:"paused,omitempty"`
-	PausedAt           *string         `json:"paused_at,omitempty"`
-	Worktrees          []WorktreeEntry `json:"worktrees,omitempty"`
-	RunID              *string            `json:"run_id,omitempty"`
-	GateResults        []GateResultEntry  `json:"gate_results,omitempty"`
-	Charter            *Charter              `json:"charter,omitempty"`
-	PendingSuggestions *[]PendingSuggestion  `json:"pending_suggestions,omitempty"`
-	LastAnalyzeCommit  *string               `json:"last_analyze_commit,omitempty"`
+	Version            string               `json:"version"`
+	Goal               *string              `json:"goal"`
+	Scope              ColonyScope          `json:"scope,omitempty"`
+	ColonyMode         ColonyMode           `json:"colony_mode,omitempty"`
+	ColonyName         *string              `json:"colony_name"`
+	ColonyVersion      int                  `json:"colony_version"`
+	State              State                `json:"state"`
+	CurrentPhase       int                  `json:"current_phase"`
+	SessionID          *string              `json:"session_id"`
+	InitializedAt      *time.Time           `json:"initialized_at"`
+	BuildStartedAt     *time.Time           `json:"build_started_at"`
+	Plan               Plan                 `json:"plan"`
+	Memory             Memory               `json:"memory"`
+	Errors             Errors               `json:"errors"`
+	Signals            []Signal             `json:"signals"`
+	Graveyards         []Graveyard          `json:"graveyards"`
+	Events             []string             `json:"events"`
+	ColonyDepth        string               `json:"colony_depth,omitempty"`
+	VerificationDepth  string               `json:"verification_depth,omitempty"`
+	PlanGranularity    PlanGranularity      `json:"plan_granularity,omitempty"`
+	ParallelMode       ParallelMode         `json:"parallel_mode,omitempty"`
+	TerritorySurveyed  *string              `json:"territory_surveyed,omitempty"`
+	Milestone          string               `json:"milestone"`
+	MilestoneUpdatedAt *string              `json:"milestone_updated_at,omitempty"`
+	Paused             bool                 `json:"paused,omitempty"`
+	PausedAt           *string              `json:"paused_at,omitempty"`
+	Worktrees          []WorktreeEntry      `json:"worktrees,omitempty"`
+	RunID              *string              `json:"run_id,omitempty"`
+	GateResults        []GateResultEntry    `json:"gate_results,omitempty"`
+	Charter            *Charter             `json:"charter,omitempty"`
+	PendingSuggestions *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
+	LastAnalyzeCommit  *string              `json:"last_analyze_commit,omitempty"`
 }
 
 // EffectiveScope returns the compatibility-safe colony scope.
 func (s ColonyState) EffectiveScope() ColonyScope {
 	return s.Scope.Effective()
+}
+
+// EffectiveColonyMode returns the compatibility-safe colony mode.
+func (s ColonyState) EffectiveColonyMode() ColonyMode {
+	return s.ColonyMode.Effective()
 }
 
 // ---------------------------------------------------------------------------
@@ -401,15 +436,98 @@ func decodePlanConfidence(raw json.RawMessage) (*float64, error) {
 	return &average, nil
 }
 
+// PhaseMode represents the development mode of a phase, which drives gate
+// strictness and reviewer depth. Default is prototype.
+type PhaseMode string
+
+const (
+	PhaseModeDiscovery   PhaseMode = "discovery"
+	PhaseModePrototype   PhaseMode = "prototype"
+	PhaseModeProduction  PhaseMode = "production"
+	PhaseModeMaintenance PhaseMode = "maintenance"
+)
+
+// Valid reports whether m is a recognized phase mode.
+func (m PhaseMode) Valid() bool {
+	switch m {
+	case PhaseModeDiscovery, PhaseModePrototype, PhaseModeProduction, PhaseModeMaintenance:
+		return true
+	}
+	return false
+}
+
+// NormalizePhaseMode maps user input (including aliases) to a canonical PhaseMode.
+// Empty input defaults to PhaseModePrototype. Aliases:
+//   - discovery, explore, spike, research, investigate -> PhaseModeDiscovery
+//   - prototype, build, feature, develop -> PhaseModePrototype
+//   - production, release, deploy, harden, ship, launch -> PhaseModeProduction
+//   - maintenance, refactor, docs, cleanup, chore -> PhaseModeMaintenance
+func NormalizePhaseMode(value string) PhaseMode {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "discovery", "explore", "spike", "research", "investigate":
+		return PhaseModeDiscovery
+	case "production", "release", "deploy", "harden", "ship", "launch":
+		return PhaseModeProduction
+	case "maintenance", "refactor", "docs", "cleanup", "chore":
+		return PhaseModeMaintenance
+	case "":
+		return PhaseModePrototype
+	default:
+		return PhaseModePrototype
+	}
+}
+
+// phaseModeDiscoveryKeywords lists substrings that suggest a discovery phase.
+var phaseModeDiscoveryKeywords = []string{
+	"discover", "explore", "spike", "research", "investigate",
+	"prototype", "boundaries", "scaffold", "skeleton",
+}
+
+// phaseModeProductionKeywords lists substrings that suggest a production phase.
+var phaseModeProductionKeywords = []string{
+	"production", "release", "deploy", "harden", "ship", "launch",
+	"security", "auth", "crypto", "compliance", "audit",
+}
+
+// phaseModeMaintenanceKeywords lists substrings that suggest a maintenance phase.
+var phaseModeMaintenanceKeywords = []string{
+	"refactor", "cleanup", "chore", "docs", "documentation",
+	"test coverage", "optimize", "performance",
+}
+
+// InferPhaseMode guesses a phase mode from its name and description.
+// It uses keyword matching and defaults to PhaseModePrototype.
+func InferPhaseMode(name, description string) PhaseMode {
+	text := strings.ToLower(name + " " + description)
+	for _, kw := range phaseModeProductionKeywords {
+		if strings.Contains(text, kw) {
+			return PhaseModeProduction
+		}
+	}
+	for _, kw := range phaseModeDiscoveryKeywords {
+		if strings.Contains(text, kw) {
+			return PhaseModeDiscovery
+		}
+	}
+	for _, kw := range phaseModeMaintenanceKeywords {
+		if strings.Contains(text, kw) {
+			return PhaseModeMaintenance
+		}
+	}
+	return PhaseModePrototype
+}
+
 // Phase represents a single phase in the colony plan.
 type Phase struct {
-	ID                  int      `json:"id"`
-	Name                string   `json:"name"`
-	Description         string   `json:"description"`
-	Status              string   `json:"status"`
-	Tasks               []Task   `json:"tasks"`
-	SuccessCriteria     []string `json:"success_criteria"`
-	WatcherFailureCount int      `json:"watcher_failure_count,omitempty"`
+	ID                  int       `json:"id"`
+	Name                string    `json:"name"`
+	Description         string    `json:"description"`
+	Status              string    `json:"status"`
+	Mode                PhaseMode `json:"mode,omitempty"`
+	Tasks               []Task    `json:"tasks"`
+	SuccessCriteria     []string  `json:"success_criteria"`
+	WatcherFailureCount int       `json:"watcher_failure_count,omitempty"`
 }
 
 // Task represents a single task within a phase.

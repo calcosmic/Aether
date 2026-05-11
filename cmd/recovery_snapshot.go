@@ -102,6 +102,7 @@ func syncSessionFromState(state colony.ColonyState, opts sessionSyncOptions) (co
 			SessionID:        sessionID,
 			StartedAt:        startedAt,
 			ColonyGoal:       goal,
+			ColonyMode:       state.EffectiveColonyMode(),
 			CurrentPhase:     state.CurrentPhase,
 			CurrentMilestone: state.Milestone,
 			SuggestedNext:    "aether status",
@@ -125,6 +126,7 @@ func syncSessionFromState(state colony.ColonyState, opts sessionSyncOptions) (co
 		goal = strings.TrimSpace(*state.Goal)
 	}
 	session.ColonyGoal = goal
+	session.ColonyMode = state.EffectiveColonyMode()
 	session.CurrentPhase = state.CurrentPhase
 	session.CurrentMilestone = state.Milestone
 	session.ActiveTodos = sessionActiveTodosFromState(state)
@@ -422,6 +424,7 @@ func renderContextSnapshot(state colony.ColonyState, session colony.SessionFile,
 	b.WriteString(fmt.Sprintf("| **Phase Status** | %s |\n", phaseStatus))
 	b.WriteString(fmt.Sprintf("| **Milestone** | %s |\n", milestone))
 	b.WriteString(fmt.Sprintf("| **Colony Status** | %s |\n", state.State))
+	b.WriteString(fmt.Sprintf("| **Colony Mode** | %s |\n", state.EffectiveColonyMode()))
 	b.WriteString(fmt.Sprintf("| **Safe to Clear?** | %s |\n", safeToClear))
 	b.WriteString("\n---\n\n")
 	b.WriteString("## Current Goal\n\n")
@@ -583,6 +586,9 @@ func renderHandoffSnapshot(state colony.ColonyState, session colony.SessionFile,
 	b.WriteString("\n")
 	b.WriteString("- State: ")
 	b.WriteString(string(state.State))
+	b.WriteString("\n")
+	b.WriteString("- Colony Mode: ")
+	b.WriteString(string(state.EffectiveColonyMode()))
 	b.WriteString("\n")
 	if strings.TrimSpace(state.Milestone) != "" {
 		b.WriteString("- Milestone: ")

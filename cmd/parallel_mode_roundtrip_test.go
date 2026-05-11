@@ -17,6 +17,8 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestParallelModeRoundTrip(t *testing.T) {
+	forceJSONOutputModeForTest(t)
+
 	t.Run("set worktree then get returns worktree", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)

@@ -187,6 +187,87 @@ func TestPlanReturnsExistingPlanWithoutRefresh(t *testing.T) {
 	}
 }
 
+func TestPlanIgnoresPriorGoalPlanningArtifactForFreshSession(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-stale-plan-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	stalePhaseName := "Prior goal stale phase"
+	if err := store.SaveJSON("planning/phase-plan.json", codexWorkerPlanArtifact{
+		Confidence: codexPlanConfidence{Overall: 97},
+		Phases: []codexWorkerPlanPhase{
+			{
+				Name:        stalePhaseName,
+				Description: "This plan belongs to the previous colony goal.",
+				Tasks:       []codexWorkerPlanTask{{Goal: "Do prior-goal work"}},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("save stale planning artifact: %v", err)
+	}
+
+	freshGoal := "Fresh session should get a fresh plan"
+	sessionID := "fresh-session"
+	sessionStarted := time.Now().UTC()
+	if err := store.SaveJSON("session.json", colony.SessionFile{
+		SessionID:   sessionID,
+		StartedAt:   sessionStarted.Format(time.RFC3339),
+		ColonyGoal:  freshGoal,
+		LastCommand: "init",
+	}); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &freshGoal,
+		State:        colony.StateREADY,
+		SessionID:    &sessionID,
+		CurrentPhase: 0,
+		Plan:         colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if existing, _ := result["existing_plan"].(bool); existing {
+		t.Fatalf("expected fresh plan generation, got existing_plan:true: %+v", result)
+	}
+	if result["goal"].(string) != freshGoal {
+		t.Fatalf("goal = %q, want %q", result["goal"], freshGoal)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(state.Plan.Phases) == 0 {
+		t.Fatal("expected plan to generate fresh phases")
+	}
+	for _, phase := range state.Plan.Phases {
+		if strings.Contains(phase.Name, stalePhaseName) || strings.Contains(phase.Description, "previous colony goal") {
+			t.Fatalf("stale planning artifact leaked into fresh plan: %+v", state.Plan.Phases)
+		}
+	}
+	events := strings.Join(state.Events, "\n")
+	if strings.Contains(events, "plan_recovered|state") {
+		t.Fatalf("fresh session should not recover from stale planning artifact, got events: %v", state.Events)
+	}
+	if !strings.Contains(events, "plan_generated|plan") {
+		t.Fatalf("expected fresh plan_generated event, got %v", state.Events)
+	}
+}
+
 func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -223,12 +304,18 @@ func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	if result["dispatch_mode"].(string) != "plan-only" {
 		t.Fatalf("dispatch_mode = %q, want plan-only", result["dispatch_mode"])
 	}
+	if result["colony_mode"].(string) != "colony" {
+		t.Fatalf("colony_mode = %q, want colony", result["colony_mode"])
+	}
 	manifest := result["plan_manifest"].(map[string]interface{})
 	if _, ok := result["planning_manifest"].(map[string]interface{}); !ok {
 		t.Fatalf("planning_manifest alias missing from result")
 	}
 	if manifest["dispatch_mode"].(string) != "plan-only" {
 		t.Fatalf("manifest dispatch_mode = %q, want plan-only", manifest["dispatch_mode"])
+	}
+	if manifest["colony_mode"].(string) != "colony" {
+		t.Fatalf("manifest colony_mode = %q, want colony", manifest["colony_mode"])
 	}
 	if manifest["depth"].(string) != "deep" || manifest["granularity"].(string) != "quarter" {
 		t.Fatalf("manifest depth/granularity = %v/%v, want deep/quarter", manifest["depth"], manifest["granularity"])
@@ -418,6 +505,7 @@ func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
 	if len(dispatches) != 2 {
 		t.Fatalf("expected 2 dispatches, got %d", len(dispatches))
 	}
+	delete(manifest, "colony_mode")
 
 	scout := dispatches[0].(map[string]interface{})
 	routeSetter := dispatches[1].(map[string]interface{})
@@ -1141,6 +1229,20 @@ func TestPlanFallbackStillSupportsExplicitAetherCommandWork(t *testing.T) {
 	}
 }
 
+func TestPlannedPlanningWorkersUsesQueenSelectedGatekeeper(t *testing.T) {
+	saveGlobals(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	root := t.TempDir()
+	dispatches := plannedPlanningWorkersForGoal(root, "Plan secure auth token rotation")
+
+	for _, caste := range []string{"scout", "route_setter", "gatekeeper"} {
+		if !planningDispatchHasCaste(dispatches, caste) {
+			t.Fatalf("planned planning dispatches missing Queen-selected %s: %+v", caste, dispatches)
+		}
+	}
+}
+
 // --- dispatchRealPlanningWorkers tests ---
 
 func TestDispatchRealPlanningWorkers_NilInvoker_ReturnsNil(t *testing.T) {
@@ -1202,6 +1304,15 @@ developer_instructions = "test instructions"`), 0644); err != nil {
 	if result[1].Status != "completed" {
 		t.Fatalf("expected second dispatch status 'completed', got %q", result[1].Status)
 	}
+}
+
+func planningDispatchHasCaste(dispatches []codexPlanningDispatch, caste string) bool {
+	for _, dispatch := range dispatches {
+		if dispatch.Caste == caste {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDispatchRealPlanningWorkers_UsesTimeoutOverrideAndSurveyFirstBrief(t *testing.T) {
@@ -1793,5 +1904,241 @@ func TestPlanningWorkerBriefIncludesLoopGuards(t *testing.T) {
 		if !strings.Contains(routeBrief, want) {
 			t.Fatalf("route-setter planning brief missing %q:\n%s", want, routeBrief)
 		}
+	}
+}
+
+// --- Plan finalizer validation rejection tests (Task 4.1) ---
+
+func TestMergeExternalPlanResults_RejectsMalformedJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	malformedPath := filepath.Join(tmpDir, "completion.json")
+	if err := os.WriteFile(malformedPath, []byte("{not valid json}"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := loadExternalPlanCompletion(malformedPath)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON completion file")
+	}
+	if !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("expected parse error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsMissingManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	noManifestPath := filepath.Join(tmpDir, "completion.json")
+	validJSON := `{"dispatches": [{"name": "Scout-12", "caste": "scout", "status": "completed"}]}`
+	if err := os.WriteFile(noManifestPath, []byte(validJSON), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := loadExternalPlanCompletion(noManifestPath)
+	if err == nil {
+		t.Fatal("expected error for completion file missing plan_manifest")
+	}
+	if !strings.Contains(err.Error(), "plan_manifest") {
+		t.Fatalf("expected plan_manifest error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsWrongCaste(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", Caste: "watcher", Status: "completed"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong caste in plan result")
+	}
+	if !strings.Contains(err.Error(), "caste") {
+		t.Fatalf("expected caste mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsWrongStage(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", Stage: "design", Status: "completed"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong stage in plan result")
+	}
+	if !strings.Contains(err.Error(), "stage") {
+		t.Fatalf("expected stage mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsWrongTaskID(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", TaskID: "wrong-task", Status: "completed"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong task_id in plan result")
+	}
+	if !strings.Contains(err.Error(), "task_id") {
+		t.Fatalf("expected task_id mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsWrongWave(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", Wave: 1, TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", Wave: 2, Status: "completed"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong wave in plan result")
+	}
+	if !strings.Contains(err.Error(), "wave") {
+		t.Fatalf("expected wave mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsDuplicateWorkerResult(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", Status: "completed"},
+		{Name: "Scout-12", Status: "completed"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for duplicate plan worker result")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("expected duplicate error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsNonTerminalStatus(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", Status: "running"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for non-terminal status in plan result")
+	}
+	if !strings.Contains(err.Error(), "non-terminal") {
+		t.Fatalf("expected non-terminal status error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsNonCompletedNonReconciled(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", Status: "failed"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for non-completed non-reconciled plan result")
+	}
+	if !strings.Contains(err.Error(), "did not complete cleanly") {
+		t.Fatalf("expected 'did not complete cleanly' error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsMissingResult(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+			{Name: "Mapper-45", Caste: "route_setter", Stage: "design", TaskID: "plan-route"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "Scout-12", Status: "completed"},
+		// Mapper-45 result is missing
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for missing plan worker result")
+	}
+	if !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("expected missing result error, got: %v", err)
+	}
+}
+
+func TestMergeExternalPlanResults_RejectsNamelessResult(t *testing.T) {
+	manifest := codexPlanManifest{
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		Dispatches: []codexPlanningDispatch{
+			{Name: "Scout-12", Caste: "scout", Stage: "survey", TaskID: "plan-scout"},
+		},
+	}
+	results := []codexPlanningDispatch{
+		{Name: "", Status: "completed"},
+	}
+	_, err := mergeExternalPlanResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for nameless plan result")
+	}
+	if !strings.Contains(err.Error(), "missing name") {
+		t.Fatalf("expected missing name error, got: %v", err)
+	}
+}
+
+func TestPlanningWorkerBriefGatekeeperIncludesReviewLedgerInstruction(t *testing.T) {
+	root := t.TempDir()
+	survey := codexSurveyContext{}
+	spec, ok := planningWorkerSpecForCaste("gatekeeper")
+	if !ok {
+		t.Fatal("planningWorkerSpecForCaste(gatekeeper) should return a spec")
+	}
+
+	brief := renderPlanningWorkerBrief(root, survey, spec)
+	if !strings.Contains(brief, "review-ledger-write") {
+		t.Fatalf("gatekeeper planning brief missing review-ledger-write instruction:\n%s", brief)
+	}
+	if !strings.Contains(brief, "This is a review task") {
+		t.Fatalf("gatekeeper planning brief missing review task indicator:\n%s", brief)
+	}
+	if !strings.Contains(brief, "Return status `blocked` if advancement is unsafe") {
+		t.Fatalf("gatekeeper planning brief missing blocked status instruction:\n%s", brief)
 	}
 }

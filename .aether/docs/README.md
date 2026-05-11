@@ -58,6 +58,7 @@ Distributed developer references:
 |------|---------|
 | `known-issues.md` | Active known issues and workarounds |
 | `publish-update-runbook.md` | Authoritative workflow for publishing hub/runtime updates and verifying downstream refreshes |
+| `phase5-lifecycle-integration-parity.md` | Phase 5 guidance for Orchestrator Mode lifecycle routing, finalizer validation, wrapper parity, and changelog planning |
 
 ---
 

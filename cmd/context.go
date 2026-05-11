@@ -139,6 +139,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 				"total_phases":  0,
 				"state":         "UNKNOWN",
 				"goal":          "",
+				"colony_mode":   string(colony.ColonyModeColony),
 				"parallel_mode": "in-repo",
 			},
 			"memory_health": map[string]interface{}{
@@ -168,6 +169,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 		if sessionFound {
 			result["session"] = map[string]interface{}{
 				"summary":         session.Summary,
+				"colony_mode":     session.ColonyMode,
 				"suggested_next":  session.SuggestedNext,
 				"active_todos":    session.ActiveTodos,
 				"last_command":    session.LastCommand,
@@ -213,6 +215,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 	if parallelMode == "" {
 		parallelMode = "in-repo"
 	}
+	colonyMode := string(state.EffectiveColonyMode())
 
 	// Compute memory health inline
 	wisdomCount := 0
@@ -261,6 +264,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"total_phases":  totalPhases,
 			"state":         stateStr,
 			"goal":          goal,
+			"colony_mode":   colonyMode,
 			"parallel_mode": parallelMode,
 		},
 		"memory_health": map[string]interface{}{
@@ -328,6 +332,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 		}
 		result["session"] = map[string]interface{}{
 			"summary":         summary,
+			"colony_mode":     colonyMode,
 			"suggested_next":  suggestedNext,
 			"active_todos":    todos,
 			"last_command":    session.LastCommand,

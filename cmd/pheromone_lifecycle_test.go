@@ -23,6 +23,7 @@ import (
 // for lifecycle tests. Each call gets its own temp dir to prevent state leaks.
 func setupLifecycleStore(t *testing.T) (*storage.Store, string) {
 	t.Helper()
+	forceJSONOutputModeForTest(t)
 	tmpDir := t.TempDir()
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {

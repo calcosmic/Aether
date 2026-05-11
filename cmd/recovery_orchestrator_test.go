@@ -1170,6 +1170,7 @@ func TestContinueFinalize_GateRecovery_RecoveryInstructionsInOutput(t *testing.T
 		"build/phase-1/verification.json",
 		"build/phase-1/gates.json",
 		gateRecoveryInstructions,
+			colony.VerificationDepthLight,
 	)
 	if err != nil {
 		t.Fatalf("finalizeBlockedExternalContinue failed: %v", err)

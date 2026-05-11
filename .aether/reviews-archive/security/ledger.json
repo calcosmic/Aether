@@ -1,0 +1,48 @@
+{
+  "entries": [
+    {
+      "id": "sec-1-001",
+      "phase": 1,
+      "phase_name": "Planning Gatekeeper Review",
+      "agent": "gatekeeper",
+      "agent_name": "Checkpoint-63",
+      "generated_at": "2026-05-10T13:24:49Z",
+      "status": "open",
+      "severity": "INFO",
+      "description": ""
+    },
+    {
+      "id": "sec-1-002",
+      "phase": 1,
+      "phase_name": "Planning Gatekeeper Review",
+      "agent": "gatekeeper",
+      "agent_name": "Checkpoint-63",
+      "generated_at": "2026-05-10T13:24:49Z",
+      "status": "open",
+      "severity": "INFO",
+      "description": ""
+    },
+    {
+      "id": "sec-1-003",
+      "phase": 1,
+      "phase_name": "Planning Gatekeeper Review",
+      "agent": "gatekeeper",
+      "agent_name": "Checkpoint-63",
+      "generated_at": "2026-05-10T13:24:49Z",
+      "status": "open",
+      "severity": "LOW",
+      "description": ""
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "open": 3,
+    "resolved": 0,
+    "by_severity": {
+      "high": 0,
+      "medium": 0,
+      "low": 1,
+      "info": 2
+    }
+  }
+}

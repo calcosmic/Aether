@@ -105,6 +105,17 @@ var flagAddCmd = &cobra.Command{
 			ff.Decisions = []colony.FlagEntry{}
 		}
 
+		if existing, ok := matchingEnvironmentBlockedLaunchFlag(ff.Decisions, flag); ok {
+			result := map[string]interface{}{
+				"created": false,
+				"deduped": true,
+				"flag":    existing,
+				"total":   len(ff.Decisions),
+			}
+			outputWorkflow(result, renderFlagActionVisual("flag", "Flag Already Active", result))
+			return nil
+		}
+
 		ff.Decisions = append(ff.Decisions, flag)
 
 		if err := store.SaveJSON("pending-decisions.json", ff); err != nil {
@@ -120,6 +131,32 @@ var flagAddCmd = &cobra.Command{
 		outputWorkflow(result, renderFlagActionVisual("flag", "Flag Created", result))
 		return nil
 	},
+}
+
+func matchingEnvironmentBlockedLaunchFlag(flags []colony.FlagEntry, candidate colony.FlagEntry) (colony.FlagEntry, bool) {
+	if candidate.Resolved || candidate.Type != "blocker" || !isEnvironmentBlockedLaunchVerification(candidate.Description) {
+		return colony.FlagEntry{}, false
+	}
+	for _, existing := range flags {
+		if existing.Resolved || existing.Type != "blocker" {
+			continue
+		}
+		if !sameFlagPhase(existing.Phase, candidate.Phase) {
+			continue
+		}
+		if !isEnvironmentBlockedLaunchVerification(existing.Description) {
+			continue
+		}
+		return existing, true
+	}
+	return colony.FlagEntry{}, false
+}
+
+func sameFlagPhase(left, right *int) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 var flagResolveCmd = &cobra.Command{

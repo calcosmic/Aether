@@ -15,6 +15,9 @@ import (
 // assignment leaks into subsequent tests. Belt-and-suspenders with per-test
 // cleanup via saveGlobals.
 func TestMain(m *testing.M) {
+	origOutputMode, hadOutputMode := os.LookupEnv("AETHER_OUTPUT_MODE")
+	_ = os.Setenv("AETHER_OUTPUT_MODE", "json")
+
 	origStore := store
 	origStdout := stdout
 	origStderr := stderr
@@ -61,6 +64,11 @@ func TestMain(m *testing.M) {
 	narratorLookPath = origNarratorLookPath
 	narratorCommandContext = origNarratorCommandContext
 	narratorRuntimePath = origNarratorRuntimePath
+	if hadOutputMode {
+		_ = os.Setenv("AETHER_OUTPUT_MODE", origOutputMode)
+	} else {
+		_ = os.Unsetenv("AETHER_OUTPUT_MODE")
+	}
 
 	os.Exit(code)
 }
@@ -113,6 +121,19 @@ func saveGlobals(t *testing.T) {
 		narratorRuntimePath = origNarratorRuntimePath
 		resumeNoHandoff = origResumeNoHandoff
 	})
+}
+
+func forceJSONOutputModeForTest(t *testing.T) {
+	t.Helper()
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+}
+
+func isPermissionDeniedForTest(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "operation not permitted") || strings.Contains(text, "permission denied")
 }
 
 // resetRootCmd restores rootCmd state (SetArgs, SetOut) and resets all

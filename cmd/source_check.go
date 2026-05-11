@@ -37,6 +37,13 @@ type sourceCheckResult struct {
 
 var sourceCheckGeneratedHeader = regexp.MustCompile(`^<!-- Generated from (\.aether/commands/[^ ]+\.yaml) - DO NOT EDIT DIRECTLY -->$`)
 
+var sourceCheckRequiredExchangeXMLAssets = []string{
+	"colony-archive.xml",
+	"colony-registry.xml",
+	"pheromones.xml",
+	"queen-wisdom.xml",
+}
+
 var sourceCheckCmd = &cobra.Command{
 	Use:   "source-check",
 	Short: "Verify source-of-truth and generated wrapper parity",
@@ -208,7 +215,34 @@ func checkCanonicalSourceSurfaces(root string) (int, []sourceCheckIssue) {
 		}
 	}
 
-	return len(required), issues
+	checked := len(required)
+	for _, name := range sourceCheckRequiredExchangeXMLAssets {
+		checked++
+		rel := filepath.ToSlash(filepath.Join(".aether", "exchange", name))
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		info, err := os.Stat(path)
+		if err != nil {
+			issues = append(issues, sourceCheckIssue{
+				Area:     "sources",
+				Path:     rel,
+				Message:  "required exchange XML asset is missing",
+				Expected: "file",
+				Actual:   "missing",
+			})
+			continue
+		}
+		if info.IsDir() {
+			issues = append(issues, sourceCheckIssue{
+				Area:     "sources",
+				Path:     rel,
+				Message:  "required exchange XML asset should be a file",
+				Expected: "file",
+				Actual:   "dir",
+			})
+		}
+	}
+
+	return checked, issues
 }
 
 func checkRetiredSourceMirrors(root string) (int, []sourceCheckIssue) {

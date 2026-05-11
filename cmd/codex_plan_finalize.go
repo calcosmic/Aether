@@ -114,6 +114,9 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if len(manifest.Dispatches) == 0 {
 		return nil, fmt.Errorf("plan_manifest contains no dispatches")
 	}
+	if err := validateFinalizerManifestRoot("plan_manifest", manifest.Root, root); err != nil {
+		return nil, err
+	}
 
 	state, granularity, err := validateExternalPlanState(manifest)
 	if err != nil {
@@ -216,7 +219,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	updateSessionSummary("plan-finalize", nextCommand, fmt.Sprintf("Generated %d plan phases with %d%% confidence from external planning workers", len(phases), confidence.Overall))
 	runStatus = "completed"
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"planned":                   true,
 		"existing_plan":             false,
 		"refreshed":                 manifest.Refresh,
@@ -243,7 +246,9 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		"unresolved_clarifications": 0,
 		"planning_warning":          "",
 		"next":                      nextCommand,
-	}, nil
+	}
+	addOrchestratorBoundaryGuidance(result, "plan", updatedState, nextCommand, manifest.BoundaryQuestions)
+	return result, nil
 }
 
 func validateExternalPlanState(manifest *codexPlanManifest) (colony.ColonyState, colony.PlanGranularity, error) {
@@ -257,12 +262,20 @@ func validateExternalPlanState(manifest *codexPlanManifest) (colony.ColonyState,
 	if strings.TrimSpace(*state.Goal) != strings.TrimSpace(manifest.Goal) {
 		return state, "", fmt.Errorf("plan_manifest goal does not match active colony goal")
 	}
+	if err := validateFinalizerManifestColonyMode("plan_manifest", manifest.ColonyMode, state); err != nil {
+		return state, "", err
+	}
 	granularity := colony.PlanGranularity(strings.TrimSpace(manifest.Granularity))
 	if !granularity.Valid() {
 		return state, "", fmt.Errorf("plan_manifest granularity %q is invalid", manifest.Granularity)
 	}
 	if len(state.Plan.Phases) > 0 && !manifest.Refresh {
-		return state, granularity, fmt.Errorf("active colony already has a plan; rerun `aether plan --plan-only --refresh` before finalizing a replacement")
+		if manifest.ExistingPlan {
+			// Manifest acknowledges existing phases were detected during plan-only.
+			// Proceed with finalization; the manifest's phases will replace them.
+			return state, granularity, nil
+		}
+		return state, granularity, fmt.Errorf("stale phases from a prior session are blocking finalization; rerun `aether plan --plan-only --refresh` or run `aether init` to start fresh")
 	}
 	if manifest.Refresh && state.CurrentPhase > 0 {
 		for _, phase := range state.Plan.Phases {
@@ -320,19 +333,19 @@ func mergeExternalPlanResults(manifest codexPlanManifest, results []codexPlannin
 }
 
 func validateExternalPlanIdentity(dispatch codexPlanningDispatch, result codexPlanningDispatch) error {
-	if value := strings.TrimSpace(result.Caste); value != "" && !strings.EqualFold(value, dispatch.Caste) {
-		return fmt.Errorf("external planning result %s caste = %q, want %q", dispatch.Name, value, dispatch.Caste)
+	dispatchSpec := workerIdentitySpec{
+		Caste:  dispatch.Caste,
+		Stage:  dispatch.Stage,
+		TaskID: dispatch.TaskID,
+		Wave:   dispatch.Wave,
 	}
-	if value := strings.TrimSpace(result.Stage); value != "" && !strings.EqualFold(value, dispatch.Stage) {
-		return fmt.Errorf("external planning result %s stage = %q, want %q", dispatch.Name, value, dispatch.Stage)
+	resultSpec := workerIdentitySpec{
+		Caste:  result.Caste,
+		Stage:  result.Stage,
+		TaskID: result.TaskID,
+		Wave:   result.Wave,
 	}
-	if value := strings.TrimSpace(result.TaskID); value != "" && value != strings.TrimSpace(dispatch.TaskID) {
-		return fmt.Errorf("external planning result %s task_id = %q, want %q", dispatch.Name, value, dispatch.TaskID)
-	}
-	if result.Wave > 0 && dispatch.Wave > 0 && result.Wave != dispatch.Wave {
-		return fmt.Errorf("external planning result %s wave = %d, want %d", dispatch.Name, result.Wave, dispatch.Wave)
-	}
-	return nil
+	return validateWorkerResultIdentity(dispatch.Name, dispatchSpec, resultSpec)
 }
 
 func (c codexExternalPlanCompletion) scoutReport(dispatches []codexPlanningDispatch, manifest *codexPlanManifest) codexScoutReport {

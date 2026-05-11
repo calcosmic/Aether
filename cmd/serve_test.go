@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -473,11 +474,12 @@ func TestMustJSON(t *testing.T) {
 	}
 }
 
-
 // ===================== WebSocket Tests =====================
 
 // setupWebSocketTestServer is a test helper that creates a WebSocket server for testing
 func setupWebSocketTestServer(t *testing.T) (*streamingServer, *events.Bus, func()) {
+	requireLoopbackServerCapability(t)
+
 	dir := t.TempDir()
 	store, err := storage.NewStore(dir)
 	if err != nil {
@@ -492,6 +494,27 @@ func setupWebSocketTestServer(t *testing.T) (*streamingServer, *events.Bus, func
 	}
 
 	return server, bus, cleanup
+}
+
+func requireLoopbackServerCapability(t *testing.T) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		if isPermissionDeniedForTest(err) {
+			t.Skipf("loopback listener unavailable in this sandbox: %v", err)
+		}
+		t.Fatalf("loopback listener check failed: %v", err)
+	}
+	_ = listener.Close()
+
+	listener6, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		if isPermissionDeniedForTest(err) {
+			t.Skipf("IPv6 loopback listener unavailable in this sandbox: %v", err)
+		}
+		return
+	}
+	_ = listener6.Close()
 }
 
 // TestWebSocketCommandFlags verifies WebSocket-related flags exist

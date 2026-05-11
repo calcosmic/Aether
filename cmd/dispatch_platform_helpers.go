@@ -13,8 +13,12 @@ func dispatchAgentPath(root string, invoker codex.WorkerInvoker, agentName strin
 	if platform == codex.PlatformUnknown {
 		platform = codex.DetectActivePlatform()
 	}
-	if platform == codex.PlatformUnknown {
-		platform = codex.PlatformCodex
+	return dispatchAgentPathForPlatform(root, platform, agentName)
+}
+
+func dispatchAgentPathForPlatform(root string, platform codex.Platform, agentName string) string {
+	if platform == codex.PlatformUnknown || platform == codex.PlatformFake {
+		return ""
 	}
 	return codex.AgentDefinitionPath(root, platform, agentName)
 }

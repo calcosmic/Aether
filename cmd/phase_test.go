@@ -11,6 +11,7 @@ import (
 func TestPhaseJSON(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -59,6 +60,7 @@ func TestPhaseJSON(t *testing.T) {
 func TestPhaseJSONNotFound(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 
@@ -89,6 +91,7 @@ func TestPhaseJSONNotFound(t *testing.T) {
 func TestPhaseJSONSpecificNumber(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 

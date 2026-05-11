@@ -28,6 +28,40 @@ func TestEntombCommandExists(t *testing.T) {
 	}
 }
 
+func TestClearActiveColonyRuntimeFilesPreservesShippedExchangeXML(t *testing.T) {
+	root := t.TempDir()
+	dataDir := filepath.Join(root, ".aether", "data")
+	exchangeDir := filepath.Join(root, ".aether", "exchange")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("create data dir: %v", err)
+	}
+	if err := os.MkdirAll(exchangeDir, 0755); err != nil {
+		t.Fatalf("create exchange dir: %v", err)
+	}
+
+	for _, name := range sourceCheckRequiredExchangeXMLAssets {
+		if err := os.WriteFile(filepath.Join(exchangeDir, name), []byte("<fixture />\n"), 0644); err != nil {
+			t.Fatalf("write exchange fixture %s: %v", name, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "session.json"), []byte("{}\n"), 0644); err != nil {
+		t.Fatalf("write runtime session: %v", err)
+	}
+
+	if err := clearActiveColonyRuntimeFiles(root, dataDir); err != nil {
+		t.Fatalf("clear runtime files: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dataDir, "session.json")); !os.IsNotExist(err) {
+		t.Fatalf("session.json should be removed, stat err=%v", err)
+	}
+	for _, name := range sourceCheckRequiredExchangeXMLAssets {
+		if _, err := os.Stat(filepath.Join(exchangeDir, name)); err != nil {
+			t.Fatalf("shipped exchange XML %s should be preserved: %v", name, err)
+		}
+	}
+}
+
 func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -664,6 +698,7 @@ func TestEntombRegistryFinalStats(t *testing.T) {
 	taskID := "task-1"
 
 	// Set up registry in the hub path
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(t.TempDir(), ".aether"))
 	hub := resolveHubPath()
 	registryDir := filepath.Join(hub, "registry")
 	if err := os.MkdirAll(registryDir, 0755); err != nil {

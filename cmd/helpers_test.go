@@ -61,6 +61,7 @@ func TestOutputOKMap(t *testing.T) {
 }
 
 func TestOutputError(t *testing.T) {
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 	defer func() { stderr = os.Stderr }()
@@ -90,6 +91,7 @@ func TestOutputError(t *testing.T) {
 }
 
 func TestOutputErrorIncludesDetails(t *testing.T) {
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 	defer func() { stderr = os.Stderr }()
@@ -118,6 +120,7 @@ func TestOutputErrorIncludesDetails(t *testing.T) {
 }
 
 func TestOutputErrorMessage(t *testing.T) {
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 	defer func() { stderr = os.Stderr }()

@@ -51,33 +51,39 @@ type codexBuildTaskPlan struct {
 }
 
 type codexBuildManifest struct {
-	Phase                int                              `json:"phase"`
-	PhaseName            string                           `json:"phase_name"`
-	Goal                 string                           `json:"goal,omitempty"`
-	Root                 string                           `json:"root"`
-	PlanOnly             bool                             `json:"plan_only,omitempty"`
-	ParallelMode         string                           `json:"parallel_mode,omitempty"`
-	WaveExecution        []codexWaveExecutionPlan         `json:"wave_execution,omitempty"`
-	ExecutionPlan        []codexBuildExecutionPlan        `json:"execution_plan,omitempty"`
-	ColonyDepth          string                           `json:"colony_depth"`
-	DispatchMode         string                           `json:"dispatch_mode,omitempty"`
-	HostPlatform         string                           `json:"host_platform,omitempty"`
-	ExecutionOwner       string                           `json:"execution_owner,omitempty"`
-	WorkerDispatchOptIn  bool                             `json:"worker_dispatch_opt_in,omitempty"`
-	GeneratedAt          string                           `json:"generated_at"`
-	State                string                           `json:"state"`
-	Checkpoint           string                           `json:"checkpoint"`
-	ClaimsPath           string                           `json:"claims_path"`
-	Playbooks            []string                         `json:"playbooks"`
-	WorkerBriefs         []string                         `json:"worker_briefs"`
-	Dispatches           []codexBuildDispatch             `json:"dispatches"`
-	SelectedTasks        []string                         `json:"selected_tasks,omitempty"`
-	Tasks                []codexBuildTaskPlan             `json:"tasks"`
-	SuccessCriteria      []string                         `json:"success_criteria"`
-	ReviewDepth          string                           `json:"review_depth,omitempty"`
-	ProfileContract      codexWorkflowProfileContract     `json:"profile_contract,omitempty"`
-	QueenRecommendation  codexQueenWorkflowRecommendation `json:"queen_recommendation,omitempty"`
-	QueenExecutionPolicy codexQueenExecutionPolicy        `json:"queen_execution_policy,omitempty"`
+	Phase                     int                              `json:"phase"`
+	PhaseName                 string                           `json:"phase_name"`
+	Goal                      string                           `json:"goal,omitempty"`
+	Root                      string                           `json:"root"`
+	ColonyMode                string                           `json:"colony_mode,omitempty"`
+	PlanOnly                  bool                             `json:"plan_only,omitempty"`
+	ParallelMode              string                           `json:"parallel_mode,omitempty"`
+	WaveExecution             []codexWaveExecutionPlan         `json:"wave_execution,omitempty"`
+	ExecutionPlan             []codexBuildExecutionPlan        `json:"execution_plan,omitempty"`
+	ColonyDepth               string                           `json:"colony_depth"`
+	DispatchMode              string                           `json:"dispatch_mode,omitempty"`
+	HostPlatform              string                           `json:"host_platform,omitempty"`
+	ExecutionOwner            string                           `json:"execution_owner,omitempty"`
+	WorkerDispatchOptIn       bool                             `json:"worker_dispatch_opt_in,omitempty"`
+	GeneratedAt               string                           `json:"generated_at"`
+	State                     string                           `json:"state"`
+	Checkpoint                string                           `json:"checkpoint"`
+	ClaimsPath                string                           `json:"claims_path"`
+	Playbooks                 []string                         `json:"playbooks"`
+	WorkerBriefs              []string                         `json:"worker_briefs"`
+	Dispatches                []codexBuildDispatch             `json:"dispatches"`
+	SelectedTasks             []string                         `json:"selected_tasks,omitempty"`
+	Tasks                     []codexBuildTaskPlan             `json:"tasks"`
+	SuccessCriteria           []string                         `json:"success_criteria"`
+	ReviewDepth               string                           `json:"review_depth,omitempty"`
+	ProfileContract           codexWorkflowProfileContract     `json:"profile_contract,omitempty"`
+	QueenRecommendation       codexQueenWorkflowRecommendation `json:"queen_recommendation,omitempty"`
+	QueenExecutionPolicy      codexQueenExecutionPolicy        `json:"queen_execution_policy,omitempty"`
+	BoundaryQuestions         []discussQuestion                `json:"boundary_questions,omitempty"`
+	BoundaryQuestionCount     int                              `json:"boundary_question_count,omitempty"`
+	BoundaryQuestionsCreated  int                              `json:"boundary_questions_created,omitempty"`
+	BoundaryQuestionsExisting int                              `json:"boundary_questions_existing,omitempty"`
+	OrchestratorGuidance      *orchestratorBoundaryGuidance    `json:"orchestrator_boundary_guidance,omitempty"`
 }
 
 type codexWaveExecutionPlan struct {
@@ -148,6 +154,10 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
+	state, _, err = reconcilePriorCompletedPhaseTasksFromTrustedManifests(root, state, phaseNum)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
 	phase := state.Plan.Phases[phaseNum-1]
 	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
@@ -161,7 +171,6 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	}
 
 	generatedAt := time.Now().UTC()
-	depth := normalizedBuildDepth(state.ColonyDepth)
 	playbooks := codexBuildPlaybooks()
 	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
 		LightFlag:         options.LightFlag,
@@ -171,7 +180,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		DispatchWorkers:   options.DispatchWorkers,
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
+	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
@@ -187,10 +196,19 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	profileContract := workflowProfileContract(reviewDepth)
 	queenRecommendation := recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases))
 	manifest.QueenExecutionPolicy = policy
+	boundary, err := materializeOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	manifest.BoundaryQuestions = boundary.Questions
+	manifest.BoundaryQuestionCount = len(boundary.Questions)
+	manifest.BoundaryQuestionsCreated = boundary.Created
+	manifest.BoundaryQuestionsExisting = boundary.Existing
 
 	result := map[string]interface{}{
 		"plan_only":              true,
 		"phase":                  phaseNum,
+		"colony_mode":            string(state.EffectiveColonyMode()),
 		"review_depth":           string(reviewDepth),
 		"phase_name":             phase.Name,
 		"state":                  state.State,
@@ -217,6 +235,11 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 			"spawn_complete_required": true,
 			"finalize_surface":        "awaiting_wrapper_completion",
 		},
+	}
+	addBoundaryQuestionResultFields(result, boundary)
+	if guidance, ok := addOrchestratorBoundaryGuidance(result, "build", state, fmt.Sprintf("aether build %d", phaseNum), boundary.Questions); ok {
+		manifest.OrchestratorGuidance = &guidance
+		result["dispatch_manifest"] = manifest
 	}
 	return result, state, phase, dispatches, nil
 }
@@ -281,6 +304,10 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
+	state, _, err = reconcilePriorCompletedPhaseTasksFromTrustedManifests(root, state, phaseNum)
+	if err != nil {
+		return nil, err
+	}
 	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
 	phase := state.Plan.Phases[phaseNum-1]
 	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
@@ -308,10 +335,6 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	depth := strings.TrimSpace(state.ColonyDepth)
-	if depth == "" {
-		depth = "standard"
-	}
 	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
 		LightFlag:         options.LightFlag,
 		HeavyFlag:         options.HeavyFlag,
@@ -321,7 +344,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 	playbooks := codexBuildPlaybooks()
-	dispatches := plannedBuildDispatchesForSelection(phase, depth, selectedTaskIDs, reviewDepth)
+	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches)
 	if err != nil {
 		return nil, err
@@ -363,7 +386,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	}
 
 	updatedState := state
-	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs)
+	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs, reviewDepth)
 	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
@@ -453,6 +476,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 
 	result := map[string]interface{}{
 		"phase":                  phaseNum,
+		"colony_mode":            string(updatedState.EffectiveColonyMode()),
 		"review_depth":           string(reviewDepth),
 		"phase_name":             updatedPhase.Name,
 		"state":                  updatedState.State,
@@ -515,6 +539,10 @@ func validateCodexBuildState(state colony.ColonyState, phaseNum int, selectedTas
 	for i := 0; i < phaseNum-1; i++ {
 		if state.Plan.Phases[i].Status != colony.PhaseCompleted {
 			return fmt.Errorf("phase %d is not complete yet; build phases in order", state.Plan.Phases[i].ID)
+		}
+		if !phaseTasksAllCompleted(state.Plan.Phases[i]) {
+			incomplete := incompletePhaseTaskSummary(state.Plan.Phases[i])
+			return fmt.Errorf("phase %d is marked completed but has incomplete task records (%s); run `aether build %d --force` to regenerate trusted task evidence", state.Plan.Phases[i].ID, incomplete, state.Plan.Phases[i].ID)
 		}
 	}
 
@@ -599,7 +627,7 @@ func countCodexBuildClaimPaths(claims codexBuildClaims) int {
 	return total
 }
 
-func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt time.Time, selectedTaskIDs []string) {
+func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt time.Time, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) {
 	state.State = colony.StateEXECUTING
 	state.CurrentPhase = phaseNum
 	state.BuildStartedAt = &startedAt
@@ -607,7 +635,9 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 	for i := range state.Plan.Phases {
 		switch {
 		case state.Plan.Phases[i].ID < phaseNum && state.Plan.Phases[i].Status != colony.PhaseCompleted:
-			state.Plan.Phases[i].Status = colony.PhaseCompleted
+			if phaseTasksAllCompleted(state.Plan.Phases[i]) {
+				state.Plan.Phases[i].Status = colony.PhaseCompleted
+			}
 		case state.Plan.Phases[i].ID == phaseNum:
 			state.Plan.Phases[i].Status = colony.PhaseInProgress
 			applyBuildTaskStatuses(&state.Plan.Phases[i], selectedTaskIDs)
@@ -619,7 +649,7 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 	phase := state.Plan.Phases[phaseNum-1]
 	state.Events = append(trimmedEvents(state.Events),
 		fmt.Sprintf("%s|phase_started|build|Phase %d: %s", startedAt.Format(time.RFC3339), phaseNum, phase.Name),
-		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelection(phase, normalizedBuildDepth(state.ColonyDepth), selectedTaskIDs, colony.VerificationDepthLight)), phaseNum),
+		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelectionWithState(phase, *state, selectedTaskIDs, reviewDepth)), phaseNum),
 	)
 
 	if tracer != nil && state.RunID != nil {
@@ -684,7 +714,15 @@ func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispat
 }
 
 func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
-	depth = normalizedBuildDepth(depth)
+	state := colony.ColonyState{
+		ColonyDepth:       normalizedBuildDepth(depth),
+		VerificationDepth: string(reviewDepth),
+	}
+	return plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
+}
+
+func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+	depth := normalizedBuildDepth(state.ColonyDepth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
 		selected[taskID] = struct{}{}
@@ -693,20 +731,14 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 	taskWaveBase := 10
 	lastTaskExecutionWave := taskWaveBase + max(len(waves), 1)
 	dispatches := make([]codexBuildDispatch, 0, len(phase.Tasks)+8)
+	queenState := state
+	queenState.ColonyDepth = depth
+	queenState.VerificationDepth = string(reviewDepth)
+	queenCastes := queenBuildCasteSet(queenOrchestrate(phase, "build", queenState))
+	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth)
 
-	if len(selected) == 0 && depth == "full" {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "prep", 1, "archaeologist", "Git history analysis before implementation"+findingsInjectionForCaste("archaeologist")))
-	}
-
-	if len(selected) == 0 && (depth == "deep" || depth == "full") {
-		dispatches = append(dispatches,
-			codexBuildSpecialistDispatch(phase, "research", 2, "oracle", "Phase research and implementation risks"),
-			codexBuildSpecialistDispatch(phase, "design", 3, "architect", "Design boundaries before coding"),
-		)
-	}
-
-	if len(selected) == 0 && phaseNeedsAmbassador(phase, selected) {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "integration", 4, "ambassador", "External integration design before implementation"))
+	if len(selected) == 0 {
+		dispatches = append(dispatches, queenBuildPreWaveDispatches(phase, queenCastes)...)
 	}
 
 	for waveIdx, wave := range waves {
@@ -718,12 +750,13 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 					continue
 				}
 			}
+			caste := queenBuildTaskCaste(task, queenCastes)
 			dispatches = append(dispatches, codexBuildDispatch{
 				Stage:         "wave",
 				Wave:          waveIdx + 1,
 				ExecutionWave: taskWaveBase + waveIdx + 1,
-				Caste:         suggestedBuildCaste(task),
-				Name:          deterministicAntName(suggestedBuildCaste(task), fmt.Sprintf("phase:%d:task:%d:%s", phase.ID, taskIdx, task.Goal)),
+				Caste:         caste,
+				Name:          deterministicAntName(caste, fmt.Sprintf("phase:%d:task:%d:%s", phase.ID, taskIdx, task.Goal)),
 				Task:          strings.TrimSpace(task.Goal),
 				Status:        "spawned",
 				TaskID:        taskID,
@@ -734,54 +767,139 @@ func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, select
 	}
 
 	if len(waves) == 0 && len(selected) == 0 {
+		caste := "builder"
+		if !queenCastes[caste] {
+			caste = queenBuildFallbackTaskCaste(queenCastes)
+		}
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:         "wave",
 			Wave:          1,
 			ExecutionWave: taskWaveBase + 1,
-			Caste:         "builder",
-			Name:          deterministicAntName("builder", fmt.Sprintf("phase:%d:default", phase.ID)),
+			Caste:         caste,
+			Name:          deterministicAntName(caste, fmt.Sprintf("phase:%d:default", phase.ID)),
 			Task:          "Build the phase objective",
 			Status:        "spawned",
 		})
 	}
 
-	if len(selected) == 0 {
+	if len(selected) == 0 && queenCastes["probe"] {
 		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "probe", lastTaskExecutionWave+1, "probe", "Independent probe verification of builder claims"))
 	}
 
-	dispatches = append(dispatches, codexBuildDispatch{
-		Stage:         "verification",
-		ExecutionWave: lastTaskExecutionWave + 2,
-		Caste:         "watcher",
-		Name:          deterministicAntName("watcher", fmt.Sprintf("phase:%d:watcher", phase.ID)),
-		Task:          "Independent verification before advancement" + findingsInjectionForCaste("watcher"),
-		Status:        "spawned",
-	})
-	if len(selected) == 0 && (depth == "deep" || depth == "full") && reviewDepth == colony.VerificationDepthHeavy {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "measurement", lastTaskExecutionWave+3, "measurer", "Performance and cost surface review after implementation"+findingsInjectionForCaste("measurer")))
-	}
-	if depth == "full" && reviewDepth == colony.VerificationDepthHeavy {
+	if queenCastes["watcher"] {
 		dispatches = append(dispatches, codexBuildDispatch{
-			Stage:         "resilience",
-			ExecutionWave: lastTaskExecutionWave + 4,
-			Caste:         "chaos",
-			Name:          deterministicAntName("chaos", fmt.Sprintf("phase:%d:chaos", phase.ID)),
-			Task:          "Resilience probing after verification" + findingsInjectionForCaste("chaos"),
+			Stage:         "verification",
+			ExecutionWave: lastTaskExecutionWave + 2,
+			Caste:         "watcher",
+			Name:          deterministicAntName("watcher", fmt.Sprintf("phase:%d:watcher", phase.ID)),
+			Task:          "Independent verification before advancement" + findingsInjectionForCaste("watcher"),
 			Status:        "spawned",
 		})
 	}
-	if reviewDepth == colony.VerificationDepthLight && chaosShouldRunInLightMode(phase.ID) {
-		dispatches = append(dispatches, codexBuildDispatch{
-			Stage:         "resilience",
-			ExecutionWave: lastTaskExecutionWave + 4,
-			Caste:         "chaos",
-			Name:          deterministicAntName("chaos", fmt.Sprintf("phase:%d:chaos", phase.ID)),
-			Task:          "Light-mode resilience sampling (30% deterministic)" + findingsInjectionForCaste("chaos"),
-			Status:        "spawned",
-		})
+	if len(selected) == 0 {
+		dispatches = append(dispatches, queenBuildPostWaveDispatches(phase, queenCastes, lastTaskExecutionWave)...)
 	}
 
 	return dispatches
+}
+
+func queenBuildCasteSet(dispatches []CasteDispatch) map[string]bool {
+	castes := make(map[string]bool, len(dispatches))
+	for _, dispatch := range dispatches {
+		caste := strings.TrimSpace(dispatch.Caste)
+		if caste == "" {
+			continue
+		}
+		castes[caste] = true
+	}
+	return castes
+}
+
+func applyBuildDispatchPolicyCastes(queenCastes map[string]bool, phase colony.Phase, depth string, reviewDepth colony.VerificationDepth) {
+	delete(queenCastes, "measurer")
+	delete(queenCastes, "chaos")
+
+	if (depth == "deep" || depth == "full") && reviewDepth == colony.VerificationDepthHeavy {
+		queenCastes["measurer"] = true
+	}
+	if phase.Mode != colony.PhaseModeDiscovery {
+		if depth == "full" && reviewDepth == colony.VerificationDepthHeavy {
+			queenCastes["chaos"] = true
+		}
+		if reviewDepth == colony.VerificationDepthLight && chaosShouldRunInLightMode(phase.ID) {
+			queenCastes["chaos"] = true
+		}
+	}
+}
+
+func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool) []codexBuildDispatch {
+	plans := []struct {
+		caste string
+		stage string
+		wave  int
+		task  string
+	}{
+		{"archaeologist", "prep", 1, "Git history analysis before implementation"},
+		{"oracle", "research", 2, "Phase research and implementation risks"},
+		{"architect", "design", 3, "Design boundaries before coding"},
+		{"ambassador", "integration", 4, "External integration design before implementation"},
+		{"gatekeeper", "security", 5, "Security boundaries and auth risk review before implementation"},
+		{"includer", "accessibility", 6, "Accessibility requirements and inclusive interaction review"},
+		{"weaver", "refactor", 7, "Refactoring seams and simplification plan before implementation"},
+		{"tracker", "diagnosis", 7, "Root-cause investigation and regression context before implementation"},
+		{"keeper", "knowledge", 8, "Knowledge preservation plan for reusable patterns"},
+		{"chronicler", "documentation", 8, "Documentation surface and changelog planning"},
+		{"medic", "health", 8, "Runtime health and repair risk review"},
+		{"fixer", "repair", 8, "Repair strategy and remediation boundaries"},
+		{"porter", "delivery", 8, "Delivery, packaging, and release handling review"},
+		{"sage", "wisdom", 8, "Learning synthesis and reusable pattern capture"},
+	}
+	dispatches := make([]codexBuildDispatch, 0, len(plans))
+	for _, plan := range plans {
+		if !queenCastes[plan.caste] {
+			continue
+		}
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, plan.wave, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
+	}
+	return dispatches
+}
+
+func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, lastTaskExecutionWave int) []codexBuildDispatch {
+	plans := []struct {
+		caste  string
+		stage  string
+		offset int
+		task   string
+	}{
+		{"auditor", "audit", 3, "Quality and compliance review after implementation"},
+		{"measurer", "measurement", 4, "Performance and cost surface review after implementation"},
+		{"chaos", "resilience", 5, "Resilience probing after verification"},
+	}
+	dispatches := make([]codexBuildDispatch, 0, len(plans))
+	for _, plan := range plans {
+		if !queenCastes[plan.caste] {
+			continue
+		}
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, lastTaskExecutionWave+plan.offset, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
+	}
+	return dispatches
+}
+
+func queenBuildTaskCaste(task colony.Task, queenCastes map[string]bool) string {
+	caste := suggestedBuildCaste(task)
+	if queenCastes[caste] {
+		return caste
+	}
+	return queenBuildFallbackTaskCaste(queenCastes)
+}
+
+func queenBuildFallbackTaskCaste(queenCastes map[string]bool) string {
+	for _, caste := range []string{"builder", "scout", "oracle", "weaver", "tracker", "fixer"} {
+		if queenCastes[caste] {
+			return caste
+		}
+	}
+	return "builder"
 }
 
 // findingsInjectionForCaste returns findings-path injection text for review castes
@@ -937,6 +1055,26 @@ func executionReasonForBuildStep(stage string, taskWave int, workerCount int, pa
 		return "pre-wave architecture design before implementation"
 	case "integration":
 		return "external integration design before implementation"
+	case "security":
+		return "security and auth review before implementation"
+	case "accessibility":
+		return "accessibility requirements review before implementation"
+	case "refactor":
+		return "refactoring strategy before implementation"
+	case "diagnosis":
+		return "root-cause investigation before implementation"
+	case "knowledge":
+		return "knowledge preservation before implementation"
+	case "documentation":
+		return "documentation planning before implementation"
+	case "health":
+		return "runtime health review before implementation"
+	case "repair":
+		return "repair strategy before implementation"
+	case "delivery":
+		return "delivery and packaging review before implementation"
+	case "wisdom":
+		return "learning synthesis before implementation"
 	case "wave":
 		if taskWave > 0 {
 			return buildWaveExecutionPlan(taskWave, workerCount, parallelMode).Reason
@@ -946,6 +1084,8 @@ func executionReasonForBuildStep(stage string, taskWave int, workerCount int, pa
 		return "post-wave independent verification of builder claims"
 	case "verification":
 		return "post-wave watcher verification before advancement"
+	case "audit":
+		return "post-wave quality and compliance review"
 	case "measurement":
 		return "post-wave performance and cost review"
 	case "resilience":
@@ -1153,6 +1293,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		PhaseName:           phase.Name,
 		Goal:                goal,
 		Root:                root,
+		ColonyMode:          string(state.EffectiveColonyMode()),
 		PlanOnly:            planOnly,
 		ParallelMode:        string(effectiveParallelMode(state)),
 		WaveExecution:       buildWaveExecutionPlans(dispatches, effectiveParallelMode(state)),
@@ -1349,9 +1490,237 @@ func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} 
 	return completed
 }
 
+func reconcilePriorCompletedPhaseTasksFromTrustedManifests(root string, state colony.ColonyState, phaseNum int) (colony.ColonyState, []string, error) {
+	if store == nil || phaseNum <= 1 || len(state.Plan.Phases) == 0 {
+		return state, nil, nil
+	}
+
+	rehearsal := state
+	if repaired, err := applyPriorCompletedPhaseTaskRepairs(root, &rehearsal, phaseNum); err != nil || len(repaired) == 0 {
+		return state, repaired, err
+	}
+
+	repaired := []string{}
+	var updated colony.ColonyState
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
+		var err error
+		repaired, err = applyPriorCompletedPhaseTaskRepairs(root, &updated, phaseNum)
+		return err
+	}); err != nil {
+		return state, nil, fmt.Errorf("failed to reconcile completed prior phase task statuses: %w", err)
+	}
+	return updated, repaired, nil
+}
+
+func applyPriorCompletedPhaseTaskRepairs(root string, state *colony.ColonyState, phaseNum int) ([]string, error) {
+	if state == nil || phaseNum <= 1 {
+		return nil, nil
+	}
+
+	repaired := []string{}
+	limit := phaseNum - 1
+	if limit > len(state.Plan.Phases) {
+		limit = len(state.Plan.Phases)
+	}
+	for idx := 0; idx < limit; idx++ {
+		phase := &state.Plan.Phases[idx]
+		if phase.Status != colony.PhaseCompleted || phaseTasksAllCompleted(*phase) {
+			continue
+		}
+		completed, err := trustedCompletedPhaseTaskEvidence(root, *state, *phase)
+		if err != nil {
+			return nil, err
+		}
+		phaseRepaired := []string{}
+		for taskIdx := range phase.Tasks {
+			taskID := buildTaskID(phase.Tasks[taskIdx], taskIdx)
+			if _, ok := completed[taskID]; !ok {
+				continue
+			}
+			if phase.Tasks[taskIdx].Status != colony.TaskCompleted {
+				phase.Tasks[taskIdx].Status = colony.TaskCompleted
+				phaseRepaired = append(phaseRepaired, taskID)
+			}
+		}
+		if len(phaseRepaired) > 0 {
+			repaired = append(repaired, phaseRepaired...)
+			state.Events = append(trimmedEvents(state.Events),
+				fmt.Sprintf("%s|phase_tasks_repaired|build|Repaired completed task statuses for phase %d from trusted build manifest: %s", time.Now().UTC().Format(time.RFC3339), phase.ID, strings.Join(uniqueSortedStrings(phaseRepaired), ", ")),
+			)
+		}
+	}
+	return uniqueSortedStrings(repaired), nil
+}
+
+func phaseTasksAllCompleted(phase colony.Phase) bool {
+	for _, task := range phase.Tasks {
+		if task.Status != colony.TaskCompleted {
+			return false
+		}
+	}
+	return true
+}
+
+func trustedCompletedPhaseTaskEvidence(root string, state colony.ColonyState, phase colony.Phase) (map[string]struct{}, error) {
+	manifest := loadCodexContinueManifest(phase.ID)
+	if !manifest.Present {
+		return nil, completedPhaseTaskRepairError(phase, "no build manifest was found")
+	}
+	if err := validateTrustedCompletedPhaseManifest(root, state, phase, manifest); err != nil {
+		return nil, completedPhaseTaskRepairError(phase, err.Error())
+	}
+
+	stateIDs := phaseTaskIDSet(phase)
+	completed := completedTaskEvidenceIDs(manifest.Data)
+	missing := missingTaskIDs(stateIDs, completed)
+	if len(missing) > 0 {
+		return nil, completedPhaseTaskRepairError(phase, fmt.Sprintf("trusted build manifest lacks completed task evidence for %s", strings.Join(missing, ", ")))
+	}
+	return completed, nil
+}
+
+func validateTrustedCompletedPhaseManifest(root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest) error {
+	data := manifest.Data
+	if data.Phase != phase.ID {
+		return fmt.Errorf("build manifest phase %d does not match completed phase %d", data.Phase, phase.ID)
+	}
+	if data.PlanOnly || strings.EqualFold(strings.TrimSpace(data.DispatchMode), "plan-only") {
+		return fmt.Errorf("build manifest for phase %d is plan-only, not a final runtime manifest", phase.ID)
+	}
+	if isSimulatedBuildDispatchMode(data.DispatchMode) {
+		return fmt.Errorf("build manifest for phase %d is simulated and cannot repair persisted task state", phase.ID)
+	}
+	if !isFinalBuildDispatchMode(data.DispatchMode) && !manifestStateLooksFinal(data.State) {
+		return fmt.Errorf("build manifest for phase %d is not final (dispatch_mode: %s)", phase.ID, strings.TrimSpace(data.DispatchMode))
+	}
+	if strings.TrimSpace(data.PhaseName) != "" && strings.TrimSpace(phase.Name) != "" && strings.TrimSpace(data.PhaseName) != strings.TrimSpace(phase.Name) {
+		return fmt.Errorf("build manifest phase name %q does not match COLONY_STATE phase name %q", strings.TrimSpace(data.PhaseName), strings.TrimSpace(phase.Name))
+	}
+	if state.Goal != nil && strings.TrimSpace(data.Goal) != "" && strings.TrimSpace(*state.Goal) != strings.TrimSpace(data.Goal) {
+		return fmt.Errorf("build manifest goal does not match COLONY_STATE goal")
+	}
+	if strings.TrimSpace(data.Root) != "" && strings.TrimSpace(root) != "" && filepath.Clean(data.Root) != filepath.Clean(root) {
+		return fmt.Errorf("build manifest root %q does not match current root %q", filepath.Clean(data.Root), filepath.Clean(root))
+	}
+	return validateBuildManifestTaskSetForPhase(manifest, phase, false)
+}
+
+func manifestStateLooksFinal(state string) bool {
+	switch colony.State(strings.TrimSpace(state)) {
+	case colony.StateBUILT, colony.StateCOMPLETED:
+		return true
+	default:
+		return false
+	}
+}
+
+func completedPhaseTaskRepairError(phase colony.Phase, reason string) error {
+	incomplete := incompletePhaseTaskSummary(phase)
+	if incomplete == "" {
+		incomplete = "none"
+	}
+	return fmt.Errorf("phase %d is marked completed but task rows are incomplete (%s); %s; restore .aether/data/build/phase-%d/manifest.json from the completed run or run `aether build %d --force` to regenerate trusted task evidence before building a later phase", phase.ID, incomplete, reason, phase.ID, phase.ID)
+}
+
+func incompletePhaseTaskSummary(phase colony.Phase) string {
+	incomplete := []string{}
+	for idx, task := range phase.Tasks {
+		if task.Status == colony.TaskCompleted {
+			continue
+		}
+		status := strings.TrimSpace(task.Status)
+		if status == "" {
+			status = colony.TaskPending
+		}
+		incomplete = append(incomplete, fmt.Sprintf("%s=%s", buildTaskID(task, idx), status))
+	}
+	return strings.Join(incomplete, ", ")
+}
+
+func completedTaskEvidenceIDs(manifest codexBuildManifest) map[string]struct{} {
+	completed := completedBuildTaskIDs(manifest.Dispatches)
+	for _, task := range manifest.Tasks {
+		taskID := strings.TrimSpace(task.ID)
+		if taskID == "" || strings.TrimSpace(task.Status) != colony.TaskCompleted {
+			continue
+		}
+		completed[taskID] = struct{}{}
+	}
+	return completed
+}
+
+func phaseTaskIDSet(phase colony.Phase) []string {
+	ids := make([]string, 0, len(phase.Tasks))
+	for idx, task := range phase.Tasks {
+		ids = append(ids, buildTaskID(task, idx))
+	}
+	return uniqueSortedStrings(ids)
+}
+
+func manifestTaskIDSet(tasks []codexBuildTaskPlan) []string {
+	ids := make([]string, 0, len(tasks))
+	for idx, task := range tasks {
+		taskID := strings.TrimSpace(task.ID)
+		if taskID == "" {
+			taskID = fmt.Sprintf("task-%d", idx+1)
+		}
+		ids = append(ids, taskID)
+	}
+	return uniqueSortedStrings(ids)
+}
+
+func validateBuildManifestTaskSetForPhase(manifest codexContinueManifest, phase colony.Phase, allowMissingTasks bool) error {
+	if !manifest.Present {
+		return nil
+	}
+	if len(manifest.Data.Tasks) == 0 && allowMissingTasks {
+		return nil
+	}
+	manifestIDs := manifestTaskIDSet(manifest.Data.Tasks)
+	stateIDs := phaseTaskIDSet(phase)
+	if stringSlicesEqual(manifestIDs, stateIDs) {
+		return nil
+	}
+	return fmt.Errorf("phase %d build manifest task set does not match COLONY_STATE (manifest: %s; state: %s)", phase.ID, formatTaskIDSet(manifestIDs), formatTaskIDSet(stateIDs))
+}
+
+func stringSlicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for idx := range left {
+		if left[idx] != right[idx] {
+			return false
+		}
+	}
+	return true
+}
+
+func missingTaskIDs(ids []string, present map[string]struct{}) []string {
+	missing := []string{}
+	for _, id := range ids {
+		if _, ok := present[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	return uniqueSortedStrings(missing)
+}
+
+func formatTaskIDSet(ids []string) string {
+	if len(ids) == 0 {
+		return "none"
+	}
+	return strings.Join(ids, ", ")
+}
+
 func isFinalBuildDispatchMode(dispatchMode string) bool {
 	mode := strings.ToLower(strings.TrimSpace(dispatchMode))
 	return mode != "" && mode != "plan-only"
+}
+
+func isSimulatedBuildDispatchMode(dispatchMode string) bool {
+	mode := strings.ToLower(strings.TrimSpace(dispatchMode))
+	return mode == "simulated" || mode == "synthetic"
 }
 
 func writeCodexBuildOutcomeReports(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, recordedAt time.Time, dispatchMode string) (map[string][]string, []codexBuildDispatch, error) {
@@ -1723,11 +2092,11 @@ func buildPlaybooksForDispatch(dispatch codexBuildDispatch, playbooks []string) 
 	filtered := make([]string, 0, len(playbooks))
 	for _, playbook := range playbooks {
 		switch dispatch.Caste {
-		case "oracle", "architect", "archaeologist", "ambassador":
+		case "oracle", "architect", "archaeologist", "ambassador", "weaver", "tracker", "keeper", "chronicler", "medic", "fixer", "porter", "sage":
 			if strings.Contains(playbook, "build-prep") || strings.Contains(playbook, "build-wave") {
 				filtered = append(filtered, playbook)
 			}
-		case "watcher", "chaos", "probe", "measurer":
+		case "watcher", "chaos", "probe", "measurer", "gatekeeper", "auditor", "includer":
 			if strings.Contains(playbook, "build-verify") || strings.Contains(playbook, "build-complete") {
 				filtered = append(filtered, playbook)
 			}
@@ -1755,6 +2124,12 @@ func expectedDispatchOutcome(dispatch codexBuildDispatch) string {
 		return "Design boundaries, interfaces, and sequencing guidance for the phase."
 	case "ambassador":
 		return "External integration constraints, authentication needs, and implementation sequencing."
+	case "gatekeeper":
+		return "Security, authentication, and secret-handling risks with concrete mitigation guidance."
+	case "auditor":
+		return "Quality and compliance findings with concrete follow-up risks."
+	case "includer":
+		return "Accessibility findings and inclusive interaction requirements."
 	case "probe":
 		return "Independent verification of builder claims, files, tests, and task fit."
 	case "measurer":
@@ -1763,6 +2138,22 @@ func expectedDispatchOutcome(dispatch codexBuildDispatch) string {
 		return "Resilience findings and failure cases worth checking before advancement."
 	case "archaeologist":
 		return "Git history insights and risk identification from prior commits."
+	case "weaver":
+		return "Refactoring guidance and simplification changes that preserve behavior."
+	case "tracker":
+		return "Root-cause notes and regression evidence for the phase."
+	case "keeper":
+		return "Reusable project knowledge and patterns preserved for future workers."
+	case "chronicler":
+		return "Documentation updates that reflect the completed phase."
+	case "medic":
+		return "Health diagnosis and repair recommendations for runtime state."
+	case "fixer":
+		return "Focused remediation changes with verification evidence."
+	case "porter":
+		return "Packaging, delivery, and release-readiness notes."
+	case "sage":
+		return "Synthesized lessons and reusable implementation wisdom."
 	default:
 		return "Concrete code changes plus a truthful summary of files touched and verification run."
 	}

@@ -1322,6 +1322,7 @@
     "short_description": "Initialize a new colony in the current directory",
     "flags": [
       "charter-json",
+      "colony-mode",
       "scope"
     ],
     "parent_command": "",
@@ -1332,6 +1333,7 @@
     "name": "init-ceremony",
     "short_description": "Run the full colony init ceremony (scan, charter, brief, approve)",
     "flags": [
+      "colony-mode",
       "scope",
       "target"
     ],

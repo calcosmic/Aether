@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,6 +43,23 @@ func TestSourceCheckRejectsRetiredMirrorDirectories(t *testing.T) {
 	}
 }
 
+func TestSourceCheckRejectsMissingExchangeXMLAssets(t *testing.T) {
+	root := minimalSourceCheckRoot(t)
+	missing := filepath.Join(".aether", "exchange", "queen-wisdom.xml")
+	if err := os.Remove(filepath.Join(root, missing)); err != nil {
+		t.Fatalf("remove exchange fixture: %v", err)
+	}
+
+	result := runSourceCheck(root)
+	if result.OK {
+		t.Fatal("source check should fail when required exchange XML assets are missing")
+	}
+
+	if !sourceCheckHasIssue(result, missing, "required exchange XML asset is missing") {
+		t.Fatalf("missing exchange XML issue, got: %+v", result.Issues)
+	}
+}
+
 func minimalSourceCheckRoot(t *testing.T) string {
 	t.Helper()
 
@@ -63,6 +81,9 @@ func minimalSourceCheckRoot(t *testing.T) string {
 	}
 
 	writeFile(t, root, filepath.Join(".aether", "workers.md"), []byte("# Workers\n"))
+	for _, name := range sourceCheckRequiredExchangeXMLAssets {
+		writeFile(t, root, filepath.Join(".aether", "exchange", name), []byte("<fixture />\n"))
+	}
 	writeFile(t, root, filepath.Join(".aether", "commands", "status.yaml"), []byte("name: ant-status\n"))
 	header := []byte("<!-- Generated from .aether/commands/status.yaml - DO NOT EDIT DIRECTLY -->\n")
 	writeFile(t, root, filepath.Join(".claude", "commands", "ant", "status.md"), header)

@@ -18,6 +18,7 @@ func setupPheromoneTest(t *testing.T) (tmpDir string, buf *bytes.Buffer) {
 	t.Helper()
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 
 	tmpDir = t.TempDir()
 	dataDir := tmpDir + "/.aether/data"

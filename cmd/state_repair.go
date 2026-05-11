@@ -22,6 +22,9 @@ func repairMissingPlanFromArtifacts(state colony.ColonyState) (colony.ColonyStat
 	if store == nil || state.Goal == nil || strings.TrimSpace(*state.Goal) == "" || len(state.Plan.Phases) > 0 {
 		return state, false, nil
 	}
+	if !hasMissingPlanRecoveryContext(state) {
+		return state, false, nil
+	}
 
 	artifact, generatedAt, err := loadPersistedPlanArtifact(state)
 	if err != nil {
@@ -61,8 +64,8 @@ func loadPersistedPlanArtifact(state colony.ColonyState) (codexWorkerPlanArtifac
 	}
 
 	generatedAt := info.ModTime().UTC()
-	if state.InitializedAt != nil && generatedAt.Before(state.InitializedAt.UTC()) {
-		return codexWorkerPlanArtifact{}, time.Time{}, fmt.Errorf("planning artifact predates colony initialization")
+	if cutoff, ok := activePlanRecoveryCutoff(state); ok && generatedAt.Before(cutoff) {
+		return codexWorkerPlanArtifact{}, time.Time{}, fmt.Errorf("planning artifact predates active colony session")
 	}
 
 	var artifact codexWorkerPlanArtifact
@@ -73,6 +76,69 @@ func loadPersistedPlanArtifact(state colony.ColonyState) (codexWorkerPlanArtifac
 		return codexWorkerPlanArtifact{}, time.Time{}, fmt.Errorf("planning artifact contained no phases")
 	}
 	return artifact, generatedAt, nil
+}
+
+func hasMissingPlanRecoveryContext(state colony.ColonyState) bool {
+	if state.CurrentPhase > 0 || state.Plan.GeneratedAt != nil || state.Plan.Confidence != nil {
+		return true
+	}
+
+	switch state.State {
+	case colony.StateEXECUTING, colony.StateBUILT, colony.StateCOMPLETED:
+		return true
+	}
+
+	for _, event := range state.Events {
+		event = strings.ToLower(strings.TrimSpace(event))
+		if event == "" {
+			continue
+		}
+		if strings.Contains(event, "|plan_generated|") ||
+			strings.Contains(event, "|phase_advanced|") ||
+			strings.Contains(event, "|phase_completed|") ||
+			legacyPhaseCompletePattern.MatchString(event) {
+			return true
+		}
+	}
+	return false
+}
+
+func activePlanRecoveryCutoff(state colony.ColonyState) (time.Time, bool) {
+	var cutoff time.Time
+	if state.InitializedAt != nil {
+		cutoff = state.InitializedAt.UTC()
+	}
+	if sessionStarted, ok := activeSessionStartedAt(state); ok && (cutoff.IsZero() || sessionStarted.After(cutoff)) {
+		cutoff = sessionStarted
+	}
+	if cutoff.IsZero() {
+		return time.Time{}, false
+	}
+	return cutoff, true
+}
+
+func activeSessionStartedAt(state colony.ColonyState) (time.Time, bool) {
+	if store == nil {
+		return time.Time{}, false
+	}
+
+	var session colony.SessionFile
+	if err := store.LoadJSON("session.json", &session); err != nil {
+		return time.Time{}, false
+	}
+
+	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" && strings.TrimSpace(session.ColonyGoal) != strings.TrimSpace(*state.Goal) {
+		return time.Time{}, false
+	}
+	if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" && strings.TrimSpace(session.SessionID) != strings.TrimSpace(*state.SessionID) {
+		return time.Time{}, false
+	}
+
+	startedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(session.StartedAt))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return startedAt.UTC(), true
 }
 
 func inferRecoveredPhaseProgress(state colony.ColonyState) (int, int) {

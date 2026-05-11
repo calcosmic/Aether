@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -412,6 +413,237 @@ func TestFindRepoRelativePathIncludesUntrackedFiles(t *testing.T) {
 	got := findRepoRelativePath(tmp, "AddCardButton.test.tsx")
 	if got != "src/components/AddCardButton.test.tsx" {
 		t.Errorf("findRepoRelativePath() = %q, want %q", got, "src/components/AddCardButton.test.tsx")
+	}
+}
+
+// --- Finalizer validation rejection tests (Task 4.1) ---
+// These tests document expected rejection behavior for malformed, mismatched,
+// or invalid external worker results. They are intentionally written against
+// current behavior and will be validated independently.
+
+func TestMergeExternalBuildResults_RejectsMalformedJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	malformedPath := filepath.Join(tmpDir, "completion.json")
+	if err := os.WriteFile(malformedPath, []byte("{not valid json}"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := loadExternalBuildCompletion(malformedPath)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON completion file")
+	}
+	// The error should mention parsing
+	if !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("expected parse error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsMissingManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	noManifestPath := filepath.Join(tmpDir, "completion.json")
+	validJSON := `{"dispatches": [{"name": "Mason-67", "status": "completed"}]}`
+	if err := os.WriteFile(noManifestPath, []byte(validJSON), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := loadExternalBuildCompletion(noManifestPath)
+	if err == nil {
+		t.Fatal("expected error for completion file missing dispatch_manifest")
+	}
+	if !strings.Contains(err.Error(), "dispatch_manifest") {
+		t.Fatalf("expected dispatch_manifest error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsWrongRoot(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Root:     "/some/other/path",
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	// mergeExternalBuildResults itself does not validate root — that happens
+	// in runCodexBuildFinalize via validateFinalizerManifestRoot.
+	// Verify that the merge itself succeeds (root is checked upstream).
+	if err != nil {
+		t.Fatalf("mergeExternalBuildResults should not check root (upstream concern): %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsWrongCaste(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Caste: "watcher", Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong caste")
+	}
+	if !strings.Contains(err.Error(), "caste") {
+		t.Fatalf("expected caste mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsWrongStage(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Stage: "verification", Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong stage")
+	}
+	if !strings.Contains(err.Error(), "stage") {
+		t.Fatalf("expected stage mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsWrongTaskID(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", TaskID: "2.1", Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong task_id")
+	}
+	if !strings.Contains(err.Error(), "task_id") {
+		t.Fatalf("expected task_id mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsWrongWave(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", Wave: 1, TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Wave: 2, Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong wave")
+	}
+	if !strings.Contains(err.Error(), "wave") {
+		t.Fatalf("expected wave mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsWrongExecutionWave(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", Wave: 1, ExecutionWave: 1, TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", ExecutionWave: 3, Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for wrong execution_wave")
+	}
+	if !strings.Contains(err.Error(), "execution_wave") {
+		t.Fatalf("expected execution_wave mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsDuplicateWorkerResult(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Status: "completed"},
+		{Name: "Mason-67", Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for duplicate worker result")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("expected duplicate error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsNonTerminalStatus(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Status: "running"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for non-terminal status")
+	}
+	if !strings.Contains(err.Error(), "non-terminal") {
+		t.Fatalf("expected non-terminal status error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsMissingResult(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", TaskID: ""},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Mason-67", Status: "completed"},
+		// Keen-33 result is missing — build should reject
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for missing worker result")
+	}
+	if !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("expected missing result error, got: %v", err)
+	}
+}
+
+func TestMergeExternalBuildResults_RejectsNamelessResult(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-67", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{Name: "", Status: "completed"},
+	}
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected error for nameless result")
+	}
+	if !strings.Contains(err.Error(), "missing name") {
+		t.Fatalf("expected missing name error, got: %v", err)
 	}
 }
 

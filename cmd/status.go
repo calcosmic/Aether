@@ -201,6 +201,7 @@ func renderLoopSafetySection(loopEvents []events.Event) string {
 	b.WriteString("\n")
 	return b.String()
 }
+
 // renderGateStatusSection renders the Gate Status dashboard section.
 // Returns empty string when no gate-results file exists for the current phase,
 // or when the phase is 0 (not started).
@@ -209,11 +210,11 @@ func renderGateStatusSection(state colony.ColonyState, s *storage.Store) string 
 		return ""
 	}
 
-		rel := fmt.Sprintf("gate-results-%d.json", state.CurrentPhase)
-		var results []GateCheckResult
-		if err := s.LoadJSON(rel, &results); err != nil || len(results) == 0 {
-			return ""
-		}
+	rel := fmt.Sprintf("gate-results-%d.json", state.CurrentPhase)
+	var results []GateCheckResult
+	if err := s.LoadJSON(rel, &results); err != nil || len(results) == 0 {
+		return ""
+	}
 
 	passed := 0
 	failed := 0
@@ -503,6 +504,7 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		"display_phase":          displayPhaseNum,
 		"tasks_completed":        tasksCompleted,
 		"tasks_total":            tasksTotal,
+		"colony_mode":            string(state.EffectiveColonyMode()),
 		"agent_delegate_session": codex.IsAgentDelegateSession(),
 	}
 
@@ -549,10 +551,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		}
 	}
 
-		// Gate Status (GATE-09)
-		if gateSection := renderGateStatusSection(state, s); gateSection != "" {
-			b.WriteString(gateSection)
-		}
+	// Gate Status (GATE-09)
+	if gateSection := renderGateStatusSection(state, s); gateSection != "" {
+		b.WriteString(gateSection)
+	}
 
 	// Progress
 	totalPhases := len(state.Plan.Phases)
@@ -646,6 +648,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 
 	// Scope
 	fmt.Fprintf(&b, "Scope: %s\n", state.EffectiveScope())
+	fmt.Fprintf(&b, "Colony Mode: %s\n", state.EffectiveColonyMode())
 
 	// Milestone
 	if state.Milestone != "" {

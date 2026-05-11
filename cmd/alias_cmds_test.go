@@ -254,6 +254,7 @@ func TestColonyArchiveXMLOutputFlag(t *testing.T) {
 func TestImportSignalsAcceptsFileFlag(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 	var errBuf bytes.Buffer

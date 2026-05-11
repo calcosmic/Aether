@@ -112,6 +112,71 @@ func TestOracleGuideCarriesBroadScopeTimeoutGuard(t *testing.T) {
 	}
 }
 
+func TestLifecycleGuidesCarryOrchestratorBoundaryGuidance(t *testing.T) {
+	for _, command := range []string{"plan", "build", "continue", "seal"} {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), guide.PostSteps...), "\n")
+		for _, want := range []string{
+			"orchestrator_boundary_guidance",
+			"after_discuss_next",
+			"aether discuss",
+			"fresh",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing Orchestrator guidance anchor %q", command, want)
+			}
+		}
+	}
+}
+
+func TestInitGuideAndWrappersCarryColonyModeChoice(t *testing.T) {
+	guide, err := buildCommandGuide("init", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(init): %v", err)
+	}
+	guideText := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+	for _, want := range []string{
+		"Colony Mode",
+		"Orchestrator Mode",
+		"default to Colony Mode",
+		"--colony-mode",
+	} {
+		if !strings.Contains(guideText, want) {
+			t.Errorf("init command-guide missing colony mode choice anchor %q", want)
+		}
+	}
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	files := []string{
+		filepath.Join(repoRoot, ".aether", "commands", "init.yaml"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "init.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "init.md"),
+		filepath.Join(repoRoot, ".aether", "skills", "colony", "aether-colony-creation", "SKILL.md"),
+	}
+	for _, path := range files {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(content)
+		for _, want := range []string{
+			"Colony Mode",
+			"Orchestrator Mode",
+			"--colony-mode",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing colony mode choice anchor %q", path, want)
+			}
+		}
+	}
+}
+
 func TestCommandGuideLiteralCommandsArePassthrough(t *testing.T) {
 	for _, command := range []string{"status", "focus", "reference-list", "update"} {
 		guide, err := buildCommandGuide(command, "codex")
@@ -215,6 +280,45 @@ func TestIntelligentWrappersCarryCodexDriftGuard(t *testing.T) {
 	}
 }
 
+func TestLifecycleWrapperSourcesCarryOrchestratorBoundaryGuidance(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	var files []string
+	for _, command := range []string{"plan", "build", "continue", "seal"} {
+		files = append(files,
+			filepath.Join(repoRoot, ".aether", "commands", command+".yaml"),
+			filepath.Join(repoRoot, ".claude", "commands", "ant", command+".md"),
+			filepath.Join(repoRoot, ".opencode", "commands", "ant", command+".md"),
+		)
+	}
+	files = append(files,
+		filepath.Join(repoRoot, ".aether", "skills", "colony", "aether-colony-build-cycle", "SKILL.md"),
+		filepath.Join(repoRoot, ".aether", "docs", "wrapper-runtime-ux-contract.md"),
+		filepath.Join(repoRoot, ".aether", "docs", "source-of-truth-map.md"),
+	)
+
+	for _, path := range files {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(content)
+		for _, want := range []string{
+			"orchestrator_boundary_guidance",
+			"after_discuss_next",
+			"aether discuss",
+			"fresh",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing Orchestrator guidance anchor %q", path, want)
+			}
+		}
+	}
+}
+
 func TestOracleWrappersAndSkillCarryTimeoutGuard(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
@@ -303,13 +407,19 @@ func TestCodexLifecycleSkillsLiveOnlyInAetherSource(t *testing.T) {
 }
 
 func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
-	shims := map[string]bool{}
+	shims := map[string]codexSkillShim{}
 	for _, shim := range codexSkillShims() {
-		shims[shim.Name] = true
+		shims[shim.Name] = shim
 	}
 	for _, skill := range []string{commandGuideSkillCreation, commandGuideSkillResearch, commandGuideSkillBuildCycle} {
-		if !shims[skill] {
+		if _, ok := shims[skill]; !ok {
 			t.Fatalf("codex generated shims missing command-guide skill %q", skill)
+		}
+	}
+	creationShim := shims[commandGuideSkillCreation]
+	for _, want := range []string{"Colony Mode", "Orchestrator Mode", "--colony-mode"} {
+		if !strings.Contains(creationShim.Body, want) {
+			t.Fatalf("codex creation shim missing %q", want)
 		}
 	}
 }
