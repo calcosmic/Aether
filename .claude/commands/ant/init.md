@@ -63,6 +63,17 @@ Present the synthesized charter for user review:
 **Constraints:** {synthesized_charter.constraints}
 ```
 
+## Colony Mode
+
+Before creating colony state, ask the user to choose the operating mode:
+
+1. Colony Mode — use the existing default lifecycle with fewer prompts.
+2. Orchestrator Mode — ask guided boundary questions at phase points for tighter user control.
+
+If the user skips the choice or the host is non-interactive, use Colony Mode.
+Store the choice as `selected_colony_mode`, with value `colony` or
+`orchestrator`.
+
 ## Pheromone Suggestions
 
 Separate scan warnings from strategic pheromones:
@@ -121,7 +132,7 @@ flow.
 
 - Use AskUserQuestion with 3 options: proceed, revise goal, cancel.
 - After approval, for each approved synthesized pheromone, run `aether pheromone-write --type "{type}" --content "{content}" --source "init-synthesis"`.
-- Then run `AETHER_OUTPUT_MODE=visual aether init --charter-json '<synthesized charter JSON>' "<refined goal>"`, where `<synthesized charter JSON>` is the JSON-serialized charter object from the AI synthesis.
+- Then run `AETHER_OUTPUT_MODE=visual aether init --colony-mode "{selected_colony_mode}" --charter-json '<synthesized charter JSON>' "<refined goal>"`, where `<synthesized charter JSON>` is the JSON-serialized charter object from the AI synthesis.
 - Do not write `.aether/QUEEN.md`, `.aether/data/COLONY_STATE.json`, `session.json`, `constraints.json`, or `pheromones.json` by hand from this command spec.
 - If setup is missing, relay the runtime guidance exactly.
 - If docs and runtime disagree, runtime wins.

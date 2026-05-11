@@ -90,11 +90,59 @@ func TestInitCeremonyProceed(t *testing.T) {
 	if state.Charter.TechStack == "" {
 		t.Error("Charter.TechStack is empty, want non-empty")
 	}
+	if state.ColonyMode != colony.ColonyModeColony {
+		t.Errorf("ColonyMode = %q, want %q", state.ColonyMode, colony.ColonyModeColony)
+	}
 
 	// Verify session.json was created
 	sessionPath := filepath.Join(s.BasePath(), "session.json")
 	if _, err := os.Stat(sessionPath); err != nil {
 		t.Fatalf("session.json not created: %v", err)
+	}
+}
+
+func TestInitCeremonyOrchestratorSelection(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	projectRoot := filepath.Dir(filepath.Dir(s.BasePath()))
+	os.WriteFile(filepath.Join(projectRoot, "go.mod"), []byte("module test\n"), 0644)
+
+	r, w, _ := os.Pipe()
+	oldStdin := os.Stdin
+	os.Stdin = r
+	defer func() { os.Stdin = oldStdin }()
+
+	resetCachedStdinReader()
+	origStdinReader := stdinReader
+	stdinReader = func() *bufio.Reader { return bufio.NewReader(r) }
+	defer func() { stdinReader = origStdinReader; resetCachedStdinReader() }()
+
+	go func() {
+		w.WriteString("1\n")
+		w.Close()
+	}()
+
+	rootCmd.SetArgs([]string{"init-ceremony", "--colony-mode", "orchestrator", "Build orchestrator mode", "--target", projectRoot})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v (stderr: %s)", err, errBuf.String())
+	}
+
+	statePath := filepath.Join(s.BasePath(), "COLONY_STATE.json")
+	var state colony.ColonyState
+	data, _ := os.ReadFile(statePath)
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("failed to parse COLONY_STATE.json: %v", err)
+	}
+	if state.ColonyMode != colony.ColonyModeOrchestrator {
+		t.Fatalf("ColonyMode = %q, want %q", state.ColonyMode, colony.ColonyModeOrchestrator)
 	}
 }
 
@@ -297,8 +345,8 @@ func TestSynthesizeLaunchBriefEmptyData(t *testing.T) {
 // appear in the Risks section.
 func TestSynthesizeLaunchBriefWithRisks(t *testing.T) {
 	charter := &colony.Charter{
-		Intent:    "Risky project",
-		KeyRisks:  "No test coverage, tight deadline",
+		Intent:      "Risky project",
+		KeyRisks:    "No test coverage, tight deadline",
 		Constraints: "Must ship in 2 weeks",
 	}
 	researchData := ceremonyResearchData{}

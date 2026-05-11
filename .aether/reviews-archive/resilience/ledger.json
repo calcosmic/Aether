@@ -1,0 +1,127 @@
+{
+  "entries": [
+    {
+      "id": "res-2-001",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "MEDIUM",
+      "file": "cmd/codex_continue_finalize.go",
+      "line": 957,
+      "category": "state_corruption",
+      "description": "finalizeBlockedExternalContinue uses store.SaveJSON instead of UpdateJSONAtomically to write COLONY_STATE.json. If the process crashes between the atomic update at line 1005 (advanceExternalContinue) and this SaveJSON, or if another process writes concurrently, the colony state could be overwritten with stale data. SaveJSON is still atomic at the filesystem level (tmp+rename), but it does not perform a read-modify-write cycle, so it can clobber concurrent changes.",
+      "suggestion": "Use store.UpdateJSONAtomically in finalizeBlockedExternalContinue to append events without clobbering concurrent state mutations."
+    },
+    {
+      "id": "res-2-002",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "MEDIUM",
+      "file": "cmd/codex_continue_finalize.go",
+      "line": 1061,
+      "category": "error_handling",
+      "description": "After advanceExternalContinue atomically commits state at line 1005, a second store.SaveJSON call at line 1061 overwrites COLONY_STATE.json to append worker flow events. The error is silently discarded with _. If this write fails, the state on disk lacks the flow events but is otherwise consistent. If it races with another process, it could clobber the atomic commit.",
+      "suggestion": "Either fold the event append into the atomic update at line 1005, or use UpdateJSONAtomically for the post-advance event append and handle the error."
+    },
+    {
+      "id": "res-2-003",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/codex_build.go",
+      "line": 1660,
+      "category": "unexpected_inputs",
+      "description": "Both manifestTaskIDSet and phaseTaskIDSet call uniqueSortedStrings which deduplicates IDs. If a manifest has duplicate task IDs (e.g. [1.1, 1.1, 1.2]) and colony state has [1.1, 1.2], the deduplicated sets would both be [1.1, 1.2] and stringSlicesEqual would return true, allowing the divergence to pass validation silently. The manifest would have 3 task entries but only 2 unique IDs.",
+      "suggestion": "Compare raw task counts before deduplication, or validate that task IDs are unique within manifest and state before calling stringSlicesEqual."
+    },
+    {
+      "id": "res-2-004",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/codex_continue_finalize.go",
+      "line": 1012,
+      "category": "state_corruption",
+      "description": "advanceExternalContinue unconditionally overwrites all task statuses to TaskCompleted at lines 1012-1013. This is protected by gate checks in the caller (gates.Passed, review.Passed, provenance valid), but the function itself has no defensive assertion. If the gates are ever bypassed or relaxed, this code would silently mark incomplete tasks as completed.",
+      "suggestion": "Add a defensive assertion at the top of advanceExternalContinue that verifies assessment.Passed is true and all tasks have verified evidence before proceeding with the overwrite."
+    },
+    {
+      "id": "res-2-005",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "pkg/storage/storage.go",
+      "line": 121,
+      "category": "race_conditions",
+      "description": "UpdateJSONAtomically uses UpdateFile which acquires an exclusive file lock via flock. This provides cross-process safety for COLONY_STATE.json mutations. The lock is held for the entire read-modify-write cycle, preventing concurrent builds or continues from corrupting state. Race condition risk is mitigated by file locking.",
+      "suggestion": "No action needed. File locking is properly implemented."
+    },
+    {
+      "id": "res-2-006",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/codex_build.go",
+      "line": 1134,
+      "category": "edge_cases",
+      "description": "buildTaskID handles nil task.ID gracefully by falling back to generated task-N IDs. Empty task arrays return true from phaseTasksAllCompleted (vacuously true). These edge cases are properly handled.",
+      "suggestion": "No action needed."
+    },
+    {
+      "id": "res-2-007",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/codex_build_finalize.go",
+      "line": 187,
+      "category": "boundary_conditions",
+      "description": "validateBuildManifestTaskSetForPhase with allowMissingTasks=true only bypasses validation when manifest.Data.Tasks is empty. When the manifest has fewer tasks than state (e.g. 1 vs 2), the stringSlicesEqual check at line 1681 correctly detects the mismatch because the sorted ID arrays have different lengths. Confirmed by TestBuildFinalize_DivergentManifestTaskCount.",
+      "suggestion": "No action needed. The allowMissingTasks bypass is narrow and correct."
+    },
+    {
+      "id": "res-2-008",
+      "phase": 2,
+      "agent": "chaos",
+      "agent_name": "Surge-40",
+      "generated_at": "2026-05-10T16:18:18Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/codex_build.go",
+      "line": 635,
+      "category": "edge_cases",
+      "description": "applyCodexBuildState now checks phaseTasksAllCompleted before marking prior phases as completed (line 638). This was the original bug and is now fixed. Confirmed by TestApplyCodexBuildState_DoesNotCompletePriorPhaseWithIncompleteTasks.",
+      "suggestion": "No action needed. Fix is in place."
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "open": 8,
+    "resolved": 0,
+    "by_severity": {
+      "high": 0,
+      "medium": 2,
+      "low": 2,
+      "info": 4
+    }
+  }
+}

@@ -37,6 +37,12 @@ var initCmd = &cobra.Command{
 			outputError(1, fmt.Sprintf("invalid scope %q (must be project or meta)", scopeRaw), nil)
 			return nil
 		}
+		colonyModeRaw, _ := cmd.Flags().GetString("colony-mode")
+		colonyMode, err := parseInitColonyMode(colonyModeRaw)
+		if err != nil {
+			outputError(1, fmt.Sprintf("invalid colony mode %q (must be colony or orchestrator)", colonyModeRaw), nil)
+			return nil
+		}
 
 		goal := strings.TrimSpace(args[0])
 		if goal == "" {
@@ -137,6 +143,7 @@ var initCmd = &cobra.Command{
 			Version:       "3.0",
 			Goal:          &goal,
 			Scope:         scope,
+			ColonyMode:    colonyMode,
 			ColonyVersion: 0,
 			State:         colony.StateREADY,
 			CurrentPhase:  0,
@@ -170,6 +177,7 @@ var initCmd = &cobra.Command{
 			SessionID:        sessionID,
 			StartedAt:        nowStr,
 			ColonyGoal:       goal,
+			ColonyMode:       colonyMode,
 			CurrentPhase:     0,
 			CurrentMilestone: "",
 			SuggestedNext:    "aether plan",
@@ -211,6 +219,7 @@ var initCmd = &cobra.Command{
 			"state":               string(colony.StateREADY),
 			"goal":                goal,
 			"scope":               string(scope),
+			"colony_mode":         string(colonyMode),
 			"version":             "3.0",
 			"phase":               0,
 			"session":             sessionID,
@@ -231,8 +240,20 @@ func ptrStr(s *string) string {
 	return *s
 }
 
+func parseInitColonyMode(raw string) (colony.ColonyMode, error) {
+	mode := colony.ColonyMode(strings.ToLower(strings.TrimSpace(raw)))
+	if mode == "" {
+		return colony.ColonyModeColony, nil
+	}
+	if !mode.Valid() {
+		return "", colony.ErrInvalidColonyMode
+	}
+	return mode, nil
+}
+
 func init() {
 	initCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
+	initCmd.Flags().String("colony-mode", string(colony.ColonyModeColony), "Colony mode: colony or orchestrator")
 	initCmd.Flags().String("charter-json", "", "Approved charter data as JSON string")
 	rootCmd.AddCommand(initCmd)
 }

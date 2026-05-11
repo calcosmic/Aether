@@ -194,6 +194,9 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 	if result["dispatch_mode"].(string) != "plan-only" {
 		t.Fatalf("dispatch_mode = %q, want plan-only", result["dispatch_mode"])
 	}
+	if result["colony_mode"].(string) != "colony" {
+		t.Fatalf("colony_mode = %q, want colony", result["colony_mode"])
+	}
 	if got := int(result["dispatch_count"].(float64)); got != 4 {
 		t.Fatalf("dispatch_count = %d, want 4", got)
 	}
@@ -219,6 +222,9 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 	plan := result["continue_manifest"].(map[string]interface{})
 	if plan["requires_finalizer"] != true {
 		t.Fatalf("continue_manifest requires_finalizer = %v, want true", plan["requires_finalizer"])
+	}
+	if plan["colony_mode"].(string) != "colony" {
+		t.Fatalf("continue_manifest colony_mode = %q, want colony", plan["colony_mode"])
 	}
 	if plan["finalize_surface"].(string) != "awaiting_wrapper_completion" {
 		t.Fatalf("continue_manifest finalize_surface = %q, want awaiting_wrapper_completion", plan["finalize_surface"])
@@ -322,6 +328,69 @@ func TestContinuePlanOnlyHeavyOverridesLightWithSkipWatchers(t *testing.T) {
 	}
 }
 
+func TestContinuePlanOnlyStandardSecurityUsesQueenSelectedGatekeeper(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	root, _, _, _ := setupIntermediateContinueState(t, "Auth token rotation")
+
+	result, _, _, dispatches, err := runCodexContinuePlanOnly(root, codexContinueOptions{
+		VerificationDepth: string(colony.VerificationDepthStandard),
+		SkipWatchers:      true,
+	})
+	if err != nil {
+		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
+	}
+	if !continueExternalDispatchHasCaste(dispatches, "gatekeeper") {
+		t.Fatalf("standard auth continue dispatches missing Queen-selected gatekeeper: %+v", dispatches)
+	}
+	if !continueExternalDispatchHasCaste(dispatches, "probe") {
+		t.Fatalf("standard auth continue dispatches missing baseline probe: %+v", dispatches)
+	}
+	if continueExternalDispatchHasCaste(dispatches, "watcher") {
+		t.Fatalf("skip-watchers plan scheduled watcher dispatch: %+v", dispatches)
+	}
+	plan := result["continue_manifest"].(codexContinuePlanManifest)
+	if plan.ReviewDepth != string(colony.VerificationDepthStandard) {
+		t.Fatalf("review_depth = %q, want standard", plan.ReviewDepth)
+	}
+}
+
+func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
+	saveGlobals(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	root, _, _, _ := setupIntermediateContinueState(t, "Performance optimization")
+	phase := colony.Phase{
+		ID:          1,
+		Name:        "Performance optimization",
+		Description: "Optimize latency and benchmark memory usage",
+		Mode:        colony.PhaseModePrototype,
+	}
+
+	dispatches := plannedContinueReviewDispatches(
+		root,
+		phase,
+		codexContinueManifest{},
+		codexContinueVerificationReport{ChecksPassed: true},
+		codexContinueAssessment{Passed: true},
+		&codex.FakeInvoker{},
+		0,
+		colony.VerificationDepthStandard,
+	)
+
+	if !continueWorkerDispatchHasCaste(dispatches, "measurer") {
+		t.Fatalf("standard performance continue review missing Queen-selected measurer: %+v", dispatches)
+	}
+	if !continueWorkerDispatchHasCaste(dispatches, "probe") {
+		t.Fatalf("standard performance continue review missing baseline probe: %+v", dispatches)
+	}
+	if continueWorkerDispatchHasCaste(dispatches, "watcher") {
+		t.Fatalf("review dispatches should not include watcher verification worker: %+v", dispatches)
+	}
+}
+
 func TestContinueFinalizeAcceptsEmptyDispatchesWhenSkipWatchersLight(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -339,6 +408,7 @@ func TestContinueFinalizeAcceptsEmptyDispatchesWhenSkipWatchersLight(t *testing.
 		t.Fatalf("dispatch len = %d, want 0", len(dispatches))
 	}
 	plan := planResult["continue_manifest"].(codexContinuePlanManifest)
+	plan.ColonyMode = ""
 	completion := codexExternalContinueCompletion{
 		ContinueManifest: &plan,
 		Dispatches:       []codexContinueExternalDispatch{},
@@ -1957,6 +2027,105 @@ func TestContinueBlocksWhenUnreconciledTaskStillHasNoEvidence(t *testing.T) {
 	}
 }
 
+func TestContinueBlocksWhenManifestTaskSetDiffersFromColonyState(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Block stale manifest task set"
+	now := time.Now().UTC()
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Stale manifest task set",
+					Status: colony.PhaseInProgress,
+					Tasks: []colony.Task{
+						{ID: &taskOneID, Goal: "Ship the first task", Status: colony.TaskInProgress},
+						{ID: &taskTwoID, Goal: "Ship the second task", Status: colony.TaskInProgress, DependsOn: []string{taskOneID}},
+					},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Must wait for manifest parity", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Stale manifest task set", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-stale-1", Task: "Ship the first task", Status: "completed", TaskID: taskOneID},
+		{Stage: "wave", Wave: 2, Caste: "builder", Name: "Forge-stale-2", Task: "Ship the second task", Status: "completed", TaskID: taskTwoID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-stale-3", Task: "Independent verification before advancement", Status: "completed"},
+	})
+	var manifest codexBuildManifest
+	manifestPath := filepath.ToSlash(filepath.Join("build", "phase-1", "manifest.json"))
+	if err := store.LoadJSON(manifestPath, &manifest); err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+	manifest.Tasks = []codexBuildTaskPlan{
+		{ID: taskOneID, Goal: "Ship the first task", Status: colony.TaskCompleted},
+	}
+	if err := store.SaveJSON(manifestPath, manifest); err != nil {
+		t.Fatalf("failed to write stale manifest: %v", err)
+	}
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Fatalf("expected blocked:true for manifest task-set drift, got %v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Fatalf("expected advanced:false for manifest task-set drift, got %v", result)
+	}
+	if next, _ := result["next"].(string); next != "aether build 1 --force" {
+		t.Fatalf("next = %q, want %q", next, "aether build 1 --force")
+	}
+	wantIssue := "phase 1 build manifest task set does not match COLONY_STATE (manifest: 1.1; state: 1.1, 1.2); run `aether build 1 --force` to regenerate the build manifest before `aether continue`"
+	if issues := stringSliceValue(result["blocking_issues"]); !containsString(issues, wantIssue) {
+		t.Fatalf("blocking_issues = %v, want exact recovery guidance %q", issues, wantIssue)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.State != colony.StateBUILT {
+		t.Fatalf("state = %s, want BUILT", state.State)
+	}
+	if state.Plan.Phases[0].Status != colony.PhaseInProgress {
+		t.Fatalf("phase 1 status = %s, want in_progress", state.Plan.Phases[0].Status)
+	}
+	if state.Plan.Phases[1].Status != colony.PhasePending {
+		t.Fatalf("phase 2 status = %s, want pending", state.Plan.Phases[1].Status)
+	}
+}
+
 func TestContinueBlocksWhenBuilderClaimsMismatch(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -2709,6 +2878,24 @@ func setupIntermediateContinueState(t *testing.T, phaseName string) (string, str
 	return root, dataDir, goal, taskID
 }
 
+func continueExternalDispatchHasCaste(dispatches []codexContinueExternalDispatch, caste string) bool {
+	for _, dispatch := range dispatches {
+		if dispatch.Caste == caste {
+			return true
+		}
+	}
+	return false
+}
+
+func continueWorkerDispatchHasCaste(dispatches []codex.WorkerDispatch, caste string) bool {
+	for _, dispatch := range dispatches {
+		if dispatch.Caste == caste {
+			return true
+		}
+	}
+	return false
+}
+
 func verificationStepsByName(t *testing.T, verification map[string]interface{}) map[string]map[string]interface{} {
 	t.Helper()
 
@@ -2873,6 +3060,53 @@ func TestVerifyCodexBuildClaims_RealMode_EmptyClaimsFail(t *testing.T) {
 	}
 	if !strings.Contains(result.Summary, "real mode") {
 		t.Fatalf("expected summary to mention real mode, got: %s", result.Summary)
+	}
+}
+
+func TestVerifyCodexBuildClaims_RejectsMismatchedBuildPhase(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	dataDir := tmpDir + "/.aether/data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("failed to create claimed file: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	store = s
+
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		FilesModified: []string{"main.go"},
+		BuildPhase:    2,
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("failed to write claims: %v", err)
+	}
+
+	manifest := codexContinueManifest{
+		Present: true,
+		Path:    "build/phase-1/manifest.json",
+		Data: codexBuildManifest{
+			Phase:        1,
+			DispatchMode: "real",
+			ClaimsPath:   displayDataPath("last-build-claims.json"),
+			Dispatches: []codexBuildDispatch{
+				{Stage: "wave", Caste: "builder", Name: "Forge-1", Task: "Build it", Status: "completed", TaskID: "1.1"},
+			},
+		},
+	}
+
+	result := verifyCodexBuildClaims(tmpDir, manifest)
+	if result.Passed {
+		t.Fatalf("expected Passed=false for stale claims from phase 2, got Passed=true: %s", result.Summary)
+	}
+	wantSummary := "builder claims build_phase 2 does not match manifest phase 1; run `aether build 1 --force` to regenerate claims before `aether continue`"
+	if result.Summary != wantSummary {
+		t.Fatalf("summary = %q, want %q", result.Summary, wantSummary)
 	}
 }
 
@@ -4637,6 +4871,73 @@ func TestExternalContinueReviewReportTimeoutNotBlocking(t *testing.T) {
 	}
 }
 
+func TestExternalContinueReviewReportUsesPlannedStandardReviewCastes(t *testing.T) {
+	now := time.Now().UTC()
+	planned := []codexContinueExternalDispatch{
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "planned"},
+		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "planned"},
+	}
+	workerFlow := []codexContinueWorkerFlowStep{
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues"},
+		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "completed", Summary: "Coverage is adequate"},
+	}
+
+	report := externalContinueReviewReport(1, workerFlow, now, false, colony.VerificationDepthStandard, planned)
+
+	if !report.Passed {
+		t.Fatalf("report.Passed = false, want true for planned standard review castes: %+v", report.BlockingIssues)
+	}
+	if len(report.Workers) != 2 {
+		t.Fatalf("report.Workers len = %d, want 2", len(report.Workers))
+	}
+}
+
+func TestExternalContinueReviewReportBlocksWrongPlannedReviewCaste(t *testing.T) {
+	now := time.Now().UTC()
+	planned := []codexContinueExternalDispatch{
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "planned"},
+		{Stage: "review", Caste: "probe", Name: "Probe-45", Status: "planned"},
+	}
+	workerFlow := []codexContinueWorkerFlowStep{
+		{Stage: "review", Caste: "gatekeeper", Name: "Guard-43", Status: "completed", Summary: "No issues"},
+		{Stage: "review", Caste: "auditor", Name: "Audit-44", Status: "completed", Summary: "Quality is adequate"},
+	}
+
+	report := externalContinueReviewReport(1, workerFlow, now, false, colony.VerificationDepthStandard, planned)
+
+	if report.Passed {
+		t.Fatalf("report.Passed = true, want false for wrong planned review caste")
+	}
+	if !strings.Contains(strings.Join(report.BlockingIssues, "\n"), "expected review castes [gatekeeper probe], got [gatekeeper auditor]") {
+		t.Fatalf("BlockingIssues = %v, want planned caste mismatch", report.BlockingIssues)
+	}
+}
+
+func TestExternalContinueReviewReportEnvironmentBlockedLaunchNotBlocking(t *testing.T) {
+	now := time.Now().UTC()
+	workerFlow := []codexContinueWorkerFlowStep{
+		{
+			Stage:   "review",
+			Caste:   "probe",
+			Name:    "Probe-45",
+			Status:  "blocked",
+			Summary: "Phase launch smoke is unproven: npx next dev and raw Node HTTP bind to 127.0.0.1 both failed with EPERM listen before app code ran.",
+			Blockers: []string{
+				"Mandatory launch smoke could not complete: raw Node HTTP bind to localhost failed with EPERM listen; external launch proof is required.",
+			},
+		},
+	}
+
+	report := externalContinueReviewReport(1, workerFlow, now, true, colony.VerificationDepthLight)
+
+	if !report.Passed {
+		t.Errorf("report.Passed = false, want true for environment-blocked launch proof")
+	}
+	if len(report.BlockingIssues) != 0 {
+		t.Errorf("BlockingIssues = %v, want none", report.BlockingIssues)
+	}
+}
+
 func TestAttachExternalContinueWatcherTimeoutAdvisory(t *testing.T) {
 	verification := codexContinueVerificationReport{
 		Phase:        1,
@@ -4670,6 +4971,120 @@ func TestAttachExternalContinueWatcherTimeoutAdvisory(t *testing.T) {
 	}
 	if watcherFlow == nil {
 		t.Error("watcherFlow should not be nil")
+	}
+}
+
+func TestAttachExternalContinueWatcherEnvironmentBlockedLaunchAdvisory(t *testing.T) {
+	verification := codexContinueVerificationReport{
+		Phase:        1,
+		ChecksPassed: true,
+		Passed:       true,
+		Steps: []codexVerificationStep{
+			{Name: "build", Passed: true},
+			{Name: "tests", Passed: true},
+		},
+	}
+	workerFlow := []codexContinueWorkerFlowStep{
+		{
+			Stage:   "verification",
+			Caste:   "watcher",
+			Name:    "Keen-42",
+			Status:  "blocked",
+			Summary: "Watcher tried next dev and a raw Node HTTP bind to 127.0.0.1; both failed with EPERM listen before app code ran.",
+		},
+	}
+
+	result, _ := attachExternalContinueWatcher(verification, workerFlow)
+
+	if !result.Passed {
+		t.Errorf("result.Passed = false, want true for environment-blocked launch proof")
+	}
+	if !result.ChecksPassed {
+		t.Errorf("result.ChecksPassed = false, want true")
+	}
+	if result.Watcher.Status != watcherStatusEnvironmentBlocked {
+		t.Errorf("watcher status = %q, want %q", result.Watcher.Status, watcherStatusEnvironmentBlocked)
+	}
+	if len(result.BlockingIssues) != 0 {
+		t.Errorf("BlockingIssues = %v, want none", result.BlockingIssues)
+	}
+}
+
+func TestEvaluateContinueWatcherVerificationClassifiesRawBindEPERM(t *testing.T) {
+	manifest := codexContinueManifest{
+		Present: true,
+		Data: codexBuildManifest{
+			Dispatches: []codexBuildDispatch{
+				{
+					Stage:   "verification",
+					Caste:   "watcher",
+					Name:    "Watch-64",
+					Status:  "blocked",
+					Summary: "Mandatory launch smoke could not complete in this sandbox.",
+					Blockers: []string{
+						"`npm run dev`, `npx next dev -H 127.0.0.1 -p 4010`, and a raw Node HTTP bind to localhost all failed with EPERM listen.",
+					},
+				},
+			},
+		},
+	}
+
+	watcher := evaluateContinueWatcherVerification(manifest)
+
+	if !watcher.Passed {
+		t.Fatalf("watcher.Passed = false, want true for environment-blocked launch verification")
+	}
+	if watcher.Status != watcherStatusEnvironmentBlocked {
+		t.Fatalf("watcher.Status = %q, want %q", watcher.Status, watcherStatusEnvironmentBlocked)
+	}
+	if !strings.Contains(watcher.Summary, "external launch proof") {
+		t.Fatalf("summary should preserve external proof requirement, got %q", watcher.Summary)
+	}
+}
+
+func TestEnvironmentBlockedLaunchVerificationClassifiesMinimalRawBind(t *testing.T) {
+	text := "Raw minimal socket bind failed with EPERM listen before application launch verification could run."
+	if !isEnvironmentBlockedLaunchVerification(text) {
+		t.Fatalf("expected raw minimal socket bind EPERM to classify as environment-blocked launch verification")
+	}
+}
+
+func TestRunCodexContinueVerificationSkipsWatcherForRawBindEPERM(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	phase := colony.Phase{ID: 1, Name: "Prototype"}
+	state := colony.ColonyState{
+		Plan: colony.Plan{Phases: []colony.Phase{phase}},
+	}
+	manifest := codexContinueManifest{
+		Present: true,
+		Data: codexBuildManifest{
+			Dispatches: []codexBuildDispatch{
+				{
+					Stage:   "verification",
+					Caste:   "watcher",
+					Name:    "Watch-64",
+					Status:  "blocked",
+					Summary: "A raw Node HTTP bind to 127.0.0.1 failed with EPERM listen, so this host cannot run launch smoke.",
+				},
+			},
+		},
+	}
+
+	report, watcherFlow := runCodexContinueVerification(context.Background(), tmpDir, state, phase, manifest, time.Second, time.Second, false)
+
+	if watcherFlow != nil {
+		t.Fatalf("watcherFlow = %+v, want nil because continue watcher should not be spawned", watcherFlow)
+	}
+	if !report.Passed || !report.ChecksPassed {
+		t.Fatalf("report should pass on non-launch verification, got %+v", report)
+	}
+	if report.Watcher.Status != watcherStatusEnvironmentBlocked {
+		t.Fatalf("watcher status = %q, want %q", report.Watcher.Status, watcherStatusEnvironmentBlocked)
 	}
 }
 
@@ -5893,6 +6308,45 @@ func TestMissingBuildPacketLightFlagBlocksKeywordOverride(t *testing.T) {
 	}
 }
 
+func TestContinueProbeReviewBriefTreatsPackageCoverageAsAdvisory(t *testing.T) {
+	brief := renderCodexContinueReviewBrief(
+		"/repo",
+		colony.Phase{ID: 3, Name: "Wire Into Build Flow"},
+		codexContinueManifest{},
+		codexContinueVerificationReport{ChecksPassed: true},
+		codexContinueAssessment{},
+		codexContinueReviewSpec{
+			Caste: "probe",
+			Task:  codexContinueReviewSpecs[2].Task,
+		},
+	)
+
+	if !strings.Contains(brief, "package-wide line coverage below an aspirational threshold is advisory") {
+		t.Fatalf("probe brief should make package-wide coverage advisory, got:\n%s", brief)
+	}
+	if !strings.Contains(brief, "missing focused regression coverage for changed behavior") {
+		t.Fatalf("probe brief should still allow blocking on concrete coverage gaps, got:\n%s", brief)
+	}
+}
+
+func TestContinueReviewTimeoutAdvisoryWhenVerificationPassed(t *testing.T) {
+	step := codexContinueWorkerFlowStep{Status: "timeout", Summary: "worker timeout after 5m0s"}
+	verification := codexContinueVerificationReport{ChecksPassed: true}
+
+	if continueReviewStepBlocks(step, verification) {
+		t.Fatal("review timeout should be advisory when independent verification passed")
+	}
+}
+
+func TestContinueReviewTimeoutBlocksWhenVerificationFailed(t *testing.T) {
+	step := codexContinueWorkerFlowStep{Status: "timeout", Summary: "worker timeout after 5m0s"}
+	verification := codexContinueVerificationReport{ChecksPassed: false}
+
+	if !continueReviewStepBlocks(step, verification) {
+		t.Fatal("review timeout should block when independent verification failed")
+	}
+}
+
 func TestContinueMissingPacketHonorsStoredDepth(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -5912,5 +6366,188 @@ func TestContinueMissingPacketHonorsStoredDepth(t *testing.T) {
 	}
 	if result["review_depth"] != string(colony.VerificationDepthHeavy) {
 		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
+	}
+}
+
+// --- Continue finalizer validation rejection tests (Task 4.1) ---
+
+func TestMergeExternalContinueResults_RejectsMalformedJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	malformedPath := filepath.Join(tmpDir, "completion.json")
+	if err := os.WriteFile(malformedPath, []byte("{not valid json}"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := loadExternalContinueCompletion(malformedPath)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON completion file")
+	}
+	if !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("expected parse error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsMissingManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	noManifestPath := filepath.Join(tmpDir, "completion.json")
+	validJSON := `{"dispatches": [{"name": "Keen-33", "status": "completed"}]}`
+	if err := os.WriteFile(noManifestPath, []byte(validJSON), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, err := loadExternalContinueCompletion(noManifestPath)
+	if err == nil {
+		t.Fatal("expected error for completion file missing continue_manifest")
+	}
+	if !strings.Contains(err.Error(), "continue_manifest") {
+		t.Fatalf("expected continue_manifest error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsWrongCaste(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", Task: "Verify build"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Name: "Keen-33", Caste: "gatekeeper", Status: "completed"},
+	}
+	_, err := mergeExternalContinueResults(plan, results)
+	if err == nil {
+		t.Fatal("expected error for wrong caste in continue result")
+	}
+	if !strings.Contains(err.Error(), "caste") {
+		t.Fatalf("expected caste mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsWrongStage(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", Task: "Verify build"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Name: "Keen-33", Stage: "review", Status: "completed"},
+	}
+	_, err := mergeExternalContinueResults(plan, results)
+	if err == nil {
+		t.Fatal("expected error for wrong stage in continue result")
+	}
+	if !strings.Contains(err.Error(), "stage") {
+		t.Fatalf("expected stage mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsWrongTaskID(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", TaskID: "1.1", Task: "Verify build"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Name: "Keen-33", TaskID: "2.2", Status: "completed"},
+	}
+	_, err := mergeExternalContinueResults(plan, results)
+	if err == nil {
+		t.Fatal("expected error for wrong task_id in continue result")
+	}
+	if !strings.Contains(err.Error(), "task_id") {
+		t.Fatalf("expected task_id mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsWrongWave(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", Wave: 1, Task: "Verify build"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Name: "Keen-33", Wave: 2, Status: "completed"},
+	}
+	_, err := mergeExternalContinueResults(plan, results)
+	if err == nil {
+		t.Fatal("expected error for wrong wave in continue result")
+	}
+	if !strings.Contains(err.Error(), "wave") {
+		t.Fatalf("expected wave mismatch error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsDuplicateWorkerResult(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", Task: "Verify build"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Name: "Keen-33", Status: "completed"},
+		{Name: "Keen-33", Status: "completed"},
+	}
+	_, err := mergeExternalContinueResults(plan, results)
+	if err == nil {
+		t.Fatal("expected error for duplicate continue worker result")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("expected duplicate error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsNonTerminalStatus(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", Task: "Verify build"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Name: "Keen-33", Status: "pending"},
+	}
+	_, err := mergeExternalContinueResults(plan, results)
+	if err == nil {
+		t.Fatal("expected error for non-terminal status in continue result")
+	}
+	if !strings.Contains(err.Error(), "non-terminal") {
+		t.Fatalf("expected non-terminal status error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_RejectsNamelessResult(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", Task: "Verify build"},
+		},
+	}
+	results := []codexContinueExternalDispatch{
+		{Name: "", Status: "completed"},
+	}
+	_, err := mergeExternalContinueResults(plan, results)
+	if err == nil {
+		t.Fatal("expected error for nameless continue result")
+	}
+	if !strings.Contains(err.Error(), "missing name") {
+		t.Fatalf("expected missing name error, got: %v", err)
+	}
+}
+
+func TestMergeExternalContinueResults_SynthesizesTimeoutForMissingResult(t *testing.T) {
+	plan := codexContinuePlanManifest{
+		Dispatches: []codexContinueExternalDispatch{
+			{Name: "Keen-33", Caste: "watcher", Stage: "verification", Task: "Verify build"},
+		},
+	}
+	// No results provided — continue should synthesize a timeout entry
+	results := []codexContinueExternalDispatch{}
+	flow, err := mergeExternalContinueResults(plan, results)
+	if err != nil {
+		t.Fatalf("expected continue to tolerate missing results (synthesizes timeout): %v", err)
+	}
+	if len(flow) != 1 {
+		t.Fatalf("expected 1 synthesized flow step, got %d", len(flow))
+	}
+	if flow[0].Status != "timeout" {
+		t.Fatalf("expected synthesized timeout status, got %q", flow[0].Status)
+	}
+	if flow[0].Name != "Keen-33" {
+		t.Fatalf("expected synthesized step to preserve name, got %q", flow[0].Name)
 	}
 }

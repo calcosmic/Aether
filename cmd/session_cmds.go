@@ -99,6 +99,7 @@ var sessionInitCmd = &cobra.Command{
 			SessionID:        sessionID,
 			StartedAt:        time.Now().UTC().Format(time.RFC3339),
 			ColonyGoal:       goal,
+			ColonyMode:       colony.ColonyModeColony,
 			CurrentPhase:     0,
 			CurrentMilestone: "First Mound",
 			SuggestedNext:    "aether plan",
@@ -208,6 +209,7 @@ var sessionUpdateCmd = &cobra.Command{
 				SessionID:        sessionID,
 				StartedAt:        time.Now().UTC().Format(time.RFC3339),
 				ColonyGoal:       "",
+				ColonyMode:       colony.ColonyModeColony,
 				CurrentPhase:     0,
 				CurrentMilestone: "First Mound",
 				SuggestedNext:    "aether plan",
@@ -225,6 +227,7 @@ var sessionUpdateCmd = &cobra.Command{
 			if state.Goal != nil && *state.Goal != "" {
 				session.ColonyGoal = *state.Goal
 			}
+			session.ColonyMode = state.EffectiveColonyMode()
 			if state.CurrentPhase > 0 {
 				session.CurrentPhase = state.CurrentPhase
 			}

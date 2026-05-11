@@ -131,6 +131,9 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if len(plan.Dispatches) == 0 && !(plan.SkipWatchers && plan.ReviewDepth == string(colony.VerificationDepthLight)) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, fmt.Errorf("continue_manifest contains no dispatches")
 	}
+	if err := validateFinalizerManifestRoot("continue_manifest", plan.Root, root); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, err
+	}
 
 	state, phase, manifest, err := validateExternalContinueState(plan)
 	if err != nil {
@@ -179,6 +182,11 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := traceContinueProvenance(manifest.Data.Dispatches); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	finalizeReviewDepth := colony.VerificationDepthLight
+	if plan.ReviewDepth != "" {
+		finalizeReviewDepth = colony.NormalizeVerificationDepth(plan.ReviewDepth)
+	}
+
 	// Phase 97: Read queen-state as advisory context (D-09, D-11)
 	queenAdvisory, _ := queenStateRead(phase.ID)
 	// queenAdvisory.Decisions provides advisory context for logging -- finalize re-evaluates gates live
@@ -241,7 +249,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		if plan.ReviewDepth != "" {
 			resolveDepth = plan.ReviewDepth
 		}
-		gates, autoResolved := autoResolveSoftBlockGates(phase.ID, gates, resolveDepth)
+		gates, autoResolved := autoResolveSoftBlockGates(phase.ID, gates, resolveDepth, phase.Mode)
 
 		if len(autoResolved) > 0 {
 			// Re-persist gate results with auto-resolved annotations
@@ -326,7 +334,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			hasSoftBlockRemaining := false
 			for _, c := range gates.Checks {
 				if !c.Passed {
-					tier, _ := gateClassify(c.Name)
+					tier, _ := phaseModeAwareGateClassify(c.Name, phase.Mode)
 					if tier == softBlock {
 						hasSoftBlockRemaining = true
 						break
@@ -409,7 +417,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 				}
 			}
 
-			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel, gateRecoveryInstructions)
+			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel, gateRecoveryInstructions, finalizeReviewDepth)
 			if err != nil {
 				return nil, state, phase, nil, nil, false, err
 			}
@@ -418,17 +426,13 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		}
 	}
 
-	finalizeReviewDepth := colony.VerificationDepthLight
-	if plan.ReviewDepth != "" {
-		finalizeReviewDepth = colony.NormalizeVerificationDepth(plan.ReviewDepth)
-	}
-	review := externalContinueReviewReport(phase.ID, workerFlow, now, skipMissing, finalizeReviewDepth)
+	review := externalContinueReviewReport(phase.ID, workerFlow, now, skipMissing, finalizeReviewDepth, plan.Dispatches)
 	reviewReportRel := continuePlanArtifactsPath(phase.ID, "review.json")
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
 	if !review.Passed {
-		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, workerFlow, now, verificationReportRel, gateReportRel, nil)
+		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, workerFlow, now, verificationReportRel, gateReportRel, nil, finalizeReviewDepth)
 		if err != nil {
 			return nil, state, phase, nil, nil, false, err
 		}
@@ -533,7 +537,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 	captureLearning()
 
-	result, updated, nextPhase, housekeeping, final, err := advanceExternalContinue(root, state, phase, manifest, verification, assessment, gates, review, reviewReportRel, watcherFlow, workerFlow, now, verificationReportRel, gateReportRel)
+	result, updated, nextPhase, housekeeping, final, err := advanceExternalContinue(root, state, phase, manifest, verification, assessment, gates, review, reviewReportRel, watcherFlow, workerFlow, now, verificationReportRel, gateReportRel, finalizeReviewDepth)
 	if err != nil {
 		return nil, state, phase, nil, housekeeping, final, err
 	}
@@ -557,6 +561,9 @@ func validateExternalContinueState(plan *codexContinuePlanManifest) (colony.Colo
 	}
 	if plan.Phase != state.CurrentPhase {
 		return state, colony.Phase{}, codexContinueManifest{}, fmt.Errorf("continue_manifest phase %d does not match active phase %d", plan.Phase, state.CurrentPhase)
+	}
+	if err := validateFinalizerManifestColonyMode("continue_manifest", plan.ColonyMode, state); err != nil {
+		return state, colony.Phase{}, codexContinueManifest{}, err
 	}
 	phase := state.Plan.Phases[state.CurrentPhase-1]
 	if phase.Status != colony.PhaseInProgress {
@@ -627,18 +634,60 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 			summary = strings.Join(blockers, "; ")
 		}
 		flow = append(flow, codexContinueWorkerFlowStep{
-			Stage:    dispatch.Stage,
-			Caste:    dispatch.Caste,
-			Name:     dispatch.Name,
-			Task:     dispatch.Task,
-			Status:   status,
-			Summary:  summary,
-			Blockers: blockers,
-			Duration: result.Duration,
-			Report:   strings.TrimSpace(result.Report),
+			Stage:           dispatch.Stage,
+			Caste:           dispatch.Caste,
+			Name:            dispatch.Name,
+			Task:            dispatch.Task,
+			Status:          status,
+			Summary:         summary,
+			Blockers:        blockers,
+			Duration:        result.Duration,
+			Report:          strings.TrimSpace(result.Report),
+			Findings:        mergeCodexReviewFindings(result.Findings, result.Issues),
+			Recommendations: uniqueSortedStrings(result.Recommendations),
+			WeakSpots:       uniqueSortedStrings(result.WeakSpots),
+			EdgeCases:       uniqueSortedStrings(result.EdgeCases),
+			ReusableLessons: uniqueSortedStrings(result.ReusableLessons),
 		})
 	}
 	return flow, nil
+}
+
+func mergeCodexReviewFindings(groups ...[]codexReviewFinding) []codexReviewFinding {
+	var merged []codexReviewFinding
+	seen := map[string]bool{}
+	for _, group := range groups {
+		for _, finding := range group {
+			finding.Description = strings.TrimSpace(finding.Description)
+			if finding.Description == "" {
+				finding.Description = strings.TrimSpace(finding.Title)
+			}
+			finding.Title = strings.TrimSpace(finding.Title)
+			finding.Domain = strings.TrimSpace(strings.ToLower(finding.Domain))
+			finding.Severity = strings.TrimSpace(strings.ToUpper(finding.Severity))
+			finding.File = strings.TrimSpace(finding.File)
+			finding.Category = strings.TrimSpace(finding.Category)
+			finding.Suggestion = strings.TrimSpace(finding.Suggestion)
+			if finding.Description == "" && finding.Suggestion == "" {
+				continue
+			}
+			key := strings.Join([]string{
+				finding.Domain,
+				finding.Severity,
+				finding.File,
+				fmt.Sprintf("%d", finding.Line),
+				finding.Category,
+				finding.Description,
+				finding.Suggestion,
+			}, "\x00")
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			merged = append(merged, finding)
+		}
+	}
+	return merged
 }
 
 func persistExternalContinueHandoffs(root string, phaseNum int, dispatches []codexContinueExternalDispatch, results []codexContinueExternalDispatch) error {
@@ -683,19 +732,19 @@ func persistExternalContinueHandoffs(root string, phaseNum int, dispatches []cod
 }
 
 func validateExternalContinueIdentity(dispatch codexContinueExternalDispatch, result codexContinueExternalDispatch) error {
-	if value := strings.TrimSpace(result.Caste); value != "" && !strings.EqualFold(value, dispatch.Caste) {
-		return fmt.Errorf("external continue result %s caste = %q, want %q", dispatch.Name, value, dispatch.Caste)
+	dispatchSpec := workerIdentitySpec{
+		Caste:  dispatch.Caste,
+		Stage:  dispatch.Stage,
+		TaskID: dispatch.TaskID,
+		Wave:   dispatch.Wave,
 	}
-	if value := strings.TrimSpace(result.Stage); value != "" && !strings.EqualFold(value, dispatch.Stage) {
-		return fmt.Errorf("external continue result %s stage = %q, want %q", dispatch.Name, value, dispatch.Stage)
+	resultSpec := workerIdentitySpec{
+		Caste:  result.Caste,
+		Stage:  result.Stage,
+		TaskID: result.TaskID,
+		Wave:   result.Wave,
 	}
-	if value := strings.TrimSpace(result.TaskID); value != "" && value != strings.TrimSpace(dispatch.TaskID) {
-		return fmt.Errorf("external continue result %s task_id = %q, want %q", dispatch.Name, value, dispatch.TaskID)
-	}
-	if result.Wave > 0 && dispatch.Wave > 0 && result.Wave != dispatch.Wave {
-		return fmt.Errorf("external continue result %s wave = %d, want %d", dispatch.Name, result.Wave, dispatch.Wave)
-	}
-	return nil
+	return validateWorkerResultIdentity(dispatch.Name, dispatchSpec, resultSpec)
 }
 
 func attachExternalContinueWatcher(verification codexContinueVerificationReport, workerFlow []codexContinueWorkerFlowStep) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
@@ -714,6 +763,9 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 			Status:  status,
 			Worker:  strings.TrimSpace(step.Name),
 			Summary: summary,
+		}
+		if isEnvironmentBlockedLaunchVerification(strings.Join(append([]string{summary}, step.Blockers...), "\n")) {
+			watcher = environmentBlockedWatcher(watcher)
 		}
 		verification.Watcher = watcher
 		if !watcher.Passed {
@@ -740,7 +792,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 	return verification, nil
 }
 
-func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth colony.VerificationDepth) codexContinueReviewReport {
+func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time, skipMissing bool, reviewDepth colony.VerificationDepth, plannedDispatches ...[]codexContinueExternalDispatch) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phaseID,
 		GeneratedAt: now.Format(time.RFC3339),
@@ -761,6 +813,9 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 		if status == "completed" || status == "manually-reconciled" {
 			continue
 		}
+		if continueWorkerFlowEnvironmentBlocked(step) {
+			continue
+		}
 		if status == "timeout" {
 			warnings = append(warnings, fmt.Sprintf("%s review timed out; review was not completed", step.Name))
 			continue
@@ -771,10 +826,17 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", step.Name, summary))
 		}
 	}
-	expectedReviewers := expectedContinueReviewWorkerCount(reviewDepth)
-	if !skipMissing && expectedReviewers > 0 && len(report.Workers) != expectedReviewers {
-		report.Passed = false
-		blockers = append(blockers, fmt.Sprintf("expected %d review workers, got %d", expectedReviewers, len(report.Workers)))
+	if expectedCastes := expectedContinueReviewCastes(reviewDepth, plannedDispatches...); len(expectedCastes) > 0 {
+		actualCastes := actualContinueReviewCastes(report.Workers)
+		if skipMissing {
+			if !continueReviewCastesArePlannedSubset(actualCastes, expectedCastes) {
+				report.Passed = false
+				blockers = append(blockers, fmt.Sprintf("expected review castes %v, got %v", expectedCastes, actualCastes))
+			}
+		} else if !equalStringSlices(actualCastes, expectedCastes) {
+			report.Passed = false
+			blockers = append(blockers, fmt.Sprintf("expected review castes %v, got %v", expectedCastes, actualCastes))
+		}
 	}
 	report.BlockingIssues = uniqueSortedStrings(blockers)
 	report.Passed = report.Passed && len(report.BlockingIssues) == 0
@@ -786,18 +848,80 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 	return report
 }
 
-func expectedContinueReviewWorkerCount(reviewDepth colony.VerificationDepth) int {
+func expectedContinueReviewCastes(reviewDepth colony.VerificationDepth, plannedDispatches ...[]codexContinueExternalDispatch) []string {
+	for _, dispatches := range plannedDispatches {
+		castes := make([]string, 0, len(dispatches))
+		for _, dispatch := range dispatches {
+			if strings.TrimSpace(dispatch.Stage) != "review" {
+				continue
+			}
+			caste := strings.TrimSpace(dispatch.Caste)
+			if caste == "" {
+				continue
+			}
+			castes = append(castes, caste)
+		}
+		if len(castes) > 0 {
+			return castes
+		}
+	}
+
 	switch colony.NormalizeVerificationDepth(string(reviewDepth)) {
 	case colony.VerificationDepthLight:
-		return 0
+		return nil
 	case colony.VerificationDepthStandard:
-		return 1
+		return []string{"gatekeeper"}
 	default:
-		return len(codexContinueReviewSpecs)
+		castes := make([]string, 0, len(codexContinueReviewSpecs))
+		for _, spec := range codexContinueReviewSpecs {
+			castes = append(castes, spec.Caste)
+		}
+		return castes
 	}
 }
 
-func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review *codexContinueReviewReport, reviewReportRel string, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string, gateRecoveryInstructions []map[string]interface{}) (map[string]interface{}, colony.ColonyState, error) {
+func actualContinueReviewCastes(workers []codexContinueWorkerFlowStep) []string {
+	castes := make([]string, 0, len(workers))
+	for _, worker := range workers {
+		if caste := strings.TrimSpace(worker.Caste); caste != "" {
+			castes = append(castes, caste)
+		}
+	}
+	return castes
+}
+
+func equalStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func continueReviewCastesArePlannedSubset(actual, expected []string) bool {
+	expectedIndex := 0
+	for _, actualCaste := range actual {
+		matched := false
+		for expectedIndex < len(expected) {
+			if actualCaste == expected[expectedIndex] {
+				expectedIndex++
+				matched = true
+				break
+			}
+			expectedIndex++
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review *codexContinueReviewReport, reviewReportRel string, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string, gateRecoveryInstructions []map[string]interface{}, reviewDepth colony.VerificationDepth) (map[string]interface{}, colony.ColonyState, error) {
 	blockers := append([]string{}, gates.BlockingIssues...)
 	if review != nil {
 		blockers = append(blockers, review.BlockingIssues...)
@@ -844,6 +968,7 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 		"phase_name":          phase.Name,
 		"state":               blockedState.State,
 		"next":                nextCommand,
+			"review_depth":        string(reviewDepth),
 		"verification":        verification,
 		"assessment":          assessment,
 		"task_evidence":       assessment.Tasks,
@@ -864,10 +989,11 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	if len(gateRecoveryInstructions) > 0 {
 		result["recovery_instructions"] = gateRecoveryInstructions
 	}
+	addOrchestratorBoundaryGuidance(result, "continue", blockedState, nextCommand, nil)
 	return result, blockedState, nil
 }
 
-func advanceExternalContinue(root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review codexContinueReviewReport, reviewReportRel string, watcherFlow *codexContinueWorkerFlowStep, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string) (map[string]interface{}, colony.ColonyState, *colony.Phase, *signalHousekeepingResult, bool, error) {
+func advanceExternalContinue(root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, gates codexContinueGateReport, review codexContinueReviewReport, reviewReportRel string, watcherFlow *codexContinueWorkerFlowStep, workerFlow []codexContinueWorkerFlowStep, now time.Time, verificationReportRel, gateReportRel string, reviewDepth colony.VerificationDepth) (map[string]interface{}, colony.ColonyState, *colony.Phase, *signalHousekeepingResult, bool, error) {
 	currentIdx := state.CurrentPhase - 1
 	closedWorkerDetails := plannedCodexContinueClosedWorkers(manifest, assessment)
 	closedWorkers := closedWorkerNames(closedWorkerDetails)
@@ -969,6 +1095,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 		"current_phase":       updated.CurrentPhase,
 		"state":               updated.State,
 		"next":                nextCommand,
+		"review_depth":        string(reviewDepth),
 		"verification":        verification,
 		"assessment":          assessment,
 		"task_evidence":       assessment.Tasks,
@@ -989,6 +1116,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 		result["next_phase"] = nextPhase.ID
 		result["next_phase_name"] = nextPhase.Name
 	}
+	addOrchestratorBoundaryGuidance(result, "continue", updated, nextCommand, nil)
 	return result, updated, nextPhase, &housekeeping, final, nil
 }
 

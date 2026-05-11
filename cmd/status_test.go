@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -69,10 +70,10 @@ func TestStatusNoColony(t *testing.T) {
 }
 
 func TestStatusNoColonyVisual(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
@@ -100,6 +101,7 @@ func TestStatusNoColonyVisual(t *testing.T) {
 }
 
 func TestStatusOutput(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -161,6 +163,7 @@ func TestStatusOutput(t *testing.T) {
 }
 
 func TestStatusOutput_DefaultScopeDisplay(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -187,6 +190,7 @@ func TestStatusOutput_DefaultScopeDisplay(t *testing.T) {
 }
 
 func TestStatusOutput_MetaScopeDisplay(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -221,7 +225,49 @@ func TestStatusOutput_MetaScopeDisplay(t *testing.T) {
 	}
 }
 
+func TestStatusOutput_ColonyModeDisplay(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	var buf bytes.Buffer
+	stdout = &buf
+	defer func() { stdout = os.Stdout }()
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	state.ColonyMode = colony.ColonyModeOrchestrator
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Colony Mode: orchestrator") {
+		t.Fatalf("expected orchestrator colony mode in output, got:\n%s", output)
+	}
+
+	result := buildStatusResult(state, s)
+	if got := result["colony_mode"]; got != string(colony.ColonyModeOrchestrator) {
+		t.Fatalf("status result colony_mode = %v, want %q", got, colony.ColonyModeOrchestrator)
+	}
+}
+
 func TestStatusPheromoneSummary(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -261,6 +307,7 @@ func TestStatusPheromoneSummary(t *testing.T) {
 }
 
 func TestStatusShowsInlinePheromoneStrength(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -303,6 +350,7 @@ func TestStatusShowsInlinePheromoneStrength(t *testing.T) {
 }
 
 func TestStatusUsesStandaloneInstincts(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -370,6 +418,7 @@ func TestStatusUsesStandaloneInstincts(t *testing.T) {
 }
 
 func TestStatusShowsRecentInstinctsWithConfidence(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -443,6 +492,7 @@ func TestStatusShowsRecentInstinctsWithConfidence(t *testing.T) {
 }
 
 func TestStatusOutput_ParallelModeDefault(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -476,6 +526,7 @@ func TestStatusOutput_ParallelModeDefault(t *testing.T) {
 }
 
 func TestStatusOutput_ParallelModeWorktree(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -518,6 +569,7 @@ func TestStatusOutput_ParallelModeWorktree(t *testing.T) {
 }
 
 func TestStatusMemoryHealth(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -553,6 +605,7 @@ func TestStatusMemoryHealth(t *testing.T) {
 }
 
 func TestStatusShowsActiveWorkersFromSpawnTree(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -589,6 +642,7 @@ func TestStatusShowsActiveWorkersFromSpawnTree(t *testing.T) {
 }
 
 func TestStatusPrefersCurrentRunWorkersOverStaleHistory(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -667,6 +721,7 @@ func TestStatusPrefersCurrentRunWorkersOverStaleHistory(t *testing.T) {
 }
 
 func TestStatusShowsSpawnSummaryFromSpawnTree(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -731,6 +786,7 @@ func TestStatusShowsSpawnSummaryFromSpawnTree(t *testing.T) {
 }
 
 func TestStatusShowsStartingRunningAndTimeoutWorkersHonestly(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -795,6 +851,7 @@ func TestStatusShowsStartingRunningAndTimeoutWorkersHonestly(t *testing.T) {
 }
 
 func TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -837,6 +894,7 @@ func TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers(t *testing.T) {
 }
 
 func TestStatusCompletedColonyShowsFullTaskProgress(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -876,6 +934,7 @@ func TestStatusCompletedColonyShowsFullTaskProgress(t *testing.T) {
 }
 
 func TestStatusShowsProofSummaryAndRoute(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -919,6 +978,7 @@ func TestStatusShowsProofSummaryAndRoute(t *testing.T) {
 }
 
 func TestStatus_ReviewFindings(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -989,6 +1049,7 @@ func TestStatus_ReviewFindings(t *testing.T) {
 }
 
 func TestStatus_ReviewFindings_NoData(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -1018,6 +1079,7 @@ func TestStatus_ReviewFindings_NoData(t *testing.T) {
 }
 
 func TestStatus_ReviewFindings_PartialData(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -1081,6 +1143,7 @@ func TestStatus_ReviewFindings_PartialData(t *testing.T) {
 }
 
 func TestStatusVersionLine(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1121,6 +1184,9 @@ func TestStatusVersionLine(t *testing.T) {
 }
 
 func TestStatusVersionLineMismatch(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	hubDir := filepath.Join(t.TempDir(), ".aether")
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1147,14 +1213,13 @@ func TestStatusVersionLineMismatch(t *testing.T) {
 		},
 	})
 
-	// Write a hub version.json that differs from binary version
-	hubDir := resolveHubPath()
-	if hubDir != "" {
-		hubVersionPath := hubDir + "/version.json"
-		if err := os.MkdirAll(hubDir, 0755); err == nil {
-			os.WriteFile(hubVersionPath, []byte(`{"version": "99.99.99"}`), 0644)
-			defer os.Remove(hubVersionPath)
-		}
+	// Write a private hub version.json that differs from the source runtime version.
+	if err := os.MkdirAll(hubDir, 0755); err != nil {
+		t.Fatalf("failed to create test hub dir: %v", err)
+	}
+	hubVersionPath := filepath.Join(hubDir, "version.json")
+	if err := os.WriteFile(hubVersionPath, []byte(`{"version": "99.99.99"}`), 0644); err != nil {
+		t.Fatalf("failed to write test hub version: %v", err)
 	}
 
 	rootCmd.SetArgs([]string{"status"})
@@ -1171,6 +1236,7 @@ func TestStatusVersionLineMismatch(t *testing.T) {
 }
 
 func TestStatusSignalSummaryLine(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -1224,6 +1290,7 @@ func TestStatusSignalSummaryLine(t *testing.T) {
 }
 
 func TestStatusSignalSummaryEmpty(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer
 	stdout = &buf
 	defer func() { stdout = os.Stdout }()
@@ -1257,6 +1324,7 @@ func ptrFloat64(f float64) *float64 {
 }
 
 func TestStatusShowsRecoveryDoorway(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1401,6 +1469,7 @@ func TestRenderGateStatusSection_ZeroPhase(t *testing.T) {
 }
 
 func TestStatusDashboard_IncludesGateSection(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1452,6 +1521,7 @@ func TestStatusDashboard_IncludesGateSection(t *testing.T) {
 }
 
 func TestStatusDashboard_OmitsGateSectionWhenNoResults(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 

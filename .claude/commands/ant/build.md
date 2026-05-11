@@ -50,6 +50,15 @@ Parse `result.dispatch_manifest`. This manifest is the only source for worker na
 
 Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the old visual stack comes from the same runtime manifest you parsed.
 
+## Guided Boundary Gate
+
+Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`.
+
+- If it is active or `next` is `aether discuss`, stop the build flow and show its summary.
+- Route to `aether discuss` so the user can resolve the runtime-owned questions.
+- Tell the user to rerun `after_discuss_next` after answers are resolved.
+- Request a fresh plan-only manifest after the guided answer is resolved. Do not reuse the pre-discuss manifest and do not ask, answer, or store boundary questions in wrapper markdown.
+
 ## Runtime Spawn Ceremony
 
 Immediately after parsing the JSON manifest, render the runtime-owned spawn ceremony for the user:

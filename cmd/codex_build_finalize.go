@@ -66,18 +66,18 @@ var buildFinalizeCmd = &cobra.Command{
 		phaseNum, err := parsePositivePhaseArg(args[0])
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return err
 		}
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		completion, err := loadExternalBuildCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return err
 		}
 		result, state, phase, dispatches, err := runCodexBuildFinalize(skillWorkspaceRoot(), phaseNum, completion, false)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return err
 		}
 		outputWorkflow(result, renderBuildFinalizeVisual(state, phase, dispatches))
 		return nil
@@ -161,10 +161,16 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if len(manifest.Dispatches) == 0 {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("dispatch_manifest contains no dispatches")
 	}
+	if err := validateFinalizerManifestRoot("dispatch_manifest", manifest.Root, root); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 
 	state, err := loadActiveColonyState()
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	if err := validateFinalizerManifestColonyMode("dispatch_manifest", manifest.ColonyMode, state); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
@@ -172,8 +178,15 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
+	state, _, err = reconcilePriorCompletedPhaseTasksFromTrustedManifests(root, state, phaseNum)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	selectedTaskIDs := uniqueSortedStrings(manifest.SelectedTasks)
 	phase := state.Plan.Phases[phaseNum-1]
+	if err := validateBuildManifestTaskSetForPhase(codexContinueManifest{Present: true, Data: *manifest}, phase, true); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -206,7 +219,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 
 	// Prepare the updated state in memory first (needed for downstream writes).
 	updatedState := state
-	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs)
+	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
 	updatedState.State = colony.StateBUILT
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
@@ -270,6 +283,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if len(recoveryInstructions) > 0 {
 		result["recovery_instructions"] = recoveryInstructions
 	}
+	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
 	return result, updatedState, updatedPhase, dispatches, nil
 }
 
@@ -458,22 +472,21 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 }
 
 func validateExternalResultIdentity(dispatch codexBuildDispatch, result codexExternalBuildWorkerResult) error {
-	if value := strings.TrimSpace(result.Caste); value != "" && !strings.EqualFold(value, dispatch.Caste) {
-		return fmt.Errorf("external worker result %s caste = %q, want %q", dispatch.Name, value, dispatch.Caste)
+	dispatchSpec := workerIdentitySpec{
+		Caste:         dispatch.Caste,
+		Stage:         dispatch.Stage,
+		TaskID:        dispatch.TaskID,
+		Wave:          dispatch.Wave,
+		ExecutionWave: normalizedDispatchWave(dispatch),
 	}
-	if value := strings.TrimSpace(result.Stage); value != "" && !strings.EqualFold(value, dispatch.Stage) {
-		return fmt.Errorf("external worker result %s stage = %q, want %q", dispatch.Name, value, dispatch.Stage)
+	resultSpec := workerIdentitySpec{
+		Caste:         result.Caste,
+		Stage:         result.Stage,
+		TaskID:        result.TaskID,
+		Wave:          result.Wave,
+		ExecutionWave: result.ExecutionWave,
 	}
-	if value := strings.TrimSpace(result.TaskID); value != "" && value != strings.TrimSpace(dispatch.TaskID) {
-		return fmt.Errorf("external worker result %s task_id = %q, want %q", dispatch.Name, value, dispatch.TaskID)
-	}
-	if result.Wave > 0 && dispatch.Wave > 0 && result.Wave != dispatch.Wave {
-		return fmt.Errorf("external worker result %s wave = %d, want %d", dispatch.Name, result.Wave, dispatch.Wave)
-	}
-	if result.ExecutionWave > 0 && result.ExecutionWave != normalizedDispatchWave(dispatch) {
-		return fmt.Errorf("external worker result %s execution_wave = %d, want %d", dispatch.Name, result.ExecutionWave, normalizedDispatchWave(dispatch))
-	}
-	return nil
+	return validateWorkerResultIdentity(dispatch.Name, dispatchSpec, resultSpec)
 }
 
 func normalizeExternalBuildStatus(status string) string {

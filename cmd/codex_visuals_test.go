@@ -84,7 +84,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "It's safe to clear your context now."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}

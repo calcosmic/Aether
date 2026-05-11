@@ -267,8 +267,15 @@ func TestSealPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	if result["requires_finalizer"] != true {
 		t.Fatalf("requires_finalizer = %v, want true", result["requires_finalizer"])
 	}
+	if result["colony_mode"] != "colony" {
+		t.Fatalf("colony_mode = %v, want colony", result["colony_mode"])
+	}
 	if got := int(result["dispatch_count"].(float64)); got != 3 {
 		t.Fatalf("dispatch_count = %d, want 3", got)
+	}
+	manifest := result["seal_manifest"].(map[string]interface{})
+	if manifest["colony_mode"] != "colony" {
+		t.Fatalf("seal_manifest colony_mode = %v, want colony", manifest["colony_mode"])
 	}
 	if _, err := os.Stat(filepath.Join(root, ".aether", "CROWNED-ANTHILL.md")); !os.IsNotExist(err) {
 		t.Fatalf("plan-only should not write CROWNED-ANTHILL.md, stat err=%v", err)
@@ -313,6 +320,7 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		t.Fatalf("run seal plan-only: %v", err)
 	}
 	manifest := planResult["seal_manifest"].(sealPlanManifest)
+	manifest.ColonyMode = ""
 	results := append([]codexContinueExternalDispatch{}, manifest.Dispatches...)
 	for i := range results {
 		results[i].Status = "completed"
@@ -419,5 +427,26 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		if !strings.Contains(string(summaryData), want) {
 			t.Fatalf("seal summary missing %q:\n%s", want, string(summaryData))
 		}
+	}
+}
+
+func TestSealReviewRequiredCastesUseQueenSelectedLightDiscovery(t *testing.T) {
+	goal := "Discovery-only seal"
+	state := colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Discovery spike",
+			Status: colony.PhaseCompleted,
+			Mode:   colony.PhaseModeDiscovery,
+		}}},
+	}
+
+	required := sealReviewRequiredCastes(state)
+
+	if len(required) != 0 {
+		t.Fatalf("light discovery seal required castes = %v, want none from Queen-selected seal policy", required)
 	}
 }

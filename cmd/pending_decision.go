@@ -14,6 +14,8 @@ type PendingDecision struct {
 	Description string `json:"description"`
 	Phase       *int   `json:"phase,omitempty"`
 	Source      string `json:"source,omitempty"`
+	SessionID   string `json:"session_id,omitempty"`
+	GoalHash    string `json:"goal_hash,omitempty"`
 	Resolution  string `json:"resolution,omitempty"`
 	Resolved    bool   `json:"resolved"`
 	CreatedAt   string `json:"created_at"`
@@ -58,6 +60,7 @@ var pendingDecisionAddCmd = &cobra.Command{
 		if phase > 0 {
 			decision.Phase = &phase
 		}
+		stampPendingDecisionScope(&decision, loadCurrentPendingDecisionScope())
 
 		// Load existing decisions
 		var file PendingDecisionFile
@@ -162,6 +165,7 @@ var pendingDecisionResolveCmd = &cobra.Command{
 				file.Decisions[i].Resolved = true
 				file.Decisions[i].Resolution = resolution
 				file.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+				stampPendingDecisionScope(&file.Decisions[i], loadCurrentPendingDecisionScope())
 				found = true
 				break
 			}

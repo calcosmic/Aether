@@ -589,6 +589,13 @@ func TestOracleCompatibilityStopKillsControllerProcessTree(t *testing.T) {
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
 
+	if _, err := oracleProcessTable(); err != nil {
+		if isPermissionDeniedForTest(err) {
+			t.Skipf("process table inspection unavailable in this sandbox: %v", err)
+		}
+		t.Fatalf("process table inspection failed: %v", err)
+	}
+
 	oracleDir := filepath.Join(root, ".aether", "oracle")
 	if err := os.MkdirAll(oracleDir, 0755); err != nil {
 		t.Fatalf("mkdir oracle dir: %v", err)
@@ -596,6 +603,9 @@ func TestOracleCompatibilityStopKillsControllerProcessTree(t *testing.T) {
 
 	cmd := exec.Command("sh", "-c", "sleep 30 & wait")
 	if err := cmd.Start(); err != nil {
+		if isPermissionDeniedForTest(err) {
+			t.Skipf("process fixture unavailable in this sandbox: %v", err)
+		}
 		t.Fatalf("start oracle controller fixture: %v", err)
 	}
 	t.Cleanup(func() {
@@ -1048,6 +1058,9 @@ func TestOracleCompatibilityEnforcesAttemptWatchdog(t *testing.T) {
 	if atomic.LoadInt32(&blocking.cancelled) == 0 {
 		t.Fatal("expected watchdog deadline to cancel the blocked oracle worker")
 	}
+	if atomic.LoadInt32(&blocking.finished) == 0 {
+		t.Fatal("expected watchdog to wait for the cancelled oracle worker to stop before returning")
+	}
 }
 
 func TestOracleCompatibilityShortCircuitsOnValidResponseFile(t *testing.T) {
@@ -1409,11 +1422,14 @@ func (i *oracleSlowCompletingInvoker) ValidateAgent(path string) error      { re
 
 type oracleBlockingUntilCancelledInvoker struct {
 	cancelled int32
+	finished  int32
 }
 
 func (i *oracleBlockingUntilCancelledInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
 	<-ctx.Done()
 	atomic.AddInt32(&i.cancelled, 1)
+	time.Sleep(75 * time.Millisecond)
+	atomic.AddInt32(&i.finished, 1)
 	return codex.WorkerResult{
 		WorkerName: cfg.WorkerName,
 		Caste:      cfg.Caste,

@@ -28,6 +28,7 @@ const (
 	defaultOracleStrategy         = "adaptive"
 	defaultOracleTimeout          = 12 * time.Minute
 	defaultOracleHeartbeat        = 15 * time.Second
+	defaultOracleAttemptDrain     = 2 * time.Second
 )
 
 type oracleDepthConfig struct {
@@ -1305,6 +1306,11 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	}, nil
 }
 
+type oracleAttemptResult struct {
+	result codex.WorkerResult
+	err    error
+}
+
 func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker, paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, target oracleQuestion, attempt int, policy oracleAttemptPolicy, responsePath string) (codex.WorkerResult, error) {
 	attemptTimeout := policy.Timeout
 	if attemptTimeout <= 0 {
@@ -1313,16 +1319,11 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 	attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
 	defer cancel()
 
-	type oracleAttemptResult struct {
-		result codex.WorkerResult
-		err    error
-	}
-
 	resultCh := make(chan oracleAttemptResult, 1)
 	startedAt := time.Now()
-	workerState := state
+	workerConfig := buildOracleWorkerConfig(invoker, paths, state, plan, detectedType, languages, frameworks, target, attempt, policy, responsePath)
 	go func() {
-		result, err := invokeOracleIteration(attemptCtx, invoker, paths, workerState, plan, detectedType, languages, frameworks, target, attempt, policy, responsePath)
+		result, err := invoker.Invoke(attemptCtx, workerConfig)
 		resultCh <- oracleAttemptResult{result: result, err: err}
 	}()
 
@@ -1344,6 +1345,7 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 				summary = fmt.Sprintf("Oracle attempt timed out after %s watchdog.", oracleDurationLabel(attemptTimeout))
 			}
+			waitOracleAttemptResult(resultCh, defaultOracleAttemptDrain)
 			return codex.WorkerResult{
 				Caste:    "oracle",
 				TaskID:   fmt.Sprintf("oracle.%d", state.Iteration),
@@ -1356,6 +1358,7 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 			elapsed := time.Since(startedAt)
 			if response, err := loadOracleWorkerResponse(responsePath, target); err == nil {
 				cancel()
+				waitOracleAttemptResult(resultCh, defaultOracleAttemptDrain)
 				return codex.WorkerResult{
 					Caste:    "oracle",
 					TaskID:   fmt.Sprintf("oracle.%d", state.Iteration),
@@ -1384,6 +1387,20 @@ func runOracleIterationAttempt(ctx context.Context, invoker codex.WorkerInvoker,
 	}
 }
 
+func waitOracleAttemptResult(resultCh <-chan oracleAttemptResult, timeout time.Duration) (oracleAttemptResult, bool) {
+	if timeout <= 0 {
+		timeout = defaultOracleAttemptDrain
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case result := <-resultCh:
+		return result, true
+	case <-timer.C:
+		return oracleAttemptResult{}, false
+	}
+}
+
 func oracleWorkerAttemptTimedOut(result codex.WorkerResult, err error) bool {
 	return strings.EqualFold(strings.TrimSpace(result.Status), "timeout") ||
 		errors.Is(err, context.DeadlineExceeded) ||
@@ -1391,6 +1408,10 @@ func oracleWorkerAttemptTimedOut(result codex.WorkerResult, err error) bool {
 }
 
 func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, target oracleQuestion, attempt int, policy oracleAttemptPolicy, responsePath string) (codex.WorkerResult, error) {
+	return invoker.Invoke(ctx, buildOracleWorkerConfig(invoker, paths, state, plan, detectedType, languages, frameworks, target, attempt, policy, responsePath))
+}
+
+func buildOracleWorkerConfig(invoker codex.WorkerInvoker, paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, target oracleQuestion, attempt int, policy oracleAttemptPolicy, responsePath string) codex.WorkerConfig {
 	workerName := deterministicAntName("oracle", fmt.Sprintf("%s|%d", state.Topic, state.Iteration))
 	topicHeadline := oracleTopicHeadline(state.Topic)
 	if topicHeadline == "" {
@@ -1434,7 +1455,7 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 	referenceTask := strings.TrimSpace(state.Topic + "\n" + target.Text)
 	referenceSection := resolveReferenceSectionWithOutput("oracle", referenceTask, "oracle", state.Template)
 
-	return invoker.Invoke(ctx, codex.WorkerConfig{
+	return codex.WorkerConfig{
 		AgentName:        "aether-oracle",
 		AgentTOMLPath:    dispatchAgentPath(paths.Root, invoker, paths.AgentName),
 		Caste:            "oracle",
@@ -1449,7 +1470,7 @@ func invokeOracleIteration(ctx context.Context, invoker codex.WorkerInvoker, pat
 		PheromoneSection: resolvePheromoneSection(),
 		ConfigOverrides:  oracleWorkerConfigOverrides(policy),
 		ResponsePath:     responsePath,
-	})
+	}
 }
 
 func renderOracleContextCapsule(state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, target oracleQuestion, attempt int, responseRelPath string) string {

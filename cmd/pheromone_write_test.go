@@ -17,6 +17,7 @@ import (
 func TestPheromoneWrite_SanitizeValidContent(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -65,6 +66,7 @@ func TestPheromoneWrite_SanitizeValidContent(t *testing.T) {
 func TestPheromoneWrite_SanitizeAngleBrackets(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -104,6 +106,7 @@ func TestPheromoneWrite_SanitizeAngleBrackets(t *testing.T) {
 func TestPheromoneWrite_SanitizeRejectsXML(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 
@@ -135,6 +138,7 @@ func TestPheromoneWrite_SanitizeRejectsXML(t *testing.T) {
 func TestPheromoneWrite_SanitizeRejectsPromptInjection(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 
@@ -166,6 +170,7 @@ func TestPheromoneWrite_SanitizeRejectsPromptInjection(t *testing.T) {
 func TestPheromoneWrite_SanitizeRejectsShellInjection(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 
@@ -197,6 +202,7 @@ func TestPheromoneWrite_SanitizeRejectsShellInjection(t *testing.T) {
 func TestPheromoneWrite_SanitizeRejectsTooLong(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 
@@ -231,6 +237,7 @@ func TestPheromoneWrite_HashOnRawContentNotSanitized(t *testing.T) {
 	// The hash is computed on raw input, so deduplication should still work.
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -279,6 +286,7 @@ func TestPheromoneWrite_HashOnRawContentNotSanitized(t *testing.T) {
 func TestPheromoneWrite_SourceFlag(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -312,6 +320,7 @@ func TestPheromoneWrite_SourceFlag(t *testing.T) {
 func TestPheromoneWrite_SourceFlagDefault(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -345,6 +354,7 @@ func TestPheromoneWrite_SourceFlagDefault(t *testing.T) {
 func TestPheromoneWrite_ReasonFlag(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -378,6 +388,7 @@ func TestPheromoneWrite_ReasonFlag(t *testing.T) {
 func TestPheromoneWrite_ReasonFlagOmitted(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -411,6 +422,7 @@ func TestPheromoneWrite_ReasonFlagOmitted(t *testing.T) {
 func TestPheromoneWrite_TTLFlag(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -449,6 +461,7 @@ func TestPheromoneWrite_TTLFlag(t *testing.T) {
 func TestPheromoneWrite_TTLFlagDays(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -483,6 +496,7 @@ func TestPheromoneWrite_TTLFlagDays(t *testing.T) {
 func TestPheromoneWrite_TTLFlagWeeks(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -518,6 +532,7 @@ func TestPheromoneWrite_TTLOverridesTypeDefault(t *testing.T) {
 	// REDIRECT normally gets 30-day expiry. With --ttl "1h", it should get 1 hour instead.
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -561,6 +576,7 @@ func TestPheromoneWrite_TTLOverridesTypeDefault(t *testing.T) {
 func TestPheromoneWrite_TTLInvalidFormat(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 
@@ -589,6 +605,7 @@ func TestPheromoneWrite_TTLInvalidFormat(t *testing.T) {
 func TestPheromoneWriteSourcePhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -641,6 +658,7 @@ func TestPheromoneWriteSourcePhase(t *testing.T) {
 func TestPheromoneWriteSourcePhaseNilWhenNoColony(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -677,6 +695,7 @@ func TestPheromoneWriteSourcePhaseNilWhenNoColony(t *testing.T) {
 func TestPheromoneWrite_AllNewFlagsTogether(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 

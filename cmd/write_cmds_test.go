@@ -349,6 +349,48 @@ func TestFlagAddBlocker(t *testing.T) {
 	}
 }
 
+func TestFlagAddDedupesEnvironmentBlockedLaunchBlockers(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	first := "Next dev and a raw Node HTTP bind to 127.0.0.1 both failed with EPERM listen before app code ran."
+	second := "Watcher reran raw Node HTTP bind to localhost and launch smoke; both failed with EPERM listen, so external launch proof is required."
+
+	rootCmd.SetArgs([]string{"flag-add", "blocker", "launch smoke blocked", first, "verification", "2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("first flag-add returned error: %v", err)
+	}
+
+	buf.Reset()
+	rootCmd.SetArgs([]string{"flag-add", "blocker", "launch smoke blocked again", second, "verification", "2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("second flag-add returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["created"] != false {
+		t.Fatalf("created = %v, want false for duplicate environment blocker", result["created"])
+	}
+	if result["deduped"] != true {
+		t.Fatalf("deduped = %v, want true", result["deduped"])
+	}
+
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		t.Fatalf("load flags: %v", err)
+	}
+	if len(ff.Decisions) != 1 {
+		t.Fatalf("decisions len = %d, want 1", len(ff.Decisions))
+	}
+}
+
 func TestFlagAddWithDescriptionAndPhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

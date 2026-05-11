@@ -198,6 +198,7 @@ func TestPlanGranularitySet_Invalid(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStatusOutput_Granularity(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	saveGlobals(t)
 	resetRootCmd(t)
 	var buf bytes.Buffer

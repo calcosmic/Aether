@@ -617,6 +617,26 @@ func TestSurveyFallbackDocsAreEvidenceBasedForDockerRepo(t *testing.T) {
 	}
 }
 
+func TestPlannedSurveyorsUseQueenSelectedConcreteCastes(t *testing.T) {
+	root := t.TempDir()
+
+	dispatches := plannedSurveyors(root)
+	queenCastes := queenBuildCasteSet(queenOrchestrate(colony.Phase{
+		Name:        "Colonize repository",
+		Description: "Survey architecture, provisions, disciplines, and pathogens",
+		Mode:        colony.PhaseModeDiscovery,
+	}, "colonize", colony.ColonyState{}))
+
+	for _, dispatch := range dispatches {
+		if !queenCastes[dispatch.Caste] {
+			t.Fatalf("planned surveyor %q was not Queen-selected: %+v", dispatch.Caste, dispatches)
+		}
+	}
+	if len(dispatches) != len(queenCastes) {
+		t.Fatalf("planned surveyors = %d, Queen-selected castes = %d: %+v", len(dispatches), len(queenCastes), dispatches)
+	}
+}
+
 // unavailableInvoker always reports not available, forcing fallback.
 type unavailableInvoker struct{}
 

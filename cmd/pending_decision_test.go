@@ -9,6 +9,7 @@ import (
 func TestPendingDecisionAdd(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -41,6 +42,7 @@ func TestPendingDecisionAdd(t *testing.T) {
 func TestPendingDecisionAddWithFlags(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -92,6 +94,7 @@ func TestPendingDecisionAddWithFlags(t *testing.T) {
 func TestPendingDecisionListEmpty(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -123,6 +126,7 @@ func TestPendingDecisionListEmpty(t *testing.T) {
 func TestPendingDecisionListFilterUnresolved(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -181,6 +185,7 @@ func TestPendingDecisionListFilterUnresolved(t *testing.T) {
 func TestPendingDecisionListFilterType(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -212,6 +217,7 @@ func TestPendingDecisionListFilterType(t *testing.T) {
 func TestPendingDecisionResolve(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stdout = &buf
 
@@ -243,6 +249,7 @@ func TestPendingDecisionResolve(t *testing.T) {
 func TestPendingDecisionResolveNotFound(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
 	var buf bytes.Buffer
 	stderr = &buf
 
@@ -264,6 +271,7 @@ func TestPendingDecisionAddMissingDescription(t *testing.T) {
 	resetRootCmd(t)
 	var outBuf, errBuf bytes.Buffer
 	saveGlobals(t)
+	forceJSONOutputModeForTest(t)
 	stdout = &outBuf
 	stderr = &errBuf
 

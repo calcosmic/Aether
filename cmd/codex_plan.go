@@ -124,24 +124,30 @@ type codexPlanOptions struct {
 }
 
 type codexPlanManifest struct {
-	Goal               string                  `json:"goal"`
-	Root               string                  `json:"root"`
-	GeneratedAt        string                  `json:"generated_at"`
-	Refresh            bool                    `json:"refresh"`
-	ExistingPlan       bool                    `json:"existing_plan"`
-	ExistingPhaseCount int                     `json:"existing_phase_count,omitempty"`
-	Depth              string                  `json:"depth"`
-	Granularity        string                  `json:"granularity"`
-	GranularityMin     int                     `json:"granularity_min"`
-	GranularityMax     int                     `json:"granularity_max"`
-	PlanningDepth      string                  `json:"planning_depth"`
-	VerificationDepth  string                  `json:"verification_depth,omitempty"`
-	Survey             codexSurveyContext      `json:"survey"`
-	Dispatches         []codexPlanningDispatch `json:"dispatches"`
-	DispatchMode       string                  `json:"dispatch_mode"`
-	DispatchContract   map[string]interface{}  `json:"dispatch_contract"`
-	FinalizeSurface    string                  `json:"finalize_surface"`
-	RequiresFinalizer  bool                    `json:"requires_finalizer"`
+	Goal                      string                        `json:"goal"`
+	Root                      string                        `json:"root"`
+	GeneratedAt               string                        `json:"generated_at"`
+	ColonyMode                string                        `json:"colony_mode,omitempty"`
+	Refresh                   bool                          `json:"refresh"`
+	ExistingPlan              bool                          `json:"existing_plan"`
+	ExistingPhaseCount        int                           `json:"existing_phase_count,omitempty"`
+	Depth                     string                        `json:"depth"`
+	Granularity               string                        `json:"granularity"`
+	GranularityMin            int                           `json:"granularity_min"`
+	GranularityMax            int                           `json:"granularity_max"`
+	PlanningDepth             string                        `json:"planning_depth"`
+	VerificationDepth         string                        `json:"verification_depth,omitempty"`
+	Survey                    codexSurveyContext            `json:"survey"`
+	Dispatches                []codexPlanningDispatch       `json:"dispatches"`
+	DispatchMode              string                        `json:"dispatch_mode"`
+	DispatchContract          map[string]interface{}        `json:"dispatch_contract"`
+	FinalizeSurface           string                        `json:"finalize_surface"`
+	RequiresFinalizer         bool                          `json:"requires_finalizer"`
+	BoundaryQuestions         []discussQuestion             `json:"boundary_questions,omitempty"`
+	BoundaryQuestionCount     int                           `json:"boundary_question_count,omitempty"`
+	BoundaryQuestionsCreated  int                           `json:"boundary_questions_created,omitempty"`
+	BoundaryQuestionsExisting int                           `json:"boundary_questions_existing,omitempty"`
+	OrchestratorGuidance      *orchestratorBoundaryGuidance `json:"orchestrator_boundary_guidance,omitempty"`
 }
 
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
@@ -208,6 +214,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		return map[string]interface{}{
 			"planned":                    true,
 			"existing_plan":              true,
+			"colony_mode":                string(state.EffectiveColonyMode()),
 			"goal":                       *state.Goal,
 			"phases":                     state.Plan.Phases,
 			"count":                      len(state.Plan.Phases),
@@ -284,7 +291,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
 	)
 
-	dispatches := plannedPlanningWorkers(root)
+	dispatches := plannedPlanningWorkersForGoal(root, *state.Goal)
 	dispatchMode := "synthetic"
 	artifactSource := "local-synthesis"
 	planSource := "local-synthesis"
@@ -304,7 +311,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			dispatchMode = "fallback"
 			planningWarning = fmt.Sprintf("Real planning workers were unavailable, so Aether fell back to local synthesis. Cause: %s", dispatchAvailabilityMessage(invoker))
 		} else {
-			realDispatches, dispatchErr := dispatchRealPlanningWorkersWithTimeout(context.Background(), root, survey, invoker, opts.WorkerTimeout)
+			realDispatches, dispatchErr := dispatchRealPlanningWorkersWithTimeout(context.Background(), root, survey, invoker, opts.WorkerTimeout, *state.Goal)
 			if realDispatches != nil {
 				dispatches = realDispatches
 			}
@@ -447,6 +454,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"planned":                    true,
 		"existing_plan":              false,
 		"refreshed":                  opts.Refresh,
+		"colony_mode":                string(state.EffectiveColonyMode()),
 		"goal":                       *state.Goal,
 		"phases":                     phases,
 		"count":                      len(phases),
@@ -538,10 +546,15 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		if nextPhase > 0 {
 			nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 		}
-		return map[string]interface{}{
+		boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
+		if err != nil {
+			return nil, err
+		}
+		result := map[string]interface{}{
 			"plan_only":                  true,
 			"planned":                    true,
 			"existing_plan":              true,
+			"colony_mode":                string(state.EffectiveColonyMode()),
 			"goal":                       *state.Goal,
 			"phases":                     state.Plan.Phases,
 			"count":                      len(state.Plan.Phases),
@@ -558,7 +571,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"unresolved_clarifications":  unresolvedClarifications,
 			"clarification_warning":      clarificationWarning,
 			"next":                       nextCommand,
-		}, nil
+		}
+		addBoundaryQuestionResultFields(result, boundary)
+		addOrchestratorBoundaryGuidance(result, "plan", state, nextCommand, boundary.Questions)
+		return result, nil
 	}
 	if opts.Refresh && state.CurrentPhase > 0 {
 		for _, phase := range state.Plan.Phases {
@@ -572,16 +588,18 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	if err != nil {
 		return nil, err
 	}
-	dispatches := plannedPlanningWorkers(root)
+	dispatches := plannedPlanningWorkersForGoal(root, *state.Goal)
+	specs := planningWorkerSpecsForGoal(*state.Goal)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
-		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[i])
+		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i])
 	}
 	generatedAt := time.Now().UTC()
 	manifest := codexPlanManifest{
 		Goal:               *state.Goal,
 		Root:               root,
 		GeneratedAt:        generatedAt.Format(time.RFC3339),
+		ColonyMode:         string(state.EffectiveColonyMode()),
 		Refresh:            opts.Refresh,
 		ExistingPlan:       len(state.Plan.Phases) > 0,
 		ExistingPhaseCount: len(state.Plan.Phases),
@@ -599,11 +617,21 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		RequiresFinalizer:  true,
 	}
 
-	return map[string]interface{}{
+	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
+	if err != nil {
+		return nil, err
+	}
+	manifest.BoundaryQuestions = boundary.Questions
+	manifest.BoundaryQuestionCount = len(boundary.Questions)
+	manifest.BoundaryQuestionsCreated = boundary.Created
+	manifest.BoundaryQuestionsExisting = boundary.Existing
+
+	result := map[string]interface{}{
 		"plan_only":                  true,
 		"planned":                    true,
 		"existing_plan":              false,
 		"refreshed":                  opts.Refresh,
+		"colony_mode":                string(state.EffectiveColonyMode()),
 		"goal":                       *state.Goal,
 		"depth":                      planDepth,
 		"planning_depth":             planningDepth,
@@ -631,7 +659,21 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"runtime_state_only":      true,
 			"planning_depth":          planningDepth,
 		},
-	}, nil
+	}
+	addBoundaryQuestionResultFields(result, boundary)
+	if guidance, ok := addOrchestratorBoundaryGuidance(result, "plan", state, planAfterDiscussNext(opts), boundary.Questions); ok {
+		manifest.OrchestratorGuidance = &guidance
+		result["plan_manifest"] = manifest
+		result["planning_manifest"] = manifest
+	}
+	return result, nil
+}
+
+func planAfterDiscussNext(opts codexPlanOptions) string {
+	if opts.Refresh {
+		return "aether plan --refresh"
+	}
+	return "aether plan"
 }
 
 func normalizedGranularity(value colony.PlanGranularity) colony.PlanGranularity {
@@ -738,32 +780,50 @@ func firstBuildablePhase(phases []colony.Phase) int {
 }
 
 func plannedPlanningWorkers(root string) []codexPlanningDispatch {
-	dispatches := []codexPlanningDispatch{
-		{
-			Stage:     "scouting",
-			Wave:      1,
-			Caste:     "scout",
-			AgentName: codexAgentNameForCaste("scout"),
-			Name:      deterministicAntName("scout", root+"|plan|scout"),
-			Task:      "Survey the repo and distill planning findings from available territory reports",
-			TaskID:    "plan-scout",
-			Outputs:   []string{"SCOUT.md"},
+	return plannedPlanningWorkersForGoal(root, "")
+}
+
+func plannedPlanningWorkersForGoal(root, goal string) []codexPlanningDispatch {
+	specs := planningWorkerSpecsForGoal(goal)
+	dispatches := make([]codexPlanningDispatch, 0, len(specs))
+	for i, spec := range specs {
+		dispatches = append(dispatches, codexPlanningDispatch{
+			Stage:     planningStageForCaste(spec.Caste),
+			Wave:      i + 1,
+			Caste:     spec.Caste,
+			AgentName: strings.TrimSuffix(spec.AgentFile, ".toml"),
+			Name:      deterministicAntName(spec.Caste, root+"|plan|"+spec.Caste),
+			Task:      spec.Task,
+			TaskID:    "plan-" + strings.ReplaceAll(spec.Caste, "_", "-"),
+			Outputs:   append([]string{}, spec.Outputs...),
 			Status:    "spawned",
-		},
-		{
-			Stage:     "routing",
-			Wave:      2,
-			Caste:     "route_setter",
-			AgentName: codexAgentNameForCaste("route_setter"),
-			Name:      deterministicAntName("route_setter", root+"|plan|route-setter"),
-			Task:      "Convert surveyed findings into an executable multi-phase colony plan",
-			TaskID:    "plan-route-setter",
-			Outputs:   []string{"ROUTE-SETTER.md"},
-			Status:    "spawned",
-		},
+		})
 	}
 	attachPlanningDispatchSkillAssignments(dispatches)
 	return dispatches
+}
+
+func planningStageForCaste(caste string) string {
+	switch caste {
+	case "scout":
+		return "scouting"
+	case "route_setter":
+		return "routing"
+	case "architect":
+		return "architecture"
+	case "oracle":
+		return "research"
+	case "gatekeeper":
+		return "security"
+	case "includer":
+		return "accessibility"
+	case "chronicler":
+		return "documentation"
+	case "keeper":
+		return "knowledge"
+	default:
+		return "planning"
+	}
 }
 
 func attachPlanningDispatchSkillAssignments(dispatches []codexPlanningDispatch) {
@@ -801,23 +861,70 @@ var planningWorkerSpecs = []planningWorkerSpec{
 	},
 }
 
+func planningWorkerSpecsForGoal(goal string) []planningWorkerSpec {
+	phase := colony.Phase{
+		Name:        strings.TrimSpace(goal),
+		Description: strings.TrimSpace(goal),
+		Mode:        colony.InferPhaseMode(goal, goal),
+	}
+	selected := queenBuildCasteSet(queenOrchestrate(phase, "plan", colony.ColonyState{}))
+	specs := make([]planningWorkerSpec, 0, len(planningWorkerSpecs))
+	for _, spec := range planningWorkerSpecs {
+		if selected[spec.Caste] {
+			specs = append(specs, spec)
+		}
+	}
+	for _, caste := range []string{"architect", "oracle", "gatekeeper", "includer", "keeper", "chronicler"} {
+		if !selected[caste] {
+			continue
+		}
+		if spec, ok := planningWorkerSpecForCaste(caste); ok {
+			specs = append(specs, spec)
+		}
+	}
+	return specs
+}
+
+func planningWorkerSpecForCaste(caste string) (planningWorkerSpec, bool) {
+	switch caste {
+	case "architect":
+		return planningWorkerSpec{Caste: "architect", AgentFile: "aether-architect.toml", Task: "Identify architecture boundaries, interfaces, and structural risks before route-setting", Outputs: []string{"ARCHITECT.md"}}, true
+	case "oracle":
+		return planningWorkerSpec{Caste: "oracle", AgentFile: "aether-oracle.toml", Task: "Research unknowns and evaluate options that could change the route", Outputs: []string{"ORACLE.md"}}, true
+	case "gatekeeper":
+		return planningWorkerSpec{Caste: "gatekeeper", AgentFile: "aether-gatekeeper.toml", Task: "Review security, permission, dependency, and release-integrity constraints before planning", Outputs: []string{"GATEKEEPER.md"}}, true
+	case "includer":
+		return planningWorkerSpec{Caste: "includer", AgentFile: "aether-includer.toml", Task: "Review accessibility and inclusive-use requirements before planning", Outputs: []string{"INCLUDER.md"}}, true
+	case "keeper":
+		return planningWorkerSpec{Caste: "keeper", AgentFile: "aether-keeper.toml", Task: "Preserve relevant conventions, prior decisions, and reusable knowledge for the plan", Outputs: []string{"KEEPER.md"}}, true
+	case "chronicler":
+		return planningWorkerSpec{Caste: "chronicler", AgentFile: "aether-chronicler.toml", Task: "Map documentation surfaces and changelog obligations for the plan", Outputs: []string{"CHRONICLER.md"}}, true
+	}
+	return planningWorkerSpec{}, false
+}
+
 // dispatchRealPlanningWorkers attempts real worker invocation for planning.
 // If the invoker is not available, it returns nil, nil (caller falls back to plannedPlanningWorkers).
 func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex.WorkerInvoker) ([]codexPlanningDispatch, error) {
 	return dispatchRealPlanningWorkersWithTimeout(ctx, root, codexSurveyContext{}, invoker, 0)
 }
 
-func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, survey codexSurveyContext, invoker codex.WorkerInvoker, timeoutOverride time.Duration) ([]codexPlanningDispatch, error) {
+func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, survey codexSurveyContext, invoker codex.WorkerInvoker, timeoutOverride time.Duration, goalOpt ...string) ([]codexPlanningDispatch, error) {
 	if invoker == nil || !invoker.IsAvailable(ctx) {
 		return nil, nil
 	}
-	planned := plannedPlanningWorkers(root)
+	goal := ""
+	if len(goalOpt) > 0 {
+		goal = goalOpt[0]
+	}
+	planned := plannedPlanningWorkersForGoal(root, goal)
+	specs := planningWorkerSpecsForGoal(goal)
 	capsule := resolveCodexWorkerContext()
 	pheromoneSection := resolvePheromoneSection()
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
-	results := make([]codex.DispatchResult, 0, len(planningWorkerSpecs))
+	results := make([]codex.DispatchResult, 0, len(specs))
 	workerTimeout := effectivePlanningDispatchTimeout(timeoutOverride)
-	for i, spec := range planningWorkerSpecs {
+	for i, spec := range specs {
 		agentName := strings.TrimSuffix(spec.AgentFile, ".toml")
 		dispatch := codex.WorkerDispatch{
 			ID:               fmt.Sprintf("planning-%d", i),
@@ -853,8 +960,8 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 		}
 		results = append(results, stageResults...)
 		if stageResults[0].Status != "completed" {
-			dispatches := convertPlanningDispatchResults(results, root)
-			if i+1 < len(planningWorkerSpecs) {
+			dispatches := convertPlanningDispatchResults(results, root, goal)
+			if i+1 < len(specs) {
 				dispatches[i+1].Status = "dependency_blocked"
 				dispatches[i+1].Summary = fmt.Sprintf("%s did not complete, so downstream planning stayed blocked.", dispatch.WorkerName)
 			}
@@ -862,13 +969,17 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 		}
 	}
 
-	return convertPlanningDispatchResults(results, root), nil
+	return convertPlanningDispatchResults(results, root, goal), nil
 }
 
 // convertPlanningDispatchResults maps a slice of DispatchResult to codexPlanningDispatch.
 // If results don't cover all specs, remaining specs get the planned defaults.
-func convertPlanningDispatchResults(results []codex.DispatchResult, root string) []codexPlanningDispatch {
-	planned := plannedPlanningWorkers(root)
+func convertPlanningDispatchResults(results []codex.DispatchResult, root string, goalOpt ...string) []codexPlanningDispatch {
+	goal := ""
+	if len(goalOpt) > 0 {
+		goal = goalOpt[0]
+	}
+	planned := plannedPlanningWorkersForGoal(root, goal)
 	dispatches := make([]codexPlanningDispatch, 0, len(planned))
 
 	for i, planned := range planned {
@@ -1169,6 +1280,22 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("- Aether will persist the scout artifact after the worker completes: ")
 		b.WriteString(strings.Join(primaryOutputs, ", "))
 		b.WriteString("\n")
+	} else if spec.Caste == "gatekeeper" || spec.Caste == "auditor" {
+		b.WriteString("This is a review task. You may persist findings to your domain review ledger using `aether review-ledger-write`, but do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
+		b.WriteString("Write planning outputs directly into the repository.\n")
+		b.WriteString("- Primary outputs: ")
+		b.WriteString(strings.Join(primaryOutputs, ", "))
+		b.WriteString("\n")
+		b.WriteString("- Planning dir: ")
+		b.WriteString(planningDir)
+		b.WriteString("\n")
+		b.WriteString("- Phase research dir: ")
+		b.WriteString(phaseResearchDir)
+		b.WriteString("\n")
+		b.WriteString("- Also write a machine-readable plan artifact at ")
+		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "phase-plan.json")))
+		b.WriteString(" using this JSON shape:\n")
+		b.WriteString(`  {"phases":[{"name":"","description":"","tasks":[{"goal":"","constraints":[],"hints":[],"success_criteria":[],"depends_on":[]}],"success_criteria":[]}],"confidence":{"knowledge":0,"requirements":0,"risks":0,"dependencies":0,"effort":0,"overall":0},"gaps":[]}` + "\n")
 	} else {
 		b.WriteString("Write planning outputs directly into the repository.\n")
 		b.WriteString("- Route-Setter read budget: consume the manifest survey context and the Scout terminal result provided by the wrapper, then read at most 6 targeted repository files. Do not redo the Scout survey.\n")
@@ -1231,6 +1358,7 @@ func buildWorkerPlanPhases(artifact codexWorkerPlanArtifact) []colony.Phase {
 			Name:            strings.TrimSpace(sourcePhase.Name),
 			Description:     strings.TrimSpace(sourcePhase.Description),
 			Status:          colony.PhasePending,
+			Mode:            colony.InferPhaseMode(sourcePhase.Name, sourcePhase.Description),
 			Tasks:           []colony.Task{},
 			SuccessCriteria: uniqueSortedStrings(sourcePhase.SuccessCriteria),
 		}
@@ -1342,6 +1470,7 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 			Name:            template.Name,
 			Description:     template.Description,
 			Status:          colony.PhasePending,
+			Mode:            colony.InferPhaseMode(template.Name, template.Description),
 			Tasks:           []colony.Task{},
 			SuccessCriteria: append([]string{}, template.SuccessCriteria...),
 		}

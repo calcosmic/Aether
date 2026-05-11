@@ -1,0 +1,99 @@
+{
+  "entries": [
+    {
+      "id": "tst-2-001",
+      "phase": 2,
+      "agent": "watcher",
+      "agent_name": "Watch-64-r2",
+      "generated_at": "2026-05-10T16:14:22Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/phase_task_reconciliation_test.go",
+      "line": 22,
+      "category": "documentation",
+      "description": "Comment says Task 2.2 will implement the fix and BUG CONFIRMED tests should FAIL, but per the task summary, all fixes were already in source code. The comment is stale/misleading.",
+      "suggestion": "Update the file header comment to reflect that fixes are already in place and all tests now pass as regression guards."
+    },
+    {
+      "id": "tst-3-001",
+      "phase": 3,
+      "agent": "watcher",
+      "agent_name": "Hawk-45",
+      "generated_at": "2026-05-10T18:08:45Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/codex_build_test.go",
+      "line": 84,
+      "category": "test_expectation",
+      "description": "TestBuildWritesDispatchArtifactsAndUpdatesState expects dispatch_count=5 but runtime produces 7. Test expectation was changed in working tree (from 7 to 5) but runtime dispatch logic was not correspondingly updated. Pre-existing mismatch from earlier phase, not caused by Phase 3.",
+      "suggestion": "Update test expectations back to 7 or update dispatch logic to match the 5-dispatch expectation"
+    },
+    {
+      "id": "tst-3-002",
+      "phase": 3,
+      "agent": "watcher",
+      "agent_name": "Hawk-45",
+      "generated_at": "2026-05-10T18:08:45Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/codex_build_test.go",
+      "line": 296,
+      "category": "test_expectation",
+      "description": "TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState expects dispatch_count=5 but runtime produces 7. Same root cause as above.",
+      "suggestion": "Same as above"
+    },
+    {
+      "id": "tst-3-003",
+      "phase": 3,
+      "agent": "watcher",
+      "agent_name": "Hawk-45",
+      "generated_at": "2026-05-10T18:08:45Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/codex_build_test.go",
+      "line": 512,
+      "category": "test_expectation",
+      "description": "TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean expects castes=[builder probe watcher] but runtime produces [builder probe watcher measurer chaos]. Queen execution policy produces more castes than test expects.",
+      "suggestion": "Update test to match current Queen execution policy behavior"
+    },
+    {
+      "id": "tst-3-004",
+      "phase": 3,
+      "agent": "watcher",
+      "agent_name": "Hawk-45",
+      "generated_at": "2026-05-10T18:08:45Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/codex_visuals_test.go",
+      "line": 89,
+      "category": "test_expectation",
+      "description": "TestBuildVisualOutputShowsSpawnPlan expects Verification [standard] section but output shows Verification [heavy] because single-phase plan is always final phase. Pre-existing issue, file not modified in Phase 3.",
+      "suggestion": "Update test to expect heavy for single-phase plan or use multi-phase test setup"
+    },
+    {
+      "id": "tst-4-001",
+      "phase": 4,
+      "agent": "watcher",
+      "agent_name": "Vigil-16",
+      "generated_at": "2026-05-11T12:26:41Z",
+      "status": "open",
+      "severity": "LOW",
+      "file": "cmd/codex_build_test.go",
+      "line": 85,
+      "category": "pre-existing",
+      "description": "4 pre-existing test failures in codex_build_test.go (dispatch_count 7 vs expected 5) and codex_visuals_test.go (missing Verification stage marker) — unrelated to Phase 4 result validation hardening",
+      "suggestion": "Update test expectations to match current runtime dispatch behavior in a dedicated fix phase"
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "open": 6,
+    "resolved": 0,
+    "by_severity": {
+      "high": 0,
+      "medium": 0,
+      "low": 6,
+      "info": 0
+    }
+  }
+}

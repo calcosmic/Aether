@@ -115,7 +115,7 @@ func codexSkillShims() []codexSkillShim {
 			Dir:         "aether-colony-creation",
 			Name:        "aether-colony-creation",
 			Description: "Use when initializing an Aether colony in Codex; refine intent before calling the runtime.",
-			Body:        "For `aether init` or setup requests, use `aether command-guide init --platform codex`, ask compact clarifying questions when needed, synthesize a precise charter, then let the runtime create state.",
+			Body:        "For `aether init` or setup requests, use `aether command-guide init --platform codex`, ask compact clarifying questions when needed, ask the user to choose Colony Mode or Orchestrator Mode, synthesize a precise charter, then run the runtime with `--colony-mode <selected>` so it creates state.",
 		},
 		{
 			Dir:         "aether-colony-research",

@@ -59,15 +59,21 @@ AETHER_OUTPUT_MODE=json aether init-research --goal "<raw goal>" --target .
    - `non_goals`
    - `risks`
    - `first_milestone`
-5. Keep deterministic housekeeping separate from strategy. README, changelog,
+5. Ask the user to choose the colony mode before state creation:
+   - Colony Mode: the existing default lifecycle with fewer prompts.
+   - Orchestrator Mode: guided boundary questions at phase points for tighter
+     user control.
+   Default to Colony Mode when the user skips the choice or the host is
+   non-interactive.
+6. Keep deterministic housekeeping separate from strategy. README, changelog,
    license, formatter, or CI suggestions are scan warnings, not strategic
    pheromones.
-6. Suggest at most 3 strategic pheromones only when they are specific to the
+7. Suggest at most 3 strategic pheromones only when they are specific to the
    clarified user intent. Ask approval before writing any signal.
-7. Start the colony through the runtime:
+8. Start the colony through the runtime:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether init --charter-json '<synthesized charter JSON>' "<refined goal>"
+AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' "<refined goal>"
 ```
 
 ## Guardrails

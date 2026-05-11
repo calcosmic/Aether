@@ -383,6 +383,7 @@ func ensureSessionSummary(state colony.ColonyState, commandName, suggestedNext, 
 			SessionID:        fmt.Sprintf("hook_%d", time.Now().Unix()),
 			StartedAt:        time.Now().UTC().Format(time.RFC3339),
 			ColonyGoal:       goal,
+			ColonyMode:       state.EffectiveColonyMode(),
 			CurrentPhase:     state.CurrentPhase,
 			CurrentMilestone: state.Milestone,
 			SuggestedNext:    suggestedNext,
@@ -394,6 +395,7 @@ func ensureSessionSummary(state colony.ColonyState, commandName, suggestedNext, 
 	}
 	session.LastCommand = commandName
 	session.LastCommandAt = time.Now().UTC().Format(time.RFC3339)
+	session.ColonyMode = state.EffectiveColonyMode()
 	session.CurrentPhase = state.CurrentPhase
 	if state.Milestone != "" {
 		session.CurrentMilestone = state.Milestone

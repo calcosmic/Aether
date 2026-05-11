@@ -290,9 +290,9 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	}
 
 	findingSummary := renderSwarmFindingSummary(investigationRuns)
-	builderPlan := buildSwarmBuilderPlan(root, target)
-	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, []swarmWorkerPlan{builderPlan}, "Fix Wave"))
-	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, []swarmWorkerPlan{builderPlan}, findingSummary, invoker)
+	fixPlans := buildSwarmFixPlans(root, target)
+	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, fixPlans, "Fix Wave"))
+	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, findingSummary, invoker)
 	if err != nil {
 		if ctx.Err() != nil {
 			runStatus = "timeout"
@@ -302,9 +302,9 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	}
 
 	builderSummary := renderSwarmFindingSummary(builderRuns)
-	watcherPlan := buildSwarmWatcherPlan(root, target)
-	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, []swarmWorkerPlan{watcherPlan}, "Verification Wave"))
-	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, []swarmWorkerPlan{watcherPlan}, findingSummary+"\n\n"+builderSummary, invoker)
+	verificationPlans := buildSwarmVerificationPlans(root, target)
+	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, verificationPlans, "Verification Wave"))
+	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, verificationPlans, findingSummary+"\n\n"+builderSummary, invoker)
 	if err != nil {
 		if ctx.Err() != nil {
 			runStatus = "timeout"
@@ -435,9 +435,8 @@ func buildSwarmManifest(root, target, dispatchMode string, now time.Time) swarmM
 
 func allSwarmPlans(root, target string) []swarmWorkerPlan {
 	plans := append([]swarmWorkerPlan{}, buildSwarmInvestigationPlans(root, target)...)
-	builder := buildSwarmBuilderPlan(root, target)
-	watcher := buildSwarmWatcherPlan(root, target)
-	plans = append(plans, builder, watcher)
+	plans = append(plans, buildSwarmFixPlans(root, target)...)
+	plans = append(plans, buildSwarmVerificationPlans(root, target)...)
 	return plans
 }
 
@@ -821,51 +820,117 @@ func recordExternalSwarmRun(swarmID string, runs []swarmWorkerExecution) error {
 }
 
 func buildSwarmInvestigationPlans(root, target string) []swarmWorkerPlan {
-	seed := strings.ToLower(strings.TrimSpace(target))
-	return []swarmWorkerPlan{
-		{
-			Name:      deterministicAntName("tracker", root+"|swarm|tracker|"+seed),
-			Caste:     "tracker",
-			Role:      "tracker",
-			Task:      "Reproduce the issue, trace the failure path, and identify the most likely root cause.",
-			AgentName: "aether-tracker",
-			Wave:      1,
-			Timeout:   defaultSwarmWorkerTimeout,
-		},
-		{
-			Name:      deterministicAntName("scout", root+"|swarm|scout|"+seed),
-			Caste:     "scout",
-			Role:      "scout",
-			Task:      "Search the repo for the most relevant files, patterns, tests, and documentation tied to the reported bug.",
-			AgentName: "aether-scout",
-			Wave:      1,
-			Timeout:   defaultSwarmWorkerTimeout,
-		},
-		{
-			Name:      deterministicAntName("archaeologist", root+"|swarm|archaeology|"+seed),
-			Caste:     "archaeologist",
-			Role:      "archaeologist",
-			Task:      "Inspect git history and prior fixes around the bug area to identify historical context, fragile zones, and regressions.",
-			AgentName: "aether-archaeologist",
-			Wave:      1,
-			Timeout:   defaultSwarmWorkerTimeout,
-		},
-	}
+	return buildSwarmPlansForWave(root, target, 1)
 }
 
 func buildSwarmBuilderPlan(root, target string) swarmWorkerPlan {
-	return swarmWorkerPlan{
-		Name:      deterministicAntName("builder", root+"|swarm|builder|"+strings.ToLower(strings.TrimSpace(target))),
-		Caste:     "builder",
-		Role:      "builder",
-		Task:      "Implement the smallest safe fix for the reported bug and add or update tests that prove the regression is covered.",
-		AgentName: "aether-builder",
-		Wave:      2,
-		Timeout:   8 * time.Minute,
+	return buildSwarmPlanForCaste(root, target, "builder")
+}
+
+func buildSwarmFixPlans(root, target string) []swarmWorkerPlan {
+	plans := buildSwarmPlansForWave(root, target, 2)
+	if len(plans) == 0 {
+		return []swarmWorkerPlan{buildSwarmBuilderPlan(root, target)}
 	}
+	return plans
 }
 
 func buildSwarmWatcherPlan(root, target string) swarmWorkerPlan {
+	return buildSwarmPlanForCaste(root, target, "watcher")
+}
+
+func buildSwarmVerificationPlans(root, target string) []swarmWorkerPlan {
+	plans := buildSwarmPlansForWave(root, target, 3)
+	if len(plans) == 0 {
+		return []swarmWorkerPlan{buildSwarmWatcherPlan(root, target)}
+	}
+	return plans
+}
+
+func buildSwarmPlansForWave(root, target string, wave int) []swarmWorkerPlan {
+	selected := queenSwarmSelectedCastes(target)
+	order := []string{"tracker", "scout", "archaeologist", "gatekeeper", "medic", "builder", "weaver", "fixer", "watcher", "probe"}
+	plans := make([]swarmWorkerPlan, 0, len(order))
+	for _, caste := range order {
+		if !selected[caste] {
+			continue
+		}
+		plan := buildSwarmPlanForCaste(root, target, caste)
+		if plan.Wave == wave {
+			plans = append(plans, plan)
+		}
+	}
+	return plans
+}
+
+func queenSwarmSelectedCastes(target string) map[string]bool {
+	phase := colony.Phase{
+		Name:        strings.TrimSpace(target),
+		Description: strings.TrimSpace(target),
+		Mode:        colony.PhaseModeMaintenance,
+		Tasks: []colony.Task{{
+			Goal: strings.TrimSpace(target),
+		}},
+	}
+	return queenBuildCasteSet(queenOrchestrate(phase, "swarm", colony.ColonyState{}))
+}
+
+func buildSwarmPlanForCaste(root, target, caste string) swarmWorkerPlan {
+	seed := strings.ToLower(strings.TrimSpace(target))
+	plan := swarmWorkerPlan{
+		Name:      deterministicAntName(caste, root+"|swarm|"+caste+"|"+seed),
+		Caste:     caste,
+		Role:      caste,
+		Task:      swarmTaskForCaste(caste),
+		AgentName: codexAgentNameForCaste(caste),
+		Wave:      swarmWaveForCaste(caste),
+		Timeout:   defaultSwarmWorkerTimeout,
+	}
+	if caste == "builder" {
+		plan.Timeout = 8 * time.Minute
+	}
+	return plan
+}
+
+func swarmWaveForCaste(caste string) int {
+	switch caste {
+	case "builder", "weaver", "fixer":
+		return 2
+	case "watcher", "probe":
+		return 3
+	default:
+		return 1
+	}
+}
+
+func swarmTaskForCaste(caste string) string {
+	switch caste {
+	case "tracker":
+		return "Reproduce the issue, trace the failure path, and identify the most likely root cause."
+	case "scout":
+		return "Search the repo for the most relevant files, patterns, tests, and documentation tied to the reported bug."
+	case "archaeologist":
+		return "Inspect git history and prior fixes around the bug area to identify historical context, fragile zones, and regressions."
+	case "gatekeeper":
+		return "Inspect security, auth, permission, dependency, and release-integrity risks tied to the reported bug."
+	case "medic":
+		return "Diagnose colony/runtime health risks and recovery constraints tied to the reported bug."
+	case "weaver":
+		return "Refactor the smallest safe structure needed to make the bug fix durable without changing unrelated behavior."
+	case "fixer":
+		return "Apply a targeted remediation for the reported bug when the fix is mechanical and well bounded."
+	case "probe":
+		return "Probe regression coverage and edge cases to confirm the reported bug cannot recur."
+	case "builder":
+		return "Implement the smallest safe fix for the reported bug and add or update tests that prove the regression is covered."
+	case "watcher":
+		return "Verify the fix independently, run the most relevant checks, and confirm whether the bug is actually resolved."
+	default:
+		return "Investigate and resolve the reported swarm target within the caste's specialty."
+	}
+}
+
+func buildLegacySwarmWatcherPlan(root, target string) swarmWorkerPlan {
 	return swarmWorkerPlan{
 		Name:      deterministicAntName("watcher", root+"|swarm|watcher|"+strings.ToLower(strings.TrimSpace(target))),
 		Caste:     "watcher",

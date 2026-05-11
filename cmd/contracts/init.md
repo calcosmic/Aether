@@ -9,6 +9,7 @@
 | Flag | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | --scope | string | no | project | Colony scope: project or meta |
+| --colony-mode | string | no | colony | Colony mode: colony or orchestrator |
 | --charter-json | string | no | "" | Approved charter data as JSON string |
 
 ### Arguments
@@ -20,7 +21,7 @@ None
 ## Outputs
 
 ### Stdout
-JSON envelope via `outputWorkflow` (visual + structured). Contains state, goal, scope, version, phase, session, data_dir, shelf_backlog, shelf_backlog_count.
+JSON envelope via `outputWorkflow` (visual + structured). Contains state, goal, scope, colony_mode, version, phase, session, data_dir, shelf_backlog, shelf_backlog_count.
 
 ### Files Created/Modified
 | File | Operation | When |
@@ -36,7 +37,7 @@ JSON envelope via `outputWorkflow` (visual + structured). Contains state, goal, 
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Goal empty, invalid scope, colony already initialized, or seal in progress |
+| 1 | Goal empty, invalid scope, invalid colony mode, colony already initialized, or seal in progress |
 
 ## State Mutations
 
@@ -46,7 +47,7 @@ None -> READY: Creates new colony state with State=READY, CurrentPhase=0, empty 
 ### Data Artifacts Modified
 | Artifact | Write Type | Content Changed |
 |----------|------------|-----------------|
-| .aether/data/COLONY_STATE.json | create | Full new ColonyState v3.0 with goal, scope, session ID, run ID, initialized timestamp |
+| .aether/data/COLONY_STATE.json | create | Full new ColonyState v3.0 with goal, scope, colony mode, session ID, run ID, initialized timestamp |
 | .aether/data/session.json | create | SessionFile with session ID, goal, suggested next="aether plan" |
 | .aether/data/activity.log | append | COLONY_INITIALIZED entry with goal and session ID |
 

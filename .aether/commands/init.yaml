@@ -13,9 +13,10 @@ intent_refinement:
   - "Before creating colony state, ask one compact batch of 4-7 AI-led scoping questions when the goal is vague or broad."
   - "Questions should clarify target users, success criteria, non-goals, constraints, risk tolerance, affected systems, and the first useful milestone."
   - "Synthesize the raw goal, user answers, and init-research scan into a deeper charter JSON. Do not simply echo the runtime-generated charter."
+  - "Before creating colony state, ask the user to choose Colony Mode or Orchestrator Mode. Explain that Colony Mode is the existing default and Orchestrator Mode asks guided boundary questions at phase points for tighter user control. Default to Colony Mode when the user skips the choice or the host is non-interactive."
   - "Separate deterministic scan warnings from AI-synthesized pheromones. README/changelog/license/formatter suggestions are housekeeping, not strategic colony guidance."
   - "Suggest at most 3 synthesized pheromones, and only when they are specific to the user's clarified intent. Let the user approve each one before writing it."
-  - "Run `AETHER_OUTPUT_MODE=visual aether init --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
+  - "Run `AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

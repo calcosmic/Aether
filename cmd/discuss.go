@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +18,12 @@ const (
 	clarificationDecisionType = "clarification"
 	discussOptionDelimiter    = " Options: "
 	discussSourcePrefix       = "discuss:"
+
+	clarifiedIntentMaxEntries       = 6
+	clarifiedIntentMaxQuestionChars = 180
+	clarifiedIntentMaxAnswerChars   = 500
+	clarifiedIntentMaxEntryChars    = 720
+	clarifiedIntentMaxSectionChars  = 1600
 )
 
 type discussQuestion struct {
@@ -33,6 +42,18 @@ type clarifiedIntentEntry struct {
 	Question   string `json:"question"`
 	Resolution string `json:"resolution"`
 	Source     string `json:"source,omitempty"`
+}
+
+type clarifiedIntentRenderResult struct {
+	Lines    []string
+	Blocked  []colonyPrimeLedgerItem
+	Warnings []string
+}
+
+type pendingDecisionScope struct {
+	GoalHash      string
+	SessionID     string
+	InitializedAt *time.Time
 }
 
 var discussCmd = &cobra.Command{
@@ -99,35 +120,78 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 	}
 
 	survey, _ := loadCodexSurveyContext(root)
+	scope := pendingDecisionScopeFromState(state)
 	pending := loadPendingDecisionFile()
+	activePending, stalePending := filterPendingDecisionFileForScope(pending, scope)
+	staleClarificationCount := countClarifications(stalePending)
 	activeSignals := activeSignalTexts()
 
-	questions, createdCount, existingCount, err := materializeDiscussQuestions(goal, survey, pending, activeSignals, maxQuestions, dryRun)
+	questions, createdCount, existingCount, err := materializeDiscussQuestions(goal, survey, pending, activeSignals, maxQuestions, dryRun, scope)
 	if err != nil {
 		return nil, err
 	}
-	resolved := resolvedClarifiedIntentEntries(pending)
+
+	// Surface unresolved orchestrator boundary questions alongside discuss questions.
+	discussSources := map[string]bool{}
+	for _, q := range questions {
+		if s := strings.TrimSpace(q.Source); s != "" {
+			discussSources[s] = true
+		}
+	}
+	for _, decision := range activePending.Decisions {
+		if decision.Type != clarificationDecisionType || decision.Resolved {
+			continue
+		}
+		source := strings.TrimSpace(decision.Source)
+		if !strings.HasPrefix(source, orchestratorBoundarySourcePrefix+":") {
+			continue
+		}
+		if discussSources[source] {
+			continue
+		}
+		q, opts := parseClarificationDescription(decision.Description)
+		if strings.TrimSpace(q) == "" {
+			continue
+		}
+		questions = append(questions, discussQuestion{
+			ID:             decision.ID,
+			Category:       "orchestrator_boundary",
+			Question:       q,
+			Options:        opts,
+			HardConstraint: clarificationIsHardConstraint(decision),
+			Status:         "pending",
+			Source:         decision.Source,
+		})
+		existingCount++
+		discussSources[source] = true
+	}
+
+	resolved := resolvedClarifiedIntentEntries(activePending)
 
 	next := "Run `aether plan` once the critical clarifications are resolved."
 	if len(questions) > 0 {
 		next = "Resolve a question with `aether discuss --resolve <id> --answer \"...\"`, then run `aether plan`."
 	}
+	staleNotice := pendingDecisionStaleNotice(staleClarificationCount)
 
 	return map[string]interface{}{
-		"goal":              goal,
-		"question_count":    len(questions),
-		"created_count":     createdCount,
-		"existing_count":    existingCount,
-		"dry_run":           dryRun,
-		"survey_docs":       survey.SurveyDocs,
-		"questions":         questions,
-		"resolved":          resolved,
-		"resolved_count":    len(resolved),
-		"pending_count":     countPendingClarifications(pending),
-		"signal_count":      len(activeSignals),
-		"survey_available":  len(survey.SurveyDocs) > 0 || len(survey.Frameworks) > 0 || len(survey.Directories) > 0,
-		"next":              next,
-		"discussion_status": discussionStatus(len(questions), createdCount, existingCount),
+		"goal":                    goal,
+		"question_count":          len(questions),
+		"created_count":           createdCount,
+		"existing_count":          existingCount,
+		"dry_run":                 dryRun,
+		"survey_docs":             survey.SurveyDocs,
+		"questions":               questions,
+		"resolved":                resolved,
+		"resolved_count":          len(resolved),
+		"pending_count":           countPendingClarifications(activePending),
+		"ignored_stale_count":     staleClarificationCount,
+		"quarantined_stale_count": staleClarificationCount,
+		"stale_state_notice":      staleNotice,
+		"signal_count":            len(activeSignals),
+		"survey_available":        len(survey.SurveyDocs) > 0 || len(survey.Frameworks) > 0 || len(survey.Directories) > 0,
+		"next":                    next,
+		"discussion_status":       discussionStatus(len(questions), createdCount, existingCount),
 	}, nil
 }
 
@@ -141,9 +205,13 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	}
 
 	file := loadPendingDecisionFile()
+	scope := loadCurrentPendingDecisionScope()
 	found := -1
 	for i := range file.Decisions {
 		if file.Decisions[i].ID == id {
+			if !pendingDecisionMatchesScope(file.Decisions[i], scope) {
+				return nil, fmt.Errorf("clarification %q is stale for the current goal/session; run `aether discuss` to create or resolve current-goal clarifications", id)
+			}
 			found = i
 			break
 		}
@@ -159,6 +227,7 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	file.Decisions[found].Resolved = true
 	file.Decisions[found].Resolution = answer
 	file.Decisions[found].ResolvedAt = now
+	stampPendingDecisionScope(&file.Decisions[found], scope)
 	if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
 		return nil, fmt.Errorf("failed to save clarification resolution: %w", err)
 	}
@@ -177,13 +246,14 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 		var state colony.ColonyState
 		if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
 			_ = tracer.LogIntervention(*state.RunID, "discuss.resolved", "discuss", map[string]interface{}{
-				"decisions":         1,
+				"decisions":        1,
 				"redirect_emitted": redirectEmitted,
 			})
 		}
 	}
 
-	remaining := countPendingClarifications(file)
+	activeFile, _ := filterPendingDecisionFileForScope(file, scope)
+	remaining := countPendingClarifications(activeFile)
 	next := "Run `aether discuss` to review remaining questions before planning."
 	if remaining == 0 {
 		next = "Run `aether plan` to generate phases with the clarified intent."
@@ -200,8 +270,9 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	}, nil
 }
 
-func materializeDiscussQuestions(goal string, survey codexSurveyContext, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool) ([]discussQuestion, int, int, error) {
-	existingBySource := clarificationDecisionIndex(pending)
+func materializeDiscussQuestions(goal string, survey codexSurveyContext, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool, scope pendingDecisionScope) ([]discussQuestion, int, int, error) {
+	activePending, _ := filterPendingDecisionFileForScope(pending, scope)
+	existingBySource := clarificationDecisionIndex(activePending)
 	candidates := generateDiscussCandidates(goal, survey)
 	questions := make([]discussQuestion, 0, maxQuestions)
 	createdCount := 0
@@ -237,6 +308,7 @@ func materializeDiscussQuestions(goal string, survey codexSurveyContext, pending
 				Resolved:    false,
 				CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 			}
+			stampPendingDecisionScope(&decision, scope)
 			pending.Decisions = append(pending.Decisions, decision)
 			candidate.ID = decision.ID
 			dirty = true
@@ -418,6 +490,10 @@ func renderDiscussVisual(result map[string]interface{}) string {
 	if intValue(result["resolved_count"]) > 0 {
 		b.WriteString(fmt.Sprintf("Resolved clarifications already on file: %d\n", intValue(result["resolved_count"])))
 	}
+	if notice := stringValue(result["stale_state_notice"]); notice != "" {
+		b.WriteString(notice)
+		b.WriteString("\n")
+	}
 	b.WriteString("\n")
 
 	if questions, ok := result["questions"].([]discussQuestion); ok && len(questions) > 0 {
@@ -458,6 +534,99 @@ func loadPendingDecisionFile() PendingDecisionFile {
 		file.Decisions = []PendingDecision{}
 	}
 	return file
+}
+
+func loadCurrentPendingDecisionScope() pendingDecisionScope {
+	if store == nil {
+		return pendingDecisionScope{}
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return pendingDecisionScope{}
+	}
+	return pendingDecisionScopeFromState(state)
+}
+
+func pendingDecisionScopeFromState(state colony.ColonyState) pendingDecisionScope {
+	scope := pendingDecisionScope{GoalHash: pendingDecisionGoalHash(derefGoal(state.Goal))}
+	if state.SessionID != nil {
+		scope.SessionID = strings.TrimSpace(*state.SessionID)
+	}
+	if state.InitializedAt != nil {
+		initializedAt := state.InitializedAt.UTC()
+		scope.InitializedAt = &initializedAt
+	}
+	return scope
+}
+
+func pendingDecisionGoalHash(goal string) string {
+	normalized := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(goal))), " ")
+	if normalized == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:])
+}
+
+func stampPendingDecisionScope(decision *PendingDecision, scope pendingDecisionScope) {
+	if decision == nil {
+		return
+	}
+	if strings.TrimSpace(decision.GoalHash) == "" && strings.TrimSpace(scope.GoalHash) != "" {
+		decision.GoalHash = scope.GoalHash
+	}
+	if strings.TrimSpace(decision.SessionID) == "" && strings.TrimSpace(scope.SessionID) != "" {
+		decision.SessionID = scope.SessionID
+	}
+}
+
+func filterPendingDecisionFileForScope(file PendingDecisionFile, scope pendingDecisionScope) (PendingDecisionFile, PendingDecisionFile) {
+	active := PendingDecisionFile{Decisions: []PendingDecision{}}
+	stale := PendingDecisionFile{Decisions: []PendingDecision{}}
+	for _, decision := range file.Decisions {
+		if pendingDecisionMatchesScope(decision, scope) {
+			active.Decisions = append(active.Decisions, decision)
+			continue
+		}
+		stale.Decisions = append(stale.Decisions, decision)
+	}
+	return active, stale
+}
+
+func pendingDecisionMatchesScope(decision PendingDecision, scope pendingDecisionScope) bool {
+	// Prefer session ID over goal hash: two colonies with the same goal but
+	// different sessions should not share pending decisions. Session ID is the
+	// stronger scope boundary.
+	scopeSession := strings.TrimSpace(scope.SessionID)
+	decisionSession := strings.TrimSpace(decision.SessionID)
+	if scopeSession != "" && decisionSession != "" {
+		return scopeSession == decisionSession
+	}
+
+	scopeGoal := strings.TrimSpace(scope.GoalHash)
+	decisionGoal := strings.TrimSpace(decision.GoalHash)
+	if scopeGoal != "" && decisionGoal != "" {
+		return scopeGoal == decisionGoal
+	}
+
+	if scope.InitializedAt != nil {
+		if createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(decision.CreatedAt)); err == nil {
+			return !createdAt.Before(*scope.InitializedAt)
+		}
+		return false
+	}
+	return true
+}
+
+func pendingDecisionStaleNotice(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	label := "clarification"
+	if count != 1 {
+		label = "clarifications"
+	}
+	return fmt.Sprintf("Ignored %d stale %s from a prior goal/session. They remain in pending-decisions.json for audit; run `aether discuss` to create or resolve current-goal clarifications.", count, label)
 }
 
 func clarificationDecisionIndex(file PendingDecisionFile) map[string]PendingDecision {
@@ -513,6 +682,16 @@ func countPendingClarifications(file PendingDecisionFile) int {
 	total := 0
 	for _, decision := range file.Decisions {
 		if decision.Type == clarificationDecisionType && !decision.Resolved {
+			total++
+		}
+	}
+	return total
+}
+
+func countClarifications(file PendingDecisionFile) int {
+	total := 0
+	for _, decision := range file.Decisions {
+		if decision.Type == clarificationDecisionType {
 			total++
 		}
 	}
@@ -580,18 +759,128 @@ func parseClarificationDescription(description string) (string, []string) {
 }
 
 func clarifiedIntentPromptEntries() []string {
-	file := loadPendingDecisionFile()
+	file, _ := loadScopedPendingDecisionFile(loadCurrentPendingDecisionScope())
 	entries := resolvedClarifiedIntentEntries(file)
-	lines := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		question := strings.TrimSpace(entry.Question)
-		answer := strings.TrimSpace(entry.Resolution)
-		if question == "" || answer == "" {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("- %s => %s", question, answer))
+	return renderClarifiedIntentPromptEntries(entries)
+}
+
+func clarifiedIntentPromptRenderResult() clarifiedIntentRenderResult {
+	return clarifiedIntentPromptRenderResultForScope(loadCurrentPendingDecisionScope())
+}
+
+func clarifiedIntentPromptRenderResultForScope(scope pendingDecisionScope) clarifiedIntentRenderResult {
+	file, _ := loadScopedPendingDecisionFile(scope)
+	entries := resolvedClarifiedIntentEntries(file)
+	source := pendingDecisionsFile
+	if store != nil {
+		source = filepath.Join(store.BasePath(), pendingDecisionsFile)
+	}
+	return renderClarifiedIntentPromptEntriesWithIntegrity(entries, source)
+}
+
+func loadScopedPendingDecisionFile(scope pendingDecisionScope) (PendingDecisionFile, PendingDecisionFile) {
+	file := loadPendingDecisionFile()
+	return filterPendingDecisionFileForScope(file, scope)
+}
+
+func renderClarifiedIntentPromptEntries(entries []clarifiedIntentEntry) []string {
+	rendered := renderBoundedClarifiedIntentPromptLines(entries)
+	lines := make([]string, 0, len(rendered))
+	for _, item := range rendered {
+		lines = append(lines, item.line)
 	}
 	return lines
+}
+
+type clarifiedIntentPromptLine struct {
+	entry clarifiedIntentEntry
+	line  string
+}
+
+func renderBoundedClarifiedIntentPromptLines(entries []clarifiedIntentEntry) []clarifiedIntentPromptLine {
+	rendered := make([]clarifiedIntentPromptLine, 0, clarifiedIntentMaxEntries)
+	sectionChars := 0
+	for _, entry := range entries {
+		if len(rendered) >= clarifiedIntentMaxEntries {
+			break
+		}
+		item, ok := boundedClarifiedIntentPromptLine(entry)
+		if !ok {
+			continue
+		}
+		lineChars := len(item.line) + 1
+		if sectionChars+lineChars > clarifiedIntentMaxSectionChars {
+			break
+		}
+		rendered = append(rendered, item)
+		sectionChars += lineChars
+	}
+	return rendered
+}
+
+func boundedClarifiedIntentPromptLine(entry clarifiedIntentEntry) (clarifiedIntentPromptLine, bool) {
+	question := truncateString(strings.TrimSpace(entry.Question), clarifiedIntentMaxQuestionChars)
+	answer := truncateString(strings.TrimSpace(entry.Resolution), clarifiedIntentMaxAnswerChars)
+	if question == "" || answer == "" {
+		return clarifiedIntentPromptLine{}, false
+	}
+	line := truncateString(fmt.Sprintf("- %s => %s", question, answer), clarifiedIntentMaxEntryChars)
+	return clarifiedIntentPromptLine{entry: entry, line: line}, true
+}
+
+func renderClarifiedIntentPromptEntriesWithIntegrity(entries []clarifiedIntentEntry, source string) clarifiedIntentRenderResult {
+	result := clarifiedIntentRenderResult{
+		Lines:    make([]string, 0, clarifiedIntentMaxEntries),
+		Blocked:  []colonyPrimeLedgerItem{},
+		Warnings: []string{},
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		source = pendingDecisionsFile
+	}
+	sectionChars := 0
+	for idx, entry := range entries {
+		if len(result.Lines) >= clarifiedIntentMaxEntries {
+			break
+		}
+		item, ok := boundedClarifiedIntentPromptLine(entry)
+		if !ok {
+			continue
+		}
+		assessment := colony.AssessPromptSource(source, item.line)
+		if assessment.Action == colony.PromptIntegrityActionBlock {
+			entrySource := clarifiedIntentEntrySource(source, item.entry, idx)
+			result.Warnings = append(result.Warnings, assessment.Warning("clarified_intent", entrySource))
+			result.Blocked = append(result.Blocked, colonyPrimeLedgerItem{
+				Name:           "clarified_intent",
+				Title:          "Clarified Intent",
+				Source:         filepath.ToSlash(entrySource),
+				Priority:       8,
+				Chars:          len(item.line),
+				BaseTrustClass: assessment.BaseTrustClass,
+				TrustClass:     assessment.TrustClass,
+				Action:         assessment.Action,
+				Blocked:        true,
+				Findings:       append([]colony.PromptIntegrityFinding(nil), assessment.Findings...),
+			})
+			continue
+		}
+		lineChars := len(item.line) + 1
+		if sectionChars+lineChars > clarifiedIntentMaxSectionChars {
+			break
+		}
+		result.Lines = append(result.Lines, item.line)
+		sectionChars += lineChars
+	}
+	return result
+}
+
+func clarifiedIntentEntrySource(source string, entry clarifiedIntentEntry, index int) string {
+	id := strings.TrimSpace(entry.ID)
+	if id == "" {
+		id = fmt.Sprintf("entry_%d", index+1)
+	}
+	return source + "#" + id
 }
 
 func clarificationIsHardConstraint(decision PendingDecision) bool {

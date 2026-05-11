@@ -55,19 +55,20 @@ Only use this path when the user explicitly requests `--verification-depth heavy
    `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS`
 2. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
 3. Parse `result.continue_manifest`; do not parse visual output.
-4. Render the runtime-owned heavy-review spawn ceremony:
+4. Before rendering spawn ceremonies or spawning reviewers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the heavy-review flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest and do not ask, answer, or store boundary questions in wrapper markdown.
+5. Render the runtime-owned heavy-review spawn ceremony:
    `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>`
-5. Use visible live Task/subagent panels with caste-labelled descriptions as the heavy-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
-6. Pass each dispatch's runtime-provided `brief` verbatim. The brief includes read cache discipline; if a reviewer keeps re-reading the same unchanged file or artifact, stop waiting and mark that reviewer `blocked` with the concrete missing context.
-7. Before each manifest execution wave, render:
+6. Use visible live Task/subagent panels with caste-labelled descriptions as the heavy-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
+7. Pass each dispatch's runtime-provided `brief` verbatim. The brief includes read cache discipline; if a reviewer keeps re-reading the same unchanged file or artifact, stop waiting and mark that reviewer `blocked` with the concrete missing context.
+8. Before each manifest execution wave, render:
    `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
-8. For each dispatch in `continue_manifest.dispatches`, run `AETHER_OUTPUT_MODE=json aether spawn-log`, spawn the matching platform agent using `subagent_type="{agent_name}"` or equivalent with description `{caste emoji} {Caste} {name}: {task}`, then run `AETHER_OUTPUT_MODE=json aether spawn-complete`.
-9. Write each terminal reviewer result to a temporary worker JSON file and render:
+9. For each dispatch in `continue_manifest.dispatches`, run `AETHER_OUTPUT_MODE=json aether spawn-log`, spawn the matching platform agent using `subagent_type="{agent_name}"` or equivalent with description `{caste emoji} {Caste} {name}: {task}`, then run `AETHER_OUTPUT_MODE=json aether spawn-complete`.
+10. Write each terminal reviewer result to a temporary worker JSON file and render:
    `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>`
-10. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.
-11. Finalize with:
+11. Collect terminal worker results into a temporary completion JSON file containing the original `continue_manifest` and a `dispatches` array.
+12. Finalize with:
    `AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file <completion_file>`
-12. Render the user-facing closeout:
+13. Render the user-facing closeout:
    `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file <completion_file>`
 
 ## Learning Extraction

@@ -104,6 +104,89 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 	}
 }
 
+func TestSyncColonyArtifactsSurfacesColonyModeWithoutChangingNextStep(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+
+	goal := "Show selected mode in guidance"
+	taskID := "1.1"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		ColonyMode:   colony.ColonyModeOrchestrator,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Milestone:    "Open Chambers",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Mode visibility",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Keep next step stable", Status: colony.TaskPending}},
+				},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	const suggestedNext = "aether build 1"
+	session, err := syncColonyArtifacts(state, colonyArtifactOptions{
+		CommandName:   "status-guidance-test",
+		SuggestedNext: suggestedNext,
+		Summary:       "Mode guidance was refreshed",
+		HandoffTitle:  "Mode Visibility",
+		WriteHandoff:  true,
+	})
+	if err != nil {
+		t.Fatalf("sync artifacts: %v", err)
+	}
+	if session.SuggestedNext != suggestedNext {
+		t.Fatalf("session SuggestedNext = %q, want %q", session.SuggestedNext, suggestedNext)
+	}
+
+	var sessionJSON map[string]interface{}
+	if err := store.LoadJSON("session.json", &sessionJSON); err != nil {
+		t.Fatalf("load session.json: %v", err)
+	}
+	if got := sessionJSON["colony_mode"]; got != string(colony.ColonyModeOrchestrator) {
+		t.Fatalf("session colony_mode = %v, want %q", got, colony.ColonyModeOrchestrator)
+	}
+	if got := sessionJSON["suggested_next"]; got != suggestedNext {
+		t.Fatalf("session suggested_next = %v, want %q", got, suggestedNext)
+	}
+
+	contextData, err := os.ReadFile(filepath.Join(os.Getenv("AETHER_ROOT"), ".aether", "CONTEXT.md"))
+	if err != nil {
+		t.Fatalf("read context: %v", err)
+	}
+	context := string(contextData)
+	for _, want := range []string{
+		"| **Colony Mode** | orchestrator |",
+		"1. Run `aether build 1`",
+	} {
+		if !strings.Contains(context, want) {
+			t.Fatalf("CONTEXT.md missing %q\n%s", want, context)
+		}
+	}
+
+	handoffData, err := os.ReadFile(filepath.Join(os.Getenv("AETHER_ROOT"), ".aether", "HANDOFF.md"))
+	if err != nil {
+		t.Fatalf("read handoff: %v", err)
+	}
+	handoff := string(handoffData)
+	for _, want := range []string{
+		"- Colony Mode: orchestrator",
+		"- Run `aether build 1`",
+	} {
+		if !strings.Contains(handoff, want) {
+			t.Fatalf("HANDOFF.md missing %q\n%s", want, handoff)
+		}
+	}
+}
+
 func TestResumeColonyRestoresSessionAndClearsHandoff(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

@@ -37,6 +37,15 @@ Expected manifest:
 - `dispatches`: Gatekeeper, Auditor, and Probe final-review workers
 - `finalizer_command`: `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`
 
+## Guided Boundary Gate
+
+Before rendering spawn ceremonies or spawning final-review workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`.
+
+- If it is active or `next` is `aether discuss`, stop the seal flow and show its summary.
+- Route to `aether discuss` so the user can resolve the runtime-owned questions.
+- Tell the user to rerun `after_discuss_next` after answers are resolved.
+- Request a fresh plan-only manifest after the guided answer is resolved. Do not reuse the pre-discuss manifest and do not ask, answer, or store boundary questions in wrapper markdown.
+
 ## Runtime Spawn Ceremony
 
 Before spawning final-review workers, render the runtime-owned old-style seal ceremony:
@@ -80,6 +89,8 @@ For each dispatch:
    - `summary`
    - `blockers`
    - `report`
+   - optional `findings` or `issues` objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`
+   - optional `recommendations`, `weak_spots`, `edge_cases_discovered`, and `reusable_lessons`
 8. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 9. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`.
 
@@ -102,7 +113,18 @@ Write a JSON completion packet:
       "status": "completed",
       "summary": "No release blockers found.",
       "blockers": [],
-      "report": "..."
+      "report": "...",
+      "findings": [
+        {
+          "domain": "security",
+          "severity": "LOW",
+          "category": "release-integrity",
+          "description": "Release provenance should be signed before public distribution.",
+          "suggestion": "Add signed provenance in the next release hardening pass.",
+          "blocking": false
+        }
+      ],
+      "reusable_lessons": ["Keep release provenance checks in the final seal review."]
     }
   ]
 }
@@ -145,6 +167,7 @@ Run selected delivery actions sequentially and stop on first failure.
 - Do NOT run `aether seal` without `--plan-only` from this wrapper unless the user explicitly asks for raw/no-orchestration.
 - Do NOT run Porter delivery commands unless the user explicitly chooses them after `seal-finalize`.
 - Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
+- Do NOT drop structured reviewer findings; `seal-finalize` persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied.
 - Runtime output wins if this wrapper and the runtime disagree.
 
 ## Cross-Platform Drift Guard

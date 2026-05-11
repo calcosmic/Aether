@@ -19,7 +19,7 @@ var (
 	planningScoutTimeout        = 15 * time.Minute
 	planningRouteSetterTimeout  = 15 * time.Minute
 	surveyorDispatchTimeout     = 5 * time.Minute
-	continueReviewTimeout       = 5 * time.Minute
+	continueReviewTimeout       = 10 * time.Minute
 	continueVerificationTimeout = 15 * time.Minute
 )
 
@@ -296,8 +296,15 @@ func recommendQueenWorkflowProfile(state colony.ColonyState, phase colony.Phase,
 }
 
 // recommendQueenExecutionPolicy generates a queen execution policy.
+// Uses resolveVerificationDepth to apply smart defaults (phase position, keyword
+// detection) when no explicit depth is provided, matching the continue path's
+// depth resolution in resolveEffectiveContinueDepth.
 func recommendQueenExecutionPolicy(state colony.ColonyState, phase colony.Phase, totalPhases int, input codexQueenExecutionPolicyInput) codexQueenExecutionPolicy {
-	depth := colony.NormalizeVerificationDepth(input.VerificationDepth)
+	effectiveDepth := resolveVerificationDepthFlag(input.LightFlag, input.HeavyFlag, input.VerificationDepth)
+	if effectiveDepth == "" {
+		effectiveDepth = strings.TrimSpace(state.VerificationDepth)
+	}
+	depth := resolveVerificationDepth(phase, totalPhases, input.LightFlag, input.HeavyFlag, effectiveDepth)
 	return codexQueenExecutionPolicy{
 		VerificationDepth: string(depth),
 		ReviewDepth:       string(depth),

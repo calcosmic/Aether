@@ -151,6 +151,21 @@ For any commands still unresolved, check for these files in order, use first mat
 
 If no build system detected, skip build/test/type/lint checks but still verify success criteria.
 
+#### Phase Mode Awareness
+
+The verification loop adapts to the current phase's `mode` field (`discovery`, `prototype`, `production`, `maintenance`). Read `plan.phases[current].mode` from COLONY_STATE.json.
+
+| Mode | Build | Types | Lint | Tests | Coverage | Probe | Success Criteria |
+|------|-------|-------|------|-------|----------|-------|------------------|
+| `discovery` | Run | Run | Run | Run | Skip | Skip | Check (env errors warn) |
+| `prototype` | Run | Run | Run | Run | Advisory | Skip if missing | Check |
+| `production` | Run | Run | Run | Run | Required | Spawn if <80% | Check |
+| `maintenance` | Run | Run | Run | Run | Advisory | Skip if missing | Check |
+
+**Environment errors** (EPERM, EADDRINUSE, connection refused, missing DB) in `discovery` phases are warnings, not blockers. Report them but do not block advancement.
+
+**Coverage checks** for `discovery` phases are skipped entirely. For `prototype` and `maintenance`, coverage is advisory — run the check if a coverage command exists, but do not spawn Probe if coverage is low or missing.
+
 #### 2. Run 6-Phase Verification Loop
 
 Execute all applicable phases and capture output:
@@ -200,19 +215,23 @@ After test check completes, write gate result:
 aether gate-results-write --name "tests_pass" --passed {true/false} --detail "{summary of pass/fail counts}"
 ```
 
-**Coverage Check** (if coverage command exists):
+**Coverage Check** (if coverage command exists AND phase mode is not `discovery`):
+- `discovery`: Skip coverage check entirely.
+- `prototype` / `maintenance`: Run if command exists, record percentage, but do NOT block if missing or low.
+- `production`: Run if command exists, target 80%+ for new code.
 Run using the Bash tool with description "Checking test coverage...": `{coverage_command}  # e.g., npm run test:coverage`
-Record: coverage percentage (target: 80%+ for new code)
+Record: coverage percentage.
 
 #### Step 1.5.1: Probe Coverage Agent (Conditional)
 
-**Test coverage improvement — runs when coverage < 80% AND tests pass.**
+**Test coverage improvement — runs only when appropriate for the phase mode.**
 
 1. **Check coverage threshold condition:**
-   - Coverage data is already available from Phase 4 coverage check
+   - If phase mode is `discovery`: Skip Probe entirely. Coverage is not required for discovery work.
    - If tests failed: Skip Probe silently (coverage data unreliable)
-   - If coverage_percent >= 80%: Skip Probe silently, continue to Phase 5
-   - If coverage_percent < 80% AND tests passed: Proceed to spawn Probe
+   - If phase mode is `prototype` or `maintenance`: Skip Probe even if coverage is low. Coverage is advisory only.
+   - If phase mode is `production` AND coverage_percent >= 80%: Skip Probe silently, continue to Phase 5
+   - If phase mode is `production` AND coverage_percent < 80% AND tests passed: Proceed to spawn Probe
 
 2. **If skipping Probe:**
 ```

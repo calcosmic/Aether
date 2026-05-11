@@ -195,6 +195,12 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 		outputError(1, fmt.Sprintf("invalid scope %q", scopeRaw), nil)
 		return nil
 	}
+	colonyModeRaw, _ := cmd.Flags().GetString("colony-mode")
+	colonyMode, err := parseInitColonyMode(colonyModeRaw)
+	if err != nil {
+		outputError(1, fmt.Sprintf("invalid colony mode %q", colonyModeRaw), nil)
+		return nil
+	}
 
 	// In test mode (stdinReader is set), skip TTY check
 	isTestMode := stdinReader != nil
@@ -251,7 +257,7 @@ func runInitCeremony(cmd *cobra.Command, args []string) error {
 					Message: fmt.Sprintf("Charter: %s", charter.Intent),
 				}, "init-ceremony")
 
-				if err := createCeremonyColony(goal, scope, *charter); err != nil {
+				if err := createCeremonyColony(goal, scope, colonyMode, *charter); err != nil {
 					outputError(1, fmt.Sprintf("failed to create colony: %v", err), nil)
 					return nil
 				}
@@ -450,7 +456,7 @@ func stringOrEmpty(v interface{}) string {
 
 // createCeremonyColony creates the colony state, session, and artifacts
 // with the approved charter.
-func createCeremonyColony(goal string, scope colony.ColonyScope, charter colony.Charter) error {
+func createCeremonyColony(goal string, scope colony.ColonyScope, colonyMode colony.ColonyMode, charter colony.Charter) error {
 	dataDir := store.BasePath()
 	statePath := filepath.Join(dataDir, "COLONY_STATE.json")
 
@@ -518,6 +524,7 @@ createFreshColony:
 		Version:       "3.0",
 		Goal:          &goal,
 		Scope:         scope,
+		ColonyMode:    colonyMode,
 		ColonyVersion: 0,
 		State:         colony.StateREADY,
 		CurrentPhase:  0,
@@ -530,12 +537,12 @@ createFreshColony:
 			Decisions:      []colony.Decision{},
 			Instincts:      []colony.Instinct{},
 		},
-		Errors:        colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}},
-		Signals:       []colony.Signal{},
-		Graveyards:    []colony.Graveyard{},
-		Events:        []string{},
-		ParallelMode:  colony.ModeInRepo,
-		Charter:       &charter,
+		Errors:       colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}},
+		Signals:      []colony.Signal{},
+		Graveyards:   []colony.Graveyard{},
+		Events:       []string{},
+		ParallelMode: colony.ModeInRepo,
+		Charter:      &charter,
 	}
 
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -547,6 +554,7 @@ createFreshColony:
 		SessionID:        sessionID,
 		StartedAt:        nowStr,
 		ColonyGoal:       goal,
+		ColonyMode:       colonyMode,
 		CurrentPhase:     0,
 		CurrentMilestone: "",
 		SuggestedNext:    "aether plan",
@@ -598,5 +606,6 @@ var initCeremonyCmd = &cobra.Command{
 func init() {
 	initCeremonyCmd.Flags().String("target", ".", "Directory to scan")
 	initCeremonyCmd.Flags().String("scope", string(colony.ScopeProject), "Colony scope: project or meta")
+	initCeremonyCmd.Flags().String("colony-mode", string(colony.ColonyModeColony), "Colony mode: colony or orchestrator")
 	rootCmd.AddCommand(initCeremonyCmd)
 }

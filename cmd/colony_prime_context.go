@@ -726,10 +726,17 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		})
 	}
 
-	if clarifications := clarifiedIntentPromptEntries(); len(clarifications) > 0 {
+	clarifiedIntent := clarifiedIntentPromptRenderResultForScope(pendingDecisionScopeFromState(state))
+	if len(clarifiedIntent.Warnings) > 0 {
+		result.Warnings = append(result.Warnings, clarifiedIntent.Warnings...)
+	}
+	if len(clarifiedIntent.Blocked) > 0 {
+		result.Ledger.Blocked = append(result.Ledger.Blocked, clarifiedIntent.Blocked...)
+	}
+	if len(clarifiedIntent.Lines) > 0 {
 		var clarifySB strings.Builder
 		clarifySB.WriteString("## CLARIFIED INTENT\n\n")
-		for _, clarification := range clarifications {
+		for _, clarification := range clarifiedIntent.Lines {
 			clarifySB.WriteString(clarification)
 			clarifySB.WriteString("\n")
 		}

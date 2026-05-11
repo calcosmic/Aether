@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Docs
 - AGENTS.md: add Runtime Lifecycle mermaid diagram (under Architecture Overview) and Wisdom Pipeline mermaid diagram (under Wisdom Pipeline). Model-agnostic, shows both `in-repo` and `worktree` parallel modes, and contains the `skill-match` sub-graph.
+- Added Phase 5 lifecycle integration guidance covering Orchestrator Mode routing, finalizer validation, wrapper parity, and changelog planning.
+- Documented runtime-owned `orchestrator_boundary_guidance` routing across command guides, Claude/OpenCode wrappers, Codex build-cycle skill, and wrapper-runtime contract docs.
+
+### Changed
+- Lifecycle wrapper guidance now stops before worker spawning when Orchestrator Mode routes to `aether discuss`, then requires rerunning `after_discuss_next` with a fresh plan-only manifest after answers are resolved.
 
 ## [1.0.30] - 2026-05-06
 

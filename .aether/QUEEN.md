@@ -296,3 +296,18 @@ High-confidence behavioral patterns that have been validated through repeated co
 ## Anti-Patterns
 
 - Do not default unknown hosts to Codex
+
+## Wisdom
+- Final seal reviews should pair stored phase artifacts with fresh full-suite and race-suite evidence when any worker review timed out or watcher review was skipped. (seal review phase 5, 2026-05-09)
+- For lifecycle features, test both the small helper contract and the top-level command path that decides whether state may advance. (seal review phase 5, 2026-05-09)
+- For wrapper-driven features, verify the generated command-guide run command carries every new runtime flag needed by the normal guided path. (seal review phase 5, 2026-05-09)
+- Mode features need acceptance tests at the first user entry point, not only at downstream manifests and finalizers. (seal review phase 5, 2026-05-09)
+- Mode-selection changes should verify both wrapper guidance and runtime persistence so orchestration text cannot drift from executable behavior. (seal review phase 5, 2026-05-09)
+- Release-integrity reviews should separate package-version vulnerability hits from reachable release-binary exposure and cite the reachability check used. (seal review phase 5, 2026-05-09)
+- Seal final-review workers need an explicit temp completion artifact allowance when runtime finalizers require JSON files; otherwise role write boundaries can conflict with finalization. (seal review phase 5, 2026-05-09)
+- When a blocker is fixed by later work, update the review ledger status in the same phase so stale CRITICAL entries do not obscure real release risk. (seal review phase 5, 2026-05-09)
+
+- Adaptive orchestration changes need both a cross-flow contract test and targeted regressions for previously blocked finalizer or concurrency paths. (seal review phase 6, 2026-05-08)
+- Final seal review should verify adaptive planned reviewer sets, not static depth counts. (seal review phase 6, 2026-05-08)
+- For final seal reviews, do not rely on timeout-marked review artifacts alone; replace them with fresh focused and broad verification before approving. (seal review phase 6, 2026-05-08)
+- Timeout/cancellation fixes that involve goroutines need a fresh race-suite pass before seal. (seal review phase 6, 2026-05-08)

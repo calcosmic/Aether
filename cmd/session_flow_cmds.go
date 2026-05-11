@@ -693,6 +693,7 @@ func loadOrCreateSessionSummary(now time.Time, state colony.ColonyState) (colony
 		SessionID:        fmt.Sprintf("%d_%s", now.Unix(), randomHex(4)),
 		StartedAt:        now.Format(time.RFC3339),
 		ColonyGoal:       goal,
+		ColonyMode:       state.EffectiveColonyMode(),
 		CurrentPhase:     state.CurrentPhase,
 		CurrentMilestone: state.Milestone,
 		SuggestedNext:    "aether resume",
