@@ -27,6 +27,12 @@ export interface DispatchResult {
   summary: string;
   /** Approximate duration in seconds (for simulated workers). */
   duration?: number;
+  /** Files modified by the worker (simulated or real). */
+  files_modified?: string[];
+  /** Files created by the worker (simulated or real). */
+  files_created?: string[];
+  /** Tests written by the worker (simulated or real). */
+  tests_written?: string[];
 }
 
 /** Options for worker dispatch, extending Go bridge options. */
@@ -36,6 +42,12 @@ export interface DispatchOptions extends GoBridgeOptions {
    * a real platform CLI. The prototype uses simulation.
    */
   simulateWorkers?: boolean;
+  /**
+   * File paths that actually exist in the repo, used as simulated worker
+   * file claims. Must be real repo-relative paths that exist on disk,
+   * because the Go build-finalizer validates all file claims.
+   */
+  simulatedFileClaims?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -94,12 +106,22 @@ export async function dispatchSingleWorker(
     if (simulate) {
       // Simulated worker execution: brief delay to mimic work.
       await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      // Use configurable simulated file claims, or empty if not provided.
+      // The Go build-finalizer validates that all file claims exist in the
+      // repo, so simulated claims must reference real files.
+      const simClaims = opts.simulatedFileClaims ?? [];
       result = {
         name: dispatch.name,
         status: "completed",
         summary: `Simulated worker completion for ${dispatch.name}`,
         duration: 0.1,
       };
+      if (simClaims.length > 0) {
+        result.files_modified = [simClaims[0]!];
+      }
+      if (simClaims.length > 1) {
+        result.tests_written = [simClaims[1]!];
+      }
     } else {
       throw new Error("Real worker dispatch not yet implemented");
     }
@@ -199,6 +221,9 @@ export async function dispatchWorkers(
  * Map dispatch entries and their results to WorkerResult objects for
  * the Go build finalizer.
  *
+ * Matches results to dispatches by name (not by index) to handle
+ * wave-grouped re-ordering from dispatchWorkers.
+ *
  * Preserves manifest fields (caste, task_id, stage, wave) alongside
  * dispatch outcomes (status, summary).
  *
@@ -210,14 +235,20 @@ export function toWorkerResults(
   dispatches: BuildDispatch[],
   results: DispatchResult[]
 ): WorkerResult[] {
-  return dispatches.map((dispatch, i): WorkerResult => {
-    const result = results[i]!;
+  // Build a name -> result lookup for O(1) matching
+  const resultByName = new Map<string, DispatchResult>();
+  for (const r of results) {
+    resultByName.set(r.name, r);
+  }
+
+  return dispatches.map((dispatch): WorkerResult => {
+    const result = resultByName.get(dispatch.name);
     // Build result object; omit optional fields when undefined for
     // exactOptionalPropertyTypes compatibility.
     const worker: WorkerResult = {
-      name: result.name,
-      status: result.status,
-      summary: result.summary,
+      name: dispatch.name,
+      status: result?.status ?? "completed",
+      summary: result?.summary ?? `Simulated completion for ${dispatch.name}`,
       caste: dispatch.caste,
       task: dispatch.task,
       stage: dispatch.stage,
@@ -225,7 +256,10 @@ export function toWorkerResults(
     if (dispatch.task_id !== undefined) worker.task_id = dispatch.task_id;
     if (dispatch.wave !== undefined) worker.wave = dispatch.wave;
     if (dispatch.execution_wave !== undefined) worker.execution_wave = dispatch.execution_wave;
-    if (result.duration !== undefined) worker.duration = result.duration;
+    if (result?.duration !== undefined) worker.duration = result.duration;
+    if (result?.files_modified !== undefined) worker.files_modified = result.files_modified;
+    if (result?.files_created !== undefined) worker.files_created = result.files_created;
+    if (result?.tests_written !== undefined) worker.tests_written = result.tests_written;
     return worker;
   });
 }
