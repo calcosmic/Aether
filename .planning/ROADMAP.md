@@ -35,7 +35,7 @@ See `.planning/milestones/` for full archived phase details.
 - [x] **Phase 108: Golden Workflow Tests** -- Add snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects (completed 2026-05-12)
 - [x] **Phase 109: TypeScript Orchestration Host Prototype** -- Build minimal TS host that calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly (completed 2026-05-12)
 - [x] **Phase 110: Go Safety Invariant Verification** -- Ensure Go remains sole authority for state mutation, finalizers, locking, install/update/publish, verification contracts (completed 2026-05-12)
-- [ ] **Phase 111: Follow-up Migration Map** -- Produce concrete next steps for Oracle confidence iteration, swarm visibility, and broader build/continue parity
+- [x] **Phase 111: Follow-up Migration Map** -- Produce concrete next steps for Oracle confidence iteration, swarm visibility, and broader build/continue parity (completed 2026-05-12)
 
 ## Phase Details
 
@@ -121,7 +121,7 @@ Plans:
   4. The map includes phase numbers, estimated scope, and dependency ordering
 **Plans**: 1 plan
 Plans:
-- [ ] 111-01-PLAN.md -- Write complete migration map document with three milestone sections (Oracle/RALF, Swarm Visibility, Parity), dependency graph, and summary
+- [x] 111-01-PLAN.md -- Write complete migration map document with three milestone sections (Oracle/RALF, Swarm Visibility, Parity), dependency graph, and summary
 
 ## Progress
 
@@ -132,4 +132,4 @@ Plans:
 | 108. Golden Workflow Tests | v1.16 | 1/1 | Complete    | 2026-05-12 |
 | 109. TypeScript Orchestration Host Prototype | v1.16 | 3/3 | Complete    | 2026-05-12 |
 | 110. Go Safety Invariant Verification | v1.16 | 1/1 | Complete    | 2026-05-12 |
-| 111. Follow-up Migration Map | v1.16 | 0/1 | Planning complete | - |
+| 111. Follow-up Migration Map | v1.16 | 1/1 | Complete    | 2026-05-12 |

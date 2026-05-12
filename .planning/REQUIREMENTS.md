@@ -50,10 +50,10 @@
 
 ### Follow-up Migration Map (MAP)
 
-- [ ] **MAP-01**: Written follow-up plan exists for restoring Oracle/RALF confidence iteration
-- [ ] **MAP-02**: Written follow-up plan exists for restoring swarm visibility
-- [ ] **MAP-03**: Written follow-up plan exists for broader build/continue parity (all flows use TS host)
-- [ ] **MAP-04**: Map includes phase numbers, estimated scope, and dependency ordering
+- [x] **MAP-01**: Written follow-up plan exists for restoring Oracle/RALF confidence iteration
+- [x] **MAP-02**: Written follow-up plan exists for restoring swarm visibility
+- [x] **MAP-03**: Written follow-up plan exists for broader build/continue parity (all flows use TS host)
+- [x] **MAP-04**: Map includes phase numbers, estimated scope, and dependency ordering
 
 ## Deferred from v1.16 (Adaptive Caste Orchestration)
 
@@ -108,10 +108,10 @@
 | SAFE-04 | Phase 110 | Complete |
 | SAFE-05 | Phase 110 | Complete |
 | SAFE-06 | Phase 110 | Complete |
-| MAP-01 | Phase 111 | Pending |
-| MAP-02 | Phase 111 | Pending |
-| MAP-03 | Phase 111 | Pending |
-| MAP-04 | Phase 111 | Pending |
+| MAP-01 | Phase 111 | Complete |
+| MAP-02 | Phase 111 | Complete |
+| MAP-03 | Phase 111 | Complete |
+| MAP-04 | Phase 111 | Complete |
 
 **Coverage:**
 - v1.16 requirements: 25 total
