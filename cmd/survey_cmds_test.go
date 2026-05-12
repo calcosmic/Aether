@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -134,8 +135,8 @@ func TestSurveyVerifyNoSurveyDir(t *testing.T) {
 	}
 
 	files := result["files"].([]interface{})
-	if len(files) != 5 {
-		t.Errorf("expected 5 file checks, got %d", len(files))
+	if len(files) != 12 {
+		t.Errorf("expected 12 file checks, got %d", len(files))
 	}
 }
 
@@ -165,6 +166,112 @@ func TestSurveyVerifyWithValidFiles(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	if result["valid"] != false {
 		t.Errorf("valid = %v, want false (not all 5 files present)", result["valid"])
+	}
+}
+
+func TestSurveyVerifyRequiresMarkdownSurveyDocs(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	surveyDir := s.BasePath() + "/survey"
+	os.MkdirAll(surveyDir, 0755)
+	for _, name := range surveyFiles {
+		os.WriteFile(surveyDir+"/"+name+".json", []byte(`{"ok":true}`+"\n"), 0644)
+	}
+
+	rootCmd.SetArgs([]string{"survey-verify"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["valid"] != false {
+		t.Fatalf("valid = %v, want false when markdown survey docs are missing", result["valid"])
+	}
+	if !issuesContain(result["issues"].([]interface{}), "PROVISIONS.md: file not found") {
+		t.Fatalf("issues did not report missing PROVISIONS.md: %v", result["issues"])
+	}
+}
+
+func TestSurveyVerifyWithCompleteArtifacts(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	surveyDir := s.BasePath() + "/survey"
+	os.MkdirAll(surveyDir, 0755)
+	for _, name := range surveyFiles {
+		os.WriteFile(surveyDir+"/"+name+".json", []byte(`{"ok":true}`+"\n"), 0644)
+	}
+	for _, name := range []string{"PROVISIONS.md", "TRAILS.md", "BLUEPRINT.md", "CHAMBERS.md", "DISCIPLINES.md", "SENTINEL-PROTOCOLS.md", "PATHOGENS.md"} {
+		os.WriteFile(surveyDir+"/"+name, []byte("# "+name+"\n"), 0644)
+	}
+
+	rootCmd.SetArgs([]string{"survey-verify"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["valid"] != true {
+		t.Fatalf("valid = %v, want true with all survey artifacts present: %v", result["valid"], result["issues"])
+	}
+}
+
+func TestSurveyVerifyRejectsMalformedMarkdownSurveyDocs(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	surveyDir := s.BasePath() + "/survey"
+	os.MkdirAll(surveyDir, 0755)
+	for _, name := range surveyFiles {
+		os.WriteFile(surveyDir+"/"+name+".json", []byte(`{"ok":true}`+"\n"), 0644)
+	}
+	for _, name := range requiredSurveyMarkdownFiles {
+		content := []byte("# " + name + "\n")
+		if name == "PROVISIONS.md" {
+			content = []byte{'#', ' ', 'b', 'a', 'd', 0, '\n'}
+		}
+		os.WriteFile(surveyDir+"/"+name, content, 0644)
+	}
+
+	rootCmd.SetArgs([]string{"survey-verify"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	if result["valid"] != false {
+		t.Fatalf("valid = %v, want false with malformed markdown", result["valid"])
+	}
+	if !issuesContain(result["issues"].([]interface{}), "PROVISIONS.md: invalid markdown") {
+		t.Fatalf("issues did not report malformed PROVISIONS.md: %v", result["issues"])
 	}
 }
 
@@ -210,6 +317,15 @@ func TestSurveyVerifyInvalidJSON(t *testing.T) {
 	if !foundBlueprint {
 		t.Error("did not find blueprint in file checks")
 	}
+}
+
+func issuesContain(issues []interface{}, want string) bool {
+	for _, issue := range issues {
+		if strings.Contains(issue.(string), want) {
+			return true
+		}
+	}
+	return false
 }
 
 // --- Verify Claims Tests ---

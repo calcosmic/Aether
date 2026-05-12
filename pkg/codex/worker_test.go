@@ -59,6 +59,86 @@ func TestWorkerClaimsSchemaStrictObjects(t *testing.T) {
 	t.Fatal("root worker claims schema must disallow additional properties")
 }
 
+func TestWorkerClaimsSchemaForScoutPlanningIncludesScoutReport(t *testing.T) {
+	schema := workerClaimsSchemaForConfig(WorkerConfig{
+		Caste:     "scout",
+		TaskBrief: "Final result must include scout_report with findings.",
+	})
+
+	if _, ok := schema.Properties["scout_report"]; !ok {
+		t.Fatalf("scout_report missing from Scout planning schema: %+v", schema.Properties)
+	}
+	if !stringListContains(schema.Required, "scout_report") {
+		t.Fatalf("scout_report missing from required fields: %v", schema.Required)
+	}
+
+	contract := renderResponseContract(WorkerConfig{
+		Caste:     "scout",
+		TaskBrief: "Final result must include scout_report with findings.",
+	})
+	if !strings.Contains(contract, "Include scout_report as an object") {
+		t.Fatalf("response contract missing scout_report guidance:\n%s", contract)
+	}
+
+	defaultSchema := workerClaimsSchemaForConfig(WorkerConfig{Caste: "builder"})
+	if _, ok := defaultSchema.Properties["scout_report"]; ok {
+		t.Fatalf("default worker schema unexpectedly includes scout_report: %+v", defaultSchema.Properties)
+	}
+}
+
+func TestParseWorkerOutputPreservesTopLevelScoutReport(t *testing.T) {
+	output := `{
+		"ant_name": "Keen-6",
+		"caste": "scout",
+		"task_id": "plan-0",
+		"status": "completed",
+		"summary": "Scout mapped planning risks.",
+		"files_created": [],
+		"files_modified": [],
+		"tests_written": [],
+		"artifacts": {},
+		"scout_report": {
+			"findings": [
+				{"area": "planning", "discovery": "top-level scout report survives parsing", "source": "cmd/codex_plan.go"}
+			],
+			"gaps": [],
+			"confidence": 90,
+			"study_files": ["cmd/codex_plan.go"]
+		},
+		"tool_count": 0,
+		"blockers": [],
+		"spawns": [],
+		"handoff": {
+			"changed_files": [],
+			"commands_run": [],
+			"verification_status": "not_run",
+			"known_failures": [],
+			"open_decisions": [],
+			"assumptions": [],
+			"next_worker_instructions": [],
+			"do_not_repeat": [],
+			"freshness": "fresh"
+		}
+	}`
+
+	claims, err := ParseWorkerOutput(output)
+	if err != nil {
+		t.Fatalf("ParseWorkerOutput returned error: %v", err)
+	}
+	if !strings.Contains(string(claims.ScoutReport), "top-level scout report survives parsing") {
+		t.Fatalf("scout report was not preserved: %s", string(claims.ScoutReport))
+	}
+}
+
+func stringListContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func assertStrictSchemaObject(t *testing.T, schema map[string]interface{}, path string) {
 	t.Helper()
 	if schema["type"] == "object" {

@@ -273,6 +273,21 @@ func TestSealPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	if got := int(result["dispatch_count"].(float64)); got != 3 {
 		t.Fatalf("dispatch_count = %d, want 3", got)
 	}
+	dispatches := result["dispatches"].([]interface{})
+	var probeBrief string
+	for _, raw := range dispatches {
+		dispatch := raw.(map[string]interface{})
+		if dispatch["caste"] == "probe" {
+			probeBrief, _ = dispatch["brief"].(string)
+			break
+		}
+	}
+	if !strings.Contains(probeBrief, "package-wide line coverage below an aspirational threshold is advisory") {
+		t.Fatalf("seal probe brief should keep package-wide coverage advisory, got:\n%s", probeBrief)
+	}
+	if !strings.Contains(probeBrief, "missing focused regression coverage for changed behavior") {
+		t.Fatalf("seal probe brief should still block concrete focused coverage gaps, got:\n%s", probeBrief)
+	}
 	manifest := result["seal_manifest"].(map[string]interface{})
 	if manifest["colony_mode"] != "colony" {
 		t.Fatalf("seal_manifest colony_mode = %v, want colony", manifest["colony_mode"])

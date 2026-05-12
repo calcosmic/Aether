@@ -298,6 +298,11 @@ High-confidence behavioral patterns that have been validated through repeated co
 - Do not default unknown hosts to Codex
 
 ## Wisdom
+- For final seal Probe reviews, focused command passes and changed-path regression tests are stronger release evidence than broad package coverage percentages by themselves. (seal review phase 6, 2026-05-12)
+- When a seal review blocks on lifecycle contract evidence, the follow-up fix should update both runtime behavior and the phase gap docs, then rerun focused contract tests plus a broad package test before re-review. (seal review phase 6, 2026-05-12)
+- Final seal should not approve artifacts that still label in-scope lifecycle gaps as P0 blocked unless the release explicitly accepts and reclassifies them. (seal review phase 6, 2026-05-12)
+- For final seal, make coverage evidence first-class in the phase verification report rather than relying only on plain go test ./...; otherwise Probe must recompute coverage and may block late. (seal review phase 6, 2026-05-12)
+- Plan-only lifecycle commands need tests that assert both user-visible worker activity and no pre-finalizer .aether/data mutation for wrapper-owned paths. (seal review phase 6, 2026-05-12)
 - Final seal reviews should pair stored phase artifacts with fresh full-suite and race-suite evidence when any worker review timed out or watcher review was skipped. (seal review phase 5, 2026-05-09)
 - For lifecycle features, test both the small helper contract and the top-level command path that decides whether state may advance. (seal review phase 5, 2026-05-09)
 - For wrapper-driven features, verify the generated command-guide run command carries every new runtime flag needed by the normal guided path. (seal review phase 5, 2026-05-09)

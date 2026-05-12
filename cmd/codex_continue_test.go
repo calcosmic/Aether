@@ -229,12 +229,23 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 	if plan["finalize_surface"].(string) != "awaiting_wrapper_completion" {
 		t.Fatalf("continue_manifest finalize_surface = %q, want awaiting_wrapper_completion", plan["finalize_surface"])
 	}
+	wrapperContract := result["wrapper_contract"].(map[string]interface{})
+	if got := wrapperContract["source_command"].(string); got != "AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS" {
+		t.Fatalf("wrapper_contract source_command = %q, want heavy external review command", got)
+	}
+	if got := result["queen_state_persisted"]; got != false {
+		t.Fatalf("queen_state_persisted = %v, want false", got)
+	}
+	if got := result["queen_state_persisted_by"]; got != "continue-finalize" {
+		t.Fatalf("queen_state_persisted_by = %v, want continue-finalize", got)
+	}
 
 	for _, rel := range []string{
 		"build/phase-1/verification.json",
 		"build/phase-1/gates.json",
 		"build/phase-1/review.json",
 		"build/phase-1/continue.json",
+		"queen-state-1.json",
 	} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); !os.IsNotExist(err) {
 			t.Fatalf("plan-only unexpectedly wrote %s (err=%v)", rel, err)
@@ -294,6 +305,10 @@ func TestContinuePlanOnlySkipWatchersLightEmitsNoWorkerDispatches(t *testing.T) 
 	}
 	if got := result["skip_watchers"]; got != true {
 		t.Fatalf("result skip_watchers = %v, want true", got)
+	}
+	wrapperContract := result["wrapper_contract"].(map[string]interface{})
+	if got := wrapperContract["source_command"].(string); got != "AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth light --skip-watchers $ARGUMENTS" {
+		t.Fatalf("wrapper_contract source_command = %q, want light skip-watchers command", got)
 	}
 }
 
@@ -574,8 +589,18 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 	if !report.Advanced {
 		t.Fatalf("continue report advanced = false, want true: %+v", report)
 	}
-	if len(report.WorkerFlow) != 5 {
-		t.Fatalf("worker flow count = %d, want watcher + 3 review + housekeeping", len(report.WorkerFlow))
+	if len(report.WorkerFlow) != 6 {
+		t.Fatalf("worker flow count = %d, want deterministic verification + watcher + 3 review + housekeeping", len(report.WorkerFlow))
+	}
+	if report.WorkerFlow[0].Name != "Deterministic verification" {
+		t.Fatalf("first worker flow step = %q, want deterministic verification", report.WorkerFlow[0].Name)
+	}
+	queenState, err := queenStateRead(1)
+	if err != nil {
+		t.Fatalf("continue-finalize should persist queen-state-1.json: %v", err)
+	}
+	if queenState.Phase != 1 || len(queenState.Decisions) == 0 {
+		t.Fatalf("unexpected queen state persisted by continue-finalize: %+v", queenState)
 	}
 }
 
@@ -5234,7 +5259,7 @@ func TestContinue_SkipWatchersAdvancesWhenVerificationPasses(t *testing.T) {
 		{Stage: "verification", Caste: "watcher", Name: "Keen-build-502", Task: "Build-time verification", Status: "completed"},
 	})
 
-	rootCmd.SetArgs([]string{"continue", "--skip-watchers"})
+	rootCmd.SetArgs([]string{"continue", "--skip-watchers", "--verification-depth", "standard"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("continue returned error: %v", err)
 	}
@@ -5251,6 +5276,137 @@ func TestContinue_SkipWatchersAdvancesWhenVerificationPasses(t *testing.T) {
 	watcher := result["verification"].(map[string]interface{})["watcher"].(map[string]interface{})
 	if status, _ := watcher["status"].(string); status != "skipped" {
 		t.Fatalf("expected watcher status 'skipped', got %q", status)
+	}
+
+	review := result["review"].(map[string]interface{})
+	workers := review["workers"].([]interface{})
+	if len(workers) != 1 {
+		t.Fatalf("skip-watchers review workers len = %d, want skipped system step: %#v", len(workers), workers)
+	}
+	reviewStep := workers[0].(map[string]interface{})
+	if reviewStep["stage"] != "review" || reviewStep["caste"] != "system" || reviewStep["status"] != "skipped" {
+		t.Fatalf("review skip step = %#v, want review/system/skipped", reviewStep)
+	}
+	if summary, _ := reviewStep["summary"].(string); !strings.Contains(summary, "skipped") {
+		t.Fatalf("review skip summary should explain skip, got %q", summary)
+	}
+	workerFlow := result["worker_flow"].([]interface{})
+	sawDeterministic := false
+	sawWatcherSkip := false
+	sawReviewSkip := false
+	sawHousekeeping := false
+	for _, raw := range workerFlow {
+		step := raw.(map[string]interface{})
+		switch {
+		case step["name"] == "Deterministic verification" && step["stage"] == "verification" && step["caste"] == "system":
+			sawDeterministic = true
+		case step["name"] == "Continue watcher" && step["status"] == "skipped":
+			sawWatcherSkip = true
+		case step["name"] == "Review wave" && step["stage"] == "review" && step["status"] == "skipped":
+			sawReviewSkip = true
+		case step["stage"] == "housekeeping":
+			sawHousekeeping = true
+		}
+	}
+	for label, ok := range map[string]bool{
+		"deterministic verification": sawDeterministic,
+		"skipped watcher":            sawWatcherSkip,
+		"skipped review":             sawReviewSkip,
+		"housekeeping":               sawHousekeeping,
+	} {
+		if !ok {
+			t.Fatalf("skip-watchers worker_flow missing %s step: %#v", label, workerFlow)
+		}
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	eventText := strings.Join(state.Events, "\n")
+	for _, want := range []string{
+		"deterministic_verification|continue|",
+		"watcher_verification|continue|",
+		"continue_review|continue|",
+		"signal_housekeeping|continue|",
+		"phase_advanced|continue|",
+	} {
+		if !strings.Contains(eventText, want) {
+			t.Fatalf("expected state events to contain %q, got:\n%s", want, eventText)
+		}
+	}
+
+	summary := loadSpawnActivitySummaryForState(store, &state)
+	recentText, err := json.Marshal(summary.RecentOutcomeEntries)
+	if err != nil {
+		t.Fatalf("marshal recent outcomes: %v", err)
+	}
+	for _, want := range []string{"Deterministic verification", "Continue watcher", "Review wave", "Signal housekeeping"} {
+		if !strings.Contains(string(recentText), want) {
+			t.Fatalf("expected recent continue outcomes to include %q, got %s", want, string(recentText))
+		}
+	}
+}
+
+func TestContinueVisualAnnouncesDeterministicVerificationFlow(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Show deterministic verification progress"
+	now := time.Now().UTC()
+	taskID := "1.1"
+	nextTaskID := "2.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateBUILT,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Visual verification flow",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Complete work", Status: colony.TaskInProgress}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &nextTaskID, Goal: "Continue work", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	seedContinueBuildPacket(t, dataDir, 1, "Visual verification flow", goal, []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-visual-1", Task: "Complete work", Status: "completed", TaskID: taskID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-build-visual-2", Task: "Build-time verification", Status: "completed"},
+	})
+
+	rootCmd.SetArgs([]string{"continue", "--skip-watchers"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"Running deterministic verification for phase 1 before watcher/review workers",
+		"Continue Worker Flow",
+		"Deterministic verification [system] completed",
+		"Continue watcher [system] skipped",
+		"Review wave [system] skipped",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("visual output missing %q:\n%s", want, output)
+		}
 	}
 }
 

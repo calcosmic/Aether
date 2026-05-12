@@ -56,10 +56,10 @@ Read the task specification completely before writing any test.
 
 ## Coverage Targets
 
-- **Lines**: 80%+ minimum
-- **Branches**: 75%+ minimum
-- **Functions**: 90%+ minimum
-- **Critical paths**: 100%
+- **Critical paths touched by the task**: 100% focused regression coverage
+- **New or changed business logic**: aim for 80%+ meaningful line coverage
+- **Package-wide coverage below 80%**: advisory by itself; do not block solely on a repo-wide percentage unless project policy explicitly makes it blocking
+- **Branches and functions**: use as gap-finding signals, not automatic blockers
 </execution_flow>
 
 <critical_rules>

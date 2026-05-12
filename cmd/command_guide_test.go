@@ -132,6 +132,121 @@ func TestLifecycleGuidesCarryOrchestratorBoundaryGuidance(t *testing.T) {
 	}
 }
 
+func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
+	tests := map[string][]string{
+		"colonize": {
+			"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+			"visible live Task/subagent panels",
+			"aether spawn-log",
+			"aether spawn-complete",
+			"ceremony worker-complete --workflow colonize",
+			"AETHER_OUTPUT_MODE=json aether colonize-finalize",
+		},
+		"plan": {
+			"AETHER_OUTPUT_MODE=json aether plan --plan-only",
+			"visible live Task/subagent panels",
+			"aether spawn-log",
+			"aether spawn-complete",
+			"ceremony worker-complete --workflow plan",
+			"AETHER_OUTPUT_MODE=json aether plan-finalize",
+		},
+		"build": {
+			"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+			"visible live Task/subagent panels",
+			"aether spawn-log",
+			"aether spawn-complete",
+			"ceremony worker-complete --workflow build",
+			"AETHER_OUTPUT_MODE=json aether build-finalize",
+		},
+		"continue": {
+			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+			"visible live Task/subagent panels",
+			"aether spawn-log",
+			"aether spawn-complete",
+			"ceremony worker-complete --workflow continue",
+			"continue-finalize",
+		},
+	}
+
+	for command, wants := range tests {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		for _, want := range wants {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing visible worker activity anchor %q", command, want)
+			}
+		}
+	}
+}
+
+func TestCodexLifecycleYamlAndGuidesAgreeOnWorkerActivity(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	tests := map[string][]string{
+		"colonize": {"spawn-log", "spawn-complete", "colonize-finalize", "visible live Task/subagent"},
+		"plan":     {"spawn-log", "spawn-complete", "plan-finalize", "visible live Task/subagent"},
+		"build":    {"spawn-log", "spawn-complete", "build-finalize", "visible live Task/subagent"},
+		"continue": {"spawn-log", "spawn-complete", "continue-finalize", "visible live Task/subagent"},
+	}
+
+	for command, anchors := range tests {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		guideText := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		yamlPath := filepath.Join(repoRoot, ".aether", "commands", command+".yaml")
+		content, err := os.ReadFile(yamlPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", yamlPath, err)
+		}
+		yamlText := string(content)
+		for _, anchor := range anchors {
+			if !strings.Contains(guideText, anchor) {
+				t.Errorf("%s command-guide missing shared worker activity anchor %q", command, anchor)
+			}
+			if !strings.Contains(yamlText, anchor) {
+				t.Errorf("%s YAML missing shared worker activity anchor %q", command, anchor)
+			}
+		}
+	}
+}
+
+func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, ".aether", "skills", "colony", commandGuideSkillBuildCycle, "SKILL.md")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := string(content)
+	for _, want := range []string{
+		"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+		"AETHER_OUTPUT_MODE=json aether plan --plan-only",
+		"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+		"aether spawn-log",
+		"aether spawn-complete",
+		"aether ceremony worker-complete",
+		"visible live Task/subagent panels",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("%s missing lifecycle worker activity anchor %q", path, want)
+		}
+	}
+}
+
 func TestInitGuideAndWrappersCarryColonyModeChoice(t *testing.T) {
 	guide, err := buildCommandGuide("init", "codex")
 	if err != nil {
@@ -422,6 +537,37 @@ func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
 			t.Fatalf("codex creation shim missing %q", want)
 		}
 	}
+
+	buildCycleShim := shims[commandGuideSkillBuildCycle]
+	for _, want := range []string{"colonize", "aether colonize", "plan-only", "finalize"} {
+		text := buildCycleShim.Description + "\n" + buildCycleShim.Body + "\n" + strings.Join(buildCycleShim.TaskKeywords, "\n")
+		if !strings.Contains(text, want) {
+			t.Fatalf("codex build-cycle shim missing %q", want)
+		}
+	}
+	rendered := renderCodexSkillShim(buildCycleShim)
+	fm := parseSkillFrontmatter(rendered)
+	if fm == nil {
+		t.Fatalf("generated build-cycle shim should have parseable frontmatter")
+	}
+	wantTriggers := []string{"colonize", "plan", "build", "continue", "swarm", "seal"}
+	if strings.Join(fm.WorkflowTriggers, ",") != strings.Join(wantTriggers, ",") {
+		t.Fatalf("build-cycle shim workflow triggers = %v, want %v", fm.WorkflowTriggers, wantTriggers)
+	}
+	for _, want := range []string{"aether colonize", "aether plan", "aether build", "aether continue", "aether swarm", "aether seal", "dispatch manifest", "plan-only", "finalize"} {
+		if !stringSliceContains(fm.TaskKeywords, want) {
+			t.Fatalf("build-cycle shim task keywords missing %q: %v", want, fm.TaskKeywords)
+		}
+	}
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func yamlCommandNamesForGuideTest(t *testing.T) []string {

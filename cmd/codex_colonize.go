@@ -575,18 +575,7 @@ func plannedSurveyors(root string) []codexSurveyorDispatch {
 	specs := queenSurveyorSpecs()
 	dispatches := make([]codexSurveyorDispatch, 0, len(specs))
 	for i, spec := range specs {
-		seed := fmt.Sprintf("%s|%s", root, spec.AgentSuffix)
-		dispatches = append(dispatches, codexSurveyorDispatch{
-			Stage:     "survey",
-			Wave:      1,
-			Caste:     spec.Caste,
-			Name:      deterministicAntName("surveyor", seed),
-			Task:      spec.Task,
-			TaskID:    fmt.Sprintf("survey-%d", i),
-			AgentName: fmt.Sprintf("aether-surveyor-%s", spec.AgentSuffix),
-			Outputs:   append([]string{}, spec.Outputs...),
-			Status:    "spawned",
-		})
+		dispatches = append(dispatches, surveyDispatchFromSpec(root, spec, i))
 	}
 	return dispatches
 }
@@ -605,6 +594,30 @@ var surveyorSpecs = []surveyorSpec{
 	{Caste: "surveyor-nest", AgentSuffix: "nest", Task: "Map architecture and chamber layout", Outputs: []string{"BLUEPRINT.md", "CHAMBERS.md"}},
 	{Caste: "surveyor-disciplines", AgentSuffix: "disciplines", Task: "Map disciplines and sentinel protocols", Outputs: []string{"DISCIPLINES.md", "SENTINEL-PROTOCOLS.md"}},
 	{Caste: "surveyor-pathogens", AgentSuffix: "pathogens", Task: "Identify pathogens and fragile boundaries", Outputs: []string{"PATHOGENS.md"}},
+}
+
+func surveyDispatchFromSpec(root string, spec surveyorSpec, index int) codexSurveyorDispatch {
+	seed := fmt.Sprintf("%s|%s", root, spec.AgentSuffix)
+	return codexSurveyorDispatch{
+		Stage:       "survey",
+		Wave:        1,
+		Caste:       spec.Caste,
+		Name:        deterministicAntName("surveyor", seed),
+		Task:        spec.Task,
+		TaskID:      fmt.Sprintf("survey-%d", index),
+		AgentName:   fmt.Sprintf("aether-surveyor-%s", spec.AgentSuffix),
+		Outputs:     append([]string{}, spec.Outputs...),
+		OutputPaths: surveyOutputPaths(spec.Outputs),
+		Status:      "spawned",
+	}
+}
+
+func surveyOutputPaths(outputs []string) []string {
+	paths := make([]string, 0, len(outputs))
+	for _, output := range outputs {
+		paths = append(paths, filepath.ToSlash(filepath.Join(".aether", "data", "survey", output)))
+	}
+	return paths
 }
 
 func queenSurveyorSpecs() []surveyorSpec {
@@ -699,46 +712,13 @@ func dispatchRealSurveyorsWithTimeout(ctx context.Context, root string, invoker 
 // If results don't cover all specs, remaining specs get the planned-surveyor defaults.
 func convertDispatchResults(results []codex.DispatchResult, specs []surveyorSpec, root string) []codexSurveyorDispatch {
 	dispatches := make([]codexSurveyorDispatch, 0, len(specs))
+	usedResults := make([]bool, len(results))
 
 	for i, spec := range specs {
-		seed := fmt.Sprintf("%s|%s", root, spec.AgentSuffix)
-		name := deterministicAntName("surveyor", seed)
+		d := surveyDispatchFromSpec(root, spec, i)
 
-		d := codexSurveyorDispatch{
-			Stage:     "survey",
-			Wave:      1,
-			Caste:     spec.Caste,
-			Name:      name,
-			Task:      spec.Task,
-			TaskID:    fmt.Sprintf("survey-%d", i),
-			AgentName: fmt.Sprintf("aether-surveyor-%s", spec.AgentSuffix),
-			Outputs:   spec.Outputs,
-			Status:    "spawned",
-		}
-
-		if i < len(results) {
-			r := results[i]
-			d.Name = r.WorkerName
-			if d.Name == "" {
-				d.Name = name
-			}
-			d.Status = normalizeRuntimeDispatchStatus(r.Status)
-			if r.WorkerResult != nil {
-				d.Duration = r.WorkerResult.Duration.Seconds()
-				d.FilesCreated = append(d.FilesCreated, r.WorkerResult.FilesCreated...)
-				d.FilesModified = append(d.FilesModified, r.WorkerResult.FilesModified...)
-				d.Claimed = append(d.Claimed, d.FilesCreated...)
-				d.Claimed = append(d.Claimed, d.FilesModified...)
-				d.Claimed = uniqueSortedStrings(d.Claimed)
-				d.Summary = strings.TrimSpace(r.WorkerResult.Summary)
-				if d.Summary == "" && len(r.WorkerResult.Blockers) > 0 {
-					d.Blockers = append(d.Blockers, r.WorkerResult.Blockers...)
-					d.Summary = strings.Join(r.WorkerResult.Blockers, "; ")
-				}
-			}
-			if strings.TrimSpace(d.Summary) == "" && r.Error != nil {
-				d.Summary = strings.TrimSpace(r.Error.Error())
-			}
+		if result, ok := findSurveyDispatchResult(d, results, usedResults); ok {
+			applySurveyDispatchResult(&d, result)
 		}
 
 		dispatches = append(dispatches, d)
@@ -747,16 +727,99 @@ func convertDispatchResults(results []codex.DispatchResult, specs []surveyorSpec
 	return dispatches
 }
 
+func findSurveyDispatchResult(dispatch codexSurveyorDispatch, results []codex.DispatchResult, used []bool) (codex.DispatchResult, bool) {
+	for i, result := range results {
+		if used[i] {
+			continue
+		}
+		if surveyDispatchResultMatches(dispatch, result) {
+			used[i] = true
+			return result, true
+		}
+	}
+	for i, result := range results {
+		if used[i] || surveyDispatchResultHasIdentity(result) {
+			continue
+		}
+		used[i] = true
+		return result, true
+	}
+	return codex.DispatchResult{}, false
+}
+
+func surveyDispatchResultMatches(dispatch codexSurveyorDispatch, result codex.DispatchResult) bool {
+	if result.WorkerResult != nil {
+		if strings.TrimSpace(result.WorkerResult.TaskID) != "" && strings.TrimSpace(result.WorkerResult.TaskID) == dispatch.TaskID {
+			return true
+		}
+		if strings.TrimSpace(result.WorkerResult.Caste) != "" && strings.TrimSpace(result.WorkerResult.Caste) == dispatch.Caste {
+			return true
+		}
+		if strings.TrimSpace(result.WorkerResult.WorkerName) != "" && strings.TrimSpace(result.WorkerResult.WorkerName) == dispatch.Name {
+			return true
+		}
+	}
+	return strings.TrimSpace(result.WorkerName) != "" && strings.TrimSpace(result.WorkerName) == dispatch.Name
+}
+
+func surveyDispatchResultHasIdentity(result codex.DispatchResult) bool {
+	if strings.TrimSpace(result.WorkerName) != "" {
+		return true
+	}
+	if result.WorkerResult == nil {
+		return false
+	}
+	return strings.TrimSpace(result.WorkerResult.TaskID) != "" ||
+		strings.TrimSpace(result.WorkerResult.Caste) != "" ||
+		strings.TrimSpace(result.WorkerResult.WorkerName) != ""
+}
+
+func applySurveyDispatchResult(dispatch *codexSurveyorDispatch, result codex.DispatchResult) {
+	name := strings.TrimSpace(result.WorkerName)
+	if result.WorkerResult != nil && strings.TrimSpace(result.WorkerResult.WorkerName) != "" {
+		name = strings.TrimSpace(result.WorkerResult.WorkerName)
+	}
+	if name != "" {
+		dispatch.Name = name
+	}
+
+	status := strings.TrimSpace(result.Status)
+	if result.WorkerResult != nil && strings.TrimSpace(result.WorkerResult.Status) != "" {
+		status = strings.TrimSpace(result.WorkerResult.Status)
+	}
+	dispatch.Status = normalizeRuntimeDispatchStatus(status)
+	if result.WorkerResult != nil {
+		dispatch.Duration = result.WorkerResult.Duration.Seconds()
+		dispatch.FilesCreated = append(dispatch.FilesCreated, result.WorkerResult.FilesCreated...)
+		dispatch.FilesModified = append(dispatch.FilesModified, result.WorkerResult.FilesModified...)
+		dispatch.Claimed = append(dispatch.Claimed, dispatch.FilesCreated...)
+		dispatch.Claimed = append(dispatch.Claimed, dispatch.FilesModified...)
+		dispatch.Claimed = uniqueSortedStrings(dispatch.Claimed)
+		dispatch.Summary = strings.TrimSpace(result.WorkerResult.Summary)
+		if dispatch.Summary == "" && len(result.WorkerResult.Blockers) > 0 {
+			dispatch.Blockers = append(dispatch.Blockers, result.WorkerResult.Blockers...)
+			dispatch.Summary = strings.Join(result.WorkerResult.Blockers, "; ")
+		}
+	}
+	if strings.TrimSpace(dispatch.Summary) == "" && result.Error != nil {
+		dispatch.Summary = strings.TrimSpace(result.Error.Error())
+	}
+}
+
 func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dispatches []codexSurveyorDispatch, snapshots map[string]codexArtifactSnapshot) ([]string, int, error) {
 	generatedAt := time.Now().UTC().Format(time.RFC3339)
+	dispatchByOutput, err := surveyDispatchesByRequiredOutput(dispatches)
+	if err != nil {
+		return nil, 0, err
+	}
 	files := map[string]string{
-		"PROVISIONS.md":         renderSurveyProvisions(generatedAt, facts, dispatches[0]),
-		"TRAILS.md":             renderSurveyTrails(generatedAt, facts, dispatches[0]),
-		"BLUEPRINT.md":          renderSurveyBlueprint(generatedAt, facts, dispatches[1]),
-		"CHAMBERS.md":           renderSurveyChambers(generatedAt, facts, dispatches[1]),
-		"DISCIPLINES.md":        renderSurveyDisciplines(generatedAt, facts, dispatches[2]),
-		"SENTINEL-PROTOCOLS.md": renderSurveySentinel(generatedAt, facts, dispatches[2]),
-		"PATHOGENS.md":          renderSurveyPathogens(generatedAt, facts, dispatches[3]),
+		"PROVISIONS.md":         renderSurveyProvisions(generatedAt, facts, dispatchByOutput["PROVISIONS.md"]),
+		"TRAILS.md":             renderSurveyTrails(generatedAt, facts, dispatchByOutput["TRAILS.md"]),
+		"BLUEPRINT.md":          renderSurveyBlueprint(generatedAt, facts, dispatchByOutput["BLUEPRINT.md"]),
+		"CHAMBERS.md":           renderSurveyChambers(generatedAt, facts, dispatchByOutput["CHAMBERS.md"]),
+		"DISCIPLINES.md":        renderSurveyDisciplines(generatedAt, facts, dispatchByOutput["DISCIPLINES.md"]),
+		"SENTINEL-PROTOCOLS.md": renderSurveySentinel(generatedAt, facts, dispatchByOutput["SENTINEL-PROTOCOLS.md"]),
+		"PATHOGENS.md":          renderSurveyPathogens(generatedAt, facts, dispatchByOutput["PATHOGENS.md"]),
 	}
 	claimed := make(map[string]bool)
 	for _, dispatch := range dispatches {
@@ -769,6 +832,9 @@ func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dis
 	preserved := 0
 	for name, content := range files {
 		relPath := filepath.ToSlash(filepath.Join(".aether", "data", "survey", name))
+		if err := ensureSurveyArtifactPathWritable(filepath.Join(surveyDir, name), name); err != nil {
+			return nil, 0, err
+		}
 		if shouldPreserveWorkerArtifact(root, relPath, snapshots, claimed) {
 			names = append(names, name)
 			preserved++
@@ -781,6 +847,51 @@ func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dis
 	}
 	sort.Strings(names)
 	return names, preserved, nil
+}
+
+func ensureSurveyArtifactPathWritable(path, name string) error {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to inspect %s: %w", name, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to write survey artifact %s through a symlink", name)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("refusing to write survey artifact %s over a directory", name)
+	}
+	return nil
+}
+
+func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch) (map[string]codexSurveyorDispatch, error) {
+	required := make(map[string]bool, len(requiredSurveyMarkdownFiles))
+	for _, name := range requiredSurveyMarkdownFiles {
+		required[name] = true
+	}
+
+	byOutput := make(map[string]codexSurveyorDispatch, len(required))
+	for _, dispatch := range dispatches {
+		for _, output := range dispatch.Outputs {
+			output = strings.TrimSpace(filepath.ToSlash(output))
+			if !required[output] {
+				continue
+			}
+			if existing, ok := byOutput[output]; ok {
+				return nil, fmt.Errorf("duplicate surveyor output %s claimed by %s and %s", output, existing.Name, dispatch.Name)
+			}
+			byOutput[output] = dispatch
+		}
+	}
+
+	for _, name := range requiredSurveyMarkdownFiles {
+		if _, ok := byOutput[name]; !ok {
+			return nil, fmt.Errorf("missing required surveyor output %s", name)
+		}
+	}
+	return byOutput, nil
 }
 
 func writeSurveyCompatibilityJSON(surveyDir string, facts codexWorkspaceFacts) error {
@@ -854,7 +965,7 @@ func updateSurveyState(surveyedAt string, docCount int) error {
 }
 
 func surveyDocsExist(surveyDir string) bool {
-	for _, name := range []string{"PROVISIONS.md", "TRAILS.md", "BLUEPRINT.md", "CHAMBERS.md", "DISCIPLINES.md", "SENTINEL-PROTOCOLS.md", "PATHOGENS.md"} {
+	for _, name := range requiredSurveyMarkdownFiles {
 		if _, err := os.Stat(filepath.Join(surveyDir, name)); err == nil {
 			return true
 		}

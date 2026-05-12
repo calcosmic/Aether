@@ -76,6 +76,7 @@ type codexBuildManifest struct {
 	Tasks                     []codexBuildTaskPlan             `json:"tasks"`
 	SuccessCriteria           []string                         `json:"success_criteria"`
 	ReviewDepth               string                           `json:"review_depth,omitempty"`
+	DispatchContract          map[string]interface{}           `json:"dispatch_contract,omitempty"`
 	ProfileContract           codexWorkflowProfileContract     `json:"profile_contract,omitempty"`
 	QueenRecommendation       codexQueenWorkflowRecommendation `json:"queen_recommendation,omitempty"`
 	QueenExecutionPolicy      codexQueenExecutionPolicy        `json:"queen_execution_policy,omitempty"`
@@ -154,7 +155,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
-	state, _, err = reconcilePriorCompletedPhaseTasksFromTrustedManifests(root, state, phaseNum)
+	state, err = reconcilePriorCompletedPhaseTasksForPlanOnly(root, state, phaseNum)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -192,7 +193,10 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
+	executionPlan := buildExecutionPlans(dispatches, parallelMode)
+	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
 	manifest := buildCodexBuildManifest(root, state, phase, "", "", playbooks, dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
+	manifest.DispatchContract = dispatchContract
 	profileContract := workflowProfileContract(reviewDepth)
 	queenRecommendation := recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases))
 	manifest.QueenExecutionPolicy = policy
@@ -206,29 +210,33 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	manifest.BoundaryQuestionsExisting = boundary.Existing
 
 	result := map[string]interface{}{
-		"plan_only":              true,
-		"phase":                  phaseNum,
-		"colony_mode":            string(state.EffectiveColonyMode()),
-		"review_depth":           string(reviewDepth),
-		"phase_name":             phase.Name,
-		"state":                  state.State,
-		"playbooks":              playbooks,
-		"next":                   "spawn wrapper agents from dispatches, then record completion",
-		"currentTask":            phase.Tasks,
-		"dispatches":             codexBuildDispatchMaps(dispatches),
-		"dispatch_manifest":      manifest,
-		"dispatch_count":         len(dispatches),
-		"wave_count":             len(waveExecution),
-		"parallel_waves":         countParallelWaveExecutionPlans(waveExecution),
-		"parallel_mode":          string(parallelMode),
-		"wave_execution":         waveExecution,
-		"dispatch_mode":          "plan-only",
-		"host_platform":          string(codex.DetectActivePlatform()),
-		"execution_owner":        buildExecutionOwner("plan-only", true),
-		"profile_contract":       profileContract,
-		"queen_recommendation":   queenRecommendation,
-		"queen_execution_policy": policy,
-		"selected_tasks":         selectedTaskIDs,
+		"plan_only":                true,
+		"phase":                    phaseNum,
+		"colony_mode":              string(state.EffectiveColonyMode()),
+		"review_depth":             string(reviewDepth),
+		"phase_name":               phase.Name,
+		"state":                    state.State,
+		"playbooks":                playbooks,
+		"next":                     "spawn wrapper agents from dispatches, then record completion",
+		"currentTask":              phase.Tasks,
+		"dispatches":               codexBuildDispatchMaps(dispatches),
+		"dispatch_manifest":        manifest,
+		"dispatch_count":           len(dispatches),
+		"wave_count":               len(waveExecution),
+		"parallel_waves":           countParallelWaveExecutionPlans(waveExecution),
+		"parallel_mode":            string(parallelMode),
+		"wave_execution":           waveExecution,
+		"execution_plan":           executionPlan,
+		"execution_wave_count":     len(executionPlan),
+		"parallel_execution_waves": countParallelBuildExecutionPlans(executionPlan),
+		"dispatch_mode":            "plan-only",
+		"dispatch_contract":        dispatchContract,
+		"host_platform":            string(codex.DetectActivePlatform()),
+		"execution_owner":          buildExecutionOwner("plan-only", true),
+		"profile_contract":         profileContract,
+		"queen_recommendation":     queenRecommendation,
+		"queen_execution_policy":   policy,
+		"selected_tasks":           selectedTaskIDs,
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
 			"spawn_log_required":      true,
@@ -351,8 +359,12 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	}
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
+	executionPlan := buildExecutionPlans(dispatches, parallelMode)
 	waveCount := len(waveExecution)
 	parallelWaves := countParallelWaveExecutionPlans(waveExecution)
+	executionWaveCount := len(executionPlan)
+	parallelExecutionWaves := countParallelBuildExecutionPlans(executionPlan)
+	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
 
 	parentCtx := options.ParentContext
 	if parentCtx == nil {
@@ -475,29 +487,33 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	dispatchMaps := codexBuildDispatchMaps(dispatches)
 
 	result := map[string]interface{}{
-		"phase":                  phaseNum,
-		"colony_mode":            string(updatedState.EffectiveColonyMode()),
-		"review_depth":           string(reviewDepth),
-		"phase_name":             updatedPhase.Name,
-		"state":                  updatedState.State,
-		"playbooks":              playbooks,
-		"next":                   "aether continue",
-		"currentTask":            updatedPhase.Tasks,
-		"dispatches":             dispatchMaps,
-		"dispatch_count":         len(dispatches),
-		"wave_count":             waveCount,
-		"parallel_waves":         parallelWaves,
-		"parallel_mode":          string(parallelMode),
-		"wave_execution":         waveExecution,
-		"dispatch_mode":          mode,
-		"queen_execution_policy": policy,
-		"force":                  options.Force,
-		"selected_tasks":         selectedTaskIDs,
-		"checkpoint":             displayDataPath(checkpointRel),
-		"build_dir":              displayDataPath(buildDirRel),
-		"manifest":               displayDataPath(manifestRel),
-		"worker_briefs":          briefPaths,
-		"claims_path":            displayDataPath(claimsRel),
+		"phase":                    phaseNum,
+		"colony_mode":              string(updatedState.EffectiveColonyMode()),
+		"review_depth":             string(reviewDepth),
+		"phase_name":               updatedPhase.Name,
+		"state":                    updatedState.State,
+		"playbooks":                playbooks,
+		"next":                     "aether continue",
+		"currentTask":              updatedPhase.Tasks,
+		"dispatches":               dispatchMaps,
+		"dispatch_count":           len(dispatches),
+		"wave_count":               waveCount,
+		"parallel_waves":           parallelWaves,
+		"parallel_mode":            string(parallelMode),
+		"wave_execution":           waveExecution,
+		"execution_plan":           executionPlan,
+		"execution_wave_count":     executionWaveCount,
+		"parallel_execution_waves": parallelExecutionWaves,
+		"dispatch_mode":            mode,
+		"dispatch_contract":        dispatchContract,
+		"queen_execution_policy":   policy,
+		"force":                    options.Force,
+		"selected_tasks":           selectedTaskIDs,
+		"checkpoint":               displayDataPath(checkpointRel),
+		"build_dir":                displayDataPath(buildDirRel),
+		"manifest":                 displayDataPath(manifestRel),
+		"worker_briefs":            briefPaths,
+		"claims_path":              displayDataPath(claimsRel),
 	}
 	runStatus = dispatchRunStatus(dispatches)
 	return result, nil
@@ -782,22 +798,26 @@ func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colon
 		})
 	}
 
+	nextVerificationWave := lastTaskExecutionWave + 1
 	if len(selected) == 0 && queenCastes["probe"] {
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "probe", lastTaskExecutionWave+1, "probe", "Independent probe verification of builder claims"))
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, "probe", nextVerificationWave, "probe", "Independent probe verification of builder claims"))
+		nextVerificationWave++
+	}
+	if len(selected) == 0 {
+		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, nextVerificationWave)
+		dispatches = append(dispatches, postWaveDispatches...)
+		nextVerificationWave += len(postWaveDispatches)
 	}
 
 	if queenCastes["watcher"] {
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:         "verification",
-			ExecutionWave: lastTaskExecutionWave + 2,
+			ExecutionWave: nextVerificationWave,
 			Caste:         "watcher",
 			Name:          deterministicAntName("watcher", fmt.Sprintf("phase:%d:watcher", phase.ID)),
 			Task:          "Independent verification before advancement" + findingsInjectionForCaste("watcher"),
 			Status:        "spawned",
 		})
-	}
-	if len(selected) == 0 {
-		dispatches = append(dispatches, queenBuildPostWaveDispatches(phase, queenCastes, lastTaskExecutionWave)...)
 	}
 
 	return dispatches
@@ -864,23 +884,24 @@ func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool
 	return dispatches
 }
 
-func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, lastTaskExecutionWave int) []codexBuildDispatch {
+func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, startExecutionWave int) []codexBuildDispatch {
 	plans := []struct {
-		caste  string
-		stage  string
-		offset int
-		task   string
+		caste string
+		stage string
+		task  string
 	}{
-		{"auditor", "audit", 3, "Quality and compliance review after implementation"},
-		{"measurer", "measurement", 4, "Performance and cost surface review after implementation"},
-		{"chaos", "resilience", 5, "Resilience probing after verification"},
+		{"auditor", "audit", "Quality and compliance review after implementation"},
+		{"measurer", "measurement", "Performance and cost surface review after implementation"},
+		{"chaos", "resilience", "Resilience probing after specialist verification"},
 	}
 	dispatches := make([]codexBuildDispatch, 0, len(plans))
+	executionWave := startExecutionWave
 	for _, plan := range plans {
 		if !queenCastes[plan.caste] {
 			continue
 		}
-		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, lastTaskExecutionWave+plan.offset, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
+		dispatches = append(dispatches, codexBuildSpecialistDispatch(phase, plan.stage, executionWave, plan.caste, plan.task+findingsInjectionForCaste(plan.caste)))
+		executionWave++
 	}
 	return dispatches
 }
@@ -1123,6 +1144,51 @@ func countParallelWaveExecutionPlans(plans []codexWaveExecutionPlan) int {
 	return total
 }
 
+func countParallelBuildExecutionPlans(plans []codexBuildExecutionPlan) int {
+	total := 0
+	for _, plan := range plans {
+		if plan.Strategy == "parallel" {
+			total++
+		}
+	}
+	return total
+}
+
+func buildDispatchContractForDispatches(dispatches []codexBuildDispatch, parallelMode colony.ParallelMode, workerTimeout time.Duration) map[string]interface{} {
+	executionPlan := buildExecutionPlans(dispatches, parallelMode)
+	executionModel := "staged build execution: builder wave(s), specialist verification, watcher verification"
+	if len(executionPlan) > 0 {
+		executionModel = fmt.Sprintf("%d staged build execution waves: builder wave(s), specialist verification, watcher verification", len(executionPlan))
+	}
+	contract := codexDispatchContract{
+		ExecutionModel:       executionModel,
+		WaveCount:            len(executionPlan),
+		WorkerCount:          len(dispatches),
+		SharedTimeoutSeconds: 0,
+		WorkerTimeoutSeconds: int(effectiveBuildDispatchTimeout(workerTimeout) / time.Second),
+		DeadlinePolicy:       "Each build worker gets its own timeout. The Queen runtime advances execution_wave stages in order and records each terminal worker result.",
+		DependencyBehavior:   "Builder task waves run before post-build specialist verification. Watcher verification is the final build execution stage before finalization.",
+		FallbackBehavior:     "Runtime worker dispatch rolls back failed direct builds; host-orchestrated plan-only builds must call build-finalize with fresh worker results.",
+		FallbackVisibility:   []string{"dispatch_mode", "dispatches", "execution_plan", "worker_handoffs"},
+		CoordinationPath:     dataContractPath("spawn-tree.txt"),
+		ArtifactPaths: []string{
+			dataContractPath("build", "phase-<phase>", "manifest.json"),
+			dataContractPath("build", "phase-<phase>", "worker-briefs"),
+			dataContractPath("last-build-claims.json"),
+			dataContractPath("handoffs", "worker-handoffs.json"),
+		},
+	}.asMap()
+	contract["execution_plan"] = append([]codexBuildExecutionPlan{}, executionPlan...)
+	return contract
+}
+
+func effectiveBuildDispatchTimeout(workerTimeout time.Duration) time.Duration {
+	if workerTimeout > 0 {
+		return workerTimeout
+	}
+	return codex.DefaultWorkerTimeout
+}
+
 func normalizedBuildDepth(depth string) string {
 	depth = strings.TrimSpace(depth)
 	if depth == "" {
@@ -1314,6 +1380,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		Tasks:               codexBuildTaskPlans(phase),
 		SuccessCriteria:     append([]string{}, phase.SuccessCriteria...),
 		ReviewDepth:         string(reviewDepth),
+		DispatchContract:    buildDispatchContractForDispatches(dispatches, effectiveParallelMode(state), 0),
 		ProfileContract:     workflowProfileContract(reviewDepth),
 		QueenRecommendation: recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases)),
 		QueenExecutionPolicy: recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
@@ -1476,6 +1543,16 @@ func reconcileCompletedBuildTasks(state *colony.ColonyState, phaseNum int, dispa
 		taskIDs = append(taskIDs, taskID)
 	}
 	return uniqueSortedStrings(taskIDs)
+}
+
+func reconcilePriorCompletedPhaseTasksForPlanOnly(root string, state colony.ColonyState, phaseNum int) (colony.ColonyState, error) {
+	if phaseNum <= 1 {
+		return state, nil
+	}
+	if _, err := applyPriorCompletedPhaseTaskRepairs(root, &state, phaseNum); err != nil {
+		return state, err
+	}
+	return state, nil
 }
 
 func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} {

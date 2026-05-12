@@ -70,6 +70,7 @@ type WorkerResult struct {
 	FilesModified []string                   // Files the worker claims to have modified
 	TestsWritten  []string                   // Test files the worker created
 	Artifacts     map[string]json.RawMessage // Optional structured artifacts requested by task-specific briefs
+	ScoutReport   json.RawMessage            // Optional top-level scout_report artifact for planning Scout workers
 	ToolCount     int                        // Number of tool calls reported
 	Blockers      []string                   // Blocking issues reported
 	Spawns        []string                   // Sub-workers spawned
@@ -97,6 +98,7 @@ type workerClaims struct {
 	FilesModified []string                   `json:"files_modified"`
 	TestsWritten  []string                   `json:"tests_written"`
 	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
 	ToolCount     int                        `json:"tool_count"`
 	Blockers      []string                   `json:"blockers"`
 	Spawns        []string                   `json:"spawns"`
@@ -209,6 +211,7 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
 		Artifacts:     claims.Artifacts,
+		ScoutReport:   claims.ScoutReport,
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
@@ -382,7 +385,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 	defer os.Remove(lastMessagePath)
 
-	schemaJSON, err := marshalJSON(workerClaimsSchema())
+	schemaJSON, err := marshalJSON(workerClaimsSchemaForConfig(config))
 	if err != nil {
 		return WorkerResult{
 			WorkerName: config.WorkerName,
@@ -548,6 +551,7 @@ waitLoop:
 		FilesModified: claims.FilesModified,
 		TestsWritten:  claims.TestsWritten,
 		Artifacts:     claims.Artifacts,
+		ScoutReport:   claims.ScoutReport,
 		ToolCount:     claims.ToolCount,
 		Blockers:      claims.Blockers,
 		Spawns:        claims.Spawns,
@@ -733,6 +737,10 @@ func renderResponseContract(config WorkerConfig) string {
 	if strings.EqualFold(strings.TrimSpace(config.Caste), "builder") {
 		statusLine = "code_written, completed, failed, blocked"
 	}
+	scoutReportLine := ""
+	if workerClaimsShouldIncludeScoutReport(config) {
+		scoutReportLine = "\n- Include scout_report as an object with findings, gaps, confidence, and study_files."
+	}
 	return strings.TrimSpace(fmt.Sprintf(`
 ## Final Response Contract
 
@@ -744,7 +752,23 @@ Return ONLY a single JSON object as your final response.
 - Include handoff with changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, and freshness.
 - Keep summary concise and concrete.
 - Include artifacts as an object. Use {} unless the task brief gives an explicit schema.
-`, filepath.Clean(root), statusLine))
+%s
+`, filepath.Clean(root), statusLine, scoutReportLine))
+}
+
+func workerClaimsSchemaForConfig(config WorkerConfig) jsonSchema {
+	schema := workerClaimsSchema()
+	if !workerClaimsShouldIncludeScoutReport(config) {
+		return schema
+	}
+	schema.Properties["scout_report"] = scoutReportClaimSchema()
+	schema.Required = append(schema.Required, "scout_report")
+	return schema
+}
+
+func workerClaimsShouldIncludeScoutReport(config WorkerConfig) bool {
+	return strings.EqualFold(strings.TrimSpace(config.Caste), "scout") &&
+		strings.Contains(config.TaskBrief, "scout_report")
 }
 
 func workerClaimsSchema() jsonSchema {
@@ -822,6 +846,39 @@ func workerClaimsSchema() jsonSchema {
 					"freshness":                map[string]interface{}{"type": "string"},
 				},
 			},
+		},
+	}
+}
+
+func scoutReportClaimSchema() map[string]interface{} {
+	stringArray := map[string]interface{}{
+		"type": "array",
+		"items": map[string]interface{}{
+			"type": "string",
+		},
+	}
+	findingSchema := map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"area", "discovery", "source"},
+		"properties": map[string]interface{}{
+			"area":      map[string]interface{}{"type": "string"},
+			"discovery": map[string]interface{}{"type": "string"},
+			"source":    map[string]interface{}{"type": "string"},
+		},
+	}
+	return map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"findings", "gaps", "confidence", "study_files"},
+		"properties": map[string]interface{}{
+			"findings": map[string]interface{}{
+				"type":  "array",
+				"items": findingSchema,
+			},
+			"gaps":        stringArray,
+			"confidence":  map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
+			"study_files": stringArray,
 		},
 	}
 }

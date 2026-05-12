@@ -248,6 +248,7 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			FilesModified: []string{"cmd/orchestrator_boundary_guidance.go"},
 		}},
 	}
+	writeClaimFileForTest(t, root, "cmd/orchestrator_boundary_guidance.go")
 
 	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
 	if err != nil {

@@ -91,6 +91,29 @@ func TestValidateBuildProvenance_TestsWrittenOnlyAccepted(t *testing.T) {
 	}
 }
 
+func TestValidateBuildProvenance_CodeWrittenAliasAccepted(t *testing.T) {
+	results := []codexExternalBuildWorkerResult{
+		{Name: "builder-1", Caste: "builder", Status: "code_written", TaskID: "1.1", FilesModified: []string{"cmd/main.go"}},
+	}
+	err := validateBuildProvenance(results)
+	if err != nil {
+		t.Fatalf("expected nil when builder uses code_written alias with file evidence, got: %s", err)
+	}
+}
+
+func TestValidateBuildProvenance_RejectsWatcherOnlyFileEvidence(t *testing.T) {
+	results := []codexExternalBuildWorkerResult{
+		{Name: "watcher-1", Caste: "watcher", Status: "completed", FilesModified: []string{"cmd/main.go"}},
+	}
+	err := validateBuildProvenance(results)
+	if err == nil {
+		t.Fatal("expected watcher-only file evidence to fail build provenance")
+	}
+	if !contains(err.Error(), "no workers completed successfully") {
+		t.Errorf("error should mention no completed build workers, got: %s", err.Error())
+	}
+}
+
 func TestValidateBuildProvenance_EmptyResults(t *testing.T) {
 	err := validateBuildProvenance([]codexExternalBuildWorkerResult{})
 	if err == nil {

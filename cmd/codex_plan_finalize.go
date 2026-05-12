@@ -25,6 +25,11 @@ type codexExternalPlanCompletion struct {
 	PhasePlan        *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
 }
 
+const (
+	planFinalizeManifestMaxAge     = 24 * time.Hour
+	planFinalizeManifestFutureSkew = 5 * time.Minute
+)
+
 var planFinalizeCmd = &cobra.Command{
 	Use:   "plan-finalize",
 	Short: "Record externally spawned wrapper planning workers as the colony plan",
@@ -124,6 +129,13 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	}
 
 	now := time.Now().UTC()
+	if err := validateCodexPlanManifestFreshness(*manifest, now); err != nil {
+		return nil, err
+	}
+	if err := validateCodexPlanManifestWorkspace(root, *manifest); err != nil {
+		return nil, err
+	}
+
 	runHandle, err := beginRuntimeSpawnRun("plan", now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize planning run: %w", err)
@@ -138,7 +150,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		return nil, err
 	}
 	scoutReport := completion.scoutReport(dispatches, manifest)
-	phasePlan, err := completion.phasePlan(root, dispatches)
+	phasePlan, err := completion.phasePlan(root, dispatches, manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -170,11 +182,19 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	}
 
 	emptySnapshots := map[string]codexArtifactSnapshot{}
-	scoutFile, _, err := writePlanningScoutArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, dispatches[0], scoutReport, emptySnapshots)
+	scoutDispatch, ok := planningDispatchByCaste(dispatches, "scout")
+	if !ok {
+		return nil, fmt.Errorf("plan_manifest missing scout dispatch")
+	}
+	routeSetterDispatch, ok := planningDispatchByCaste(dispatches, "route_setter")
+	if !ok {
+		return nil, fmt.Errorf("plan_manifest missing route-setter dispatch")
+	}
+	scoutFile, _, err := writePlanningScoutArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, scoutDispatch, scoutReport, emptySnapshots)
 	if err != nil {
 		return nil, err
 	}
-	routeSetterFile, _, err := writeRouteSetterArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, dispatches[1], confidence, unresolvedGaps, phases, emptySnapshots)
+	routeSetterFile, _, err := writeRouteSetterArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, routeSetterDispatch, confidence, unresolvedGaps, phases, emptySnapshots)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +216,9 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	updatedState.CurrentPhase = firstBuildablePhase(phases)
 	updatedState.BuildStartedAt = nil
 	updatedState.PlanGranularity = granularity
+	if strings.TrimSpace(manifest.VerificationDepth) != "" {
+		updatedState.VerificationDepth = string(colony.NormalizeVerificationDepth(manifest.VerificationDepth))
+	}
 	planConfidence := float64(confidence.Overall) / 100.0
 	updatedState.Plan = colony.Plan{
 		GeneratedAt: &now,
@@ -287,6 +310,53 @@ func validateExternalPlanState(manifest *codexPlanManifest) (colony.ColonyState,
 	return state, granularity, nil
 }
 
+func validateCodexPlanManifestFreshness(manifest codexPlanManifest, now time.Time) error {
+	raw := strings.TrimSpace(manifest.GeneratedAt)
+	if raw == "" {
+		return fmt.Errorf("plan_manifest generated_at is required for freshness validation")
+	}
+	generatedAt, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return fmt.Errorf("plan_manifest generated_at is invalid: %w", err)
+	}
+	generatedAt = generatedAt.UTC()
+	if generatedAt.After(now.Add(planFinalizeManifestFutureSkew)) {
+		return fmt.Errorf("plan_manifest generated_at %s is too far in the future", raw)
+	}
+	if now.Sub(generatedAt) > planFinalizeManifestMaxAge {
+		return fmt.Errorf("stale plan_manifest generated_at %s exceeds max age %s; rerun `aether plan --plan-only`", raw, planFinalizeManifestMaxAge)
+	}
+	return nil
+}
+
+func validateCodexPlanManifestWorkspace(root string, manifest codexPlanManifest) error {
+	current, err := loadCodexSurveyContext(root)
+	if err != nil {
+		return fmt.Errorf("failed to validate plan_manifest workspace: %w", err)
+	}
+	comparisons := []struct {
+		name string
+		was  []string
+		now  []string
+	}{
+		{name: "survey_docs", was: manifest.Survey.SurveyDocs, now: current.SurveyDocs},
+		{name: "languages", was: manifest.Survey.Languages, now: current.Languages},
+		{name: "frameworks", was: manifest.Survey.Frameworks, now: current.Frameworks},
+		{name: "directories", was: manifest.Survey.Directories, now: current.Directories},
+		{name: "entry_points", was: manifest.Survey.EntryPoints, now: current.EntryPoints},
+		{name: "dependencies", was: manifest.Survey.Dependencies, now: current.Dependencies},
+		{name: "test_files", was: manifest.Survey.TestFiles, now: current.TestFiles},
+		{name: "issues", was: manifest.Survey.Issues, now: current.Issues},
+		{name: "security_patterns", was: manifest.Survey.SecurityPatterns, now: current.SecurityPatterns},
+	}
+	for _, comparison := range comparisons {
+		if !sameStringSet(comparison.was, comparison.now) {
+			return fmt.Errorf("plan_manifest workspace changed since generation: %s changed; rerun `aether plan --plan-only`", comparison.name)
+		}
+	}
+	return nil
+}
+
 func mergeExternalPlanResults(manifest codexPlanManifest, results []codexPlanningDispatch) ([]codexPlanningDispatch, error) {
 	resultByName := make(map[string]codexPlanningDispatch, len(results))
 	for _, result := range results {
@@ -374,7 +444,7 @@ func (c codexExternalPlanCompletion) scoutReport(dispatches []codexPlanningDispa
 	return report
 }
 
-func (c codexExternalPlanCompletion) phasePlan(root string, dispatches []codexPlanningDispatch) (*codexWorkerPlanArtifact, error) {
+func (c codexExternalPlanCompletion) phasePlan(root string, dispatches []codexPlanningDispatch, manifest *codexPlanManifest) (*codexWorkerPlanArtifact, error) {
 	if c.PhasePlan != nil {
 		return c.PhasePlan, nil
 	}
@@ -391,6 +461,9 @@ func (c codexExternalPlanCompletion) phasePlan(root string, dispatches []codexPl
 			if filepath.ToSlash(filepath.Clean(relPath)) != filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json")) {
 				continue
 			}
+			if err := validateClaimedPlanArtifactFreshness(root, relPath, manifest); err != nil {
+				return nil, err
+			}
 			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relPath)))
 			if err != nil {
 				return nil, fmt.Errorf("read claimed phase_plan: %w", err)
@@ -403,6 +476,36 @@ func (c codexExternalPlanCompletion) phasePlan(root string, dispatches []codexPl
 		}
 	}
 	return nil, fmt.Errorf("completion file must include route-setter phase_plan")
+}
+
+func validateClaimedPlanArtifactFreshness(root string, relPath string, manifest *codexPlanManifest) error {
+	relPath = filepath.ToSlash(filepath.Clean(strings.TrimSpace(relPath)))
+	absPath := filepath.Join(root, filepath.FromSlash(relPath))
+	info, err := os.Lstat(absPath)
+	if err != nil {
+		return fmt.Errorf("claimed phase_plan %s is missing: %w", relPath, err)
+	}
+	if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("claimed phase_plan %s is not a regular file", relPath)
+	}
+
+	if manifest != nil {
+		if snapshot, ok := manifest.Snapshots[relPath]; ok && snapshot.Existed {
+			currentHash := artifactContentHash(absPath)
+			if snapshot.ContentHash != "" && currentHash == snapshot.ContentHash {
+				return fmt.Errorf("claimed phase_plan %s was already present when plan_manifest was generated; rerun `aether plan --plan-only` and use fresh route-setter output", relPath)
+			}
+			if snapshot.ContentHash == "" && info.ModTime().Equal(snapshot.ModTime) && info.Size() == snapshot.Size {
+				return fmt.Errorf("claimed phase_plan %s was already present when plan_manifest was generated; rerun `aether plan --plan-only` and use fresh route-setter output", relPath)
+			}
+		}
+		if generatedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(manifest.GeneratedAt)); err == nil {
+			if info.ModTime().Before(generatedAt.UTC().Add(-planFinalizeManifestFutureSkew)) {
+				return fmt.Errorf("claimed phase_plan %s predates plan_manifest generation; rerun `aether plan --plan-only` and use fresh route-setter output", relPath)
+			}
+		}
+	}
+	return nil
 }
 
 func planningDispatchMaps(dispatches []codexPlanningDispatch) []map[string]interface{} {

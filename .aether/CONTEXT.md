@@ -8,14 +8,14 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-12T00:15:18Z |
-| **Current Phase** | 1 |
-| **Phase Name** | Contract and gap mapping |
-| **Phase Status** | ready |
-| **Milestone** | First Mound |
-| **Colony Status** | READY |
+| **Last Updated** | 2026-05-12T07:05:22Z |
+| **Current Phase** | 6 |
+| **Phase Name** | End-to-end verification |
+| **Phase Status** | completed |
+| **Milestone** | Crowned Anthill |
+| **Colony Status** | COMPLETED |
 | **Colony Mode** | orchestrator |
-| **Safe to Clear?** | YES — Plan persisted, ready for the next command |
+| **Safe to Clear?** | YES — Colony complete |
 
 ---
 
@@ -27,7 +27,7 @@ Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCo
 
 ## What's In Progress
 
-Generated 6 plan phases with 80% confidence
+Colony sealed
 
 ---
 
@@ -35,6 +35,8 @@ Generated 6 plan phases with 80% confidence
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
+| What boundary should final seal reviewers enforce: block on security or quality issues | pheromone | active |
+| What boundary should builders protect for Phase 6 (End-to-end verification): phase tasks only | pheromone | active |
 | Do not plan a language, protocol, grammar, parser, encoding, or communication DSL. The colony goal is Aether runtime lifecycle reliability: platform dispatch... | pheromone | active |
 | Which existing surface should own the first implementation slice: Own the first implementation slice in the Go runtime lifecycle code under cmd/ and pkg/code... | pheromone | active |
 | How tightly should this work reuse existing contracts and integrations: Reuse existing lifecycle contracts, manifests, finalizers, command-guide metadata, an... | pheromone | active |
@@ -58,14 +60,13 @@ Generated 6 plan phases with 80% confidence
 - Twist-44 was closed after stalling without writing /tmp/aether-build-1-worker-Twist-44.json after a parent-side malformed legacy timestamp hardening update. ...
 - Running AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard spawned Probe Excavat-92, which heartbeated until worker time...
 - Build plan-only created hard Orchestrator boundary question pd_1778424856613270000 for Phase 2, but AETHER_OUTPUT_MODE=visual aether discuss reported 0 quest...
-- The active goal is Aether lifecycle reliability, and the real Route-Setter reported a 5-phase reliability plan, but the committed phase plan remains the stal...
 
 ---
 
-## Tasks For Phase 1 — Contract and gap mapping
+## Tasks For Phase 6 — End-to-end verification
 
-- [ ] Compare the documented ant workflow with the current Codex command behavior
-- [ ] Decide the observable ant-process outputs Codex must emit during each core command
+- [x] Add tests that prove colonize, plan, build, and continue record real worker activity
+- [x] Run a live colony loop and compare its outputs with the documented ant process
 
 ---
 
@@ -79,18 +80,18 @@ Generated 6 plan phases with 80% confidence
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-11T23:33:12Z|plan_generated|plan|Generated 4 phases with 80% confidence
-- 2026-05-11T23:43:57Z|planning_scout|plan|Scout summarized surveyed repo context
-- 2026-05-11T23:43:57Z|plan_generated|plan|Generated 4 phases with 80% confidence
-- 2026-05-12T00:15:18Z|planning_scout|plan|Scout summarized surveyed repo context
-- 2026-05-12T00:15:18Z|plan_generated|plan|Generated 6 phases with 80% confidence
+- 2026-05-12T06:14:12Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
+- 2026-05-12T06:14:12Z|watcher_verification|continue|watcher skipped; relying on verification commands
+- 2026-05-12T06:14:12Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
+- 2026-05-12T06:14:12Z|signal_housekeeping|continue|Signal housekeeping completed: 4 active -> 4 active
+- 2026-05-12T07:05:22Z|sealed|seal|Colony sealed at Crowned Anthill
 
 ---
 
 ## Next Steps
 
-1. Run `aether build 1`
-2. Run `aether phase --number 1` to inspect the tracked phase details
+1. Run `aether entomb`
+2. Run `aether phase --number 6` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---
@@ -100,7 +101,3 @@ Generated 6 plan phases with 80% confidence
 1. Run `aether resume` for the quick dashboard restore
 2. Run `aether resume-colony` for the full handoff and task view
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
-
-### Active Todos
-- Compare the documented ant workflow with the current Codex command behavior
-- Decide the observable ant-process outputs Codex must emit during each core command

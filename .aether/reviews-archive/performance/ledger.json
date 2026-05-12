@@ -1,17 +1,17 @@
 {
   "entries": [
     {
-      "id": "prf-3-001",
-      "phase": 3,
-      "phase_name": "Safe Guided Answer Pipeline",
+      "id": "prf-1-001",
+      "phase": 1,
+      "phase_name": "Contract and gap mapping",
       "agent": "auditor",
       "agent_name": "Auditor Ant",
-      "generated_at": "2026-05-08T19:19:09Z",
+      "generated_at": "2026-05-12T01:20:01Z",
       "status": "open",
-      "severity": "LOW",
-      "file": "cmd/discuss.go",
-      "line": 667,
-      "description": "All-blocked clarified intent entries can grow warnings and ledger output without hitting the safe-line cap."
+      "severity": "INFO",
+      "file": ".aether/docs/codex-observable-output-contract.md",
+      "line": 98,
+      "description": "No runtime performance-sensitive implementation changed in this phase; verification targets are scoped to future lifecycle safety tests rather than hot-path behavior."
     }
   ],
   "summary": {
@@ -21,8 +21,8 @@
     "by_severity": {
       "high": 0,
       "medium": 0,
-      "low": 1,
-      "info": 0
+      "low": 0,
+      "info": 1
     }
   }
 }

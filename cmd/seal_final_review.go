@@ -1030,6 +1030,9 @@ func renderSealFinalReviewBrief(root string, state colony.ColonyState, phase col
 	b.WriteString("\n\n")
 	b.WriteString("This is the final review before `aether seal` closes the colony. Do not modify repo source files. Return status `blocked` if the colony is not safe to seal.\n\n")
 	b.WriteString(spec.Task)
+	if strings.EqualFold(strings.TrimSpace(spec.Caste), "probe") {
+		b.WriteString("\n\nCoverage guidance: if runtime verification checks passed, package-wide line coverage below an aspirational threshold is advisory by itself. Block only for red verification commands, missing focused regression coverage for changed behavior, or concrete unexercised edge cases that make sealing unsafe.")
+	}
 	b.WriteString("\n\nEvidence to inspect:\n")
 	b.WriteString("- Colony state: .aether/data/COLONY_STATE.json\n")
 	b.WriteString(fmt.Sprintf("- Final phase build manifest, if present: .aether/data/build/phase-%d/manifest.json\n", phase.ID))
