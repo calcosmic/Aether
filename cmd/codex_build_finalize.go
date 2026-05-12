@@ -400,11 +400,16 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 	}
 
 	dispatches := make([]codexBuildDispatch, len(manifest.Dispatches))
+	usedResults := make(map[string]bool, len(results))
 	for i, dispatch := range manifest.Dispatches {
-		result, ok := resultByName[dispatch.Name]
+		resultName, result, ok, err := selectExternalBuildResultForDispatch(dispatch.Name, resultByName, usedResults)
+		if err != nil {
+			return nil, err
+		}
 		if !ok {
 			return nil, fmt.Errorf("missing external worker result for %s", dispatch.Name)
 		}
+		usedResults[resultName] = true
 		if err := validateExternalResultIdentity(dispatch, result); err != nil {
 			return nil, err
 		}
@@ -427,6 +432,54 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 	return dispatches, nil
 }
 
+func selectExternalBuildResultForDispatch(expectedName string, resultByName map[string]codexExternalBuildWorkerResult, used map[string]bool) (string, codexExternalBuildWorkerResult, bool, error) {
+	expectedName = strings.TrimSpace(expectedName)
+	if expectedName == "" {
+		return "", codexExternalBuildWorkerResult{}, false, nil
+	}
+	if result, ok := resultByName[expectedName]; ok {
+		if used[expectedName] {
+			return "", codexExternalBuildWorkerResult{}, false, fmt.Errorf("external worker result for %s matched more than one dispatch", expectedName)
+		}
+		return expectedName, result, true, nil
+	}
+
+	expectedBase := stripWorkerRetrySuffix(expectedName)
+	matches := []string{}
+	for name := range resultByName {
+		if used[name] {
+			continue
+		}
+		if stripWorkerRetrySuffix(name) == expectedBase {
+			matches = append(matches, name)
+		}
+	}
+	sort.Strings(matches)
+	switch len(matches) {
+	case 0:
+		return "", codexExternalBuildWorkerResult{}, false, nil
+	case 1:
+		name := matches[0]
+		return name, resultByName[name], true, nil
+	default:
+		return "", codexExternalBuildWorkerResult{}, false, fmt.Errorf("ambiguous external worker result for %s: %s", expectedName, strings.Join(matches, ", "))
+	}
+}
+
+func stripWorkerRetrySuffix(name string) string {
+	name = strings.TrimSpace(name)
+	idx := strings.LastIndex(name, "-r")
+	if idx <= 0 || idx+2 >= len(name) {
+		return name
+	}
+	for _, r := range name[idx+2:] {
+		if r < '0' || r > '9' {
+			return name
+		}
+	}
+	return name[:idx]
+}
+
 func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexBuildDispatch, results []codexExternalBuildWorkerResult) error {
 	resultByName := make(map[string]codexExternalBuildWorkerResult, len(results))
 	for _, result := range results {
@@ -434,11 +487,16 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 			resultByName[name] = result
 		}
 	}
+	usedResults := make(map[string]bool, len(results))
 	for _, dispatch := range dispatches {
-		result, ok := resultByName[dispatch.Name]
+		resultName, result, ok, err := selectExternalBuildResultForDispatch(dispatch.Name, resultByName, usedResults)
+		if err != nil {
+			return err
+		}
 		if !ok {
 			continue
 		}
+		usedResults[resultName] = true
 		status := normalizeExternalBuildStatus(result.Status)
 		workerResult := &codex.WorkerResult{
 			WorkerName:    dispatch.Name,

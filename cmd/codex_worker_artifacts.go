@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,8 +10,10 @@ import (
 )
 
 type codexArtifactSnapshot struct {
-	Existed bool
-	ModTime time.Time
+	Existed     bool
+	ModTime     time.Time
+	Size        int64
+	ContentHash string
 }
 
 func snapshotRelativeFiles(root string, relDirs ...string) map[string]codexArtifactSnapshot {
@@ -44,8 +48,10 @@ func snapshotRelativeFiles(root string, relDirs ...string) map[string]codexArtif
 			}
 			relPath = filepath.ToSlash(relPath)
 			snapshots[relPath] = codexArtifactSnapshot{
-				Existed: true,
-				ModTime: info.ModTime(),
+				Existed:     true,
+				ModTime:     info.ModTime(),
+				Size:        info.Size(),
+				ContentHash: artifactContentHash(path),
 			}
 			return nil
 		})
@@ -93,5 +99,20 @@ func shouldPreserveWorkerArtifact(root string, relPath string, before map[string
 	if !existed || !snapshot.Existed {
 		return true
 	}
-	return info.ModTime().After(snapshot.ModTime)
+	if info.ModTime().After(snapshot.ModTime) || info.Size() != snapshot.Size {
+		return true
+	}
+	if snapshot.ContentHash == "" {
+		return false
+	}
+	return artifactContentHash(filepath.Join(root, filepath.FromSlash(relPath))) != snapshot.ContentHash
+}
+
+func artifactContentHash(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("%x", sum)
 }

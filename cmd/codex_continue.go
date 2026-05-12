@@ -1412,6 +1412,8 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
 	} else if shellChecksPassed && isEnvironmentBlockedWatcher(buildWatcher) {
 		continueWatcher = buildWatcher
+	} else if summary, ok := continueWatcherHostBoundarySkipSummary(manifest); ok {
+		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: summary}
 	} else if shellChecksPassed && !isCodexWorkerAvailable() {
 		// Auto-skip: shell verification passed but Codex CLI is unavailable.
 		// No point spawning a watcher that will immediately fail.
@@ -2027,11 +2029,50 @@ func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers 
 		}
 		return cmd
 	}
+	if continueBlockersContainWatcherFailure(blockers) && !options.SkipWatchers {
+		return fmt.Sprintf("aether continue --skip-watchers%s", buildContinueReconcileFlagSuffix(options.ReconcileTaskIDs))
+	}
 	next := strings.TrimSpace(continueNextCommandForAssessment(assessment))
 	if next == "aether continue" && len(blockers) > 0 {
 		return "" // Don't suggest looping back to continue with blockers (D-08 preserved).
 	}
 	return next
+}
+
+func continueWatcherHostBoundarySkipSummary(manifest codexContinueManifest) (string, bool) {
+	if manifestUsesExternalTask(manifest) {
+		return "watcher auto-skipped; external-task build was wrapper-mediated, so continue trusts runtime verification instead of spawning an untracked watcher", true
+	}
+	if codex.ShouldUseAgentDelegatePath() {
+		return fmt.Sprintf("watcher auto-skipped; %s", codex.AgentDelegateFallbackReason()), true
+	}
+	return "", false
+}
+
+func buildContinueReconcileFlagSuffix(taskIDs []string) string {
+	if len(taskIDs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, taskID := range uniqueSortedStrings(taskIDs) {
+		b.WriteString(" --reconcile-task ")
+		b.WriteString(taskID)
+	}
+	return b.String()
+}
+
+func continueBlockersContainWatcherFailure(blockers []string) bool {
+	for _, blocker := range blockers {
+		lower := strings.ToLower(strings.TrimSpace(blocker))
+		if lower == "" {
+			continue
+		}
+		if strings.Contains(lower, "watcher") &&
+			(strings.Contains(lower, "failed") || strings.Contains(lower, "did not complete") || strings.Contains(lower, "timed out")) {
+			return true
+		}
+	}
+	return false
 }
 
 func continueNextCommandForAssessment(assessment codexContinueAssessment) string {

@@ -189,6 +189,60 @@ func TestMergeExternalBuildResultsWithAntName(t *testing.T) {
 	}
 }
 
+func TestMergeExternalBuildResultsMatchesRetrySuffixDrift(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Hunt-33-r2", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:         "Hunt-33",
+			Caste:        "builder",
+			Stage:        "wave",
+			TaskID:       "1.1",
+			Status:       "completed",
+			Summary:      "Implemented task despite retry suffix drift",
+			FilesCreated: []string{"cmd/reliability.go"},
+		},
+	}
+
+	dispatches, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("mergeExternalBuildResults with retry suffix drift: %v", err)
+	}
+	if dispatches[0].Status != "completed" {
+		t.Errorf("status = %q, want completed", dispatches[0].Status)
+	}
+	if !contains(strings.Join(dispatches[0].Outputs, ","), "cmd/reliability.go") {
+		t.Fatalf("expected outputs from suffix-matched result, got %+v", dispatches[0].Outputs)
+	}
+}
+
+func TestMergeExternalBuildResultsRejectsAmbiguousRetrySuffixMatch(t *testing.T) {
+	manifest := codexBuildManifest{
+		PlanOnly: true,
+		Dispatches: []codexBuildDispatch{
+			{Name: "Hunt-33-r4", Caste: "builder", Stage: "wave", TaskID: "1.1"},
+		},
+	}
+
+	results := []codexExternalBuildWorkerResult{
+		{Name: "Hunt-33-r2", Caste: "builder", Stage: "wave", TaskID: "1.1", Status: "completed", FilesCreated: []string{"a.go"}},
+		{Name: "Hunt-33-r3", Caste: "builder", Stage: "wave", TaskID: "1.1", Status: "completed", FilesCreated: []string{"b.go"}},
+	}
+
+	_, err := mergeExternalBuildResults(manifest, results)
+	if err == nil {
+		t.Fatal("expected ambiguous retry suffix match to fail")
+	}
+	if !contains(err.Error(), "ambiguous external worker result") {
+		t.Fatalf("expected ambiguous match error, got: %v", err)
+	}
+}
+
 func TestClaimsOrAggregateWithAntName(t *testing.T) {
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &codexBuildManifest{PlanOnly: true},

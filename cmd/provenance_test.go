@@ -41,8 +41,8 @@ func TestValidateBuildProvenance_ZeroFilesModified(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when all completed workers have zero FilesModified, got nil")
 	}
-	if !contains(err.Error(), "none reported file modifications") {
-		t.Errorf("error should mention no file modifications, got: %s", err.Error())
+	if !contains(err.Error(), "none reported file changes") {
+		t.Errorf("error should mention no file changes, got: %s", err.Error())
 	}
 }
 
@@ -66,30 +66,28 @@ func TestValidateBuildProvenance_NilSlice(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when completed worker has nil FilesModified, got nil")
 	}
-	if !contains(err.Error(), "none reported file modifications") {
-		t.Errorf("error should mention no file modifications, got: %s", err.Error())
+	if !contains(err.Error(), "none reported file changes") {
+		t.Errorf("error should mention no file changes, got: %s", err.Error())
 	}
 }
 
-func TestValidateBuildProvenance_FilesCreatedOnlyRejected(t *testing.T) {
-	// Per D-01: only FilesModified counts. FilesCreated alone should be rejected.
+func TestValidateBuildProvenance_FilesCreatedOnlyAccepted(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "builder-1", Status: "completed", Task: "task-1", FilesCreated: []string{"cmd/new.go"}, FilesModified: nil},
 	}
 	err := validateBuildProvenance(results)
-	if err == nil {
-		t.Fatal("expected error when completed worker has FilesCreated but no FilesModified, got nil")
+	if err != nil {
+		t.Fatalf("expected nil when completed worker has FilesCreated, got: %s", err)
 	}
 }
 
-func TestValidateBuildProvenance_TestsWrittenOnlyRejected(t *testing.T) {
-	// Per D-01: only FilesModified counts. TestsWritten alone should be rejected.
+func TestValidateBuildProvenance_TestsWrittenOnlyAccepted(t *testing.T) {
 	results := []codexExternalBuildWorkerResult{
 		{Name: "builder-1", Status: "completed", Task: "task-1", TestsWritten: []string{"cmd/main_test.go"}, FilesModified: nil},
 	}
 	err := validateBuildProvenance(results)
-	if err == nil {
-		t.Fatal("expected error when completed worker has TestsWritten but no FilesModified, got nil")
+	if err != nil {
+		t.Fatalf("expected nil when completed worker has TestsWritten, got: %s", err)
 	}
 }
 
