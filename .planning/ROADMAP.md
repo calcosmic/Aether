@@ -119,7 +119,9 @@ Plans:
   2. A written follow-up plan exists for restoring swarm visibility
   3. A written follow-up plan exists for broader build/continue parity (all flows use TS host)
   4. The map includes phase numbers, estimated scope, and dependency ordering
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 111-01-PLAN.md -- Write complete migration map document with three milestone sections (Oracle/RALF, Swarm Visibility, Parity), dependency graph, and summary
 
 ## Progress
 
@@ -130,4 +132,4 @@ Plans:
 | 108. Golden Workflow Tests | v1.16 | 1/1 | Complete    | 2026-05-12 |
 | 109. TypeScript Orchestration Host Prototype | v1.16 | 3/3 | Complete    | 2026-05-12 |
 | 110. Go Safety Invariant Verification | v1.16 | 1/1 | Complete    | 2026-05-12 |
-| 111. Follow-up Migration Map | v1.16 | 0/TBD | Not started | - |
+| 111. Follow-up Migration Map | v1.16 | 0/1 | Planning complete | - |
