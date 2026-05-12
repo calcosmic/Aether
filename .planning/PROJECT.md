@@ -222,25 +222,31 @@ This document evolves at phase transitions and milestone boundaries.
 
 *Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*
 
-## Current Milestone: v1.16 Queen-Owned Adaptive Caste Orchestration
+## Current Milestone: v1.16 Hybrid Runtime Boundary and Orchestration Recovery
 
-**Goal:** Replace static depth-based agent lists with a Queen decision function that reads phase content and selects relevant castes for build, continue, plan, colonize, swarm, and seal flows.
+**Goal:** Prove one lifecycle workflow can be restored through a hybrid architecture — Go as safety kernel, TypeScript as orchestration control plane, Markdown/YAML/TOML as editable colony brain, Bash only as small glue.
 
 **Why this matters:**
-- The current system spawns agents based on dumb depth strings ("full", "deep", "standard", "light")
-- A "settings UI panel" phase gets the same agents as an "auth token rotation" phase if both are "deep"
-- This causes unnecessary timeouts (Probe sitting for 10 minutes on simple UI work), false blocks (Gatekeeper flagging security on non-security work), and wasted compute
-- 9 of 26 defined castes are never dispatched because there's no logic connecting them to phase content
-- The Queen already decides gate outcomes — she should also decide which agents to spawn
+- The Go runtime has valuable safety machinery, but the Bash/Node-to-Go migration caused regressions in the living parts of Aether
+- Queen orchestration, visible worker waves, ceremony, Oracle/RALF confidence iteration, swarm visibility, and platform-specific agent dispatch behavior all degraded
+- Research converges on a boundary fix, not a language rewrite: keep Go for safety, restore orchestration in TypeScript, keep editable assets as the colony brain
+- The best Classic version (likely v5.4.0) should be used as a behavior baseline, not a permanent second product
 
-**Target areas:**
-1. Caste Relevance Engine — keyword/condition registry scoring every caste against phase content
-2. Queen Orchestrate Function — central decision replacing static depth switches in all flows
-3. Build Flow Wiring — replace `plannedBuildDispatchesForSelection` with adaptive dispatch
-4. Continue Flow Wiring — replace `codexContinueReviewSpecs` with adaptive review dispatch
-5. Other Flow Wiring — plan, colonize, swarm, seal all use the same Queen decision
-6. Verification & Regression — tests proving the right castes spawn for known phase types
+**Target features:**
+1. Runtime boundary contract — what Go owns, what TypeScript owns, what editable assets own, what Bash may still do
+2. Classic baseline identification and smoke-test — verify v5.4.0 as the behavior comparison anchor
+3. Golden workflow tests — snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects
+4. Minimal TypeScript orchestration host — calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly
+5. Go safety invariants preserved — Go remains sole authority for state mutation, finalizers, locking, install/update/publish, verification contracts
+6. Follow-up migration map — concrete next steps for Oracle confidence iteration, swarm visibility, and broader build/continue parity
 
-**Core principle:** The Queen reads what the phase is about, then decides who should work on it. No more spawning security auditors for UI polish.
+**Core principle:** Go should own safety, not soul. The TypeScript control plane restores the living orchestration behavior; the Go kernel remains the only authority for state mutation.
 
-*Last updated: 2026-05-08 — milestone created after v1.15 shipped*
+**Non-goals:**
+- Do not rewrite the whole runtime in TypeScript
+- Do not restore raw Bash state mutation
+- Do not maintain Classic and Go as two long-term products
+- Do not move install/update/publish safety out of Go
+- Do not make visual output parsing authoritative
+
+*Last updated: 2026-05-12 — milestone pivoted from adaptive caste orchestration to hybrid runtime recovery*
