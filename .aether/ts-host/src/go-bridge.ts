@@ -143,8 +143,14 @@ export function callGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
  */
 export function assertNoDirectDataWrites(filePath: string): void {
   const normalized = filePath.replace(/\\/g, "/");
+  // Resolve .. segments to prevent traversal bypass
+  const resolved = normalized.split("/").reduce<string[]>((acc, segment) => {
+    if (segment === "..") acc.pop();
+    else if (segment !== ".") acc.push(segment);
+    return acc;
+  }, []).join("/");
   for (const goPath of GO_OWNED_PATHS) {
-    if (normalized.startsWith(goPath) || normalized.includes(goPath)) {
+    if (resolved.startsWith(goPath) || resolved.includes("/" + goPath)) {
       throw new Error(
         `Boundary violation: TS host must not write to Go-owned path "${goPath}". ` +
           `Path attempted: "${filePath}". Use Go finalizer commands instead.`
@@ -176,8 +182,15 @@ export function writeCompletionFile(
   const targetDir = join(tmpdir(), dir);
   const targetPath = join(targetDir, filename);
 
-  // Boundary enforcement
+  // Boundary enforcement: reject Go-owned paths and paths escaping tmpdir
   assertNoDirectDataWrites(targetPath);
+  const resolvedTarget = targetPath.replace(/\\/g, "/");
+  const resolvedTmpdir = tmpdir().replace(/\\/g, "/");
+  if (!resolvedTarget.startsWith(resolvedTmpdir)) {
+    throw new Error(
+      `Completion file path escapes tmpdir: ${targetPath}`
+    );
+  }
 
   // Ensure directory exists
   if (!existsSync(targetDir)) {

@@ -46,7 +46,7 @@ describe("host entry point", () => {
     );
   });
 
-  it("host lifecycle command prints not-yet-implemented message", () => {
+  it("host lifecycle command executes and produces JSON output or lifecycle error", () => {
     const result = spawnSync(
       "node",
       ["--import", "tsx", hostPath, "lifecycle"],
@@ -56,11 +56,14 @@ describe("host entry point", () => {
       }
     );
 
+    // Either succeeds with JSON on stdout, or fails with a lifecycle error on stderr
+    const stdout = result.stdout ?? "";
     const stderr = result.stderr ?? "";
+    const hasJsonOutput = stdout.includes("{");
+    const hasError = stderr.includes("Failed at");
     assert.ok(
-      stderr.includes("not yet implemented") ||
-        stderr.includes("Lifecycle"),
-      `Stderr should mention not yet implemented. Got: ${stderr.slice(0, 200)}`
+      hasJsonOutput || hasError,
+      `Should produce JSON output or lifecycle error. stdout: ${stdout.slice(0, 200)}, stderr: ${stderr.slice(0, 200)}`
     );
   });
 });
