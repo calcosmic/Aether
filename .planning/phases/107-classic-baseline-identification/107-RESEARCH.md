@@ -387,17 +387,13 @@ v5.4.0 is the clear choice for three reasons:
 **Resolved during research:**
 - Node modules availability: CONFIRMED `node_modules/` NOT in v5.4.0 tag. Smoke test must run `npm install`. npm dependencies are commander, js-yaml, picocolors. [VERIFIED: git ls-tree v5.4.0 node_modules/ returns empty]
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Smoke test scope for D-04**
-   - What we know: D-04 says "test checks exit codes = 0 for plan/build/continue, output contains ceremony stage markers and caste labels, COLONY_STATE.json changes between commands."
-   - What's unclear: Since plan/build/continue are slash commands (not CLI subcommands), the smoke test cannot directly execute them. The test can only verify the preconditions: CLI works, colony state created, wrapper files present.
-   - Recommendation: The smoke test verifies the Node CLI lifecycle (`init -> status -> sync-state`). For plan/build/continue, the test verifies wrapper Markdown files exist and contain expected ceremony markers. This satisfies D-04's intent within Classic's architectural constraints. The full plan/build/continue lifecycle test belongs in Phase 108 (Golden Workflow Tests) against the Go runtime.
+1. **Smoke test scope for D-04** (RESOLVED)
+   - Resolution: The smoke test verifies the Node CLI lifecycle (`init -> status -> sync-state`) and checks COLONY_STATE.json mutation via sync-state (hash comparison before/after). For plan/build/continue, the test verifies wrapper Markdown files exist AND contain ceremony markers (grep for "Stage", "worker", "caste", "Builder"). The full plan/build/continue lifecycle test against actual ceremony output belongs in Phase 108 (Golden Workflow Tests) against the Go runtime. D-04 deviation is documented in-script.
 
-2. **Baseline document location**
-   - What we know: CONTEXT.md suggests `.aether/references/` or the phase directory.
-   - What's unclear: Exact file path and naming.
-   - Recommendation: Place at `.aether/references/classic-baseline.md`. This keeps it alongside the Phase 106 contract and makes it discoverable by future phases.
+2. **Baseline document location** (RESOLVED)
+   - Resolution: Place at `.aether/references/classic-baseline.md`. This keeps it alongside the Phase 106 contract and makes it discoverable by future phases.
 
 ## Environment Availability
 
