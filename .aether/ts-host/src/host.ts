@@ -16,6 +16,7 @@
 import type { BuildManifest, ContinueCompletion, PlanCompletion } from "./types.js";
 import { callGoJSON, discoverGoBinary } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
+import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
 
 function parseArgs(argv: string[]): {
   command: string;
@@ -48,7 +49,7 @@ function printUsage(): void {
       "  plan          Call aether plan --plan-only\n" +
       "  build <N>     Call aether build N --plan-only\n" +
       "  continue      Call aether continue --plan-only\n" +
-      "  lifecycle     Full plan->build->continue (not yet implemented)\n\n" +
+      "  lifecycle [N] Full plan->build->continue sequence (default phase: 1)\n\n" +
       "Options:\n" +
       "  --cwd <path>  Working directory\n"
   );
@@ -102,10 +103,21 @@ async function main(): Promise<void> {
     }
 
     case "lifecycle": {
-      process.stderr.write(
-        "Lifecycle orchestration not yet implemented (planned for Plan 03)\n"
-      );
-      process.exit(0);
+      const phaseArg = positional[0];
+      if (phaseArg && isNaN(parseInt(phaseArg, 10))) {
+        process.stderr.write("Error: lifecycle phase must be a number\n");
+        process.exit(1);
+      }
+      const lifecycleOpts: LifecycleOptions = {
+        goBinaryPath,
+        cwd,
+        simulateWorkers: true,
+      };
+      if (phaseArg) {
+        lifecycleOpts.phase = parseInt(phaseArg, 10);
+      }
+      const result = await runLifecycle(lifecycleOpts);
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
 
