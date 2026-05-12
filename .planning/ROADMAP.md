@@ -58,7 +58,10 @@ Plans:
   1. A documented comparison of v5.3.0, v5.3.3, and v5.4.0 against behavior criteria exists with a selected tag and rationale
   2. A smoke-test script checks out the selected Classic tag and verifies the lifecycle runs without errors
   3. Baseline documentation includes selected tag, selection rationale, known limitations, and a behavior comparison checklist
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 107-01-PLAN.md -- Create Classic baseline document with version comparison and behavioral checklist
+- [ ] 107-02-PLAN.md -- Create standalone Bash smoke test for Classic v5.4.0
 
 ### Phase 108: Golden Workflow Tests
 **Goal**: Golden/snapshot tests exist for the `plan -> build 1 -> continue` lifecycle and run in CI, failing on ceremony, worker activity, or state behavior regressions
@@ -115,7 +118,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 106. Boundary Contract | v1.16 | 0/1 | Planning complete | - |
-| 107. Classic Baseline Identification | v1.16 | 0/TBD | Not started | - |
+| 107. Classic Baseline Identification | v1.16 | 0/2 | Planning complete | - |
 | 108. Golden Workflow Tests | v1.16 | 0/TBD | Not started | - |
 | 109. TypeScript Orchestration Host Prototype | v1.16 | 0/TBD | Not started | - |
 | 110. Go Safety Invariant Verification | v1.16 | 0/TBD | Not started | - |
