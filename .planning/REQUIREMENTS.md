@@ -41,12 +41,12 @@
 
 ### Go Safety Invariants (SAFE)
 
-- [ ] **SAFE-01**: Go remains sole authority for COLONY_STATE.json mutation
-- [ ] **SAFE-02**: Go finalizers validate manifest provenance before any state write
-- [ ] **SAFE-03**: Go locking and atomic write semantics unchanged by TS host presence
-- [ ] **SAFE-04**: Install, update, publish commands remain pure Go — no TS involvement
-- [ ] **SAFE-05**: Verification contracts (command-guide, parity tests, drift guards) still pass with TS host enabled
-- [ ] **SAFE-06**: Existing `aether plan --plan-only` and `aether build --plan-only` behavior unchanged
+- [x] **SAFE-01**: Go remains sole authority for COLONY_STATE.json mutation
+- [x] **SAFE-02**: Go finalizers validate manifest provenance before any state write
+- [x] **SAFE-03**: Go locking and atomic write semantics unchanged by TS host presence
+- [x] **SAFE-04**: Install, update, publish commands remain pure Go — no TS involvement
+- [x] **SAFE-05**: Verification contracts (command-guide, parity tests, drift guards) still pass with TS host enabled
+- [x] **SAFE-06**: Existing `aether plan --plan-only` and `aether build --plan-only` behavior unchanged
 
 ### Follow-up Migration Map (MAP)
 
@@ -102,12 +102,12 @@
 | HOST-05 | Phase 109 | Pending |
 | HOST-06 | Phase 109 | Pending |
 | HOST-07 | Phase 109 | Pending |
-| SAFE-01 | Phase 110 | Pending |
-| SAFE-02 | Phase 110 | Pending |
-| SAFE-03 | Phase 110 | Pending |
-| SAFE-04 | Phase 110 | Pending |
-| SAFE-05 | Phase 110 | Pending |
-| SAFE-06 | Phase 110 | Pending |
+| SAFE-01 | Phase 110 | Complete |
+| SAFE-02 | Phase 110 | Complete |
+| SAFE-03 | Phase 110 | Complete |
+| SAFE-04 | Phase 110 | Complete |
+| SAFE-05 | Phase 110 | Complete |
+| SAFE-06 | Phase 110 | Complete |
 | MAP-01 | Phase 111 | Pending |
 | MAP-02 | Phase 111 | Pending |
 | MAP-03 | Phase 111 | Pending |

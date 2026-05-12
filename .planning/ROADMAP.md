@@ -34,7 +34,7 @@ See `.planning/milestones/` for full archived phase details.
 - [ ] **Phase 107: Classic Baseline Identification** -- Identify and smoke-test the best Classic version (likely v5.4.0) as a behavior comparison anchor
 - [x] **Phase 108: Golden Workflow Tests** -- Add snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects (completed 2026-05-12)
 - [x] **Phase 109: TypeScript Orchestration Host Prototype** -- Build minimal TS host that calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly (completed 2026-05-12)
-- [ ] **Phase 110: Go Safety Invariant Verification** -- Ensure Go remains sole authority for state mutation, finalizers, locking, install/update/publish, verification contracts
+- [x] **Phase 110: Go Safety Invariant Verification** -- Ensure Go remains sole authority for state mutation, finalizers, locking, install/update/publish, verification contracts (completed 2026-05-12)
 - [ ] **Phase 111: Follow-up Migration Map** -- Produce concrete next steps for Oracle confidence iteration, swarm visibility, and broader build/continue parity
 
 ## Phase Details
@@ -106,7 +106,9 @@ Plans:
   4. Install, update, publish commands remain pure Go — no TS involvement
   5. Verification contracts (command-guide, parity tests, drift guards) still pass with TS host enabled
   6. Existing `aether plan --plan-only` and `aether build --plan-only` behavior is unchanged
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [x] 110-01-PLAN.md -- Write 6 safety invariant test functions (SAFE-01 through SAFE-06) in cmd/safety_invariant_test.go
 
 ### Phase 111: Follow-up Migration Map
 **Goal**: A written follow-up plan exists with phase numbers, estimated scope, and dependency ordering for restoring Oracle/RALF confidence iteration, swarm visibility, and broader build/continue parity
@@ -127,5 +129,5 @@ Plans:
 | 107. Classic Baseline Identification | v1.16 | 0/2 | Planning complete | - |
 | 108. Golden Workflow Tests | v1.16 | 1/1 | Complete    | 2026-05-12 |
 | 109. TypeScript Orchestration Host Prototype | v1.16 | 3/3 | Complete    | 2026-05-12 |
-| 110. Go Safety Invariant Verification | v1.16 | 0/TBD | Not started | - |
+| 110. Go Safety Invariant Verification | v1.16 | 1/1 | Complete    | 2026-05-12 |
 | 111. Follow-up Migration Map | v1.16 | 0/TBD | Not started | - |
