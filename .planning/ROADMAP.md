@@ -33,7 +33,7 @@ See `.planning/milestones/` for full archived phase details.
 - [x] **Phase 106: Boundary Contract** -- Write and commit the runtime boundary contract that assigns ownership to Go, TypeScript, editable assets, and Bash (completed 2026-05-12)
 - [ ] **Phase 107: Classic Baseline Identification** -- Identify and smoke-test the best Classic version (likely v5.4.0) as a behavior comparison anchor
 - [x] **Phase 108: Golden Workflow Tests** -- Add snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects (completed 2026-05-12)
-- [ ] **Phase 109: TypeScript Orchestration Host Prototype** -- Build minimal TS host that calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly
+- [x] **Phase 109: TypeScript Orchestration Host Prototype** -- Build minimal TS host that calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly (completed 2026-05-12)
 - [ ] **Phase 110: Go Safety Invariant Verification** -- Ensure Go remains sole authority for state mutation, finalizers, locking, install/update/publish, verification contracts
 - [ ] **Phase 111: Follow-up Migration Map** -- Produce concrete next steps for Oracle confidence iteration, swarm visibility, and broader build/continue parity
 
