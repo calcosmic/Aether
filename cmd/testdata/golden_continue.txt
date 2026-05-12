@@ -1,0 +1,58 @@
+Running deterministic verification for phase 1 before watcher/review workers (timeout 15m0s per command).
+── Dispatch ──
+Continue Verification 1 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+  👁️ Watcher Worker-XX  Phase: 1 — Golden phase
+
+… 👁️ Watcher Worker-XX  starting wave 1  Phase: 1 — Golden phase
+
+… 👁️ Watcher Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
+
+✓ 👁️ Watcher Worker-XX  completed 0.0s  FakeInvoker completed task continue-verification-1 for worker Worker-XX (caste: watcher)
+
+  Step 1/4: Verification (1s)
+── Dispatch ──
+Continue Review 1 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+  🧪 Probe Worker-XX  Phase: 1 — Golden phase
+
+… 🧪 Probe Worker-XX  starting wave 1  Phase: 1 — Golden phase
+
+… 🧪 Probe Worker-XX  running wave 1  Phase: 1 — Golden phase  [simulated worker heartbeat observed]
+
+✓ 🧪 Probe Worker-XX  completed 0.0s  FakeInvoker completed task continue-review-probe for worker Worker-XX (caste: probe)
+
+  Step 2/4: Housekeeping (1s)
+  Step 3/4: Advance (1s)
+Ceremony complete in 1s
+━━ 👁️ C O N T I N U E ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Review depth: standard (Phase 1 of 2)
+── Verification ──
+Verification pass complete.
+Phase 1 verified and completed: Golden phase
+Workers
+  - Worker-XX
+  - Worker-XX
+Continue Worker Flow
+  - Deterministic verification [system] completed — deterministic verification completed: 3 passed, 1 skipped
+  - Worker-XX [watcher] completed — Watcher Worker-XX completed independent verification before advancement
+  - Worker-XX [probe] completed — Probe Worker-XX completed continue review before advancement
+  - Signal housekeeping [system] completed — 0 active -> 0 active
+Verification passed during continue
+━━ 🗂️ A R T I F A C T S ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+.aether/data/build/phase-1/verification.json
+.aether/data/build/phase-1/gates.json
+.aether/data/build/phase-1/review.json
+.aether/data/build/phase-1/continue.json
+.aether/data/spawn-tree.txt
+Workers closed: 2
+── Housekeeping ──
+Signals: 0 active -> 0 active after housekeeping
+── Next Phase ──
+Next phase ready: 2 — Next golden phase
+
+━━ 🐜 N E X T   U P ━━
+Run `aether build 2` to start the next phase
+It's safe to clear your context now. Run `/ant-resume` to restore.
