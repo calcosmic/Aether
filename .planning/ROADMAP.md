@@ -73,7 +73,9 @@ Plans:
   3. The test captures worker activity (spawn-log entries, dispatch manifests, worker descriptions)
   4. The test captures state side effects (COLONY_STATE.json mutations only after finalizers, no pre-finalize state writes)
   5. The test runs in CI and fails if ceremony, worker activity, or state behavior regresses
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 108-01-PLAN.md -- Create golden lifecycle snapshot tests for plan/build/continue and state mutation verification
 
 ### Phase 109: TypeScript Orchestration Host Prototype
 **Goal**: A minimal TypeScript host can drive `plan -> build 1 -> continue` through Go manifests and finalizers without direct state writes, producing visible worker activity and ceremony
@@ -119,7 +121,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 106. Boundary Contract | v1.16 | 0/1 | Planning complete | - |
 | 107. Classic Baseline Identification | v1.16 | 0/2 | Planning complete | - |
-| 108. Golden Workflow Tests | v1.16 | 0/TBD | Not started | - |
+| 108. Golden Workflow Tests | v1.16 | 0/1 | Planning complete | - |
 | 109. TypeScript Orchestration Host Prototype | v1.16 | 0/TBD | Not started | - |
 | 110. Go Safety Invariant Verification | v1.16 | 0/TBD | Not started | - |
 | 111. Follow-up Migration Map | v1.16 | 0/TBD | Not started | - |
