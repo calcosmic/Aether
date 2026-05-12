@@ -121,7 +121,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 106. Boundary Contract | v1.16 | 0/1 | Planning complete | - |
 | 107. Classic Baseline Identification | v1.16 | 0/2 | Planning complete | - |
-| 108. Golden Workflow Tests | v1.16 | 1/1 | Complete   | 2026-05-12 |
+| 108. Golden Workflow Tests | v1.16 | 1/1 | Complete    | 2026-05-12 |
 | 109. TypeScript Orchestration Host Prototype | v1.16 | 0/TBD | Not started | - |
 | 110. Go Safety Invariant Verification | v1.16 | 0/TBD | Not started | - |
 | 111. Follow-up Migration Map | v1.16 | 0/TBD | Not started | - |

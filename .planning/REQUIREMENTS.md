@@ -23,11 +23,11 @@
 
 ### Golden Workflow Tests (TEST)
 
-- [ ] **TEST-01**: Golden/snapshot test exists for `plan -> build 1 -> continue` lifecycle
-- [ ] **TEST-02**: Test captures visible ceremony output (stage separators, caste labels, worker banners)
-- [ ] **TEST-03**: Test captures worker activity (spawn-log entries, dispatch manifests, worker descriptions)
-- [ ] **TEST-04**: Test captures state side effects (COLONY_STATE.json mutations only after finalizers, no pre-finalize state writes)
-- [ ] **TEST-05**: Test runs in CI and fails if ceremony, worker activity, or state behavior regresses
+- [x] **TEST-01**: Golden/snapshot test exists for `plan -> build 1 -> continue` lifecycle
+- [x] **TEST-02**: Test captures visible ceremony output (stage separators, caste labels, worker banners)
+- [x] **TEST-03**: Test captures worker activity (spawn-log entries, dispatch manifests, worker descriptions)
+- [x] **TEST-04**: Test captures state side effects (COLONY_STATE.json mutations only after finalizers, no pre-finalize state writes)
+- [x] **TEST-05**: Test runs in CI and fails if ceremony, worker activity, or state behavior regresses
 
 ### TypeScript Orchestration Host (HOST)
 
@@ -90,11 +90,11 @@
 | BASE-01 | Phase 107 | Pending |
 | BASE-02 | Phase 107 | Pending |
 | BASE-03 | Phase 107 | Pending |
-| TEST-01 | Phase 108 | Pending |
-| TEST-02 | Phase 108 | Pending |
-| TEST-03 | Phase 108 | Pending |
-| TEST-04 | Phase 108 | Pending |
-| TEST-05 | Phase 108 | Pending |
+| TEST-01 | Phase 108 | Complete |
+| TEST-02 | Phase 108 | Complete |
+| TEST-03 | Phase 108 | Complete |
+| TEST-04 | Phase 108 | Complete |
+| TEST-05 | Phase 108 | Complete |
 | HOST-01 | Phase 109 | Pending |
 | HOST-02 | Phase 109 | Pending |
 | HOST-03 | Phase 109 | Pending |
