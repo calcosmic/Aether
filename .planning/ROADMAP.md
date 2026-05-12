@@ -32,7 +32,7 @@ See `.planning/milestones/` for full archived phase details.
 
 - [x] **Phase 106: Boundary Contract** -- Write and commit the runtime boundary contract that assigns ownership to Go, TypeScript, editable assets, and Bash (completed 2026-05-12)
 - [ ] **Phase 107: Classic Baseline Identification** -- Identify and smoke-test the best Classic version (likely v5.4.0) as a behavior comparison anchor
-- [ ] **Phase 108: Golden Workflow Tests** -- Add snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects
+- [x] **Phase 108: Golden Workflow Tests** -- Add snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects (completed 2026-05-12)
 - [ ] **Phase 109: TypeScript Orchestration Host Prototype** -- Build minimal TS host that calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly
 - [ ] **Phase 110: Go Safety Invariant Verification** -- Ensure Go remains sole authority for state mutation, finalizers, locking, install/update/publish, verification contracts
 - [ ] **Phase 111: Follow-up Migration Map** -- Produce concrete next steps for Oracle confidence iteration, swarm visibility, and broader build/continue parity
@@ -75,7 +75,7 @@ Plans:
   5. The test runs in CI and fails if ceremony, worker activity, or state behavior regresses
 **Plans**: 1 plan
 Plans:
-- [ ] 108-01-PLAN.md -- Create golden lifecycle snapshot tests for plan/build/continue and state mutation verification
+- [x] 108-01-PLAN.md -- Create golden lifecycle snapshot tests for plan/build/continue and state mutation verification
 
 ### Phase 109: TypeScript Orchestration Host Prototype
 **Goal**: A minimal TypeScript host can drive `plan -> build 1 -> continue` through Go manifests and finalizers without direct state writes, producing visible worker activity and ceremony
@@ -121,7 +121,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 106. Boundary Contract | v1.16 | 0/1 | Planning complete | - |
 | 107. Classic Baseline Identification | v1.16 | 0/2 | Planning complete | - |
-| 108. Golden Workflow Tests | v1.16 | 0/1 | Planning complete | - |
+| 108. Golden Workflow Tests | v1.16 | 1/1 | Complete   | 2026-05-12 |
 | 109. TypeScript Orchestration Host Prototype | v1.16 | 0/TBD | Not started | - |
 | 110. Go Safety Invariant Verification | v1.16 | 0/TBD | Not started | - |
 | 111. Follow-up Migration Map | v1.16 | 0/TBD | Not started | - |
