@@ -981,6 +981,78 @@ func TestPlanUsesWorkerWrittenArtifactsWhenProvided(t *testing.T) {
 	}
 }
 
+func TestPlanUsesFreshWorkerPlanArtifactWhenTimestampDoesNotAdvance(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+
+	goal := "Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	stalePlanPath := filepath.Join(dataDir, "planning", "phase-plan.json")
+	if err := os.MkdirAll(filepath.Dir(stalePlanPath), 0755); err != nil {
+		t.Fatalf("create planning dir: %v", err)
+	}
+	stalePlan := []byte(`{"phases":[{"name":"Research charter and communication target","description":"Wrong stale language plan.","tasks":[{"goal":"Design a stale protocol"}]}],"confidence":{"overall":91}}`)
+	if err := os.WriteFile(stalePlanPath, stalePlan, 0644); err != nil {
+		t.Fatalf("write stale plan: %v", err)
+	}
+	staleTime := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(stalePlanPath, staleTime, staleTime); err != nil {
+		t.Fatalf("set stale plan time: %v", err)
+	}
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &planningSameTimestampInvoker{} }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["plan_source"]; got != "worker-artifact" {
+		t.Fatalf("plan_source = %v, want worker-artifact", got)
+	}
+	phases := result["phases"].([]interface{})
+	firstPhase := phases[0].(map[string]interface{})
+	if firstPhase["name"] != "Host dispatch fails closed" {
+		t.Fatalf("first phase name = %v, want Host dispatch fails closed", firstPhase["name"])
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(state.Plan.Phases) == 0 {
+		t.Fatal("expected phases")
+	}
+	if state.Plan.Phases[0].Name == "Research charter and communication target" {
+		t.Fatalf("stale language plan leaked into committed state: %+v", state.Plan.Phases[0])
+	}
+}
+
 func TestPlanFallsBackWhenRealPlanningDispatchFails(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1226,6 +1298,35 @@ func TestPlanFallbackStillSupportsExplicitAetherCommandWork(t *testing.T) {
 	}
 	if templates[0].Name != "Contract and gap mapping" {
 		t.Fatalf("first template = %q, want Contract and gap mapping", templates[0].Name)
+	}
+}
+
+func TestPlanFallbackTreatsLifecycleReliabilityAsAetherWork(t *testing.T) {
+	goal := "Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI"
+	templates := planningTemplates(goal, codexSurveyContext{}, codexScoutReport{})
+	if len(templates) == 0 {
+		t.Fatal("expected templates")
+	}
+	if templates[0].Name != "Contract and gap mapping" {
+		t.Fatalf("first template = %q, want Contract and gap mapping", templates[0].Name)
+	}
+
+	blob := ""
+	for _, phase := range templates {
+		blob += phase.Name + "\n" + phase.Description + "\n"
+		for _, task := range phase.Tasks {
+			blob += task.Goal + "\n"
+		}
+	}
+	for _, unwanted := range []string{
+		"Research charter and communication target",
+		"Representation and grammar design",
+		"communication problem",
+		"semantic primitives",
+	} {
+		if strings.Contains(blob, unwanted) {
+			t.Fatalf("lifecycle reliability fallback should not produce language-design plan containing %q:\n%s", unwanted, blob)
+		}
 	}
 }
 
@@ -1513,6 +1614,73 @@ func (p *planningArtifactInvoker) IsAvailable(_ context.Context) bool {
 }
 
 func (p *planningArtifactInvoker) ValidateAgent(_ string) error {
+	return nil
+}
+
+type planningSameTimestampInvoker struct{}
+
+func (p *planningSameTimestampInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	result := codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "worker-authored planning artifact with unchanged timestamp",
+	}
+	if config.Caste != "route_setter" {
+		return result, nil
+	}
+
+	planningDir := filepath.Join(config.Root, ".aether", "data", "planning")
+	if err := os.MkdirAll(planningDir, 0755); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	target := filepath.Join(planningDir, "phase-plan.json")
+	preserveTime := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	if info, err := os.Stat(target); err == nil {
+		preserveTime = info.ModTime()
+	}
+	planArtifact := `{
+  "phases": [
+    {
+      "name": "Host dispatch fails closed",
+      "description": "Route host-specific spawning through explicit boundaries before lifecycle state changes.",
+      "tasks": [
+        {
+          "goal": "Make planner artifacts from active workers authoritative even when timestamps do not advance",
+          "constraints": ["Do not fall back to stale synthetic plans"],
+          "hints": ["cmd/codex_plan.go", "cmd/codex_worker_artifacts.go"],
+          "success_criteria": ["Worker plan artifact is committed to colony state"],
+          "depends_on": []
+        }
+      ],
+      "success_criteria": ["Fresh worker-authored plan is selected"]
+    }
+  ],
+  "confidence": {
+    "knowledge": 92,
+    "requirements": 90,
+    "risks": 84,
+    "dependencies": 82,
+    "effort": 80,
+    "overall": 87
+  },
+  "gaps": []
+}`
+	if err := os.WriteFile(target, []byte(planArtifact), 0644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	if err := os.Chtimes(target, preserveTime, preserveTime); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return result, nil
+}
+
+func (p *planningSameTimestampInvoker) IsAvailable(_ context.Context) bool {
+	return true
+}
+
+func (p *planningSameTimestampInvoker) ValidateAgent(_ string) error {
 	return nil
 }
 

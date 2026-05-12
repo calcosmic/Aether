@@ -1873,15 +1873,20 @@ func planningTemplates(goal string, survey codexSurveyContext, report codexScout
 }
 
 func isLanguageDesignGoal(goalLower string) bool {
-	return containsAny(goalLower, []string{
-		"language", "grammar", "syntax", "parser", "lexer", "compiler", "transpil", "dsl",
+	return containsAnyWholeWord(goalLower, []string{
+		"language", "grammar", "syntax", "parser", "lexer", "compiler", "dsl",
 		"protocol", "serialization", "encode", "decode", "format", "schema", "spec",
-		"communication", "token efficien", "context efficien", "ai-to-ai",
+		"communication",
+	}) || containsAny(goalLower, []string{
+		"transpil", "token efficien", "context efficien", "ai-to-ai",
 	})
 }
 
 func isAetherOrchestrationGoal(goalLower string) bool {
-	if !containsAny(goalLower, []string{"parity", "orchestrat", "workflow", "command", "spawn"}) {
+	if !containsAny(goalLower, []string{
+		"parity", "orchestrat", "workflow", "command", "spawn",
+		"lifecycle", "reliability", "platform", "dispatch", "finalizer", "read-loop",
+	}) {
 		return false
 	}
 	return containsAny(goalLower, []string{
@@ -1902,6 +1907,20 @@ func containsAny(text string, needles []string) bool {
 	for _, needle := range needles {
 		if strings.Contains(text, needle) {
 			return true
+		}
+	}
+	return false
+}
+
+func containsAnyWholeWord(text string, needles []string) bool {
+	fields := strings.FieldsFunc(text, func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	})
+	for _, field := range fields {
+		for _, needle := range needles {
+			if field == needle {
+				return true
+			}
 		}
 	}
 	return false

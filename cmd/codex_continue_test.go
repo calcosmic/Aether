@@ -5088,6 +5088,47 @@ func TestRunCodexContinueVerificationSkipsWatcherForRawBindEPERM(t *testing.T) {
 	}
 }
 
+func TestRunCodexContinueVerificationSkipsWatcherForExternalTaskManifest(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	invoker := &continueWatcherTestInvoker{}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	phase := colony.Phase{ID: 1, Name: "Wrapper mediated phase"}
+	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
+	manifest := codexContinueManifest{
+		Present: true,
+		Data: codexBuildManifest{
+			Phase:        1,
+			DispatchMode: "external-task",
+			Dispatches: []codexBuildDispatch{
+				{Stage: "wave", Caste: "builder", Name: "Forge-1", Task: "Build it", Status: "completed"},
+			},
+		},
+	}
+
+	report, watcherFlow := runCodexContinueVerification(context.Background(), tmpDir, state, phase, manifest, time.Second, time.Second, false)
+
+	if watcherFlow != nil {
+		t.Fatalf("watcherFlow = %+v, want nil for wrapper-mediated external-task manifest", watcherFlow)
+	}
+	if invoker.watcherCalls != 0 {
+		t.Fatalf("watcher was spawned %d time(s), want 0", invoker.watcherCalls)
+	}
+	if report.Watcher.Status != "skipped" || report.Watcher.Worker != "auto-skip" {
+		t.Fatalf("watcher = %+v, want auto-skip skipped", report.Watcher)
+	}
+	if !strings.Contains(report.Watcher.Summary, "external-task build was wrapper-mediated") {
+		t.Fatalf("watcher summary should explain host boundary skip, got %q", report.Watcher.Summary)
+	}
+}
+
 func TestAttachExternalContinueWatcherFailedStillBlocks(t *testing.T) {
 	verification := codexContinueVerificationReport{
 		Phase:        1,
