@@ -157,7 +157,7 @@ Per D-07: all 6 colony flows (plan, build, continue, colonize, seal, oracle) use
 | Phase | Name | Scope | Dependencies |
 |-------|------|-------|--------------|
 | C-1 | Colonize TS Host Integration | Medium -- Add `runColonizeLifecycle()` to TS host. Colonize already has `colonize --plan-only` (returns `codexColonizeManifest` with 4 surveyor dispatches) and `colonize-finalize` command. TS host calls plan-only, dispatches surveyor workers, calls finalizer | Milestones A and B complete (D-03) |
-| C-2 | Seal TS Host Integration | Medium -- Add `runSealLifecycle()` to TS host. Seal needs a new `seal --plan-only` (returns blocker list, ceremony steps) and `seal-finalize` command. TS host calls plan-only, checks for blockers, dispatches review workers if needed, calls finalizer | C-1 |
+| C-2 | Seal TS Host Integration | Medium -- Add `runSealLifecycle()` to TS host. Seal already has `seal --plan-only` (returns blocker list, ceremony steps) and `seal-finalize` command in Go. TS host calls plan-only, checks for blockers, dispatches review workers if needed, calls finalizer | C-1 |
 | C-3 | End-to-End Parity Verification | Medium -- Integration test that runs all 6 flows (plan, build, continue, colonize, seal, oracle) through TS host. Verify no direct `.aether/data/` writes, all state through Go finalizers | C-2 |
 
 ### Requirements
