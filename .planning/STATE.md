@@ -1,47 +1,45 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.16
-milestone_name: Queen-Owned Adaptive Caste Orchestration
-status: milestone_in_progress
-last_updated: "2026-05-08T04:00:00.000Z"
-last_activity: 2026-05-08 -- Milestone v1.16 created after v1.15 shipped
+milestone_name: Hybrid Runtime Boundary and Orchestration Recovery
+status: Phase 106 complete, Phase 107 next
+stopped_at: Phase 106 executed
+last_updated: "2026-05-12T10:30:00.000Z"
+last_activity: 2026-05-12 — Phase 106 Boundary Contract complete
 progress:
   total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-08)
+See: .planning/PROJECT.md (updated 2026-05-12)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 106 -- Caste Relevance Engine -- NEXT
+**Current focus:** Phase 107 -- Classic Baseline Identification -- NEXT
 
 ## Current Position
 
-Phase: 106 of 111 (Caste Relevance Engine) -- NOT STARTED
-Plan: 0 of 13 complete
-Status: Milestone v1.16 created. Ready to start Phase 106.
-Last activity: 2026-05-08 -- Milestone created, PROJECT.md and ROADMAP.md updated
-
-Progress: [          ] 0%
+Phase: 106 Complete
+Plan: 106-01 Complete
+Status: Phase 106 executed successfully
+Last activity: 2026-05-12 — Phase 106 Boundary Contract complete
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (v1.16)
-- Average duration: N/A
-- Total execution time: N/A
+- Total plans completed: 1 (v1.16)
+- Average duration: ~5 min
+- Total execution time: ~5 min
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
-| --    | --   | --       | --    | --    |
+| 106 | 106-01 | ~5 min | 4 | 5 |
 
 *Updated after each plan completion*
 
@@ -53,19 +51,18 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - v1.15 shipped 2026-05-08: Framework Coherence complete, all audit findings addressed
-- Worker economy audit (Phase 102) found 18 actively dispatched castes, 9 defined but never used
-- Static depth-based agent lists are the root cause of unnecessary timeouts and blocks
-- Queen should decide which agents to spawn based on phase content, not depth strings
+- Milestone pivoted from adaptive caste orchestration to hybrid runtime recovery (2026-05-12)
+- Go should own safety, not soul — TypeScript control plane restores living orchestration behavior
+- Classic baseline (likely v5.4.0) will be used as behavior comparison anchor, not a permanent second product
+- Phase 106: Runtime boundary contract committed with Go/TS/Assets/Bash ownership, anti-patterns, and Go enforcement test
 
 ### Pending Todos
 
-1. Create Phase 106 plan (Caste Relevance Engine)
-2. Implement caste relevance registry
-3. Add tests for caste scoring against known phase types
+1. Execute Phase 107 (Classic Baseline Identification)
 
 ### Blockers/Concerns
 
-- None yet.
+- None.
 
 ## Deferred Items
 
@@ -84,9 +81,12 @@ Items acknowledged and carried forward from previous milestones:
 | v2 scope | Cross-phase queen continuity (QUEEN-02) | Needs proven recovery loop first | v1.14 |
 | v2 scope | Queen context budget config (QUEEN-03) | Needs empirical validation | v1.14 |
 | v2 scope | Cross-phase coordination (QUEEN-04) | Architectural risk | v1.14 |
+| v1.17+ | Oracle/RALF confidence iteration restoration | Deferred to follow-up map | v1.16 |
+| v1.17+ | Swarm visibility restoration | Deferred to follow-up map | v1.16 |
+| v1.17+ | Broader build/continue parity (all flows use TS host) | Deferred to follow-up map | v1.16 |
 
 ## Session Continuity
 
-Last session: 2026-05-08T01:55:00.000Z
-Stopped at: Milestone v1.16 creation complete
-Resume file: .planning/PROJECT.md
+Last session: 2026-05-12T10:30:00.000Z
+Stopped at: Phase 106 executed
+Resume file: .planning/phases/106-boundary-contract/106-CONTEXT.md

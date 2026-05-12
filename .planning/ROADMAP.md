@@ -30,7 +30,7 @@ See `.planning/milestones/` for full archived phase details.
 
 ### v1.16 Hybrid Runtime Boundary and Orchestration Recovery (In Progress)
 
-- [ ] **Phase 106: Boundary Contract** -- Write and commit the runtime boundary contract that assigns ownership to Go, TypeScript, editable assets, and Bash
+- [x] **Phase 106: Boundary Contract** -- Write and commit the runtime boundary contract that assigns ownership to Go, TypeScript, editable assets, and Bash (completed 2026-05-12)
 - [ ] **Phase 107: Classic Baseline Identification** -- Identify and smoke-test the best Classic version (likely v5.4.0) as a behavior comparison anchor
 - [ ] **Phase 108: Golden Workflow Tests** -- Add snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects
 - [ ] **Phase 109: TypeScript Orchestration Host Prototype** -- Build minimal TS host that calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly
@@ -48,7 +48,7 @@ See `.planning/milestones/` for full archived phase details.
   2. The document is referenced by a comment or import in the TypeScript host source code
   3. The document includes explicit anti-patterns: no TS direct state writes, no visual output parsing as authority, no wrapper-owned recovery menus
 Plans:
-- [ ] 106-01-PLAN.md -- Write boundary contract, TS host skeleton, Go integration test
+- [x] 106-01-PLAN.md -- Write boundary contract, TS host skeleton, Go integration test (completed 2026-05-12)
 
 ### Phase 107: Classic Baseline Identification
 **Goal**: The best Classic version is identified with evidence and a smoke-test script verifies it can run `plan -> build 1 -> continue` without errors

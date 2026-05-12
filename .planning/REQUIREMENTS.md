@@ -1,90 +1,123 @@
-# Requirements: Aether v1.15
+# Requirements: Aether v1.16
 
-**Defined:** 2026-05-07
+**Defined:** 2026-05-12
 **Core Value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
 
-## v1.15 Requirements
+## v1.16 Requirements
 
-### Lifecycle Coherence (LIFE)
+### Boundary Contract (BOUND)
 
-- [ ] **LIFE-01**: Every major lifecycle command (init, discuss, colonize, plan, build, continue, seal, entomb, publish, update) has a documented contract specifying inputs, outputs, state mutations, and exit conditions
-- [ ] **LIFE-02**: A command catalog scan verifies all 317 Cobra commands produce structured output (help text, error codes, state artifacts where applicable)
-- [x] **LIFE-03**: No command produces dead-end artifacts that are never consumed by later commands or user-facing output
+- [x] **BOUND-01**: Written runtime boundary contract exists that clearly assigns ownership:
+  - Go owns: state mutation, validation, atomic writes/locking, manifests, finalizers, install/update/publish, recovery, verification contracts, safe subprocess supervision
+  - TypeScript owns: lifecycle orchestration host, platform adapters, worker wave orchestration, Oracle/RALF confidence iteration, ceremony rendering, prompt contract tests
+  - Editable assets (Markdown/YAML/TOML) own: command playbooks, agent instructions, worker roles, prompts, ceremony copy, skills, platform surfaces
+  - Bash owns: small smoke tests, setup checks, release glue
+- [x] **BOUND-02**: Contract is committed to repo and referenced by TypeScript host source code
+- [x] **BOUND-03**: Contract includes explicit anti-patterns: no TS direct state writes, no visual output parsing as authority, no wrapper-owned recovery menus
 
-### Worker Economy (WORK)
+### Classic Baseline (BASE)
 
-- [x] **WORK-01**: Every spawned worker caste has a documented purpose, expected durable output, and downstream consumer
-- [x] **WORK-02**: No worker type is spawned that only reads and returns chat without persisting findings, state, or artifacts
-- [x] **WORK-03**: Build/continue/seal/colonize/plan wave shapes are documented and each spawn is justified
+- [ ] **BASE-01**: Best Classic version identified with evidence (compare v5.3.0, v5.3.3, v5.4.0 against behavior criteria)
+- [ ] **BASE-02**: Smoke-test script exists that checks out Classic tag and verifies it can run `plan -> build 1 -> continue` without errors
+- [ ] **BASE-03**: Baseline documented with: selected tag, selection rationale, known limitations, behavior comparison checklist
 
-### Platform Parity (PLAT)
+### Golden Workflow Tests (TEST)
 
-- [ ] **PLAT-01**: Go runtime behavior, YAML definitions, Claude wrappers, OpenCode wrappers, and Codex command-guide output agree on command names, flags, and behavior descriptions
-- [ ] **PLAT-02**: Existing parity tests (source-check, command_parity_test, command_source_hygiene_test) are extended to close 3 known gaps (command-guide alignment, wrapper contract fields, Codex coverage)
-- [ ] **PLAT-03**: No platform wrapper describes behavior the runtime does not support
+- [ ] **TEST-01**: Golden/snapshot test exists for `plan -> build 1 -> continue` lifecycle
+- [ ] **TEST-02**: Test captures visible ceremony output (stage separators, caste labels, worker banners)
+- [ ] **TEST-03**: Test captures worker activity (spawn-log entries, dispatch manifests, worker descriptions)
+- [ ] **TEST-04**: Test captures state side effects (COLONY_STATE.json mutations only after finalizers, no pre-finalize state writes)
+- [ ] **TEST-05**: Test runs in CI and fails if ceremony, worker activity, or state behavior regresses
 
-### Visual Ceremony (VIZ)
+### TypeScript Orchestration Host (HOST)
 
-- [x] **VIZ-01**: Caste colors, stage markers, live worker stacking, and closeout banners reflect real runtime state
-- [x] **VIZ-02**: No decorative output exists that hides missing behavior or pretends a state transition happened when it didn't
+- [ ] **HOST-01**: Minimal TypeScript host prototype exists that can be invoked as `aether-host` or equivalent
+- [ ] **HOST-02**: Host calls Go `--plan-only` commands to obtain JSON manifests (not visual output parsing)
+- [ ] **HOST-03**: Host dispatches visible platform workers from manifest fields (spawn-log before, spawn-complete after)
+- [ ] **HOST-04**: Host calls Go finalizers to commit state changes
+- [ ] **HOST-05**: Host never writes `.aether/data/` directly — all state mutation goes through Go finalizers
+- [ ] **HOST-06**: Host records spawn lifecycle events (spawn-log / spawn-complete) via Go CLI subcommands
+- [ ] **HOST-07**: Host either runs the selected workflow end-to-end or documents the exact blocker with a reproducible test
 
-### Data Wiring (DATA)
+### Go Safety Invariants (SAFE)
 
-- [x] **DATA-01**: Every artifact in .aether/data/ (COLONY_STATE, pheromones, midden, instincts, session, handoffs, review ledgers) is traced to a downstream consumer or explicitly documented as write-only-for-async
-- [x] **DATA-02**: QUEEN.md, Hive Brain, and graph/survey artifacts are wired into colony-prime context injection or explicitly pruned
-- [x] **DATA-03**: Review ledgers accumulate across phases and survive session resets
+- [ ] **SAFE-01**: Go remains sole authority for COLONY_STATE.json mutation
+- [ ] **SAFE-02**: Go finalizers validate manifest provenance before any state write
+- [ ] **SAFE-03**: Go locking and atomic write semantics unchanged by TS host presence
+- [ ] **SAFE-04**: Install, update, publish commands remain pure Go — no TS involvement
+- [ ] **SAFE-05**: Verification contracts (command-guide, parity tests, drift guards) still pass with TS host enabled
+- [ ] **SAFE-06**: Existing `aether plan --plan-only` and `aether build --plan-only` behavior unchanged
 
-### Release Integrity (REL)
+### Follow-up Migration Map (MAP)
 
-- [x] **REL-01**: Version bumping, binary publishing, hub sync, npm metadata, install/update behavior, and stale-file cleanup operate as one verified coherent system
-- [x] **REL-02**: Published user experience matches the source checkout (no stale hub files, no version mismatches)
+- [ ] **MAP-01**: Written follow-up plan exists for restoring Oracle/RALF confidence iteration
+- [ ] **MAP-02**: Written follow-up plan exists for restoring swarm visibility
+- [ ] **MAP-03**: Written follow-up plan exists for broader build/continue parity (all flows use TS host)
+- [ ] **MAP-04**: Map includes phase numbers, estimated scope, and dependency ordering
 
-### Test Contracts (TEST)
+## Deferred from v1.16 (Adaptive Caste Orchestration)
 
-- [x] **TEST-01**: Structural snapshot tests freeze verified command contracts so future drift fails loudly
-- [x] **TEST-02**: Regression test suite covers command contracts, wrapper parity, output modes, worker guardrails, data flow, and publish/update behavior
-- [ ] **TEST-03**: `go test ./...`, `go vet ./...`, and source/wrapper checks pass consistently
+| Requirement | Original Description | Deferred Reason |
+|-------------|---------------------|-----------------|
+| ORCH-01 | Caste relevance registry with keywords/conditions | Superseded by hybrid architecture — caste selection moves to TS control plane |
+| ORCH-02 | `queenOrchestrate()` function | Superseded — orchestration responsibility moves to TS host |
+| ORCH-03 | Build flow adaptive dispatch | Superseded — build flow dispatch moves to TS host using Go manifests |
+| ORCH-04 | Continue flow adaptive review | Superseded — continue review moves to TS host |
+| ORCH-05 | Plan/colonize/swarm/seal adaptive dispatch | Superseded — all flows use TS host orchestration |
+| ORCH-06 | Tests for caste spawning | Deferred until TS host stabilizes |
+| ORCH-07 | Depth flag behavior preservation | Still valid — depth flags remain Go-owned overrides |
+| ORCH-08 | Never-dispatched caste paths | Deferred — TS host will define dispatch paths in later milestone |
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| New user-facing features | This is a hardening audit, not feature development |
-| Performance optimization | Not the goal; audit is about correctness and coherence |
-| Cross-colony ledger sharing | Findings contain code-specific paths that go stale across repos |
-| Auto-block on critical findings | Conflicts with existing continue-review blocking |
-| Web UI for audit results | CLI-only for now |
-| Full security audit | Security-specific findings are in scope, but this is not a dedicated security audit |
+| Full TypeScript rewrite of Aether runtime | Non-goal — Go kernel remains authoritative |
+| Restoring raw Bash state mutation | Non-goal — wrapper-owned state writes are unsafe |
+| Maintaining Classic and Go as two products | Non-goal — Classic is baseline only, not a product |
+| Moving install/update/publish to TypeScript | Non-goal — safety-critical release pipeline stays in Go |
+| Making visual output parsing authoritative | Non-goal — JSON manifest contracts are the authority |
+| Web UI for orchestration control | Future consideration — CLI-first for now |
+| Cross-colony orchestration | Federation deferred to v2+ |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LIFE-01 | Phase 100 | Pending |
-| LIFE-02 | Phase 100 | Pending |
-| LIFE-03 | Phase 103 | Complete |
-| WORK-01 | Phase 102 | Complete |
-| WORK-02 | Phase 102 | Complete |
-| WORK-03 | Phase 102 | Complete |
-| PLAT-01 | Phase 101 | Pending |
-| PLAT-02 | Phase 101 | Pending |
-| PLAT-03 | Phase 101 | Pending |
-| VIZ-01 | Phase 102 | Complete |
-| VIZ-02 | Phase 102 | Complete |
-| DATA-01 | Phase 103 | Complete |
-| DATA-02 | Phase 103 | Complete |
-| DATA-03 | Phase 104 | Complete |
-| REL-01 | Phase 104 | Complete |
-| REL-02 | Phase 104 | Complete |
-| TEST-01 | Phase 104 | Complete |
-| TEST-02 | Phase 104 | Complete |
-| TEST-03 | Phase 105 | Pending |
+| BOUND-01 | Phase 106 | Pending |
+| BOUND-02 | Phase 106 | Pending |
+| BOUND-03 | Phase 106 | Pending |
+| BASE-01 | Phase 107 | Pending |
+| BASE-02 | Phase 107 | Pending |
+| BASE-03 | Phase 107 | Pending |
+| TEST-01 | Phase 108 | Pending |
+| TEST-02 | Phase 108 | Pending |
+| TEST-03 | Phase 108 | Pending |
+| TEST-04 | Phase 108 | Pending |
+| TEST-05 | Phase 108 | Pending |
+| HOST-01 | Phase 109 | Pending |
+| HOST-02 | Phase 109 | Pending |
+| HOST-03 | Phase 109 | Pending |
+| HOST-04 | Phase 109 | Pending |
+| HOST-05 | Phase 109 | Pending |
+| HOST-06 | Phase 109 | Pending |
+| HOST-07 | Phase 109 | Pending |
+| SAFE-01 | Phase 110 | Pending |
+| SAFE-02 | Phase 110 | Pending |
+| SAFE-03 | Phase 110 | Pending |
+| SAFE-04 | Phase 110 | Pending |
+| SAFE-05 | Phase 110 | Pending |
+| SAFE-06 | Phase 110 | Pending |
+| MAP-01 | Phase 111 | Pending |
+| MAP-02 | Phase 111 | Pending |
+| MAP-03 | Phase 111 | Pending |
+| MAP-04 | Phase 111 | Pending |
 
 **Coverage:**
-- v1.15 requirements: 19 total
-- Mapped to phases: 19
+- v1.16 requirements: 25 total
+- Mapped to phases: 25
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-05-07*
-*Last updated: 2026-05-07 after roadmap creation*
+*Requirements defined: 2026-05-12*
+*Last updated: 2026-05-12 after milestone pivot from adaptive caste to hybrid runtime recovery*
