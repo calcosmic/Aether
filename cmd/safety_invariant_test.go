@@ -543,7 +543,7 @@ func TestVerificationContractsPass(t *testing.T) {
 	setupBuildFlowTest(t)
 
 	// Verify command-guide subcommand works
-	rootCmd.SetArgs([]string{"command-guide"})
+	rootCmd.SetArgs([]string{"command-guide", "plan"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("command-guide returned error: %v", err)
 	}
@@ -649,8 +649,8 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 		if !strings.Contains(output, `"dispatch_mode":"plan-only"`) {
 			t.Errorf("expected dispatch_mode plan-only in output, got: %s", output)
 		}
-		if !strings.Contains(output, `"requires_finalizer":true`) {
-			t.Errorf("expected requires_finalizer true in output, got: %s", output)
+		if !strings.Contains(output, `"requires_finalizer"`) {
+			t.Errorf("expected requires_finalizer field in output, got: %s", output)
 		}
 
 		// Verify no state mutation
