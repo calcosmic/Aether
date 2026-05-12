@@ -123,6 +123,30 @@ func planningDispatchContractWithTimeout(workerTimeout time.Duration) map[string
 	}.asMap()
 }
 
+func planningDispatchContractForDispatches(dispatches []codexPlanningDispatch, workerTimeout time.Duration) map[string]interface{} {
+	contract := planningDispatchContractWithTimeout(workerTimeout)
+	if len(dispatches) == 0 {
+		return contract
+	}
+
+	maxWave := 0
+	for _, dispatch := range dispatches {
+		if dispatch.Wave > maxWave {
+			maxWave = dispatch.Wave
+		}
+	}
+	if maxWave == 0 {
+		maxWave = len(dispatches)
+	}
+	contract["worker_count"] = len(dispatches)
+	contract["wave_count"] = maxWave
+	if len(dispatches) != len(planningWorkerSpecs) {
+		contract["execution_model"] = fmt.Sprintf("%d staged planning workers, scout plus route-setter with supporting castes", len(dispatches))
+		contract["dependency_behavior"] = "Real worker dispatch requires an authenticated platform dispatcher. Supporting planning castes may contribute evidence, and route-setter finalization is selected by caste identity rather than fixed array position."
+	}
+	return contract
+}
+
 func (c codexDispatchContract) asMap() map[string]interface{} {
 	return map[string]interface{}{
 		"execution_model":        c.ExecutionModel,

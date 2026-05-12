@@ -85,16 +85,22 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 		t.Fatalf("dispatch_count = %d, want 7", got)
 	}
 	if got := int(result["wave_count"].(float64)); got != 2 {
-		t.Fatalf("wave_count = %d, want 2", got)
+		t.Fatalf("wave_count = %d, want 2 task waves", got)
 	}
 	if got := int(result["parallel_waves"].(float64)); got != 0 {
 		t.Fatalf("parallel_waves = %d, want 0", got)
+	}
+	if got := int(result["execution_wave_count"].(float64)); got != 7 {
+		t.Fatalf("execution_wave_count = %d, want 7 execution waves", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
 	}
 	if waveExecution, ok := result["wave_execution"].([]interface{}); !ok || len(waveExecution) != 2 {
 		t.Fatalf("wave_execution = %#v, want 2 wave plans", result["wave_execution"])
+	}
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 7 {
+		t.Fatalf("execution_plan = %#v, want 7 execution stages", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -335,7 +341,7 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if len(executionPlan) != 7 {
 		t.Fatalf("execution_plan = %d, want 7 steps: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"design", "wave", "wave", "probe", "verification", "measurement", "resilience"}
+	wantStages := []string{"design", "wave", "wave", "probe", "measurement", "resilience", "verification"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -375,6 +381,165 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 	if state.Plan.Phases[0].Status != colony.PhaseReady {
 		t.Fatalf("phase status = %s, want ready", state.Plan.Phases[0].Status)
+	}
+}
+
+func TestBuildPlanOnlyUsesPriorPhaseEvidenceWithoutMutatingState(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Plan the next phase without committing repairs"
+	phaseOneTaskID := "1.1"
+	phaseTwoTaskID := "2.1"
+	now := time.Now().UTC()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		ColonyDepth:  "light",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Completed but stale task rows",
+					Status: colony.PhaseCompleted,
+					Tasks:  []colony.Task{{ID: &phaseOneTaskID, Goal: "Already completed externally", Status: colony.TaskPending}},
+				},
+				{
+					ID:     2,
+					Name:   "Next phase",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &phaseTwoTaskID, Goal: "Plan the next implementation", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	if err := store.SaveJSON("build/phase-1/manifest.json", codexBuildManifest{
+		Phase:        1,
+		PhaseName:    "Completed but stale task rows",
+		Goal:         goal,
+		Root:         root,
+		ColonyDepth:  "light",
+		DispatchMode: "external-task",
+		GeneratedAt:  now.Format(time.RFC3339),
+		State:        string(colony.StateBUILT),
+		Tasks:        []codexBuildTaskPlan{{ID: phaseOneTaskID, Goal: "Already completed externally", Status: colony.TaskCompleted}},
+		Dispatches: []codexBuildDispatch{
+			{Stage: "wave", Wave: 1, ExecutionWave: 11, Caste: "builder", Name: "Forge-prior", Task: "Already completed externally", Status: "completed", TaskID: phaseOneTaskID, Outputs: []string{"main.go"}},
+			{Stage: "verification", ExecutionWave: 12, Caste: "watcher", Name: "Keen-prior", Task: "Verify prior phase", Status: "completed", Outputs: []string{"main_test.go"}},
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed prior manifest: %v", err)
+	}
+	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
+		FilesModified: []string{"main.go"},
+		BuildPhase:    1,
+		Timestamp:     now.Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("failed to seed prior claims: %v", err)
+	}
+
+	statePath := filepath.Join(dataDir, "COLONY_STATE.json")
+	before, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state before plan-only: %v", err)
+	}
+
+	result, _, _, _, err := runCodexBuildPlanOnly(root, 2, nil)
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	if manifest.Phase != 2 {
+		t.Fatalf("manifest phase = %d, want 2", manifest.Phase)
+	}
+
+	after, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state after plan-only: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("build --plan-only mutated COLONY_STATE.json\nbefore:\n%s\nafter:\n%s", string(before), string(after))
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("failed to reload state: %v", err)
+	}
+	if state.Plan.Phases[0].Tasks[0].Status == colony.TaskCompleted {
+		t.Fatal("plan-only should not persist prior task repair before build-finalize")
+	}
+	if state.Plan.Phases[1].Tasks[0].Status != colony.TaskPending {
+		t.Fatalf("current task status = %s, want pending", state.Plan.Phases[1].Tasks[0].Status)
+	}
+}
+
+func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Expose the real build worker sequence"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Execution contract",
+				Description: "Run implementation before independent specialist checks and final watcher verification",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks:       []colony.Task{{ID: &taskID, Goal: "Implement the build sequence contract", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	if len(manifest.ExecutionPlan) == 0 {
+		t.Fatal("manifest execution_plan should not be empty")
+	}
+
+	gotStages := make([]string, 0, len(manifest.ExecutionPlan))
+	for _, step := range manifest.ExecutionPlan {
+		gotStages = append(gotStages, step.Stage)
+		if step.WorkerCount < 1 {
+			t.Fatalf("execution step %+v has no workers", step)
+		}
+	}
+	wantStages := []string{"wave", "probe", "measurement", "resilience", "verification"}
+	if strings.Join(gotStages, ",") != strings.Join(wantStages, ",") {
+		t.Fatalf("execution stages = %v, want %v", gotStages, wantStages)
+	}
+
+	last := manifest.ExecutionPlan[len(manifest.ExecutionPlan)-1]
+	if last.Stage != "verification" || !containsString(last.Castes, "watcher") {
+		t.Fatalf("final execution step = %+v, want watcher verification", last)
+	}
+	contract, ok := result["dispatch_contract"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dispatch_contract missing or wrong type: %T", result["dispatch_contract"])
+	}
+	if got := intValue(contract["wave_count"]); got != len(manifest.ExecutionPlan) {
+		t.Fatalf("dispatch_contract wave_count = %d, want execution plan length %d", got, len(manifest.ExecutionPlan))
+	}
+	if got := intValue(contract["worker_count"]); got != len(manifest.Dispatches) {
+		t.Fatalf("dispatch_contract worker_count = %d, want dispatch count %d", got, len(manifest.Dispatches))
 	}
 }
 
@@ -508,7 +673,7 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
-	if got, want := buildManifestCastes(manifest), []string{"builder", "probe", "watcher", "measurer", "chaos"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	if got, want := buildManifestCastes(manifest), []string{"builder", "probe", "measurer", "chaos", "watcher"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("dispatch castes = %v, want lean Queen plan %v", got, want)
 	}
 	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper"} {
@@ -753,6 +918,7 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "wrapper-evidence.txt"), []byte("external work\n"), 0644); err != nil {
 		t.Fatalf("failed to write claimed file: %v", err)
 	}
+	writeClaimFileForTest(t, root, "cmd/main.go")
 
 	dispatchResults := make([]codexExternalBuildWorkerResult, 0, len(manifest.Dispatches))
 	for _, dispatch := range manifest.Dispatches {
@@ -1803,11 +1969,12 @@ func TestResolvePheromoneSection_GroupsSignalsByType(t *testing.T) {
 	}
 	store = s
 
+	recent := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
 	pf := colony.PheromoneFile{
 		Signals: []colony.PheromoneSignal{
-			{Type: "FOCUS", Content: json.RawMessage(`{"text":"security"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: "2026-04-16T00:00:00Z"},
-			{Type: "REDIRECT", Content: json.RawMessage(`{"text":"avoid global state"}`), Active: true, Strength: floatPtr(0.9), CreatedAt: "2026-04-16T00:00:00Z"},
-			{Type: "FEEDBACK", Content: json.RawMessage(`{"text":"prefer interfaces"}`), Active: true, Strength: floatPtr(0.7), CreatedAt: "2026-04-16T00:00:00Z"},
+			{Type: "FOCUS", Content: json.RawMessage(`{"text":"security"}`), Active: true, Strength: floatPtr(0.8), CreatedAt: recent},
+			{Type: "REDIRECT", Content: json.RawMessage(`{"text":"avoid global state"}`), Active: true, Strength: floatPtr(0.9), CreatedAt: recent},
+			{Type: "FEEDBACK", Content: json.RawMessage(`{"text":"prefer interfaces"}`), Active: true, Strength: floatPtr(0.7), CreatedAt: recent},
 		},
 	}
 	if err := store.SaveJSON("pheromones.json", pf); err != nil {

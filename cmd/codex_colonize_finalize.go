@@ -22,6 +22,11 @@ type codexExternalColonizeCompletion struct {
 	Workers          []codexSurveyorDispatch `json:"workers,omitempty"`
 }
 
+const (
+	colonizeFinalizeManifestMaxAge     = 24 * time.Hour
+	colonizeFinalizeManifestFutureSkew = 5 * time.Minute
+)
+
 var colonizeFinalizeCmd = &cobra.Command{
 	Use:   "colonize-finalize",
 	Short: "Record externally spawned surveyor workers as the territory survey",
@@ -114,21 +119,27 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
 		return nil, fmt.Errorf("colonize_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
 	}
+	now := time.Now().UTC()
+	if err := validateCodexColonizeManifestFreshness(*manifest, now); err != nil {
+		return nil, err
+	}
 
 	facts, err := surveyWorkspace(root)
 	if err != nil {
 		return nil, err
 	}
+	if err := validateCodexColonizeManifestWorkspace(*manifest, facts); err != nil {
+		return nil, err
+	}
 
 	surveyDir := filepath.Join(store.BasePath(), "survey")
-	if surveyDocsExist(surveyDir) && !manifest.ForceResurvey && !manifest.ExistingSurvey {
+	if surveyDocsExist(surveyDir) && !manifest.ForceResurvey && !manifest.ExistingSurvey && surveyDocsExistedInManifest(*manifest) {
 		return nil, fmt.Errorf("existing territory survey found; rerun `aether colonize --plan-only --force-resurvey` before finalizing a replacement")
 	}
 	if err := os.MkdirAll(surveyDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create survey directory: %w", err)
 	}
 
-	now := time.Now().UTC()
 	runHandle, err := beginRuntimeSpawnRun("colonize", now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize colonize run: %w", err)
@@ -206,6 +217,95 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 	return result, nil
 }
 
+func validateCodexColonizeManifestFreshness(manifest codexColonizeManifest, now time.Time) error {
+	raw := strings.TrimSpace(manifest.GeneratedAt)
+	if raw == "" {
+		return fmt.Errorf("colonize_manifest generated_at is required for freshness validation")
+	}
+	generatedAt, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return fmt.Errorf("colonize_manifest generated_at is invalid: %w", err)
+	}
+	generatedAt = generatedAt.UTC()
+	if generatedAt.After(now.Add(colonizeFinalizeManifestFutureSkew)) {
+		return fmt.Errorf("colonize_manifest generated_at %s is too far in the future", raw)
+	}
+	if now.Sub(generatedAt) > colonizeFinalizeManifestMaxAge {
+		return fmt.Errorf("stale colonize_manifest generated_at %s exceeds max age %s; rerun `aether colonize --plan-only`", raw, colonizeFinalizeManifestMaxAge)
+	}
+	return nil
+}
+
+func validateCodexColonizeManifestWorkspace(manifest codexColonizeManifest, facts codexWorkspaceFacts) error {
+	if strings.TrimSpace(manifest.DetectedType) != "" && manifest.DetectedType != facts.DetectedType {
+		return fmt.Errorf("colonize_manifest workspace changed since generation: detected_type was %q, now %q; rerun `aether colonize --plan-only`", manifest.DetectedType, facts.DetectedType)
+	}
+	comparisons := []struct {
+		name string
+		was  []string
+		now  []string
+	}{
+		{name: "languages", was: manifest.Languages, now: facts.Languages},
+		{name: "frameworks", was: manifest.Frameworks, now: facts.Frameworks},
+		{name: "entry_points", was: manifest.EntryPoints, now: facts.EntryPoints},
+		{name: "key_dirs", was: manifest.KeyDirs, now: facts.TopLevelDirs},
+	}
+	for _, comparison := range comparisons {
+		if !sameStringSet(comparison.was, comparison.now) {
+			return fmt.Errorf("colonize_manifest workspace changed since generation: %s changed; rerun `aether colonize --plan-only`", comparison.name)
+		}
+	}
+	if manifest.Stats != nil {
+		if files, ok := intFromInterface(manifest.Stats["files"]); ok && files != facts.FileCount {
+			return fmt.Errorf("colonize_manifest workspace changed since generation: file count was %d, now %d; rerun `aether colonize --plan-only`", files, facts.FileCount)
+		}
+		if dirs, ok := intFromInterface(manifest.Stats["directories"]); ok && dirs != facts.DirectoryCount {
+			return fmt.Errorf("colonize_manifest workspace changed since generation: directory count was %d, now %d; rerun `aether colonize --plan-only`", dirs, facts.DirectoryCount)
+		}
+	}
+	return nil
+}
+
+func sameStringSet(a, b []string) bool {
+	a = uniqueSortedStrings(a)
+	b = uniqueSortedStrings(b)
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func intFromInterface(value interface{}) (int, bool) {
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case json.Number:
+		i, err := v.Int64()
+		return int(i), err == nil
+	default:
+		return 0, false
+	}
+}
+
+func surveyDocsExistedInManifest(manifest codexColonizeManifest) bool {
+	for _, name := range requiredSurveyMarkdownFiles {
+		relPath := filepath.ToSlash(filepath.Join(".aether", "data", "survey", name))
+		if snapshot, ok := manifest.Snapshots[relPath]; ok && snapshot.Existed {
+			return true
+		}
+	}
+	return false
+}
+
 func sameCleanPath(a, b string) bool {
 	aAbs, aErr := filepath.Abs(filepath.Clean(strings.TrimSpace(a)))
 	bAbs, bErr := filepath.Abs(filepath.Clean(strings.TrimSpace(b)))
@@ -257,6 +357,15 @@ func mergeExternalSurveyResults(manifest codexColonizeManifest, results []codexS
 			return nil, fmt.Errorf("surveyor %s did not complete: %s (%s)", planned.Name, status, summary)
 		}
 
+		filesCreated, err := cleanExternalSurveyClaims("files_created", result.FilesCreated, planned)
+		if err != nil {
+			return nil, err
+		}
+		filesModified, err := cleanExternalSurveyClaims("files_modified", result.FilesModified, planned)
+		if err != nil {
+			return nil, err
+		}
+
 		planned.Status = "completed"
 		if strings.TrimSpace(result.Name) != "" {
 			planned.Name = strings.TrimSpace(result.Name)
@@ -264,12 +373,12 @@ func mergeExternalSurveyResults(manifest codexColonizeManifest, results []codexS
 		planned.Summary = strings.TrimSpace(result.Summary)
 		planned.Blockers = append([]string{}, result.Blockers...)
 		planned.Duration = result.Duration
-		planned.FilesCreated = append([]string{}, result.FilesCreated...)
-		planned.FilesModified = append([]string{}, result.FilesModified...)
+		planned.FilesCreated = filesCreated
+		planned.FilesModified = filesModified
 		planned.Claimed = uniqueSortedStrings(append(append([]string{}, planned.FilesCreated...), planned.FilesModified...))
 		if len(planned.Claimed) == 0 {
 			claimed := make([]string, 0, len(planned.OutputPaths))
-			for _, outputPath := range planned.OutputPaths {
+			for _, outputPath := range declaredSurveyOutputPaths(planned) {
 				if _, err := os.Stat(filepath.Join(manifest.Root, filepath.FromSlash(outputPath))); err == nil {
 					claimed = append(claimed, outputPath)
 				}
@@ -279,6 +388,54 @@ func mergeExternalSurveyResults(manifest codexColonizeManifest, results []codexS
 		merged = append(merged, planned)
 	}
 	return merged, nil
+}
+
+func cleanExternalSurveyClaims(field string, claims []string, dispatch codexSurveyorDispatch) ([]string, error) {
+	if len(claims) == 0 {
+		return []string{}, nil
+	}
+	allowed := map[string]bool{}
+	for _, outputPath := range declaredSurveyOutputPaths(dispatch) {
+		allowed[outputPath] = true
+	}
+
+	cleaned := make([]string, 0, len(claims))
+	for _, claim := range claims {
+		path, err := cleanExternalSurveyClaimPath(claim)
+		if err != nil {
+			return nil, fmt.Errorf("surveyor %s %s %q is invalid: %w", dispatch.Name, field, claim, err)
+		}
+		if len(allowed) > 0 && !allowed[path] {
+			return nil, fmt.Errorf("surveyor %s %s claim %q is not a declared output for this dispatch", dispatch.Name, field, path)
+		}
+		cleaned = append(cleaned, path)
+	}
+	return uniqueSortedStrings(cleaned), nil
+}
+
+func cleanExternalSurveyClaimPath(claim string) (string, error) {
+	raw := strings.TrimSpace(strings.ReplaceAll(claim, "\\", "/"))
+	if raw == "" {
+		return "", fmt.Errorf("claim path is empty")
+	}
+	if filepath.IsAbs(raw) {
+		return "", fmt.Errorf("claim path must be repo-relative under .aether/data/survey/")
+	}
+	cleaned := filepath.ToSlash(filepath.Clean(raw))
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", fmt.Errorf("claim path must stay within the repository")
+	}
+	if !strings.HasPrefix(cleaned, ".aether/data/survey/") {
+		return "", fmt.Errorf("claim path must be under .aether/data/survey/")
+	}
+	return cleaned, nil
+}
+
+func declaredSurveyOutputPaths(dispatch codexSurveyorDispatch) []string {
+	if len(dispatch.Outputs) > 0 {
+		return uniqueSortedStrings(surveyOutputPaths(dispatch.Outputs))
+	}
+	return uniqueSortedStrings(dispatch.OutputPaths)
 }
 
 func recordExternalSurveySpawnTree(dispatches []codexSurveyorDispatch) error {

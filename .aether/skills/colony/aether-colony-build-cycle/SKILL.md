@@ -95,8 +95,10 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
    blocker instead of manually reconciling it as completed.
 12. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
    consumes Scout findings directly instead of re-running the survey.
-13. After each terminal result, render `aether ceremony worker-complete`.
-14. Finalize through:
+13. Call `aether spawn-log` before each planning worker and
+   `aether spawn-complete` after each terminal result.
+14. After each terminal result, render `aether ceremony worker-complete`.
+15. Finalize through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>
@@ -200,15 +202,23 @@ AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth s
 
 Use external review orchestration only when the user explicitly requested heavy
 review or the runtime asks for wrapper-spawned review workers. In that case,
-request the runtime manifest, spawn only the planned reviewers as visible live
-Task/subagent panels with caste-labelled descriptions, collect results, finalize
-through `aether continue-finalize`, then render. Save the JSON manifest envelope
-to a temporary file, apply the Guided Boundary Gate before rendering spawn
-ceremonies or spawning reviewers, and use `aether ceremony spawn-plan`, `aether
-ceremony wave-start`, and `aether ceremony worker-complete` around the live reviewers.
-Pass each reviewer brief verbatim; it contains read cache discipline. If a reviewer keeps re-reading the
-same unchanged file or artifact, mark it `blocked` with the missing context
-instead of waiting through another loop.
+request the runtime manifest:
+
+```bash
+AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy <args>
+```
+
+Save the JSON manifest envelope to a temporary file, parse
+`result.continue_manifest`, apply the Guided Boundary Gate before rendering
+spawn ceremonies or spawning reviewers, and spawn only the planned reviewers as
+visible live Task/subagent panels with caste-labelled descriptions. Use
+`aether ceremony spawn-plan`, `aether ceremony wave-start`, and
+`aether ceremony worker-complete` around the live reviewers. Call
+`aether spawn-log` before each reviewer and `aether spawn-complete` after each
+terminal result. Pass each reviewer brief verbatim; it contains read cache
+discipline. If a reviewer keeps re-reading the same unchanged file or artifact,
+mark it `blocked` with the missing context instead of waiting through another
+loop. Collect results, finalize through `aether continue-finalize`, then render.
 
 ```bash
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file <worker completion JSON>

@@ -1001,6 +1001,7 @@ func withoutLiveSpawnEntries(summary spawnActivitySummary) spawnActivitySummary 
 			filtered.BlockedCount++
 		case "failed", "timeout", "superseded":
 			filtered.FailedCount++
+		case "skipped":
 		default:
 			continue
 		}

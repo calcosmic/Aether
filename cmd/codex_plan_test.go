@@ -981,6 +981,86 @@ func TestPlanUsesWorkerWrittenArtifactsWhenProvided(t *testing.T) {
 	}
 }
 
+func TestPlanUsesScoutReportReturnedByScoutWorker(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("failed to write go.mod: %v", err)
+	}
+
+	goal := "Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	invoker := &planningScoutReportInvoker{}
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := result["dispatch_mode"]; got != "real" {
+		t.Fatalf("dispatch_mode = %v, want real", got)
+	}
+
+	if len(invoker.briefs) != 2 {
+		t.Fatalf("expected 2 planning briefs, got %d", len(invoker.briefs))
+	}
+	if !strings.Contains(invoker.briefs[1], "Scout preserved real direct-runtime finding") {
+		t.Fatalf("route-setter brief did not receive scout guidance:\n%s", invoker.briefs[1])
+	}
+
+	scoutData, err := os.ReadFile(filepath.Join(dataDir, "planning", "SCOUT.md"))
+	if err != nil {
+		t.Fatalf("read SCOUT.md: %v", err)
+	}
+	if !strings.Contains(string(scoutData), "Scout preserved real direct-runtime finding") {
+		t.Fatalf("SCOUT.md did not preserve worker scout report:\n%s", string(scoutData))
+	}
+
+	researchData, err := os.ReadFile(filepath.Join(dataDir, "phase-research", "phase-1-research.md"))
+	if err != nil {
+		t.Fatalf("read phase research: %v", err)
+	}
+	if !strings.Contains(string(researchData), "Scout preserved real direct-runtime finding") {
+		t.Fatalf("phase research did not use worker scout report:\n%s", string(researchData))
+	}
+}
+
+func TestScoutReportFromWorkerResultReadsArtifactsFallback(t *testing.T) {
+	raw := json.RawMessage(`{
+		"findings": [
+			{"area": "planning", "discovery": "artifact fallback survives", "source": "test"}
+		],
+		"gaps": [],
+		"confidence": 87,
+		"study_files": ["cmd/codex_plan.go"]
+	}`)
+	report, ok := scoutReportFromWorkerResult(&codex.WorkerResult{
+		Artifacts: map[string]json.RawMessage{"scout_report": raw},
+	})
+	if !ok {
+		t.Fatal("expected scout report from artifacts fallback")
+	}
+	if got := report.Findings[0].Discovery; got != "artifact fallback survives" {
+		t.Fatalf("discovery = %q, want artifact fallback survives", got)
+	}
+}
+
 func TestPlanUsesFreshWorkerPlanArtifactWhenTimestampDoesNotAdvance(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1516,6 +1596,44 @@ func (p *planningCaptureInvoker) IsAvailable(_ context.Context) bool {
 }
 
 func (p *planningCaptureInvoker) ValidateAgent(_ string) error {
+	return nil
+}
+
+type planningScoutReportInvoker struct {
+	briefs []string
+}
+
+func (p *planningScoutReportInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	p.briefs = append(p.briefs, config.TaskBrief)
+	result := codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "returned scout planning report",
+	}
+	if config.Caste == "scout" {
+		result.ScoutReport = json.RawMessage(`{
+			"findings": [
+				{
+					"area": "runtime planning",
+					"discovery": "Scout preserved real direct-runtime finding",
+					"source": "cmd/codex_plan.go"
+				}
+			],
+			"gaps": ["Route-Setter needs the Scout result before drafting phases"],
+			"confidence": 91,
+			"study_files": ["cmd/codex_plan.go"]
+		}`)
+	}
+	return result, nil
+}
+
+func (p *planningScoutReportInvoker) IsAvailable(_ context.Context) bool {
+	return true
+}
+
+func (p *planningScoutReportInvoker) ValidateAgent(_ string) error {
 	return nil
 }
 
@@ -2071,6 +2189,33 @@ func TestPlanningWorkerBriefIncludesLoopGuards(t *testing.T) {
 	} {
 		if !strings.Contains(routeBrief, want) {
 			t.Fatalf("route-setter planning brief missing %q:\n%s", want, routeBrief)
+		}
+	}
+}
+
+func TestPlanningWorkerBriefIncludesSurveyFindingsAsBuildableGuidance(t *testing.T) {
+	root := t.TempDir()
+	survey := codexSurveyContext{
+		SurveyDocs:   []string{"BLUEPRINT.md", "DISCIPLINES.md", "PATHOGENS.md"},
+		Languages:    []string{"Go"},
+		Frameworks:   []string{"cobra CLI"},
+		Directories:  []string{"cmd", "pkg"},
+		EntryPoints:  []string{"cmd/main.go"},
+		Dependencies: []string{"github.com/spf13/cobra"},
+		TestFiles:    []string{"cmd/codex_plan_test.go"},
+		Issues:       []string{"Codex planning currently drops Scout results"},
+	}
+
+	brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+	for _, want := range []string{
+		"## Scout Planning Guidance",
+		"Primary execution surfaces live around cmd/main.go",
+		"The implementation surface spans Go",
+		"Existing test coverage already exercises representative paths like cmd/codex_plan_test.go",
+		"Codex planning currently drops Scout results",
+	} {
+		if !strings.Contains(brief, want) {
+			t.Fatalf("route-setter planning guidance missing %q:\n%s", want, brief)
 		}
 	}
 }

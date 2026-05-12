@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -120,15 +119,6 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		budget = newRecoveryBudget(1)
 	}
 	queenDecisions := queenDecide(planGates, budget, circuitBreaker, phase.ID, string(reviewDepth))
-	queenState := QueenStateFile{
-		Phase:          phase.ID,
-		GeneratedAt:    now.Format(time.RFC3339),
-		Decisions:      queenDecisions,
-		BudgetSnapshot: budget,
-	}
-	if err := queenStateWrite(phase.ID, queenState); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to persist queen state: %v\n", err)
-	}
 
 	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, effectiveSkipWatchers)
 	plan := codexContinuePlanManifest{
@@ -178,8 +168,10 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		"verification_timeout_seconds": int(verificationTimeout / time.Second),
 		"queen_decisions":              queenDecisions,
 		"queen_state_file":             fmt.Sprintf("queen-state-%d.json", phase.ID),
+		"queen_state_persisted":        false,
+		"queen_state_persisted_by":     "continue-finalize",
 		"wrapper_contract": map[string]interface{}{
-			"source_command":               "AETHER_OUTPUT_MODE=json aether continue --plan-only --skip-watchers --light $ARGUMENTS",
+			"source_command":               continuePlanOnlySourceCommand(reviewDepth, effectiveSkipWatchers),
 			"spawn_log_required":           true,
 			"spawn_complete_required":      true,
 			"worker_timeout_seconds":       int(effectiveContinueReviewTimeout(options.WorkerTimeout) / time.Second),
@@ -194,6 +186,22 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		result["continue_manifest"] = plan
 	}
 	return result, state, phase, dispatches, nil
+}
+
+func continuePlanOnlySourceCommand(reviewDepth colony.VerificationDepth, skipWatchers bool) string {
+	parts := []string{
+		"AETHER_OUTPUT_MODE=json",
+		"aether",
+		"continue",
+		"--plan-only",
+		"--verification-depth",
+		string(colony.NormalizeVerificationDepth(string(reviewDepth))),
+	}
+	if skipWatchers {
+		parts = append(parts, "--skip-watchers")
+	}
+	parts = append(parts, "$ARGUMENTS")
+	return strings.Join(parts, " ")
 }
 
 func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manifest codexContinueManifest, now time.Time, verificationTimeout time.Duration, skipWatchers bool) codexContinueVerificationReport {

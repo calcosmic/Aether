@@ -133,6 +133,40 @@ func TestHasCompletedBuilders(t *testing.T) {
 	}
 }
 
+func TestValidateBuildProvenanceRequiresCompletedBuilderFileEvidence(t *testing.T) {
+	if err := validateBuildProvenance([]codexExternalBuildWorkerResult{
+		{
+			Name:          "Mason-67",
+			Caste:         "builder",
+			Status:        "code_written",
+			FilesModified: []string{"cmd/codex_build_finalize.go"},
+		},
+	}); err != nil {
+		t.Fatalf("expected completed builder with file evidence to pass provenance: %v", err)
+	}
+
+	if err := validateBuildProvenance([]codexExternalBuildWorkerResult{
+		{
+			Name:   "Mason-67",
+			Caste:  "builder",
+			Status: "completed",
+		},
+	}); err == nil {
+		t.Fatal("expected completed builder without file evidence to fail provenance")
+	}
+
+	if err := validateBuildProvenance([]codexExternalBuildWorkerResult{
+		{
+			Name:          "Keen-13",
+			Caste:         "watcher",
+			Status:        "completed",
+			FilesModified: []string{"cmd/codex_build_finalize_test.go"},
+		},
+	}); err == nil {
+		t.Fatal("expected watcher-only file evidence to fail build provenance")
+	}
+}
+
 func TestMergeExternalBuildResultsWithCodeWritten(t *testing.T) {
 	manifest := codexBuildManifest{
 		PlanOnly: true,
@@ -244,6 +278,10 @@ func TestMergeExternalBuildResultsRejectsAmbiguousRetrySuffixMatch(t *testing.T)
 }
 
 func TestClaimsOrAggregateWithAntName(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "src/main.go")
+	writeClaimFileForTest(t, root, "go.mod")
+	writeClaimFileForTest(t, root, "src/main_test.go")
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &codexBuildManifest{PlanOnly: true},
 		Dispatches: []codexExternalBuildWorkerResult{
@@ -261,7 +299,10 @@ func TestClaimsOrAggregateWithAntName(t *testing.T) {
 		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
 	}
 
-	claims := completion.claimsOrAggregate(t.TempDir(), 1, time.Now().UTC(), dispatches)
+	claims, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err != nil {
+		t.Fatalf("claimsOrAggregate: %v", err)
+	}
 
 	if len(claims.FilesCreated) == 0 {
 		t.Error("expected FilesCreated to be populated from ant_name worker")
@@ -271,6 +312,189 @@ func TestClaimsOrAggregateWithAntName(t *testing.T) {
 	}
 	if len(claims.FilesModified) == 0 {
 		t.Error("expected FilesModified to be populated")
+	}
+}
+
+func TestClaimsOrAggregateRejectsUnsafeClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:          "Mason-67",
+			Status:        "completed",
+			FilesModified: []string{"../outside.go"},
+		}},
+	}
+	dispatches := []codexBuildDispatch{
+		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
+	}
+
+	_, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err == nil {
+		t.Fatal("expected unsafe claim path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "escapes repository") {
+		t.Fatalf("expected repository escape error, got: %v", err)
+	}
+}
+
+func TestClaimsOrAggregateRejectsAbsoluteClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "src/generated.go")
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:         "Mason-67",
+			Status:       "completed",
+			FilesCreated: []string{filepath.Join(root, "src", "generated.go")},
+		}},
+	}
+	dispatches := []codexBuildDispatch{
+		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
+	}
+
+	_, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err == nil {
+		t.Fatal("expected absolute claim path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "repo-relative") {
+		t.Fatalf("expected repo-relative error, got: %v", err)
+	}
+}
+
+func TestClaimsOrAggregateRejectsAetherDataClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, ".aether/data/build/phase-1/outcome.md")
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:         "Mason-67",
+			Status:       "completed",
+			FilesCreated: []string{".aether/data/build/phase-1/outcome.md"},
+		}},
+	}
+	dispatches := []codexBuildDispatch{
+		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
+	}
+
+	_, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err == nil {
+		t.Fatal("expected .aether/data claim path to be rejected")
+	}
+	if !strings.Contains(err.Error(), ".aether/data") {
+		t.Fatalf("expected .aether/data error, got: %v", err)
+	}
+}
+
+func TestClaimsOrAggregateRejectsMissingClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:          "Mason-67",
+			Status:        "completed",
+			FilesModified: []string{"src/missing.go"},
+		}},
+	}
+	dispatches := []codexBuildDispatch{
+		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
+	}
+
+	_, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err == nil {
+		t.Fatal("expected missing claim path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("expected missing path error, got: %v", err)
+	}
+}
+
+func TestClaimsOrAggregateRejectsAmbiguousClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "src/target.go")
+	writeClaimFileForTest(t, root, "pkg/target.go")
+	gitInitForTest(t, root)
+
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:          "Mason-67",
+			Status:        "completed",
+			FilesModified: []string{"target.go"},
+		}},
+	}
+	dispatches := []codexBuildDispatch{
+		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
+	}
+
+	_, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err == nil {
+		t.Fatal("expected ambiguous claim path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("expected ambiguous path error, got: %v", err)
+	}
+}
+
+func TestClaimsOrAggregateRejectsSymlinkClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "real/target.go")
+	linkPath := filepath.Join(root, "src", "linked.go")
+	if err := os.MkdirAll(filepath.Dir(linkPath), 0o755); err != nil {
+		t.Fatalf("mkdir symlink parent: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "real", "target.go"), linkPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:          "Mason-67",
+			Status:        "completed",
+			FilesModified: []string{"src/linked.go"},
+		}},
+	}
+	dispatches := []codexBuildDispatch{
+		{Name: "Mason-67", Caste: "builder", Status: "completed", TaskID: "1.1"},
+	}
+
+	_, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err == nil {
+		t.Fatal("expected symlink claim path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink path error, got: %v", err)
+	}
+}
+
+func TestClaimsOrAggregateNormalizesValidRepoRelativeClaimPaths(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "src/generated.go")
+	writeClaimFileForTest(t, root, "src/main.go")
+	writeClaimFileForTest(t, root, "src/main_test.go")
+	completion := codexExternalBuildCompletion{
+		Claims: &codexBuildClaims{
+			FilesCreated:  []string{"src/generated.go"},
+			FilesModified: []string{"src/main.go"},
+			TestsWritten:  []string{"src/main_test.go"},
+			TaskClaims: []codexBuildTaskClaim{{
+				TaskID:        "1.1",
+				FilesCreated:  []string{"src/generated.go"},
+				FilesModified: []string{"src/main.go"},
+				TestsWritten:  []string{"src/main_test.go"},
+			}},
+		},
+	}
+
+	claims, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), nil)
+	if err != nil {
+		t.Fatalf("claimsOrAggregate: %v", err)
+	}
+	if got, want := strings.Join(claims.FilesCreated, ","), "src/generated.go"; got != want {
+		t.Fatalf("FilesCreated = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(claims.FilesModified, ","), "src/main.go"; got != want {
+		t.Fatalf("FilesModified = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(claims.TestsWritten, ","), "src/main_test.go"; got != want {
+		t.Fatalf("TestsWritten = %q, want %q", got, want)
+	}
+	if len(claims.TaskClaims) != 1 || strings.Join(claims.TaskClaims[0].FilesCreated, ",") != "src/generated.go" {
+		t.Fatalf("TaskClaims not normalized: %#v", claims.TaskClaims)
 	}
 }
 
@@ -716,5 +940,16 @@ func gitAddForTest(t *testing.T, dir string) {
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Skipf("git add failed: %v", err)
+	}
+}
+
+func writeClaimFileForTest(t *testing.T, root, rel string) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", rel, err)
+	}
+	if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", rel, err)
 	}
 }

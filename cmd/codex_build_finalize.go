@@ -197,6 +197,9 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
+	if err := validateExternalWorkerResultClaimPaths(root, completion.workerResults()); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	dispatches, err := mergeExternalBuildResults(*manifest, completion.workerResults())
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -227,7 +230,10 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", completedAt.Format(time.RFC3339), phaseNum),
 	)
 
-	claims := completion.claimsOrAggregate(root, phaseNum, startedAt, dispatches)
+	claims, err := completion.claimsOrAggregate(root, phaseNum, startedAt, dispatches)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	if err := store.SaveJSON(claimsRel, claims); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build claims: %w", err)
 	}
@@ -498,15 +504,27 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 		}
 		usedResults[resultName] = true
 		status := normalizeExternalBuildStatus(result.Status)
+		filesCreated, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_created", resultName), result.FilesCreated)
+		if err != nil {
+			return err
+		}
+		filesModified, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_modified", resultName), result.FilesModified)
+		if err != nil {
+			return err
+		}
+		testsWritten, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s tests_written", resultName), result.TestsWritten)
+		if err != nil {
+			return err
+		}
 		workerResult := &codex.WorkerResult{
 			WorkerName:    dispatch.Name,
 			Caste:         dispatch.Caste,
 			TaskID:        dispatch.TaskID,
 			Status:        status,
 			Summary:       result.Summary,
-			FilesCreated:  normalizeClaimPathsToRoot(root, result.FilesCreated),
-			FilesModified: normalizeClaimPathsToRoot(root, result.FilesModified),
-			TestsWritten:  normalizeClaimPathsToRoot(root, result.TestsWritten),
+			FilesCreated:  filesCreated,
+			FilesModified: filesModified,
+			TestsWritten:  testsWritten,
 			Blockers:      result.Blockers,
 			Handoff:       codex.NormalizeWorkerHandoff(root, result.Handoff),
 		}
@@ -579,20 +597,17 @@ func parseManifestGeneratedAt(manifest codexBuildManifest) time.Time {
 	return time.Now().UTC()
 }
 
-func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum int, startedAt time.Time, dispatches []codexBuildDispatch) codexBuildClaims {
+func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum int, startedAt time.Time, dispatches []codexBuildDispatch) (codexBuildClaims, error) {
 	if c.Claims != nil {
 		claims := *c.Claims
 		claims.BuildPhase = phaseNum
 		if strings.TrimSpace(claims.Timestamp) == "" {
 			claims.Timestamp = startedAt.Format(time.RFC3339)
 		}
-		claims.FilesCreated = uniqueSortedStrings(claims.FilesCreated)
-		claims.FilesModified = uniqueSortedStrings(claims.FilesModified)
-		claims.TestsWritten = uniqueSortedStrings(claims.TestsWritten)
-		claims.FilesCreated = normalizeClaimPathsToRoot(root, claims.FilesCreated)
-		claims.FilesModified = normalizeClaimPathsToRoot(root, claims.FilesModified)
-		claims.TestsWritten = normalizeClaimPathsToRoot(root, claims.TestsWritten)
-		return claims
+		if err := validateAndNormalizeBuildClaims(root, "completion claims", &claims); err != nil {
+			return codexBuildClaims{}, err
+		}
+		return claims, nil
 	}
 
 	byName := map[string]codexExternalBuildWorkerResult{}
@@ -631,15 +646,15 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 	claims.FilesCreated = uniqueSortedStrings(claims.FilesCreated)
 	claims.FilesModified = uniqueSortedStrings(claims.FilesModified)
 	claims.TestsWritten = uniqueSortedStrings(claims.TestsWritten)
-	claims.FilesCreated = normalizeClaimPathsToRoot(root, claims.FilesCreated)
-	claims.FilesModified = normalizeClaimPathsToRoot(root, claims.FilesModified)
-	claims.TestsWritten = normalizeClaimPathsToRoot(root, claims.TestsWritten)
 
 	// Filesystem fallback: if claims are empty but builders completed, discover files via git.
 	if len(claims.FilesCreated) == 0 && len(claims.FilesModified) == 0 && hasCompletedBuilders(dispatches) {
 		created, modified := discoverChangedFilesFromGit()
 		claims.FilesCreated = created
 		claims.FilesModified = modified
+	}
+	if err := validateAndNormalizeBuildClaims(root, "aggregated worker claims", &claims); err != nil {
+		return codexBuildClaims{}, err
 	}
 
 	if len(taskClaims) > 0 {
@@ -653,13 +668,72 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 			entry.FilesCreated = uniqueSortedStrings(entry.FilesCreated)
 			entry.FilesModified = uniqueSortedStrings(entry.FilesModified)
 			entry.TestsWritten = uniqueSortedStrings(entry.TestsWritten)
-			entry.FilesCreated = normalizeClaimPathsToRoot(root, entry.FilesCreated)
-			entry.FilesModified = normalizeClaimPathsToRoot(root, entry.FilesModified)
-			entry.TestsWritten = normalizeClaimPathsToRoot(root, entry.TestsWritten)
+			if err := validateAndNormalizeBuildTaskClaim(root, "aggregated worker task claims", entry); err != nil {
+				return codexBuildClaims{}, err
+			}
 			claims.TaskClaims = append(claims.TaskClaims, *entry)
 		}
 	}
-	return claims
+	return claims, nil
+}
+
+func validateExternalWorkerResultClaimPaths(root string, results []codexExternalBuildWorkerResult) error {
+	for _, result := range results {
+		name := result.effectiveName()
+		if name == "" {
+			name = "unnamed"
+		}
+		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s outputs", name), result.Outputs); err != nil {
+			return err
+		}
+		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_created", name), result.FilesCreated); err != nil {
+			return err
+		}
+		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s files_modified", name), result.FilesModified); err != nil {
+			return err
+		}
+		if _, err := validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("worker %s tests_written", name), result.TestsWritten); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAndNormalizeBuildClaims(root, owner string, claims *codexBuildClaims) error {
+	var err error
+	if claims.FilesCreated, err = validateAndNormalizeClaimPathsToRoot(root, owner+" files_created", claims.FilesCreated); err != nil {
+		return err
+	}
+	if claims.FilesModified, err = validateAndNormalizeClaimPathsToRoot(root, owner+" files_modified", claims.FilesModified); err != nil {
+		return err
+	}
+	if claims.TestsWritten, err = validateAndNormalizeClaimPathsToRoot(root, owner+" tests_written", claims.TestsWritten); err != nil {
+		return err
+	}
+	for i := range claims.TaskClaims {
+		if err := validateAndNormalizeBuildTaskClaim(root, owner, &claims.TaskClaims[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAndNormalizeBuildTaskClaim(root, owner string, claim *codexBuildTaskClaim) error {
+	taskLabel := strings.TrimSpace(claim.TaskID)
+	if taskLabel == "" {
+		taskLabel = "unassigned"
+	}
+	var err error
+	if claim.FilesCreated, err = validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("%s task %s files_created", owner, taskLabel), claim.FilesCreated); err != nil {
+		return err
+	}
+	if claim.FilesModified, err = validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("%s task %s files_modified", owner, taskLabel), claim.FilesModified); err != nil {
+		return err
+	}
+	if claim.TestsWritten, err = validateAndNormalizeClaimPathsToRoot(root, fmt.Sprintf("%s task %s tests_written", owner, taskLabel), claim.TestsWritten); err != nil {
+		return err
+	}
+	return nil
 }
 
 func recordExternalBuildSpawnTree(dispatches []codexBuildDispatch) error {
@@ -715,6 +789,156 @@ func parseGitNameOutput(out []byte) []string {
 		result = append(result, line)
 	}
 	return uniqueSortedStrings(result)
+}
+
+func validateAndNormalizeClaimPathsToRoot(root, field string, paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(paths))
+	for _, path := range uniqueSortedStrings(paths) {
+		rel, err := validateAndNormalizeClaimPathToRoot(root, field, path)
+		if err != nil {
+			return nil, err
+		}
+		if rel != "" {
+			normalized = append(normalized, rel)
+		}
+	}
+	return uniqueSortedStrings(normalized), nil
+}
+
+func validateAndNormalizeClaimPathToRoot(root, field, claimed string) (string, error) {
+	claimed = strings.TrimSpace(claimed)
+	if claimed == "" {
+		return "", nil
+	}
+	if strings.ContainsRune(claimed, 0) {
+		return "", fmt.Errorf("invalid %s claim %q: path contains a null byte", field, claimed)
+	}
+	policyClaim := filepath.ToSlash(filepath.Clean(filepath.FromSlash(strings.ReplaceAll(claimed, "\\", "/"))))
+	if filepath.IsAbs(claimed) || filepath.IsAbs(filepath.FromSlash(policyClaim)) || hasWindowsVolumePrefix(policyClaim) {
+		return "", fmt.Errorf("invalid %s claim %q: path must be repo-relative", field, claimed)
+	}
+	if policyClaim == ".aether/data" || strings.HasPrefix(policyClaim, ".aether/data/") {
+		return "", fmt.Errorf("invalid %s claim %q: path must not be under .aether/data", field, claimed)
+	}
+	if strings.TrimSpace(root) == "" {
+		return "", fmt.Errorf("invalid %s claim %q: repository root is unavailable", field, claimed)
+	}
+
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("invalid %s claim %q: resolve repository root: %w", field, claimed, err)
+	}
+	rootEval, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		rootEval = rootAbs
+	}
+
+	candidateAbs, directCandidate, err := candidateClaimAbsolutePath(rootAbs, claimed)
+	if err != nil {
+		return "", fmt.Errorf("invalid %s claim %q: %w", field, claimed, err)
+	}
+	if rel, ok, err := normalizeExistingClaimPath(rootEval, candidateAbs, field, claimed); ok || err != nil {
+		return rel, err
+	}
+
+	if directCandidate {
+		if rel, ok, err := findUnambiguousRepoRelativeClaimPath(rootAbs, rootEval, field, claimed); ok || err != nil {
+			return rel, err
+		}
+	}
+	return "", fmt.Errorf("invalid %s claim %q: path does not exist inside repository", field, claimed)
+}
+
+func hasWindowsVolumePrefix(path string) bool {
+	if len(path) < 2 || path[1] != ':' {
+		return false
+	}
+	ch := path[0]
+	return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+}
+
+func candidateClaimAbsolutePath(rootAbs, claimed string) (string, bool, error) {
+	claimedSlash := filepath.ToSlash(claimed)
+	if filepath.IsAbs(claimed) {
+		return filepath.Clean(claimed), false, nil
+	}
+	cleanRel := filepath.Clean(filepath.FromSlash(claimedSlash))
+	if cleanRel == "." {
+		return "", false, fmt.Errorf("path is empty")
+	}
+	if cleanRel == ".." || strings.HasPrefix(cleanRel, ".."+string(filepath.Separator)) {
+		return "", false, fmt.Errorf("path escapes repository")
+	}
+	return filepath.Join(rootAbs, cleanRel), true, nil
+}
+
+func normalizeExistingClaimPath(rootEval, candidateAbs, field, claimed string) (string, bool, error) {
+	info, err := os.Lstat(candidateAbs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("invalid %s claim %q: inspect path: %w", field, claimed, err)
+	}
+	if info.IsDir() {
+		return "", true, fmt.Errorf("invalid %s claim %q: path is a directory", field, claimed)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", true, fmt.Errorf("invalid %s claim %q: path is a symlink", field, claimed)
+	}
+	resolved, err := filepath.EvalSymlinks(candidateAbs)
+	if err != nil {
+		return "", true, fmt.Errorf("invalid %s claim %q: resolve path: %w", field, claimed, err)
+	}
+	rel, err := repoRelativeClaimPath(rootEval, resolved)
+	if err != nil {
+		return "", true, fmt.Errorf("invalid %s claim %q: %w", field, claimed, err)
+	}
+	return rel, true, nil
+}
+
+func repoRelativeClaimPath(rootEval, resolved string) (string, error) {
+	rel, err := filepath.Rel(rootEval, resolved)
+	if err != nil {
+		return "", fmt.Errorf("path is not relative to repository: %w", err)
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("path is outside repository")
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+func findUnambiguousRepoRelativeClaimPath(rootAbs, rootEval, field, claimed string) (string, bool, error) {
+	cleanClaim := filepath.ToSlash(filepath.Clean(filepath.FromSlash(claimed)))
+	base := filepath.Base(cleanClaim)
+	if base == "." || base == string(filepath.Separator) {
+		return "", false, nil
+	}
+	out, err := exec.Command("git", "-C", rootAbs, "ls-files", "--cached", "--others", "--exclude-standard", "--", "*"+base).Output()
+	if err != nil {
+		return "", false, nil
+	}
+	candidates := parseGitNameOutput(out)
+	matches := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate = filepath.ToSlash(candidate)
+		if candidate == cleanClaim || strings.HasSuffix(candidate, "/"+cleanClaim) || cleanClaim == base {
+			matches = append(matches, candidate)
+		}
+	}
+	matches = uniqueSortedStrings(matches)
+	switch len(matches) {
+	case 0:
+		return "", false, nil
+	case 1:
+		rel, ok, err := normalizeExistingClaimPath(rootEval, filepath.Join(rootAbs, filepath.FromSlash(matches[0])), field, claimed)
+		return rel, ok, err
+	default:
+		return "", true, fmt.Errorf("invalid %s claim %q: ambiguous repository path (%s)", field, claimed, strings.Join(matches, ", "))
+	}
 }
 
 // normalizeClaimPathsToRoot resolves subdirectory-relative paths to repo-root-relative paths.

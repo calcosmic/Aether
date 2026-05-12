@@ -359,6 +359,268 @@ func TestColonizeFinalizeRecordsExternalSurveyors(t *testing.T) {
 	}
 }
 
+func TestColonizeFinalizeRejectsOutOfScopeSurveyClaim(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-colonize-claim-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goal := "Survey with external host workers"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	result, err := runCodexColonizePlanOnly(root, codexColonizeOptions{PlanOnly: true})
+	if err != nil {
+		t.Fatalf("runCodexColonizePlanOnly: %v", err)
+	}
+	manifest := result["colonize_manifest"].(codexColonizeManifest)
+	dispatches := make([]codexSurveyorDispatch, 0, len(manifest.Dispatches))
+	for i, dispatch := range manifest.Dispatches {
+		dispatch.Status = "completed"
+		dispatch.Summary = "survey complete"
+		if i == 0 {
+			dispatch.FilesCreated = []string{"cmd/main.go"}
+		}
+		dispatches = append(dispatches, dispatch)
+	}
+
+	_, err = runCodexColonizeFinalize(root, codexExternalColonizeCompletion{
+		ColonizeManifest: &manifest,
+		Dispatches:       dispatches,
+	})
+	if err == nil {
+		t.Fatal("expected colonize-finalize to reject out-of-scope file claim")
+	}
+	if !strings.Contains(err.Error(), "files_created") || !strings.Contains(err.Error(), ".aether/data/survey") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestColonizeFinalizeAllowsFirstTimeWorkerWrittenSurveyArtifacts(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-colonize-worker-doc-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goal := "Survey with worker-authored docs"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	result, err := runCodexColonizePlanOnly(root, codexColonizeOptions{PlanOnly: true})
+	if err != nil {
+		t.Fatalf("runCodexColonizePlanOnly: %v", err)
+	}
+	manifest := result["colonize_manifest"].(codexColonizeManifest)
+	targetRel := filepath.ToSlash(filepath.Join(".aether", "data", "survey", "PROVISIONS.md"))
+	targetPath := filepath.Join(root, filepath.FromSlash(targetRel))
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		t.Fatalf("mkdir survey dir: %v", err)
+	}
+	if err := os.WriteFile(targetPath, []byte("# worker-authored provisions\n"), 0644); err != nil {
+		t.Fatalf("write worker artifact: %v", err)
+	}
+
+	dispatches := make([]codexSurveyorDispatch, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		dispatch.Status = "completed"
+		dispatch.Summary = "survey complete"
+		if stringSliceContains(dispatch.OutputPaths, targetRel) {
+			dispatch.FilesCreated = []string{targetRel}
+		}
+		dispatches = append(dispatches, dispatch)
+	}
+
+	finalizeResult, err := runCodexColonizeFinalize(root, codexExternalColonizeCompletion{
+		ColonizeManifest: &manifest,
+		Dispatches:       dispatches,
+	})
+	if err != nil {
+		t.Fatalf("colonize-finalize rejected first-time worker artifact: %v", err)
+	}
+	if got := finalizeResult["artifact_source"]; got != "external-task" {
+		t.Fatalf("artifact_source = %v, want external-task", got)
+	}
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("read preserved worker artifact: %v", err)
+	}
+	if string(data) != "# worker-authored provisions\n" {
+		t.Fatalf("worker artifact was not preserved:\n%s", string(data))
+	}
+}
+
+func TestColonizeFinalizeRejectsSymlinkSurveyClaim(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-colonize-symlink-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goal := "Reject symlink survey claims"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	result, err := runCodexColonizePlanOnly(root, codexColonizeOptions{PlanOnly: true})
+	if err != nil {
+		t.Fatalf("runCodexColonizePlanOnly: %v", err)
+	}
+	manifest := result["colonize_manifest"].(codexColonizeManifest)
+	targetRel := filepath.ToSlash(filepath.Join(".aether", "data", "survey", "PROVISIONS.md"))
+	targetPath := filepath.Join(root, filepath.FromSlash(targetRel))
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		t.Fatalf("mkdir survey dir: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("# outside\n"), 0644); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+	if err := os.Symlink(outside, targetPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	dispatches := make([]codexSurveyorDispatch, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		dispatch.Status = "completed"
+		dispatch.Summary = "survey complete"
+		if stringSliceContains(dispatch.OutputPaths, targetRel) {
+			dispatch.FilesCreated = []string{targetRel}
+		}
+		dispatches = append(dispatches, dispatch)
+	}
+
+	_, err = runCodexColonizeFinalize(root, codexExternalColonizeCompletion{
+		ColonizeManifest: &manifest,
+		Dispatches:       dispatches,
+	})
+	if err == nil {
+		t.Fatal("expected colonize-finalize to reject symlink survey claim")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestColonizeFinalizeRejectsStaleManifest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-colonize-stale-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goal := "Survey with fresh manifest"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	result, err := runCodexColonizePlanOnly(root, codexColonizeOptions{PlanOnly: true})
+	if err != nil {
+		t.Fatalf("runCodexColonizePlanOnly: %v", err)
+	}
+	manifest := result["colonize_manifest"].(codexColonizeManifest)
+	manifest.GeneratedAt = time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339)
+	dispatches := make([]codexSurveyorDispatch, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		dispatch.Status = "completed"
+		dispatch.Summary = "survey complete"
+		dispatches = append(dispatches, dispatch)
+	}
+
+	_, err = runCodexColonizeFinalize(root, codexExternalColonizeCompletion{
+		ColonizeManifest: &manifest,
+		Dispatches:       dispatches,
+	})
+	if err == nil {
+		t.Fatal("expected colonize-finalize to reject stale manifest")
+	}
+	if !strings.Contains(err.Error(), "stale") || !strings.Contains(err.Error(), "generated_at") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestColonizeFinalizeRejectsWorkspaceDriftAfterManifest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-colonize-drift-test\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	goal := "Reject stale workspace manifest"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	result, err := runCodexColonizePlanOnly(root, codexColonizeOptions{PlanOnly: true})
+	if err != nil {
+		t.Fatalf("runCodexColonizePlanOnly: %v", err)
+	}
+	manifest := result["colonize_manifest"].(codexColonizeManifest)
+	if err := os.WriteFile(filepath.Join(root, "new_file.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write new file: %v", err)
+	}
+	dispatches := make([]codexSurveyorDispatch, 0, len(manifest.Dispatches))
+	for _, dispatch := range manifest.Dispatches {
+		dispatch.Status = "completed"
+		dispatch.Summary = "survey complete"
+		dispatches = append(dispatches, dispatch)
+	}
+
+	_, err = runCodexColonizeFinalize(root, codexExternalColonizeCompletion{
+		ColonizeManifest: &manifest,
+		Dispatches:       dispatches,
+	})
+	if err == nil {
+		t.Fatal("expected colonize-finalize to reject workspace drift")
+	}
+	if !strings.Contains(err.Error(), "workspace changed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestSurveyDispatchContractWithTimeoutOverride(t *testing.T) {
 	contract := surveyDispatchContractWithTimeout(6 * time.Minute)
 	if got, ok := contract["worker_timeout_seconds"].(int); !ok || got != 360 {
@@ -634,6 +896,285 @@ func TestPlannedSurveyorsUseQueenSelectedConcreteCastes(t *testing.T) {
 	}
 	if len(dispatches) != len(queenCastes) {
 		t.Fatalf("planned surveyors = %d, Queen-selected castes = %d: %+v", len(dispatches), len(queenCastes), dispatches)
+	}
+}
+
+func TestConvertDispatchResultsMatchesShuffledResultsByTaskID(t *testing.T) {
+	root := t.TempDir()
+	specs := []surveyorSpec{
+		{Caste: "surveyor-provisions", AgentSuffix: "provisions", Task: "Map provisions", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}},
+		{Caste: "surveyor-nest", AgentSuffix: "nest", Task: "Map nest", Outputs: []string{"BLUEPRINT.md", "CHAMBERS.md"}},
+	}
+	results := []codex.DispatchResult{
+		{
+			WorkerName: "Nest-Worker",
+			Status:     "completed",
+			WorkerResult: &codex.WorkerResult{
+				WorkerName:   "Nest-Worker",
+				Caste:        "surveyor-nest",
+				TaskID:       "survey-1",
+				Status:       "completed",
+				Summary:      "nest survey",
+				FilesCreated: []string{filepath.ToSlash(filepath.Join(".aether", "data", "survey", "BLUEPRINT.md"))},
+			},
+		},
+		{
+			WorkerName: "Provision-Worker",
+			Status:     "completed",
+			WorkerResult: &codex.WorkerResult{
+				WorkerName:   "Provision-Worker",
+				Caste:        "surveyor-provisions",
+				TaskID:       "survey-0",
+				Status:       "completed",
+				Summary:      "provisions survey",
+				FilesCreated: []string{filepath.ToSlash(filepath.Join(".aether", "data", "survey", "PROVISIONS.md"))},
+			},
+		},
+	}
+
+	got := convertDispatchResults(results, specs, root)
+
+	if got[0].Name != "Provision-Worker" || got[0].Summary != "provisions survey" {
+		t.Fatalf("provisions dispatch was not matched by task_id: %+v", got[0])
+	}
+	if got[1].Name != "Nest-Worker" || got[1].Summary != "nest survey" {
+		t.Fatalf("nest dispatch was not matched by task_id: %+v", got[1])
+	}
+}
+
+func TestConvertDispatchResultsFallsBackForUnidentifiedLegacyResult(t *testing.T) {
+	root := t.TempDir()
+	specs := []surveyorSpec{
+		{Caste: "surveyor-provisions", AgentSuffix: "provisions", Task: "Map provisions", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}},
+	}
+	results := []codex.DispatchResult{
+		{
+			Status: "completed",
+			WorkerResult: &codex.WorkerResult{
+				Status:  "completed",
+				Summary: "legacy survey result",
+			},
+		},
+	}
+
+	got := convertDispatchResults(results, specs, root)
+
+	if len(got) != 1 {
+		t.Fatalf("expected one dispatch, got %d", len(got))
+	}
+	if got[0].Summary != "legacy survey result" {
+		t.Fatalf("legacy result was not applied: %+v", got[0])
+	}
+	if got[0].Name == "" {
+		t.Fatal("dispatch name should remain populated")
+	}
+}
+
+func TestConvertDispatchResultsIgnoresMismatchedIdentifiedResult(t *testing.T) {
+	root := t.TempDir()
+	specs := []surveyorSpec{
+		{Caste: "surveyor-provisions", AgentSuffix: "provisions", Task: "Map provisions", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}},
+	}
+	results := []codex.DispatchResult{
+		{
+			WorkerName: "Unrelated-Worker",
+			Status:     "completed",
+			WorkerResult: &codex.WorkerResult{
+				WorkerName: "Unrelated-Worker",
+				Caste:      "surveyor-nest",
+				TaskID:     "survey-99",
+				Status:     "completed",
+				Summary:    "wrong survey result",
+			},
+		},
+	}
+
+	got := convertDispatchResults(results, specs, root)
+
+	if got[0].Status != "spawned" {
+		t.Fatalf("mismatched identified result should not be applied: %+v", got[0])
+	}
+	if got[0].Summary != "" {
+		t.Fatalf("mismatched identified result summary leaked into dispatch: %+v", got[0])
+	}
+}
+
+func TestConvertDispatchResultsMatchesByCasteWhenTaskIDMissing(t *testing.T) {
+	root := t.TempDir()
+	specs := []surveyorSpec{
+		{Caste: "surveyor-provisions", AgentSuffix: "provisions", Task: "Map provisions", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}},
+	}
+	results := []codex.DispatchResult{
+		{
+			Status: "completed",
+			WorkerResult: &codex.WorkerResult{
+				Caste:   "surveyor-provisions",
+				Status:  "completed",
+				Summary: "caste matched survey result",
+			},
+		},
+	}
+
+	got := convertDispatchResults(results, specs, root)
+
+	if got[0].Summary != "caste matched survey result" {
+		t.Fatalf("result was not matched by caste: %+v", got[0])
+	}
+}
+
+func TestWriteSurveyArtifactsMapsDispatchesByDeclaredOutputs(t *testing.T) {
+	root := t.TempDir()
+	surveyDir := filepath.Join(root, ".aether", "data", "survey")
+	if err := os.MkdirAll(surveyDir, 0755); err != nil {
+		t.Fatalf("mkdir survey dir: %v", err)
+	}
+	facts := codexWorkspaceFacts{Root: root, DetectedType: "go"}
+	dispatches := []codexSurveyorDispatch{
+		{Caste: "surveyor-pathogens", Name: "Pathogen-Worker", Outputs: []string{"PATHOGENS.md"}, Status: "completed"},
+		{Caste: "surveyor-disciplines", Name: "Discipline-Worker", Outputs: []string{"DISCIPLINES.md", "SENTINEL-PROTOCOLS.md"}, Status: "completed"},
+		{Caste: "surveyor-nest", Name: "Nest-Worker", Outputs: []string{"BLUEPRINT.md", "CHAMBERS.md"}, Status: "completed"},
+		{Caste: "surveyor-provisions", Name: "Provision-Worker", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}, Status: "completed"},
+	}
+
+	if _, _, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, nil); err != nil {
+		t.Fatalf("writeSurveyArtifacts returned error: %v", err)
+	}
+
+	provisions, err := os.ReadFile(filepath.Join(surveyDir, "PROVISIONS.md"))
+	if err != nil {
+		t.Fatalf("read PROVISIONS.md: %v", err)
+	}
+	if !strings.Contains(string(provisions), "- Surveyor: Provision-Worker") {
+		t.Fatalf("PROVISIONS.md used wrong dispatch:\n%s", string(provisions))
+	}
+
+	pathogens, err := os.ReadFile(filepath.Join(surveyDir, "PATHOGENS.md"))
+	if err != nil {
+		t.Fatalf("read PATHOGENS.md: %v", err)
+	}
+	if !strings.Contains(string(pathogens), "- Surveyor: Pathogen-Worker") {
+		t.Fatalf("PATHOGENS.md used wrong dispatch:\n%s", string(pathogens))
+	}
+}
+
+func TestWriteSurveyArtifactsPreservesClaimedWorkerFile(t *testing.T) {
+	root := t.TempDir()
+	surveyDir := filepath.Join(root, ".aether", "data", "survey")
+	if err := os.MkdirAll(surveyDir, 0755); err != nil {
+		t.Fatalf("mkdir survey dir: %v", err)
+	}
+	targetRel := filepath.ToSlash(filepath.Join(".aether", "data", "survey", "PROVISIONS.md"))
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(targetRel)), []byte("# worker provisions\n"), 0644); err != nil {
+		t.Fatalf("write worker artifact: %v", err)
+	}
+	facts := codexWorkspaceFacts{Root: root, DetectedType: "go"}
+	dispatches := []codexSurveyorDispatch{
+		{Caste: "surveyor-provisions", Name: "Provision-Worker", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}, Status: "completed", Claimed: []string{targetRel}},
+		{Caste: "surveyor-nest", Name: "Nest-Worker", Outputs: []string{"BLUEPRINT.md", "CHAMBERS.md"}, Status: "completed"},
+		{Caste: "surveyor-disciplines", Name: "Discipline-Worker", Outputs: []string{"DISCIPLINES.md", "SENTINEL-PROTOCOLS.md"}, Status: "completed"},
+		{Caste: "surveyor-pathogens", Name: "Pathogen-Worker", Outputs: []string{"PATHOGENS.md"}, Status: "completed"},
+	}
+
+	_, preserved, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, nil)
+	if err != nil {
+		t.Fatalf("writeSurveyArtifacts returned error: %v", err)
+	}
+	if preserved != 1 {
+		t.Fatalf("preserved = %d, want 1", preserved)
+	}
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(targetRel)))
+	if err != nil {
+		t.Fatalf("read preserved artifact: %v", err)
+	}
+	if string(data) != "# worker provisions\n" {
+		t.Fatalf("worker artifact was overwritten:\n%s", string(data))
+	}
+}
+
+func TestWriteSurveyArtifactsRejectsMissingRequiredSurveyOutput(t *testing.T) {
+	root := t.TempDir()
+	surveyDir := filepath.Join(root, ".aether", "data", "survey")
+	if err := os.MkdirAll(surveyDir, 0755); err != nil {
+		t.Fatalf("mkdir survey dir: %v", err)
+	}
+	facts := codexWorkspaceFacts{Root: root, DetectedType: "go"}
+	dispatches := []codexSurveyorDispatch{
+		{Caste: "surveyor-provisions", Name: "Provision-Worker", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}, Status: "completed"},
+		{Caste: "surveyor-nest", Name: "Nest-Worker", Outputs: []string{"BLUEPRINT.md", "CHAMBERS.md"}, Status: "completed"},
+		{Caste: "surveyor-disciplines", Name: "Discipline-Worker", Outputs: []string{"DISCIPLINES.md", "SENTINEL-PROTOCOLS.md"}, Status: "completed"},
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("writeSurveyArtifacts panicked; want missing-output error: %v", recovered)
+		}
+	}()
+
+	_, _, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, nil)
+	if err == nil {
+		t.Fatal("expected missing required survey output error")
+	}
+	if !strings.Contains(err.Error(), "PATHOGENS.md") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExternalSurveyClaimValidationNormalizesAndRejectsBadPaths(t *testing.T) {
+	dispatch := codexSurveyorDispatch{
+		Name:    "Provision-Worker",
+		Outputs: []string{"PROVISIONS.md", "TRAILS.md"},
+	}
+
+	cleaned, err := cleanExternalSurveyClaims("files_modified", []string{
+		`.aether\data\survey\PROVISIONS.md`,
+		".aether/data/survey/PROVISIONS.md",
+	}, dispatch)
+	if err != nil {
+		t.Fatalf("cleanExternalSurveyClaims returned error: %v", err)
+	}
+	if len(cleaned) != 1 || cleaned[0] != ".aether/data/survey/PROVISIONS.md" {
+		t.Fatalf("cleaned claims = %v", cleaned)
+	}
+
+	badClaims := []string{
+		"",
+		"/tmp/PROVISIONS.md",
+		"../.aether/data/survey/PROVISIONS.md",
+		"cmd/main.go",
+		".aether/data/survey/EXTRA.md",
+	}
+	for _, claim := range badClaims {
+		if _, err := cleanExternalSurveyClaims("files_created", []string{claim}, dispatch); err == nil {
+			t.Fatalf("expected claim %q to be rejected", claim)
+		}
+	}
+}
+
+func TestDeclaredSurveyOutputPathsFallsBackToManifestOutputPaths(t *testing.T) {
+	got := declaredSurveyOutputPaths(codexSurveyorDispatch{
+		OutputPaths: []string{".aether/data/survey/PROVISIONS.md"},
+	})
+	if len(got) != 1 || got[0] != ".aether/data/survey/PROVISIONS.md" {
+		t.Fatalf("declaredSurveyOutputPaths = %v", got)
+	}
+}
+
+func TestValidateCodexColonizeManifestFreshnessRejectsInvalidAndFutureTimestamps(t *testing.T) {
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	if err := validateCodexColonizeManifestFreshness(codexColonizeManifest{
+		GeneratedAt: now.Format(time.RFC3339),
+	}, now); err != nil {
+		t.Fatalf("fresh manifest rejected: %v", err)
+	}
+
+	cases := []string{
+		"",
+		"not-a-time",
+		now.Add(colonizeFinalizeManifestFutureSkew + time.Minute).Format(time.RFC3339),
+	}
+	for _, generatedAt := range cases {
+		if err := validateCodexColonizeManifestFreshness(codexColonizeManifest{GeneratedAt: generatedAt}, now); err == nil {
+			t.Fatalf("expected generated_at %q to be rejected", generatedAt)
+		}
 	}
 }
 

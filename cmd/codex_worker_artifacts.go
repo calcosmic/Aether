@@ -77,15 +77,13 @@ func shouldPreserveWorkerArtifact(root string, relPath string, before map[string
 	if relPath == "" || relPath == "." {
 		return false
 	}
-	if claimed[relPath] {
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(relPath))); err == nil {
-			return true
-		}
-	}
-
-	info, err := os.Stat(filepath.Join(root, filepath.FromSlash(relPath)))
-	if err != nil || info.IsDir() {
+	absPath := filepath.Join(root, filepath.FromSlash(relPath))
+	info, err := os.Lstat(absPath)
+	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return false
+	}
+	if claimed[relPath] {
+		return true
 	}
 
 	// If a fallback marker exists, only preserve artifacts newer than the marker.
@@ -105,7 +103,7 @@ func shouldPreserveWorkerArtifact(root string, relPath string, before map[string
 	if snapshot.ContentHash == "" {
 		return false
 	}
-	return artifactContentHash(filepath.Join(root, filepath.FromSlash(relPath))) != snapshot.ContentHash
+	return artifactContentHash(absPath) != snapshot.ContentHash
 }
 
 func artifactContentHash(path string) string {

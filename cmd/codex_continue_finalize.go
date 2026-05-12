@@ -164,6 +164,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 
 	verificationTimeout := continueFinalizeVerificationTimeout(plan, verificationTimeoutOverride)
+	emitContinueVerificationStart(phase, verificationTimeout)
 	verification := runCodexContinueVerificationSnapshot(root, phase, manifest, now, verificationTimeout, plan.SkipWatchers)
 	var watcherFlow *codexContinueWorkerFlowStep
 	if plan.SkipWatchers {
@@ -193,6 +194,20 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// queenAdvisory is NOT used to skip or alter gate evaluation -- it is purely informational
 	_ = queenAdvisory
 	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	budget := budgetFromRecoveryLog(phase.ID, 1)
+	if budget == nil {
+		budget = newRecoveryBudget(1)
+	}
+	queenDecisions := queenDecide(gates, budget, circuitBreaker, phase.ID, string(finalizeReviewDepth))
+	queenState := QueenStateFile{
+		Phase:          phase.ID,
+		GeneratedAt:    now.Format(time.RFC3339),
+		Decisions:      queenDecisions,
+		BudgetSnapshot: budget,
+	}
+	if err := queenStateWrite(phase.ID, queenState); err != nil {
+		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to persist queen state: %w", err)
+	}
 
 	verificationReportRel := continuePlanArtifactsPath(phase.ID, "verification.json")
 	gateReportRel := continuePlanArtifactsPath(phase.ID, "gates.json")
@@ -417,7 +432,8 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 				}
 			}
 
-			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", workerFlow, now, verificationReportRel, gateReportRel, gateRecoveryInstructions, finalizeReviewDepth)
+			blockedWorkerFlow := continueWorkerFlowForVerification(verification, continueReviewWorkerFlowSteps(workerFlow), watcherFlow)
+			result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, nil, "", blockedWorkerFlow, now, verificationReportRel, gateReportRel, gateRecoveryInstructions, finalizeReviewDepth)
 			if err != nil {
 				return nil, state, phase, nil, nil, false, err
 			}
@@ -432,7 +448,8 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
 	if !review.Passed {
-		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, workerFlow, now, verificationReportRel, gateReportRel, nil, finalizeReviewDepth)
+		blockedWorkerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
+		result, blockedState, err := finalizeBlockedExternalContinue(state, phase, manifest, verification, assessment, gates, &review, reviewReportRel, blockedWorkerFlow, now, verificationReportRel, gateReportRel, nil, finalizeReviewDepth)
 		if err != nil {
 			return nil, state, phase, nil, nil, false, err
 		}
@@ -955,6 +972,7 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	}
 	blockedState := state
 	blockedState.Events = append(trimmedEvents(blockedState.Events), continueWorkerFlowEvents(now, workerFlow)...)
+	blockedState.Events = append(blockedState.Events, fmt.Sprintf("%s|continue_blocked|continue-finalize|Continue blocked before advancement", now.Format(time.RFC3339)))
 	if err := store.SaveJSON("COLONY_STATE.json", blockedState); err != nil {
 		return nil, state, fmt.Errorf("failed to save colony state: %w", err)
 	}
@@ -968,7 +986,7 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 		"phase_name":          phase.Name,
 		"state":               blockedState.State,
 		"next":                nextCommand,
-			"review_depth":        string(reviewDepth),
+		"review_depth":        string(reviewDepth),
 		"verification":        verification,
 		"assessment":          assessment,
 		"task_evidence":       assessment.Tasks,
@@ -1050,7 +1068,7 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 	if err := continueContextUpdater(phase, manifest, closedWorkerDetails, now); err != nil {
 		return nil, state, nil, &housekeeping, final, err
 	}
-	fullWorkerFlow := continueWorkerFlowWithWatcher(review.Workers, watcherFlow)
+	fullWorkerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
 	fullWorkerFlow = append(fullWorkerFlow, continueHousekeepingFlowStep(housekeeping))
 	if err := recordExternalContinueWorkerFlow(fullWorkerFlow); err != nil {
 		return nil, state, nil, &housekeeping, final, err

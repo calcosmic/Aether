@@ -124,30 +124,31 @@ type codexPlanOptions struct {
 }
 
 type codexPlanManifest struct {
-	Goal                      string                        `json:"goal"`
-	Root                      string                        `json:"root"`
-	GeneratedAt               string                        `json:"generated_at"`
-	ColonyMode                string                        `json:"colony_mode,omitempty"`
-	Refresh                   bool                          `json:"refresh"`
-	ExistingPlan              bool                          `json:"existing_plan"`
-	ExistingPhaseCount        int                           `json:"existing_phase_count,omitempty"`
-	Depth                     string                        `json:"depth"`
-	Granularity               string                        `json:"granularity"`
-	GranularityMin            int                           `json:"granularity_min"`
-	GranularityMax            int                           `json:"granularity_max"`
-	PlanningDepth             string                        `json:"planning_depth"`
-	VerificationDepth         string                        `json:"verification_depth,omitempty"`
-	Survey                    codexSurveyContext            `json:"survey"`
-	Dispatches                []codexPlanningDispatch       `json:"dispatches"`
-	DispatchMode              string                        `json:"dispatch_mode"`
-	DispatchContract          map[string]interface{}        `json:"dispatch_contract"`
-	FinalizeSurface           string                        `json:"finalize_surface"`
-	RequiresFinalizer         bool                          `json:"requires_finalizer"`
-	BoundaryQuestions         []discussQuestion             `json:"boundary_questions,omitempty"`
-	BoundaryQuestionCount     int                           `json:"boundary_question_count,omitempty"`
-	BoundaryQuestionsCreated  int                           `json:"boundary_questions_created,omitempty"`
-	BoundaryQuestionsExisting int                           `json:"boundary_questions_existing,omitempty"`
-	OrchestratorGuidance      *orchestratorBoundaryGuidance `json:"orchestrator_boundary_guidance,omitempty"`
+	Goal                      string                           `json:"goal"`
+	Root                      string                           `json:"root"`
+	GeneratedAt               string                           `json:"generated_at"`
+	ColonyMode                string                           `json:"colony_mode,omitempty"`
+	Refresh                   bool                             `json:"refresh"`
+	ExistingPlan              bool                             `json:"existing_plan"`
+	ExistingPhaseCount        int                              `json:"existing_phase_count,omitempty"`
+	Depth                     string                           `json:"depth"`
+	Granularity               string                           `json:"granularity"`
+	GranularityMin            int                              `json:"granularity_min"`
+	GranularityMax            int                              `json:"granularity_max"`
+	PlanningDepth             string                           `json:"planning_depth"`
+	VerificationDepth         string                           `json:"verification_depth,omitempty"`
+	Survey                    codexSurveyContext               `json:"survey"`
+	Dispatches                []codexPlanningDispatch          `json:"dispatches"`
+	Snapshots                 map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
+	DispatchMode              string                           `json:"dispatch_mode"`
+	DispatchContract          map[string]interface{}           `json:"dispatch_contract"`
+	FinalizeSurface           string                           `json:"finalize_surface"`
+	RequiresFinalizer         bool                             `json:"requires_finalizer"`
+	BoundaryQuestions         []discussQuestion                `json:"boundary_questions,omitempty"`
+	BoundaryQuestionCount     int                              `json:"boundary_question_count,omitempty"`
+	BoundaryQuestionsCreated  int                              `json:"boundary_questions_created,omitempty"`
+	BoundaryQuestionsExisting int                              `json:"boundary_questions_existing,omitempty"`
+	OrchestratorGuidance      *orchestratorBoundaryGuidance    `json:"orchestrator_boundary_guidance,omitempty"`
 }
 
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
@@ -188,11 +189,6 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 	verificationSmartDefault := opts.VerificationDepth == ""
 	planningSmartDefault := opts.PlanningDepth == ""
-	// Persist resolved verification depth in ColonyState for downstream build consumption.
-	state.VerificationDepth = verificationDepth
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		return nil, fmt.Errorf("failed to persist verification depth: %w", err)
-	}
 	pending := loadPendingDecisionFile()
 	unresolvedClarifications := countPendingClarifications(pending)
 	clarificationWarning := ""
@@ -205,6 +201,11 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
+		// Persist resolved verification depth only for non-plan-only paths.
+		state.VerificationDepth = verificationDepth
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			return nil, fmt.Errorf("failed to persist verification depth: %w", err)
+		}
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
 		if nextPhase > 0 {
@@ -234,6 +235,12 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 
 	if codex.ShouldUseAgentDelegatePath() {
 		return runCodexPlanAgentDelegate(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+	}
+
+	// Persist resolved verification depth only once planning will finalize in this process.
+	state.VerificationDepth = verificationDepth
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		return nil, fmt.Errorf("failed to persist verification depth: %w", err)
 	}
 
 	if opts.Refresh {
@@ -334,8 +341,19 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		dispatchMode = "synthetic"
 	}
 
-	scoutReport := synthesizeScoutPlanningReport(*state.Goal, survey)
-	scoutFile, preservedScoutArtifact, err := writePlanningScoutArtifact(root, planningDir, *state.Goal, granularity, survey, dispatches[0], scoutReport, artifactSnapshots)
+	scoutReport := scoutReportForPlanningDispatches(*state.Goal, survey, dispatches)
+	if scoutIndex := planningDispatchIndexByCaste(dispatches, "scout"); scoutIndex >= 0 && dispatches[scoutIndex].ScoutReport == nil {
+		dispatches[scoutIndex].ScoutReport = &scoutReport
+	}
+	scoutDispatch, ok := planningDispatchByCaste(dispatches, "scout")
+	if !ok {
+		return nil, fmt.Errorf("planning dispatches missing scout worker")
+	}
+	routeSetterDispatch, ok := planningDispatchByCaste(dispatches, "route_setter")
+	if !ok {
+		return nil, fmt.Errorf("planning dispatches missing route-setter worker")
+	}
+	scoutFile, preservedScoutArtifact, err := writePlanningScoutArtifact(root, planningDir, *state.Goal, granularity, survey, scoutDispatch, scoutReport, artifactSnapshots)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +367,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	} else if note != "" {
 		unresolvedGaps = limitStrings(uniqueSortedStrings(append(unresolvedGaps, note)), 4)
 	}
-	routeSetterFile, preservedRouteArtifact, err := writeRouteSetterArtifact(root, planningDir, *state.Goal, granularity, survey, dispatches[1], confidence, unresolvedGaps, phases, artifactSnapshots)
+	routeSetterFile, preservedRouteArtifact, err := writeRouteSetterArtifact(root, planningDir, *state.Goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, artifactSnapshots)
 	if err != nil {
 		return nil, err
 	}
@@ -447,6 +465,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		if dispatch.Duration > 0 {
 			entry["duration"] = dispatch.Duration
 		}
+		if dispatch.ScoutReport != nil {
+			entry["scout_report"] = dispatch.ScoutReport
+		}
 		dispatchMaps = append(dispatchMaps, entry)
 	}
 
@@ -475,7 +496,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"phase_research_files":       phaseResearchFiles,
 		"dispatches":                 dispatchMaps,
 		"dispatch_mode":              dispatchMode,
-		"dispatch_contract":          planningDispatchContractWithTimeout(opts.WorkerTimeout),
+		"dispatch_contract":          planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout),
 		"artifact_source":            artifactSource,
 		"plan_source":                planSource,
 		"gaps":                       unresolvedGaps,
@@ -535,11 +556,6 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	verificationSmartDefault := opts.VerificationDepth == ""
 	planningSmartDefault := opts.PlanningDepth == ""
 	planningPhase := colony.Phase{ID: 1}
-	// Persist resolved verification depth in ColonyState for downstream build consumption.
-	state.VerificationDepth = verificationDepth
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		return nil, fmt.Errorf("failed to persist verification depth: %w", err)
-	}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
@@ -594,6 +610,11 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		dispatches[i].Status = "planned"
 		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i])
 	}
+	artifactSnapshots := snapshotRelativeFiles(root,
+		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
+		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
+	)
+	dispatchContract := planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
 	generatedAt := time.Now().UTC()
 	manifest := codexPlanManifest{
 		Goal:               *state.Goal,
@@ -611,8 +632,9 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		VerificationDepth:  verificationDepth,
 		Survey:             survey,
 		Dispatches:         dispatches,
+		Snapshots:          artifactSnapshots,
 		DispatchMode:       "plan-only",
-		DispatchContract:   planningDispatchContractWithTimeout(opts.WorkerTimeout),
+		DispatchContract:   dispatchContract,
 		FinalizeSurface:    "pending",
 		RequiresFinalizer:  true,
 	}
@@ -647,7 +669,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"dispatches":                 dispatches,
 		"dispatch_count":             len(dispatches),
 		"dispatch_mode":              "plan-only",
-		"dispatch_contract":          planningDispatchContractWithTimeout(opts.WorkerTimeout),
+		"dispatch_contract":          dispatchContract,
 		"unresolved_clarifications":  unresolvedClarifications,
 		"clarification_warning":      clarificationWarning,
 		"next":                       "spawn wrapper planning agents, then record completion",
@@ -803,6 +825,23 @@ func plannedPlanningWorkersForGoal(root, goal string) []codexPlanningDispatch {
 	return dispatches
 }
 
+func planningDispatchByCaste(dispatches []codexPlanningDispatch, caste string) (codexPlanningDispatch, bool) {
+	index := planningDispatchIndexByCaste(dispatches, caste)
+	if index < 0 {
+		return codexPlanningDispatch{}, false
+	}
+	return dispatches[index], true
+}
+
+func planningDispatchIndexByCaste(dispatches []codexPlanningDispatch, caste string) int {
+	for i, dispatch := range dispatches {
+		if strings.EqualFold(dispatch.Caste, caste) {
+			return i
+		}
+	}
+	return -1
+}
+
 func planningStageForCaste(caste string) string {
 	switch caste {
 	case "scout":
@@ -924,6 +963,7 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	results := make([]codex.DispatchResult, 0, len(specs))
 	workerTimeout := effectivePlanningDispatchTimeout(timeoutOverride)
+	scoutGuidance := ""
 	for i, spec := range specs {
 		agentName := strings.TrimSuffix(spec.AgentFile, ".toml")
 		dispatch := codex.WorkerDispatch{
@@ -933,7 +973,7 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 			AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
 			Caste:            spec.Caste,
 			TaskID:           fmt.Sprintf("plan-%d", i),
-			TaskBrief:        renderPlanningWorkerBrief(root, survey, spec),
+			TaskBrief:        renderPlanningWorkerBrief(root, survey, spec, scoutGuidance),
 			ContextCapsule:   capsule,
 			HandoffSection:   renderWorkerHandoffSection("plan", 0, planned[i].Name),
 			Workflow:         "plan",
@@ -959,6 +999,11 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 			return nil, err
 		}
 		results = append(results, stageResults...)
+		if spec.Caste == "scout" && len(stageResults) > 0 {
+			if report, ok := scoutReportFromWorkerResult(stageResults[0].WorkerResult); ok {
+				scoutGuidance = renderScoutPlanningGuidance(report)
+			}
+		}
 		if stageResults[0].Status != "completed" {
 			dispatches := convertPlanningDispatchResults(results, root, goal)
 			if i+1 < len(specs) {
@@ -1006,6 +1051,9 @@ func convertPlanningDispatchResults(results []codex.DispatchResult, root string,
 				if d.Summary == "" && len(r.WorkerResult.Blockers) > 0 {
 					d.Summary = strings.Join(r.WorkerResult.Blockers, "; ")
 				}
+				if report, ok := scoutReportFromWorkerResult(r.WorkerResult); ok {
+					d.ScoutReport = &report
+				}
 			}
 			if strings.TrimSpace(d.Summary) == "" && r.Error != nil {
 				d.Summary = strings.TrimSpace(r.Error.Error())
@@ -1016,6 +1064,84 @@ func convertPlanningDispatchResults(results []codex.DispatchResult, root string,
 	}
 
 	return dispatches
+}
+
+func scoutReportForPlanningDispatches(goal string, survey codexSurveyContext, dispatches []codexPlanningDispatch) codexScoutReport {
+	for _, dispatch := range dispatches {
+		if dispatch.ScoutReport == nil {
+			continue
+		}
+		report := normalizeScoutPlanningReport(*dispatch.ScoutReport)
+		if scoutReportHasContent(report) {
+			return report
+		}
+	}
+	return synthesizeScoutPlanningReport(goal, survey)
+}
+
+func scoutReportFromWorkerResult(result *codex.WorkerResult) (codexScoutReport, bool) {
+	if result == nil {
+		return codexScoutReport{}, false
+	}
+	raw := result.ScoutReport
+	if strings.TrimSpace(string(raw)) == "" && result.Artifacts != nil {
+		raw = result.Artifacts["scout_report"]
+	}
+	if strings.TrimSpace(string(raw)) == "" || strings.TrimSpace(string(raw)) == "null" {
+		return codexScoutReport{}, false
+	}
+	var report codexScoutReport
+	if err := json.Unmarshal(raw, &report); err != nil {
+		return codexScoutReport{}, false
+	}
+	report = normalizeScoutPlanningReport(report)
+	if !scoutReportHasContent(report) {
+		return codexScoutReport{}, false
+	}
+	return report, true
+}
+
+func normalizeScoutPlanningReport(report codexScoutReport) codexScoutReport {
+	findings := make([]codexScoutFinding, 0, len(report.Findings))
+	for _, finding := range report.Findings {
+		area := strings.TrimSpace(finding.Area)
+		discovery := strings.TrimSpace(finding.Discovery)
+		source := strings.TrimSpace(finding.Source)
+		if area == "" && discovery == "" {
+			continue
+		}
+		if area == "" {
+			area = "planning"
+		}
+		if source == "" {
+			source = "worker scout result"
+		}
+		findings = append(findings, codexScoutFinding{
+			Area:      area,
+			Discovery: discovery,
+			Source:    source,
+		})
+	}
+	report.Findings = limitScoutFindings(findings, 5)
+	report.Gaps = limitStrings(uniqueSortedStrings(report.Gaps), 4)
+	report.StudyFiles = limitStrings(uniqueSortedStrings(report.StudyFiles), 8)
+	if report.Confidence <= 0 {
+		report.Confidence = 60
+	} else {
+		report.Confidence = clampInt(report.Confidence, 1, 100)
+	}
+	return report
+}
+
+func limitScoutFindings(findings []codexScoutFinding, limit int) []codexScoutFinding {
+	if len(findings) <= limit {
+		return append([]codexScoutFinding{}, findings...)
+	}
+	return append([]codexScoutFinding{}, findings[:limit]...)
+}
+
+func scoutReportHasContent(report codexScoutReport) bool {
+	return len(report.Findings) > 0 || len(report.Gaps) > 0 || len(report.StudyFiles) > 0
 }
 
 func loadCodexSurveyContext(root string) (codexSurveyContext, error) {
@@ -1226,7 +1352,46 @@ func clampInt(value, min, max int) int {
 	return value
 }
 
-func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec planningWorkerSpec) string {
+func renderScoutPlanningGuidance(report codexScoutReport) string {
+	report = normalizeScoutPlanningReport(report)
+	if !scoutReportHasContent(report) {
+		return ""
+	}
+	var b strings.Builder
+	if len(report.Findings) > 0 {
+		b.WriteString("Findings:\n")
+		for _, finding := range report.Findings {
+			b.WriteString(fmt.Sprintf("- %s: %s (source: %s)\n", finding.Area, finding.Discovery, finding.Source))
+		}
+	}
+	if len(report.Gaps) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("Gaps:\n")
+		for _, gap := range report.Gaps {
+			b.WriteString(fmt.Sprintf("- %s\n", gap))
+		}
+	}
+	if len(report.StudyFiles) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("Study files:\n")
+		for _, file := range report.StudyFiles {
+			b.WriteString(fmt.Sprintf("- %s\n", file))
+		}
+	}
+	if report.Confidence > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(fmt.Sprintf("Confidence: %d%%", report.Confidence))
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec planningWorkerSpec, scoutGuidanceOpt ...string) string {
 	planningDir := filepath.ToSlash(filepath.Join(".aether", "data", "planning"))
 	surveyDir := filepath.ToSlash(filepath.Join(".aether", "data", "survey"))
 	phaseResearchDir := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research"))
@@ -1297,6 +1462,18 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString(" using this JSON shape:\n")
 		b.WriteString(`  {"phases":[{"name":"","description":"","tasks":[{"goal":"","constraints":[],"hints":[],"success_criteria":[],"depends_on":[]}],"success_criteria":[]}],"confidence":{"knowledge":0,"requirements":0,"risks":0,"dependencies":0,"effort":0,"overall":0},"gaps":[]}` + "\n")
 	} else {
+		scoutGuidance := ""
+		if len(scoutGuidanceOpt) > 0 {
+			scoutGuidance = strings.TrimSpace(scoutGuidanceOpt[0])
+		}
+		if scoutGuidance == "" {
+			scoutGuidance = renderScoutPlanningGuidance(synthesizeScoutPlanningReport("", survey))
+		}
+		if scoutGuidance != "" {
+			b.WriteString("## Scout Planning Guidance\n")
+			b.WriteString(scoutGuidance)
+			b.WriteString("\n\n")
+		}
 		b.WriteString("Write planning outputs directly into the repository.\n")
 		b.WriteString("- Route-Setter read budget: consume the manifest survey context and the Scout terminal result provided by the wrapper, then read at most 6 targeted repository files. Do not redo the Scout survey.\n")
 		b.WriteString("- If the Scout result is missing, continue from the manifest survey context and list that as a gap only if it blocks a useful plan.\n")
@@ -1463,6 +1640,7 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 		templates = append([]phaseTemplate{}, templates[:count]...)
 	}
 
+	redirectConstraints := activeRedirectPlanConstraints()
 	phases := make([]colony.Phase, 0, len(templates))
 	for i, template := range templates {
 		phase := colony.Phase{
@@ -1479,11 +1657,13 @@ func synthesizeRouteSetterPlan(goal string, granularity colony.PlanGranularity, 
 		}
 		for j, taskTemplate := range template.Tasks {
 			taskID := fmt.Sprintf("%d.%d", i+1, j+1)
+			constraints := append([]string{}, redirectConstraints...)
+			constraints = append(constraints, taskTemplate.Constraints...)
 			phase.Tasks = append(phase.Tasks, colony.Task{
 				ID:              &taskID,
 				Goal:            taskTemplate.Goal,
 				Status:          colony.TaskPending,
-				Constraints:     uniqueSortedStrings(taskTemplate.Constraints),
+				Constraints:     uniqueSortedStrings(constraints),
 				Hints:           uniqueSortedStrings(taskTemplate.Hints),
 				SuccessCriteria: uniqueSortedStrings(taskTemplate.SuccessCriteria),
 				DependsOn:       uniqueSortedStrings(taskTemplate.DependsOn),
@@ -1927,14 +2107,51 @@ func containsAnyWholeWord(text string, needles []string) bool {
 }
 
 func commonConstraints(survey codexSurveyContext) []string {
-	constraints := []string{
+	constraints := activeRedirectPlanConstraints()
+	constraints = append(constraints,
 		"Follow the repository's existing structure and conventions",
 		"Keep changes scoped to the current goal",
-	}
+	)
 	if len(survey.Issues) > 0 {
 		constraints = append(constraints, survey.Issues[0])
 	}
-	return limitStrings(uniqueSortedStrings(constraints), 4)
+	return limitStrings(appendUniqueStringsInOrder(constraints), 6)
+}
+
+func activeRedirectPlanConstraints() []string {
+	if store == nil {
+		return nil
+	}
+	var pf colony.PheromoneFile
+	if err := store.LoadJSON("pheromones.json", &pf); err != nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	constraints := []string{}
+	for _, signal := range pf.Signals {
+		if !signal.Active || !strings.EqualFold(signal.Type, "REDIRECT") || computeEffectiveStrength(signal, now) <= 0 {
+			continue
+		}
+		text := strings.TrimSpace(extractContentText(signal.Content))
+		if text != "" {
+			constraints = append(constraints, text)
+		}
+	}
+	return constraints
+}
+
+func appendUniqueStringsInOrder(values []string) []string {
+	seen := map[string]bool{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result
 }
 
 func commonHints(survey codexSurveyContext) []string {

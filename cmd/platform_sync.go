@@ -91,10 +91,12 @@ func repoSyncPairs() []repoSyncPair {
 }
 
 type codexSkillShim struct {
-	Dir         string
-	Name        string
-	Description string
-	Body        string
+	Dir              string
+	Name             string
+	Description      string
+	Body             string
+	WorkflowTriggers []string
+	TaskKeywords     []string
 }
 
 func codexSkillShims() []codexSkillShim {
@@ -124,10 +126,12 @@ func codexSkillShims() []codexSkillShim {
 			Body:        "For `aether oracle` or `aether discuss`, use `aether command-guide <oracle|discuss> --platform codex`, clarify output shape, scope, depth, and confidence, then run the runtime flow.",
 		},
 		{
-			Dir:         "aether-colony-build-cycle",
-			Name:        "aether-colony-build-cycle",
-			Description: "Use when Codex is asked to plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely.",
-			Body:        "For `aether plan`, `build`, `continue`, `swarm`, or `seal`, run `aether command-guide <command> --platform codex`, use runtime JSON manifests and finalizers, pass worker briefs verbatim, honor loop guards, and never hand-edit `.aether/data`.",
+			Dir:              "aether-colony-build-cycle",
+			Name:             "aether-colony-build-cycle",
+			Description:      "Use when Codex is asked to colonize, plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely.",
+			Body:             "For `aether colonize`, `aether plan`, `aether build`, `aether continue`, `aether swarm`, or `aether seal`, run `aether command-guide <command> --platform codex`, use runtime JSON manifests and finalizers, pass worker briefs verbatim, honor loop guards, and never hand-edit `.aether/data`.",
+			WorkflowTriggers: []string{"colonize", "plan", "build", "continue", "swarm", "seal"},
+			TaskKeywords:     []string{"aether colonize", "aether plan", "aether build", "aether continue", "aether swarm", "aether seal", "dispatch manifest", "plan-only", "finalize"},
 		},
 	}
 }
@@ -188,20 +192,27 @@ func syncCodexSkillShims(destDir string) syncResult {
 }
 
 func renderCodexSkillShim(shim codexSkillShim) string {
+	extraFrontmatter := ""
+	if len(shim.WorkflowTriggers) > 0 {
+		extraFrontmatter += fmt.Sprintf("workflow_triggers: [%s]\n", strings.Join(shim.WorkflowTriggers, ", "))
+	}
+	if len(shim.TaskKeywords) > 0 {
+		extraFrontmatter += fmt.Sprintf("task_keywords: [%s]\n", strings.Join(shim.TaskKeywords, ", "))
+	}
 	return fmt.Sprintf(`---
 name: %s
 description: %s
 source: shipped
 type: codex-shim
 domains: [aether, codex, orchestration]
-priority: high
+%spriority: high
 version: "1.0"
 ---
 
 # %s
 
 %s
-`, shim.Name, shim.Description, shim.Name, shim.Body)
+`, shim.Name, shim.Description, extraFrontmatter, shim.Name, shim.Body)
 }
 
 func skillDirDeclaresSource(dir, expected string) bool {

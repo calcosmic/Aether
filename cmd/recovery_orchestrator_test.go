@@ -542,6 +542,7 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
+	writeClaimFileForTest(t, root, "cmd/test.go")
 
 	// Set up circuit breaker
 	origCB := globalCircuitBreaker
@@ -627,6 +628,7 @@ func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
+	writeClaimFileForTest(t, root, "cmd/test.go")
 
 	origCB := globalCircuitBreaker
 	cb := NewCircuitBreaker(3)
@@ -694,6 +696,7 @@ func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
+	writeClaimFileForTest(t, root, "cmd/test.go")
 
 	origCB := globalCircuitBreaker
 	cb := NewCircuitBreaker(3)
@@ -748,6 +751,7 @@ func TestBuildFinalize_BudgetPersisted(t *testing.T) {
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
+	writeClaimFileForTest(t, root, "cmd/test.go")
 
 	origCB := globalCircuitBreaker
 	cb := NewCircuitBreaker(3)
@@ -810,6 +814,7 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
+	writeClaimFileForTest(t, root, "cmd/test.go")
 
 	origCB := globalCircuitBreaker
 	cb := NewCircuitBreaker(3)
@@ -1170,7 +1175,7 @@ func TestContinueFinalize_GateRecovery_RecoveryInstructionsInOutput(t *testing.T
 		"build/phase-1/verification.json",
 		"build/phase-1/gates.json",
 		gateRecoveryInstructions,
-			colony.VerificationDepthLight,
+		colony.VerificationDepthLight,
 	)
 	if err != nil {
 		t.Fatalf("finalizeBlockedExternalContinue failed: %v", err)

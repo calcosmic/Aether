@@ -15,7 +15,7 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 
 	completedCount := 0
 	for _, r := range results {
-		if r.Status == "completed" {
+		if normalizeExternalBuildStatus(r.Status) == "completed" && isBuildImplementationWorker(r) {
 			completedCount++
 			if len(r.FilesModified) > 0 || len(r.FilesCreated) > 0 || len(r.TestsWritten) > 0 {
 				return nil // At least one valid provenance entry found
@@ -27,6 +27,18 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 		return fmt.Errorf("build provenance: no workers completed successfully -- all %d worker(s) are in a non-success state", len(results))
 	}
 	return fmt.Errorf("build provenance: %d worker(s) completed but none reported file changes (created, modified, or tests) -- the build produced no changes", completedCount)
+}
+
+func isBuildImplementationWorker(result codexExternalBuildWorkerResult) bool {
+	if result.TaskID != "" {
+		return true
+	}
+	switch result.Caste {
+	case "", "builder":
+		return true
+	default:
+		return false
+	}
 }
 
 // traceContinueProvenance verifies that every completed worker dispatch has

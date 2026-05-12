@@ -678,7 +678,7 @@ func IsLiveSpawnStatus(status string) bool {
 // IsTerminalSpawnStatus reports whether a worker status should be treated as finished.
 func IsTerminalSpawnStatus(status string) bool {
 	switch normalizeSpawnStatus(status) {
-	case "completed", "failed", "blocked", "timeout", "superseded", "manually-reconciled":
+	case "completed", "failed", "blocked", "timeout", "superseded", "manually-reconciled", "skipped":
 		return true
 	default:
 		return false

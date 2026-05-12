@@ -1,11 +1,12 @@
 {
-  "text": "## Prior Reviews\n\n- Bugs (18 open): HIGH -- cmd/state_load.go:33 loadActiveColonyState automatically calls repairMissingPl..., HIGH -- cmd/discuss.go:462 PendingDecision has no goal or session identity, and load... +16 more\n- Resilience (8 open)\n- Security (3 open): INFO -- , INFO --  +1 more\n- Testing (6 open)\n",
+  "text": "## Prior Reviews\n\n- Quality (12 open): INFO -- , INFO -- .aether/docs/codex-ant-workflow-gap-map.md:41 Phase artifact is specific to plan/build/continue behavio... +10 more\n- Resilience (10 open): MEDIUM -- , HIGH --  +8 more\n- Testing (13 open): INFO -- , WARNING --  +11 more\n- Security (1 open)\n- Performance (1 open)\n",
   "domain_counts": {
-    "bugs": 18,
-    "resilience": 8,
-    "security": 3,
-    "testing": 6
+    "performance": 1,
+    "quality": 12,
+    "resilience": 10,
+    "security": 1,
+    "testing": 13
   },
-  "total_open": 35,
-  "cache_write_at": "2026-05-11T13:41:11Z"
+  "total_open": 37,
+  "cache_write_at": "2026-05-12T06:49:37Z"
 }

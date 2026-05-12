@@ -597,6 +597,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		progress = NewCeremonyProgress(continueSteps, stdout)
 	}
 
+	emitContinueVerificationStart(phase, options.VerificationTimeout)
 	verification, watcherFlow := runCodexContinueVerification(ctx, root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
@@ -682,7 +683,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			summary = blockers[0]
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
-		workerFlow := continueWorkerFlowWithWatcher(nil, watcherFlow)
+		workerFlow := continueWorkerFlowForVerification(verification, nil, watcherFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, blockers, options, phase.ID)
 		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
@@ -744,7 +745,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth)
+	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
 	reviewReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "review.json"))
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
@@ -755,7 +756,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			summary = review.BlockingIssues[0]
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
-		workerFlow := continueWorkerFlowWithWatcher(review.Workers, watcherFlow)
+		workerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, review.BlockingIssues, options, phase.ID)
 		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
@@ -890,7 +891,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err := continueContextUpdater(phase, manifest, closedWorkerDetails, now); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
-	workerFlow := continueWorkerFlowWithWatcher(review.Workers, watcherFlow)
+	workerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
 	workerFlow = append(workerFlow, continueHousekeepingFlowStep(housekeeping))
 	if err := recordContinueWorkerFlow(workerFlow); err != nil {
 		return nil, state, phase, nil, &housekeeping, false, err
@@ -1177,22 +1178,35 @@ func continueReviewSpecForCaste(caste string) (codexContinueReviewSpec, bool) {
 	return codexContinueReviewSpec{}, false
 }
 
-func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) codexContinueReviewReport {
+func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Workers:     []codexContinueWorkerFlowStep{},
 		Passed:      false,
 	}
+	if skipWatchers {
+		// Verification and runtime gates already passed; --skip-watchers means
+		// continue must not launch any platform watcher or review agents.
+		report.Workers = append(report.Workers, continueReviewSkippedFlowStep("review wave skipped by --skip-watchers; no platform review agents were launched"))
+		report.Passed = true
+		return report
+	}
 
 	invoker := newCodexWorkerInvoker()
 	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
 		fmt.Fprintf(os.Stderr, "⚠ Codex CLI unavailable — skipping review wave, proceeding with claims verification\n")
+		report.Workers = append(report.Workers, continueReviewSkippedFlowStep("review wave skipped; Codex CLI unavailable, proceeding with claims verification"))
 		report.Passed = true
 		return report
 	}
 
 	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth)
+	if len(dispatches) == 0 {
+		report.Workers = append(report.Workers, continueReviewSkippedFlowStep(continueReviewSkippedSummary(reviewDepth)))
+		report.Passed = true
+		return report
+	}
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	reviewCtx, reviewCancel := context.WithTimeout(context.Background(), effectiveContinueReviewTimeout(workerTimeout))
 	defer reviewCancel()
@@ -2900,6 +2914,130 @@ func continueWorkerFlowWithWatcher(flow []codexContinueWorkerFlowStep, watcherFl
 	return append(combined, flow...)
 }
 
+func continueWorkerFlowForVerification(verification codexContinueVerificationReport, flow []codexContinueWorkerFlowStep, watcherFlow *codexContinueWorkerFlowStep) []codexContinueWorkerFlowStep {
+	combined := []codexContinueWorkerFlowStep{continueDeterministicVerificationFlowStep(verification)}
+	if watcherFlow != nil && strings.TrimSpace(watcherFlow.Name) != "" {
+		combined = append(combined, *watcherFlow)
+	} else if skipped, ok := continueSkippedWatcherFlowStep(verification.Watcher); ok {
+		combined = append(combined, skipped)
+	}
+	return append(combined, flow...)
+}
+
+func continueReviewWorkerFlowSteps(flow []codexContinueWorkerFlowStep) []codexContinueWorkerFlowStep {
+	review := make([]codexContinueWorkerFlowStep, 0, len(flow))
+	for _, step := range flow {
+		if strings.TrimSpace(step.Stage) == "review" {
+			review = append(review, step)
+		}
+	}
+	return review
+}
+
+func continueDeterministicVerificationFlowStep(verification codexContinueVerificationReport) codexContinueWorkerFlowStep {
+	status := "completed"
+	if !verification.ChecksPassed {
+		status = "failed"
+	} else if continueVerificationAllStepsSkipped(verification.Steps) {
+		status = "skipped"
+	}
+	return codexContinueWorkerFlowStep{
+		Stage:   "verification",
+		Caste:   "system",
+		Name:    "Deterministic verification",
+		Task:    "Run deterministic verification commands before review workers",
+		Status:  status,
+		Summary: continueDeterministicVerificationSummary(verification),
+	}
+}
+
+func continueSkippedWatcherFlowStep(watcher codexWatcherVerification) (codexContinueWorkerFlowStep, bool) {
+	if !watcher.Present || continueWorkerFlowStatus(watcher.Status) != "skipped" {
+		return codexContinueWorkerFlowStep{}, false
+	}
+	summary := strings.TrimSpace(watcher.Summary)
+	if summary == "" {
+		summary = "continue watcher skipped; relying on deterministic verification"
+	}
+	return codexContinueWorkerFlowStep{
+		Stage:   "verification",
+		Caste:   "system",
+		Name:    "Continue watcher",
+		Task:    "Record why the continue watcher did not run",
+		Status:  "skipped",
+		Summary: summary,
+	}, true
+}
+
+func continueReviewSkippedFlowStep(summary string) codexContinueWorkerFlowStep {
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		summary = "review wave skipped; no review workers were required"
+	}
+	return codexContinueWorkerFlowStep{
+		Stage:   "review",
+		Caste:   "system",
+		Name:    "Review wave",
+		Task:    "Record why review workers did not run",
+		Status:  "skipped",
+		Summary: summary,
+	}
+}
+
+func continueReviewSkippedSummary(reviewDepth colony.VerificationDepth) string {
+	depth := colony.NormalizeVerificationDepth(string(reviewDepth))
+	switch depth {
+	case colony.VerificationDepthLight:
+		return "review wave skipped; light verification depth does not require review workers"
+	default:
+		return fmt.Sprintf("review wave skipped; no %s review workers were selected", depth)
+	}
+}
+
+func continueVerificationAllStepsSkipped(steps []codexVerificationStep) bool {
+	if len(steps) == 0 {
+		return false
+	}
+	for _, step := range steps {
+		if !step.Skipped {
+			return false
+		}
+	}
+	return true
+}
+
+func continueDeterministicVerificationSummary(verification codexContinueVerificationReport) string {
+	passed := 0
+	skipped := 0
+	failed := 0
+	for _, step := range verification.Steps {
+		switch {
+		case step.Skipped:
+			skipped++
+		case step.Passed:
+			passed++
+		default:
+			failed++
+		}
+	}
+	if len(verification.Steps) == 0 {
+		if verification.ChecksPassed {
+			return "deterministic verification completed; no command steps were recorded"
+		}
+		return "deterministic verification failed; no command steps were recorded"
+	}
+	if failed > 0 && verification.ChecksPassed {
+		return fmt.Sprintf("deterministic verification completed with warnings: %d passed, %d failed, %d skipped", passed, failed, skipped)
+	}
+	if failed > 0 {
+		return fmt.Sprintf("deterministic verification failed: %d passed, %d failed, %d skipped", passed, failed, skipped)
+	}
+	if skipped == len(verification.Steps) {
+		return fmt.Sprintf("deterministic verification skipped: %d commands skipped", skipped)
+	}
+	return fmt.Sprintf("deterministic verification completed: %d passed, %d skipped", passed, skipped)
+}
+
 func continueHousekeepingFlowStep(housekeeping signalHousekeepingResult) codexContinueWorkerFlowStep {
 	return codexContinueWorkerFlowStep{
 		Stage:   "housekeeping",
@@ -2920,7 +3058,7 @@ func continueWorkerFlowStatus(status string) string {
 
 func continueReviewStatusBlocks(status string) bool {
 	switch continueWorkerFlowStatus(status) {
-	case "completed", "manually-reconciled", watcherStatusEnvironmentBlocked:
+	case "completed", "manually-reconciled", "skipped", watcherStatusEnvironmentBlocked:
 		return false
 	default:
 		return true
@@ -2939,6 +3077,24 @@ func continueWorkerFlowEnvironmentBlocked(step codexContinueWorkerFlowStep) bool
 	parts := []string{step.Summary}
 	parts = append(parts, step.Blockers...)
 	return isEnvironmentBlockedLaunchVerification(strings.Join(parts, "\n"))
+}
+
+func continueWorkerFlowIsDeterministicVerification(step codexContinueWorkerFlowStep) bool {
+	return strings.TrimSpace(step.Stage) == "verification" &&
+		strings.EqualFold(strings.TrimSpace(step.Caste), "system") &&
+		strings.EqualFold(strings.TrimSpace(step.Name), "Deterministic verification")
+}
+
+func emitContinueVerificationStart(phase colony.Phase, verificationTimeout time.Duration) {
+	if !shouldRenderVisualOutput(stdout) {
+		return
+	}
+	timeout := effectiveContinueVerificationTimeout(verificationTimeout).Round(time.Second)
+	writeVisualOutput(stdout, fmt.Sprintf(
+		"Running deterministic verification for phase %d before watcher/review workers (timeout %s per command).\n",
+		phase.ID,
+		timeout,
+	))
 }
 
 func continueWatcherDefaultSummary(status string) string {
@@ -3000,7 +3156,15 @@ func continueWorkerFlowEvents(now time.Time, workerFlow []codexContinueWorkerFlo
 		case "verification":
 			summary := strings.TrimSpace(step.Summary)
 			if summary == "" {
-				summary = "Watcher verification completed"
+				if continueWorkerFlowIsDeterministicVerification(step) {
+					summary = "Deterministic verification completed"
+				} else {
+					summary = "Watcher verification completed"
+				}
+			}
+			if continueWorkerFlowIsDeterministicVerification(step) {
+				events = append(events, fmt.Sprintf("%s|deterministic_verification|continue|%s", now.Format(time.RFC3339), summary))
+				continue
 			}
 			events = append(events, fmt.Sprintf("%s|watcher_verification|continue|%s", now.Format(time.RFC3339), summary))
 		case "housekeeping":
@@ -3028,6 +3192,7 @@ func recordBlockedContinueWorkerFlow(state colony.ColonyState, now time.Time, wo
 			return err
 		}
 		updated.Events = append(trimmedEvents(updated.Events), continueWorkerFlowEvents(now, workerFlow)...)
+		updated.Events = append(updated.Events, fmt.Sprintf("%s|continue_blocked|continue|Continue blocked before advancement", now.Format(time.RFC3339)))
 		return nil
 	}); err != nil {
 		return state, fmt.Errorf("failed to save colony state: %w", err)
