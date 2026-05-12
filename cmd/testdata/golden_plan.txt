@@ -1,0 +1,237 @@
+━━ 📋 P L A N   D I S P A T C H ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Planning worker wave dispatching.
+Goal: Golden workflow test colony
+
+Workers
+  🔍 Scout Worker-XX  Survey the repo and distill planning findings from available territory reports
+  📋 Route-Setter Worker-XX  Convert surveyed findings into an executable multi-phase colony plan
+
+Coordination: .aether/data/spawn-tree.txt
+
+── Dispatch ──
+Planning Wave 1 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+  🔍 Scout Worker-XX  Planning task: Survey the repo and distill planning findings from available territory reports
+
+… 🔍 Scout Worker-XX  starting wave 1  Planning task: Survey the repo and distill planning findings from available territory reports
+
+… 🔍 Scout Worker-XX  running wave 1  Planning task: Survey the repo and distill planning findings from available territory reports  [simulated worker heartbeat observed]
+
+✓ 🔍 Scout Worker-XX  completed 0.0s  FakeInvoker completed task plan-0 for worker Worker-XX (caste: scout)
+
+── Dispatch ──
+Planning Wave 2 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+  📋 Route-Setter Worker-XX  Planning task: Convert surveyed findings into an executable multi-phase colony plan
+
+… 📋 Route-Setter Worker-XX  starting wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan
+
+… 📋 Route-Setter Worker-XX  running wave 2  Planning task: Convert surveyed findings into an executable multi-phase colony plan  [simulated worker heartbeat observed]
+
+✓ 📋 Route-Setter Worker-XX  completed 0.0s  FakeInvoker completed task plan-1 for worker Worker-XX (caste: route_setter)
+
+━━ 📋 P L A N ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scout and Route-Setter mapped the colony goal into executable phases.
+Goal: Golden workflow test colony
+Granularity: milestone (4-7 phases)
+── Depth Selection ──
+Planning depth: deep
+Verification depth: heavy
+Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>
+Plan size: 6 phases
+
+Contract
+  - Execution: 2 staged workers, scout then route-setter (2 waves), 2 workers
+  - Timeouts: 15m0s worker max; Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.
+  - Dependencies: Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.
+  - Fallback: If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first. Visibility: dispatch_mode, planning_warning, artifact_source, plan_source.
+  - Coordination: .aether/data/spawn-tree.txt
+  - Artifacts: .aether/data/planning/SCOUT.md, .aether/data/planning/ROUTE-SETTER.md, .aether/data/planning/phase-plan.json, .aether/data/phase-research
+
+Planning Artifacts
+  - SCOUT.md
+  - ROUTE-SETTER.md
+
+Phase Research
+  - phase-1-research.md
+  - phase-2-research.md
+  - phase-3-research.md
+  - phase-4-research.md
+  - phase-5-research.md
+  - ... and 1 more phase research files
+
+Phase 1 — Contract and gap mapping
+  Lock the expected ant-process behavior against the current Go command surface.
+  Task 1.1
+    Goal: Compare the documented ant workflow with the current Codex command behavior
+    Constraints:
+      - Keep the Go binary as the execution source of truth
+      - Use Claude/OpenCode command specs as the external contract
+    Hints:
+      - .claude/commands/ant/colonize.md
+      - .claude/commands/ant/plan.md
+      - cmd/codex_workflow_cmds.go
+    Success Criteria:
+      - The next implementation slices are dependency-ordered
+      - The parity gaps are explicit
+  Task 1.2
+    Goal: Decide the observable ant-process outputs Codex must emit during each core command
+    Constraints:
+      - Do not claim capabilities the Go binary does not actually perform
+    Hints:
+      - main.go
+      - main_test.go
+    Success Criteria:
+      - Each command has a concrete dispatch contract
+      - Spawn tree and artifacts are part of the contract
+  Phase Success Criteria:
+    - The parity contract is explicit
+    - The colony has an honest execution target
+
+Phase 2 — Colonize orchestration
+  Deliver surveyor-driven territory mapping that writes usable survey artifacts and spawn records.
+  Task 2.1
+    Goal: Implement the surveyor workflow for Codex colonize
+    Constraints:
+      - Follow the repository's existing structure and conventions
+      - Keep changes scoped to the current goal
+      - No obvious technical debt markers detected.
+    Hints:
+      - .aether/data/survey/
+      - cmd/codex_colonize.go
+      - spawn-tree.txt
+    Success Criteria:
+      - Survey artifacts are written
+      - Surveyor spawns are recorded and completed
+  Task 2.2
+    Goal: Keep survey artifacts stable enough for planning to consume
+    Constraints:
+      - Avoid polluting reports with cache or generated artifacts
+    Hints:
+      - PATHOGENS.md should only mention real repo concerns
+    Success Criteria:
+      - Noise from generated/cache files is excluded
+      - Survey artifacts are reusable inputs for plan
+  Phase Success Criteria:
+    - Territory survey is reliable
+    - Planning can trust the survey output
+
+Phase 3 — Planning orchestration
+  Add a scout plus route-setter planning pass that produces artifacts and a grounded phase plan.
+  Task 3.1
+    Goal: Implement a scout planning pass that summarizes survey findings into buildable guidance
+    Constraints:
+      - Planning must still work when survey docs are missing
+      - Scout output must be persisted as a planning artifact
+    Hints:
+      - SCOUT.md
+      - cmd/codex_plan.go
+      - phase-research/
+    Success Criteria:
+      - Planning produces a scout artifact
+      - The route-setter consumes scout output and survey context
+  Task 3.2
+    Goal: Generate a route-setter plan with task constraints, hints, and success criteria
+    Constraints:
+      - The first phase must become ready
+      - The saved plan must match the displayed plan
+    Hints:
+      - COLONY_STATE.json
+      - renderPlanVisual
+    Success Criteria:
+      - Plan generation is grounded in repo context
+      - Spawn records show scout and route-setter activity
+  Phase Success Criteria:
+    - Plan generation is ant-driven
+    - The colony has a grounded next phase
+
+Phase 4 — Build orchestration
+  Replace visual-only build dispatch with real worker execution slices and artifact handling.
+  Task 4.1
+    Goal: Define and implement the builder, watcher, and specialist work sequence for build
+    Constraints:
+      - Keep command behavior inside Go
+      - Recorded spawns must reflect real work performed
+    Hints:
+      - .claude/commands/ant/build.md
+      - cmd/codex_visuals.go
+      - cmd/codex_workflow_cmds.go
+    Success Criteria:
+      - Build does more than set state
+      - The spawn plan matches actual command behavior
+  Task 4.2
+    Goal: Persist build artifacts and phase context needed by continue
+    Constraints:
+      - Continue must not rely on implied work that never happened
+    Hints:
+      - main.go
+      - main_test.go
+    Success Criteria:
+      - Continue can verify concrete outputs
+      - Phase state stays consistent across reruns
+  Phase Success Criteria:
+    - Build behavior matches its visuals
+    - Continue has real evidence to consume
+
+Phase 5 — Continue orchestration
+  Make continue perform the real verification and advancement work instead of only flipping statuses.
+  Task 5.1
+    Goal: Implement watcher-led verification and housekeeping before phase advancement
+    Constraints:
+      - Completed phases must only advance after verification
+      - Signal housekeeping should stay wired into continue finalize
+    Hints:
+      - .claude/commands/ant/continue.md
+      - cmd/signal_housekeeping.go
+    Success Criteria:
+      - Advance only happens after verification succeeds
+      - Continue verifies actual artifacts
+  Task 5.2
+    Goal: Record the continue worker flow in state, spawn logs, and user-facing output
+    Constraints:
+      - The Next Up block must stay valid for the resulting state
+    Hints:
+      - print-next-up
+      - renderContinueVisual
+    Success Criteria:
+      - Continue output matches actual work
+      - The next phase becomes ready when appropriate
+  Phase Success Criteria:
+    - Continue is no longer a pure state flip
+    - Phase advancement is defensible
+
+Phase 6 — End-to-end verification
+  Run the colony from init through seal and prove the Codex ant process is now honest.
+  Task 6.1
+    Goal: Add tests that prove colonize, plan, build, and continue record real worker activity
+    Constraints:
+      - Test the user path, not just helper functions
+    Hints:
+      - cmd/codex_colonize_test.go
+      - main_test.go
+    Success Criteria:
+      - Core parity regressions are caught by tests
+      - Spawn tree entries are asserted in tests
+  Task 6.2
+    Goal: Run a live colony loop and compare its outputs with the documented ant process
+    Constraints:
+      - Call out any remaining parity gap explicitly
+    Hints:
+      - .aether/data/survey/
+      - COLONY_STATE.json
+      - spawn-tree.txt
+    Success Criteria:
+      - Remaining gaps are small and explicit
+      - The live loop proves the implemented parity
+  Phase Success Criteria:
+    - The live colony loop is credible
+    - The remaining parity gap is narrow and testable
+
+Coordination: .aether/data/spawn-tree.txt
+
+
+━━ 🐜 N E X T   U P ━━
+Run `aether build 1` to start the next planned phase.
+Alternative: Run `aether focus "..."` or `aether redirect "..."` if you want to adjust the colony before the first wave.

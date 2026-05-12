@@ -4,8 +4,8 @@ milestone: v1.16
 milestone_name: Hybrid Runtime Boundary and Orchestration Recovery
 status: executing
 stopped_at: Phase 108 context gathered
-last_updated: "2026-05-12T12:37:14.938Z"
-last_activity: 2026-05-12 -- Phase 108 planning complete
+last_updated: "2026-05-12T12:39:32.443Z"
+last_activity: 2026-05-12 -- Phase 108 execution started
 progress:
   total_phases: 6
   completed_phases: 2
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-12)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 107 — classic-baseline-identification
+**Current focus:** Phase 108 — golden-workflow-tests
 
 ## Current Position
 
-Phase: 107 (classic-baseline-identification) — EXECUTING
-Plan: 1 of 2
-Status: Ready to execute
-Last activity: 2026-05-12 -- Phase 108 planning complete
+Phase: 108 (golden-workflow-tests) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 108
+Last activity: 2026-05-12 -- Phase 108 execution started
 
 ## Performance Metrics
 
