@@ -91,9 +91,9 @@ Plans:
   7. The host either runs the selected workflow end-to-end or documents the exact blocker with a reproducible test
 **Plans**: 3 plans
 Plans:
-- [ ] 109-01-PLAN.md -- TS host scaffold: types, Go bridge, entry point (HOST-01, HOST-02, HOST-05)
-- [ ] 109-02-PLAN.md -- Worker dispatch with spawn lifecycle recording (HOST-03, HOST-06)
-- [ ] 109-03-PLAN.md -- Full lifecycle orchestrator and integration tests (HOST-04, HOST-07)
+- [x] 109-01-PLAN.md -- TS host scaffold: types, Go bridge, entry point (HOST-01, HOST-02, HOST-05) (completed 2026-05-12)
+- [x] 109-02-PLAN.md -- Worker dispatch with spawn lifecycle recording (HOST-03, HOST-06) (completed 2026-05-12)
+- [x] 109-03-PLAN.md -- Full lifecycle orchestrator and integration tests (HOST-04, HOST-07) (completed 2026-05-12)
 
 ### Phase 110: Go Safety Invariant Verification
 **Goal**: Go remains the sole authority for state mutation, finalizers, locking, install/update/publish, and verification contracts, with tests proving invariants hold when the TS host is present
@@ -126,6 +126,6 @@ Plans:
 | 106. Boundary Contract | v1.16 | 0/1 | Planning complete | - |
 | 107. Classic Baseline Identification | v1.16 | 0/2 | Planning complete | - |
 | 108. Golden Workflow Tests | v1.16 | 1/1 | Complete    | 2026-05-12 |
-| 109. TypeScript Orchestration Host Prototype | v1.16 | 0/3 | Planning complete | - |
+| 109. TypeScript Orchestration Host Prototype | v1.16 | 3/3 | Complete    | 2026-05-12 |
 | 110. Go Safety Invariant Verification | v1.16 | 0/TBD | Not started | - |
 | 111. Follow-up Migration Map | v1.16 | 0/TBD | Not started | - |
