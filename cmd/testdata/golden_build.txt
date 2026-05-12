@@ -43,8 +43,6 @@ Wave 11 starting (in-repo, serial)
 Wave 12 starting (in-repo, serial)
   Execution: serial — single task in this wave
 
-Workers: none active yet
-Workers: none active yet
 … 🔨 Builder Worker-XX  starting wave 12  Worker: Worker-XX
 
 … 🔨 Builder Worker-XX  running wave 12  Worker: Worker-XX  [simulated worker heartbeat observed]

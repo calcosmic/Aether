@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -81,7 +82,8 @@ func normalizeForGolden(s string) string {
 			continue
 		}
 		// Skip activity block section headers
-		if trimmed == "Context:" || trimmed == "Completed:" || trimmed == "Active:" {
+		if trimmed == "Context:" || trimmed == "Completed:" || trimmed == "Active:" ||
+			strings.HasPrefix(trimmed, "Workers:") {
 			continue
 		}
 		// Skip indented ceremony context lines (activity block content)
@@ -331,5 +333,122 @@ func TestGoldenContinueVisualOutput(t *testing.T) {
 				t.Errorf("continue golden output missing %q", want)
 			}
 		}
+	}
+}
+
+// loadTestColonyState reads COLONY_STATE.json from the store for golden state tests.
+func loadTestColonyState(t *testing.T) colony.ColonyState {
+	t.Helper()
+	state, err := loadColonyState()
+	if err != nil {
+		t.Fatalf("failed to load colony state: %v", err)
+	}
+	if state == nil {
+		t.Fatal("colony state is nil after load")
+	}
+	return *state
+}
+
+func TestGoldenStateMutations(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Golden state mutation test"
+	taskOneID := "st-1"
+	taskTwoID := "st-2"
+
+	// Create initial colony state with 2 phases
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "State phase",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskOneID, Goal: "State task one", Status: colony.TaskPending}},
+				},
+				{
+					ID:     2,
+					Name:   "Final phase",
+					Status: colony.PhasePending,
+					Tasks:  []colony.Task{{ID: &taskTwoID, Goal: "State task two", Status: colony.TaskPending}},
+				},
+			},
+		},
+	})
+
+	// Step 1: Run plan
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	state := loadTestColonyState(t)
+	if state.State != colony.StateREADY {
+		t.Errorf("after plan: expected state READY, got %q", state.State)
+	}
+	if len(state.Plan.Phases) == 0 {
+		t.Error("after plan: expected phases to be generated")
+	}
+
+	// Step 2: Run build 1
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"build", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build returned error: %v", err)
+	}
+
+	state = loadTestColonyState(t)
+	if state.State != colony.StateBUILT {
+		t.Errorf("after build: expected state BUILT, got %q", state.State)
+	}
+	if state.CurrentPhase != 1 {
+		t.Errorf("after build: expected CurrentPhase 1, got %d", state.CurrentPhase)
+	}
+
+	// Step 3: Set up for continue -- update state to match what build finalize would set
+	now := time.Now().UTC()
+	state.State = colony.StateBUILT
+	state.CurrentPhase = 1
+	state.BuildStartedAt = &now
+	state.Plan.Phases[0].Status = colony.PhaseInProgress
+	if state.Plan.Phases[0].Tasks != nil && len(state.Plan.Phases[0].Tasks) > 0 {
+		state.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	}
+	createTestColonyState(t, dataDir, state)
+
+	// Seed the continue build packet with completed dispatches
+	dispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-51", Task: "State task one", Status: "completed", TaskID: taskOneID},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-52", Task: "Independent verification before advancement", Status: "completed"},
+	}
+	seedContinueBuildPacket(t, dataDir, 1, "State phase", goal, dispatches)
+
+	// Step 4: Run continue
+	stdout = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"continue"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("continue returned error: %v", err)
+	}
+
+	state = loadTestColonyState(t)
+	if state.Plan.Phases[0].Status != colony.PhaseCompleted {
+		t.Errorf("after continue: expected phase 1 status PhaseCompleted, got %q", state.Plan.Phases[0].Status)
+	}
+	if state.CurrentPhase != 2 {
+		t.Errorf("after continue: expected CurrentPhase advanced to 2, got %d", state.CurrentPhase)
+	}
+	// Multi-phase colony should return to READY (not COMPLETED)
+	if state.State != colony.StateREADY {
+		t.Errorf("after continue: expected state READY (multi-phase), got %q", state.State)
 	}
 }
