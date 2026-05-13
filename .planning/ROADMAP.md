@@ -50,7 +50,7 @@ See `.planning/milestones/` for full archived phase details.
 - [x] **Phase 113: Ceremony Narrator** - Render Go events into banners, caste identity, spawn frames, and stage markers — completed 2026-05-13
 - [x] **Phase 114: Real Worker Dispatch** - Replace simulation with actual platform worker spawning, parallel waves, error recovery — completed 2026-05-13
 - [ ] **Phase 115: Swarm Dashboard** - Live terminal dashboard with animated spinners, progress bars, and chamber activity map
-- [ ] **Phase 116: Queen Orchestration** - Workflow pattern selection, Builder-Probe Lock, tiered escalation, midden checks
+- [x] **Phase 116: Queen Orchestration** - Workflow pattern selection, Builder-Probe Lock, tiered escalation, midden checks — completed 2026-05-14
 - [ ] **Phase 117: Oracle Enhancement** - Phase-aware prompts, diminishing returns detection, template-specific synthesis
 - [ ] **Phase 118: Integration & Parity Verification** - Golden workflow tests, ceremony snapshots, cross-platform smoke, state safety
 
@@ -155,9 +155,9 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 112. Foundation | v1.17 | 2/2 | Complete | 2026-05-13 |
-| 113. Ceremony Narrator | v1.17 | 0/2 | Planning | - |
-| 114. Real Worker Dispatch | v1.17 | 0/TBD | Not started | - |
+| 113. Ceremony Narrator | v1.17 | 2/2 | Complete | 2026-05-13 |
+| 114. Real Worker Dispatch | v1.17 | 2/2 | Complete | 2026-05-13 |
 | 115. Swarm Dashboard | v1.17 | 0/TBD | Not started | - |
-| 116. Queen Orchestration | v1.17 | 1/2 | In Progress|  |
+| 116. Queen Orchestration | v1.17 | 2/2 | Complete | 2026-05-14 |
 | 117. Oracle Enhancement | v1.17 | 0/TBD | Not started | - |
 | 118. Integration & Parity | v1.17 | 0/TBD | Not started | - |
