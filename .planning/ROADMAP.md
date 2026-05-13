@@ -83,8 +83,8 @@ Plans:
   5. Output falls back to plain text when TTY is not available (three-mode support: json, visual, markdown)
 **Plans**: 2 plans
 Plans:
-- [ ] 112-01-PLAN.md - Node bump, ceremony types, shared YAML config
-- [ ] 112-02-PLAN.md - Event bridge, caste config loader, boundary enforcement and tests
+- [ ] 113-01-PLAN.md - Template system: editable YAML-frontmatter templates and loader with fallback
+- [ ] 113-02-PLAN.md - Narrator and renderers: visual/markdown/json output, event dispatch, Go print removal
 **UI hint**: yes
 
 ### Phase 114: Real Worker Dispatch
@@ -111,10 +111,6 @@ Plans:
   5. Elapsed time and token consumption are visible per worker
   6. Dashboard auto-refreshes as Go writes new events to the JSONL file
 **Plans**: 2 plans
-Plans:
-- [ ] 112-01-PLAN.md - Node bump, ceremony types, shared YAML config
-- [ ] 112-02-PLAN.md - Event bridge, caste config loader, boundary enforcement and tests
-**UI hint**: yes
 
 ### Phase 116: Queen Orchestration
 **Goal**: Queen intelligently selects workflow patterns, enforces Builder-Probe Lock, and manages tiered escalation
@@ -155,8 +151,8 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 112. Foundation | v1.17 | 0/TBD | Not started | - |
-| 113. Ceremony Narrator | v1.17 | 0/TBD | Not started | - |
+| 112. Foundation | v1.17 | 2/2 | Complete | 2026-05-13 |
+| 113. Ceremony Narrator | v1.17 | 0/2 | Planning | - |
 | 114. Real Worker Dispatch | v1.17 | 0/TBD | Not started | - |
 | 115. Swarm Dashboard | v1.17 | 0/TBD | Not started | - |
 | 116. Queen Orchestration | v1.17 | 0/TBD | Not started | - |
