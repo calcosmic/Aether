@@ -18,6 +18,12 @@ import type { CeremonyConfig } from "../caste-config.js";
 // Types
 // ---------------------------------------------------------------------------
 
+export interface OracleDisplayState {
+  phase: string;
+  iteration: number;
+  active: boolean;
+}
+
 export interface DashboardFrameData {
   wave: number;
   totalWaves: number;
@@ -26,6 +32,7 @@ export interface DashboardFrameData {
   failedWorkers: WorkerState[];
   elapsedSeconds: number;
   chamberActivity: ChamberActivity[];
+  oracle?: OracleDisplayState | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +81,18 @@ function buildFrame(data: DashboardFrameData, config: CeremonyConfig): string {
 
   lines.push(renderHeader(data));
   lines.push("");
+
+  // Oracle section
+  if (data.oracle?.active) {
+    lines.push(
+      chalk.magenta("🔮 Oracle") +
+        "  Phase: " +
+        chalk.bold(data.oracle.phase) +
+        "  |  Iteration: " +
+        chalk.bold(String(data.oracle.iteration))
+    );
+    lines.push("");
+  }
 
   // Active workers
   if (data.activeWorkers.length > 0) {

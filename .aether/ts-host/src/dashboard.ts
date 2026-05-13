@@ -46,6 +46,17 @@ export function createDashboard(opts: DashboardOptions): Dashboard {
   let currentWave = 0;
   let totalWaves = 0;
 
+  interface OracleState {
+    phase: string;
+    iteration: number;
+    active: boolean;
+  }
+  const oracleState: OracleState = {
+    phase: "idle",
+    iteration: 0,
+    active: false,
+  };
+
   return {
     onEvent(event: CeremonyEvent): void {
       const payload = event.payload;
@@ -112,6 +123,26 @@ export function createDashboard(opts: DashboardOptions): Dashboard {
             existing.status = "blocked";
             existing.lastUpdate = Date.now();
             workers.set(spawnId, existing);
+          }
+          break;
+        }
+
+        case "ceremony.oracle.phase_transition": {
+          oracleState.phase = payload.phase_name ?? String(payload.phase ?? "unknown");
+          oracleState.active = true;
+          break;
+        }
+
+        case "ceremony.oracle.iteration": {
+          oracleState.iteration = typeof payload.phase === "number" ? payload.phase : 0;
+          oracleState.phase = payload.phase_name ?? oracleState.phase;
+          oracleState.active = true;
+          break;
+        }
+
+        case "ceremony.loop.break": {
+          if (payload.loop_type === "oracle") {
+            oracleState.active = false;
           }
           break;
         }
@@ -187,6 +218,13 @@ export function createDashboard(opts: DashboardOptions): Dashboard {
       failedWorkers,
       elapsedSeconds: Math.floor((Date.now() - startTime) / 1000),
       chamberActivity: chamberMap.activities,
+      oracle: oracleState.active
+        ? {
+            phase: oracleState.phase,
+            iteration: oracleState.iteration,
+            active: oracleState.active,
+          }
+        : undefined,
     };
 
     renderDashboardFrame(data, config);

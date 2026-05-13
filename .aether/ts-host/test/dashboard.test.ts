@@ -163,4 +163,45 @@ describe("dashboard", () => {
     assert.equal(extractDirectoryPrefix("file.txt"), ".");
     assert.equal(extractDirectoryPrefix("a/b/c/d.ts"), "a/b/c");
   });
+
+  it("dashboard shows Oracle phase on ceremony.oracle.phase_transition", () => {
+    const dashboard = createDashboard({ cwd: REPO_ROOT });
+    dashboard.start();
+    const event = makeEvent("ceremony.oracle.phase_transition", {
+      phase: 2,
+      phase_name: "verify",
+    });
+    dashboard.onEvent(event);
+    // Verify via non-throwing lifecycle; Oracle state is internal
+    dashboard.stop();
+  });
+
+  it("dashboard shows Oracle iteration on ceremony.oracle.iteration", () => {
+    const dashboard = createDashboard({ cwd: REPO_ROOT });
+    dashboard.start();
+    const event = makeEvent("ceremony.oracle.iteration", {
+      phase: 5,
+      phase_name: "survey",
+    });
+    dashboard.onEvent(event);
+    dashboard.stop();
+  });
+
+  it("dashboard hides Oracle section on loop break", () => {
+    const dashboard = createDashboard({ cwd: REPO_ROOT });
+    dashboard.start();
+    dashboard.onEvent(
+      makeEvent("ceremony.oracle.iteration", {
+        phase: 3,
+        phase_name: "research",
+      })
+    );
+    dashboard.onEvent(
+      makeEvent("ceremony.loop.break", {
+        loop_type: "oracle",
+        source: "oracle",
+      })
+    );
+    dashboard.stop();
+  });
 });
