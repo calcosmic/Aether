@@ -233,8 +233,10 @@ export async function runLifecycle(
     }
 
     // Create a placeholder file for simulated worker file claims.
-    // The Go build-finalizer validates that all claimed files exist on disk.
-    // For simulated workers, we create a real file that can be claimed.
+    // The Go build-finalizer validates that all claimed files exist on disk
+    // and are within the repository. For simulated workers, we create a real
+    // file in .aether/ts-host/ (TS-host-owned, NOT in GO_OWNED_PATHS) that
+    // can be claimed as file_created by the simulated workers.
     const placeholderDir = join(opts.cwd, ".aether", "ts-host");
     const placeholderRel = ".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt";
     try {

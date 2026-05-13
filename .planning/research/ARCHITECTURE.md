@@ -1,484 +1,372 @@
-# Architecture Research: v1.15 Framework Coherence Audit
+# Architecture Research
 
-**Domain:** Systematic audit and hardening of an existing Go/Cobra multi-agent CLI framework (80+ subcommands, 3 platform surfaces, 7 data subsystems)
-**Researched:** 2026-05-07
-**Overall confidence:** HIGH (direct source code analysis of cmd/, pkg/, .aether/commands/*.yaml, wrapper contracts, existing test infrastructure)
+**Domain:** Aether Hybrid Runtime — TypeScript orchestration control plane over Go safety kernel
+**Researched:** 2026-05-12
+**Confidence:** HIGH
 
-## Executive Summary
+## Standard Architecture
 
-Aether has 317 registered Cobra subcommands spread across ~100 source files in cmd/, with 60 YAML source-of-truth command definitions, dual platform wrapper surfaces (Claude + OpenCode), and a Codex runtime-native lane. The audit must verify coherence across four integration surfaces: (1) Go runtime command contracts, (2) YAML-to-wrapper generation chain, (3) data flow through the full init-to-seal lifecycle, and (4) regression test coverage that catches drift.
-
-The architecture for the audit itself is a layered scanner pattern. Layer 1 inventories what exists (command catalog, data artifact catalog, wrapper catalog). Layer 2 cross-references surfaces for parity violations. Layer 3 traces data flow through the lifecycle to find dead-end artifacts and unconsumed outputs. Layer 4 writes regression tests that freeze the verified contracts so future drift fails loudly.
-
-The key insight is that Aether already has partial audit infrastructure: `source-check` verifies YAML-to-wrapper header parity, `command_parity_test.go` verifies Claude/OpenCode body parity, `command_source_hygiene_test.go` verifies wrapper-to-YAML source references, and `visual_wrapper_contract_test.go` verifies ceremony surface presence. The audit extends these into a complete coherence checker rather than building from scratch.
-
-**Critical constraint:** The audit must not change runtime behavior. It reads and cross-references. Fixes are separate phases. The audit architecture produces findings; subsequent phases act on them.
-
-## System Overview: The Audit Scanner Architecture
+### System Overview
 
 ```
-+=====================================================================+
-|                     AUDIT SCANNER (new code)                         |
-|                                                                      |
-|  +------------------+  +------------------+  +------------------+    |
-|  | Command Catalog  |  | Data Artifact    |  | Wrapper Parity   |    |
-|  | Scanner          |  | Scanner          |  | Scanner          |    |
-|  +--------+---------+  +--------+---------+  +--------+---------+    |
-|           |                       |                       |           |
-+-----------+-----------+-----------+-----------+-----------+-----------+
-            |                       |                       |
-            v                       v                       v
-+===================+  +===================+  +===================+
-| cmd/*.go          |  | .aether/data/     |  | .claude/commands/ |
-| (317 subcommands) |  | (7 data subsystems|  | .opencode/        |
-|                   |  |  + artifacts)     |  | (wrapper parity)  |
-+===================+  +===================+  +===================+
-            |                       |                       |
-            v                       v                       v
-+=====================================================================+
-|                  AUDIT FINDINGS (structured output)                  |
-|                                                                      |
-|  +------------------+  +------------------+  +------------------+    |
-|  | Command Contract |  | Lifecycle Data   |  | Parity Drift     |    |
-|  | Violations       |  | Dead Ends        |  | Report           |    |
-|  +------------------+  +------------------+  +------------------+    |
-|                                                                      |
-+=====================================================================+
-            |
-            v
-+=====================================================================+
-|              REGRESSION TESTS (freeze verified contracts)            |
-|                                                                      |
-|  TestCommandCatalogComplete      - no orphan commands                |
-|  TestDataFlowLifecycleConnected  - no dead-end artifacts             |
-|  TestWrapperParityAtScale        - all surfaces agree                |
-|  TestCommandGuideYAMLAlignment   - guide catalog matches YAML        |
-+=====================================================================+
+┌─────────────────────────────────────────────────────────────────┐
+│                    Platform Surfaces                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │ Claude Code  │  │  OpenCode    │  │  Codex CLI   │          │
+│  │   wrappers   │  │   wrappers   │  │  (native)    │          │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
+├─────────┴──────────────────┴──────────────────┴─────────────────┤
+│              TypeScript Orchestration Host                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │   Host      │  │   Worker    │  │  Ceremony   │             │
+│  │  Adapter    │  │  Dispatcher │  │   Renderer  │             │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
+│         │                │                │                     │
+│  ┌──────┴────────────────┴────────────────┴──────┐             │
+│  │        Manifest Parser & Contract Validator     │             │
+│  └──────────────────────┬─────────────────────────┘             │
+├─────────────────────────┴───────────────────────────────────────┤
+│                     Go Safety Kernel                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │  Manifest   │  │   State     │  │  Finalizer  │             │
+│  │  Generator  │  │   Mutator   │  │   Engine    │             │
+│  │  (plan-only)│  │  (atomic)   │  │  (validate) │             │
+│  └─────────────┘  └─────────────┘  └─────────────┘             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │  Dispatch   │  │  Recovery   │  │  Publish/   │             │
+│  │  Contract   │  │   Engine    │  │   Update    │             │
+│  │  Builder    │  │             │  │             │             │
+│  └─────────────┘  └─────────────┘  └─────────────┘             │
+├─────────────────────────────────────────────────────────────────┤
+│                  Editable Colony Brain                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │   YAML      │  │  Markdown   │  │    TOML     │             │
+│  │  Commands   │  │  Playbooks  │  │   Agents    │             │
+│  └─────────────┘  └─────────────┘  └─────────────┘             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Integration Points That Need Verification
+### Component Responsibilities
 
-### 1. Go Runtime Command Surface (cmd/*.go)
+| Component | Responsibility | Typical Implementation |
+|-----------|----------------|------------------------|
+| Go Manifest Generator | Produce JSON manifests for plan/build/continue without mutating state | `aether plan --plan-only`, `aether build --plan-only` |
+| Go State Mutator | Atomic JSON writes with file locking, rollback on validation failure | `pkg/storage/storage.go`, `UpdateJSONAtomically` |
+| Go Finalizer Engine | Validate manifest provenance, merge worker results, commit state | `aether build-finalize`, `aether continue-finalize` |
+| TS Host Adapter | Shell out to Go for manifests, parse JSON, orchestrate dispatch | New: `.aether/ts/host.ts` |
+| TS Worker Dispatcher | Spawn platform workers from manifest dispatches, record lifecycle | New: `.aether/ts/dispatcher.ts` |
+| TS Ceremony Renderer | Consume Go ceremony events, render live worker stacks and wave banners | Extend existing `.aether/ts/narrator.ts` |
+| Editable Assets | Command playbooks, agent definitions, skills, ceremonies | `.aether/commands/*.yaml`, `.claude/`, `.opencode/`, `.codex/` |
 
-**Scale:** 317 `rootCmd.AddCommand()` calls across ~100 files.
-
-The audit must verify:
-
-| What | Where | Contract |
-|------|-------|----------|
-| Every command has a `Use` field | `&cobra.Command{Use: ...}` | Must match `aether <name>` pattern |
-| Every command has a `Short` description | `Short: "..."` | Non-empty, human-readable |
-| Output mode consistency | `outputOK()`, `outputError()`, `outputWorkflow()` | Commands that produce JSON must use `outputOK`; visual commands must use `outputWorkflow` |
-| Store initialization | `store *storage.Store` | Commands that read/write data must not have `nil` store; `skipStoreInit()` must list all storeless commands |
-| Flag registration | `cmd.Flags().String(...)` | Flags referenced in `RunE` must be registered in `init()` |
-
-**New component:** `CommandCatalogScanner` -- walks all registered Cobra commands via `rootCmd.Commands()` and produces a structured catalog.
-
-### 2. YAML Source-of-Truth Chain
-
-**Scale:** 60 YAML files in `.aether/commands/`.
+## Recommended Project Structure
 
 ```
-.aether/commands/*.yaml          <- Source definitions (name, runtime, codex_orchestration, wrapper_contract, guardrails)
-    |
-    v  (generation)
-.claude/commands/ant/*.md        <- Claude Code wrappers (must have generated-from header)
-.opencode/commands/ant/*.md      <- OpenCode wrappers (must have generated-from header)
-    |
-    v  (delegation)
-cmd/codex_workflow_cmds.go       <- Go runtime (authoritative state mutations)
-cmd/command_guide.go             <- Codex orchestration guide catalog
+.aether/ts/
+├── package.json              # Existing: @aether/ceremony-narrator
+├── tsconfig.json             # Existing
+├── src/
+│   ├── index.ts              # Re-export public surface
+│   ├── narrator.ts           # Existing: ceremony event parser/renderer
+│   ├── host.ts               # NEW: orchestration host adapter
+│   ├── manifest.ts           # NEW: manifest parser + contract validator
+│   ├── dispatcher.ts         # NEW: platform worker dispatcher
+│   ├── platform/
+│   │   ├── claude.ts         # NEW: Claude Code subagent adapter
+│   │   ├── opencode.ts       # NEW: OpenCode agent adapter
+│   │   └── codex.ts          # NEW: Codex CLI process adapter
+│   ├── contracts/
+│   │   ├── build-manifest.ts # NEW: codexBuildManifest type mirror
+│   │   ├── plan-manifest.ts  # NEW: codexPlanManifest type mirror
+│   │   └── dispatch-contract.ts # NEW: codexDispatchContract type mirror
+│   └── types/
+│       └── events.ts         # NEW: ceremony event type definitions
+├── test/
+│   ├── narrator.test.ts      # Existing
+│   ├── host.test.ts          # NEW: host adapter unit tests
+│   ├── manifest.test.ts      # NEW: manifest parsing tests
+│   └── dispatcher.test.ts    # NEW: dispatch logic tests
+└── dist/                     # Build output (gitignored)
 ```
 
-**Verification points:**
+### Structure Rationale
 
-| Check | Existing Coverage | Gap |
-|-------|-------------------|-----|
-| Every YAML has matching Claude wrapper | `source-check` | Partial -- checks header, not body contract |
-| Every YAML has matching OpenCode wrapper | `source-check` | Same as above |
-| Claude/OpenCode wrapper bodies are identical | `command_parity_test.go` | Covered |
-| Wrapper generated-from header matches YAML | `source_source_hygiene_test.go` | Covered |
-| YAML `codex_orchestration` matches `commandGuideCatalog()` | None | GAP -- no test verifies the command_guide catalog includes all YAML commands |
-| YAML `wrapper_contract` fields match actual runtime subcommands | None | GAP -- no test verifies manifest/finalizer fields reference real commands |
-| YAML `guardrails` are present and non-empty | None | GAP |
-| Lifecycle wrappers follow finalizer-then-closeout ordering | `visual_wrapper_contract_test.go` | Covered |
+- **`src/host.ts`:** Single entry point for the orchestration host. Owns the lifecycle loop: manifest -> ceremony -> dispatch -> finalize. Keeps platform specifics behind adapter interfaces.
+- **`src/manifest.ts`:** Mirrors Go manifest structures in TypeScript for type-safe parsing. Validates JSON shape before dispatch to fail fast on contract drift.
+- **`src/dispatcher.ts`:** Abstracts worker spawning across Claude Code (Task tool), OpenCode (agent spawn), and Codex (subprocess). Records `spawn-log` and `spawn-complete` via Go CLI calls.
+- **`src/platform/*.ts`:** Platform adapters isolate platform-specific spawn mechanics. Claude uses the Task tool; OpenCode uses its agent protocol; Codex spawns child processes. Each adapter implements a common `PlatformAdapter` interface.
+- **`src/contracts/*.ts`:** TypeScript interfaces derived from Go structs (`codexBuildManifest`, `codexPlanManifest`, `codexDispatchContract`). These are the integration contract. When Go structs change, these must update.
+- **`src/narrator.ts`:** Existing ceremony event consumer. Extended to render live worker stacks and wave banners from manifest-driven events, not just raw JSON lines.
 
-**New component:** `YAMLGuideAlignmentScanner` -- reads all YAML `codex_orchestration` entries, reads `commandGuideCatalog()`, reports mismatches.
+## Architectural Patterns
 
-### 3. Data Flow Through Full Lifecycle (init -> seal)
+### Pattern 1: Plan-Only Manifest + Finalizer Handoff
 
-The lifecycle creates, reads, and mutates data artifacts across 7 subsystems:
+**What:** Go generates a manifest without mutating state. TypeScript dispatches workers from the manifest. Go finalizer validates and commits state atomically.
 
-```
-.aaether/data/
-+-- COLONY_STATE.json          <- Central colony state (init creates, all mutate)
-+-- pheromones.json            <- Signal system (write/decay/display/display-prime)
-+-- midden/
-|   +-- midden.json            <- Failure tracking (write/recent/review/acknowledge)
-+-- constraints.json           <- Legacy constraints (write/read)
-+-- pending-decisions.json     <- Discuss system (add/list/resolve)
-+-- assumptions.json           <- Assumptions (write/read)
-+-- session.json               <- Session state (init/read/update/clear/verify)
-+-- behavior-observations.jsonl <- Profile observations (observe/read)
-+-- survey/                    <- Territory survey (load/verify)
-+-- handoffs/
-|   +-- worker-handoffs.json   <- Worker handoffs (build writes, continue reads)
-+-- spawn-runs/                <- Spawn tracking (log/complete)
-+-- review-ledgers/            <- Review persistence (write/read/summary/resolve)
-+-- gates/                     <- Gate results (write/read)
-+-- flags/                     <- Colony flags (add/resolve/check)
-+-- eventbus/                  <- Event bus (publish/query/replay/cleanup)
-+-- instincts/                 <- Instincts (create/read/trusted/decay/archive)
-+-- changelog/
-|   +-- CHANGELOG.md           <- Changelog (append)
-+-- chamber/                   <- Chambers (create/verify/list/compare)
-+-- views/                     <- View state (init/get/set/toggle)
-+-- traces/                    <- Traces (replay/export/summary/inspect)
-+-- grave/                     <- Grave patterns (add/check)
-+-- error-patterns/            <- Error patterns (add/flag/summary/check)
-+-- graph/                     <- Knowledge graph (link/neighbors/reach/cluster)
-+-- seal/
-|   +-- final-review.json      <- Seal review (seal writes)
-+-- codex/
-|   +-- build/                 <- Build artifacts (manifest, worker files)
-|   +-- continue/              <- Continue artifacts
-+-- oracle/                    <- Oracle workspace
-+-- hive/                      <- Hive search index (if SQLite enabled)
-+-- backups/                   <- Backup rotation
-```
+**When to use:** All lifecycle commands that mutate colony state (plan, build, continue, seal).
 
-**Data flow trace (init to seal):**
+**Trade-offs:**
+- Pro: Go remains sole state authority. TypeScript cannot corrupt state.
+- Pro: Manifests are testable JSON contracts.
+- Con: Two process hops (Go -> TS -> Go) add latency. Acceptable for developer tools.
+- Con: Requires discipline: TypeScript must never write `.aether/data/` directly.
 
-```
-INIT
-  |-- writes COLONY_STATE.json (goal, phase=0, state=INITIALIZED)
-  |-- writes session.json (session_id, colony_goal)
-  |
-COLONIZE
-  |-- reads COLONY_STATE.json (goal, scope)
-  |-- writes survey/* files
-  |-- writes COLONY_STATE.json (territory_surveyed)
-  |
-PLAN
-  |-- reads COLONY_STATE.json (goal, scope, depth)
-  |-- writes COLONY_STATE.json (plan with phases)
-  |
-BUILD N
-  |-- reads COLONY_STATE.json (current_phase, plan, depth)
-  |-- writes spawn-runs/* (spawn tracking)
-  |-- writes handoffs/worker-handoffs.json
-  |-- writes codex/build/* (manifest, worker files)
-  |-- writes COLONY_STATE.json (StateBUILT)
-  |
-CONTINUE N
-  |-- reads COLONY_STATE.json (current_phase, plan, gate_results)
-  |-- reads handoffs/worker-handoffs.json
-  |-- reads codex/build/* (verification)
-  |-- writes gates/* (gate results)
-  |-- writes review-ledgers/* (review findings)
-  |-- runs verification (tests, lint, claims)
-  |-- runs gate checks (11 gates)
-  |-- writes pheromones.json (decay + signal housekeeping)
-  |-- writes midden/* (failure tracking)
-  |-- writes instincts/* (promoted learnings)
-  |-- writes COLONY_STATE.json (phase advanced or blocked)
-  |
-SEAL
-  |-- reads COLONY_STATE.json (all phases complete)
-  |-- writes seal/final-review.json
-  |-- writes review-ledgers/* (final review findings)
-  |-- writes QUEEN.md (lessons, wisdom)
-  |-- promotes instincts to hive (hive-promote)
-  |-- writes COLONY_STATE.json (state=SEALED, milestone=CROWNED_ANTHILL)
-```
-
-**Dead-end detection:** For each artifact, the audit must answer: who writes it, who reads it, is it consumed downstream, or is it write-only decoration?
-
-**New component:** `LifecycleDataFlowScanner` -- traces write/read relationships across all data files.
-
-### 4. Platform Parity (3 Surfaces)
-
-| Surface | Location | Format | Parity Check |
-|---------|----------|--------|-------------|
-| Claude Code | `.claude/commands/ant/*.md` | Markdown (generated) | Body must match OpenCode |
-| OpenCode | `.opencode/commands/ant/*.md` | Markdown (generated) | Body must match Claude |
-| Codex | `command_guide.go` + Codex skills | Go struct catalog + TOML agents | Must cover same commands |
-
-**New component:** `ThreeSurfaceParityScanner` -- verifies that every YAML command appears in all three surfaces with consistent contracts.
-
-### 5. Ceremony Surface Integrity
-
-The ceremony system (`cmd/ceremony_cmd.go`) provides 4 visual surfaces:
-
-| Ceremony | Purpose | Used By |
-|----------|---------|---------|
-| `spawn-plan` | Render worker spawn plan | build, plan, colonize, seal, swarm |
-| `wave-start` | Render wave banner | build, plan, colonize, seal, swarm |
-| `worker-complete` | Render worker completion | build, plan, colonize, seal, swarm |
-| `closeout` | Render lifecycle summary | build, plan, colonize, continue, seal, swarm |
-
-Every lifecycle wrapper (6 workflows x 2 platforms = 12 wrappers) must call all four ceremony surfaces in the correct order.
-
-**Existing coverage:** `visual_wrapper_contract_test.go` verifies presence and ordering.
-
-### 6. Gate System Integrity
-
-The gate system (`cmd/gate.go`) has 11 gates with classification:
-
-| Classification | Behavior | Auto-resolve? |
-|----------------|----------|---------------|
-| `hard_block` | Stops advancement | Never |
-| `soft_block` | Warns, can be overridden | Only if queen approves |
-| `advisory` | Informational | Always safe |
-
-**Audit check:** Every gate must have an explicit classification. No gate should be unclassified.
-
-### 7. Worker Economy
-
-27 agent definitions across 3 platforms:
-
-| Platform | Location | Format | Count |
-|----------|----------|--------|-------|
-| Claude | `.claude/agents/ant/*.md` | Markdown | 25 |
-| OpenCode | `.opencode/agents/*.md` | Markdown | varies |
-| Codex | `.codex/agents/*.toml` | TOML | 25 |
-
-**Audit check:** Every agent must have a caste assignment, a clear write output (not read-only), and must be referenced by at least one command.
-
-## Recommended Audit Architecture (New Components)
-
-### Component Inventory
-
-All new code lives in cmd/ as test files and potentially a new `audit_catalog.go` for runtime catalog generation.
-
-| Component | Type | Purpose | Depends On |
-|-----------|------|---------|------------|
-| `audit-catalog` | Cobra command (new) | Produce a structured JSON catalog of all registered commands, their flags, output mode, and data file interactions | `rootCmd` tree walk |
-| `CommandCatalogScanner` | Test helper | Walk Cobra tree, produce map of command name -> metadata | `audit-catalog` or direct `rootCmd` inspection |
-| `YAMLGuideAlignmentTest` | Test file | Verify `commandGuideCatalog()` covers all YAML commands and vice versa | `commandGuideCatalog()`, YAML directory |
-| `DataFlowLifecycleTest` | Test file | Verify every data artifact has at least one writer and one reader across the lifecycle | Source analysis of cmd/*.go |
-| `ThreeSurfaceParityTest` | Test file | Extend existing parity test to include command-guide coverage | Existing `command_parity_test.go` |
-| `CommandContractRegressionTest` | Test file | Freeze the verified command catalog as a snapshot; future drift fails the test | Catalog snapshot |
-
-### Data Structures
-
-```go
-// CommandCatalogEntry describes a single registered Cobra command.
-type CommandCatalogEntry struct {
-    Name         string   `json:"name"`
-    HasShort     bool     `json:"has_short"`
-    HasRunE      bool     `json:"has_run_e"`
-    Flags        []string `json:"flags"`
-    OutputMode   string   `json:"output_mode"`   // "json", "visual", "workflow", "unknown"
-    NeedsStore   bool     `json:"needs_store"`
-    Category     string   `json:"category"`       // "literal", "full-orchestration", "semi-intelligent"
-    YAMLSource   string   `json:"yaml_source"`     // matching .aether/commands/<name>.yaml
-    InGuide      bool     `json:"in_guide"`        // appears in commandGuideCatalog()
-    DataReads    []string `json:"data_reads"`       // data files this command reads
-    DataWrites   []string `json:"data_writes"`      // data files this command writes
-}
-
-// DataFlowEdge describes a producer-consumer relationship.
-type DataFlowEdge struct {
-    Artifact string `json:"artifact"` // e.g., "COLONY_STATE.json", "pheromones.json"
-    Writers  []string `json:"writers"`  // commands that write this file
-    Readers  []string `json:"readers"`  // commands that read this file
-    Orphan   bool     `json:"orphan"`   // true if write-only (no reader) or read-only (no writer)
-}
-
-// ParityViolation describes a mismatch across surfaces.
-type ParityViolation struct {
-    Type       string `json:"type"`        // "missing_yaml", "missing_wrapper", "body_drift", "guide_mismatch"
-    Command    string `json:"command"`
-    Surface    string `json:"surface"`     // "claude", "opencode", "codex_guide", "yaml"
-    Expected   string `json:"expected"`
-    Actual     string `json:"actual"`
-}
-```
-
-## Build Order (Phase Dependencies)
-
-The audit phases must be ordered so each builds on verified results from the previous.
-
-```
-Phase 1: Command Inventory (no dependencies)
-  |-- Build CommandCatalogScanner
-  |-- Walk rootCmd tree, produce full catalog
-  |-- Output: cmd_audit_catalog.json
-  |-- Why first: every subsequent phase needs to know what commands exist
-  |
-Phase 2: YAML/Wrapper Parity (depends on Phase 1 catalog)
-  |-- Extend existing source-check with catalog-aware validation
-  |-- Verify YAML-to-wrapper generation chain completeness
-  |-- Verify command-guide catalog matches YAML
-  |-- Output: parity_violations.json
-  |-- Why second: needs the command catalog to cross-reference
-  |
-Phase 3: Data Flow Tracing (depends on Phase 1 catalog)
-  |-- For each command in catalog, trace data reads/writes
-  |-- Build DataFlowEdge map for all artifacts
-  |-- Identify dead-end artifacts (write-only, read-only, orphan)
-  |-- Output: data_flow_map.json
-  |-- Why third: needs command catalog to know which commands to trace
-  |
-Phase 4: Lifecycle Walkthrough (depends on Phase 3 data flow)
-  |-- Walk the init->colonize->plan->build->continue->seal lifecycle
-  |-- Verify each transition produces artifacts that the next transition consumes
-  |-- Identify lifecycle gaps (artifacts produced but never consumed downstream)
-  |-- Output: lifecycle_gaps.json
-  |-- Why fourth: needs data flow map to understand the full chain
-  |
-Phase 5: Regression Test Freezing (depends on Phases 1-4 findings)
-  |-- Write regression tests that snapshot the verified catalog
-  |-- Write regression tests that snapshot data flow edges
-  |-- Write regression tests that snapshot parity state
-  |-- Output: new test files in cmd/
-  |-- Why last: needs verified findings to know what to freeze
-```
-
-**Dependency graph:**
-
-```
-Phase 1 (Inventory)
-    |
-    +---> Phase 2 (Parity)
-    |
-    +---> Phase 3 (Data Flow)
-              |
-              v
-          Phase 4 (Lifecycle)
-              |
-              v
-          Phase 5 (Regression)
-```
-
-Phases 2 and 3 can run in parallel. Phase 4 requires Phase 3. Phase 5 requires all prior phases.
-
-## Patterns to Follow
-
-### Pattern 1: Catalog-First Auditing
-
-**What:** Build a complete inventory before checking any individual item.
-**When:** Always. You cannot verify coherence without knowing what exists.
 **Example:**
+```typescript
+// host.ts — build lifecycle
+async function runBuild(phase: number): Promise<void> {
+  // 1. Go generates manifest without state mutation
+  const manifestJson = await goExec('build', `--plan-only`, `--phase`, String(phase));
+  const manifest = parseBuildManifest(manifestJson);
 
-```go
-func buildCommandCatalog(t *testing.T) map[string]CommandCatalogEntry {
-    catalog := make(map[string]CommandCatalogEntry)
-    for _, cmd := range rootCmd.Commands() {
-        entry := CommandCatalogEntry{
-            Name:     cmd.Name(),
-            HasShort: cmd.Short != "",
-            HasRunE:  cmd.RunE != nil,
-        }
-        // ... populate flags, output mode, etc.
-        catalog[entry.Name] = entry
-    }
-    return catalog
+  // 2. TypeScript renders ceremony from manifest
+  renderCeremony(manifest);
+
+  // 3. TypeScript dispatches workers per manifest waves
+  const results = await dispatchWaves(manifest.dispatches, manifest.contract);
+
+  // 4. Write completion JSON to temp file (NOT .aether/data)
+  const completionFile = await writeCompletionJson(results);
+
+  // 5. Go finalizer validates and commits state
+  await goExec('build-finalize', String(phase), `--completion-file`, completionFile);
 }
 ```
 
-### Pattern 2: Snapshot Regression
+### Pattern 2: Spawn-Log / Spawn-Complete Bookkeeping
 
-**What:** After verifying a surface is correct, freeze it as a test assertion so future drift fails CI.
-**When:** At the end of the audit, not during.
+**What:** Every worker spawn and completion is recorded via Go CLI commands, not by writing state files directly.
+
+**When to use:** Every worker dispatch in the TypeScript control plane.
+
+**Trade-offs:**
+- Pro: Go owns the spawn ledger. TypeScript only requests entries.
+- Pro: Audit trail is consistent across platforms.
+- Con: Requires Go CLI subprocess calls for every spawn. Batch where possible.
+
 **Example:**
+```typescript
+// dispatcher.ts
+async function dispatchWorker(worker: DispatchWorker): Promise<WorkerResult> {
+  await goExec('spawn-log', `--caste`, worker.caste, `--task`, worker.taskId);
 
-```go
-func TestCommandCatalogSnapshot(t *testing.T) {
-    catalog := buildCommandCatalog(t)
-    // Verify no commands were removed
-    knownCount := 317 // snapshot from audit
-    if len(catalog) < knownCount {
-        t.Fatalf("command count decreased: got %d, expected at least %d", len(catalog), knownCount)
-    }
+  const result = await platform.spawn(worker); // Platform-specific
+
+  await goExec('spawn-complete', `--caste`, worker.caste, `--task`, worker.taskId, `--status`, result.status);
+  return result;
 }
 ```
 
-### Pattern 3: Cross-Reference Verification
+### Pattern 3: Platform Adapter Interface
 
-**What:** For every item in surface A, verify it exists in surface B.
-**When:** Parity checks across YAML, wrappers, command-guide, and runtime.
+**What:** A common interface for spawning workers across Claude Code, OpenCode, and Codex. Each platform implements the interface.
+
+**When to use:** When the control plane needs to dispatch workers without knowing the platform specifics.
+
+**Trade-offs:**
+- Pro: Platform parity is enforced by shared interface.
+- Pro: New platforms add an adapter, not a rewrite.
+- Con: Lowest common denominator may miss platform-specific optimizations.
+
 **Example:**
+```typescript
+// platform/types.ts
+interface PlatformAdapter {
+  readonly name: 'claude' | 'opencode' | 'codex';
+  spawn(worker: DispatchWorker): Promise<WorkerResult>;
+  isAvailable(): Promise<boolean>;
+}
 
-```go
-func TestYAMLHasGuideEntry(t *testing.T) {
-    yamlNames := loadYAMLCommandNames(t)
-    guideCatalog := commandGuideCatalog()
-    literalSet := make(map[string]bool)
-    for _, name := range commandGuideLiteralCommands() {
-        literalSet[name] = true
-    }
-    for name := range yamlNames {
-        _, inGuide := guideCatalog[name]
-        if !inGuide && !literalSet[name] {
-            t.Errorf("YAML command %q has no command-guide entry", name)
-        }
-    }
+// platform/claude.ts
+class ClaudeAdapter implements PlatformAdapter {
+  readonly name = 'claude';
+  async spawn(worker: DispatchWorker): Promise<WorkerResult> {
+    // Use Claude Code Task tool
+    return await taskToolSpawn(worker);
+  }
+  async isAvailable(): Promise<boolean> {
+    return process.env.CLAUDE_CODE === '1';
+  }
 }
 ```
 
-## Anti-Patterns to Avoid
+### Pattern 4: Ceremony Event Stream
 
-### Anti-Pattern 1: Audit That Modifies Behavior
+**What:** Go emits structured JSON events to stdout. TypeScript narrator consumes and renders them. Visual output is never parsed as truth.
 
-**What people do:** Write audit code that fixes issues as it finds them.
-**Why it is wrong:** Makes it impossible to distinguish findings from fixes. Breaks reproducibility.
-**Do this instead:** Audit produces findings. Fixes are separate phases with separate tests.
+**When to use:** All user-visible lifecycle commands.
 
-### Anti-Pattern 2: Brittle Snapshot Tests
+**Trade-offs:**
+- Pro: Clean separation: Go owns event truth, TS owns rendering.
+- Pro: Events are testable and versionable.
+- Con: Requires `AETHER_OUTPUT_MODE=json` or similar protocol.
 
-**What people do:** Snapshot entire command bodies or YAML contents as strings.
-**Why it is wrong:** Any minor formatting change breaks the test, causing alert fatigue.
-**Do this instead:** Snapshot structural properties (command count, flag count, required ceremony surfaces, data flow edges). Use `>=` for counts (growth is fine), exact match for parity.
+**Example:**
+```typescript
+// narrator.ts
+interface CeremonyEvent {
+  type: 'spawn-plan' | 'wave-start' | 'worker-complete' | 'closeout';
+  phase?: number;
+  wave?: number;
+  caste?: string;
+  workerName?: string;
+  status?: 'success' | 'failure' | 'skipped';
+  message?: string;
+}
 
-### Anti-Pattern 3: Testing Wrappers Instead of Contracts
+function renderEvent(event: CeremonyEvent): string {
+  switch (event.type) {
+    case 'wave-start':
+      return `\n── Wave ${event.wave} ──\n`;
+    case 'worker-complete':
+      return `${casteEmoji(event.caste)} ${event.workerName}  ${event.status}\n`;
+    // ...
+  }
+}
+```
 
-**What people do:** Assert exact text in wrapper markdown files.
-**Why it is wrong:** Wrappers are generated and will change with generator improvements.
-**Do this instead:** Assert structural contracts: generated-from header exists, ceremony calls are present, finalizer/closeout ordering is correct, hand-editing guardrails are present.
+## Data Flow
 
-### Anti-Pattern 4: Ignoring Store Initialization
+### Request Flow (Build Lifecycle)
 
-**What people do:** Assume all commands that access data properly check `store != nil`.
-**Why it is wrong:** A command that runs without a store will panic or silently fail.
-**Do this instead:** Verify that every command with data reads/writes either checks store or is listed in `skipStoreInit()`.
+```
+User: /ant-build 1
+    ↓
+[Wrapper] → calls TS host adapter (or TS host is the wrapper)
+    ↓
+[TS Host] → shells out: aether build 1 --plan-only
+    ↓
+[Go Runtime] → generates codexBuildManifest JSON (no state mutation)
+    ↓
+[TS Host] → parseBuildManifest(manifestJson)
+    ↓
+[TS Host] → renderCeremony(manifest) → stdout/events
+    ↓
+[TS Dispatcher] → for each wave in manifest.dispatches:
+    → for each worker in wave:
+        → platformAdapter.spawn(worker)
+        → aether spawn-log --caste X --task Y
+        → await worker result
+        → aether spawn-complete --caste X --task Y --status Z
+    ↓
+[TS Host] → writeCompletionJson(results) → /tmp/aether-completion-*.json
+    ↓
+[TS Host] → shells out: aether build-finalize 1 --completion-file /tmp/...
+    ↓
+[Go Finalizer] → validate manifest provenance
+                → merge worker results
+                → UpdateJSONAtomically(COLONY_STATE.json)
+    ↓
+[Go Runtime] → emit final ceremony event
+    ↓
+[TS Narrator] → render closeout
+```
 
-## Existing Audit Infrastructure (Extend, Do Not Replace)
+### State Management
 
-| Existing Tool | What It Checks | Extension Needed |
-|---------------|---------------|------------------|
-| `aether source-check` | YAML-to-wrapper headers, retired mirrors, canonical surfaces | Add command-guide alignment, wrapper contract field validation |
-| `command_parity_test.go` | Claude/OpenCode wrapper body parity | Add Codex command-guide parity |
-| `command_source_hygiene_test.go` | Wrapper generated-from headers, YAML source references | Add YAML field completeness (codex_orchestration, wrapper_contract) |
-| `visual_wrapper_contract_test.go` | Ceremony surface presence in lifecycle wrappers | Add ceremony parameter validation |
-| `platform_doc_hygiene_test.go` | Runtime CLI references in lifecycle docs | Extend to cover new commands |
-| `emoji_audit_test.go` | Emoji map coverage for visual commands | Add to catalog completeness check |
+```
+Go State Store (.aether/data/)
+    ↑ (atomic writes, file locking)
+Go Finalizer Engine
+    ↑ (validation, provenance checks)
+Go Manifest Generator
+    ↑ (plan-only, no mutation)
+TypeScript Host Adapter
+    ↑ (orchestration, never writes .aether/data/)
+Platform Wrappers / User
+```
 
-## Integration Points Summary
+### Key Data Flows
 
-| Integration Point | Left Side | Right Side | Contract | Existing Test |
-|-------------------|-----------|------------|----------|--------------|
-| YAML -> Claude wrapper | `.aether/commands/*.yaml` | `.claude/commands/ant/*.md` | generated-from header, body content | `source-check`, `command_source_hygiene_test` |
-| YAML -> OpenCode wrapper | `.aether/commands/*.yaml` | `.opencode/commands/ant/*.md` | generated-from header, body content | Same as above |
-| Claude <-> OpenCode parity | `.claude/commands/ant/*.md` | `.opencode/commands/ant/*.md` | Identical body | `command_parity_test` |
-| YAML -> command-guide | `.aether/commands/*.yaml` | `commandGuideCatalog()` | Every YAML has a guide entry | GAP |
-| YAML -> Go runtime | `.aether/commands/*.yaml` | `cmd/codex_workflow_cmds.go` | wrapper_contract fields match real commands | GAP |
-| Lifecycle wrapper -> ceremony | `.claude/commands/ant/{build,plan,...}.md` | `ceremony_cmd.go` | All 4 ceremony surfaces called in order | `visual_wrapper_contract_test` |
-| Build -> Continue data flow | `codex/build/*` artifacts | `codex_continue.go` reads | Build artifacts consumed by continue | GAP |
-| Continue -> Seal data flow | `gates/*`, `review-ledgers/*` | `seal_final_review.go` | Gate results and ledgers consumed by seal | GAP |
-| Seal -> Hive promotion | `instincts/*` | `hive.go` | High-confidence instincts promoted | GAP |
-| Colony-prime -> Worker context | `COLONY_STATE.json`, `pheromones.json`, `QUEEN.md` | `colony_prime_context.go` | All injected into worker prompt | `colony_prime_test` |
+1. **Manifest Flow:** Go generates JSON manifest -> TS parses and validates -> TS dispatches from manifest fields -> Go finalizer receives completion JSON. This is the core integration boundary.
+2. **Event Flow:** Go emits ceremony events -> TS narrator consumes and renders -> User sees live worker stacks. Events are read-only; TS never writes state based on events.
+3. **Spawn Ledger Flow:** TS requests spawn-log/spawn-complete via Go CLI -> Go updates internal spawn tracking -> Go finalizer references spawn ledger for provenance. TS never writes spawn ledger files directly.
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1 colony, 1 user | TS host runs inline in wrapper process. No background service needed. |
+| Multiple colonies, 1 user | TS host is stateless per invocation. Go state remains per-repo. No shared TS state. |
+| Multiple users / CI | TS host runs in CI process. Go binary is the only installed artifact. No TS daemon. |
+
+### Scaling Priorities
+
+1. **First bottleneck:** Subprocess latency from TS -> Go CLI calls. Mitigation: batch spawn-log calls, use `--plan-only` JSON output directly without temp files where possible.
+2. **Second bottleneck:** Platform worker concurrency limits (Claude Code Task tool limits, OpenCode agent slots). Mitigation: respect `codexDispatchContract` worker counts and timeouts; queue workers if platform limits exceeded.
+
+## Anti-Patterns
+
+### Anti-Pattern 1: TypeScript Writes `.aether/data/` Directly
+
+**What people do:** The TS control plane writes COLONY_STATE.json, session files, or spawn ledgers directly.
+
+**Why it's wrong:** Violates the safety kernel boundary. Corrupts state if TS has a bug or races with Go. Breaks atomic write guarantees.
+
+**Do this instead:** All state writes go through Go finalizers. TS writes completion JSON to temp files outside `.aether/data/` and passes paths to Go finalizers.
+
+### Anti-Pattern 2: TypeScript Parses Visual Output as Truth
+
+**What people do:** TS parses ANSI-colored banners or progress bars to determine worker status or phase state.
+
+**Why it's wrong:** Visual output is for humans, not machines. It changes between versions. Parsing it creates brittle integrations.
+
+**Do this instead:** Use `AETHER_OUTPUT_MODE=json` for machine-readable output. Parse JSON manifests and events, not visual text.
+
+### Anti-Pattern 3: TypeScript Reimplements Planning Logic
+
+**What people do:** TS control plane decides which workers to spawn, in what order, with what skills — duplicating Go manifest generation.
+
+**Why it's wrong:** Splits the source of truth. Go tests validate manifest logic; TS reimplementation would not be covered. Drift is inevitable.
+
+**Do this instead:** TS consumes Go-generated manifests and dispatches exactly what the manifest specifies. If the manifest is wrong, fix Go.
+
+### Anti-Pattern 4: Classic Wrapper-Owned State Mutation
+
+**What people do:** Restore Classic v5.4.0 behavior where wrappers read and wrote COLONY_STATE.json, watch files, and session state directly.
+
+**Why it's wrong:** This was the behavior that caused the migration regressions. It bypasses Go validation, atomic writes, and provenance checks.
+
+**Do this instead:** Restore Classic orchestration *feel* (live workers, wave banners, caste labels) but not Classic state ownership. Use plan-only manifests and finalizers.
+
+## Integration Points
+
+### External Services
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Claude Code Task tool | TS platform adapter spawns subagents via Task tool | Requires Claude Code environment. Task tool has concurrency limits. |
+| OpenCode agents | TS platform adapter spawns agents via OpenCode protocol | Requires OpenCode environment. Agent availability varies. |
+| Codex CLI | TS platform adapter spawns `aether` subprocesses | Codex is runtime-native; TS host may be minimal or skipped for Codex. |
+| Go CLI (`aether`) | TS shells out for manifests, finalizers, spawn-log, spawn-complete | Use JSON output mode. Parse stdout, not stderr or visual output. |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| TS Host <-> Go Manifest Generator | Subprocess + JSON stdout | TS calls `aether build --plan-only`; Go returns JSON manifest. |
+| TS Host <-> Go Finalizer | Subprocess + temp file path | TS writes completion JSON to temp file; Go reads and validates. |
+| TS Host <-> Go Spawn Ledger | Subprocess CLI calls | TS calls `aether spawn-log` / `aether spawn-complete`. |
+| TS Host <-> TS Narrator | In-process function calls | Host passes ceremony events to narrator for rendering. |
+| TS Host <-> Platform Adapters | In-process async calls | Adapters spawn platform-specific workers. |
+| Go Runtime <-> Editable Assets | File reads (YAML, Markdown, TOML) | Go reads command playbooks and agent definitions at runtime. |
 
 ## Sources
 
-- Direct source analysis: `cmd/root.go`, `cmd/codex_workflow_cmds.go`, `cmd/command_guide.go`, `cmd/source_check.go`, `cmd/ceremony_cmd.go`, `cmd/gate.go`
-- Test infrastructure: `cmd/command_parity_test.go`, `cmd/command_source_hygiene_test.go`, `cmd/visual_wrapper_contract_test.go`, `cmd/codex_e2e_test.go`
-- Data structures: `pkg/colony/colony.go` (ColonyState), `pkg/storage/storage.go` (Store)
-- Lifecycle flow: `cmd/codex_continue.go`, `cmd/seal_final_review.go`, `cmd/entomb_cmd.go`
-- YAML definitions: `.aether/commands/*.yaml` (60 files)
-- Project context: `.planning/PROJECT.md`
+- [S1] Wrapper-runtime ownership contract — `.aether/docs/wrapper-runtime-ux-contract.md`
+- [S3] Current command-guide catalog — `cmd/command_guide.go`
+- [S9] Current build wrapper YAML with restore-real-wrapper-orchestration contract — `.aether/commands/build.yaml`
+- [S15] build-finalize manifest and provenance validation — `cmd/codex_build_finalize.go`
+- [S55] codexBuildManifest owns dispatch metadata, execution plans, skill sections, boundary guidance, and review depth — `cmd/codex_build.go`
+- [S58] Go ceremony command renders spawn-plan, wave-start, worker-complete, and closeout from lifecycle JSON — `cmd/ceremony_cmd.go`
+- [S60] Current TypeScript package is a ceremony narrator, not a lifecycle control plane — `.aether/ts/package.json`; `.aether/ts/narrator.ts`
+- [S65] Ceremony Revival via Bundled TypeScript Narrator — `.aether/docs/ceremony-revival-v1.6-plan.md`
+- [S67] Node.js child_process documentation — https://nodejs.org/api/child_process.html
+- [S94] Current plan wrapper orchestration contract — `.aether/commands/plan.yaml:26-45`
+- [S95] Current build wrapper orchestration contract — `.aether/commands/build.yaml:20-33`
+- Oracle synthesis — `.aether/oracle/synthesis.md`
+- Hybrid runtime strategy research — `.aether/docs/hybrid-runtime-strategy-research.md`
 
 ---
-*Architecture research for: Aether v1.15 Framework Coherence Audit*
-*Researched: 2026-05-07*
+*Architecture research for: Aether Hybrid Runtime Boundary and Orchestration Recovery*
+*Researched: 2026-05-12*

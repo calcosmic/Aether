@@ -1,5 +1,22 @@
 # Aether Milestones
 
+## v1.16 Hybrid Runtime Boundary and Orchestration Recovery (Shipped: 2026-05-13)
+
+**Phases completed:** 6 phases, 9 plans, 13 tasks
+
+**Key accomplishments:**
+
+- v5.4.0 selected as Classic baseline with 16-module behavioral checklist extracted from actual git tag source code, 5 known limitations with workarounds, and classification matching Phase 106 contract (3 Restore in TS, 11 Keep in Go, 3 Obsolete)
+- Standalone Bash smoke test that checks out Classic v5.4.0 in an isolated worktree and verifies colony init, state mutation across sync-state, 16-module inventory, wrapper command ceremony content, and CLI subcommand execution
+- Four golden snapshot tests capturing plan/build/continue ceremony output and state mutation transitions across the full colony lifecycle
+- TypeScript host scaffold with Go subprocess bridge, manifest type definitions, boundary enforcement, and nine integration tests
+- Worker dispatch module with spawn-log/complete lifecycle recording via Go CLI, wave-grouped execution, and five integration tests against real Go binary
+- Full lifecycle orchestrator driving plan->build->continue through Go manifests and finalizers, with 16 tests proving end-to-end completion and boundary enforcement
+- 6 Go test functions proving Go remains sole state mutation authority and finalizer gatekeeper when TS host orchestrates worker dispatch
+- Complete migration map for Oracle/RALF, Swarm Visibility, and Build/Continue Parity with 8 phases, 20 requirements, and sequential dependency ordering
+
+---
+
 ## v1.11 Aether Unification
 
 **Shipped:** 2026-04-30
@@ -194,6 +211,7 @@
 **Phases:** 8 | **Plans:** 16 | **Tasks:** 16+ | **Requirements:** 11/11 satisfied
 
 ### Delivered
+
 - Loop-proof colony: 6 LOOP requirements covering watcher auto-skip, recovery redirect, circuit breaker, cycle detection, lifecycle exclusion, and telemetry
 - Independent 3-level planning depth (light/standard/deep) with CLI flag and manifest integration
 - Independent 3-level verification depth (light/standard/heavy) with 3-tier dispatch
@@ -203,6 +221,7 @@
 - Code review fix: boolean flag preservation through depth resolution
 
 ### Tech Debt
+
 - Phase 81 missing 81-01-SUMMARY.md (documentation only)
 - Phase 85 missing both SUMMARY.md files (documentation only)
 - REQUIREMENTS.md used text "Complete" instead of markdown [x] checkboxes

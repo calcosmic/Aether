@@ -34,16 +34,17 @@ That means:
 
 ## Current State
 
-- Go runtime is healthy, v1.0.35 shipped
-- Milestone v1.15 Framework Coherence shipped (2026-05-08): command inventory, worker economy audit, data flow audit, release integrity, findings remediation
-- Milestone v1.16 in progress: Queen-Owned Adaptive Caste Orchestration
+- Go runtime is healthy, v1.0.34 shipped
+- Milestone v1.16 Hybrid Runtime Boundary shipped (2026-05-13): boundary contract, Classic baseline, golden workflow tests, TypeScript orchestration host, Go safety invariants, migration map
+- TypeScript host drives plan/build/continue through Go manifests and finalizers — boundary enforcement prevents direct state writes
 - 2900+ tests passing, full E2E regression coverage
 - Stable and dev publish channels with integrity verification
 - Queen coordinates phases autonomously — gate classification, auto-recovery, wave lifecycle
 - 11 continue gates with watcher veto, auditor blocking, and runtime verification
 - Reference library system with indexed, scored, matchable global references
 - Worker economy audit documented 18 actively dispatched castes, 9 defined but never dispatched
-- Current pain: static depth-based agent lists ignore phase content, causing unnecessary timeouts and blocks
+- Migration map ready: Oracle/RALF, Swarm, Parity as next 3 milestones
+- Known tech debt: Phase 106 missing VERIFICATION.md, orphaned TS exports, some REQUIREMENTS.md checkboxes unchecked
 
 <details>
 <summary>Prior State History</summary>
@@ -89,7 +90,7 @@ That means:
 - [x] v1.13 Recovery Hardening & Hive Learning -- Phases 88-92 (shipped 2026-05-03)
 - [x] v1.14 Queen Authority -- Phases 93-99 (shipped 2026-05-04)
 - [x] v1.15 Framework Coherence, Efficiency, and Ship Readiness -- Phases 100-105 (shipped 2026-05-08)
-- [ ] v1.16 Queen-Owned Adaptive Caste Orchestration -- Phases 106-111
+- [x] v1.16 Hybrid Runtime Boundary and Orchestration Recovery -- Phases 106-111 (shipped 2026-05-13)
 
 ## Requirements
 
@@ -132,14 +133,12 @@ That means:
 
 ### Active
 
+- [ ] MIGRATE-01: Oracle/RALF loop driven by TS host with Go confidence tracking
+- [ ] MIGRATE-02: Swarm display rendered through TS host from Go data
+- [ ] MIGRATE-03: All colony flows (colonize, seal, oracle, swarm) use TS host orchestration
+- [ ] MIGRATE-04: Cross-language integration test verifying boundary enforcement end-to-end
 - [ ] ORCH-01: Caste relevance registry exists with keywords and conditions for all 26 castes
 - [ ] ORCH-02: `queenOrchestrate()` function reads phase content and returns scored caste list
-- [ ] ORCH-03: Build flow uses adaptive dispatch instead of static depth strings
-- [ ] ORCH-04: Continue flow uses adaptive review instead of static `codexContinueReviewSpecs`
-- [ ] ORCH-05: Plan, colonize, swarm, and seal flows use adaptive dispatch
-- [ ] ORCH-06: Tests prove correct castes spawn for known phase types (UI, auth, refactor, discovery)
-- [ ] ORCH-07: No regression in existing depth flag behavior (flags still respected as override)
-- [ ] ORCH-08: Previously never-dispatched castes (Weaver, Keeper, Chronicler, etc.) now have dispatch paths
 
 ### Out of Scope
 
