@@ -1,384 +1,247 @@
-# Technology Stack: Queen Authority
+# Technology Stack Additions: v1.17 Classic Restoration
 
-**Project:** Aether v1.14 -- Queen Authority
-**Researched:** 2026-05-03
-**Confidence:** HIGH (all findings from source code inspection of existing Aether runtime)
+**Project:** Aether TS Host Ceremony & Swarm Dashboard
+**Researched:** 2026-05-13
+**Confidence:** HIGH (verified via npm registry + official GitHub sources)
 
 ## Executive Summary
 
-The queen authority milestone requires **zero new external dependencies**. Every capability the queen needs -- worker dispatch, failure detection, circuit breaking, retry with backoff, gate evaluation, output aggregation, and process lifecycle management -- already exists as discrete components in the Go runtime. The work is entirely about wiring these existing pieces into a coordinator loop inside the Go binary, not about importing new libraries.
+The v1.17 milestone restores Classic Aether's living ceremony (banners, ASCII art, spawn notifications, seal rituals) and animated swarm dashboard (per-ant progress, chamber activity map, live refresh) to the TypeScript orchestration host. The TS host already calls Go manifests/finalizers via a subprocess bridge. The new work adds:
 
-The queen becomes an autonomous coordinator by reading existing infrastructure that is currently driven externally by wrapper markdown (Claude/OpenCode) or by manual user invocation:
+1. **Ceremony narrator package** — renders banners, caste identity, stage separators, and ritual text from Go-emitted events
+2. **Animated swarm dashboard** — subscribes to the Go event bus (JSONL file), renders live worker activity with spinners and progress bars
+3. **Event streaming bridge** — watches the Go JSONL event file and pushes parsed events into the TS host
 
-| Current Driver | Queen Authority Change |
-|---------------|----------------------|
-| Wrapper markdown calls `aether build`, `aether continue` | Go runtime runs build/continue in a loop internally |
-| User manually runs `/ant-unblock` when gates fail | Go runtime evaluates gates and dispatches Fixer automatically |
-| User reads raw worker output | Go runtime filters/summarizes output before surfacing |
-| User decides whether to re-dispatch a failed worker | Go runtime applies circuit breaker + retry policy |
-| User manages wave progression | Go runtime manages wave lifecycle end-to-end |
+The stack must stay lean: the existing TS host has zero runtime dependencies. We add only what is strictly necessary for terminal rendering and file watching, avoiding heavy frameworks like React-Ink or Blessed.
 
-## Existing Infrastructure Already Available
+## Recommended Stack Additions
 
-The following components exist and are production-tested. The queen coordinator assembles them into an autonomous loop.
+### Core Rendering
 
-### 1. Worker Dispatch (`pkg/codex/dispatch.go`)
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `chalk` | 5.6.2 | ANSI color/style for caste labels, banners, status text | Zero dependencies, chainable API, auto-detects color support, used by 115k+ packages. ESM-native matches our `type: "module"`. |
+| `boxen` | 8.0.1 | Framed boxes around ceremony banners, Queen pronouncements, seal rituals | 9 border styles, title support, padding/margin control, integrates with chalk for colored borders. Lightweight (~24 KB). |
+| `figlet` | 1.11.0 | ASCII art banners ("CROWNED ANTHILL", "SEALED CHAMBERS") | Full FIGfont spec, sync API (`textSync`), 300+ built-in fonts, TypeScript types available (`@types/figlet` 1.7.0). |
+| `ora` | 9.4.0 | Per-worker spinners in swarm dashboard | 100+ spinner styles via `cli-spinners`, state methods (`start`/`succeed`/`fail`), promise helper, TTY-aware auto-disable. |
+| `cli-progress` | 3.12.0 | Multi-bar progress display for wave completion, per-ant tool counters | `MultiBar` container supports concurrent independent bars, custom formatters, payload tokens, FPS limiter. No heavy deps. |
+| `log-update` | 8.0.0 | Overwrite previous terminal output for live dashboard refresh | Partial redraws reduce flicker; `done()`/`clear()` lifecycle. Used by `ora` and `listr2` internally. |
 
-Already has wave-based dependency ordering, lifecycle events, parallel execution, and result aggregation.
+### File Watching
 
-| Component | Location | Status |
-|-----------|----------|--------|
-| `DispatchBatchWithObserver` | `pkg/codex/dispatch.go:92` | Production, tested |
-| `DispatchWaveWithObserver` | `pkg/codex/dispatch.go:124` | Production, tested |
-| `DispatchObserver` callback | `pkg/codex/dispatch.go:50` | Production, tested |
-| `ExtractClaims` aggregation | `pkg/codex/dispatch.go:228` | Production, tested |
-| `WorkerInvoker` interface | `pkg/codex/worker.go:125` | Production, tested |
-| `ProgressAwareWorkerInvoker` | `pkg/codex/worker.go:120` | Production, tested |
-| `WorkerResult` struct | `pkg/codex/worker.go:60` | Production, tested |
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `chokidar` | 5.0.0 | Watch Go's `event-bus.jsonl` for live event streaming to TS host | De-facto standard (30M+ repos). Normalizes `fs.watch` events, macOS filename support, atomic write handling, depth limiting. v5 is ESM-only, Node >=20. |
 
-**What this means for queen:** The queen does not need to spawn workers herself. She calls `DispatchBatchWithObserver` with a `DispatchObserver` callback that feeds her lifecycle events (starting, running, completed, failed, timeout). The observer is the queen's sensory input.
+### Supporting Utilities
 
-### 2. Circuit Breaker (`cmd/circuit_breaker.go`)
+| Technology | Version | Purpose | When to Use |
+|------------|---------|---------|-------------|
+| `strip-ansi` | 7.2.0 | Remove ANSI codes when computing string width for layout | Any width calculation on styled strings (boxen, progress bars, dashboard columns). |
+| `wrap-ansi` | 10.0.0 | Wrap styled text to terminal width without breaking ANSI sequences | Long ceremony messages, Queen pronouncements that must fit terminal width. |
+| `ansi-escapes` | 7.3.0 | Low-level cursor positioning, screen clearing, scroll regions | If we need custom dashboard layouts beyond what log-update provides. |
 
-Already has per-worker failure tracking, threshold-based tripping, same-caste peer redistribution, and ceremony event emission.
+### Dev Dependencies
 
-| Component | Location | Status |
-|-----------|----------|--------|
-| `CircuitBreaker` struct | `cmd/circuit_breaker.go:23` | Production, tested |
-| `Allow/RecordSuccess/RecordFailure` | `cmd/circuit_breaker.go:44-68` | Production, tested |
-| `findSameCastePeer` | `cmd/circuit_breaker.go:102` | Production, tested |
-| `Reset` (per-wave) | `cmd/circuit_breaker.go:71` | Production, tested |
-| `TrippedWorkers` | `cmd/circuit_breaker.go:86` | Production, tested |
-| Ceremony events | `cmd/circuit_breaker.go:120-155` | Production, tested |
-
-**What this means for queen:** The queen already has a circuit breaker. She resets it at wave boundaries, records failures/successes from `DispatchObserver` events, checks `Allow()` before dispatching, and calls `findSameCastePeer` when a worker is tripped.
-
-### 3. Gate System (`cmd/gate.go`, `cmd/fixer_dispatch.go`)
-
-Already has 11 named gates, per-phase persistence, incremental re-check (skip passed), recovery templates, and Fixer dispatch with attempt caps.
-
-| Component | Location | Status |
-|-----------|----------|--------|
-| `gateCheck` struct | `cmd/gate.go:22` | Production, tested |
-| `shouldSkipGate` | `cmd/gate.go:557` | Production, tested |
-| `gateResultsWritePhase` | `cmd/gate.go:605` | Production, tested |
-| `gateResultsReadPhase` | `cmd/gate.go:613` | Production, tested |
-| `gateRecoveryTemplates` | `cmd/gate.go:487-536` | Production, tested |
-| `dispatchFixer` | `cmd/fixer_dispatch.go:131` | Production, tested |
-| `resolveFixedGates` | `cmd/fixer_dispatch.go:217` | Production, tested |
-| `checkAttemptCap` | `cmd/fixer_dispatch.go:92` | Production, tested |
-| `isFixerDispatchBlocked` | `cmd/fixer_dispatch.go:105` | Production, tested |
-| 11 gate recovery templates | `cmd/gate.go:487-536` | Production, tested |
-
-**What this means for queen:** Smart gating is mostly wiring. The queen reads gate results after continue, classifies failures as auto-resolvable vs. human-escalation, dispatches Fixer for auto-resolvable ones, and surfaces only genuine blockers to the user. The classification logic is the new part -- the infrastructure for dispatching Fixer and tracking attempts already exists.
-
-### 4. Process Tracking (`pkg/codex/process_tracker.go`)
-
-Already has PID registry, stale worker detection, graceful termination with SIGTERM/SIGKILL escalation, and cleanup.
-
-| Component | Location | Status |
-|-----------|----------|--------|
-| `ProcessTracker` | `pkg/codex/process_tracker.go:45` | Production, tested |
-| `TrackProcess/UntrackProcess` | `pkg/codex/process_tracker.go:68-106` | Production, tested |
-| `KillAll` (per-root) | `pkg/codex/process_tracker.go:128` | Production, tested |
-| `DetectStaleWorkers` | `pkg/codex/process_tracker.go:144` | Production, tested |
-| `CleanupStaleWorkers` | `pkg/codex/process_tracker.go:185` | Production, tested |
-
-**What this means for queen:** The queen can check `DetectStaleWorkers` at wave boundaries and call `KillAll` for cleanup. She does not need to build process management from scratch.
-
-### 5. Immune System / Retry (`cmd/immune.go`)
-
-Already has error diagnosis, exponential backoff retry, scar recording, and auto-scar detection from midden failures.
-
-| Component | Location | Status |
-|-----------|----------|--------|
-| `diagnoseError` | `cmd/immune.go:46` | Production, tested |
-| `trophallaxisRetryCmd` (backoff) | `cmd/immune.go:91` | Production, tested |
-| `scarAdd/scarCheck` | `cmd/immune.go:126-238` | Production, tested |
-| `immuneAutoScar` | `cmd/immune.go:240` | Production, tested |
-
-**What this means for queen:** The queen calls `diagnoseError` on worker failures to determine retryability, then uses the existing backoff formula (`2^attempt * 2` seconds) for retry delays. She records failures as scars for future avoidance.
-
-### 6. Autopilot State (`cmd/autopilot.go`)
-
-Already has phase tracking, replan interval checking, headless mode, and stop/init commands.
-
-| Component | Location | Status |
-|-----------|----------|--------|
-| `autopilotState` struct | `cmd/autopilot.go:20` | Production, tested |
-| `autopilot-update` | `cmd/autopilot.go:85` | Production, tested |
-| `autopilot-check-replan` | `cmd/autopilot.go:223` | Production, tested |
-| `autopilot-set-headless` | `cmd/autopilot.go:277` | Production, tested |
-
-**What this means for queen:** The autopilot state machine already tracks multi-phase progress. The queen authority loop extends this from "track and report" to "decide and act."
-
-### 7. Workflow Profile System (`cmd/codex_dispatch_contract.go`)
-
-Already has three profiles (fast, standard, final-review), queen recommendation engine, depth flags, and lifecycle command contracts.
-
-| Component | Location | Status |
-|-----------|----------|--------|
-| `recommendQueenWorkflowProfile` | `cmd/codex_dispatch_contract.go:329` | Production, tested |
-| `workflowProfiles` | `cmd/codex_dispatch_contract.go:138` | Production, tested |
-| `codexWorkflowProfileContract` | `cmd/codex_dispatch_contract.go:62` | Production, tested |
-
-**What this means for queen:** The queen already recommends profiles. In autonomous mode, she applies her recommendation directly instead of emitting it as advice.
-
-### 8. Colony State (`pkg/colony/colony.go`)
-
-Already has state machine transitions, phase advancement, worktree tracking, gate results, and charter data.
-
-| Component | Location | Status |
-|-----------|----------|--------|
-| `ColonyState` struct | `pkg/colony/colony.go:272` | Production, tested |
-| `Transition` (state machine) | `pkg/colony/state_machine.go:7` | Production, tested |
-| `AdvancePhase` | `pkg/colony/state_machine.go:23` | Production, tested |
-| `GateResultEntry` | `pkg/colony/colony.go:227` | Production, tested |
-| `WorktreeEntry` | `pkg/colony/colony.go:214` | Production, tested |
-
-**What this means for queen:** All state mutations go through `store.UpdateJSONAtomically`, which is file-locked and atomic. The queen reads state, makes decisions, writes state -- all through existing safe patterns.
-
-## New Code Needed (No New Dependencies)
-
-### Queen Coordinator Loop
-
-A single new package `pkg/queen/` that assembles the existing components into an autonomous decision loop.
-
-```
-pkg/queen/
-├── coordinator.go      # Main loop: dispatch -> monitor -> recover -> advance
-├── gate_classifier.go  # Classifies gate failures as auto-resolvable vs. escalate
-├── output_filter.go    # Filters and summarizes worker output for clean display
-├── retry_policy.go     # Retry decisions using existing immune.go backoff
-├── wave_manager.go     # Wave lifecycle: allocate, execute, collect, cleanup
-├── coordinator_test.go
-├── gate_classifier_test.go
-├── output_filter_test.go
-├── retry_policy_test.go
-└── wave_manager_test.go
-```
-
-### cmd/ Additions
-
-| New Command | Purpose | Pattern |
-|-------------|---------|---------|
-| `queen-coordinator` | Run the autonomous coordinator loop (replaces wrapper-driven build/continue) | Extends `cmd/autopilot.go` pattern |
-| `queen-gate-classify` | Classify a gate failure as auto-resolvable or human-escalation | New, uses existing gate data |
-| `queen-output-filter` | Filter and summarize worker output | New, pure text processing |
-| `queen-retry-decide` | Decide whether to retry a failed worker | Uses existing `diagnoseError` + `trophallaxisRetryCmd` logic |
-| `queen-wave-status` | Current wave status and worker health | Aggregates existing dispatch + process tracker data |
-
-### Gate Classification Logic (New)
-
-The core new intellectual work: deciding which gate failures the queen can auto-resolve and which require human intervention.
-
-```go
-// pkg/queen/gate_classifier.go
-type GateClassification struct {
-    Name         string
-    Severity     string // "auto", "retry", "escalate"
-    Reason       string
-    RecoveryHint string
-}
-
-// Auto-resolvable gates: the queen can dispatch Fixer and verify
-var autoResolvableGates = map[string]bool{
-    "tests_pass":       true,  // Fixer re-runs tests, fixes failures
-    "watcher_veto":     true,  // Fixer addresses quality issues
-    "tdd_evidence":     true,  // Fixer writes missing tests
-    "anti_pattern":     true,  // Fixer removes critical patterns
-    "complexity":       true,  // Fixer refactors complex code
-    "medic":            true,  // Fixer applies medic repairs
-}
-
-// Escalation gates: require human judgment
-var escalationGates = map[string]bool{
-    "gatekeeper":    true,  // Security CVEs need human review
-    "auditor":       true,  // Quality below threshold needs human review
-    "runtime":       true,  // User-reported issues need human confirmation
-    "flags":         true,  // Blocker flags represent user decisions
-}
-```
-
-**Confidence: HIGH** -- The gate names and recovery templates already exist in `cmd/gate.go:487-536`. Classification is a mapping from existing data to new behavior.
-
-### Output Filtering Logic (New)
-
-The queen needs to suppress raw worker noise and surface only actionable summaries.
-
-```go
-// pkg/queen/output_filter.go
-type FilteredOutput struct {
-    Summary    string            // Human-readable phase summary
-    Workers    []WorkerSummary   // Per-worker status line
-    Warnings   []string          // Notable but non-blocking items
-    Blockers   []string          // Items requiring human attention
-    Artifacts  map[string]string // Key outputs (test results, coverage, etc.)
-}
-
-type WorkerSummary struct {
-    Name    string
-    Caste   string
-    Status  string // "completed", "failed", "retried", "skipped"
-    Summary string // Worker's self-reported summary (from WorkerResult.Summary)
-    Files   int    // Count of files created/modified
-    Duration string
-}
-```
-
-**Approach:** The queen reads `WorkerResult.Summary` (already a concise self-report), `WorkerResult.RawOutput` (full stdout, only surfaced on failure), and `DispatchResult.Error` (invocation errors). Normal-path output shows one line per worker. Failure-path output shows the worker's summary plus the last 20 lines of raw output.
-
-**Confidence: HIGH** -- All data structures already exist. This is formatting logic, not new infrastructure.
-
-### Retry Policy (New, Wraps Existing)
-
-```go
-// pkg/queen/retry_policy.go
-type RetryDecision struct {
-    Retry      bool
-    Attempt    int
-    BackoffSec int
-    Reason     string
-}
-
-func DecideRetry(err error, workerName string, attempt int, cb *CircuitBreaker) RetryDecision {
-    // 1. Check circuit breaker
-    if !cb.Allow(workerName) {
-        return RetryDecision{Retry: false, Reason: "circuit breaker tripped"}
-    }
-
-    // 2. Diagnose error using existing immune system
-    diagnosis := diagnoseError(err.Error())
-
-    // 3. Check attempt cap (reuse existing trophallaxis logic)
-    if attempt >= 3 {
-        return RetryDecision{Retry: false, Reason: "max attempts reached"}
-    }
-
-    // 4. Calculate backoff (existing formula: 2^attempt * 2)
-    backoff := int(math.Pow(2, float64(attempt)) * 2)
-
-    if !diagnosis["retryable"].(bool) {
-        return RetryDecision{Retry: false, Reason: fmt.Sprintf("non-retryable: %s", diagnosis["strategy"])}
-    }
-
-    return RetryDecision{
-        Retry:      true,
-        Attempt:    attempt + 1,
-        BackoffSec: backoff,
-        Reason:     diagnosis["strategy"].(string),
-    }
-}
-```
-
-**Confidence: HIGH** -- `diagnoseError` and backoff formula already exist in `cmd/immune.go`. This is a thin orchestration layer.
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| `@types/figlet` | 1.7.0 | TypeScript types for figlet (figlet itself is JS, not TS) |
+| `@types/cli-progress` | 3.11.6 | TypeScript types for cli-progress |
 
 ## What NOT to Add
 
-| Rejected Addition | Why |
-|-------------------|-----|
-| `thejerf/suture` (supervisor trees) | Suture manages long-running service goroutines with restart semantics. Aether's workers are short-lived subprocess invocations (spawn, execute, collect result). The existing `DispatchBatchWithObserver` + `CircuitBreaker` + `ProcessTracker` already handle this. Suture would add an abstraction layer that duplicates existing behavior. |
-| `oklog/run` (actor group) | `oklog/run` orchestrates concurrent goroutines with graceful shutdown. The queen loop is sequential (dispatch wave, wait, evaluate, decide). Concurrency within a wave is already handled by `DispatchWaveWithObserver`. `oklog/run` solves a problem Aether does not have. |
-| `cenkalti/backoff` or `sethvargo/go-retry` | The existing immune system already implements exponential backoff (`2^attempt * 2` seconds) in `cmd/immune.go:114`. Adding a backoff library for a single formula is over-engineering. |
-| Event-driven architecture (channels, pub/sub) | The `DispatchObserver` callback pattern is already event-driven. Adding channels or a pub/sub system between dispatch and queen would add complexity without benefit -- the queen processes events synchronously in her loop. |
-| State machine library | The colony state machine already exists in `pkg/colony/state_machine.go`. Adding a library like `fsm` or `mergo` would duplicate existing, tested transitions. |
-| External queue (Redis, NATS) | Workers are local subprocesses, not distributed services. File-locked JSON persistence via `pkg/storage.Store` is the correct coordination mechanism for single-machine, single-user colonies. |
+| Technology | Why Avoid | What to Use Instead |
+|------------|-----------|---------------------|
+| `ink` (7.0.3) | Requires React 19.2+ peer dependency (~25 deps, ~538 KB). Adds a full reconciler, Yoga layout engine, and React runtime to a host that currently has zero runtime deps. Overkill for ceremony banners + progress bars. | `chalk` + `boxen` + `log-update` for rendering; plain TS classes for state management. |
+| `blessed` (0.1.81) | Unmaintained (last release 2018), buggy on modern terminals, no ESM support, heavy widget framework. | `log-update` + `ansi-escapes` for cursor control; custom dashboard layout in plain TS. |
+| `listr2` (10.2.1) | Task-list framework with its own rendering engine. Node >=22.13.0 requirement exceeds our Node >=18 engine. Designed for sequential task UIs, not live multi-worker dashboards. | `ora` for individual spinners + `cli-progress` for bars + custom orchestration. |
+| `react` / `react-reconciler` | Only needed if we chose Ink. No other terminal library needs React. | Not applicable — avoid Ink. |
+| `ws` (WebSocket library) | Go event bus uses JSONL file persistence, not WebSockets. No network streaming needed. | `chokidar` watching JSONL file + `fs.createReadStream` for tailing. |
+| `blessed-contrib` | Dashboard widgets for blessed. Blessed itself is deprecated; contrib is doubly so. | Custom dashboard components using `cli-progress`, `ora`, and `log-update`. |
+| `terminal-kit` | Full terminal framework with input handling, mouse support, screen buffers. Too heavy for our use case. | `chalk` + `boxen` + `log-update` for output only. |
 
-## Existing Dependency Usage (No Version Changes)
+## Installation
 
-| Dependency | Current Version | Queen Authority Usage |
-|------------|----------------|----------------------|
-| `golang.org/x/sync` | v0.20.0 | Already used in `pkg/agent/pool.go` for `errgroup`. Wave parallel execution already uses `sync.WaitGroup` in `pkg/codex/dispatch.go`. No change needed. |
-| `github.com/spf13/cobra` | v1.10.2 | New queen commands register via `rootCmd.AddCommand()`. No version change. |
-| `github.com/BurntSushi/toml` | v1.5.0 | Agent TOML parsing unchanged. No version change. |
-| `modernc.org/sqlite` | v1.50.0 | Hive learning store unchanged. Queen reads colony state from JSON (not SQLite). No version change. |
-| `pkg/storage.Store` | existing | All state mutations via `UpdateJSONAtomically`. No change. |
+```bash
+# Runtime dependencies
+cd .aether/ts-host
+npm install chalk@5.6.2 boxen@8.0.1 figlet@1.11.0 ora@9.4.0 cli-progress@3.12.0 log-update@8.0.0 chokidar@5.0.0 strip-ansi@7.2.0 wrap-ansi@10.0.0 ansi-escapes@7.3.0
 
-## Architecture: Queen Coordinator Loop
-
-The queen coordinator is a sequential decision loop, not a concurrent service:
-
-```
-┌──────────────────────────────────────────────────────┐
-│                QUEEN COORDINATOR                      │
-│                                                       │
-│  for each phase in plan:                              │
-│    1. SELECT PROFILE                                  │
-│       └─ recommendQueenWorkflowProfile() [existing]    │
-│                                                       │
-│    2. DISPATCH WAVE                                   │
-│       ├─ CircuitBreaker.Reset()                       │
-│       ├─ DispatchBatchWithObserver(observer)           │
-│       └─ observer -> queen event buffer               │
-│                                                       │
-│    3. EVALUATE WAVE RESULTS                           │
-│       ├─ For each failed worker:                      │
-│       │   ├─ CircuitBreaker.RecordFailure()            │
-│       │   ├─ DecideRetry() -> uses diagnoseError       │
-│       │   ├─ If retryable: re-dispatch (back to 2)     │
-│       │   └─ If tripped: findSameCastePeer or skip    │
-│       └─ ExtractClaims() for success summary          │
-│                                                       │
-│    4. RUN GATES                                       │
-│       ├─ Read gate results (gateResultsReadPhase)      │
-│       ├─ ClassifyGate() -> auto | retry | escalate     │
-│       ├─ Auto-resolvable: dispatchFixer() [existing]   │
-│       ├─ Re-verify fixed gates                        │
-│       └─ Escalate remaining to user                   │
-│                                                       │
-│    5. FILTER OUTPUT                                   │
-│       └─ Build FilteredOutput from WorkerResults       │
-│                                                       │
-│    6. ADVANCE OR ESCALATE                             │
-│       ├─ All gates passed: AdvancePhase() [existing]   │
-│       ├─ Some gates failed: surface blockers to user  │
-│       └─ Record scars, emit telemetry                 │
-│                                                       │
-│    7. CLEANUP                                         │
-│       ├─ DetectStaleWorkers() -> KillAll() [existing]  │
-│       └─ spawnTrackClear() [existing]                 │
-│                                                       │
-└──────────────────────────────────────────────────────┘
+# Dev dependencies
+npm install -D @types/figlet@1.7.0 @types/cli-progress@3.11.6
 ```
 
-## Integration Points
+## Integration Points with Existing TS Host
 
-| Queen Action | Calls Into | Package |
-|-------------|-----------|---------|
-| Select profile | `recommendQueenWorkflowProfile` | `cmd/codex_dispatch_contract.go` |
-| Dispatch workers | `DispatchBatchWithObserver` | `pkg/codex/dispatch.go` |
-| Track failures | `CircuitBreaker.RecordFailure` | `cmd/circuit_breaker.go` |
-| Check retryability | `diagnoseError` | `cmd/immune.go` |
-| Redistribute task | `findSameCastePeer` | `cmd/circuit_breaker.go` |
-| Evaluate gates | `gateResultsReadPhase`, `shouldSkipGate` | `cmd/gate.go` |
-| Dispatch fixer | `dispatchFixer` | `cmd/fixer_dispatch.go` |
-| Resolve fixed gates | `resolveFixedGates` | `cmd/fixer_dispatch.go` |
-| Check attempt cap | `checkAttemptCap` | `cmd/fixer_dispatch.go` |
-| Advance phase | `AdvancePhase` | `pkg/colony/state_machine.go` |
-| Mutate state | `store.UpdateJSONAtomically` | `pkg/storage/storage.go` |
-| Track processes | `ProcessTracker.TrackProcess` | `pkg/codex/process_tracker.go` |
-| Cleanup stale | `CleanupStaleWorkers` | `pkg/codex/process_tracker.go` |
-| Record scars | `scarAdd` logic (inline) | `cmd/immune.go` |
-| Update autopilot | `autopilot-update` logic (inline) | `cmd/autopilot.go` |
-| Emit telemetry | `emitLoopBreakEvent` | `cmd/` (existing ceremony) |
+### 1. Event Streaming Bridge (`src/event-bridge.ts`)
 
-## Estimated New Code
+Go persists events to `.aether/data/event-bus.jsonl` (configurable via `events.Config.JSONLFile`). The TS host must:
 
-| Component | Lines (estimate) | Complexity |
-|-----------|-----------------|------------|
-| `pkg/queen/coordinator.go` | ~200 | Medium -- main loop orchestration |
-| `pkg/queen/gate_classifier.go` | ~80 | Low -- classification map + logic |
-| `pkg/queen/output_filter.go` | ~120 | Low -- text formatting |
-| `pkg/queen/retry_policy.go` | ~60 | Low -- wraps existing diagnoseError |
-| `pkg/queen/wave_manager.go` | ~150 | Medium -- wave lifecycle management |
-| `cmd/queen_*.go` (5 commands) | ~300 | Low -- cobra command wrappers |
-| Tests | ~400 | Standard |
-| **Total** | **~1,310** | |
+1. **Initial replay**: Call `aether event-bus replay --topic ceremony.build.* --since <session_start>` to get all ceremony events from the current session.
+2. **Live tail**: Use `chokidar` to watch `event-bus.jsonl` for changes, then read new lines via `fs.createReadStream` with a seek offset.
+3. **Parse**: Each line is a JSON object matching the `Event` struct (fields: `id`, `topic`, `payload`, `source`, `timestamp`, `ttl_days`, `expires_at`).
+4. **Dispatch**: Emit parsed events to an internal `EventEmitter` or typed callback registry.
+
+```typescript
+// Conceptual integration
+import { watch } from "chokidar";
+import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
+
+interface CeremonyEvent {
+  id: string;
+  topic: string;
+  payload: CeremonyPayload; // from pkg/events/ceremony.go
+  source: string;
+  timestamp: string;
+}
+
+// 1. Replay existing events
+const replayed = await callGoJSON<CeremonyEvent[]>(bridge, [
+  "event-bus", "replay",
+  "--topic", "ceremony.build.*",
+  "--since", sessionStartISO,
+]);
+
+// 2. Watch for new events
+const watcher = watch(jsonlPath, { persistent: false });
+watcher.on("change", async () => {
+  const newLines = await tailNewLines(jsonlPath, lastOffset);
+  for (const line of newLines) {
+    const evt = JSON.parse(line) as CeremonyEvent;
+    eventEmitter.emit(evt.topic, evt);
+  }
+});
+```
+
+**Why chokidar + manual tail instead of a streaming library?**
+- The Go bus appends to JSONL atomically (`storage.Store.AppendJSONL`), so `chokidar` `change` events fire on each append.
+- A simple offset tracker + `fs.createReadStream({ start: offset })` is sufficient and avoids adding a `tail` or `jsonlines` dependency.
+- `jsonlines` parser adds ~15 KB but provides little value over `line.split("\n").map(JSON.parse)` for well-formed Go output.
+
+### 2. Ceremony Narrator Package (`src/ceremony/`)
+
+Consumes ceremony events and renders them using `chalk`, `boxen`, and `figlet`.
+
+```
+src/ceremony/
+  narrator.ts      -- Main renderer: maps event topics to render functions
+  banners.ts       -- figlet banners for milestone names, seal rituals
+  caste-render.ts  -- chalk-colored caste identity lines (emoji + label + name)
+  stage-markers.ts -- "── Stage Name ──" separators
+  boxes.ts         -- boxen wrappers for Queen pronouncements, warnings
+```
+
+**Integration with existing types:**
+- Uses `CeremonyPayload` fields from `pkg/events/ceremony.go` (already typed in `src/types.ts` as `BuildDispatch` / `WorkerResult` — extend with a `CeremonyPayload` interface).
+- Reads caste emoji/color/label maps from the shared YAML ceremony config (CEREMONY-02), not hardcoded.
+
+### 3. Swarm Dashboard (`src/dashboard/`)
+
+Live terminal dashboard showing active workers, wave progress, and chamber activity.
+
+```
+src/dashboard/
+  dashboard.ts     -- Orchestrates render loop, owns log-update instance
+  worker-row.ts    -- Renders a single worker: ora spinner + cli-progress bar + status
+  wave-panel.ts    -- Groups worker rows by wave, shows wave-level progress
+  chamber-map.ts   -- Shows which project areas have active workers
+  renderer.ts      -- log-update integration: compose all panels into single output string
+```
+
+**Integration with worker-dispatch.ts:**
+- `dispatchWorkers` currently writes to `process.stderr` directly. Replace with event emission:
+  - Before dispatch: emit `ceremony.build.spawn` event (or call narrator directly).
+  - During dispatch: update dashboard worker row (spinner active).
+  - After dispatch: update worker row status (`completed`/`failed`), increment progress bar.
+- The dashboard receives events both from the local dispatch loop and from the event bridge (for workers dispatched by other processes or Go directly).
+
+### 4. ANSI Color/Style Management
+
+**Caste color mapping:**
+- Go runtime defines `casteColorMap` in `cmd/codex_visuals.go` (ANSI codes).
+- TS host reads the shared YAML ceremony config (CEREMONY-02) which exports the same map as hex/named colors.
+- `chalk` converts named colors or hex to ANSI: `chalk.hex("#FFD700")` or `chalk.yellow`.
+
+**Why chalk over manual ANSI escape codes:**
+- Auto-detects color support (disables in CI, non-TTY).
+- Chainable API: `chalk.bold.yellow.bgBlue`.
+- No dependencies, ~44 KB, battle-tested.
+
+## Engine Compatibility
+
+| Package | Node Engine | Our Host (>=18) | Status |
+|---------|-------------|-----------------|--------|
+| chalk 5.6.2 | no engine specified | OK | Compatible |
+| boxen 8.0.1 | >=18 | OK | Compatible |
+| figlet 1.11.0 | >=17 | OK | Compatible |
+| ora 9.4.0 | >=20 | OK | Compatible (dev/test on 18 may need --no-engine-strict) |
+| cli-progress 3.12.0 | >=4 | OK | Compatible |
+| log-update 8.0.0 | >=22 | **Caution** | May need Node >=20 in practice; test on 18 |
+| chokidar 5.0.0 | >=20.19.0 | **Caution** | v5 requires Node >=20; if host must run on 18, use chokidar 4.0.3 |
+| strip-ansi 7.2.0 | no engine | OK | Compatible |
+| wrap-ansi 10.0.0 | no engine | OK | Compatible |
+| ansi-escapes 7.3.0 | no engine | OK | Compatible |
+
+**Decision on Node >=18 vs >=20:**
+- The TS host `package.json` specifies `"node": ">=18"`.
+- `chokidar` v5 requires Node >=20.19.0. If we must support Node 18, downgrade to `chokidar@4.0.3` (still ESM, 1 dependency, Node >=14).
+- `log-update` v8 requires Node >=22. If Node 18 support is required, downgrade to `log-update@5.0.1` (still works, fewer features).
+- **Recommendation:** Bump TS host engine to `>=20` since Node 18 reaches End-of-Life in April 2025 (already past). All team/dev machines run Node 25+.
+
+## Alternatives Considered
+
+### Terminal Rendering Framework: Ink vs Custom
+
+| Criterion | Ink (React) | Custom (chalk+boxen+ora) |
+|-----------|-------------|--------------------------|
+| Dependencies | 25+ (React, reconciler, Yoga, ws, etc.) | 0-5 (chalk has 0, boxen has ~5, ora has ~8) |
+| Bundle size | ~538 KB | ~150 KB total |
+| Learning curve | React knowledge required | Plain TS/Node |
+| Animation | `useAnimation` hook | `ora` spinners + `log-update` refresh loop |
+| Layout | Flexbox via Yoga | Manual string composition + `wrap-ansi` |
+| Maintenance risk | Tied to React release cycle | Decoupled, smaller surface area |
+| Fit for Aether | Overkill for banners + bars | Purpose-built for ceremony + dashboard |
+
+**Verdict:** Custom stack. Ink is excellent for complex interactive CLIs (like Claude Code itself), but Aether's ceremony needs are primarily output rendering, not interactive input handling. The dependency weight and React peer dependency are unjustified.
+
+### File Watching: chokidar vs Node fs.watch
+
+| Criterion | chokidar | Node fs.watch |
+|-----------|----------|---------------|
+| Cross-platform | Normalizes macOS/Linux/Windows quirks | Platform-specific behavior |
+| Event quality | `add`/`change`/`unlink` with filenames | Often emits `rename` with no context |
+| Atomic writes | `awaitWriteFinish` option | Not supported |
+| Dependencies | 1 (v4/v5) | 0 |
+| Size | ~82 KB | 0 |
+
+**Verdict:** chokidar. The normalized events and atomic-write handling are worth the 82 KB for reliable event streaming from Go's JSONL appends.
+
+### Progress Bars: cli-progress vs custom
+
+| Criterion | cli-progress | Custom ANSI |
+|-----------|--------------|-------------|
+| Multi-bar | Native `MultiBar` | Manual cursor positioning |
+| Formatting | Placeholder tokens + custom formatters | Manual string building |
+| FPS limiting | Built-in | Manual |
+| ETA calculation | Built-in | Manual |
+
+**Verdict:** cli-progress. The `MultiBar` container is exactly what the swarm dashboard needs for concurrent per-worker bars. Re-implementing cursor math and ETA is error-prone.
 
 ## Sources
 
-- Source code inspection: `pkg/codex/dispatch.go`, `pkg/codex/worker.go`, `pkg/codex/process_tracker.go`, `cmd/circuit_breaker.go`, `cmd/gate.go`, `cmd/fixer_dispatch.go`, `cmd/immune.go`, `cmd/autopilot.go`, `cmd/codex_dispatch_contract.go`, `pkg/colony/colony.go`, `pkg/colony/state_machine.go`, `pkg/storage/storage.go`
-- Existing go.mod: `golang.org/x/sync v0.20.0`, `github.com/spf13/cobra v1.10.2`, `modernc.org/sqlite v1.50.0`
-- Suture supervisor trees: [github.com/thejerf/suture](https://github.com/thejerf/suture) -- evaluated and rejected (see "What NOT to Add")
-- oklog/run: [github.com/oklog/run](https://github.com/oklog/run) -- evaluated and rejected (see "What NOT to Add")
-- errgroup SetLimit: [pkg.go.dev/golang.org/x/sync/errgroup](https://pkg.go.dev/golang.org/x/sync/errgroup) -- already in project, no changes needed
+- npm registry verified versions (2026-05-13):
+  - `chalk@5.6.2`, `boxen@8.0.1`, `figlet@1.11.0`, `ora@9.4.0`, `cli-progress@3.12.0`, `log-update@8.0.0`, `chokidar@5.0.0`
+- GitHub repositories (official):
+  - https://github.com/chalk/chalk
+  - https://github.com/sindresorhus/boxen
+  - https://github.com/sindresorhus/ora
+  - https://github.com/sindresorhus/log-update
+  - https://github.com/npkgz/cli-progress
+  - https://github.com/paulmillr/chokidar
+  - https://github.com/patorjk/figlet.js
+- Aether codebase (existing types and event bus):
+  - `.aether/ts-host/src/types.ts` — Go manifest/completion types
+  - `.aether/ts-host/src/go-bridge.ts` — Subprocess bridge with JSON envelope
+  - `pkg/events/ceremony.go` — Ceremony event topics and payload shape
+  - `pkg/events/bus.go` — JSONL persistence and pub/sub mechanics

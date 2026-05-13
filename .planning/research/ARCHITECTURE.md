@@ -1,372 +1,393 @@
-# Architecture Research
+# Architecture Research: v1.17 Classic Restoration — Go Events → TS Host → Wrapper Ceremony
 
-**Domain:** Aether Hybrid Runtime — TypeScript orchestration control plane over Go safety kernel
-**Researched:** 2026-05-12
-**Confidence:** HIGH
+**Project:** Aether v1.17 Classic Restoration
+**Researched:** 2026-05-13
+**Confidence:** HIGH (based on direct source code analysis)
 
-## Standard Architecture
+## Executive Summary
 
-### System Overview
+Aether v1.17 restores the living orchestration behavior lost during the Bash-to-Go migration. The architecture is a three-layer pipeline: **Go emits structured events** (from `pkg/events/` and `cmd/ceremony_emitter.go`), the **TypeScript host subscribes to those events and orchestrates platform worker dispatch** (`.aether/ts-host/`), and **wrapper markdown renders ceremony** (`.claude/commands/ant/build.md`). The boundary contract from v1.16 remains intact: Go owns all state mutations; the TS host never writes to `.aether/data/`.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Platform Surfaces                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │ Claude Code  │  │  OpenCode    │  │  Codex CLI   │          │
-│  │   wrappers   │  │   wrappers   │  │  (native)    │          │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
-├─────────┴──────────────────┴──────────────────┴─────────────────┤
-│              TypeScript Orchestration Host                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │   Host      │  │   Worker    │  │  Ceremony   │             │
-│  │  Adapter    │  │  Dispatcher │  │   Renderer  │             │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
-│         │                │                │                     │
-│  ┌──────┴────────────────┴────────────────┴──────┐             │
-│  │        Manifest Parser & Contract Validator     │             │
-│  └──────────────────────┬─────────────────────────┘             │
-├─────────────────────────┴───────────────────────────────────────┤
-│                     Go Safety Kernel                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │  Manifest   │  │   State     │  │  Finalizer  │             │
-│  │  Generator  │  │   Mutator   │  │   Engine    │             │
-│  │  (plan-only)│  │  (atomic)   │  │  (validate) │             │
-│  └─────────────┘  └─────────────┘  └─────────────┘             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │  Dispatch   │  │  Recovery   │  │  Publish/   │             │
-│  │  Contract   │  │   Engine    │  │   Update    │             │
-│  │  Builder    │  │             │  │             │             │
-│  └─────────────┘  └─────────────┘  └─────────────┘             │
-├─────────────────────────────────────────────────────────────────┤
-│                  Editable Colony Brain                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │   YAML      │  │  Markdown   │  │    TOML     │             │
-│  │  Commands   │  │  Playbooks  │  │   Agents    │             │
-│  └─────────────┘  └─────────────┘  └─────────────┘             │
-└─────────────────────────────────────────────────────────────────┘
-```
+The key integration question is: *how does the TS host consume events in real time?* The Go runtime already has three event-delivery mechanisms: (1) a **subprocess narrator pipe** (`cmd/narrator_launcher.go` → Node.js stdin), (2) a **JSONL tail + poll** model via `event-bus-subscribe --stream`, and (3) a **WebSocket/SSE server** (`aether serve`). For the TS host control plane, the recommended path is a **hybrid: JSONL tail for startup replay + subprocess narrator pipe for live events**, because it requires no background server process, works within the existing wrapper→Go→TS call chain, and respects the boundary contract.
 
-### Component Responsibilities
+## Recommended Architecture
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| Go Manifest Generator | Produce JSON manifests for plan/build/continue without mutating state | `aether plan --plan-only`, `aether build --plan-only` |
-| Go State Mutator | Atomic JSON writes with file locking, rollback on validation failure | `pkg/storage/storage.go`, `UpdateJSONAtomically` |
-| Go Finalizer Engine | Validate manifest provenance, merge worker results, commit state | `aether build-finalize`, `aether continue-finalize` |
-| TS Host Adapter | Shell out to Go for manifests, parse JSON, orchestrate dispatch | New: `.aether/ts/host.ts` |
-| TS Worker Dispatcher | Spawn platform workers from manifest dispatches, record lifecycle | New: `.aether/ts/dispatcher.ts` |
-| TS Ceremony Renderer | Consume Go ceremony events, render live worker stacks and wave banners | Extend existing `.aether/ts/narrator.ts` |
-| Editable Assets | Command playbooks, agent definitions, skills, ceremonies | `.aether/commands/*.yaml`, `.claude/`, `.opencode/`, `.codex/` |
-
-## Recommended Project Structure
+### Layer Diagram (Text)
 
 ```
-.aether/ts/
-├── package.json              # Existing: @aether/ceremony-narrator
-├── tsconfig.json             # Existing
-├── src/
-│   ├── index.ts              # Re-export public surface
-│   ├── narrator.ts           # Existing: ceremony event parser/renderer
-│   ├── host.ts               # NEW: orchestration host adapter
-│   ├── manifest.ts           # NEW: manifest parser + contract validator
-│   ├── dispatcher.ts         # NEW: platform worker dispatcher
-│   ├── platform/
-│   │   ├── claude.ts         # NEW: Claude Code subagent adapter
-│   │   ├── opencode.ts       # NEW: OpenCode agent adapter
-│   │   └── codex.ts          # NEW: Codex CLI process adapter
-│   ├── contracts/
-│   │   ├── build-manifest.ts # NEW: codexBuildManifest type mirror
-│   │   ├── plan-manifest.ts  # NEW: codexPlanManifest type mirror
-│   │   └── dispatch-contract.ts # NEW: codexDispatchContract type mirror
-│   └── types/
-│       └── events.ts         # NEW: ceremony event type definitions
-├── test/
-│   ├── narrator.test.ts      # Existing
-│   ├── host.test.ts          # NEW: host adapter unit tests
-│   ├── manifest.test.ts      # NEW: manifest parsing tests
-│   └── dispatcher.test.ts    # NEW: dispatch logic tests
-└── dist/                     # Build output (gitignored)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  WRAPPER LAYER (Markdown — .claude/commands/ant/build.md)                   │
+│  ────────────────────────────────────────────────────────                   │
+│  • Renders spawn-plan, wave-start, worker-complete, closeout                │
+│  • Invokes Go CLI: AETHER_OUTPUT_MODE=visual aether ceremony ...            │
+│  • Spawns platform agents (Claude Code Tasks) with caste-labelled names     │
+│  • NEVER mutates state; NEVER parses visual output as authority             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ calls
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  GO RUNTIME LAYER (cmd/ + pkg/)                                             │
+│  ─────────────────────────────────────────                                  │
+│  • State mutation: COLONY_STATE.json, session, pheromones (file-locked)     │
+│  • Manifest generation: build --plan-only, plan --plan-only, continue ...   │
+│  • Finalizers: build-finalize, plan-finalize, continue-finalize             │
+│  • Ceremony emitter: cmd/ceremony_emitter.go publishes to pkg/events/bus.go │
+│  • Visual rendering: cmd/ceremony_cmd.go (spawn-plan, wave-start, etc.)     │
+│  • Narrator launcher: cmd/narrator_launcher.go (Node.js subprocess pipe)    │
+│  • Event bus CLI: event-bus-subscribe --stream --filter "ceremony.*"        │
+│  • Serve command: SSE/WebSocket server (aether serve)                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+                    ▼               ▼               ▼
+            ┌──────────────┐ ┌─────────────┐ ┌─────────────┐
+            │ Subprocess   │ │ JSONL Tail  │ │ SSE/WS      │
+            │ Narrator Pipe│ │ + Poll      │ │ Server      │
+            │ (stdin NDJSON│ │ (file watch)│ │ (aether serve│
+            │  events)     │ │             │ │  localhost) │
+            └──────────────┘ └─────────────┘ └─────────────┘
+                    │               │               │
+                    └───────────────┼───────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TS HOST LAYER (.aether/ts-host/)                                           │
+│  ─────────────────────────────────                                          │
+│  • go-bridge.ts: execFileSync calls to Go CLI (JSON mode)                   │
+│  • lifecycle.ts: plan → build → continue orchestration                      │
+│  • worker-dispatch.ts: manifest → spawn-log → platform agent → spawn-complete│
+│  • event-bridge.ts (NEW): consume Go events, drive TS-side ceremony         │
+│  • ceremony-narrator.ts (NEW): render real-time ceremony from event stream  │
+│  • wave-dispatcher.ts (NEW): parallel wave execution with event feedback    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Structure Rationale
+### Data Flow: Plan → Build → Continue
 
-- **`src/host.ts`:** Single entry point for the orchestration host. Owns the lifecycle loop: manifest -> ceremony -> dispatch -> finalize. Keeps platform specifics behind adapter interfaces.
-- **`src/manifest.ts`:** Mirrors Go manifest structures in TypeScript for type-safe parsing. Validates JSON shape before dispatch to fail fast on contract drift.
-- **`src/dispatcher.ts`:** Abstracts worker spawning across Claude Code (Task tool), OpenCode (agent spawn), and Codex (subprocess). Records `spawn-log` and `spawn-complete` via Go CLI calls.
-- **`src/platform/*.ts`:** Platform adapters isolate platform-specific spawn mechanics. Claude uses the Task tool; OpenCode uses its agent protocol; Codex spawns child processes. Each adapter implements a common `PlatformAdapter` interface.
-- **`src/contracts/*.ts`:** TypeScript interfaces derived from Go structs (`codexBuildManifest`, `codexPlanManifest`, `codexDispatchContract`). These are the integration contract. When Go structs change, these must update.
-- **`src/narrator.ts`:** Existing ceremony event consumer. Extended to render live worker stacks and wave banners from manifest-driven events, not just raw JSON lines.
+```
+Plan Flow
+---------
+Wrapper: /ant-plan
+  └─> Go: aether plan --plan-only
+        └─> Go emits: ceremony.plan.wave.start, ceremony.plan.spawn, ceremony.plan.wave.end
+        └─> Go returns JSON: { plan_manifest, dispatches }
+  └─> TS Host (optional): receives events via event-bridge, renders live plan ceremony
+  └─> Wrapper: renders spawn plan from manifest (AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan)
+  └─> Wrapper: spawns planning agents (Scout, Route-Setter)
+  └─> Wrapper: builds completion file, calls Go plan-finalize
+        └─> Go commits state: COLONY_STATE.json updated with phases
 
-## Architectural Patterns
+Build Flow
+----------
+Wrapper: /ant-build 1
+  └─> Go: aether build 1 --plan-only
+        └─> Go emits: ceremony.build.prewave, ceremony.build.wave.start, ceremony.build.spawn
+        └─> Go returns JSON: { dispatch_manifest, dispatches, execution_plan }
+  └─> TS Host: event-bridge connects to Go event stream
+  └─> TS Host: wave-dispatcher groups dispatches by execution_wave
+  └─> TS Host: for each wave:
+        • renders wave-start banner (via ceremony-narrator or Go CLI)
+        • dispatches platform agents in parallel (worker-dispatch.ts)
+        • records spawn-log / spawn-complete via Go CLI
+        • Go emits ceremony.build.spawn (starting → running → completed/failed)
+        • TS Host receives live status updates via event-bridge
+  └─> Wrapper: renders worker-complete lines as agents return
+  └─> Wrapper: builds completion packet, calls Go build-finalize
+        └─> Go commits state: StateBUILT, claims, spawn-tree, phase tasks
 
-### Pattern 1: Plan-Only Manifest + Finalizer Handoff
+Continue Flow
+-------------
+Wrapper: /ant-continue
+  └─> Go: aether continue --plan-only
+        └─> Go emits: ceremony.continue.wave.start, ceremony.continue.spawn, ceremony.continue.wave.end
+        └─> Go returns JSON: { continue_manifest, dispatches }
+  └─> TS Host: event-bridge receives verification/review events
+  └─> Wrapper: spawns verification agents (Watcher, Probe, Auditor, etc.)
+  └─> Wrapper: builds completion file, calls Go continue-finalize
+        └─> Go commits state: gates, advance to next phase, or block
+```
 
-**What:** Go generates a manifest without mutating state. TypeScript dispatches workers from the manifest. Go finalizer validates and commits state atomically.
+## Component Responsibilities
 
-**When to use:** All lifecycle commands that mutate colony state (plan, build, continue, seal).
+### Go Runtime (Existing, Modified)
 
-**Trade-offs:**
-- Pro: Go remains sole state authority. TypeScript cannot corrupt state.
-- Pro: Manifests are testable JSON contracts.
-- Con: Two process hops (Go -> TS -> Go) add latency. Acceptable for developer tools.
-- Con: Requires discipline: TypeScript must never write `.aether/data/` directly.
+| Component | File | Responsibility | What It Emits |
+|-----------|------|----------------|---------------|
+| Ceremony Emitter | `cmd/ceremony_emitter.go` | Publishes `events.CeremonyPayload` to `pkg/events/bus.go` | `ceremony.build.*`, `ceremony.plan.*`, `ceremony.continue.*` topics |
+| Event Bus | `pkg/events/bus.go` | In-memory pub/sub with JSONL persistence, TTL, crash replay | `Event{ID,Topic,Payload,Source,Timestamp}` |
+| Ceremony Topics | `pkg/events/ceremony.go` | Constants for all ceremony moments | 26 topics from `build.prewave` to `hive.promote` |
+| Narrator Launcher | `cmd/narrator_launcher.go` | Spawns Node.js subprocess, pipes events to stdin | NDJSON `events.Event` lines |
+| Build Command | `cmd/codex_build.go` | Manifest generation, worker dispatch (Go-native), state mutation | `emitBuildCeremony*` calls |
+| Ceremony Command | `cmd/ceremony_cmd.go` | Visual rendering from manifest/completion files | ANSI banners, caste identity, stage markers |
+| Spawn Commands | `cmd/spawn.go` | `spawn-log`, `spawn-complete`, spawn-tree CRUD | `ceremony.build.spawn` events |
+| Serve Command | `cmd/serve.go` | SSE/WebSocket server for external consumers | SSE `event: <type>\ndata: <json>` |
+| Event Bus CLI | `cmd/eventbus.go` | `event-bus-publish`, `event-bus-subscribe --stream`, `event-bus-replay` | NDJSON stream to stdout |
 
-**Example:**
-```typescript
-// host.ts — build lifecycle
-async function runBuild(phase: number): Promise<void> {
-  // 1. Go generates manifest without state mutation
-  const manifestJson = await goExec('build', `--plan-only`, `--phase`, String(phase));
-  const manifest = parseBuildManifest(manifestJson);
+### TypeScript Host (New + Existing)
 
-  // 2. TypeScript renders ceremony from manifest
-  renderCeremony(manifest);
+| Component | File | Responsibility | Boundary |
+|-----------|------|----------------|----------|
+| Go Bridge | `src/go-bridge.ts` | `execFileSync` calls to Go CLI with `AETHER_OUTPUT_MODE=json` | Reads Go output; never writes `.aether/data/` |
+| Lifecycle | `src/lifecycle.ts` | Orchestrates plan → build → continue via Go plan-only + finalizers | Calls finalizers for state commits |
+| Worker Dispatch | `src/worker-dispatch.ts` | Manifest → grouped waves → spawn-log → agent → spawn-complete | Simulated today; real platform dispatch next |
+| **Event Bridge** | `src/event-bridge.ts` *(NEW)* | Consumes Go events via JSONL tail or subprocess pipe | Subscribes only; never publishes to bus directly |
+| **Ceremony Narrator** | `src/ceremony-narrator.ts` *(NEW)* | Renders real-time ceremony from event stream (ANSI or plain) | Presentation only; no state mutation |
+| **Wave Dispatcher** | `src/wave-dispatcher.ts` *(NEW)* | Parallel execution of manifest waves with event-driven status | Drives worker-dispatch; reports back to event bridge |
 
-  // 3. TypeScript dispatches workers per manifest waves
-  const results = await dispatchWaves(manifest.dispatches, manifest.contract);
+### Wrapper Layer (Existing, Enhanced)
 
-  // 4. Write completion JSON to temp file (NOT .aether/data)
-  const completionFile = await writeCompletionJson(results);
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Build Wrapper | `.claude/commands/ant/build.md` | Calls Go for manifest, renders ceremony, spawns agents, calls finalizer |
+| Continue Wrapper | `.claude/commands/ant/continue.md` | Calls Go for continue manifest, spawns verification agents, calls finalizer |
+| Plan Wrapper | `.claude/commands/ant/plan.md` | Calls Go for plan manifest, spawns planning agents, calls finalizer |
 
-  // 5. Go finalizer validates and commits state
-  await goExec('build-finalize', String(phase), `--completion-file`, completionFile);
+## Event Payload Schema
+
+The canonical event shape is `pkg/events/event.go`:
+
+```go
+type Event struct {
+    ID        string          `json:"id"`        // evt_{unix}_{4hex}
+    Topic     string          `json:"topic"`     // ceremony.build.spawn
+    Payload   json.RawMessage `json:"payload"`   // CeremonyPayload
+    Source    string          `json:"source"`    // aether-build, aether-spawn
+    Timestamp string          `json:"timestamp"` // 2006-01-02T15:04:05Z
+    TTLDays   int             `json:"ttl_days"`
+    ExpiresAt string          `json:"expires_at"`
 }
 ```
 
-### Pattern 2: Spawn-Log / Spawn-Complete Bookkeeping
+The `CeremonyPayload` (from `pkg/events/ceremony.go`) is the domain-specific body:
 
-**What:** Every worker spawn and completion is recorded via Go CLI commands, not by writing state files directly.
-
-**When to use:** Every worker dispatch in the TypeScript control plane.
-
-**Trade-offs:**
-- Pro: Go owns the spawn ledger. TypeScript only requests entries.
-- Pro: Audit trail is consistent across platforms.
-- Con: Requires Go CLI subprocess calls for every spawn. Batch where possible.
-
-**Example:**
-```typescript
-// dispatcher.ts
-async function dispatchWorker(worker: DispatchWorker): Promise<WorkerResult> {
-  await goExec('spawn-log', `--caste`, worker.caste, `--task`, worker.taskId);
-
-  const result = await platform.spawn(worker); // Platform-specific
-
-  await goExec('spawn-complete', `--caste`, worker.caste, `--task`, worker.taskId, `--status`, result.status);
-  return result;
+```go
+type CeremonyPayload struct {
+    Phase           int      `json:"phase,omitempty"`
+    PhaseName       string   `json:"phase_name,omitempty"`
+    Wave            int      `json:"wave,omitempty"`
+    SpawnID         string   `json:"spawn_id,omitempty"`
+    Caste           string   `json:"caste,omitempty"`
+    Name            string   `json:"name,omitempty"`
+    TaskID          string   `json:"task_id,omitempty"`
+    Task            string   `json:"task,omitempty"`
+    Status          string   `json:"status,omitempty"`     // starting, running, completed, failed, timeout, blocked
+    Message         string   `json:"message,omitempty"`
+    Skill           string   `json:"skill,omitempty"`
+    PheromoneType   string   `json:"pheromone_type,omitempty"`
+    Strength        float64  `json:"strength,omitempty"`
+    Completed       int      `json:"completed,omitempty"`
+    Total           int      `json:"total,omitempty"`
+    ToolCount       int      `json:"tool_count,omitempty"`
+    TokenCount      int      `json:"token_count,omitempty"`
+    FilesCreated    []string `json:"files_created,omitempty"`
+    FilesModified   []string `json:"files_modified,omitempty"`
+    TestsWritten    []string `json:"tests_written,omitempty"`
+    Blockers        []string `json:"blockers,omitempty"`
+    SuccessCriteria []string `json:"success_criteria,omitempty"`
+    LoopType         string  `json:"loop_type,omitempty"`
+    DetectionSignal  string  `json:"detection_signal,omitempty"`
+    ActionTaken      string  `json:"action_taken,omitempty"`
 }
 ```
 
-### Pattern 3: Platform Adapter Interface
+### TypeScript Mirror (Recommended)
 
-**What:** A common interface for spawning workers across Claude Code, OpenCode, and Codex. Each platform implements the interface.
-
-**When to use:** When the control plane needs to dispatch workers without knowing the platform specifics.
-
-**Trade-offs:**
-- Pro: Platform parity is enforced by shared interface.
-- Pro: New platforms add an adapter, not a rewrite.
-- Con: Lowest common denominator may miss platform-specific optimizations.
-
-**Example:**
 ```typescript
-// platform/types.ts
-interface PlatformAdapter {
-  readonly name: 'claude' | 'opencode' | 'codex';
-  spawn(worker: DispatchWorker): Promise<WorkerResult>;
-  isAvailable(): Promise<boolean>;
+// src/event-bridge.ts
+export interface CeremonyEvent {
+  id: string;
+  topic: string;
+  payload: CeremonyPayload;
+  source: string;
+  timestamp: string;
 }
 
-// platform/claude.ts
-class ClaudeAdapter implements PlatformAdapter {
-  readonly name = 'claude';
-  async spawn(worker: DispatchWorker): Promise<WorkerResult> {
-    // Use Claude Code Task tool
-    return await taskToolSpawn(worker);
-  }
-  async isAvailable(): Promise<boolean> {
-    return process.env.CLAUDE_CODE === '1';
-  }
-}
-```
-
-### Pattern 4: Ceremony Event Stream
-
-**What:** Go emits structured JSON events to stdout. TypeScript narrator consumes and renders them. Visual output is never parsed as truth.
-
-**When to use:** All user-visible lifecycle commands.
-
-**Trade-offs:**
-- Pro: Clean separation: Go owns event truth, TS owns rendering.
-- Pro: Events are testable and versionable.
-- Con: Requires `AETHER_OUTPUT_MODE=json` or similar protocol.
-
-**Example:**
-```typescript
-// narrator.ts
-interface CeremonyEvent {
-  type: 'spawn-plan' | 'wave-start' | 'worker-complete' | 'closeout';
+export interface CeremonyPayload {
   phase?: number;
+  phase_name?: string;
   wave?: number;
+  spawn_id?: string;
   caste?: string;
-  workerName?: string;
-  status?: 'success' | 'failure' | 'skipped';
+  name?: string;
+  task_id?: string;
+  task?: string;
+  status?: "starting" | "running" | "completed" | "failed" | "timeout" | "blocked";
   message?: string;
-}
-
-function renderEvent(event: CeremonyEvent): string {
-  switch (event.type) {
-    case 'wave-start':
-      return `\n── Wave ${event.wave} ──\n`;
-    case 'worker-complete':
-      return `${casteEmoji(event.caste)} ${event.workerName}  ${event.status}\n`;
-    // ...
-  }
+  skill?: string;
+  completed?: number;
+  total?: number;
+  tool_count?: number;
+  files_created?: string[];
+  files_modified?: string[];
+  tests_written?: string[];
+  blockers?: string[];
 }
 ```
 
-## Data Flow
+## Integration Point: How Go Streams Events to TS Host
 
-### Request Flow (Build Lifecycle)
+### Option Analysis
 
-```
-User: /ant-build 1
-    ↓
-[Wrapper] → calls TS host adapter (or TS host is the wrapper)
-    ↓
-[TS Host] → shells out: aether build 1 --plan-only
-    ↓
-[Go Runtime] → generates codexBuildManifest JSON (no state mutation)
-    ↓
-[TS Host] → parseBuildManifest(manifestJson)
-    ↓
-[TS Host] → renderCeremony(manifest) → stdout/events
-    ↓
-[TS Dispatcher] → for each wave in manifest.dispatches:
-    → for each worker in wave:
-        → platformAdapter.spawn(worker)
-        → aether spawn-log --caste X --task Y
-        → await worker result
-        → aether spawn-complete --caste X --task Y --status Z
-    ↓
-[TS Host] → writeCompletionJson(results) → /tmp/aether-completion-*.json
-    ↓
-[TS Host] → shells out: aether build-finalize 1 --completion-file /tmp/...
-    ↓
-[Go Finalizer] → validate manifest provenance
-                → merge worker results
-                → UpdateJSONAtomically(COLONY_STATE.json)
-    ↓
-[Go Runtime] → emit final ceremony event
-    ↓
-[TS Narrator] → render closeout
-```
+| Mechanism | How It Works | Pros | Cons | Recommendation |
+|-----------|--------------|------|------|----------------|
+| **A. Subprocess Narrator Pipe** | Go spawns `node narrator.js`, pipes NDJSON events to stdin | Zero config; works today in `cmd/narrator_launcher.go`; live stream | Requires Node.js; one-way only; tied to Go lifecycle | **Primary for live events** |
+| **B. JSONL Tail + Poll** | TS host runs `event-bus-subscribe --stream --filter "ceremony.*"` | No server; uses existing CLI; bidirectional possible via separate CLI calls | Polling latency (250ms default); stdout parsing | **Primary for startup replay + fallback** |
+| **C. WebSocket via `aether serve`** | TS host connects to `ws://localhost:8080/ws/agents` | Lowest latency; true bidirectional | Requires background server process; port conflicts; overkill for local CLI | **Defer — useful for swarm dashboard later** |
+| **D. Named Pipe / Domain Socket** | Go writes to Unix domain socket, TS reads | Low latency; no polling | Platform-specific; requires cleanup; not yet implemented | **Reject — adds complexity without benefit** |
+| **E. File Watcher on JSONL** | TS watches `.aether/data/event-bus.jsonl` for changes | Simple; no subprocess | Race conditions; no atomic append guarantees on all platforms | **Reject — unreliable** |
 
-### State Management
+### Recommended Hybrid Approach
+
+**Phase 1 (v1.17): JSONL Tail + Subprocess Pipe**
+
+1. **Startup replay:** Before dispatching any workers, the TS host calls:
+   ```
+   AETHER_OUTPUT_MODE=json aether event-bus-replay --topic ceremony.build.spawn --since <build_start_time>
+   ```
+   This gives the TS host all events already emitted (prewave, wave-start) so it can render the current state accurately.
+
+2. **Live stream:** The TS host spawns:
+   ```
+   aether event-bus-subscribe --stream --filter "ceremony.build.*" --poll-interval 100ms
+   ```
+   as a long-running subprocess. It parses NDJSON lines from stdout and updates its internal ceremony state.
+
+3. **Alternative (narrator pipe):** If the wrapper invokes the TS host as a subprocess (instead of the other way around), Go's existing `maybeLaunchNarrator` can pipe events directly to the TS host's stdin. This is how the old `narrator.js` worked.
+
+**Phase 2 (v1.18+): WebSocket for Swarm Dashboard**
+When the live terminal dashboard (SWARM-01) is built, `aether serve` becomes useful. The dashboard connects via WebSocket and receives all `ceremony.*` events in real time.
+
+## Integration Point: How TS Host Signals Wrapper
+
+The TS host does not "signal" the wrapper directly. Instead, the wrapper invokes the TS host as part of its command flow:
 
 ```
-Go State Store (.aether/data/)
-    ↑ (atomic writes, file locking)
-Go Finalizer Engine
-    ↑ (validation, provenance checks)
-Go Manifest Generator
-    ↑ (plan-only, no mutation)
-TypeScript Host Adapter
-    ↑ (orchestration, never writes .aether/data/)
-Platform Wrappers / User
+Wrapper build.md:
+  1. Calls Go for manifest (JSON)
+  2. Calls Go for visual spawn-plan (optional — can delegate to TS host)
+  3. Invokes TS host: node .aether/ts-host/dist/host.js build-wave --manifest-file <tmp>
+     └─> TS host:
+         a. Reads manifest
+         b. Starts event-bridge (event-bus-subscribe --stream)
+         c. For each wave:
+            - Renders wave-start (via ceremony-narrator.ts or Go CLI)
+            - Dispatches platform agents (Claude Code Tasks)
+            - Records spawn-log / spawn-complete via Go CLI
+            - Receives live events, updates progress
+         d. Builds completion packet
+  4. Calls Go build-finalize with completion file
+  5. Calls Go for visual closeout
 ```
 
-### Key Data Flows
+The TS host writes progress to **stderr** (or a temp status file) so the wrapper can display it. The wrapper remains the user-facing orchestrator; the TS host is the execution engine.
 
-1. **Manifest Flow:** Go generates JSON manifest -> TS parses and validates -> TS dispatches from manifest fields -> Go finalizer receives completion JSON. This is the core integration boundary.
-2. **Event Flow:** Go emits ceremony events -> TS narrator consumes and renders -> User sees live worker stacks. Events are read-only; TS never writes state based on events.
-3. **Spawn Ledger Flow:** TS requests spawn-log/spawn-complete via Go CLI -> Go updates internal spawn tracking -> Go finalizer references spawn ledger for provenance. TS never writes spawn ledger files directly.
+## Integration Point: How Wrapper Renders Ceremony
 
-## Scaling Considerations
+Today, the wrapper renders ceremony by calling Go CLI commands:
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 1 colony, 1 user | TS host runs inline in wrapper process. No background service needed. |
-| Multiple colonies, 1 user | TS host is stateless per invocation. Go state remains per-repo. No shared TS state. |
-| Multiple users / CI | TS host runs in CI process. Go binary is the only installed artifact. No TS daemon. |
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <file>
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <file> --execution-wave <n>
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <file>
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <file>
+```
 
-### Scaling Priorities
+In v1.17, this stays mostly the same, but with two changes:
 
-1. **First bottleneck:** Subprocess latency from TS -> Go CLI calls. Mitigation: batch spawn-log calls, use `--plan-only` JSON output directly without temp files where possible.
-2. **Second bottleneck:** Platform worker concurrency limits (Claude Code Task tool limits, OpenCode agent slots). Mitigation: respect `codexDispatchContract` worker counts and timeouts; queue workers if platform limits exceeded.
+1. **TS host can render lightweight ceremony** (wave-start banners, worker status lines) directly via `ceremony-narrator.ts`, reducing Go CLI round-trips.
+2. **Go visual commands remain the canonical renderer** for complex output (spawn-plan, closeout) to ensure parity across platforms.
 
-## Anti-Patterns
+The wrapper decides: for simple real-time updates, use TS host output; for formal ceremony moments, use Go CLI.
 
-### Anti-Pattern 1: TypeScript Writes `.aether/data/` Directly
+## New Components Required
 
-**What people do:** The TS control plane writes COLONY_STATE.json, session files, or spawn ledgers directly.
+| Component | File | Purpose | Depends On |
+|-----------|------|---------|------------|
+| Event Bridge | `src/event-bridge.ts` | Connects to Go event bus (JSONL tail or narrator pipe), emits typed events to TS consumers | `go-bridge.ts` (to spawn CLI) |
+| Ceremony Narrator | `src/ceremony-narrator.ts` | Renders ANSI/plain ceremony from event stream: wave banners, worker status, progress bars | `event-bridge.ts`, caste color map (YAML or inline) |
+| Wave Dispatcher | `src/wave-dispatcher.ts` | Accepts manifest, groups by execution_wave, runs parallel dispatch, feeds events to event-bridge | `worker-dispatch.ts`, `event-bridge.ts` |
+| Caste Config Loader | `src/caste-config.ts` | Loads shared YAML caste emoji/color/label map (CEREMONY-02) | YAML parser (or inline JSON) |
 
-**Why it's wrong:** Violates the safety kernel boundary. Corrupts state if TS has a bug or races with Go. Breaks atomic write guarantees.
+## Modified Components
 
-**Do this instead:** All state writes go through Go finalizers. TS writes completion JSON to temp files outside `.aether/data/` and passes paths to Go finalizers.
+| Component | File | Change |
+|-----------|------|--------|
+| Go Bridge | `src/go-bridge.ts` | Add `spawnGoStream` helper for long-running CLI processes (event-bus-subscribe) |
+| Worker Dispatch | `src/worker-dispatch.ts` | Replace simulation with real platform dispatch; integrate with event-bridge for status updates |
+| Lifecycle | `src/lifecycle.ts` | Add event-bridge startup/shutdown; wire wave-dispatcher instead of sequential loop |
+| Host Entry | `src/host.ts` | Add `build-wave`, `watch-events` commands |
+| Build Wrapper | `.claude/commands/ant/build.md` | Add TS host invocation step; remove redundant Go ceremony calls where TS host handles it |
 
-### Anti-Pattern 2: TypeScript Parses Visual Output as Truth
+## Boundary Contract Preservation
 
-**What people do:** TS parses ANSI-colored banners or progress bars to determine worker status or phase state.
+The v1.16 boundary contract (`runtime-boundary-contract.md`) must remain intact:
 
-**Why it's wrong:** Visual output is for humans, not machines. It changes between versions. Parsing it creates brittle integrations.
+| Rule | How v1.17 Upholds It |
+|------|----------------------|
+| Go owns all state mutation | TS host still calls `build-finalize`, `plan-finalize`, `continue-finalize`. No direct `.aether/data/` writes. |
+| TS host calls Go plan-only for manifests | `lifecycle.ts` unchanged — still uses `callGoJSON` with `--plan-only`. |
+| TS host never invents workers | `wave-dispatcher.ts` dispatches only from `dispatch_manifest.dispatches`. |
+| No visual output parsing as authority | TS host consumes NDJSON from `event-bus-subscribe`, not ANSI output. |
+| Bash is glue only | No new Bash logic; TS host is Node.js. |
 
-**Do this instead:** Use `AETHER_OUTPUT_MODE=json` for machine-readable output. Parse JSON manifests and events, not visual text.
+## Suggested Build Order (Respecting Dependencies)
 
-### Anti-Pattern 3: TypeScript Reimplements Planning Logic
+```
+Phase A: Foundation (can start immediately)
+  1. caste-config.ts — load YAML caste maps (no dependencies)
+  2. event-bridge.ts — consume Go event stream (depends on go-bridge.ts)
+  3. ceremony-narrator.ts — render from events (depends on event-bridge, caste-config)
 
-**What people do:** TS control plane decides which workers to spawn, in what order, with what skills — duplicating Go manifest generation.
+Phase B: Dispatch (depends on Phase A)
+  4. wave-dispatcher.ts — parallel wave execution (depends on worker-dispatch, event-bridge)
+  5. Update worker-dispatch.ts — real platform dispatch, emit events
 
-**Why it's wrong:** Splits the source of truth. Go tests validate manifest logic; TS reimplementation would not be covered. Drift is inevitable.
+Phase C: Integration (depends on Phase B)
+  6. Update lifecycle.ts — wire wave-dispatcher, event-bridge lifecycle
+  7. Update host.ts — add build-wave command
+  8. Update build.md wrapper — invoke TS host, reduce Go ceremony calls
 
-**Do this instead:** TS consumes Go-generated manifests and dispatches exactly what the manifest specifies. If the manifest is wrong, fix Go.
+Phase D: Verification
+  9. Golden parity tests (PARITY-01) — compare TS host output against v5.4 baseline
+  10. E2E tests for event bridge → ceremony narrator → wave dispatcher pipeline
+```
 
-### Anti-Pattern 4: Classic Wrapper-Owned State Mutation
+## Scalability Considerations
 
-**What people do:** Restore Classic v5.4.0 behavior where wrappers read and wrote COLONY_STATE.json, watch files, and session state directly.
+| Concern | At 1 worker | At 10 workers | At 50 workers |
+|---------|-------------|---------------|---------------|
+| Event volume | ~20 events/build | ~200 events/build | ~1000 events/build |
+| JSONL file size | Negligible | ~500 KB | ~2 MB |
+| Polling overhead | 100ms latency OK | 100ms OK | Consider WebSocket |
+| TS host memory | <10 MB | <20 MB | <50 MB |
+| Parallel wave dispatch | Sequential fine | 2-3 parallel | Needs worktree mode |
 
-**Why it's wrong:** This was the behavior that caused the migration regressions. It bypasses Go validation, atomic writes, and provenance checks.
+## Anti-Patterns to Avoid
 
-**Do this instead:** Restore Classic orchestration *feel* (live workers, wave banners, caste labels) but not Classic state ownership. Use plan-only manifests and finalizers.
-
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Claude Code Task tool | TS platform adapter spawns subagents via Task tool | Requires Claude Code environment. Task tool has concurrency limits. |
-| OpenCode agents | TS platform adapter spawns agents via OpenCode protocol | Requires OpenCode environment. Agent availability varies. |
-| Codex CLI | TS platform adapter spawns `aether` subprocesses | Codex is runtime-native; TS host may be minimal or skipped for Codex. |
-| Go CLI (`aether`) | TS shells out for manifests, finalizers, spawn-log, spawn-complete | Use JSON output mode. Parse stdout, not stderr or visual output. |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| TS Host <-> Go Manifest Generator | Subprocess + JSON stdout | TS calls `aether build --plan-only`; Go returns JSON manifest. |
-| TS Host <-> Go Finalizer | Subprocess + temp file path | TS writes completion JSON to temp file; Go reads and validates. |
-| TS Host <-> Go Spawn Ledger | Subprocess CLI calls | TS calls `aether spawn-log` / `aether spawn-complete`. |
-| TS Host <-> TS Narrator | In-process function calls | Host passes ceremony events to narrator for rendering. |
-| TS Host <-> Platform Adapters | In-process async calls | Adapters spawn platform-specific workers. |
-| Go Runtime <-> Editable Assets | File reads (YAML, Markdown, TOML) | Go reads command playbooks and agent definitions at runtime. |
+| Anti-Pattern | Why Bad | What To Do Instead |
+|--------------|---------|-------------------|
+| TS host writes to `.aether/data/event-bus.jsonl` | Violates boundary contract; races with Go file locking | TS host subscribes via CLI or pipe; never writes |
+| Wrapper parses TS host ANSI output for state | Fragile; visual output is for humans only | Wrapper uses Go JSON CLI for state; TS host events for progress |
+| TS host invents workers not in manifest | Breaks provenance; finalizer will reject | Dispatch only from `dispatch_manifest.dispatches` |
+| Go emits events but TS host ignores them | Wasted work; ceremony feels dead | TS host must consume and render every event |
+| Ceremony rendering duplicated in Go and TS | Maintenance burden; drift | Go owns canonical complex rendering; TS owns lightweight real-time |
 
 ## Sources
 
-- [S1] Wrapper-runtime ownership contract — `.aether/docs/wrapper-runtime-ux-contract.md`
-- [S3] Current command-guide catalog — `cmd/command_guide.go`
-- [S9] Current build wrapper YAML with restore-real-wrapper-orchestration contract — `.aether/commands/build.yaml`
-- [S15] build-finalize manifest and provenance validation — `cmd/codex_build_finalize.go`
-- [S55] codexBuildManifest owns dispatch metadata, execution plans, skill sections, boundary guidance, and review depth — `cmd/codex_build.go`
-- [S58] Go ceremony command renders spawn-plan, wave-start, worker-complete, and closeout from lifecycle JSON — `cmd/ceremony_cmd.go`
-- [S60] Current TypeScript package is a ceremony narrator, not a lifecycle control plane — `.aether/ts/package.json`; `.aether/ts/narrator.ts`
-- [S65] Ceremony Revival via Bundled TypeScript Narrator — `.aether/docs/ceremony-revival-v1.6-plan.md`
-- [S67] Node.js child_process documentation — https://nodejs.org/api/child_process.html
-- [S94] Current plan wrapper orchestration contract — `.aether/commands/plan.yaml:26-45`
-- [S95] Current build wrapper orchestration contract — `.aether/commands/build.yaml:20-33`
-- Oracle synthesis — `.aether/oracle/synthesis.md`
-- Hybrid runtime strategy research — `.aether/docs/hybrid-runtime-strategy-research.md`
-
----
-*Architecture research for: Aether Hybrid Runtime Boundary and Orchestration Recovery*
-*Researched: 2026-05-12*
+- `pkg/events/bus.go` — Event bus implementation (in-memory pub/sub, JSONL persistence)
+- `pkg/events/event.go` — Event struct and topic matching
+- `pkg/events/ceremony.go` — Ceremony topics and payload schema
+- `cmd/ceremony_emitter.go` — Build ceremony emitter, lifecycle ceremony sequences
+- `cmd/ceremony_cmd.go` — Visual ceremony rendering commands
+- `cmd/narrator_launcher.go` — Node.js subprocess narrator pipe
+- `cmd/eventbus.go` — Event bus CLI (publish, query, replay, subscribe)
+- `cmd/serve.go` — SSE/WebSocket streaming server
+- `cmd/spawn.go` — spawn-log, spawn-complete with ceremony emission
+- `cmd/codex_build.go` — Build manifest generation, dispatch planning
+- `.aether/ts-host/src/lifecycle.ts` — Existing TS lifecycle orchestrator
+- `.aether/ts-host/src/worker-dispatch.ts` — Existing worker dispatch
+- `.aether/ts-host/src/go-bridge.ts` — Go CLI bridge
+- `.claude/commands/ant/build.md` — Build wrapper (ceremony invocation pattern)
+- `.aether/references/contracts/runtime-boundary-contract.md` — Boundary contract
