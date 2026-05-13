@@ -256,7 +256,8 @@ export type TerminalWorkerStatus =
   | "failed"
   | "blocked"
   | "timeout"
-  | "manually-reconciled";
+  | "manually-reconciled"
+  | "code_written";
 
 // ---------------------------------------------------------------------------
 // Ceremony event types (pkg/events/ceremony.go)

@@ -7,12 +7,12 @@
  * Satisfies ORC-01 (workflow pattern derivation) and ORC-02 (Queen recommendation).
  */
 
+import type { BuildDispatch } from "../types.js";
 import type {
-  BuildDispatch,
   QueenRecommendation,
   QueenExecutionPolicy,
   WorkflowPattern,
-} from "../types.js";
+} from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Pattern derivation

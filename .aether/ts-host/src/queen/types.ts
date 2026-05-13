@@ -133,11 +133,11 @@ export interface QueenOrchestratorResult {
   /** Queen recommendation for this build. */
   recommendation: QueenRecommendation;
   /** Midden check result (if not skipped). */
-  middenResult?: MiddenCheckResult;
+  middenResult?: MiddenCheckResult | undefined;
   /** Recovery actions for failed workers (if any). */
-  recoveryActions?: RecoveryAction[];
+  recoveryActions?: RecoveryAction[] | undefined;
   /** Error message if the build failed. */
-  error?: string;
+  error?: string | undefined;
 }
 
 /** Queen orchestrator interface. */
