@@ -31,6 +31,7 @@ import {
   toWorkerResults,
   type DispatchOptions,
 } from "./worker-dispatch.js";
+import { detectAvailablePlatforms } from "./platform-dispatcher.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +41,11 @@ import {
 export interface LifecycleOptions extends DispatchOptions {
   /** Phase number to build (default: 1). */
   phase?: number;
+  /**
+   * When true (default), workers within the same wave are dispatched
+   * concurrently via Promise.all.
+   */
+  parallel?: boolean;
 }
 
 /** Result of the lifecycle orchestration. */
@@ -232,6 +238,25 @@ export async function runLifecycle(
       throw new Error("Build manifest contains no dispatches");
     }
 
+    // Detect available platforms before dispatching.
+    const availablePlatforms = await detectAvailablePlatforms();
+    const hasPlatforms = availablePlatforms.length > 0;
+
+    // Default simulateWorkers to false (real dispatch) when platforms are available.
+    // If no platforms are available and simulateWorkers is not explicitly true,
+    // warn and fall back to simulation.
+    let simulateWorkers = opts.simulateWorkers;
+    if (simulateWorkers === undefined) {
+      if (hasPlatforms) {
+        simulateWorkers = false;
+      } else {
+        process.stderr.write(
+          "Warning: no platform CLI available. Falling back to simulation mode.\n"
+        );
+        simulateWorkers = true;
+      }
+    }
+
     // Create a placeholder file for simulated worker file claims.
     // The Go build-finalizer validates that all claimed files exist on disk
     // and are within the repository. For simulated workers, we create a real
@@ -254,12 +279,24 @@ export async function runLifecycle(
       // which is the expected behavior for a prototype that doesn't do real work.
     }
 
+    // Emit wave start event
+    process.stderr.write(
+      `Ceremony: ceremony.build.wave.start wave=1 workers=${buildDispatches.length}\n`
+    );
+
     // Dispatch workers with spawn-log/complete lifecycle recording
     const buildOpts = {
       ...opts,
+      simulateWorkers,
+      parallel: opts.parallel ?? true,
       simulatedFileClaims: [placeholderRel],
     };
     const dispatchResults = await dispatchWorkers(buildOpts, buildDispatches);
+
+    // Emit wave end event
+    process.stderr.write(
+      `Ceremony: ceremony.build.wave.end wave=1 workers=${buildDispatches.length}\n`
+    );
 
     // Convert dispatch results to WorkerResult format for the finalizer
     const workerResults = toWorkerResults(buildDispatches, dispatchResults);
