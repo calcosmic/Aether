@@ -19,6 +19,8 @@ import { loadTemplate, substituteTemplate } from "./template-loader.js";
 export interface NarratorOptions {
   cwd: string;
   outputMode?: string | undefined;
+  /** When true, narrator suppresses stdout writes (e.g. when dashboard is active). */
+  suppressOutput?: boolean;
 }
 
 export interface Narrator {
@@ -48,6 +50,7 @@ interface Renderer {
  */
 export function createNarrator(opts: NarratorOptions): Narrator {
   const config = loadCeremonyConfig(opts.cwd);
+  const suppressOutput = opts.suppressOutput ?? false;
 
   const mode =
     opts.outputMode ??
@@ -77,6 +80,8 @@ export function createNarrator(opts: NarratorOptions): Narrator {
 
   return {
     onEvent(event: CeremonyEvent): void {
+      if (suppressOutput) return;
+
       const handler = handlers[event.topic];
       if (!handler) return;
 

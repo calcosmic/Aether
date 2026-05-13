@@ -103,4 +103,28 @@ describe("narrator", () => {
     assert.ok(output.includes("🔨"), "Should preserve emoji");
     narrator.stop();
   });
+
+  it("narrator suppresses stdout when suppressOutput is true", () => {
+    const narrator = createNarrator({ cwd: REPO_ROOT, suppressOutput: true });
+    const event = makeEvent("ceremony.build.spawn", {
+      caste: "builder",
+      name: "Mason-67",
+      task: "Task 1",
+    });
+    narrator.onEvent(event);
+    assert.equal(writes.length, 0, "Should not write to stdout when suppressOutput is true");
+    narrator.stop();
+  });
+
+  it("narrator writes stdout when suppressOutput is false", () => {
+    const narrator = createNarrator({ cwd: REPO_ROOT, suppressOutput: false });
+    const event = makeEvent("ceremony.build.spawn", {
+      caste: "builder",
+      name: "Mason-67",
+      task: "Task 1",
+    });
+    narrator.onEvent(event);
+    assert.ok(writes.length > 0, "Should write to stdout when suppressOutput is false");
+    narrator.stop();
+  });
 });
