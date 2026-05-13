@@ -32,6 +32,9 @@ import {
   type DispatchOptions,
 } from "./worker-dispatch.js";
 import { detectAvailablePlatforms } from "./platform-dispatcher.js";
+import { createDashboard, type Dashboard } from "./dashboard.js";
+import { createNarrator, type Narrator } from "./narrator.js";
+import { startEventBridge, stopEventBridge, type EventBridgeController } from "./event-bridge.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +49,11 @@ export interface LifecycleOptions extends DispatchOptions {
    * concurrently via Promise.all.
    */
   parallel?: boolean;
+  /**
+   * When true (default when TTY), show the live dashboard during build.
+   * When false, use plain text narrator output.
+   */
+  dashboard?: boolean;
 }
 
 /** Result of the lifecycle orchestration. */
@@ -129,6 +137,10 @@ export async function runLifecycle(
 ): Promise<LifecycleResult> {
   const stepsCompleted: string[] = [];
   const targetPhase = opts.phase ?? 1;
+
+  // Determine if dashboard should be active (default true when TTY)
+  const useDashboard = opts.dashboard !== false && process.stdout.isTTY;
+  let dashboard: Dashboard | undefined;
 
   try {
     // ── Step 1: Plan ─────────────────────────────────────────────────────
@@ -279,6 +291,12 @@ export async function runLifecycle(
       // which is the expected behavior for a prototype that doesn't do real work.
     }
 
+    // Start dashboard before build dispatch when active
+    if (useDashboard) {
+      dashboard = createDashboard({ cwd: opts.cwd });
+      dashboard.start();
+    }
+
     // Emit wave start event
     process.stderr.write(
       `Ceremony: ceremony.build.wave.start wave=1 workers=${buildDispatches.length}\n`
@@ -297,6 +315,12 @@ export async function runLifecycle(
     process.stderr.write(
       `Ceremony: ceremony.build.wave.end wave=1 workers=${buildDispatches.length}\n`
     );
+
+    // Stop dashboard after build dispatch completes
+    if (dashboard) {
+      dashboard.stop();
+      dashboard = undefined;
+    }
 
     // Convert dispatch results to WorkerResult format for the finalizer
     const workerResults = toWorkerResults(buildDispatches, dispatchResults);
@@ -409,5 +433,11 @@ export async function runLifecycle(
       steps_completed: stepsCompleted,
       error: errorMessage,
     };
+  } finally {
+    // Ensure dashboard is always stopped, even on error
+    if (dashboard) {
+      dashboard.stop();
+      dashboard = undefined;
+    }
   }
 }
