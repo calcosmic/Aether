@@ -23,17 +23,21 @@ import { startEventBridge } from "./event-bridge.js";
 function parseArgs(argv: string[]): {
   command: string;
   cwd: string;
+  simulate: boolean;
   positional: string[];
 } {
   const args = argv.slice(2); // skip node and script path
   let command = "";
   let cwd = process.cwd();
+  let simulate = false;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "--cwd" && i + 1 < args.length) {
       cwd = args[++i]!;
+    } else if (arg === "--simulate") {
+      simulate = true;
     } else if (!command) {
       command = arg;
     } else {
@@ -41,7 +45,7 @@ function parseArgs(argv: string[]): {
     }
   }
 
-  return { command, cwd, positional };
+  return { command, cwd, simulate, positional };
 }
 
 function printUsage(): void {
@@ -53,12 +57,13 @@ function printUsage(): void {
       "  continue      Call aether continue --plan-only\n" +
       "  lifecycle [N] Full plan->build->continue sequence (default phase: 1)\n\n" +
       "Options:\n" +
-      "  --cwd <path>  Working directory\n"
+      "  --cwd <path>   Working directory\n" +
+      "  --simulate     Run in simulation mode (no real worker spawning)\n"
   );
 }
 
 async function main(): Promise<void> {
-  const { command, cwd, positional } = parseArgs(process.argv);
+  const { command, cwd, simulate, positional } = parseArgs(process.argv);
 
   if (!command) {
     printUsage();
@@ -110,10 +115,13 @@ async function main(): Promise<void> {
         process.stderr.write("Error: lifecycle phase must be a number\n");
         process.exit(1);
       }
+      if (simulate) {
+        process.stderr.write("Running in simulation mode\n");
+      }
       const lifecycleOpts: LifecycleOptions = {
         goBinaryPath,
         cwd,
-        simulateWorkers: true,
+        simulateWorkers: simulate,
       };
       if (phaseArg) {
         lifecycleOpts.phase = parseInt(phaseArg, 10);
