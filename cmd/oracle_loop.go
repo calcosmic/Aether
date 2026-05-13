@@ -1521,11 +1521,19 @@ func renderOracleContextCapsule(state oracleStateFile, plan oraclePlanFile, dete
 }
 
 func oraclePhaseDirective(state oracleStateFile, plan oraclePlanFile) string {
-	switch strings.ToLower(strings.TrimSpace(state.Phase)) {
+	return buildOraclePhaseDirective(state.Phase)
+}
+
+func buildOraclePhaseDirective(phase string) string {
+	switch strings.ToLower(strings.TrimSpace(phase)) {
 	case "survey":
-		return "Survey pass: prioritize untouched questions first and establish the evidence map."
+		return "Your task is to survey the landscape. Identify key concepts, existing solutions, and open questions. Do not form conclusions yet."
 	case "verify":
-		return "Verify pass: resolve contradictions, tighten confidence scores, and sharpen the release recommendation."
+		return "Your task is to verify previous findings. Test assumptions, look for contradictions, and assess confidence levels."
+	case "investigate":
+		return "Your task is to investigate specific questions. Deep-dive into the most promising areas identified in the survey."
+	case "synthesize":
+		return "Your task is to synthesize all findings into a coherent report. Connect dots, resolve contradictions, and formulate recommendations."
 	default:
 		return "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."
 	}
@@ -2713,6 +2721,9 @@ func nextOraclePhase(plan oraclePlanFile, state oracleStateFile) string {
 		}
 	}
 	if oracleReadyForCompletion(plan, state) || state.Iteration >= state.MaxIterations {
+		if strings.EqualFold(strings.TrimSpace(state.Phase), "verify") {
+			return "synthesize"
+		}
 		return "verify"
 	}
 	return "investigate"
