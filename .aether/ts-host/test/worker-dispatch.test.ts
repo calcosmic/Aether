@@ -340,8 +340,9 @@ describe("worker-dispatch", () => {
     assert.ok(context, "Test context should be initialized");
     const { bridge } = context;
 
-    // Create a dispatch that will fail by disabling simulation
-    // (real dispatch throws "not yet implemented")
+    // Create a dispatch that will fail by disabling simulation.
+    // Real dispatch now attempts to load agent definitions and spawn
+    // a platform CLI, which will fail in the minimal test colony.
     const dispatch = {
       stage: "implement",
       wave: 0,
@@ -353,7 +354,7 @@ describe("worker-dispatch", () => {
 
     const opts: DispatchOptions = {
       ...bridge,
-      simulateWorkers: false, // This triggers "not yet implemented" error
+      simulateWorkers: false, // Triggers real dispatch path, which fails in test colony
     };
 
     // dispatchSingleWorker should NOT throw; it catches the error and
@@ -362,8 +363,8 @@ describe("worker-dispatch", () => {
 
     assert.equal(result.status, "failed", "Worker should have failed status");
     assert.ok(
-      result.summary.includes("not yet implemented"),
-      `Summary should mention the error: ${result.summary}`
+      result.summary.includes("Worker dispatch failed"),
+      `Summary should mention dispatch failure: ${result.summary}`
     );
 
     // Verify spawn tree shows failed entry

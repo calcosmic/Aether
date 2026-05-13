@@ -2,8 +2,12 @@
  * Worker dispatch module for the TypeScript orchestration host.
  *
  * Iterates over Go manifest dispatches, records spawn-log before each worker,
- * dispatches the worker (simulated for prototype), and records spawn-complete
+ * dispatches the worker (simulated or real), and records spawn-complete
  * after. Restores the visible worker activity lost in the Bash-to-Go migration.
+ *
+ * When simulateWorkers is false, dispatches real workers via platform CLI
+ * subprocess using platform-dispatcher.ts, prompt-assembler.ts, and
+ * claims-parser.ts.
  *
  * Satisfies HOST-03 (visible dispatch from manifest) and HOST-06 (spawn
  * lifecycle events via Go CLI).
@@ -12,6 +16,18 @@
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { callGoJSON } from "./go-bridge.js";
 import type { BuildDispatch, WorkerResult, TerminalWorkerStatus } from "./types.js";
+import {
+  createPlatformDispatcher,
+  detectAvailablePlatforms,
+  spawnWorker,
+  type Platform,
+  type WorkerConfig,
+} from "./platform-dispatcher.js";
+import {
+  assemblePrompt,
+  getAgentNameForCaste,
+} from "./prompt-assembler.js";
+import { parseWorkerClaims } from "./claims-parser.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,7 +41,7 @@ export interface DispatchResult {
   status: TerminalWorkerStatus;
   /** Summary of what the worker did (or why it failed). */
   summary: string;
-  /** Approximate duration in seconds (for simulated workers). */
+  /** Approximate duration in seconds. */
   duration?: number;
   /** Files modified by the worker (simulated or real). */
   files_modified?: string[];
@@ -33,6 +49,8 @@ export interface DispatchResult {
   files_created?: string[];
   /** Tests written by the worker (simulated or real). */
   tests_written?: string[];
+  /** Detected platform for debugging. */
+  detectedPlatform?: string;
 }
 
 /** Options for worker dispatch, extending Go bridge options. */
@@ -123,7 +141,8 @@ export async function dispatchSingleWorker(
         result.tests_written = [simClaims[1]!];
       }
     } else {
-      throw new Error("Real worker dispatch not yet implemented");
+      // Real worker dispatch via platform CLI.
+      result = await dispatchRealWorker(opts, dispatch);
     }
   } catch (dispatchErr: unknown) {
     const errMsg =
@@ -154,6 +173,102 @@ export async function dispatchSingleWorker(
     process.stderr.write(
       `Warning: spawn-complete failed for ${result.name}: ${msg}\n`
     );
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Real worker dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Dispatch a real worker via platform CLI subprocess.
+ *
+ * 1. Detect available platform (default "claude")
+ * 2. Assemble prompt from agent definition + task brief + response contract
+ * 3. Spawn subprocess via platform-dispatcher
+ * 4. Parse claims JSON from stdout
+ * 5. Build DispatchResult from claims
+ *
+ * @param opts - Dispatch options
+ * @param dispatch - Build dispatch entry
+ * @returns Dispatch result from real worker claims
+ */
+async function dispatchRealWorker(
+  opts: DispatchOptions,
+  dispatch: BuildDispatch
+): Promise<DispatchResult> {
+  // Detect platform: prefer "claude" if available, else first available.
+  let platform: Platform = "claude";
+  const available = await detectAvailablePlatforms();
+  if (available.length > 0 && !available.includes("claude")) {
+    platform = available[0]!;
+  }
+
+  const agentName = getAgentNameForCaste(dispatch.caste);
+
+  const prompt = assemblePrompt({
+    cwd: opts.cwd,
+    caste: dispatch.caste,
+    name: dispatch.name,
+    task: dispatch.task,
+    platform,
+    agentName,
+  });
+
+  const config: WorkerConfig = {
+    platform,
+    agentName,
+    caste: dispatch.caste,
+    name: dispatch.name,
+    task: dispatch.task,
+    root: opts.cwd,
+    prompt,
+  };
+
+  const spawnResult = await spawnWorker(config);
+
+  if (spawnResult.exitCode !== 0) {
+    return {
+      name: dispatch.name,
+      status: "failed",
+      summary: `Worker exited with code ${spawnResult.exitCode}: ${spawnResult.stderr.slice(0, 200)}`,
+      duration: spawnResult.duration / 1000,
+      detectedPlatform: platform,
+    };
+  }
+
+  let claims;
+  try {
+    claims = parseWorkerClaims(spawnResult.stdout);
+  } catch (parseErr: unknown) {
+    const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+    return {
+      name: dispatch.name,
+      status: "failed",
+      summary: `Failed to parse worker claims: ${msg}`,
+      duration: spawnResult.duration / 1000,
+      detectedPlatform: platform,
+    };
+  }
+
+  const result: DispatchResult = {
+    name: dispatch.name,
+    status: (claims.status as TerminalWorkerStatus) ?? "completed",
+    summary: claims.summary ?? `Worker ${dispatch.name} completed`,
+    duration: spawnResult.duration / 1000,
+    detectedPlatform: platform,
+  };
+
+  if (claims.files_created !== undefined) {
+    result.files_created = claims.files_created;
+  }
+  if (claims.files_modified !== undefined) {
+    result.files_modified = claims.files_modified;
+  }
+  if (claims.tests_written !== undefined) {
+    result.tests_written = claims.tests_written;
   }
 
   return result;

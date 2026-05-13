@@ -67,7 +67,7 @@ describe("caste-config", () => {
     assert.throws(
       () => {
         // Simulate what assertCeremonyConfig would do with missing castes
-        const obj = { stage_separator: { prefix: "--", suffix: "--" } };
+        const obj = { stage_separator: { prefix: "--", suffix: "--" } } as Record<string, unknown>;
         if (!obj.castes) {
           throw new Error("Invalid ceremony.yaml: missing required key castes");
         }
