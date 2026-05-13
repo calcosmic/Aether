@@ -17,6 +17,8 @@ import type { BuildManifest, ContinueCompletion, PlanCompletion } from "./types.
 import { callGoJSON, discoverGoBinary } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
+import { createNarrator } from "./narrator.js";
+import { startEventBridge } from "./event-bridge.js";
 
 function parseArgs(argv: string[]): {
   command: string;
@@ -116,7 +118,23 @@ async function main(): Promise<void> {
       if (phaseArg) {
         lifecycleOpts.phase = parseInt(phaseArg, 10);
       }
+
+      const narrator = createNarrator({
+        cwd,
+        outputMode: process.env["AETHER_OUTPUT_MODE"],
+      });
+
+      const bridge = await startEventBridge({
+        goBinaryPath,
+        cwd,
+        onEvent: (evt) => narrator.onEvent(evt),
+      });
+
       const result = await runLifecycle(lifecycleOpts);
+
+      bridge.stop();
+      narrator.stop();
+
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }

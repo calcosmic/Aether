@@ -84,7 +84,7 @@ export function parseTemplate(raw: string): ParsedTemplate {
     throw new Error("Invalid template: missing YAML frontmatter");
   }
 
-  const frontmatterRaw = match[1];
+  const frontmatterRaw = match[1] ?? "";
   const body = raw.slice(match[0].length);
 
   const frontmatter = yaml.load(frontmatterRaw) as Record<string, unknown>;
