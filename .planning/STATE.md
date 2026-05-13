@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.17
 milestone_name: Classic Restoration
 status: executing
-stopped_at: Phase 112 complete, ready for Phase 113
-last_updated: "2026-05-13T17:00:00.000Z"
-last_activity: 2026-05-13 — Phase 112 Foundation executed (2 plans, 2 waves)
+stopped_at: Phase 113 context gathered
+last_updated: "2026-05-13T17:30:00.000Z"
+last_activity: 2026-05-13 — Phase 113 context gathered (4 decisions captured)
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 113 — Ceremony Narrator (render Go events into banners, caste identity, spawn frames)
+**Current focus:** Phase 113 — Ceremony Narrator (planning)
 
 ## Current Position
 
 Phase: 113 of 118 (Ceremony Narrator)
 Plan: —
-Status: Ready to plan
-Last activity: 2026-05-13 — Phase 112 Foundation complete
+Status: Context gathered, ready to plan
+Last activity: 2026-05-13 — Phase 113 context gathered (4 decisions captured)
 
 Progress: [██░░░░░░░░░░░░░░░░░░] 14% — Phase 112 complete, 6 phases remaining
 
