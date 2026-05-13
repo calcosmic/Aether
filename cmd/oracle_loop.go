@@ -850,8 +850,13 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		}
 
 		state.Iteration++
+		previousPhase := state.Phase
 		state.Phase = nextOraclePhase(plan, state)
+		if previousPhase != "" && previousPhase != state.Phase {
+			emitOraclePhaseTransition(previousPhase, state.Phase, state.Iteration)
+		}
 		target := selectOracleQuestionSmart(plan, state)
+		emitOracleIteration(state.Iteration, target.Text, state.Phase)
 		state.Status = "active"
 		state.StopReason = ""
 		state.ActiveQuestionID = strings.TrimSpace(target.ID)

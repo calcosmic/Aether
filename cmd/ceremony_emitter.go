@@ -566,3 +566,20 @@ func emitLoopBreakEvent(loopType, detectionSignal, actionTaken, source string) {
 		ActionTaken:     actionTaken,
 	}, source)
 }
+
+func emitOraclePhaseTransition(fromPhase, toPhase string, iteration int) {
+	emitLifecycleCeremony(events.CeremonyTopicOraclePhaseTransition, events.CeremonyPayload{
+		Status:  fmt.Sprintf("%s → %s", fromPhase, toPhase),
+		Message: fmt.Sprintf("Oracle phase transition at iteration %d", iteration),
+		PhaseName: fromPhase,
+	}, "aether-oracle")
+}
+
+func emitOracleIteration(iteration int, question, phase string) {
+	emitLifecycleCeremony(events.CeremonyTopicOracleIteration, events.CeremonyPayload{
+		Wave:    iteration,
+		Task:    question,
+		Status:  phase,
+		Message: fmt.Sprintf("Oracle iteration %d: %s", iteration, question),
+	}, "aether-oracle")
+}

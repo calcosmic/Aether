@@ -27,6 +27,8 @@ const (
 	CeremonyTopicHiveStore         = "ceremony.hive.store"
 	CeremonyTopicHivePromote       = "ceremony.hive.promote"
 	CeremonyTopicLoopBreak         = "ceremony.loop.break"
+	CeremonyTopicOraclePhaseTransition = "ceremony.oracle.phase_transition"
+	CeremonyTopicOracleIteration       = "ceremony.oracle.iteration"
 )
 
 // CeremonyPayload is the shared event shape consumed by the bundled narrator.
@@ -93,5 +95,7 @@ func CeremonyTopics() []string {
 		CeremonyTopicHiveStore,
 		CeremonyTopicHivePromote,
 		CeremonyTopicLoopBreak,
+		CeremonyTopicOraclePhaseTransition,
+		CeremonyTopicOracleIteration,
 	}
 }
