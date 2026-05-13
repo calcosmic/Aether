@@ -1,0 +1,3 @@
+---
+---
+{prefix}{stage}{suffix}
