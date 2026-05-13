@@ -25,6 +25,7 @@
   "devDependencies": {
     "@types/cli-progress": "3.11.6",
     "@types/figlet": "1.7.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.17.0",
     "tsx": "4.21.0",
     "typescript": "5.9.3"

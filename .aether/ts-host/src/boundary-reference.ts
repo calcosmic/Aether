@@ -34,6 +34,14 @@ export const GO_OWNED_PATHS = [
 ] as const;
 
 /**
+ * Paths that the TS host is explicitly allowed to read.
+ * These are exceptions to the write-only boundary contract.
+ */
+export const ALLOWED_READ_PATHS = [
+  ".aether/data/event-bus.jsonl",
+] as const;
+
+/**
  * TS host ownership classification (per Classic v5.4.0 comparison):
  * - Restore in TS: spawn-logger, logger, errors
  * - Keep in Go: state-guard, caste-colors, event-types, file-lock, banner,
@@ -47,3 +55,51 @@ export const CLASSIFICATION_SCHEMA = {
   obsolete: "Behaviors no longer relevant in the hybrid architecture",
   rejectAsUnsafe: "Behaviors that violated safety boundaries",
 } as const;
+
+// ---------------------------------------------------------------------------
+// Boundary enforcement helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Error thrown when the TS host attempts to violate the runtime boundary.
+ */
+export class BoundaryViolationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BoundaryViolationError";
+  }
+}
+
+/**
+ * Check whether a path is in the explicit read-only allowlist.
+ */
+export function isReadOnlyAllowed(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/");
+  return ALLOWED_READ_PATHS.some((allowed) => normalized === allowed);
+}
+
+/**
+ * Assert that a path is not being opened in write mode under `.aether/data/`.
+ *
+ * - If `mode` is `"read"`, the path is allowed (provided it is in ALLOWED_READ_PATHS).
+ * - If `mode` is omitted or anything other than `"read"`, any path under
+ *   `.aether/data/` is rejected.
+ * - Paths outside `.aether/data/` are always allowed.
+ */
+export function assertNoWriteToData(
+  path: string,
+  mode?: string
+): void {
+  const normalized = path.replace(/\\/g, "/");
+
+  // Not under .aether/data/ — no concern
+  if (!normalized.startsWith(".aether/data/")) return;
+
+  // Read mode on allowlisted path — permitted
+  if (mode === "read" && isReadOnlyAllowed(normalized)) return;
+
+  // Everything else under .aether/data/ is rejected
+  throw new BoundaryViolationError(
+    `TS host attempted to write to Go-owned path: ${path}`
+  );
+}
