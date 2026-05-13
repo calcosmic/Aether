@@ -427,4 +427,211 @@ describe("lifecycle", () => {
     // Dashboard cleanup is verified by the finally block in lifecycle.ts
     // and by the fact that the test runner output is not corrupted.
   });
+
+  // ---------------------------------------------------------------------------
+  // QueenOrchestrator integration tests
+  // ---------------------------------------------------------------------------
+
+  it("lifecycle uses QueenOrchestrator for build step", async () => {
+    assert.ok(context, "Test context should be initialized");
+    const { bridge } = context;
+
+    const lifecycleModule = await import("../src/lifecycle.js");
+    const originalCreateQueenOrchestrator = lifecycleModule.__setCreateQueenOrchestrator;
+
+    let runBuildCalled = false;
+    let runBuildManifest: { dispatches?: unknown[] } | undefined;
+
+    lifecycleModule.__setCreateQueenOrchestrator((opts: unknown) => {
+      return {
+        async runBuild(manifest: { dispatches?: unknown[] }) {
+          runBuildCalled = true;
+          runBuildManifest = manifest;
+          // Return one result per dispatch so Go finalizer is satisfied
+          const dispatches = manifest.dispatches ?? [];
+          const workerResults = dispatches.map((d: unknown) => {
+            const dispatch = d as { name: string; caste?: string; task?: string };
+            return {
+              name: dispatch.name,
+              status: "completed",
+              caste: dispatch.caste,
+              task: dispatch.task,
+              files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
+            };
+          });
+          return {
+            success: true,
+            workerResults,
+            pattern: "SPBV" as const,
+            recommendation: { review_depth: "fast", reason: "Test" },
+          };
+        },
+      };
+    });
+
+    try {
+      const opts: LifecycleOptions = {
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: true,
+        phase: 1,
+      };
+
+      const result = await runLifecycle(opts);
+      assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "none"}`);
+      assert.ok(runBuildCalled, "QueenOrchestrator.runBuild should have been called");
+      assert.ok(runBuildManifest, "runBuild should have received a manifest");
+    } finally {
+      lifecycleModule.__restoreCreateQueenOrchestrator();
+    }
+  });
+
+  it("lifecycle passes skipMiddenCheck to QueenOrchestrator", async () => {
+    assert.ok(context, "Test context should be initialized");
+    const { bridge } = context;
+
+    const lifecycleModule = await import("../src/lifecycle.js");
+
+    let receivedOpts: unknown;
+
+    lifecycleModule.__setCreateQueenOrchestrator((opts: unknown) => {
+      receivedOpts = opts;
+      return {
+        async runBuild(manifest: { dispatches?: unknown[] }) {
+          const dispatches = manifest.dispatches ?? [];
+          const workerResults = dispatches.map((d: unknown) => {
+            const dispatch = d as { name: string; caste?: string; task?: string };
+            return {
+              name: dispatch.name,
+              status: "completed",
+              caste: dispatch.caste,
+              task: dispatch.task,
+              files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
+            };
+          });
+          return {
+            success: true,
+            workerResults,
+            pattern: "SPBV" as const,
+            recommendation: { review_depth: "fast", reason: "Test" },
+          };
+        },
+      };
+    });
+
+    try {
+      const opts: LifecycleOptions = {
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: true,
+        phase: 1,
+        skipMiddenCheck: true,
+      };
+
+      const result = await runLifecycle(opts);
+      assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "none"}`);
+      assert.ok(receivedOpts, "QueenOrchestrator should have been created with options");
+      const qOpts = receivedOpts as { skipMiddenCheck?: boolean };
+      assert.equal(qOpts.skipMiddenCheck, true, "skipMiddenCheck should be passed through");
+    } finally {
+      lifecycleModule.__restoreCreateQueenOrchestrator();
+    }
+  });
+
+  it("lifecycle handles QueenOrchestrator failure gracefully", async () => {
+    assert.ok(context, "Test context should be initialized");
+    const { bridge } = context;
+
+    const lifecycleModule = await import("../src/lifecycle.js");
+
+    lifecycleModule.__setCreateQueenOrchestrator(() => {
+      return {
+        async runBuild(manifest: { dispatches?: unknown[] }) {
+          const dispatches = manifest.dispatches ?? [];
+          const workerResults = dispatches.map((d: unknown) => {
+            const dispatch = d as { name: string; caste?: string; task?: string };
+            return {
+              name: dispatch.name,
+              status: "completed",
+              caste: dispatch.caste,
+              task: dispatch.task,
+              files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
+            };
+          });
+          return {
+            success: true,
+            workerResults,
+            pattern: "SPBV" as const,
+            recommendation: { review_depth: "fast", reason: "Test" },
+            error: "Simulated Queen failure",
+          };
+        },
+      };
+    });
+
+    try {
+      const opts: LifecycleOptions = {
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: true,
+        phase: 1,
+      };
+
+      const result = await runLifecycle(opts);
+      // The lifecycle should still complete because the error is logged, not thrown
+      assert.ok(result.success, `Lifecycle should succeed despite Queen error: ${result.error ?? "none"}`);
+    } finally {
+      lifecycleModule.__restoreCreateQueenOrchestrator();
+    }
+  });
+
+  it("lifecycle build step includes worker results from Queen", async () => {
+    assert.ok(context, "Test context should be initialized");
+    const { bridge, dataDir } = context;
+
+    const lifecycleModule = await import("../src/lifecycle.js");
+
+    lifecycleModule.__setCreateQueenOrchestrator(() => {
+      return {
+        async runBuild(manifest: { dispatches?: unknown[] }) {
+          const dispatches = manifest.dispatches ?? [];
+          const workerResults = dispatches.map((d: unknown) => {
+            const dispatch = d as { name: string; caste?: string; task?: string };
+            return {
+              name: dispatch.name,
+              status: "completed",
+              caste: dispatch.caste,
+              task: dispatch.task,
+              files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
+            };
+          });
+          return {
+            success: true,
+            workerResults,
+            pattern: "SPBV" as const,
+            recommendation: { review_depth: "standard", reason: "Test" },
+          };
+        },
+      };
+    });
+
+    try {
+      const opts: LifecycleOptions = {
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: true,
+        phase: 1,
+      };
+
+      const result = await runLifecycle(opts);
+      assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "none"}`);
+
+      // Verify colony state was updated by Go finalizers
+      const state = readColonyState(dataDir);
+      const plan = state["plan"] as { phases?: unknown[] } | undefined;
+      assert.ok(plan, "Colony state should have a plan after lifecycle");
+    } finally {
+      lifecycleModule.__restoreCreateQueenOrchestrator();
+    }
+  });
 });

@@ -35,8 +35,27 @@ import { detectAvailablePlatforms } from "./platform-dispatcher.js";
 import { createDashboard, type Dashboard } from "./dashboard.js";
 import { createNarrator, type Narrator } from "./narrator.js";
 import { startEventBridge, stopEventBridge, type EventBridgeController } from "./event-bridge.js";
-import { createQueenOrchestrator } from "./queen/orchestrator.js";
+import { createQueenOrchestrator as _createQueenOrchestrator } from "./queen/orchestrator.js";
 import type { QueenOrchestratorResult } from "./queen/types.js";
+
+// Mutable reference for test injection.
+let _createQueenOrchestratorRef = _createQueenOrchestrator;
+
+/** Test-only: inject a mock createQueenOrchestrator. */
+export function __setCreateQueenOrchestrator(
+  fn: typeof _createQueenOrchestrator
+): void {
+  _createQueenOrchestratorRef = fn;
+}
+
+/** Test-only: restore the real createQueenOrchestrator. */
+export function __restoreCreateQueenOrchestrator(): void {
+  _createQueenOrchestratorRef = _createQueenOrchestrator;
+}
+
+function createQueenOrchestrator(...args: Parameters<typeof _createQueenOrchestrator>) {
+  return _createQueenOrchestratorRef(...args);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -315,6 +334,7 @@ export async function runLifecycle(
       parallel: opts.parallel ?? true,
       dashboard: useDashboard,
       skipMiddenCheck: opts.skipMiddenCheck ?? false,
+      simulatedFileClaims: [placeholderRel],
     });
     const queenResult = await queen.runBuild(buildManifest);
 

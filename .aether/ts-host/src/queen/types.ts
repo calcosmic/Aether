@@ -120,6 +120,12 @@ export interface QueenOrchestratorOptions extends GoBridgeOptions {
   dashboard?: boolean;
   /** When true, skip the pre-build midden check. */
   skipMiddenCheck?: boolean;
+  /**
+   * File paths that actually exist in the repo, used as simulated worker
+   * file claims. Must be real repo-relative paths that exist on disk,
+   * because the Go build-finalizer validates all file claims.
+   */
+  simulatedFileClaims?: string[];
 }
 
 /** Result of running the Queen orchestrator build. */

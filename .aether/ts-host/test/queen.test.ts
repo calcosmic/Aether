@@ -30,6 +30,8 @@ import { formatMiddenSummary } from "../src/queen/midden-check.js";
 import { handleWaveFailures } from "../src/queen/escalation.js";
 import type { DispatchResult } from "../src/worker-dispatch.js";
 import type { MiddenCheckResult } from "../src/queen/types.js";
+import type { TerminalWorkerStatus } from "../src/types.js";
+import { dispatchWave, type WaveOrchestratorOptions } from "../src/wave-orchestrator.js";
 
 // ---------------------------------------------------------------------------
 // Test data helpers
@@ -253,6 +255,60 @@ describe("midden-check", () => {
     const summary = formatMiddenSummary(result);
     assert.ok(summary.includes("within limits"));
     assert.ok(summary.includes("1 entries"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Type and default tests
+// ---------------------------------------------------------------------------
+
+describe("types and defaults", () => {
+  it("code_written is valid TerminalWorkerStatus", () => {
+    const status: TerminalWorkerStatus = "code_written";
+    assert.equal(status, "code_written");
+  });
+
+  it("wave orchestrator retryLimit defaults to 1", async () => {
+    // Create a minimal wave dispatch with a worker that always fails.
+    // With default retryLimit=1, only 1 attempt should be made.
+    const dispatches: BuildDispatch[] = [
+      makeDispatch("Retry-Default", 1),
+    ];
+
+    let callCount = 0;
+    const failMock = async (
+      _opts: WaveOrchestratorOptions,
+      dispatch: BuildDispatch
+    ): Promise<DispatchResult> => {
+      callCount++;
+      return {
+        name: dispatch.name,
+        status: "failed",
+        summary: "Always fails",
+      };
+    };
+
+    const { __setDispatchSingleWorker, __restoreDispatchSingleWorker } =
+      await import("../src/wave-orchestrator.js");
+    __setDispatchSingleWorker(failMock);
+
+    try {
+      const result = await dispatchWave(
+        {
+          goBinaryPath: "/usr/bin/true",
+          cwd: "/tmp",
+          simulateWorkers: true,
+          parallel: true,
+          // retryLimit intentionally omitted to test default
+        },
+        dispatches
+      );
+
+      assert.equal(result.failures.length, 1, "Worker should fail");
+      assert.equal(callCount, 1, "Default retryLimit=1 means exactly 1 attempt");
+    } finally {
+      __restoreDispatchSingleWorker();
+    }
   });
 });
 

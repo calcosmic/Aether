@@ -102,7 +102,12 @@ export async function runBuild(
   );
 
   // ── Step 3: Dispatch workers via waves ───────────────────────────────────
-  const waveResults = await dispatchWaves(opts, dispatches);
+  // Forward simulatedFileClaims from lifecycle placeholder creation so
+  // that simulated workers produce file claims the Go finalizer accepts.
+  const waveOpts = opts.simulatedFileClaims
+    ? { ...opts, simulatedFileClaims: opts.simulatedFileClaims }
+    : opts;
+  const waveResults = await dispatchWaves(waveOpts, dispatches);
 
   // Flatten wave results to dispatch results
   const dispatchResults: DispatchResult[] = [];
