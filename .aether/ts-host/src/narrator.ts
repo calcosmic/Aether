@@ -5,7 +5,13 @@
  * Writes rendered output directly to process.stdout in real-time.
  */
 
-import { loadCeremonyConfig, type CeremonyConfig } from "./caste-config.js";
+import {
+  loadCeremonyConfig,
+  getCasteEmoji,
+  getCasteColor,
+  getCasteLabel,
+  type CeremonyConfig,
+} from "./caste-config.js";
 import type { CeremonyEvent, CeremonyPayload } from "./types.js";
 import { visualRenderer } from "./renderers/visual.js";
 import { markdownRenderer } from "./renderers/markdown.js";
@@ -76,6 +82,20 @@ export function createNarrator(opts: NarratorOptions): Narrator {
       const content = buildCloseoutContent(payload);
       return renderer.renderBox(content, { borderStyle: "double", borderColor: "cyan" });
     },
+    "ceremony.oracle.phase_transition": (payload) =>
+      renderer.renderStageSeparator(
+        `Oracle: ${payload.status ?? "unknown"}`,
+        config
+      ),
+    "ceremony.oracle.iteration": (payload) =>
+      renderer.renderSpawnFrame(
+        {
+          caste: "oracle",
+          name: `Oracle-${payload.wave ?? 0}`,
+          task: `Researching: ${payload.task ?? ""}`,
+        },
+        config
+      ),
   };
 
   return {

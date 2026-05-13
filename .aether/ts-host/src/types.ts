@@ -326,6 +326,8 @@ export const CEREMONY_TOPICS = [
   "ceremony.hive.store",
   "ceremony.hive.promote",
   "ceremony.loop.break",
+  "ceremony.oracle.phase_transition",
+  "ceremony.oracle.iteration",
 ] as const;
 
 export type CeremonyTopic = (typeof CEREMONY_TOPICS)[number];
