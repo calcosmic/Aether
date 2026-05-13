@@ -65,7 +65,10 @@ See `.planning/milestones/` for full archived phase details.
   2. Shared YAML ceremony config (caste emoji, color, label maps) is loaded and consumed by TS host
   3. Node engine is bumped to >=20 and all new dependencies (chalk, boxen, figlet, ora, cli-progress, log-update, chokidar) install cleanly
   4. Any TS host attempt to write to `.aether/data/` is rejected at runtime or build time
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 112-01-PLAN.md - Node bump, ceremony types, shared YAML config
+- [ ] 112-02-PLAN.md - Event bridge, caste config loader, boundary enforcement and tests
 **UI hint**: yes
 
 ### Phase 113: Ceremony Narrator
@@ -78,7 +81,10 @@ See `.planning/milestones/` for full archived phase details.
   3. Crowned Anthill seal ASCII art renders from editable template (not compiled Go code)
   4. Build summary and closeout rituals display with framed template output
   5. Output falls back to plain text when TTY is not available (three-mode support: json, visual, markdown)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 112-01-PLAN.md - Node bump, ceremony types, shared YAML config
+- [ ] 112-02-PLAN.md - Event bridge, caste config loader, boundary enforcement and tests
 **UI hint**: yes
 
 ### Phase 114: Real Worker Dispatch
@@ -91,7 +97,7 @@ See `.planning/milestones/` for full archived phase details.
   3. Failed workers are retried up to a configured limit; persistent failures escalate gracefully
   4. Worker timeouts are enforced and reported as events
   5. Worktree merge-back is performed between waves when manifest indicates it is required
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 115: Swarm Dashboard
 **Goal**: Users see a live terminal dashboard showing all active workers, their progress, tool usage, and chamber activity
@@ -104,7 +110,10 @@ See `.planning/milestones/` for full archived phase details.
   4. Chamber activity map shows which project areas have active workers
   5. Elapsed time and token consumption are visible per worker
   6. Dashboard auto-refreshes as Go writes new events to the JSONL file
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 112-01-PLAN.md - Node bump, ceremony types, shared YAML config
+- [ ] 112-02-PLAN.md - Event bridge, caste config loader, boundary enforcement and tests
 **UI hint**: yes
 
 ### Phase 116: Queen Orchestration
@@ -118,7 +127,7 @@ See `.planning/milestones/` for full archived phase details.
   4. Intra-build midden threshold breaches auto-emit REDIRECT pheromones
   5. Phase mode (discovery/prototype/production/maintenance) maps to the correct verification depth
   6. Ambassador ant is conditionally spawned for integration tasks
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 117: Oracle Enhancement
 **Goal**: Oracle RALF loop is enriched with phase-aware prompts, diminishing returns detection, and template-specific synthesis
@@ -128,7 +137,7 @@ See `.planning/milestones/` for full archived phase details.
   1. Oracle worker briefs include phase-aware directives (survey, investigate, synthesize, verify)
   2. Oracle detects diminishing returns via novelty delta tracking and forces phase advancement when progress stalls
   3. Oracle output includes template-specific synthesis sections for tech-eval, architecture-review, and bug-investigation
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 118: Integration & Parity Verification
 **Goal**: The restored system is proven to match Classic v5.4 behavior through automated tests; state safety is verified
@@ -140,7 +149,7 @@ See `.planning/milestones/` for full archived phase details.
   3. Cross-platform smoke tests pass for Claude Code, OpenCode, and Codex
   4. State safety tests prove all writes go through Go finalizers; no direct TS host writes to `.aether/data/`
   5. Seal ceremony executes the full multi-step ritual (Sage, Chronicler, wisdom review, commit suggestion)
-**Plans**: TBD
+**Plans**: 2 plans
 
 ## Progress
 
