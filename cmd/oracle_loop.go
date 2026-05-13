@@ -2630,6 +2630,19 @@ func writeOracleGapsReport(path string, state oracleStateFile, plan oraclePlanFi
 }
 
 func writeOracleSynthesisReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	switch state.Template {
+	case "tech-eval", "technology-evaluation":
+		return writeTechEvaluationReport(path, state, plan)
+	case "architecture-review":
+		return writeArchitectureReviewReport(path, state, plan)
+	case "bug-investigation":
+		return writeBugInvestigationReport(path, state, plan)
+	default:
+		return writeGenericReport(path, state, plan)
+	}
+}
+
+func writeGenericReport(path string, state oracleStateFile, plan oraclePlanFile) error {
 	var b strings.Builder
 	b.WriteString("# Research Synthesis\n\n")
 	b.WriteString("## Topic\n")
@@ -2679,6 +2692,204 @@ func writeOracleSynthesisReport(path string, state oracleStateFile, plan oracleP
 			source := plan.Sources[id]
 			fmt.Fprintf(&b, "- [%s] %s — %s (%s, accessed %s)\n", id, emptyFallback(source.Title, source.URL), source.URL, emptyFallback(source.Type, "codebase"), emptyFallback(source.AccessedAt, "unknown"))
 		}
+	}
+
+	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
+	return os.WriteFile(path, []byte(strings.TrimSpace(b.String())+"\n"), 0644)
+}
+
+func writeTechEvaluationReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	var b strings.Builder
+	b.WriteString("# Tech Evaluation: ")
+	b.WriteString(emptyFallback(oracleTopicHeadline(state.Topic), "Oracle research topic"))
+	b.WriteString("\n\n## Overview\n")
+	if topicSummary := oracleTopicSummary(state.Topic); topicSummary != "" {
+		b.WriteString(topicSummary)
+	} else {
+		b.WriteString("Technology evaluation conducted via Oracle research loop.\n")
+	}
+
+	b.WriteString("\n## Alternatives Considered\n")
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n### %s\n", oracleQuestionLabel(q))
+		for _, finding := range q.KeyFindings {
+			b.WriteString("- ")
+			b.WriteString(finding.Text)
+			if len(finding.SourceIDs) > 0 {
+				b.WriteString(" ")
+				for i, sourceID := range finding.SourceIDs {
+					if i > 0 {
+						b.WriteString(" ")
+					}
+					fmt.Fprintf(&b, "[%s]", sourceID)
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+	if plan.Questions == nil || len(plan.Questions) == 0 {
+		b.WriteString("- No alternatives evaluated yet.\n")
+	}
+
+	b.WriteString("\n## Evaluation Criteria\n")
+	for _, q := range plan.Questions {
+		fmt.Fprintf(&b, "- **%s** (confidence: %d%%)\n", oracleQuestionLabel(q), q.Confidence)
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("- No criteria defined yet.\n")
+	}
+
+	b.WriteString("\n## Scoring Matrix\n")
+	b.WriteString("| Alternative | Score | Rationale |\n")
+	b.WriteString("|-------------|-------|-----------|\n")
+	for _, q := range plan.Questions {
+		for _, finding := range q.KeyFindings {
+			fmt.Fprintf(&b, "| %s | %d | %s |\n", oracleQuestionLabel(q), q.Confidence, truncateString(finding.Text, 80))
+		}
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("| — | — | No scores yet |\n")
+	}
+
+	b.WriteString("\n## Recommendation\n")
+	if strings.TrimSpace(state.Recommendation) != "" {
+		b.WriteString(state.Recommendation)
+	} else {
+		b.WriteString("No recommendation has been reached yet.\n")
+	}
+
+	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
+	return os.WriteFile(path, []byte(strings.TrimSpace(b.String())+"\n"), 0644)
+}
+
+func writeArchitectureReviewReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	var b strings.Builder
+	b.WriteString("# Architecture Review: ")
+	b.WriteString(emptyFallback(oracleTopicHeadline(state.Topic), "Oracle research topic"))
+	b.WriteString("\n\n## Context\n")
+	if topicSummary := oracleTopicSummary(state.Topic); topicSummary != "" {
+		b.WriteString(topicSummary)
+	} else {
+		b.WriteString("Architecture review conducted via Oracle research loop.\n")
+	}
+
+	b.WriteString("\n## Constraints\n")
+	for _, area := range state.FocusAreas {
+		fmt.Fprintf(&b, "- %s\n", area)
+	}
+	if len(state.FocusAreas) == 0 {
+		b.WriteString("- No specific constraints recorded.\n")
+	}
+
+	b.WriteString("\n## Options Considered\n")
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n### %s\n", oracleQuestionLabel(q))
+		for _, finding := range q.KeyFindings {
+			b.WriteString("- ")
+			b.WriteString(finding.Text)
+			if len(finding.SourceIDs) > 0 {
+				b.WriteString(" ")
+				for i, sourceID := range finding.SourceIDs {
+					if i > 0 {
+						b.WriteString(" ")
+					}
+					fmt.Fprintf(&b, "[%s]", sourceID)
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+	if plan.Questions == nil || len(plan.Questions) == 0 {
+		b.WriteString("- No options evaluated yet.\n")
+	}
+
+	b.WriteString("\n## Trade-off Analysis\n")
+	for _, q := range plan.Questions {
+		fmt.Fprintf(&b, "- **%s** (status: %s, confidence: %d%%)\n", oracleQuestionLabel(q), emptyFallback(q.Status, "open"), q.Confidence)
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("- No trade-offs analyzed yet.\n")
+	}
+
+	b.WriteString("\n## Decision\n")
+	if strings.TrimSpace(state.Recommendation) != "" {
+		b.WriteString(state.Recommendation)
+	} else {
+		b.WriteString("No architecture decision has been reached yet.\n")
+	}
+
+	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
+	return os.WriteFile(path, []byte(strings.TrimSpace(b.String())+"\n"), 0644)
+}
+
+func writeBugInvestigationReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	var b strings.Builder
+	b.WriteString("# Bug Investigation: ")
+	b.WriteString(emptyFallback(oracleTopicHeadline(state.Topic), "Oracle research topic"))
+	b.WriteString("\n\n## Symptoms\n")
+	if topicSummary := oracleTopicSummary(state.Topic); topicSummary != "" {
+		b.WriteString(topicSummary)
+	} else {
+		b.WriteString("Bug investigation conducted via Oracle research loop.\n")
+	}
+
+	b.WriteString("\n## Root Cause Analysis\n")
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n### %s\n", oracleQuestionLabel(q))
+		for _, finding := range q.KeyFindings {
+			b.WriteString("- ")
+			b.WriteString(finding.Text)
+			if len(finding.SourceIDs) > 0 {
+				b.WriteString(" ")
+				for i, sourceID := range finding.SourceIDs {
+					if i > 0 {
+						b.WriteString(" ")
+					}
+					fmt.Fprintf(&b, "[%s]", sourceID)
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+	if plan.Questions == nil || len(plan.Questions) == 0 {
+		b.WriteString("- No root cause identified yet.\n")
+	}
+
+	b.WriteString("\n## Fix Applied\n")
+	if strings.TrimSpace(state.Recommendation) != "" {
+		b.WriteString(state.Recommendation)
+	} else {
+		b.WriteString("No fix has been applied yet.\n")
+	}
+
+	b.WriteString("\n## Verification Steps\n")
+	for _, q := range plan.Questions {
+		if strings.EqualFold(strings.TrimSpace(q.Status), "answered") {
+			fmt.Fprintf(&b, "- [x] %s (confidence: %d%%)\n", oracleQuestionLabel(q), q.Confidence)
+		} else {
+			fmt.Fprintf(&b, "- [ ] %s (confidence: %d%%)\n", oracleQuestionLabel(q), q.Confidence)
+		}
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("- No verification steps defined yet.\n")
+	}
+
+	b.WriteString("\n## Prevention\n")
+	if len(state.FocusAreas) > 0 {
+		for _, area := range state.FocusAreas {
+			fmt.Fprintf(&b, "- %s\n", area)
+		}
+	} else {
+		b.WriteString("- No prevention measures recorded yet.\n")
 	}
 
 	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
