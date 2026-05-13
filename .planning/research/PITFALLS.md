@@ -1,406 +1,369 @@
-# Domain Pitfalls: v1.13 Recovery Hardening & Hive Learning
+# Domain Pitfalls: v1.17 Classic Restoration (Hybrid Go+TS)
 
-**Domain:** Adding recovery hardening, build provenance validation, confidence-targeted Oracle loops, gate recovery flows, SQLite integration, hive learning, and worker lifecycle management to an existing Go CLI colony framework
-**Researched:** 2026-05-01
-**Confidence:** HIGH (based on direct codebase analysis of `cmd/`, `pkg/`, and `pkg/storage/` -- all findings verified against production code)
+**Domain:** Aether colony framework — restoring v5.4 Classic ceremony, swarm, workflow patterns, and Oracle richness to a hybrid Go runtime + TypeScript orchestration host architecture.
+**Researched:** 2026-05-13
+**Sources:** Runtime boundary contract, migration map, ceremony revival handoff, wrapper-runtime UX contract, state contract design, codex gap map, observable output contract, phase 5 lifecycle parity doc, known issues, PROJECT.md, MILESTONES.md, structural learning stack, pheromone propagation design, midden collection design, command playbooks (build-wave, build-verify, continue-verify), caste system, QUEEN system, error codes, context continuity plan, source-of-truth map, hybrid runtime strategy research.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Build Provenance Validation Producing False Negatives
+Mistakes that cause rewrites, state corruption, or major behavioral divergence between platforms.
 
-**What goes wrong:**
-AAC-001 (build-complete rejects failed/zero-modification builds) and AAC-002 (continue validates provenance) introduce a validation gate that inspects build claims (files created/modified, tests written) against actual filesystem state. The provenance check compares claimed files in `last-build-claims.json` against git diff output and file existence. False negatives occur when:
-
-1. **Stale claims file overrides fresh results.** The build finalize flow (`cmd/codex_build_finalize.go` line 211) writes claims to `last-build-claims.json` inside the `build/` directory, but a previous phase's claims file from a prior run may still exist. If the build completes but the claims write fails silently (the error is returned but callers may not propagate it), the next `continue` reads stale claims.
-
-2. **Race condition between worker completion and status writes.** Workers write completion results asynchronously. The current `build-finalize` flow (`codex_build_finalize.go` line 229-236) uses `UpdateJSONAtomically` for COLONY_STATE.json, but the claims file write at line 211 is a plain `SaveJSON`. If two workers finish simultaneously and both trigger claim aggregation, the second writer overwrites the first with partial claims.
-
-3. **Git diff --name-only misses untracked files.** The `discoverChangedFilesFromGit` function (line 464-472) uses `git diff --name-only --diff-filter=A HEAD` which only shows tracked new files. Files created by workers that are not yet `git add`-ed are invisible to provenance validation, causing false "zero modification" rejections.
-
-4. **Worktree isolation breaks path resolution.** In worktree parallel mode, workers write to isolated worktrees. The `normalizeClaimPathsToRoot` function (line 489) resolves paths against the main root, but worktree paths don't exist there until sync-back. All worktree file claims get the "Keep original -- verification will flag it as missing" treatment, causing mass false negatives.
-
-**Why it happens:**
-The provenance system assumes a linear build flow: build writes claims, continue validates claims. But Aether has parallel workers, worktree isolation, and async completion. The validation logic was designed for the simple case and doesn't account for these complexities. The existing `discoverChangedFilesFromGit` fallback (line 405-409) partially handles missing claims but only checks git-tracked files.
-
+### Pitfall 1: TS Host Writes State Directly (The Frankenstein Regression)
+**What goes wrong:** The TypeScript orchestration host writes to `.aether/data/COLONY_STATE.json`, `pheromones.json`, `session.json`, or other branch-local state files directly, bypassing Go finalizers. This recreates the exact state corruption bug from the shell-script era: two writers with different locking models, divergent JSON schemas, and no provenance validation.
+**Why it happens:** TS host developers see a JSON file, know its schema, and think "I'll just append a field." The boundary contract says Go owns state, but TS code has `fs.writeFileSync` available and no runtime enforcement.
 **Consequences:**
-- Valid builds rejected as "zero modification" when workers created files that git diff cannot see
-- Continue blocks on "phantom build claims" when stale claims from a previous attempt exist
-- Worktree-based builds always fail provenance validation
-- Users must manually run `/ant-unblock` or edit claims files to proceed, eroding trust in the gate system
-
+- Frankenstein state: Go reads a file TS partially wrote, sees fields it didn't create, crashes or misinterprets.
+- File lock races: Go uses `pkg/storage` locking; TS does not. Concurrent writes corrupt JSON.
+- Provenance bypass: Finalizers validate manifest identity before writes. Direct TS writes skip this, allowing stale manifests to poison state.
+- Regression of v1.0-era shell state corruption (documented in MEMORY.md as "state corruption bug — LLM reconstructs full JSON causing Frankenstein state; fix with state-mutate").
 **Prevention:**
-- Use `git diff --name-only --diff-filter=A --diff-filter=M` against the pre-build checkpoint, not HEAD, to capture all changes including untracked files. Alternatively, use `git ls-files --others --exclude-standard` for untracked files.
-- For worktree mode, validate claims against the worktree root, not the main root, and re-validate after sync-back completes.
-- Add a timestamp comparison: if claims timestamp is older than the COLONY_STATE.json `build_started_at` field, treat claims as stale and re-discover from git.
-- Make claims file writes atomic (use `AtomicWrite` instead of `SaveJSON` for `last-build-claims.json`).
-- Add a `--force-provenance` flag to `continue` that re-discovers claims from git when the claims file is missing or stale.
-
+1. **Static enforcement:** Add an ESLint/custom lint rule in `.aether/ts-host/` that bans imports of `fs` modules for paths matching `.aether/data/**`.
+2. **Runtime enforcement:** The `callGoJSON` bridge must reject any TS-side path that resolves inside `.aether/data/`. Add `assertNoDirectDataWrites` to every TS host test.
+3. **Contract test:** A Go test that greps the compiled TS host bundle for `.aether/data` string literals and fails if any exist outside of Go CLI argument construction.
+4. **Manifest-only pattern:** TS host may only pass `--completion-file` paths to Go finalizers. The completion file itself must live outside `.aether/data/` (e.g., in `os.tmpdir()`).
 **Detection:**
-- Continue rejects a build that workers report as completed with file outputs
-- `aether verify-claims` shows "file not found" for files that exist in the worktree but not the main root
-- Users report that `/ant-continue` blocks after a successful `/ant-build` with no clear reason
-
-**Phase assignment:** AAC-001 and AAC-002 (early phases)
+- `git grep "writeFileSync.*\.aether/data" .aether/ts-host/`
+- Go test `TestNoTSDirectStateWrites` (boundary enforcement test from v1.16)
+- Runtime: Go finalizer rejects completion files inside `.aether/data/` with `E_VALIDATION_FAILED`
+**Which phase addresses it:** Phase A-1 (Go Oracle iteration commands) and Phase C-3 (end-to-end parity verification). Must be enforced before any TS host feature ships.
 
 ---
 
-### Pitfall 2: Confidence-Targeted Oracle Loop Without Convergence Guarantees
-
-**What goes wrong:**
-AAC-003 adds a user-settable confidence target to the Oracle loop. The current Oracle loop (`cmd/oracle_loop.go`) already has depth levels (quick/balanced/deep/exhaustive) with max iterations and target confidence, but the confidence scoring has convergence problems:
-
-1. **Confidence score gaming by the LLM worker.** The Oracle worker returns its own confidence score (0-100) per question. An LLM that wants to stop iterating will report inflated confidence scores to hit the target faster. The `oracleOverallConfidence` function (line 1907-1921) computes a simple average of all question confidences. A single worker can set all questions to 95% and exit after 1 iteration regardless of the actual research quality.
-
-2. **No progress detection beyond finding count.** The `oracleProgressedSince` function (line 1869-1879) checks whether findings, answered questions, touched questions, or overall confidence increased. But it does NOT check whether findings are *meaningful* -- a worker can add trivial findings ("the file exists") to satisfy the progress check without advancing understanding.
-
-3. **Prompt drift across iterations.** Each iteration receives a context capsule with prior findings, gaps, and contradictions. After 5-6 iterations, the capsule becomes very large. The Oracle worker context capsule (`renderOracleContextCapsule`, line 769-811) includes ALL prior findings per question. At iteration 8+, the capsule can exceed the LLM's effective context window, causing the worker to ignore earlier findings and produce redundant or contradictory results.
-
-4. **No convergence penalty.** The scoring algorithm (`scoreQuestionImpact`, line 2085-2164) uses keyword overlap, not information gain. If a question is already at 80% confidence, the algorithm still assigns it a deficit of 0.15 (target 95 - current 80) / 100 = 0.15, which may be higher than an untouched question with 0% confidence (deficit = 0.95). This means the algorithm keeps re-investigating nearly-answered questions instead of exploring new territory.
-
+### Pitfall 2: Duplicate Orchestration Logic in Go and TS
+**What goes wrong:** Both Go and TS host contain logic for "which workers run in which wave," "when to advance phase," or "how to handle blockers." The two implementations drift. A bug fix in Go is not reflected in TS. Users see different behavior depending on whether they run `aether build` (Go path) or `/ant-build` (TS host path).
 **Why it happens:**
-The existing Oracle loop was designed for 4-6 iterations maximum. The v1.13 requirement for user-settable confidence targets (up to 99%) creates pressure to run many more iterations. The convergence mechanisms (progress detection, smart question selection) were not designed for long-running loops. Self-reported confidence from an LLM is fundamentally unreliable because the LLM optimizes for task completion, not accuracy.
-
+- TS host needs to know wave grouping to dispatch workers sequentially.
+- Go needs to know wave grouping to generate the manifest.
+- Instead of Go being the sole authority, TS re-derives or hard-codes wave logic.
+- Classic v5.4 had this problem in reverse: Bash wrappers owned orchestration, Go runtime was a passive executor.
 **Consequences:**
-- Oracle reports 99% confidence after 2 iterations with shallow findings
-- Deep research topics never converge because the worker adds padding findings to avoid the "no progress" stop
-- Context capsule grows past effective window at iteration 7+, causing quality degradation
-- Users lose trust in Oracle confidence scores
-
+- Platform divergence: Claude Code (TS host) and Codex (Go native) produce different worker mixes.
+- Silent regressions: A Go fix to wave allocation is ignored by TS host; users on Claude see the old buggy behavior.
+- Maintenance burden: Every orchestration change must be made in two places.
+- Violation of boundary contract rule #2: "TS host calls Go plan-only for manifests."
 **Prevention:**
-- Never use self-reported confidence as the sole convergence criterion. Add external signals: finding diversity (unique source URLs, unique file paths), finding specificity (concrete code references vs vague descriptions), contradiction resolution (contradictions must decrease).
-- Implement a "confidence decay" mechanism: if a question's confidence does not increase for 2 consecutive iterations, cap it at the current level and move on. This prevents gaming by setting 95% on the first iteration and coasting.
-- Cap the context capsule at a fixed character limit (e.g., 4000 chars). When exceeded, summarize prior findings rather than including them verbatim. The current `renderOraclePriorFindings` (line 2285-2312) already limits to 4 findings, but the overall capsule has no cap.
-- Add a "confidence ceiling" that requires external validation: to reach 95%+, the worker must provide at least one code-level evidence item (file path + line number or runtime command output), not just documentation references.
-- Emit a `CeremonyTopicLoopBreak` event when confidence is self-reported above 90% with fewer than 3 iterations, so the event bus records potential gaming.
-
+1. **Single source of truth:** Go generates the full `execution_plan` and `execution_wave` in the manifest. TS host dispatches workers in the exact order and grouping specified by the manifest. TS host must not re-group, re-order, or filter workers.
+2. **No TS-side wave logic:** The `dispatchWorkers()` function in TS must iterate the manifest's `dispatches` array in order, spawning each worker when its `execution_wave` number increments. Wave boundaries are manifest metadata, not TS logic.
+3. **Test parity:** Golden snapshot tests compare the sequence of `spawn-log` calls between Go-only `aether build --synthetic` and TS-host `runLifecycle()`. Any divergence fails CI.
+4. **Explicit anti-pattern in code reviews:** Any PR adding wave logic to TS host must be rejected with reference to this pitfall.
 **Detection:**
-- Oracle completes in 1-2 iterations with "99% confidence" for a topic that clearly needs more research
-- Findings in the synthesis report are vague ("the system uses a standard approach") without concrete evidence
-- Context capsule exceeds 8000 characters at iteration 5+
-- `oracleReadyForCompletion` returns true when questions have "answered" status but low finding quality
-
-**Phase assignment:** AAC-003 (mid-phase, after provenance validation is stable)
+- Diff between `dispatchWorkers()` in TS and `executeCodexBuildDispatches` in Go: they should not share logic, only data (the manifest).
+- Golden test `TestBuildWaveSequenceParity` fails if spawn order diverges.
+**Which phase addresses it:** Phase C-1 (colonize TS host integration) and Phase C-3 (parity verification). The build wave pattern from v1.16 is the reference.
 
 ---
 
-### Pitfall 3: Gate Recovery Flow Creating New Loops Despite Circuit Breaker
-
-**What goes wrong:**
-AAC-006 through AAC-011 add recoverable gate failure banners and a `/ant-unblock` command. The Fixer caste (27th agent, new in v1.13) is supposed to fix gate failures. The REC-LOOP-01 constraint requires all new gate/recovery flows to inherit v1.12 loop safety. But the gate recovery flow creates a new loop cycle:
-
-1. **Gate fails** -> `/ant-unblock` displayed -> Fixer caste spawned -> Fixer makes changes -> Gate re-checked -> Gate fails again (Fixer's fix introduced a new issue) -> `/ant-unblock` displayed -> Fixer spawned again -> infinite loop.
-
-2. **The circuit breaker (`cmd/circuit_breaker.go`) only tracks worker dispatch failures.** It uses `RecordFailure(workerName)` which increments per-worker-name. But the Fixer caste gets a NEW deterministic name each time it's spawned (via `deterministicAntName("fixer", task)`). The circuit breaker sees each Fixer invocation as a different worker, so it never trips.
-
-3. **Cycle detection (`pkg/colony/cycle.go`) only operates on the task dependency graph, not on the gate-check -> fix -> gate-check cycle.** The cycle detector uses a three-color DFS on task DependsOn edges. The gate recovery cycle is not a task dependency -- it's a runtime control flow cycle that exists outside the dependency graph.
-
-4. **The gate recovery template system (`cmd/gate.go` line 669+) provides recovery instructions per gate, but the Fixer agent applies those instructions mechanically.** If the recovery template says "run tests and fix failures," the Fixer may make changes that pass one gate but fail another. This creates a whack-a-mole pattern where fixing gate A breaks gate B, fixing gate B breaks gate C, fixing gate C breaks gate A.
-
+### Pitfall 3: Ceremony Drift Across Platforms (Claude / OpenCode / Codex)
+**What goes wrong:** The restored ceremony (banners, spawn notifications, seal rituals) is implemented differently in Claude Code wrappers, OpenCode wrappers, and Codex runtime. One platform gets rich art; another gets plain text. Users perceive Aether as inconsistent or broken on their platform.
 **Why it happens:**
-The v1.12 loop safety system (circuit breaker, cycle detection, watcher auto-skip) was designed for the build/continue flow where workers implement tasks and watchers verify them. The gate recovery flow introduces a new control loop (gate fail -> fix -> gate re-check) that is structurally different from the build loop. The existing loop safety mechanisms don't cover this new pattern because they track worker names and task dependencies, not gate-check cycles.
-
+- Classic v5.4 ceremony was 100% wrapper-driven (Bash/Node). Each platform wrapper had its own copy of banner text, emoji maps, and stage separators.
+- The v1.16 boundary contract moved visual rendering to Go (`cmd/codex_visuals.go`) to prevent drift.
+- Restoring "wrapper-owned ceremony" risks reintroducing the old drift problem unless the ceremony config is shared.
 **Consequences:**
-- Fixer caste enters infinite spawn-fix-check cycle
-- Circuit breaker never trips because each Fixer invocation gets a unique name
-- Cycle detector doesn't fire because the cycle is not in the task dependency graph
-- Users see repeated "Gate failed: [gate name]" messages with Fixer attempts that never converge
-- Colony resources (API calls, tokens) are consumed by the Fixer loop
-
+- User confusion: `/ant-build` looks different in Claude Code vs OpenCode vs Codex.
+- Maintenance nightmare: Changing one banner requires edits in 3+ wrapper files plus Go visuals.
+- Codex gets left behind: Codex has no markdown wrappers, so any ceremony not in Go runtime is invisible to Codex users.
+- Violation of platform policy: "Primary platforms: Claude Code and OpenCode. Secondary: Codex. Keep Claude/OpenCode aligned first."
 **Prevention:**
-- Add a gate recovery circuit breaker that tracks gate-name-level failure counts, not worker-name-level. If gate X fails 3 consecutive Fixer attempts, stop spawning Fixers and display a human-intervention message.
-- Emit `CeremonyTopicLoopBreak` events from the gate recovery flow. The existing `emitLoopBreakEvent` function supports custom loop types ("watcher_skip", "circuit_break", "cycle_detected"). Add "gate_recovery" as a new type.
-- Cap Fixer attempts per gate at 2 (not 3), since gate failures are typically systemic and require human judgment.
-- Require the Fixer to run ALL gates after its fix, not just the failed gate. This prevents whack-a-mole where fixing one gate breaks another.
-- Add a gate recovery state to COLONY_STATE.json that tracks: `{gate_name, attempt_count, last_fixer_name, last_fix_summary}`. The `/ant-unblock` command should check this state and refuse to spawn another Fixer if attempt_count >= max.
-- Inherit from the existing circuit breaker: create a `GateRecoveryBreaker` instance alongside the worker circuit breaker in the build flow.
-
+1. **Shared ceremony config in YAML:** `ceremony.yaml` defines caste emoji, color ANSI codes, label names, banner templates, and stage separator strings. Go runtime, TS host, and wrapper generators all consume this file.
+2. **Go runtime emits structured events:** `ceremony.build.spawn`, `ceremony.build.wave.start`, etc. carry payload data (caste, name, task, wave number). Wrappers render from events, not from hard-coded text.
+3. **Codex fallback:** Go `cmd/codex_visuals.go` renders the canonical visual output from the same YAML config. If TS host or wrappers fail, Codex still shows correct ceremony.
+4. **Parity tests:** `TestCeremonyParityAcrossPlatforms` compares visual output strings for the same event across Claude, OpenCode, and Codex. Differences fail CI.
+5. **No wrapper-owned banners:** Wrappers may add platform-specific framing (Queen persona narration), but the core ceremony elements (spawn lines, wave headers, completion marks) must come from runtime events or shared YAML.
 **Detection:**
-- Fixer caste spawned 3+ times for the same gate in a single continue cycle
-- Gate recovery state shows attempt_count increasing without progress
-- Event bus contains multiple "gate_recovery" loop break events for the same gate
-- `/ant-status` shows gate failures with Fixer attempts that have identical summaries
-
-**Phase assignment:** AAC-006 through AAC-011 (mid-phase, after REC-LOOP-01 is established)
+- Visual diff between `.claude/commands/ant/build.md` and `.opencode/commands/ant/build.md` spawn ceremony sections.
+- Codex output missing caste emoji or stage separators.
+- `TestPlatformDocHygiene` fails if wrapper markdown contains hard-coded ANSI sequences.
+**Which phase addresses it:** Phase B-1 (TS host swarm display) and Phase C-2 (seal TS host integration). Ceremony config YAML should be introduced in Phase B-1.
 
 ---
 
-### Pitfall 4: SQLite Integration Colliding with Existing File-Based Storage
-
-**What goes wrong:**
-AAC-019 through AAC-031 introduce a SQLite-based hive learning layer. The PRD specifies SQLite with FTS (full-text search) for learning recall. The current storage system (`pkg/storage/`) uses JSON files with file-level locking (`FileLocker`). Introducing SQLite alongside JSON storage creates a dual-storage consistency problem:
-
-1. **WAL mode and gitignore conflict.** The PRD places the SQLite database in `.aether/data/`, which is gitignored. This is correct for data, but WAL mode creates auxiliary files (`database.db-wal`, `database.db-shm`) that also live in `.aether/data/`. If the user runs `git add .aether/data/` (the existing gitignore has a negation exception for `COLONY_STATE.json`), the WAL files get committed. On the next clone, the WAL file from the committed version conflicts with the main database file, causing `SQLITE_CORRUPT` or `database disk image is malformed` errors.
-
-2. **Concurrent read/write conflicts between the Go runtime and LLM workers.** The `pkg/storage/` FileLocker uses platform file locks (`flock` on Unix, `LockFileEx` on Windows). SQLite also uses file locks internally. If the Go runtime opens the database with `database/sql` connection pooling (default behavior) while a worker process also tries to access the database, the two locking systems can deadlock. The `go-sqlite3` driver uses C-level file locks that the Go `FileLocker` cannot coordinate with.
-
-3. **Migration safety across Aether versions.** The PRD specifies schema migrations for the hive learning tables. If a user updates Aether (`aether update`) and the new version has a different schema, the migration must run atomically. But if a colony is active (state = EXECUTING) during the update, the migration may conflict with active writes. The existing `UpdateJSONAtomically` pattern doesn't apply to SQLite -- you need `BEGIN IMMEDIATE` transactions.
-
-4. **FTS index corruption on SIGKILL.** FTS5 virtual tables maintain an in-memory index that is flushed to disk periodically. If the Aether process is killed with SIGKILL (e.g., by the OS OOM killer, or by the user pressing Ctrl+C during a write), the FTS index can become inconsistent with the base table. The `PRAGMA integrity_check` catches base table corruption but may not catch FTS-specific corruption. Rebuilding the FTS index requires `INSERT INTO fts_table(fts_table) VALUES('rebuild')`, which is an expensive operation on large datasets.
-
-5. **The `busy_timeout` PRAGMA must be set BEFORE any connection is used.** The `go-sqlite3` driver accepts PRAGMA settings in the DSN (`file:db.sqlite?_busy_timeout=5000&_journal_mode=WAL`). If these are set after the first connection, WAL mode may not activate properly. The current `pkg/storage/` has no concept of connection strings or PRAGMAs -- everything is file paths.
-
+### Pitfall 4: Rewriting Instead of Restoring (Scope Creep)
+**What goes wrong:** The team decides "while we're restoring Classic ceremony, let's also redesign the event bus, rewrite the caste system, and add a new plugin architecture." The milestone never ships. Classic features remain missing.
 **Why it happens:**
-The existing storage system was designed for JSON files with atomic writes and file-level locking. SQLite introduces a fundamentally different storage paradigm with its own locking, journaling, and connection management. The two systems cannot share state without explicit coordination. The PRD specifies the database location as `.aether/data/` without considering the WAL file implications or the gitignore negation exception.
-
+- The v5.4 Classic codebase is available as a reference. It is tempting to "improve" it while porting.
+- The hybrid architecture is new. Engineers want to "do it right" instead of "do it like Classic."
+- The migration map (D-04) explicitly says "Migration only, no new features," but this is hard to enforce without discipline.
 **Consequences:**
-- SQLite WAL files committed to git, causing corruption on clone
-- Deadlocks when Go runtime and worker processes access the database simultaneously
-- FTS search returns incomplete results after an unclean shutdown
-- Schema migration fails during an active colony, leaving the database in an inconsistent state
-- `database is locked` errors under concurrent access because `busy_timeout` was not set
-
+- Milestone v1.17 misses its ship date.
+- Users continue to lack ceremony, swarm display, and Oracle richness.
+- The Go runtime accumulates technical debt from half-finished redesigns.
+- Loss of the Classic behavior baseline: if Classic is rewritten, there is no stable reference to prove parity against.
 **Prevention:**
-- Store the SQLite database in a dedicated subdirectory (`.aether/data/hive/`) with its own `.gitignore` that excludes ALL files (not just specific ones). Do NOT rely on the parent `.aether/data/` gitignore.
-- Use a single connection pool with `SetMaxOpenConns(1)` for writes and separate read connections. The write connection should use `BEGIN IMMEDIATE` for all transactions. Read connections can use standard `BEGIN`.
-- Set PRAGMAs in the DSN: `file:.aether/data/hive/learning.db?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=1&_synchronous=NORMAL`. Verify WAL mode is active by querying `PRAGMA journal_mode` after opening.
-- For migration safety, check COLONY_STATE.json state before running migrations. If state is EXECUTING, defer migration to the next init or continue cycle. Write a migration lock file (`.aether/data/hive/.migrating`) to prevent concurrent migration attempts.
-- Add an FTS health check to `aether patrol` that runs `PRAGMA integrity_check` and verifies FTS row counts match base table row counts. If mismatched, auto-rebuild the FTS index.
-- Do NOT use the existing `FileLocker` for SQLite files. SQLite manages its own locking. Using `FileLocker` on SQLite files causes double-locking deadlocks.
-- On unclean shutdown detection (check for WAL file size > 0 on startup), run `PRAGMA wal_checkpoint(TRUNCATE)` before opening for business.
-
+1. **Classic baseline is read-only:** v5.4.0 is identified, smoke-tested, and used as a behavior baseline. No changes to the baseline.
+2. **Golden tests lock behavior:** Snapshot/golden tests capture Classic output. Any deviation from the golden file must be explicitly approved as an intentional change, not a "better" implementation.
+3. **Feature freeze checklist:** Every phase plan must include: "Does this change introduce new behavior not present in v5.4? If yes, defer to v1.18."
+4. **Migration map compliance:** Each requirement (ORA-01..ORA-08, SWA-01..SWA-05, PAR-01..PAR-07) maps to a Classic behavior. If a requirement cannot be traced to Classic, it is out of scope.
+5. **Queen review gate:** Before any phase begins, the Queen (or human reviewer) checks the phase plan against the Classic baseline checklist from v1.16.
 **Detection:**
-- `git status` shows `.aether/data/` files that should be gitignored (WAL, SHM files)
-- `database is locked` errors in colony logs during concurrent access
-- FTS search returns zero results for terms that should match
-- `PRAGMA integrity_check` returns anything other than "ok"
-- Colony hangs when both the runtime and a worker process try to write to the database
-
-**Phase assignment:** AAC-019 through AAC-031 (later phases, after provenance and gate recovery are stable)
+- Phase plans mentioning "redesign," "refactor," "new architecture," or "plugin system."
+- Golden snapshot tests failing with large diffs that are not bug fixes.
+- Increasing line counts in Go or TS without corresponding Classic behavior being restored.
+**Which phase addresses it:** All phases. The v1.16 Classic baseline checklist (16-module behavioral checklist) is the guardrail.
 
 ---
 
-### Pitfall 5: Learning from Verified Work Producing False Confidence
-
-**What goes wrong:**
-The hive learning system (AAC-019+) turns verified colony work into reusable procedural memory. The "verified" label comes from gate checks passing. But passing gates does not mean the work is correct -- it means the tests pass and no critical flags exist. This creates a false confidence problem:
-
-1. **Lucky passes inflate learning confidence.** A worker implements a feature with a subtle bug. Tests pass because the bug is in an untested code path. Gates pass. The learning system records this as a "verified successful approach" with high confidence. Future colonies that follow this learned pattern reproduce the bug.
-
-2. **Skill deduplication failures create conflicting learned behaviors.** The skill system (`skill-match`) scores skills against workers using role, pheromone signals, and codebase patterns. If two learned skills have similar detect patterns but different content (e.g., one says "always use interface{} for flexibility" and another says "never use interface{}, use generics"), both can be injected into the same worker, creating contradictory instructions.
-
-3. **Privacy gate bypasses through learned context.** The learning system injects learned patterns into worker prompts. If a learned pattern includes file paths, function names, or code snippets from a previous colony (different repo), these get injected into workers in the current colony. The existing pheromone sanitization (`cmd/signal_housekeeping.go`) blocks XML tags and prompt injection patterns, but does NOT check for cross-repo information leakage.
-
-4. **Token budget overflow from injected learned context.** The current colony-prime context budget is 8,000 characters. The existing skill injection has its own 8K budget. Adding learned context from the hive creates a THIRD injection point. If learned context is not budgeted, it can push total prompt size past the LLM's effective context window, causing workers to ignore critical instructions.
-
-5. **The existing hive deduplication is text-exact only.** The `hive-store` command (line 101-119) checks `e.Text == text && e.Domain == domain` for deduplication. But "always initialize structs with zero values" and "structs should always be zero-initialized" express the same wisdom with different text. Without semantic deduplication, the hive fills with near-duplicates that each consume the 200-entry LRU budget.
-
+### Pitfall 5: Race Conditions in Hybrid Event Streaming
+**What goes wrong:** Go emits ceremony events to a file or pipe. TS host reads them. Events are lost, duplicated, or read out of order. The swarm display shows stale workers, missing completions, or flickering incorrect state.
 **Why it happens:**
-The hive learning system treats gate passage as a proxy for correctness, but gates only verify surface properties (tests pass, no flags). The learning system has no way to evaluate the quality or generality of what it learns. The deduplication is syntactic, not semantic. The token budget system was designed for two injection points (colony-prime + skills) and doesn't account for a third.
-
+- Go writes events asynchronously during worker dispatch.
+- TS host polls or streams the event source.
+- No atomicity guarantee between event write and state finalization.
+- Crash of either process leaves the event stream in an inconsistent state.
 **Consequences:**
-- Future colonies learn buggy patterns from lucky passes
-- Workers receive contradictory instructions from conflicting learned skills
-- Cross-repo information leaks into worker prompts via learned context
-- Workers ignore critical instructions because the total prompt exceeds the effective context window
-- Hive fills with near-duplicate wisdom entries, evicting genuinely unique entries via LRU
-
+- Swarm display shows "active" workers that finished minutes ago.
+- Ceremony misses spawn-complete events, making workers appear stuck.
+- Duplicate events cause the narrator to render the same worker twice.
+- On crash recovery, the event stream cannot be replayed accurately.
 **Prevention:**
-- Never set learning confidence above 0.7 for a single-occurrence pattern. Require at least 2 successful verifications across different colonies (different repos, not different phases in the same repo) before confidence reaches 0.8. This is already the multi-repo confidence boost pattern (2 repos = 0.70, 3 repos = 0.85, 4+ = 0.95) but it should be the DEFAULT, not a boost.
-- Add a semantic deduplication step before hive-store: normalize the text (lowercase, remove articles, stem words) and check for overlap > 80% with existing entries. If overlap is high, merge into the existing entry rather than creating a new one.
-- Add a privacy gate to the learning injection: strip any file paths, function names, and code snippets from learned context before injecting into workers in a different repo. Only inject the generalized wisdom text, not the evidence.
-- Budget learned context injection at 2,000 characters max (separate from colony-prime's 8K and skills' 8K). Trim by confidence score (lowest confidence entries trimmed first).
-- Add a "learning provenance" field to hive entries that records: `{source_repo, source_phase, gate_results, timestamp}`. This allows auditing whether a learned pattern came from a genuinely verified build.
-
+1. **Event bus with TTL and replay:** Use the existing `pkg/events.Bus` (JSONL append-log with `event-publish` / `event-subscribe`). It already has file locking, TTL cleanup, and replay by timestamp.
+2. **TS host subscribes, not polls:** `event-bus-subscribe --stream --filter ceremony.*` provides an NDJSON stream. TS host reads this stream sequentially. No polling means no race between read and write.
+3. **Idempotent event handling:** TS host event consumer must handle duplicate event IDs gracefully (same `spawn_id` + `status` = no-op).
+4. **Crash recovery:** On TS host restart, replay events from the last known timestamp using `event-replay`. Rebuild the in-memory activity frame from the log.
+5. **No in-memory-only state:** The TS host's activity frame is a cache. The event bus JSONL is the source of truth.
 **Detection:**
-- Hive contains entries with confidence 0.95 that were learned from a single colony
-- Workers report contradictory instructions from learned skills
-- Learned context injection pushes total prompt past 20,000 characters
-- Hive wisdom entries contain file paths from other repos
-- Hive is full of entries that differ only in word order
-
-**Phase assignment:** AAC-019 through AAC-031 (later phases, learning triggers should come after storage is stable)
+- Swarm display shows worker in "active" section after `spawn-complete` was emitted.
+- `event-bus.jsonl` contains gaps in sequence numbers.
+- Integration test `TestEventStreamNoLossUnderLoad` fails.
+**Which phase addresses it:** Phase B-1 (TS host swarm display) and Phase B-2 (swarm integration tests). The event bus already exists; TS host must use it correctly.
 
 ---
 
-### Pitfall 6: Process Lifecycle Management Across Platforms
-
-**What goes wrong:**
-AAC-014 through AAC-017 add worker heartbeats, process groups, PID tracking, and stale worker cleanup. The current process management (`cmd/oracle_process_unix.go`) is Unix-only and has several gaps:
-
-1. **Orphaned workers on SIGKILL.** The existing `terminateOracleProcessTree` (line 17-75) sends SIGTERM, waits 2 seconds, then SIGKILL. But if the Aether process itself receives SIGKILL (e.g., OOM killer), there is no cleanup. Child worker processes become orphans, reparented to PID 1. On the next run, the stale PID file (`.aether/data/locks/`) may still exist, causing the FileLocker to block indefinitely because the lock-holding process no longer exists but the lock file remains.
-
-2. **PID recycling.** PIDs are recycled on Unix systems. If a worker process with PID 12345 dies and the OS reuses PID 12345 for an unrelated process, `oracleProcessExists` (line 123-138) returns true (the PID exists but is a different process). The stale cleanup logic may kill the wrong process. The current code only checks `ps -o stat=` and rejects zombies, but does not verify that the process at that PID is actually an Aether worker.
-
-3. **Process group signaling differences across platforms.** On Linux, process groups are session-level (SID). On macOS, process groups are different from sessions. On Windows (via `oracle_process_windows.go`), there are no process groups in the Unix sense -- `cmd.Process.Kill()` is the only option. The `terminateOracleProcessTree` function uses `ps -axo pid=,ppid=` to build a process tree, which works on macOS and Linux but has different column widths on different systems.
-
-4. **Heartbeat files as stale detection.** The PRD proposes heartbeat files for worker liveness detection. But heartbeat files have a fundamental race condition: if the worker process is alive but the filesystem write for the heartbeat fails (disk full, NFS timeout, I/O error), the heartbeat appears stale and the cleanup logic kills a healthy worker. Conversely, if the worker process dies but the heartbeat file was written 1 second before death, the heartbeat appears fresh for up to the heartbeat interval, leaving a dead worker running until the next check.
-
-5. **The existing FileLocker has no stale lock detection.** The `FileLocker` (`pkg/storage/lock.go`) acquires locks via `platformLockFile`. If the process that held the lock dies without releasing it, the lock file remains. On Unix, `flock` locks are automatically released when the process dies (because the file descriptor is closed). But if the lock file itself is corrupted or the filesystem doesn't support `flock` (e.g., NFS), the lock persists.
-
+### Pitfall 6: Animated Terminal Dashboard Breaks in Non-TTY Environments
+**What goes wrong:** The restored swarm display uses ANSI clear sequences, cursor positioning, or live redraw to create an animated dashboard. In CI, non-interactive shells, or platform wrappers that capture output as markdown, the display produces garbled text, invisible output, or broken markdown.
 **Why it happens:**
-Process lifecycle management is inherently platform-specific and full of edge cases. The current implementation was written for the Oracle loop's process tree and handles that specific case (terminate all descendants of a known PID). Generalizing it to all worker processes (builders, watchers, fixers) introduces cases that the Oracle-specific code doesn't cover. PID recycling is a well-known Unix problem that most developer tools eventually hit. Heartbeat files are a common pattern but have the filesystem-reliability race condition.
-
+- Classic v5.4 swarm was a 277-line animated Bash dashboard using `tput`, `clear`, and cursor movement.
+- Modern platforms (Claude Code, OpenCode) render assistant output as markdown, not raw terminal streams.
+- Codex runs in a non-TTY environment where ANSI sequences are meaningless.
 **Consequences:**
-- Stale worker processes consume resources after the colony exits
-- PID recycling causes the stale cleanup to kill unrelated processes
-- Heartbeat false positives kill healthy workers
-- FileLocker blocks indefinitely on corrupted lock files after unclean shutdown
-- Windows users experience different behavior than macOS/Linux users
-
+- CI logs filled with ANSI escape sequences.
+- Claude Code output shows raw `[CEREMONY]` lines mixed with JSON.
+- Users in non-interactive mode see blank or broken output.
+- Violation of known issue: "Visual output depends on terminal mode."
 **Prevention:**
-- Verify PID identity before killing: check that `/proc/<pid>/cmdline` (Linux) or `ps -o command= -p <pid>` (macOS) contains "aether" or "codex" before sending any signal. Never kill a PID based solely on its number.
-- Use process groups instead of PID tracking. Start each worker in a new process group (`cmd.SysProcAttr.Setpgid = true` on Unix, `CREATE_NEW_PROCESS_GROUP` on Windows). Kill the entire group with `syscall.Kill(-pgid, signal)`. This avoids PID recycling issues entirely because the group ID is set at creation.
-- Add a startup stale lock cleanup: on every `aether` invocation, scan `.aether/locks/` for lock files whose holding process no longer exists (check via `kill(pid, 0)` which returns ESRCH if the process doesn't exist). Remove orphaned lock files.
-- For heartbeats, use a shared memory segment or Unix socket instead of a file. If that's too complex, write heartbeats to a known location AND check the process existence (via PID file + `kill(pid, 0)`). Only consider a worker stale if BOTH the heartbeat is old AND the process doesn't exist.
-- On startup, check for stale PID files (`.aether/data/*.pid`) and verify the processes still exist before trusting them.
-- Test on all three platforms (macOS, Linux, Windows) for every process lifecycle change. The Windows implementation (`oracle_process_windows.go`) should be updated alongside the Unix implementation.
-
+1. **Three output modes:**
+   - `AETHER_OUTPUT_MODE=json`: Machine-only, no ceremony text in stdout.
+   - `AETHER_OUTPUT_MODE=visual`: TTY-only, full ANSI animation allowed.
+   - `AETHER_OUTPUT_MODE=markdown` (or default non-TTY): Plain text ceremony lines, no ANSI, suitable for markdown rendering.
+2. **Go runtime detects TTY:** `cmd/codex_visuals.go` already handles terminal capability detection. TS host must respect this and downgrade to plain text when not a TTY.
+3. **No ANSI in markdown wrappers:** Wrappers must never emit raw ANSI sequences. They render event payloads as markdown (e.g., `**Builder Hammer-42:** Task complete`).
+4. **Debounced redraw:** If animation is used, redraw only when data changes. Skip redraw if output is piped.
 **Detection:**
-- `ps aux | grep aether` shows worker processes running after the colony has exited
-- Stale lock files in `.aether/locks/` that reference non-existent PIDs
-- `aether build` hangs on startup because a lock file from a previous run was not cleaned up
-- Workers killed mid-task due to heartbeat filesystem errors on NFS-mounted home directories
-- Windows users report that worker cleanup doesn't work (the Windows implementation was not updated)
+- `AETHER_OUTPUT_MODE=json aether build 1 --plan-only` contains `[CEREMONY]` or ANSI in stdout.
+- Claude Code output shows raw escape sequences.
+- `TestNarratorLauncherAutoSkipsJSONMode` fails.
+**Which phase addresses it:** Phase B-1 (TS host swarm display). The narrator foundation from v1.6 already has TTY detection and JSON protection; TS host must inherit these rules.
 
-**Phase assignment:** AAC-014 through AAC-017 (mid-phase, alongside gate recovery)
+---
+
+### Pitfall 7: Builder-Probe Lock Bypassed by TS Host
+**What goes wrong:** The TS host marks tasks as `completed` without waiting for Probe verification. Builders self-certify, violating the Builder-Probe Lock that was a core Classic safety invariant.
+**Why it happens:**
+- TS host orchestrates worker dispatch and processes worker results.
+- A builder returns `code_written`. The TS host, eager to advance, treats this as "done" and writes a completion file with `status: "completed"`.
+- The Go finalizer trusts the completion file and advances state.
+- Probe never runs because the TS host skipped it.
+**Consequences:**
+- Untested code is marked complete.
+- Colony advances on false claims.
+- Verification loop is bypassed.
+- Regression of v1.2-era "worker dispatch honesty" fixes.
+**Prevention:**
+1. **Manifest-driven verification:** The Go build manifest includes `execution_plan` with Probe as a post-wave specialist. TS host must dispatch Probe from the manifest, not skip it.
+2. **Status translation layer:** TS host must not translate `code_written` to `completed`. It passes `code_written` through to the completion file. Only Go finalizer (or Probe result) may upgrade to `completed`.
+3. **Completion file validation:** Go `build-finalize` rejects completion files where any dispatch has `status: "completed"` without a matching Probe `status: "passed"` in the same completion file.
+4. **Explicit test:** `TestBuildFinalizeRejectsSelfCertifiedCompletion` fails if Probe is missing.
+**Detection:**
+- Build completion file contains `status: "completed"` for builder dispatches with no Probe dispatch.
+- `TestBuildFinalizeRecordsExternalTaskResultsForContinue` fails.
+**Which phase addresses it:** Phase C-1 (colonize TS host integration) and Phase C-3 (parity verification). The build wave playbook already defines the Builder-Probe Lock; TS host must obey it.
+
+---
+
+### Pitfall 8: Oracle RALF Loop Loses State Between Iterations
+**What goes wrong:** The TS host drives the Oracle RALF iteration loop. Between iterations, the TS host process crashes or is restarted. The Oracle loses its iteration count, confidence score, and accumulated findings. The next iteration starts from scratch.
+**Why it happens:**
+- TS host maintains loop state in memory (current iteration, confidence, stop conditions).
+- Go owns the Oracle workspace files (`oracle-state.json`, `oracle-plan.json`), but TS host does not re-read them at loop start.
+- The boundary contract (D-05) says "TS host orchestrates timing and worker dispatch; Go handles all question selection, confidence calculation, and state writes." If TS host also caches state, it becomes a second source of truth.
+**Consequences:**
+- Oracle runs indefinitely: iteration 1 completes, TS host restarts, iteration 1 runs again.
+- Confidence never reaches target because findings are lost.
+- User sees "Oracle is thinking..." for hours with no progress.
+- Violation of Oracle loop fix from v1.10: "Oracle loop fix with research formulation, depth selection, and state persistence."
+**Prevention:**
+1. **Stateless TS host loop:** `runOracleLifecycle()` in TS must not cache Oracle state. At each iteration, it calls `oracle-iterate --plan-only`, which returns the full current state (iteration count, confidence, next question). TS host uses this as the sole input for dispatch decisions.
+2. **Go finalizer is the only writer:** `oracle-iterate-finalize` commits iteration results. TS host never writes to `.aether/data/oracle/`.
+3. **Stop conditions in manifest:** The `--plan-only` manifest includes `confidence_target`, `max_iterations`, and `current_confidence`. TS host evaluates stop conditions from the manifest, not from local variables.
+4. **Resume from Go state:** If TS host restarts, it calls `oracle-iterate --plan-only` to discover where the loop is. No resume file in TS.
+**Detection:**
+- Oracle runs more iterations than `max_iterations`.
+- `oracle-state.json` iteration count lags behind actual iterations.
+- Integration test `TestOracleStatelessLoopResumesFromGo` fails.
+**Which phase addresses it:** Phase A-2 (TS host Oracle lifecycle) and Phase A-3 (Oracle integration tests).
+
+---
+
+### Pitfall 9: Tiered Escalation Chain Creates Infinite Loops
+**What goes wrong:** The restored tiered escalation chain (worker retry -> reassignment -> Queen -> user) loops forever. A failing worker is retried, reassigned, retried again, reassigned again — never reaching the user escalation step.
+**Why it happens:**
+- TS host implements retry logic with a counter.
+- The counter is reset when the worker is reassigned to a different caste.
+- The new caste also fails, triggering retry again.
+- No global "this task has been escalated" flag exists.
+- Classic v5.4 had this problem: Bash retry logic did not track escalation state across castes.
+**Consequences:**
+- Build hangs: workers spawn, fail, respawn, fail, respawn...
+- Token waste: each retry consumes API tokens.
+- User is never asked: the colony appears stuck.
+- Violation of v1.12 loop safety: "6 LOOP requirements covering watcher auto-skip, recovery redirect, circuit breaker, cycle detection."
+**Prevention:**
+1. **Escalation state in completion file:** Each dispatch in the completion file carries `escalation_level: 0|1|2|3` (0=initial, 1=retried, 2=reassigned, 3=escalated_to_user). TS host increments this level, not resets it.
+2. **Go finalizer enforces ceiling:** `build-finalize` rejects completion files where any dispatch has `escalation_level > 3` without `status: "blocked"` or `"escalated"`.
+3. **Circuit breaker:** After 2 retries at any level, TS host must either reassign (level 2) or escalate (level 3). No third retry at the same level.
+4. **Midden threshold integration:** If a task fails 3 times total across all levels, auto-emit REDIRECT and mark blocked (existing MID-03 behavior).
+**Detection:**
+- Spawn log shows the same task spawned 5+ times.
+- `TestEscalationChainTerminates` fails.
+- Midden shows 3+ entries for the same task.
+**Which phase addresses it:** Phase C-1 (colonize TS host integration) and Phase C-3 (parity verification). Escalation logic is part of the build wave playbook (Step 5.2 partial wave failure handling).
+
+---
+
+### Pitfall 10: Worktree Merge-Back Orphans Code
+**What goes wrong:** TS host dispatches workers in worktree mode. Workers complete, but the TS host never calls `worktree-merge-back`. The worktree branch exists with valuable code, but it is never merged into main. The next wave builds on stale main, overwriting or conflicting with the orphaned work.
+**Why it happens:**
+- TS host implements wave dispatch but forgets the merge-back step between waves.
+- The merge-back step is in the build playbook (Step 5.2.5) but is not part of the Go manifest. TS host must know to do it.
+- Worktree mode is optional (`parallel_mode: worktree`). TS host may not test it.
+**Consequences:**
+- Wave 2 workers overwrite Wave 1 changes because they work on main, not the merged state.
+- Git conflicts when worktrees are eventually cleaned up.
+- Lost work: orphaned branches are garbage collected.
+- Regression of MEMORY.md issue: "Worktree merge-back gap — Agents spawn worktrees but never auto-merge back to main, causing orphaned branches with valuable code."
+**Prevention:**
+1. **Manifest includes merge-back directive:** The build manifest includes `requires_merge_back: true` when `parallel_mode` is `worktree` and the wave is not the last. TS host checks this flag.
+2. **TS host calls Go command:** `aether worktree-merge-back --branch {branch}` is called by TS host after processing wave results, before dispatching the next wave.
+3. **Non-blocking but mandatory:** Merge-back failures create blockers but do not halt the build. However, skipping merge-back is not allowed.
+4. **Test coverage:** Integration test `TestWorktreeMergeBackBetweenWaves` verifies that Wave 2 sees Wave 1 changes.
+**Detection:**
+- `.aether/data/worktree/` contains stale branches after build completes.
+- Wave 2 workers do not see files created by Wave 1.
+- `TestWorktreeMergeBackBetweenWaves` fails.
+**Which phase addresses it:** Phase C-1 (colonize TS host integration) and Phase C-3 (parity verification). The build wave playbook already defines merge-back; TS host must implement it.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 7: 31 Work Packages Creating Merge Conflicts in a Single Milestone
-
-**What goes wrong:**
-The v1.13 PRD defines 31 work packages (AAC-001 through AAC-031). If these are implemented across many phases with parallel development, the merge conflict surface is enormous. The most conflict-prone files are:
-
-- `cmd/colony_prime_context.go` (touched by any feature that injects context into workers)
-- `pkg/colony/state.go` (touched by any feature that adds state fields)
-- `cmd/gate.go` (touched by any feature that adds gates)
-- `.claude/commands/ant/build.md` and `.claude/commands/ant/continue.md` (touched by any feature that modifies build or continue flow)
-- `cmd/main.go` (touched by any feature that adds new subcommands)
-
+### Pitfall 11: Stale Manifest Reuse After Boundary Discussion
+**What goes wrong:** The TS host requests a plan-only manifest, encounters `orchestrator_boundary_guidance` routing to `aether discuss`, resolves the discussion, then reuses the old manifest instead of requesting a fresh one. The stale manifest has outdated boundary questions or incorrect worker assignments.
 **Why it happens:**
-31 work packages in a single milestone is a large surface area. The existing codebase has tight coupling between context assembly, state management, and gate checking. Features that seem independent (e.g., SQLite integration and process lifecycle) both touch the build/continue flow.
-
+- TS host caches the manifest in a variable.
+- After discuss, the developer forgets to clear the cache.
+- The boundary contract explicitly says "request a fresh manifest after resolution."
 **Prevention:**
-- Group work packages by the files they modify, not by feature area. Sequence groups so that files modified by group A are not touched by group B.
-- Add new subcommands to a separate registration file (e.g., `cmd/subcommands.go`) instead of adding them all to `cmd/main.go`.
-- Add new state fields in a single batch phase, not spread across multiple phases. Use `omitempty` for all new fields to maintain backward compatibility.
-- For colony-prime context, add new sections behind a feature flag so they can be developed independently and enabled together.
-
+1. **Manifest lifetime:** TS host must treat the manifest as valid only for the current turn. After any `aether discuss` call, the previous manifest is invalidated.
+2. **Explicit fresh request:** The TS host code must have a comment: `// After discuss resolution, ALWAYS request a fresh manifest. Do not reuse.`
+3. **Go finalizer rejects stale manifests:** Finalizers validate `generated_at` timestamp against a freshness window (e.g., 5 minutes). Stale manifests are rejected.
 **Detection:**
-- `git merge` produces conflicts in more than 2 files per merge
-- `go test ./...` fails after merging two feature branches
+- `TestFinalizeRejectsStaleManifest` fails.
+- Wrapper test `TestWrapperRequestsFreshManifestAfterDiscuss` fails.
+**Which phase addresses it:** Phase C-2 (seal TS host integration) and Phase C-3 (parity verification). The boundary guidance contract is already defined in Phase 5.
 
 ---
 
-### Pitfall 8: New Dependencies Breaking Existing Tests
-
-**What goes wrong:**
-The PRD specifies SQLite integration. The current project has a "Zero new dependencies" policy (PROJECT.md line 158). Adding `github.com/mattn/go-sqlite3` introduces CGo, which means:
-
-1. All builds now require a C compiler (gcc/clang)
-2. Cross-compilation becomes harder (need C cross-compiler)
-3. `go test -race` behavior changes because CGo has different race detection semantics
-4. The `goreleaser` config may need updating for CGo builds
-
+### Pitfall 12: Pheromone Injection Loses User Signals on Branch Switch
+**What goes wrong:** User emits a REDIRECT signal. TS host runs on a feature branch. The signal is written to branch-local `pheromones.json`. When the user switches to main, the signal is gone. The constraint is violated on main.
 **Why it happens:**
-The "zero new dependencies" policy was established when Aether only used JSON file storage. SQLite requires a C library (either CGo or `modernc.org/sqlite` pure Go). The PRD doesn't specify which SQLite driver to use.
-
+- Pheromones are branch-local by design (state contract Rule 4).
+- User REDIRECTs should be colony-wide, but the current system scopes them to the branch.
+- The pheromone propagation design doc defines injection/merge-back protocols, but they are not fully implemented.
 **Prevention:**
-- Use `modernc.org/sqlite` (pure Go SQLite) instead of `mattn/go-sqlite3` (CGo). Pure Go eliminates the C compiler dependency, simplifies cross-compilation, and maintains the zero-CGo policy. The performance difference is negligible for Aether's use case (single-user, low-concurrency).
-- If CGo is unavoidable, update the README build instructions, goreleaser config, and CI matrix to include CGo requirements.
-- Run the full test suite with the new dependency before committing: `go test ./... -race -count=1`.
-
+1. **User signals go to hub:** `pheromone-write` with `source: "user"` should write to hub-global pheromone storage (or QUEEN.md) in addition to branch-local. This is a Go runtime change, not TS host.
+2. **TS host reads hub signals:** Before dispatching workers, TS host calls `aether pheromone-read --hub` to get user signals and merges them with branch-local signals.
+3. **Defer if complex:** If hub-global pheromones require significant Go changes, defer to v1.18. Document the limitation: "User signals are branch-local in v1.17."
 **Detection:**
-- `go build` fails on systems without gcc/clang
-- `goreleaser build --snapshot` fails with CGo errors
-- `go test -race` produces different results with CGo enabled
+- User REDIRECT on feature branch is not visible on main.
+- `TestPheromoneHubPropagation` (if exists) fails.
+**Which phase addresses it:** Phase C-3 (parity verification) or deferred to v1.18. Not a blocker for v1.17 if documented.
 
 ---
 
-### Pitfall 9: OpenCode Platform Divergence from New Features
-
-**What goes wrong:**
-The v1.13 features touch build, continue, and gate flows heavily. The CLAUDE.md states that Claude and OpenCode should be "aligned first." But the new features are implemented in the Go runtime, and the wrapper markdown files for OpenCode may not be updated to reflect new flags, new output formats, or new error messages.
-
-Specifically:
-- `/ant-unblock` (new command) needs OpenCode wrapper in `.opencode/commands/ant/unblock.md`
-- Gate recovery banners need OpenCode formatting in the continue wrapper
-- Worker heartbeat display needs OpenCode-compatible ANSI rendering
-
+### Pitfall 13: Codex Skill Drift from Wrapper Changes
+**What goes wrong:** Claude/OpenCode wrappers are updated to use TS host orchestration, but the Codex lifecycle skill (`.aether/skills/colony/aether-colony-build-cycle/SKILL.md`) is not updated. Codex users see outdated guidance that contradicts the new runtime behavior.
 **Why it happens:**
-The Go runtime is authoritative, but the wrapper markdown files are presentation-only. When new features are added to the runtime, the wrappers must be updated separately. The existing `command_parity_test.go` checks file counts but not content parity.
-
+- Codex does not use wrapper markdown. It uses TOML agents and lifecycle skills.
+- Changes to wrapper flow are not automatically reflected in Codex skills.
+- The source-of-truth map lists 5 drift-sensitive artifacts; keeping them aligned is manual.
 **Prevention:**
-- For each new command, create the OpenCode wrapper simultaneously with the Claude wrapper.
-- Add the new command to the parity test.
-- Use the runtime's structured JSON output as the single source of truth for both wrappers.
+1. **Update all 5 artifacts together:** Any change to plan/build/continue orchestration must update:
+   - `cmd/command_guide.go`
+   - `.aether/commands/{plan,build,continue}.yaml`
+   - `.claude/commands/ant/{plan,build,continue}.md`
+   - `.opencode/commands/ant/{plan,build,continue}.md`
+   - `.aether/skills/colony/aether-colony-build-cycle/SKILL.md`
+2. **Drift-guard tests:** `TestCodexLifecycleGuidesRequireVisibleWorkerActivity`, `TestCodexLifecycleYamlAndGuidesAgreeOnWorkerActivity`, and `TestCodexLifecycleSkillMirrorsWorkerActivityContract` must remain green.
+3. **Codex skill references command-guide:** The skill should delegate to `aether command-guide` for the latest orchestration contract, rather than hard-coding steps.
+**Detection:**
+- `TestCodexLifecycleSkillMirrorsWorkerActivityContract` fails.
+- Codex output shows old command sequences (e.g., `aether build --synthetic` instead of `build-finalize`).
+**Which phase addresses it:** All phases. The drift-guard tests from v1.6 are the enforcement mechanism.
 
 ---
 
-### Pitfall 10: Token Budget Overflow from Triple Injection
-
-**What goes wrong:**
-The current system has two injection points into worker prompts: colony-prime context (8K chars) and skill injection (8K chars). The hive learning system adds a third: learned context from the hive. The total prompt size is colony-prime (8K) + skills (8K) + learned context (???) + task brief (variable) + system prompt (variable). For LLMs with a 128K context window this is fine, but for smaller models or longer task briefs, the total can exceed the effective context window.
-
+### Pitfall 14: TS Host Placeholder Code Ships as Real
+**What goes wrong:** The v1.16 TS host prototype contains simulated workers, synthetic completion files, and placeholder phase plans. If this code is not replaced before v1.17 ships, users get fake worker activity and no real work done.
 **Why it happens:**
-The token budget system was designed for two injection points. Adding a third without adjusting the budget creates an unbounded injection point.
-
+- The `runLifecycle()` function in `.aether/ts-host/src/lifecycle.ts` has:
+  - `planningResults` marked as `completed` with synthetic summaries.
+  - `dispatchWorkers` with `simulatedFileClaims`.
+  - `continueResults` marked as `completed` without real reviewers.
+- Prototype code is useful for integration tests but must not be the production path.
 **Prevention:**
-- Cap learned context at 2,000 characters.
-- Add a total injection budget check: colony-prime + skills + learned context + task brief must not exceed 20,000 characters.
-- If the total exceeds the budget, trim the lowest-confidence learned entries first, then the lowest-priority skill entries, then the lowest-ranked colony-prime sections.
+1. **Explicit PROTOTYPE markers:** All simulated code must be guarded by `if (process.env.AETHER_SIMULATION_MODE)` or similar. Default path must spawn real platform workers.
+2. **Integration test vs production path:** The prototype lifecycle test uses simulation mode. The production path is tested with real (or mock) platform worker spawns.
+3. **Pre-ship audit:** Before tagging v1.17, grep for `simulated`, `placeholder`, `synthetic`, `stub` in `.aether/ts-host/src/` and verify none are in the default code path.
+**Detection:**
+- `grep -n "simulated\|placeholder\|synthetic\|stub" .aether/ts-host/src/*.ts`
+- Build produces no real file changes despite "success."
+**Which phase addresses it:** Phase A-2 (TS host Oracle lifecycle) and Phase C-1 (colonize TS host integration). By Phase C-3, all simulation code must be removed or gated.
 
 ---
 
 ## Minor Pitfalls
 
-### Pitfall 11: Fixer Caste Making Changes That Create More Gate Failures
-
-**What goes wrong:**
-The Fixer caste (27th agent) is spawned to fix gate failures. But the Fixer's changes may introduce new failures in gates that previously passed. For example, fixing a test failure by modifying production code may break a lint gate. Fixing a lint issue by removing a function may break a coverage gate.
-
+### Pitfall 15: Golden Snapshot Tests Become Brittle
+**What goes wrong:** Golden snapshot tests capture exact output strings. As the system evolves, minor formatting changes (whitespace, timestamp format, emoji) cause tests to fail, creating noise and encouraging developers to update snapshots without reviewing changes.
+**Why it happens:**
+- Snapshot tests are easy to write but hard to maintain.
+- Classic v5.4 output format is the baseline, but the hybrid architecture may legitimately differ in non-behavioral ways (e.g., JSON field ordering).
 **Prevention:**
-- The Fixer must run ALL gates after its fix, not just the failed gate.
-- If the Fixer's fix causes a different gate to fail, report both failures and stop (don't attempt to fix the new failure).
-- Cap Fixer at 1 attempt per gate failure cycle.
+1. **Structured golden tests:** Compare parsed JSON structures, not raw strings. For visual output, compare tokenized elements (spawn lines, wave headers) rather than exact ANSI sequences.
+2. **Human review required:** Snapshot updates must be reviewed in PR. A bot or CI job should flag snapshot changes for human approval.
+3. **Separate behavioral and cosmetic tests:** Behavioral tests verify "Probe runs after builders." Cosmetic tests verify "output contains caste emoji." Cosmetic tests are allowed to change; behavioral tests are not.
+**Detection:**
+- Snapshot tests fail on every unrelated change.
+- Developers run `UPDATE_SNAPSHOTS=1` habitually.
+**Which phase addresses it:** Phase C-3 (end-to-end parity verification). Golden tests are introduced in v1.16; v1.17 must keep them maintainable.
 
 ---
 
-### Pitfall 12: Oracle Loop Stop Marker Race Condition
-
-**What goes wrong:**
-The Oracle loop checks for a stop marker file (`.aether/oracle/.stop`) at the start of each iteration (line 398) and after each iteration (line 558). But between the check and the worker invocation, the user may write the stop marker. The worker invocation is async (line 664-667, goroutine with channel). The stop marker check doesn't cancel an in-flight worker invocation -- it only prevents the NEXT iteration from starting.
-
+### Pitfall 16: Missing Node Falls Back Ungracefully
+**What goes wrong:** The TS host requires Node.js. On a machine without Node, Aether commands fail with obscure errors instead of falling back to Go-only behavior.
+**Why it happens:**
+- TS host is spawned as a subprocess. If `node` is not found, the spawn fails.
+- The v1.6 narrator had this problem and solved it with non-fatal fallback. TS host must do the same.
 **Prevention:**
-- Pass a cancellable context to the worker invocation and check the stop marker in a separate goroutine that calls `cancel()` when the marker appears.
-- This is already partially done in `runOracleIterationAttempt` (line 653, `attemptCtx, cancel := context.WithCancel(ctx)`), but the cancel is only called when the heartbeat ticker detects a response file, not when the stop marker appears.
-
----
-
-### Pitfall 13: Hive Wisdom Abstraction Losing Actionable Specificity
-
-**What goes wrong:**
-The `promoteToHive` function (`cmd/hive.go` line 254-343) abstracts repo-specific text by replacing the source repo name with `<repo>` and stripping common path prefixes. But this abstraction can make wisdom too vague to be actionable. For example, "In the Aether repo, always use `store.UpdateJSONAtomically` instead of `store.SaveJSON` for COLONY_STATE.json" becomes "In <repo>, always use `store.UpdateJSONAtomically` instead of `store.SaveJSON` for COLONY_STATE.json" -- which is only useful for repos that happen to use the same store package.
-
-**Prevention:**
-- Add a "scope" field to wisdom entries: `repo-specific` vs `domain-general`. Repo-specific wisdom is only injected into workers in the same repo. Domain-general wisdom is injected everywhere.
-- The abstraction step should produce TWO entries: the repo-specific original (high confidence, repo-scoped) and the domain-general abstracted version (lower confidence, cross-repo).
-
----
-
-### Pitfall 14: Session Freshness Detection Breaking After Recovery
-
-**What goes wrong:**
-The CLAUDE.md documents session freshness detection: capture `SESSION_START=$(date +%s)` before spawning agents, then verify freshness. The recovery hardening changes may reset session state (e.g., `/ant-unblock` modifies COLONY_STATE.json) without updating the session timestamp. The freshness check then thinks the session is stale and auto-clears files that the recovery flow needs.
-
-**Prevention:**
-- Any recovery command that modifies COLONY_STATE.json must also update the session timestamp.
-- The freshness check should be aware of recovery commands and skip auto-clear for recovery-modified files.
-
----
-
-### Pitfall 15: Gate Recovery Templates Becoming Stale
-
-**What goes wrong:**
-The gate recovery template system (`cmd/gate.go` line 669+) provides per-gate recovery instructions. But as gates are added or modified in v1.13, the templates must be updated to match. If a gate's check logic changes but its recovery template doesn't, the Fixer caste follows outdated instructions.
-
-**Prevention:**
-- Store recovery templates in the same file as gate definitions, not in a separate file.
-- Add a test that verifies every gate has a corresponding recovery template.
+1. **Node optional:** `AETHER_NARRATOR=off` disables TS host features. Go runtime continues without TS host.
+2. **Clear error message:** If TS host is required but Node is missing, print: "TypeScript orchestration host requires Node.js >= 18. Install Node or set AETHER_NARRATOR=off for Go-only mode."
+3. **Graceful degradation:** If TS host fails to start, log the error and continue with Go-only path. Do not crash the command.
+**Detection:**
+- `TestNarratorLauncherMissingRuntimeDoesNotFail` (existing test pattern).
+- Run Aether in a container without Node.
+**Which phase addresses it:** Phase B-1 (TS host swarm display). The narrator launcher tests from v1.6 are the model.
 
 ---
 
@@ -408,67 +371,49 @@ The gate recovery template system (`cmd/gate.go` line 669+) provides per-gate re
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| AAC-001/002: Build provenance | False negatives from stale claims, git diff gaps, worktree path issues | Use checkpoint-based diff, timestamp validation, worktree-aware path resolution |
-| AAC-003: Oracle confidence target | LLM gaming confidence scores, prompt drift at high iterations | External validation requirements, confidence decay, context capsule cap |
-| AAC-004: Init launch brief | Synthesizing from stale scouting data | Check scouting timestamp, re-scan if stale |
-| AAC-005: Full-context path restoration | Context budget overflow | Measure current context size before enabling full path |
-| AAC-006-011: Gate recovery | Fixer creating infinite loops, whack-a-mole gate failures | Gate-level circuit breaker, Fixer attempt cap, all-gate re-check |
-| AAC-012-013: OpenCode fixes | Agent name field divergence | Update all 4 mirror locations simultaneously |
-| AAC-014-017: Worker lifecycle | PID recycling killing wrong processes, orphaned workers | Process groups instead of PIDs, identity verification before kill |
-| AAC-018: E2E validation | Integration tests not covering new recovery flows | Add E2E tests for every new gate/recovery path |
-| AAC-019-031: Hive learning | False confidence from lucky passes, skill dedup failures, privacy leaks | Multi-repo confidence requirement, semantic dedup, privacy gate |
+| A-1: Go Oracle iteration commands | Oracle state mutation in `--plan-only` | Test `TestOraclePlanOnlyDoesNotMutateState` |
+| A-2: TS host Oracle lifecycle | TS host caches Oracle state between iterations | Stateless loop: re-read from Go each iteration |
+| A-3: Oracle integration tests | Simulation mode ships as default | Gate all simulated code behind env var |
+| B-1: TS host swarm display | ANSI pollution in JSON mode | `AETHER_OUTPUT_MODE=json` strictly no ceremony text |
+| B-2: Swarm integration tests | Polling causes race conditions | Use event bus subscription, not polling |
+| C-1: Colonize TS host integration | Surveyor dispatch order diverges from manifest | Dispatch strictly from manifest `dispatches` array |
+| C-2: Seal TS host integration | Seal finalizer called when blockers exist | TS host stops on blockers, does not call finalize |
+| C-3: End-to-end parity | Golden tests become brittle | Structured comparison, not string snapshots |
 
 ---
 
-## "Looks Done But Isn't" Checklist
+## Anti-Patterns Specific to This Hybrid Model
 
-- [ ] **Provenance works in worktree mode:** Often provenance is tested in-repo only -- test with `--parallel-mode worktree` and verify claims resolve correctly after sync-back
-- [ ] **Oracle loop converges on hard topics:** Often tested with easy topics that converge in 2 iterations -- test with ambiguous topics that should require 5+ iterations
-- [ ] **Gate recovery doesn't create loops:** Often tested with a single gate failure -- test with 2 gates failing simultaneously and verify the Fixer doesn't loop
-- [ ] **SQLite survives SIGKILL:** Often tested with clean shutdown -- test with `kill -9` during an active write and verify WAL recovery
-- [ ] **Heartbeat doesn't false-positive on slow filesystems:** Often tested on local SSD -- test on NFS or encrypted home directories
-- [ ] **Learned context doesn't leak cross-repo information:** Often tested in a single repo -- test with hive entries from repo A injected into workers in repo B
-- [ ] **All 3 platforms render new commands:** Often tested on Claude only -- test `/ant-unblock`, gate recovery banners, and heartbeat display on OpenCode and Codex
-- [ ] **Circuit breaker covers gate recovery:** Often the worker circuit breaker is tested -- verify the gate recovery circuit breaker fires independently
-- [ ] **COLONY_STATE.json backward compatible:** Often new fields are added -- verify that old colonies (without new fields) can still be loaded
-- [ ] **No new CGo dependency surprises:** If using `modernc.org/sqlite`, verify it doesn't introduce CGo transitively
-
----
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Provenance false negatives | LOW | Add `--force-provenance` flag; re-discover claims from git; no data migration |
-| Oracle confidence gaming | MEDIUM | Adjust convergence criteria; re-run Oracle for affected topics; update hive entries |
-| Gate recovery infinite loop | LOW | Add gate-level circuit breaker; no data migration needed |
-| SQLite corruption | MEDIUM | Delete WAL/SHM files; rebuild FTS index; re-run migration; data loss possible |
-| False learning confidence | MEDIUM | Audit hive entries; reset confidence scores; add privacy gate retroactively |
-| PID recycling killing wrong process | HIGH | Audit killed PIDs; restore killed processes if possible; add identity verification |
-| Token budget overflow | LOW | Reduce learned context cap; adjust budget allocation; no data migration |
+| Anti-Pattern | What It Looks Like | Why It's Wrong | What To Do Instead |
+|-------------|-------------------|----------------|-------------------|
+| **TS Host State Authority** | TS host decides "advance phase" by writing `COLONY_STATE.json` | Bypasses Go finalizers, provenance, locking | TS host calls `aether continue-finalize --completion-file` |
+| **Wrapper-Owned Recovery** | Wrapper markdown shows "Choose A/B/C" menu for failed gates | Runtime owns gating; wrappers must not invent recovery | Wrapper renders runtime's recovery template from `gate-recovery-template` |
+| **Visual Parsing** | TS host scrapes `aether status` ANSI output to get current phase | Fragile, breaks on visual changes, non-TTY unsafe | Use `AETHER_OUTPUT_MODE=json aether status` |
+| **Ceremony Hard-Coding** | Wrapper markdown contains `━━━ S P A W N   P L A N ━━━` | Drifts across platforms, Codex misses it | Ceremony comes from Go event payload or shared YAML |
+| **Simulated Worker Dispatch** | `dispatchWorkers()` returns synthetic results without spawning | Ships fake behavior | Gate simulation behind env var; default path spawns real workers |
+| **Go-Owned Orchestration** | Go `cmd/codex_build.go` spawns platform workers via `exec.Command` | Go cannot spawn Claude/OpenCode Task-tool agents | Go generates manifest; TS host/wrappers spawn platform workers |
+| **TS-Owned Rendering** | TS host contains ANSI color codes and banner text | Duplicates Go visuals, drifts from YAML config | TS host delegates to Go `visuals-dump --json` or shared YAML |
+| **Ignoring Boundary Guidance** | TS host spawns workers despite `orchestrator_boundary_guidance.active: true` | Violates Phase 5 contract, causes stale manifest issues | Stop, route to discuss, request fresh manifest |
 
 ---
 
 ## Sources
 
-- Direct codebase analysis: `cmd/circuit_breaker.go` (circuit breaker implementation, per-worker-name tracking)
-- Direct codebase analysis: `pkg/colony/cycle.go` (cycle detection, three-color DFS on task dependency graph)
-- Direct codebase analysis: `cmd/oracle_loop.go` (Oracle loop, confidence scoring, progress detection, context capsule rendering)
-- Direct codebase analysis: `cmd/codex_build_finalize.go` (build claims, provenance validation, git diff fallback)
-- Direct codebase analysis: `cmd/hive.go` (hive wisdom store, deduplication, abstraction, LRU eviction)
-- Direct codebase analysis: `pkg/storage/storage.go` (atomic writes, file locking, JSON-first storage)
-- Direct codebase analysis: `pkg/storage/lock.go` (FileLocker, platform-specific locking)
-- Direct codebase analysis: `cmd/oracle_process_unix.go` (process tree termination, PID detection)
-- Direct codebase analysis: `cmd/gate.go` (gate checking, recovery templates)
-- Direct codebase analysis: `cmd/ceremony_emitter.go` (loop break event emission)
-- Direct codebase analysis: `cmd/colony_prime_context.go` (context budget system, 8K char limit)
-- [SQLite WAL mode concurrency (Reddit r/sqlite)](https://www.reddit.com/r/sqlite/comments/1nfvbh1/whats_more_performant_for_concurrent_writes_a_1/)
-- [mattn/go-sqlite3 concurrency issues #1179](https://github.com/mattn/go-sqlite3/issues/1179)
-- [SQLite Concurrency in Go: ChatML Blog](https://chatml.com/blog/sqlite-concurrency-in-go-desktop-ai-ide)
-- [SQLite Go best practices (Tessl Registry)](https://tessl.io/registry/tessl-labs/sqlite-go-best-practices/0.2.0/quality)
-- [SQLite concurrent writing performance (Stack Overflow)](https://stackoverflow.com/questions/35804884/sqlite-concurrent-writing-performance)
-- PROJECT.md v1.13 requirements (31 work packages: AAC-001 through AAC-031, REC-LOOP-01 constraint)
-
----
-*Pitfalls research for: Aether v1.13 Recovery Hardening & Hive Learning*
-*Researched: 2026-05-01*
+- `.aether/references/contracts/runtime-boundary-contract.md` — Anti-patterns #1-3, rules, failure signals
+- `.aether/docs/migration-map.md` — Milestone ordering, boundary compliance, risk assessment
+- `.aether/docs/ceremony-revival-v1.6-handoff.md` — Narrator launcher, build plan-only/finalize, wrapper restoration, ceremony gaps
+- `.aether/docs/wrapper-runtime-ux-contract.md` — Wrapper anti-patterns, runtime surface, orchestrator boundary guidance
+- `.aether/docs/codex-ant-workflow-gap-map.md` — P0/P1 gaps, stale manifest, plan-only mutation
+- `.aether/docs/codex-observable-output-contract.md` — Blocked contract surface, temp file hygiene
+- `.aether/docs/phase5-lifecycle-integration-parity.md` — Boundary guidance object, finalizer validation, wrapper parity
+- `.aether/docs/state-contract-design.md` — Branch-local vs hub-global state, read rules, merge behavior
+- `.aether/docs/known-issues.md` — Interrupted workers, visual output terminal dependency
+- `.aether/docs/command-playbooks/build-wave.md` — Builder-Probe Lock, wave logic, worktree merge-back, escalation
+- `.aether/docs/command-playbooks/build-verify.md` — Watcher spawn, verification loop
+- `.aether/docs/command-playbooks/continue-verify.md` — Continue verification, gate recovery, claim verification
+- `.aether/docs/pheromone-propagation-design.md` — Cross-branch signal propagation, injection/merge-back
+- `.aether/docs/midden-collection-design.md` — Post-merge collection, cross-PR analysis
+- `.aether/docs/structural-learning-stack.md` — Trust scoring, event bus, curation ants
+- `CLAUDE.md` (project) — Platform policy, UX architecture, wrapper-runtime contract
+- `MEMORY.md` — State corruption bug, worktree merge-back gap, worktree stale base
+- `.aether/ts-host/src/lifecycle.ts` — TS host prototype, simulation code, boundary contract
