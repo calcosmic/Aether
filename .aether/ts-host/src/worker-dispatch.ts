@@ -28,6 +28,7 @@ import {
   getAgentNameForCaste,
 } from "./prompt-assembler.js";
 import { parseWorkerClaims } from "./claims-parser.js";
+import { dispatchWaves, type WaveResult } from "./wave-orchestrator.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,6 +67,26 @@ export interface DispatchOptions extends GoBridgeOptions {
    * because the Go build-finalizer validates all file claims.
    */
   simulatedFileClaims?: string[];
+  /**
+   * When true (default), workers within the same wave are dispatched
+   * concurrently via Promise.all. When false, they run sequentially.
+   */
+  parallel?: boolean;
+  /**
+   * Maximum number of retry attempts for a failed worker.
+   * Default: 2
+   */
+  retryLimit?: number;
+  /**
+   * Base delay between retry attempts in milliseconds.
+   * Default: 5000
+   */
+  retryDelayMs?: number;
+  /**
+   * Timeout for each worker dispatch in milliseconds.
+   * Default: 600000 (10 minutes)
+   */
+  timeoutMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -282,8 +303,8 @@ async function dispatchRealWorker(
  * Dispatch multiple workers from a manifest, grouped by wave.
  *
  * Waves are processed sequentially. Within each wave, workers are
- * dispatched sequentially (parallel within-wave dispatch can be
- * added later).
+ * dispatched in parallel by default (parallel=true). Delegates to
+ * wave-orchestrator.ts for wave grouping and parallel dispatch.
  *
  * @param opts - Dispatch options including Go binary path and cwd
  * @param dispatches - Array of build dispatch entries from the manifest
@@ -293,36 +314,19 @@ export async function dispatchWorkers(
   opts: DispatchOptions,
   dispatches: BuildDispatch[]
 ): Promise<DispatchResult[]> {
-  // Group dispatches by wave number.
-  const waveMap = new Map<number, BuildDispatch[]>();
-  for (const d of dispatches) {
-    const wave = d.wave ?? d.execution_wave ?? 0;
-    const existing = waveMap.get(wave);
-    if (existing) {
-      existing.push(d);
-    } else {
-      waveMap.set(wave, [d]);
-    }
+  const waveResults = await dispatchWaves(opts, dispatches);
+
+  // Log wave summaries to stderr
+  for (const wr of waveResults) {
+    process.stderr.write(
+      `Wave ${wr.wave}: ${wr.results.length - wr.failures.length}/${wr.results.length} succeeded, ${wr.retried} retries\n`
+    );
   }
 
-  // Sort waves ascending.
-  const sortedWaves = Array.from(waveMap.keys()).sort((a, b) => a - b);
-
+  // Flatten WaveResult array back to DispatchResult array
   const results: DispatchResult[] = [];
-
-  for (const wave of sortedWaves) {
-    const waveDispatches = waveMap.get(wave)!;
-    process.stderr.write(
-      `Dispatching wave ${wave}: ${waveDispatches.length} workers\n`
-    );
-
-    // Dispatch workers sequentially within each wave.
-    for (const d of waveDispatches) {
-      const result = await dispatchSingleWorker(opts, d);
-      results.push(result);
-    }
-
-    process.stderr.write(`Wave ${wave} complete\n`);
+  for (const wr of waveResults) {
+    results.push(...wr.results);
   }
 
   return results;
