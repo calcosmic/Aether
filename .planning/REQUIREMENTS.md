@@ -70,7 +70,38 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (To be filled by roadmapper) | | |
+| TS-01 | Phase 114 | Pending |
+| TS-02 | Phase 114 | Pending |
+| TS-03 | Phase 114 | Pending |
+| TS-04 | Phase 112 | Pending |
+| TS-05 | Phase 112 | Pending |
+| TS-06 | Phase 112 | Pending |
+| CER-01 | Phase 113 | Pending |
+| CER-02 | Phase 112 | Pending |
+| CER-03 | Phase 113 | Pending |
+| CER-04 | Phase 113 | Pending |
+| CER-05 | Phase 113 | Pending |
+| CER-06 | Phase 113 | Pending |
+| CER-07 | Phase 118 | Pending |
+| SW-01 | Phase 115 | Pending |
+| SW-02 | Phase 115 | Pending |
+| SW-03 | Phase 115 | Pending |
+| SW-04 | Phase 115 | Pending |
+| SW-05 | Phase 115 | Pending |
+| SW-06 | Phase 115 | Pending |
+| ORC-01 | Phase 116 | Pending |
+| ORC-02 | Phase 116 | Pending |
+| ORC-03 | Phase 116 | Pending |
+| ORC-04 | Phase 116 | Pending |
+| ORC-05 | Phase 116 | Pending |
+| ORC-06 | Phase 116 | Pending |
+| ORA-01 | Phase 117 | Pending |
+| ORA-02 | Phase 117 | Pending |
+| ORA-03 | Phase 117 | Pending |
+| PAR-01 | Phase 118 | Pending |
+| PAR-02 | Phase 118 | Pending |
+| PAR-03 | Phase 118 | Pending |
+| PAR-04 | Phase 118 | Pending |
 
 ---
 

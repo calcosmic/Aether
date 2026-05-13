@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.17
 milestone_name: Classic Restoration
 status: planning
-last_updated: "2026-05-13T12:46:38.885Z"
+last_updated: "2026-05-13T15:30:00.000Z"
 last_activity: 2026-05-13
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,29 +17,31 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-12)
+See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 111 — Follow-up Migration Map
+**Current focus:** Phase 112 — Foundation (event bridge, ceremony config, Node bump, boundary enforcement)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 112 of 118 (Foundation)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-13 — Milestone v1.17 started
+Status: Ready to plan
+Last activity: 2026-05-13 — Roadmap created for v1.17 Classic Restoration (7 phases, 32 requirements mapped)
+
+Progress: [░░░░░░░░░░░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4 (v1.16)
-- Average duration: ~5 min
-- Total execution time: ~5 min
+- Total plans completed: 0 (v1.17)
+- Average duration: —
+- Total execution time: —
 
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 106 | 106-01 | ~5 min | 4 | 5 |
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| —     | —     | —     | —        |
 
 *Updated after each plan completion*
 
@@ -50,19 +52,25 @@ Last activity: 2026-05-13 — Milestone v1.17 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- v1.15 shipped 2026-05-08: Framework Coherence complete, all audit findings addressed
-- Milestone pivoted from adaptive caste orchestration to hybrid runtime recovery (2026-05-12)
-- Go should own safety, not soul — TypeScript control plane restores living orchestration behavior
-- Classic baseline (likely v5.4.0) will be used as behavior comparison anchor, not a permanent second product
-- Phase 106: Runtime boundary contract committed with Go/TS/Assets/Bash ownership, anti-patterns, and Go enforcement test
+- v1.16 shipped 2026-05-13: Hybrid Runtime Boundary complete, TS host prototype proven, migration map defined
+- v1.17 roadmap created 2026-05-13: 7 phases derived from 32 requirements, starting at Phase 112
+- Build order: Event bridge first, then ceremony narrator, then real dispatch, then swarm, then orchestration, then Oracle, then parity tests
+- Node engine bump to >=20 required for chokidar@5 and log-update@8 compatibility
+- Three output modes required: json (machine), visual (TTY ANSI), markdown (plain text)
 
 ### Pending Todos
 
-1. Execute Phase 107 (Classic Baseline Identification)
+1. Plan Phase 112 (Foundation)
+2. Capture Classic v5.4 baseline output for golden parity tests (before restoration work begins)
+3. Add `requires_merge_back` flag to Go manifest schema (needed for Phase 114)
+4. Add `escalation_level` field to completion file schema (needed for Phase 116)
 
 ### Blockers/Concerns
 
-- None.
+- Frankenstein state risk: TS host must never write to `.aether/data/` — boundary enforcement is critical
+- Ceremony drift risk: shared YAML config must be consumed by Go, TS host, and wrappers
+- Golden test brittleness: need careful design to compare hybrid output against Classic Bash without fragile string snapshots
+- Simulation code shipping risk: ensure no simulated worker code remains in production paths after Phase 114
 
 ## Deferred Items
 
@@ -81,16 +89,9 @@ Items acknowledged and carried forward from previous milestones:
 | v2 scope | Cross-phase queen continuity (QUEEN-02) | Needs proven recovery loop first | v1.14 |
 | v2 scope | Queen context budget config (QUEEN-03) | Needs empirical validation | v1.14 |
 | v2 scope | Cross-phase coordination (QUEEN-04) | Architectural risk | v1.14 |
-| v1.17+ | Oracle/RALF confidence iteration restoration | Deferred to follow-up map | v1.16 |
-| v1.17+ | Swarm visibility restoration | Deferred to follow-up map | v1.16 |
-| v1.17+ | Broader build/continue parity (all flows use TS host) | Deferred to follow-up map | v1.16 |
 
 ## Session Continuity
 
-Last session: 2026-05-12T20:07:36.071Z
-Stopped at: Phase 111 context gathered
-Resume file: .planning/phases/111-follow-up-migration-map/111-CONTEXT.md
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
+Last session: 2026-05-13T15:30:00.000Z
+Stopped at: Roadmap created, Phase 112 ready to plan
+Resume file: None
