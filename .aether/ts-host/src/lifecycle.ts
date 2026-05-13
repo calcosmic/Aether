@@ -35,6 +35,8 @@ import { detectAvailablePlatforms } from "./platform-dispatcher.js";
 import { createDashboard, type Dashboard } from "./dashboard.js";
 import { createNarrator, type Narrator } from "./narrator.js";
 import { startEventBridge, stopEventBridge, type EventBridgeController } from "./event-bridge.js";
+import { createQueenOrchestrator } from "./queen/orchestrator.js";
+import type { QueenOrchestratorResult } from "./queen/types.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,6 +56,8 @@ export interface LifecycleOptions extends DispatchOptions {
    * When false, use plain text narrator output.
    */
   dashboard?: boolean;
+  /** When true, skip the pre-build midden threshold check. */
+  skipMiddenCheck?: boolean;
 }
 
 /** Result of the lifecycle orchestration. */
@@ -302,14 +306,34 @@ export async function runLifecycle(
       `Ceremony: ceremony.build.wave.start wave=1 workers=${buildDispatches.length}\n`
     );
 
-    // Dispatch workers with spawn-log/complete lifecycle recording
-    const buildOpts = {
-      ...opts,
+    // Build step with Queen orchestration
+    const queen = createQueenOrchestrator({
+      goBinaryPath: opts.goBinaryPath,
+      cwd: opts.cwd,
+      phase: targetPhase,
       simulateWorkers,
       parallel: opts.parallel ?? true,
-      simulatedFileClaims: [placeholderRel],
-    };
-    const dispatchResults = await dispatchWorkers(buildOpts, buildDispatches);
+      dashboard: useDashboard,
+      skipMiddenCheck: opts.skipMiddenCheck ?? false,
+    });
+    const queenResult = await queen.runBuild(buildManifest);
+
+    // Log midden warnings and recovery actions if present
+    if (queenResult.middenResult?.exceeded) {
+      process.stderr.write(
+        `Warning: midden threshold exceeded (${queenResult.middenResult.total} entries)\n`
+      );
+    }
+    if (queenResult.recoveryActions && queenResult.recoveryActions.length > 0) {
+      process.stderr.write(
+        `Recovery actions: ${queenResult.recoveryActions.length} action(s) generated\n`
+      );
+    }
+
+    // Handle Queen orchestrator failure gracefully
+    if (queenResult.error) {
+      process.stderr.write(`Queen orchestrator error: ${queenResult.error}\n`);
+    }
 
     // Emit wave end event
     process.stderr.write(
@@ -322,8 +346,8 @@ export async function runLifecycle(
       dashboard = undefined;
     }
 
-    // Convert dispatch results to WorkerResult format for the finalizer
-    const workerResults = toWorkerResults(buildDispatches, dispatchResults);
+    // Use worker results from Queen orchestrator for the finalizer
+    const workerResults = queenResult.workerResults;
 
     // Build completion file
     const buildCompletion = {
