@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.17
 milestone_name: Classic Restoration
 status: executing
-stopped_at: Phase 113 context gathered
-last_updated: "2026-05-13T17:30:00.000Z"
-last_activity: 2026-05-13 — Phase 113 context gathered (4 decisions captured)
+stopped_at: Phase 113 complete
+last_updated: "2026-05-13T20:35:00.000Z"
+last_activity: 2026-05-13 -- Phase 113 execution complete
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 2
+  total_plans: 4
   completed_plans: 2
-  percent: 14
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 113 — Ceremony Narrator (planning)
+**Current focus:** Phase 114 — Real Worker Dispatch
 
 ## Current Position
 
-Phase: 113 of 118 (Ceremony Narrator)
+Phase: 114 of 118 (Real Worker Dispatch)
 Plan: —
-Status: Context gathered, ready to plan
-Last activity: 2026-05-13 — Phase 113 context gathered (4 decisions captured)
+Status: Ready to execute
+Last activity: 2026-05-13 -- Phase 113 execution complete
 
-Progress: [██░░░░░░░░░░░░░░░░░░] 14% — Phase 112 complete, 6 phases remaining
+Progress: [███░░░░░░░░░░░░░░░░░] 29% — Phase 113 complete, 5 phases remaining
 
 ## Performance Metrics
 

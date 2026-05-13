@@ -47,7 +47,7 @@ See `.planning/milestones/` for full archived phase details.
 **Milestone Goal:** Restore the full Aether lifecycle to v5.4-level richness — ceremony, Queen intelligence, swarm display, and the whole build/continue flow — with Go as the utility belt and the TS host as the control plane.
 
 - [x] **Phase 112: Foundation** - Event bridge, shared ceremony config, Node bump, boundary enforcement — completed 2026-05-13
-- [ ] **Phase 113: Ceremony Narrator** - Render Go events into banners, caste identity, spawn frames, and stage markers
+- [x] **Phase 113: Ceremony Narrator** - Render Go events into banners, caste identity, spawn frames, and stage markers — completed 2026-05-13
 - [ ] **Phase 114: Real Worker Dispatch** - Replace simulation with actual platform worker spawning, parallel waves, error recovery
 - [ ] **Phase 115: Swarm Dashboard** - Live terminal dashboard with animated spinners, progress bars, and chamber activity map
 - [ ] **Phase 116: Queen Orchestration** - Workflow pattern selection, Builder-Probe Lock, tiered escalation, midden checks
@@ -83,8 +83,11 @@ Plans:
   5. Output falls back to plain text when TTY is not available (three-mode support: json, visual, markdown)
 **Plans**: 2 plans
 Plans:
-- [ ] 113-01-PLAN.md - Template system: editable YAML-frontmatter templates and loader with fallback
-- [ ] 113-02-PLAN.md - Narrator and renderers: visual/markdown/json output, event dispatch, Go print removal
+**Wave 1**
+- [x] 113-01-PLAN.md - Template system: editable YAML-frontmatter templates and loader with fallback
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 113-02-PLAN.md - Narrator and renderers: visual/markdown/json output, event dispatch, Go print removal
 **UI hint**: yes
 
 ### Phase 114: Real Worker Dispatch
