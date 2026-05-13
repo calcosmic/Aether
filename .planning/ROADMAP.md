@@ -46,7 +46,7 @@ See `.planning/milestones/` for full archived phase details.
 
 **Milestone Goal:** Restore the full Aether lifecycle to v5.4-level richness — ceremony, Queen intelligence, swarm display, and the whole build/continue flow — with Go as the utility belt and the TS host as the control plane.
 
-- [ ] **Phase 112: Foundation** - Event bridge, shared ceremony config, Node bump, boundary enforcement
+- [x] **Phase 112: Foundation** - Event bridge, shared ceremony config, Node bump, boundary enforcement — completed 2026-05-13
 - [ ] **Phase 113: Ceremony Narrator** - Render Go events into banners, caste identity, spawn frames, and stage markers
 - [ ] **Phase 114: Real Worker Dispatch** - Replace simulation with actual platform worker spawning, parallel waves, error recovery
 - [ ] **Phase 115: Swarm Dashboard** - Live terminal dashboard with animated spinners, progress bars, and chamber activity map
@@ -67,8 +67,8 @@ See `.planning/milestones/` for full archived phase details.
   4. Any TS host attempt to write to `.aether/data/` is rejected at runtime or build time
 **Plans**: 2 plans
 Plans:
-- [ ] 112-01-PLAN.md - Node bump, ceremony types, shared YAML config
-- [ ] 112-02-PLAN.md - Event bridge, caste config loader, boundary enforcement and tests
+- [x] 112-01-PLAN.md - Node bump, ceremony types, shared YAML config
+- [x] 112-02-PLAN.md - Event bridge, caste config loader, boundary enforcement and tests
 **UI hint**: yes
 
 ### Phase 113: Ceremony Narrator

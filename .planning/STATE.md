@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.17
 milestone_name: Classic Restoration
-status: planning
-last_updated: "2026-05-13T15:30:00.000Z"
-last_activity: 2026-05-13
+status: executing
+stopped_at: Phase 112 complete, ready for Phase 113
+last_updated: "2026-05-13T17:00:00.000Z"
+last_activity: 2026-05-13 — Phase 112 Foundation executed (2 plans, 2 waves)
 progress:
   total_phases: 7
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+  percent: 14
 ---
 
 # Project State
@@ -20,28 +21,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 112 — Foundation (event bridge, ceremony config, Node bump, boundary enforcement)
+**Current focus:** Phase 113 — Ceremony Narrator (render Go events into banners, caste identity, spawn frames)
 
 ## Current Position
 
-Phase: 112 of 118 (Foundation)
+Phase: 113 of 118 (Ceremony Narrator)
 Plan: —
 Status: Ready to plan
-Last activity: 2026-05-13 — Roadmap created for v1.17 Classic Restoration (7 phases, 32 requirements mapped)
+Last activity: 2026-05-13 — Phase 112 Foundation complete
 
-Progress: [░░░░░░░░░░░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░░░░░░░░░░░] 14% — Phase 112 complete, 6 phases remaining
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (v1.17)
+- Total plans completed: 2 (v1.17)
 - Average duration: —
 - Total execution time: —
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| —     | —     | —     | —        |
+| 112   | 2     | 2     | —        |
 
 *Updated after each plan completion*
 
@@ -60,7 +61,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-1. Plan Phase 112 (Foundation)
+1. Plan Phase 113 (Ceremony Narrator)
 2. Capture Classic v5.4 baseline output for golden parity tests (before restoration work begins)
 3. Add `requires_merge_back` flag to Go manifest schema (needed for Phase 114)
 4. Add `escalation_level` field to completion file schema (needed for Phase 116)
@@ -92,6 +93,6 @@ Items acknowledged and carried forward from previous milestones:
 
 ## Session Continuity
 
-Last session: 2026-05-13T15:30:00.000Z
-Stopped at: Roadmap created, Phase 112 ready to plan
-Resume file: None
+Last session: 2026-05-13T16:10:00.000Z
+Stopped at: Phase 112 complete
+Resume file: .planning/phases/112-foundation/112-CONTEXT.md
