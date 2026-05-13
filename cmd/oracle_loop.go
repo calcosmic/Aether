@@ -269,38 +269,45 @@ func oracleInvokerPlatform(invoker codex.WorkerInvoker) string {
 	return oracleDetectedPlatform()
 }
 
+type noveltyTracker struct {
+	LastKeywords   map[string]bool
+	ConsecutiveLow int
+	Threshold      float64
+}
+
 type oracleStateFile struct {
-	Version            string   `json:"version,omitempty"`
-	Topic              string   `json:"topic,omitempty"`
-	Scope              string   `json:"scope,omitempty"`
-	Template           string   `json:"template,omitempty"`
-	Phase              string   `json:"phase,omitempty"`
-	Iteration          int      `json:"iteration,omitempty"`
-	MaxIterations      int      `json:"max_iterations,omitempty"`
-	TargetConfidence   int      `json:"target_confidence,omitempty"`
-	OverallConfidence  int      `json:"overall_confidence,omitempty"`
-	StartedAt          string   `json:"started_at,omitempty"`
-	LastUpdated        string   `json:"last_updated,omitempty"`
-	Status             string   `json:"status,omitempty"`
-	Strategy           string   `json:"strategy,omitempty"`
-	FocusAreas         []string `json:"focus_areas,omitempty"`
-	Platform           string   `json:"platform,omitempty"`
-	StopReason         string   `json:"stop_reason,omitempty"`
-	Summary            string   `json:"summary,omitempty"`
-	ActiveQuestionID   string   `json:"active_question_id,omitempty"`
-	ActiveQuestionText string   `json:"active_question_text,omitempty"`
-	ActiveAttempt      int      `json:"active_attempt,omitempty"`
-	ActiveReasoning    string   `json:"active_reasoning,omitempty"`
-	ActiveTimeoutSec   int      `json:"active_timeout_sec,omitempty"`
-	ActiveElapsedSec   int      `json:"active_elapsed_sec,omitempty"`
-	ActiveStartedAt    string   `json:"active_started_at,omitempty"`
-	ActiveDeadlineAt   string   `json:"active_deadline_at,omitempty"`
-	LastArtifactPath   string   `json:"last_artifact_path,omitempty"`
-	OpenGaps           []string `json:"open_gaps,omitempty"`
-	Contradictions     []string `json:"contradictions,omitempty"`
-	Recommendation     string   `json:"recommendation,omitempty"`
-	ControllerPID      int      `json:"controller_pid,omitempty"`
-	Depth              string   `json:"depth,omitempty"`
+	Version            string         `json:"version,omitempty"`
+	Topic              string         `json:"topic,omitempty"`
+	Scope              string         `json:"scope,omitempty"`
+	Template           string         `json:"template,omitempty"`
+	Phase              string         `json:"phase,omitempty"`
+	Iteration          int            `json:"iteration,omitempty"`
+	MaxIterations      int            `json:"max_iterations,omitempty"`
+	TargetConfidence   int            `json:"target_confidence,omitempty"`
+	OverallConfidence  int            `json:"overall_confidence,omitempty"`
+	StartedAt          string         `json:"started_at,omitempty"`
+	LastUpdated        string         `json:"last_updated,omitempty"`
+	Status             string         `json:"status,omitempty"`
+	Strategy           string         `json:"strategy,omitempty"`
+	FocusAreas         []string       `json:"focus_areas,omitempty"`
+	Platform           string         `json:"platform,omitempty"`
+	StopReason         string         `json:"stop_reason,omitempty"`
+	Summary            string         `json:"summary,omitempty"`
+	ActiveQuestionID   string         `json:"active_question_id,omitempty"`
+	ActiveQuestionText string         `json:"active_question_text,omitempty"`
+	ActiveAttempt      int            `json:"active_attempt,omitempty"`
+	ActiveReasoning    string         `json:"active_reasoning,omitempty"`
+	ActiveTimeoutSec   int            `json:"active_timeout_sec,omitempty"`
+	ActiveElapsedSec   int            `json:"active_elapsed_sec,omitempty"`
+	ActiveStartedAt    string         `json:"active_started_at,omitempty"`
+	ActiveDeadlineAt   string         `json:"active_deadline_at,omitempty"`
+	LastArtifactPath   string         `json:"last_artifact_path,omitempty"`
+	OpenGaps           []string       `json:"open_gaps,omitempty"`
+	Contradictions     []string       `json:"contradictions,omitempty"`
+	Recommendation     string         `json:"recommendation,omitempty"`
+	ControllerPID      int            `json:"controller_pid,omitempty"`
+	Depth              string         `json:"depth,omitempty"`
+	Novelty            noveltyTracker `json:"novelty,omitempty"`
 }
 
 type oraclePlanFile struct {
@@ -2368,6 +2375,22 @@ func applyOracleWorkerResponse(state oracleStateFile, plan oraclePlanFile, respo
 	state.OverallConfidence = oracleOverallConfidence(plan)
 	state.Summary = response.Summary
 	state.LastUpdated = now
+
+	// Update novelty tracker
+	currentKeywords := extractKeywordsSet(response.Summary + " " + response.Recommendation)
+	if state.Novelty.LastKeywords != nil && len(state.Novelty.LastKeywords) > 0 {
+		delta := computeNoveltyDelta(currentKeywords, state.Novelty.LastKeywords)
+		if state.Novelty.Threshold == 0 {
+			state.Novelty.Threshold = 0.15
+		}
+		if delta < state.Novelty.Threshold {
+			state.Novelty.ConsecutiveLow++
+		} else {
+			state.Novelty.ConsecutiveLow = 0
+		}
+	}
+	state.Novelty.LastKeywords = currentKeywords
+
 	return state, plan, nil
 }
 
@@ -2756,6 +2779,10 @@ func oracleProgressedSince(before oracleProgressSnapshot, plan oraclePlanFile, s
 		if containsOracleIteration(q.IterationsTouched, state.Iteration) {
 			return true
 		}
+	}
+	// Diminishing returns check: if novelty < threshold for 3 consecutive iterations, stop
+	if state.Novelty.ConsecutiveLow >= 3 {
+		return false
 	}
 	return false
 }
@@ -3255,4 +3282,61 @@ func oracleDurationLabel(d time.Duration) string {
 		return "0s"
 	}
 	return d.Truncate(time.Second).String()
+}
+
+// oracleStopWords is the set of common English words filtered out by extractKeywordsSet.
+var oracleStopWords = map[string]bool{
+	"the": true, "and": true, "a": true, "an": true, "in": true, "on": true, "at": true,
+	"to": true, "for": true, "of": true, "with": true, "by": true, "is": true, "are": true,
+	"was": true, "were": true, "be": true, "been": true, "being": true, "have": true, "has": true,
+	"had": true, "do": true, "does": true, "did": true, "will": true, "would": true, "could": true,
+	"should": true, "may": true, "might": true, "can": true, "this": true, "that": true, "these": true,
+	"those": true,
+}
+
+// extractKeywordsSet splits text into unique lowercase words of 3+ characters,
+// filtering out stop words. Returns a set (map[string]bool) for novelty comparison.
+func extractKeywordsSet(text string) map[string]bool {
+	words := strings.Fields(text)
+	seen := make(map[string]bool, len(words))
+	for _, w := range words {
+		lower := strings.ToLower(w)
+		lower = strings.Trim(lower, ".,;:!?\"'()[]{}")
+		if len(lower) < 3 {
+			continue
+		}
+		if oracleStopWords[lower] {
+			continue
+		}
+		seen[lower] = true
+	}
+	return seen
+}
+
+// computeNoveltyDelta calculates Jaccard distance between two keyword sets:
+// 1 - |intersection| / |union|. Returns 0.0 for identical sets, 1.0 for completely different.
+func computeNoveltyDelta(current, previous map[string]bool) float64 {
+	if len(current) == 0 && len(previous) == 0 {
+		return 0.0
+	}
+	if len(current) == 0 || len(previous) == 0 {
+		return 1.0
+	}
+	intersection := 0
+	for kw := range current {
+		if previous[kw] {
+			intersection++
+		}
+	}
+	union := make(map[string]bool, len(current)+len(previous))
+	for kw := range current {
+		union[kw] = true
+	}
+	for kw := range previous {
+		union[kw] = true
+	}
+	if len(union) == 0 {
+		return 0.0
+	}
+	return 1.0 - float64(intersection)/float64(len(union))
 }
