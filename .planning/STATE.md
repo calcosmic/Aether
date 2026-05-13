@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.16
-milestone_name: Hybrid Runtime Boundary and Orchestration Recovery
-status: Awaiting next milestone
-stopped_at: Phase 111 context gathered
-last_updated: "2026-05-13T11:41:37.287Z"
-last_activity: 2026-05-13 — Milestone v1.16 completed and archived
+milestone: v1.17
+milestone_name: Classic Restoration
+status: planning
+last_updated: "2026-05-13T12:46:38.885Z"
+last_activity: 2026-05-13
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-12)
 
 ## Current Position
 
-Phase: Milestone v1.16 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-13 — Milestone v1.16 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-13 — Milestone v1.17 started
 
 ## Performance Metrics
 

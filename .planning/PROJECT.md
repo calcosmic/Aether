@@ -32,19 +32,31 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
+## Current Milestone: v1.17 Classic Restoration
+
+**Goal:** Restore the full Aether lifecycle to v5.4-level richness — ceremony, Queen intelligence, swarm display, and the whole build/continue flow — with Go as the utility belt and the TS host as the control plane.
+
+**Target features:**
+- TS host becomes the real control plane (actual worker dispatch, parallel waves, error recovery)
+- Ceremony restored to command wrappers (banners, art, spawn notifications, seal rituals — editable in markdown)
+- Shared ceremony config in YAML (caste emoji/color/label maps — not duplicated across commands)
+- Go emits structured events via ceremony topics; wrappers render from events
+- Queen workflow pattern selection (SPBV, Investigate-Fix, Refactor, etc.) based on phase type
+- Builder-Probe Lock restored (builders cannot self-certify)
+- Tiered escalation chain (worker retry → reassignment → Queen → user)
+- Oracle enriched with phase-aware prompts, diminishing returns detection, template-specific synthesis
+- Swarm display with live terminal dashboard
+- Golden parity tests proving restored system matches Classic behavior
+
 ## Current State
 
 - Go runtime is healthy, v1.0.34 shipped
 - Milestone v1.16 Hybrid Runtime Boundary shipped (2026-05-13): boundary contract, Classic baseline, golden workflow tests, TypeScript orchestration host, Go safety invariants, migration map
-- TypeScript host drives plan/build/continue through Go manifests and finalizers — boundary enforcement prevents direct state writes
+- v1.16 TS host prototype proves Go manifests → TS orchestration → Go finalizers works
 - 2900+ tests passing, full E2E regression coverage
-- Stable and dev publish channels with integrity verification
-- Queen coordinates phases autonomously — gate classification, auto-recovery, wave lifecycle
-- 11 continue gates with watcher veto, auditor blocking, and runtime verification
-- Reference library system with indexed, scored, matchable global references
-- Worker economy audit documented 18 actively dispatched castes, 9 defined but never dispatched
-- Migration map ready: Oracle/RALF, Swarm, Parity as next 3 milestones
-- Known tech debt: Phase 106 missing VERIFICATION.md, orphaned TS exports, some REQUIREMENTS.md checkboxes unchecked
+- Event bus has ceremony topics already defined (ceremony.build.spawn, ceremony.build.wave.start, etc.)
+- Core insight from research: "Go owns safety, not soul" — ~12% of cmd/ should shrink (ceremony rendering, orchestration logic)
+- Classic v5.4 research complete: ceremony was 100% wrapper-driven, Queen selected workflow patterns, Oracle had phase-aware prompts, swarm was a 277-line animated bash dashboard
 
 <details>
 <summary>Prior State History</summary>
@@ -91,6 +103,7 @@ That means:
 - [x] v1.14 Queen Authority -- Phases 93-99 (shipped 2026-05-04)
 - [x] v1.15 Framework Coherence, Efficiency, and Ship Readiness -- Phases 100-105 (shipped 2026-05-08)
 - [x] v1.16 Hybrid Runtime Boundary and Orchestration Recovery -- Phases 106-111 (shipped 2026-05-13)
+- [ ] v1.17 Classic Restoration -- Phases 112+
 
 ## Requirements
 
@@ -133,12 +146,22 @@ That means:
 
 ### Active
 
-- [ ] MIGRATE-01: Oracle/RALF loop driven by TS host with Go confidence tracking
-- [ ] MIGRATE-02: Swarm display rendered through TS host from Go data
-- [ ] MIGRATE-03: All colony flows (colonize, seal, oracle, swarm) use TS host orchestration
-- [ ] MIGRATE-04: Cross-language integration test verifying boundary enforcement end-to-end
-- [ ] ORCH-01: Caste relevance registry exists with keywords and conditions for all 26 castes
-- [ ] ORCH-02: `queenOrchestrate()` function reads phase content and returns scored caste list
+- [ ] TSHOST-01: TS host dispatches real platform workers (not simulated) with parallel wave execution
+- [ ] TSHOST-02: TS host handles error recovery, retry logic, and timeout management
+- [ ] TSHOST-03: Event bridge streams Go ceremony events to TS/wrapper consumers
+- [ ] CEREMONY-01: Ceremony restored to command wrappers as editable markdown (banners, art, spawn notifications, seal rituals)
+- [ ] CEREMONY-02: Shared ceremony config in YAML (caste emoji/color/label maps, naming conventions)
+- [ ] CEREMONY-03: Go ceremony rendering code replaced by event emission (Go emits, wrappers render)
+- [ ] ORCHESTRA-01: Queen selects workflow patterns (SPBV, Investigate-Fix, Refactor, Compliance, Documentation Sprint) based on phase type
+- [ ] ORCHESTRA-02: Builder-Probe Lock restored — builders return code_written, only Probe upgrades to completed
+- [ ] ORCHESTRA-03: Tiered escalation chain (worker retry → parent reassignment → Queen reassignment → user escalation)
+- [ ] ORCHESTRA-04: Intra-build midden threshold checks with auto-REDIRECT pheromone emission
+- [ ] ORACLE-01: Phase-aware prompt directives (survey/investigate/synthesize/verify) injected into Oracle worker briefs
+- [ ] ORACLE-02: Diminishing returns detection with novelty delta tracking and forced phase advancement
+- [ ] ORACLE-03: Template-specific synthesis sections (tech-eval, architecture-review, bug-investigation, best-practices)
+- [ ] SWARM-01: Live terminal dashboard with animated spinners, per-ant progress bars, and tool usage counters
+- [ ] SWARM-02: Chamber activity map showing which project areas have active workers
+- [ ] PARITY-01: Golden workflow tests comparing output and behavior against v5.4 Classic baseline
 
 ### Out of Scope
 
