@@ -158,6 +158,6 @@ Plans:
 | 113. Ceremony Narrator | v1.17 | 0/2 | Planning | - |
 | 114. Real Worker Dispatch | v1.17 | 0/TBD | Not started | - |
 | 115. Swarm Dashboard | v1.17 | 0/TBD | Not started | - |
-| 116. Queen Orchestration | v1.17 | 0/TBD | Not started | - |
+| 116. Queen Orchestration | v1.17 | 1/2 | In Progress|  |
 | 117. Oracle Enhancement | v1.17 | 0/TBD | Not started | - |
 | 118. Integration & Parity | v1.17 | 0/TBD | Not started | - |
