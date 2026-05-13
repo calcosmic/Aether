@@ -49,7 +49,7 @@ See `.planning/milestones/` for full archived phase details.
 - [x] **Phase 112: Foundation** - Event bridge, shared ceremony config, Node bump, boundary enforcement — completed 2026-05-13
 - [x] **Phase 113: Ceremony Narrator** - Render Go events into banners, caste identity, spawn frames, and stage markers — completed 2026-05-13
 - [x] **Phase 114: Real Worker Dispatch** - Replace simulation with actual platform worker spawning, parallel waves, error recovery — completed 2026-05-13
-- [ ] **Phase 115: Swarm Dashboard** - Live terminal dashboard with animated spinners, progress bars, and chamber activity map
+- [x] **Phase 115: Swarm Dashboard** - Live terminal dashboard with animated spinners, progress bars, and chamber activity map — completed 2026-05-13
 - [x] **Phase 116: Queen Orchestration** - Workflow pattern selection, Builder-Probe Lock, tiered escalation, midden checks — completed 2026-05-14
 - [ ] **Phase 117: Oracle Enhancement** - Phase-aware prompts, diminishing returns detection, template-specific synthesis
 - [ ] **Phase 118: Integration & Parity Verification** - Golden workflow tests, ceremony snapshots, cross-platform smoke, state safety
