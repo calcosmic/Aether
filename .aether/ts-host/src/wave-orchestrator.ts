@@ -31,7 +31,7 @@ export interface WaveOrchestratorOptions extends DispatchOptions {
   parallel?: boolean;
   /**
    * Maximum number of retry attempts for a failed worker.
-   * Default: 2
+   * Default: 1 (delegate deeper recovery to Go orchestrateRecovery)
    */
   retryLimit?: number;
   /**
@@ -78,7 +78,7 @@ export async function retryDispatch(
 ): Promise<DispatchResult> {
   const result = await _dispatchSingleWorker(opts, dispatch);
 
-  const retryLimit = opts.retryLimit ?? 2;
+  const retryLimit = opts.retryLimit ?? 1;
 
   if (result.status === "failed" && attempt < retryLimit) {
     const delay = (opts.retryDelayMs ?? 5000) * attempt;
@@ -99,7 +99,7 @@ async function runRetryLoop(
 ): Promise<{ result: DispatchResult; retried: number }> {
   let result = await _dispatchSingleWorker(opts, dispatch);
   let retried = 0;
-  const retryLimit = opts.retryLimit ?? 2;
+  const retryLimit = opts.retryLimit ?? 1;
 
   while (result.status === "failed" && retried < retryLimit - 1) {
     retried++;
