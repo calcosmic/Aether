@@ -25,6 +25,7 @@ function parseArgs(argv: string[]): {
   cwd: string;
   simulate: boolean;
   noDashboard: boolean;
+  skipMiddenCheck: boolean;
   positional: string[];
 } {
   const args = argv.slice(2); // skip node and script path
@@ -32,6 +33,7 @@ function parseArgs(argv: string[]): {
   let cwd = process.cwd();
   let simulate = false;
   let noDashboard = false;
+  let skipMiddenCheck = false;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -42,6 +44,8 @@ function parseArgs(argv: string[]): {
       simulate = true;
     } else if (arg === "--no-dashboard") {
       noDashboard = true;
+    } else if (arg === "--skip-midden-check") {
+      skipMiddenCheck = true;
     } else if (!command) {
       command = arg;
     } else {
@@ -49,7 +53,7 @@ function parseArgs(argv: string[]): {
     }
   }
 
-  return { command, cwd, simulate, noDashboard, positional };
+  return { command, cwd, simulate, noDashboard, skipMiddenCheck, positional };
 }
 
 function printUsage(): void {
@@ -61,14 +65,15 @@ function printUsage(): void {
       "  continue      Call aether continue --plan-only\n" +
       "  lifecycle [N] Full plan->build->continue sequence (default phase: 1)\n\n" +
       "Options:\n" +
-      "  --cwd <path>    Working directory\n" +
-      "  --simulate      Run in simulation mode (no real worker spawning)\n" +
-      "  --no-dashboard  Disable live dashboard, use plain text output\n"
+      "  --cwd <path>        Working directory\n" +
+      "  --simulate          Run in simulation mode (no real worker spawning)\n" +
+      "  --no-dashboard      Disable live dashboard, use plain text output\n" +
+      "  --skip-midden-check Skip pre-build midden threshold check\n"
   );
 }
 
 async function main(): Promise<void> {
-  const { command, cwd, simulate, noDashboard, positional } = parseArgs(process.argv);
+  const { command, cwd, simulate, noDashboard, skipMiddenCheck, positional } = parseArgs(process.argv);
 
   if (!command) {
     printUsage();
@@ -128,6 +133,7 @@ async function main(): Promise<void> {
         cwd,
         simulateWorkers: simulate,
         dashboard: !noDashboard,
+        skipMiddenCheck,
       };
       if (phaseArg) {
         lifecycleOpts.phase = parseInt(phaseArg, 10);
