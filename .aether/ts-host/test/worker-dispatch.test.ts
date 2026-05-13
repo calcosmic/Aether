@@ -18,6 +18,7 @@ import {
   dispatchWorkers,
   toWorkerResults,
   type DispatchResult,
+  type DispatchOptions,
 } from "../src/worker-dispatch.js";
 import {
   __setDispatchSingleWorker,
@@ -32,7 +33,7 @@ let mockResults: Map<string, DispatchResult> = new Map();
 let mockCallCount: Map<string, number> = new Map();
 
 async function mockDispatchSingleWorker(
-  _opts: Record<string, unknown>,
+  _opts: DispatchOptions,
   dispatch: BuildDispatch
 ): Promise<DispatchResult> {
   const count = mockCallCount.get(dispatch.name) ?? 0;
@@ -70,7 +71,7 @@ function makeDispatch(name: string, wave: number): BuildDispatch {
   };
 }
 
-const defaultOpts: Record<string, unknown> = {
+const defaultOpts: DispatchOptions = {
   goBinaryPath: "/usr/bin/true",
   cwd: "/tmp",
   simulateWorkers: true,
