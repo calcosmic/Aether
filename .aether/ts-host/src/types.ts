@@ -257,3 +257,74 @@ export type TerminalWorkerStatus =
   | "blocked"
   | "timeout"
   | "manually-reconciled";
+
+// ---------------------------------------------------------------------------
+// Ceremony event types (pkg/events/ceremony.go)
+// ---------------------------------------------------------------------------
+
+export interface CeremonyPayload {
+  phase?: number;
+  phase_name?: string;
+  wave?: number;
+  spawn_id?: string;
+  caste?: string;
+  name?: string;
+  task_id?: string;
+  task?: string;
+  status?: string;
+  message?: string;
+  skill?: string;
+  pheromone_type?: string;
+  strength?: number;
+  completed?: number;
+  total?: number;
+  tool_count?: number;
+  token_count?: number;
+  files_created?: string[];
+  files_modified?: string[];
+  tests_written?: string[];
+  blockers?: string[];
+  success_criteria?: string[];
+  loop_type?: string;
+  detection_signal?: string;
+  action_taken?: string;
+}
+
+export interface CeremonyEvent {
+  id: string;
+  topic: string;
+  payload: CeremonyPayload;
+  source: string;
+  timestamp: string;
+  ttl_days: number;
+  expires_at: string;
+}
+
+export const CEREMONY_TOPICS = [
+  "ceremony.build.prewave",
+  "ceremony.build.wave.start",
+  "ceremony.build.spawn",
+  "ceremony.build.tool_use",
+  "ceremony.build.wave.end",
+  "ceremony.build.circuit_break",
+  "ceremony.plan.wave.start",
+  "ceremony.plan.spawn",
+  "ceremony.plan.wave.end",
+  "ceremony.colonize.wave.start",
+  "ceremony.colonize.spawn",
+  "ceremony.colonize.wave.end",
+  "ceremony.continue.wave.start",
+  "ceremony.continue.spawn",
+  "ceremony.continue.wave.end",
+  "ceremony.pheromone.emit",
+  "ceremony.skill.activate",
+  "ceremony.chamber.seal",
+  "ceremony.chamber.entomb",
+  "ceremony.midden.record",
+  "ceremony.queen.promote",
+  "ceremony.hive.store",
+  "ceremony.hive.promote",
+  "ceremony.loop.break",
+] as const;
+
+export type CeremonyTopic = (typeof CEREMONY_TOPICS)[number];
