@@ -24,12 +24,14 @@ function parseArgs(argv: string[]): {
   command: string;
   cwd: string;
   simulate: boolean;
+  noDashboard: boolean;
   positional: string[];
 } {
   const args = argv.slice(2); // skip node and script path
   let command = "";
   let cwd = process.cwd();
   let simulate = false;
+  let noDashboard = false;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -38,6 +40,8 @@ function parseArgs(argv: string[]): {
       cwd = args[++i]!;
     } else if (arg === "--simulate") {
       simulate = true;
+    } else if (arg === "--no-dashboard") {
+      noDashboard = true;
     } else if (!command) {
       command = arg;
     } else {
@@ -45,7 +49,7 @@ function parseArgs(argv: string[]): {
     }
   }
 
-  return { command, cwd, simulate, positional };
+  return { command, cwd, simulate, noDashboard, positional };
 }
 
 function printUsage(): void {
@@ -57,13 +61,14 @@ function printUsage(): void {
       "  continue      Call aether continue --plan-only\n" +
       "  lifecycle [N] Full plan->build->continue sequence (default phase: 1)\n\n" +
       "Options:\n" +
-      "  --cwd <path>   Working directory\n" +
-      "  --simulate     Run in simulation mode (no real worker spawning)\n"
+      "  --cwd <path>    Working directory\n" +
+      "  --simulate      Run in simulation mode (no real worker spawning)\n" +
+      "  --no-dashboard  Disable live dashboard, use plain text output\n"
   );
 }
 
 async function main(): Promise<void> {
-  const { command, cwd, simulate, positional } = parseArgs(process.argv);
+  const { command, cwd, simulate, noDashboard, positional } = parseArgs(process.argv);
 
   if (!command) {
     printUsage();
@@ -122,6 +127,7 @@ async function main(): Promise<void> {
         goBinaryPath,
         cwd,
         simulateWorkers: simulate,
+        dashboard: !noDashboard,
       };
       if (phaseArg) {
         lifecycleOpts.phase = parseInt(phaseArg, 10);
@@ -130,12 +136,15 @@ async function main(): Promise<void> {
       const narrator = createNarrator({
         cwd,
         outputMode: process.env["AETHER_OUTPUT_MODE"],
+        suppressOutput: !noDashboard && process.stdout.isTTY,
       });
 
       const bridge = await startEventBridge({
         goBinaryPath,
         cwd,
-        onEvent: (evt) => narrator.onEvent(evt),
+        onEvent: (evt) => {
+          narrator.onEvent(evt);
+        },
       });
 
       const result = await runLifecycle(lifecycleOpts);
