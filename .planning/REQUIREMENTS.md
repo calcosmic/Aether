@@ -83,10 +83,10 @@
 | CER-05 | Phase 113 | Pending |
 | CER-06 | Phase 113 | Pending |
 | CER-07 | Phase 118 | Pending |
-| SW-01 | Phase 115 | Pending |
-| SW-02 | Phase 115 | Pending |
+| SW-01 | Phase 115 | Complete |
+| SW-02 | Phase 115 | Complete |
 | SW-03 | Phase 115 | Pending |
-| SW-04 | Phase 115 | Pending |
+| SW-04 | Phase 115 | Complete |
 | SW-05 | Phase 115 | Pending |
 | SW-06 | Phase 115 | Pending |
 | ORC-01 | Phase 116 | Pending |
