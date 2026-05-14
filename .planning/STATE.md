@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.18
 milestone_name: Hybrid Runtime Parity & Release Gate
-status: in_progress
-stopped_at: Phase 122 complete
+status: completed
+stopped_at: Phase 123 complete
 last_updated: "2026-05-14T00:00:00.000Z"
-last_activity: 2026-05-14 -- Phase 122 Classic Parity Coverage verification complete
+last_activity: 2026-05-14 -- Phase 123 Dev Publish + Downstream Smoke execution complete
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 80
+  completed_phases: 5
+  total_plans: 5
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -25,16 +25,23 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Phase: 122 of 123 (Classic Parity Coverage)
+Phase: 123 of 123 (Dev Publish + Downstream Smoke)
 Plan: 01 complete
 Status: Completed
 
 ## Known Blockers
 
-None
+None — smoke test passed.
+
+## Blocker List for Stable Release
+
+| Item | Status | Notes |
+|------|--------|-------|
+| REL-06 Dev channel publish | PASS | v1.0.38 published to ~/.aether-dev |
+| REL-07 Downstream smoke test | PASS | init, plan, build, continue, oracle all functional |
+| REL-08 Blocker list recorded | PASS | No blockers — ready for stable release |
 
 ## Next Actions
 
-1. Run `/gsd-plan-phase 123` to plan Dev Publish + Downstream Smoke phase
-2. Publish to dev channel, verify full workflow in clean downstream repo
+Milestone v1.18 complete. Archive or proceed to v1.19 planning.
 3. Proceed to Phase 120 (Platform Dispatch Correctness)
