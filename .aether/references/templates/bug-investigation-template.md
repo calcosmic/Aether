@@ -1,6 +1,7 @@
 ---
 schema_version: "1.0"
 id: bug-investigation-template
+template: bug-investigation
 kind: template
 category: templates
 title: Bug Investigation Template
@@ -17,53 +18,19 @@ render:
   mode: full
   max_chars: 4200
 ---
-# Bug Investigation Template
+# Bug Investigation: {{title}}
 
-## Symptom
+## Symptoms
+<!-- What was observed -->
 
-Describe the visible failure. Include command, workflow, file, user action, or test name.
+## Root Cause Analysis
+<!-- Why it happened -->
 
-## Impact
+## Fix Applied
+<!-- What was changed -->
 
-Explain what the bug prevents or risks.
+## Verification Steps
+<!-- How we confirmed the fix -->
 
-For beginners: this is why the bug matters.
-
-## Reproduction
-
-State the smallest known reproduction:
-
-```text
-Command:
-Expected:
-Actual:
-```
-
-If not reproducible, say what evidence exists and what is missing.
-
-## Timeline
-
-List relevant recent changes, commits, generated files, user corrections, or state transitions.
-
-## Hypotheses
-
-Use a table:
-
-| Hypothesis | Evidence For | Evidence Against | Status |
-|---|---|---|---|
-
-## Root Cause
-
-Name the exact mechanism. Avoid vague causes like "state issue" or "race condition" unless the evidence proves it.
-
-## Fix Boundary
-
-State what should change and what must remain untouched.
-
-## Verification
-
-List the command or inspection that proves the original failure is fixed.
-
-## Residual Risk
-
-Name what remains unproven.
+## Prevention
+<!-- How to prevent recurrence -->

@@ -1,484 +1,393 @@
-# Architecture Research: v1.15 Framework Coherence Audit
+# Architecture Research: v1.17 Classic Restoration — Go Events → TS Host → Wrapper Ceremony
 
-**Domain:** Systematic audit and hardening of an existing Go/Cobra multi-agent CLI framework (80+ subcommands, 3 platform surfaces, 7 data subsystems)
-**Researched:** 2026-05-07
-**Overall confidence:** HIGH (direct source code analysis of cmd/, pkg/, .aether/commands/*.yaml, wrapper contracts, existing test infrastructure)
+**Project:** Aether v1.17 Classic Restoration
+**Researched:** 2026-05-13
+**Confidence:** HIGH (based on direct source code analysis)
 
 ## Executive Summary
 
-Aether has 317 registered Cobra subcommands spread across ~100 source files in cmd/, with 60 YAML source-of-truth command definitions, dual platform wrapper surfaces (Claude + OpenCode), and a Codex runtime-native lane. The audit must verify coherence across four integration surfaces: (1) Go runtime command contracts, (2) YAML-to-wrapper generation chain, (3) data flow through the full init-to-seal lifecycle, and (4) regression test coverage that catches drift.
+Aether v1.17 restores the living orchestration behavior lost during the Bash-to-Go migration. The architecture is a three-layer pipeline: **Go emits structured events** (from `pkg/events/` and `cmd/ceremony_emitter.go`), the **TypeScript host subscribes to those events and orchestrates platform worker dispatch** (`.aether/ts-host/`), and **wrapper markdown renders ceremony** (`.claude/commands/ant/build.md`). The boundary contract from v1.16 remains intact: Go owns all state mutations; the TS host never writes to `.aether/data/`.
 
-The architecture for the audit itself is a layered scanner pattern. Layer 1 inventories what exists (command catalog, data artifact catalog, wrapper catalog). Layer 2 cross-references surfaces for parity violations. Layer 3 traces data flow through the lifecycle to find dead-end artifacts and unconsumed outputs. Layer 4 writes regression tests that freeze the verified contracts so future drift fails loudly.
+The key integration question is: *how does the TS host consume events in real time?* The Go runtime already has three event-delivery mechanisms: (1) a **subprocess narrator pipe** (`cmd/narrator_launcher.go` → Node.js stdin), (2) a **JSONL tail + poll** model via `event-bus-subscribe --stream`, and (3) a **WebSocket/SSE server** (`aether serve`). For the TS host control plane, the recommended path is a **hybrid: JSONL tail for startup replay + subprocess narrator pipe for live events**, because it requires no background server process, works within the existing wrapper→Go→TS call chain, and respects the boundary contract.
 
-The key insight is that Aether already has partial audit infrastructure: `source-check` verifies YAML-to-wrapper header parity, `command_parity_test.go` verifies Claude/OpenCode body parity, `command_source_hygiene_test.go` verifies wrapper-to-YAML source references, and `visual_wrapper_contract_test.go` verifies ceremony surface presence. The audit extends these into a complete coherence checker rather than building from scratch.
+## Recommended Architecture
 
-**Critical constraint:** The audit must not change runtime behavior. It reads and cross-references. Fixes are separate phases. The audit architecture produces findings; subsequent phases act on them.
-
-## System Overview: The Audit Scanner Architecture
+### Layer Diagram (Text)
 
 ```
-+=====================================================================+
-|                     AUDIT SCANNER (new code)                         |
-|                                                                      |
-|  +------------------+  +------------------+  +------------------+    |
-|  | Command Catalog  |  | Data Artifact    |  | Wrapper Parity   |    |
-|  | Scanner          |  | Scanner          |  | Scanner          |    |
-|  +--------+---------+  +--------+---------+  +--------+---------+    |
-|           |                       |                       |           |
-+-----------+-----------+-----------+-----------+-----------+-----------+
-            |                       |                       |
-            v                       v                       v
-+===================+  +===================+  +===================+
-| cmd/*.go          |  | .aether/data/     |  | .claude/commands/ |
-| (317 subcommands) |  | (7 data subsystems|  | .opencode/        |
-|                   |  |  + artifacts)     |  | (wrapper parity)  |
-+===================+  +===================+  +===================+
-            |                       |                       |
-            v                       v                       v
-+=====================================================================+
-|                  AUDIT FINDINGS (structured output)                  |
-|                                                                      |
-|  +------------------+  +------------------+  +------------------+    |
-|  | Command Contract |  | Lifecycle Data   |  | Parity Drift     |    |
-|  | Violations       |  | Dead Ends        |  | Report           |    |
-|  +------------------+  +------------------+  +------------------+    |
-|                                                                      |
-+=====================================================================+
-            |
-            v
-+=====================================================================+
-|              REGRESSION TESTS (freeze verified contracts)            |
-|                                                                      |
-|  TestCommandCatalogComplete      - no orphan commands                |
-|  TestDataFlowLifecycleConnected  - no dead-end artifacts             |
-|  TestWrapperParityAtScale        - all surfaces agree                |
-|  TestCommandGuideYAMLAlignment   - guide catalog matches YAML        |
-+=====================================================================+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  WRAPPER LAYER (Markdown — .claude/commands/ant/build.md)                   │
+│  ────────────────────────────────────────────────────────                   │
+│  • Renders spawn-plan, wave-start, worker-complete, closeout                │
+│  • Invokes Go CLI: AETHER_OUTPUT_MODE=visual aether ceremony ...            │
+│  • Spawns platform agents (Claude Code Tasks) with caste-labelled names     │
+│  • NEVER mutates state; NEVER parses visual output as authority             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ calls
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  GO RUNTIME LAYER (cmd/ + pkg/)                                             │
+│  ─────────────────────────────────────────                                  │
+│  • State mutation: COLONY_STATE.json, session, pheromones (file-locked)     │
+│  • Manifest generation: build --plan-only, plan --plan-only, continue ...   │
+│  • Finalizers: build-finalize, plan-finalize, continue-finalize             │
+│  • Ceremony emitter: cmd/ceremony_emitter.go publishes to pkg/events/bus.go │
+│  • Visual rendering: cmd/ceremony_cmd.go (spawn-plan, wave-start, etc.)     │
+│  • Narrator launcher: cmd/narrator_launcher.go (Node.js subprocess pipe)    │
+│  • Event bus CLI: event-bus-subscribe --stream --filter "ceremony.*"        │
+│  • Serve command: SSE/WebSocket server (aether serve)                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+                    ▼               ▼               ▼
+            ┌──────────────┐ ┌─────────────┐ ┌─────────────┐
+            │ Subprocess   │ │ JSONL Tail  │ │ SSE/WS      │
+            │ Narrator Pipe│ │ + Poll      │ │ Server      │
+            │ (stdin NDJSON│ │ (file watch)│ │ (aether serve│
+            │  events)     │ │             │ │  localhost) │
+            └──────────────┘ └─────────────┘ └─────────────┘
+                    │               │               │
+                    └───────────────┼───────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TS HOST LAYER (.aether/ts-host/)                                           │
+│  ─────────────────────────────────                                          │
+│  • go-bridge.ts: execFileSync calls to Go CLI (JSON mode)                   │
+│  • lifecycle.ts: plan → build → continue orchestration                      │
+│  • worker-dispatch.ts: manifest → spawn-log → platform agent → spawn-complete│
+│  • event-bridge.ts (NEW): consume Go events, drive TS-side ceremony         │
+│  • ceremony-narrator.ts (NEW): render real-time ceremony from event stream  │
+│  • wave-dispatcher.ts (NEW): parallel wave execution with event feedback    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Integration Points That Need Verification
-
-### 1. Go Runtime Command Surface (cmd/*.go)
-
-**Scale:** 317 `rootCmd.AddCommand()` calls across ~100 files.
-
-The audit must verify:
-
-| What | Where | Contract |
-|------|-------|----------|
-| Every command has a `Use` field | `&cobra.Command{Use: ...}` | Must match `aether <name>` pattern |
-| Every command has a `Short` description | `Short: "..."` | Non-empty, human-readable |
-| Output mode consistency | `outputOK()`, `outputError()`, `outputWorkflow()` | Commands that produce JSON must use `outputOK`; visual commands must use `outputWorkflow` |
-| Store initialization | `store *storage.Store` | Commands that read/write data must not have `nil` store; `skipStoreInit()` must list all storeless commands |
-| Flag registration | `cmd.Flags().String(...)` | Flags referenced in `RunE` must be registered in `init()` |
-
-**New component:** `CommandCatalogScanner` -- walks all registered Cobra commands via `rootCmd.Commands()` and produces a structured catalog.
-
-### 2. YAML Source-of-Truth Chain
-
-**Scale:** 60 YAML files in `.aether/commands/`.
+### Data Flow: Plan → Build → Continue
 
 ```
-.aether/commands/*.yaml          <- Source definitions (name, runtime, codex_orchestration, wrapper_contract, guardrails)
-    |
-    v  (generation)
-.claude/commands/ant/*.md        <- Claude Code wrappers (must have generated-from header)
-.opencode/commands/ant/*.md      <- OpenCode wrappers (must have generated-from header)
-    |
-    v  (delegation)
-cmd/codex_workflow_cmds.go       <- Go runtime (authoritative state mutations)
-cmd/command_guide.go             <- Codex orchestration guide catalog
+Plan Flow
+---------
+Wrapper: /ant-plan
+  └─> Go: aether plan --plan-only
+        └─> Go emits: ceremony.plan.wave.start, ceremony.plan.spawn, ceremony.plan.wave.end
+        └─> Go returns JSON: { plan_manifest, dispatches }
+  └─> TS Host (optional): receives events via event-bridge, renders live plan ceremony
+  └─> Wrapper: renders spawn plan from manifest (AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan)
+  └─> Wrapper: spawns planning agents (Scout, Route-Setter)
+  └─> Wrapper: builds completion file, calls Go plan-finalize
+        └─> Go commits state: COLONY_STATE.json updated with phases
+
+Build Flow
+----------
+Wrapper: /ant-build 1
+  └─> Go: aether build 1 --plan-only
+        └─> Go emits: ceremony.build.prewave, ceremony.build.wave.start, ceremony.build.spawn
+        └─> Go returns JSON: { dispatch_manifest, dispatches, execution_plan }
+  └─> TS Host: event-bridge connects to Go event stream
+  └─> TS Host: wave-dispatcher groups dispatches by execution_wave
+  └─> TS Host: for each wave:
+        • renders wave-start banner (via ceremony-narrator or Go CLI)
+        • dispatches platform agents in parallel (worker-dispatch.ts)
+        • records spawn-log / spawn-complete via Go CLI
+        • Go emits ceremony.build.spawn (starting → running → completed/failed)
+        • TS Host receives live status updates via event-bridge
+  └─> Wrapper: renders worker-complete lines as agents return
+  └─> Wrapper: builds completion packet, calls Go build-finalize
+        └─> Go commits state: StateBUILT, claims, spawn-tree, phase tasks
+
+Continue Flow
+-------------
+Wrapper: /ant-continue
+  └─> Go: aether continue --plan-only
+        └─> Go emits: ceremony.continue.wave.start, ceremony.continue.spawn, ceremony.continue.wave.end
+        └─> Go returns JSON: { continue_manifest, dispatches }
+  └─> TS Host: event-bridge receives verification/review events
+  └─> Wrapper: spawns verification agents (Watcher, Probe, Auditor, etc.)
+  └─> Wrapper: builds completion file, calls Go continue-finalize
+        └─> Go commits state: gates, advance to next phase, or block
 ```
 
-**Verification points:**
+## Component Responsibilities
 
-| Check | Existing Coverage | Gap |
-|-------|-------------------|-----|
-| Every YAML has matching Claude wrapper | `source-check` | Partial -- checks header, not body contract |
-| Every YAML has matching OpenCode wrapper | `source-check` | Same as above |
-| Claude/OpenCode wrapper bodies are identical | `command_parity_test.go` | Covered |
-| Wrapper generated-from header matches YAML | `source_source_hygiene_test.go` | Covered |
-| YAML `codex_orchestration` matches `commandGuideCatalog()` | None | GAP -- no test verifies the command_guide catalog includes all YAML commands |
-| YAML `wrapper_contract` fields match actual runtime subcommands | None | GAP -- no test verifies manifest/finalizer fields reference real commands |
-| YAML `guardrails` are present and non-empty | None | GAP |
-| Lifecycle wrappers follow finalizer-then-closeout ordering | `visual_wrapper_contract_test.go` | Covered |
+### Go Runtime (Existing, Modified)
 
-**New component:** `YAMLGuideAlignmentScanner` -- reads all YAML `codex_orchestration` entries, reads `commandGuideCatalog()`, reports mismatches.
+| Component | File | Responsibility | What It Emits |
+|-----------|------|----------------|---------------|
+| Ceremony Emitter | `cmd/ceremony_emitter.go` | Publishes `events.CeremonyPayload` to `pkg/events/bus.go` | `ceremony.build.*`, `ceremony.plan.*`, `ceremony.continue.*` topics |
+| Event Bus | `pkg/events/bus.go` | In-memory pub/sub with JSONL persistence, TTL, crash replay | `Event{ID,Topic,Payload,Source,Timestamp}` |
+| Ceremony Topics | `pkg/events/ceremony.go` | Constants for all ceremony moments | 26 topics from `build.prewave` to `hive.promote` |
+| Narrator Launcher | `cmd/narrator_launcher.go` | Spawns Node.js subprocess, pipes events to stdin | NDJSON `events.Event` lines |
+| Build Command | `cmd/codex_build.go` | Manifest generation, worker dispatch (Go-native), state mutation | `emitBuildCeremony*` calls |
+| Ceremony Command | `cmd/ceremony_cmd.go` | Visual rendering from manifest/completion files | ANSI banners, caste identity, stage markers |
+| Spawn Commands | `cmd/spawn.go` | `spawn-log`, `spawn-complete`, spawn-tree CRUD | `ceremony.build.spawn` events |
+| Serve Command | `cmd/serve.go` | SSE/WebSocket server for external consumers | SSE `event: <type>\ndata: <json>` |
+| Event Bus CLI | `cmd/eventbus.go` | `event-bus-publish`, `event-bus-subscribe --stream`, `event-bus-replay` | NDJSON stream to stdout |
 
-### 3. Data Flow Through Full Lifecycle (init -> seal)
+### TypeScript Host (New + Existing)
 
-The lifecycle creates, reads, and mutates data artifacts across 7 subsystems:
+| Component | File | Responsibility | Boundary |
+|-----------|------|----------------|----------|
+| Go Bridge | `src/go-bridge.ts` | `execFileSync` calls to Go CLI with `AETHER_OUTPUT_MODE=json` | Reads Go output; never writes `.aether/data/` |
+| Lifecycle | `src/lifecycle.ts` | Orchestrates plan → build → continue via Go plan-only + finalizers | Calls finalizers for state commits |
+| Worker Dispatch | `src/worker-dispatch.ts` | Manifest → grouped waves → spawn-log → agent → spawn-complete | Simulated today; real platform dispatch next |
+| **Event Bridge** | `src/event-bridge.ts` *(NEW)* | Consumes Go events via JSONL tail or subprocess pipe | Subscribes only; never publishes to bus directly |
+| **Ceremony Narrator** | `src/ceremony-narrator.ts` *(NEW)* | Renders real-time ceremony from event stream (ANSI or plain) | Presentation only; no state mutation |
+| **Wave Dispatcher** | `src/wave-dispatcher.ts` *(NEW)* | Parallel execution of manifest waves with event-driven status | Drives worker-dispatch; reports back to event bridge |
 
-```
-.aaether/data/
-+-- COLONY_STATE.json          <- Central colony state (init creates, all mutate)
-+-- pheromones.json            <- Signal system (write/decay/display/display-prime)
-+-- midden/
-|   +-- midden.json            <- Failure tracking (write/recent/review/acknowledge)
-+-- constraints.json           <- Legacy constraints (write/read)
-+-- pending-decisions.json     <- Discuss system (add/list/resolve)
-+-- assumptions.json           <- Assumptions (write/read)
-+-- session.json               <- Session state (init/read/update/clear/verify)
-+-- behavior-observations.jsonl <- Profile observations (observe/read)
-+-- survey/                    <- Territory survey (load/verify)
-+-- handoffs/
-|   +-- worker-handoffs.json   <- Worker handoffs (build writes, continue reads)
-+-- spawn-runs/                <- Spawn tracking (log/complete)
-+-- review-ledgers/            <- Review persistence (write/read/summary/resolve)
-+-- gates/                     <- Gate results (write/read)
-+-- flags/                     <- Colony flags (add/resolve/check)
-+-- eventbus/                  <- Event bus (publish/query/replay/cleanup)
-+-- instincts/                 <- Instincts (create/read/trusted/decay/archive)
-+-- changelog/
-|   +-- CHANGELOG.md           <- Changelog (append)
-+-- chamber/                   <- Chambers (create/verify/list/compare)
-+-- views/                     <- View state (init/get/set/toggle)
-+-- traces/                    <- Traces (replay/export/summary/inspect)
-+-- grave/                     <- Grave patterns (add/check)
-+-- error-patterns/            <- Error patterns (add/flag/summary/check)
-+-- graph/                     <- Knowledge graph (link/neighbors/reach/cluster)
-+-- seal/
-|   +-- final-review.json      <- Seal review (seal writes)
-+-- codex/
-|   +-- build/                 <- Build artifacts (manifest, worker files)
-|   +-- continue/              <- Continue artifacts
-+-- oracle/                    <- Oracle workspace
-+-- hive/                      <- Hive search index (if SQLite enabled)
-+-- backups/                   <- Backup rotation
+### Wrapper Layer (Existing, Enhanced)
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Build Wrapper | `.claude/commands/ant/build.md` | Calls Go for manifest, renders ceremony, spawns agents, calls finalizer |
+| Continue Wrapper | `.claude/commands/ant/continue.md` | Calls Go for continue manifest, spawns verification agents, calls finalizer |
+| Plan Wrapper | `.claude/commands/ant/plan.md` | Calls Go for plan manifest, spawns planning agents, calls finalizer |
+
+## Event Payload Schema
+
+The canonical event shape is `pkg/events/event.go`:
+
+```go
+type Event struct {
+    ID        string          `json:"id"`        // evt_{unix}_{4hex}
+    Topic     string          `json:"topic"`     // ceremony.build.spawn
+    Payload   json.RawMessage `json:"payload"`   // CeremonyPayload
+    Source    string          `json:"source"`    // aether-build, aether-spawn
+    Timestamp string          `json:"timestamp"` // 2006-01-02T15:04:05Z
+    TTLDays   int             `json:"ttl_days"`
+    ExpiresAt string          `json:"expires_at"`
+}
 ```
 
-**Data flow trace (init to seal):**
+The `CeremonyPayload` (from `pkg/events/ceremony.go`) is the domain-specific body:
 
-```
-INIT
-  |-- writes COLONY_STATE.json (goal, phase=0, state=INITIALIZED)
-  |-- writes session.json (session_id, colony_goal)
-  |
-COLONIZE
-  |-- reads COLONY_STATE.json (goal, scope)
-  |-- writes survey/* files
-  |-- writes COLONY_STATE.json (territory_surveyed)
-  |
-PLAN
-  |-- reads COLONY_STATE.json (goal, scope, depth)
-  |-- writes COLONY_STATE.json (plan with phases)
-  |
-BUILD N
-  |-- reads COLONY_STATE.json (current_phase, plan, depth)
-  |-- writes spawn-runs/* (spawn tracking)
-  |-- writes handoffs/worker-handoffs.json
-  |-- writes codex/build/* (manifest, worker files)
-  |-- writes COLONY_STATE.json (StateBUILT)
-  |
-CONTINUE N
-  |-- reads COLONY_STATE.json (current_phase, plan, gate_results)
-  |-- reads handoffs/worker-handoffs.json
-  |-- reads codex/build/* (verification)
-  |-- writes gates/* (gate results)
-  |-- writes review-ledgers/* (review findings)
-  |-- runs verification (tests, lint, claims)
-  |-- runs gate checks (11 gates)
-  |-- writes pheromones.json (decay + signal housekeeping)
-  |-- writes midden/* (failure tracking)
-  |-- writes instincts/* (promoted learnings)
-  |-- writes COLONY_STATE.json (phase advanced or blocked)
-  |
-SEAL
-  |-- reads COLONY_STATE.json (all phases complete)
-  |-- writes seal/final-review.json
-  |-- writes review-ledgers/* (final review findings)
-  |-- writes QUEEN.md (lessons, wisdom)
-  |-- promotes instincts to hive (hive-promote)
-  |-- writes COLONY_STATE.json (state=SEALED, milestone=CROWNED_ANTHILL)
+```go
+type CeremonyPayload struct {
+    Phase           int      `json:"phase,omitempty"`
+    PhaseName       string   `json:"phase_name,omitempty"`
+    Wave            int      `json:"wave,omitempty"`
+    SpawnID         string   `json:"spawn_id,omitempty"`
+    Caste           string   `json:"caste,omitempty"`
+    Name            string   `json:"name,omitempty"`
+    TaskID          string   `json:"task_id,omitempty"`
+    Task            string   `json:"task,omitempty"`
+    Status          string   `json:"status,omitempty"`     // starting, running, completed, failed, timeout, blocked
+    Message         string   `json:"message,omitempty"`
+    Skill           string   `json:"skill,omitempty"`
+    PheromoneType   string   `json:"pheromone_type,omitempty"`
+    Strength        float64  `json:"strength,omitempty"`
+    Completed       int      `json:"completed,omitempty"`
+    Total           int      `json:"total,omitempty"`
+    ToolCount       int      `json:"tool_count,omitempty"`
+    TokenCount      int      `json:"token_count,omitempty"`
+    FilesCreated    []string `json:"files_created,omitempty"`
+    FilesModified   []string `json:"files_modified,omitempty"`
+    TestsWritten    []string `json:"tests_written,omitempty"`
+    Blockers        []string `json:"blockers,omitempty"`
+    SuccessCriteria []string `json:"success_criteria,omitempty"`
+    LoopType         string  `json:"loop_type,omitempty"`
+    DetectionSignal  string  `json:"detection_signal,omitempty"`
+    ActionTaken      string  `json:"action_taken,omitempty"`
+}
 ```
 
-**Dead-end detection:** For each artifact, the audit must answer: who writes it, who reads it, is it consumed downstream, or is it write-only decoration?
+### TypeScript Mirror (Recommended)
 
-**New component:** `LifecycleDataFlowScanner` -- traces write/read relationships across all data files.
+```typescript
+// src/event-bridge.ts
+export interface CeremonyEvent {
+  id: string;
+  topic: string;
+  payload: CeremonyPayload;
+  source: string;
+  timestamp: string;
+}
 
-### 4. Platform Parity (3 Surfaces)
+export interface CeremonyPayload {
+  phase?: number;
+  phase_name?: string;
+  wave?: number;
+  spawn_id?: string;
+  caste?: string;
+  name?: string;
+  task_id?: string;
+  task?: string;
+  status?: "starting" | "running" | "completed" | "failed" | "timeout" | "blocked";
+  message?: string;
+  skill?: string;
+  completed?: number;
+  total?: number;
+  tool_count?: number;
+  files_created?: string[];
+  files_modified?: string[];
+  tests_written?: string[];
+  blockers?: string[];
+}
+```
 
-| Surface | Location | Format | Parity Check |
-|---------|----------|--------|-------------|
-| Claude Code | `.claude/commands/ant/*.md` | Markdown (generated) | Body must match OpenCode |
-| OpenCode | `.opencode/commands/ant/*.md` | Markdown (generated) | Body must match Claude |
-| Codex | `command_guide.go` + Codex skills | Go struct catalog + TOML agents | Must cover same commands |
+## Integration Point: How Go Streams Events to TS Host
 
-**New component:** `ThreeSurfaceParityScanner` -- verifies that every YAML command appears in all three surfaces with consistent contracts.
+### Option Analysis
 
-### 5. Ceremony Surface Integrity
+| Mechanism | How It Works | Pros | Cons | Recommendation |
+|-----------|--------------|------|------|----------------|
+| **A. Subprocess Narrator Pipe** | Go spawns `node narrator.js`, pipes NDJSON events to stdin | Zero config; works today in `cmd/narrator_launcher.go`; live stream | Requires Node.js; one-way only; tied to Go lifecycle | **Primary for live events** |
+| **B. JSONL Tail + Poll** | TS host runs `event-bus-subscribe --stream --filter "ceremony.*"` | No server; uses existing CLI; bidirectional possible via separate CLI calls | Polling latency (250ms default); stdout parsing | **Primary for startup replay + fallback** |
+| **C. WebSocket via `aether serve`** | TS host connects to `ws://localhost:8080/ws/agents` | Lowest latency; true bidirectional | Requires background server process; port conflicts; overkill for local CLI | **Defer — useful for swarm dashboard later** |
+| **D. Named Pipe / Domain Socket** | Go writes to Unix domain socket, TS reads | Low latency; no polling | Platform-specific; requires cleanup; not yet implemented | **Reject — adds complexity without benefit** |
+| **E. File Watcher on JSONL** | TS watches `.aether/data/event-bus.jsonl` for changes | Simple; no subprocess | Race conditions; no atomic append guarantees on all platforms | **Reject — unreliable** |
 
-The ceremony system (`cmd/ceremony_cmd.go`) provides 4 visual surfaces:
+### Recommended Hybrid Approach
 
-| Ceremony | Purpose | Used By |
-|----------|---------|---------|
-| `spawn-plan` | Render worker spawn plan | build, plan, colonize, seal, swarm |
-| `wave-start` | Render wave banner | build, plan, colonize, seal, swarm |
-| `worker-complete` | Render worker completion | build, plan, colonize, seal, swarm |
-| `closeout` | Render lifecycle summary | build, plan, colonize, continue, seal, swarm |
+**Phase 1 (v1.17): JSONL Tail + Subprocess Pipe**
 
-Every lifecycle wrapper (6 workflows x 2 platforms = 12 wrappers) must call all four ceremony surfaces in the correct order.
+1. **Startup replay:** Before dispatching any workers, the TS host calls:
+   ```
+   AETHER_OUTPUT_MODE=json aether event-bus-replay --topic ceremony.build.spawn --since <build_start_time>
+   ```
+   This gives the TS host all events already emitted (prewave, wave-start) so it can render the current state accurately.
 
-**Existing coverage:** `visual_wrapper_contract_test.go` verifies presence and ordering.
+2. **Live stream:** The TS host spawns:
+   ```
+   aether event-bus-subscribe --stream --filter "ceremony.build.*" --poll-interval 100ms
+   ```
+   as a long-running subprocess. It parses NDJSON lines from stdout and updates its internal ceremony state.
 
-### 6. Gate System Integrity
+3. **Alternative (narrator pipe):** If the wrapper invokes the TS host as a subprocess (instead of the other way around), Go's existing `maybeLaunchNarrator` can pipe events directly to the TS host's stdin. This is how the old `narrator.js` worked.
 
-The gate system (`cmd/gate.go`) has 11 gates with classification:
+**Phase 2 (v1.18+): WebSocket for Swarm Dashboard**
+When the live terminal dashboard (SWARM-01) is built, `aether serve` becomes useful. The dashboard connects via WebSocket and receives all `ceremony.*` events in real time.
 
-| Classification | Behavior | Auto-resolve? |
-|----------------|----------|---------------|
-| `hard_block` | Stops advancement | Never |
-| `soft_block` | Warns, can be overridden | Only if queen approves |
-| `advisory` | Informational | Always safe |
+## Integration Point: How TS Host Signals Wrapper
 
-**Audit check:** Every gate must have an explicit classification. No gate should be unclassified.
+The TS host does not "signal" the wrapper directly. Instead, the wrapper invokes the TS host as part of its command flow:
 
-### 7. Worker Economy
+```
+Wrapper build.md:
+  1. Calls Go for manifest (JSON)
+  2. Calls Go for visual spawn-plan (optional — can delegate to TS host)
+  3. Invokes TS host: node .aether/ts-host/dist/host.js build-wave --manifest-file <tmp>
+     └─> TS host:
+         a. Reads manifest
+         b. Starts event-bridge (event-bus-subscribe --stream)
+         c. For each wave:
+            - Renders wave-start (via ceremony-narrator.ts or Go CLI)
+            - Dispatches platform agents (Claude Code Tasks)
+            - Records spawn-log / spawn-complete via Go CLI
+            - Receives live events, updates progress
+         d. Builds completion packet
+  4. Calls Go build-finalize with completion file
+  5. Calls Go for visual closeout
+```
 
-27 agent definitions across 3 platforms:
+The TS host writes progress to **stderr** (or a temp status file) so the wrapper can display it. The wrapper remains the user-facing orchestrator; the TS host is the execution engine.
 
-| Platform | Location | Format | Count |
-|----------|----------|--------|-------|
-| Claude | `.claude/agents/ant/*.md` | Markdown | 25 |
-| OpenCode | `.opencode/agents/*.md` | Markdown | varies |
-| Codex | `.codex/agents/*.toml` | TOML | 25 |
+## Integration Point: How Wrapper Renders Ceremony
 
-**Audit check:** Every agent must have a caste assignment, a clear write output (not read-only), and must be referenced by at least one command.
+Today, the wrapper renders ceremony by calling Go CLI commands:
 
-## Recommended Audit Architecture (New Components)
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <file>
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <file> --execution-wave <n>
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <file>
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <file>
+```
 
-### Component Inventory
+In v1.17, this stays mostly the same, but with two changes:
 
-All new code lives in cmd/ as test files and potentially a new `audit_catalog.go` for runtime catalog generation.
+1. **TS host can render lightweight ceremony** (wave-start banners, worker status lines) directly via `ceremony-narrator.ts`, reducing Go CLI round-trips.
+2. **Go visual commands remain the canonical renderer** for complex output (spawn-plan, closeout) to ensure parity across platforms.
 
-| Component | Type | Purpose | Depends On |
+The wrapper decides: for simple real-time updates, use TS host output; for formal ceremony moments, use Go CLI.
+
+## New Components Required
+
+| Component | File | Purpose | Depends On |
 |-----------|------|---------|------------|
-| `audit-catalog` | Cobra command (new) | Produce a structured JSON catalog of all registered commands, their flags, output mode, and data file interactions | `rootCmd` tree walk |
-| `CommandCatalogScanner` | Test helper | Walk Cobra tree, produce map of command name -> metadata | `audit-catalog` or direct `rootCmd` inspection |
-| `YAMLGuideAlignmentTest` | Test file | Verify `commandGuideCatalog()` covers all YAML commands and vice versa | `commandGuideCatalog()`, YAML directory |
-| `DataFlowLifecycleTest` | Test file | Verify every data artifact has at least one writer and one reader across the lifecycle | Source analysis of cmd/*.go |
-| `ThreeSurfaceParityTest` | Test file | Extend existing parity test to include command-guide coverage | Existing `command_parity_test.go` |
-| `CommandContractRegressionTest` | Test file | Freeze the verified command catalog as a snapshot; future drift fails the test | Catalog snapshot |
+| Event Bridge | `src/event-bridge.ts` | Connects to Go event bus (JSONL tail or narrator pipe), emits typed events to TS consumers | `go-bridge.ts` (to spawn CLI) |
+| Ceremony Narrator | `src/ceremony-narrator.ts` | Renders ANSI/plain ceremony from event stream: wave banners, worker status, progress bars | `event-bridge.ts`, caste color map (YAML or inline) |
+| Wave Dispatcher | `src/wave-dispatcher.ts` | Accepts manifest, groups by execution_wave, runs parallel dispatch, feeds events to event-bridge | `worker-dispatch.ts`, `event-bridge.ts` |
+| Caste Config Loader | `src/caste-config.ts` | Loads shared YAML caste emoji/color/label map (CEREMONY-02) | YAML parser (or inline JSON) |
 
-### Data Structures
+## Modified Components
 
-```go
-// CommandCatalogEntry describes a single registered Cobra command.
-type CommandCatalogEntry struct {
-    Name         string   `json:"name"`
-    HasShort     bool     `json:"has_short"`
-    HasRunE      bool     `json:"has_run_e"`
-    Flags        []string `json:"flags"`
-    OutputMode   string   `json:"output_mode"`   // "json", "visual", "workflow", "unknown"
-    NeedsStore   bool     `json:"needs_store"`
-    Category     string   `json:"category"`       // "literal", "full-orchestration", "semi-intelligent"
-    YAMLSource   string   `json:"yaml_source"`     // matching .aether/commands/<name>.yaml
-    InGuide      bool     `json:"in_guide"`        // appears in commandGuideCatalog()
-    DataReads    []string `json:"data_reads"`       // data files this command reads
-    DataWrites   []string `json:"data_writes"`      // data files this command writes
-}
+| Component | File | Change |
+|-----------|------|--------|
+| Go Bridge | `src/go-bridge.ts` | Add `spawnGoStream` helper for long-running CLI processes (event-bus-subscribe) |
+| Worker Dispatch | `src/worker-dispatch.ts` | Replace simulation with real platform dispatch; integrate with event-bridge for status updates |
+| Lifecycle | `src/lifecycle.ts` | Add event-bridge startup/shutdown; wire wave-dispatcher instead of sequential loop |
+| Host Entry | `src/host.ts` | Add `build-wave`, `watch-events` commands |
+| Build Wrapper | `.claude/commands/ant/build.md` | Add TS host invocation step; remove redundant Go ceremony calls where TS host handles it |
 
-// DataFlowEdge describes a producer-consumer relationship.
-type DataFlowEdge struct {
-    Artifact string `json:"artifact"` // e.g., "COLONY_STATE.json", "pheromones.json"
-    Writers  []string `json:"writers"`  // commands that write this file
-    Readers  []string `json:"readers"`  // commands that read this file
-    Orphan   bool     `json:"orphan"`   // true if write-only (no reader) or read-only (no writer)
-}
+## Boundary Contract Preservation
 
-// ParityViolation describes a mismatch across surfaces.
-type ParityViolation struct {
-    Type       string `json:"type"`        // "missing_yaml", "missing_wrapper", "body_drift", "guide_mismatch"
-    Command    string `json:"command"`
-    Surface    string `json:"surface"`     // "claude", "opencode", "codex_guide", "yaml"
-    Expected   string `json:"expected"`
-    Actual     string `json:"actual"`
-}
-```
+The v1.16 boundary contract (`runtime-boundary-contract.md`) must remain intact:
 
-## Build Order (Phase Dependencies)
+| Rule | How v1.17 Upholds It |
+|------|----------------------|
+| Go owns all state mutation | TS host still calls `build-finalize`, `plan-finalize`, `continue-finalize`. No direct `.aether/data/` writes. |
+| TS host calls Go plan-only for manifests | `lifecycle.ts` unchanged — still uses `callGoJSON` with `--plan-only`. |
+| TS host never invents workers | `wave-dispatcher.ts` dispatches only from `dispatch_manifest.dispatches`. |
+| No visual output parsing as authority | TS host consumes NDJSON from `event-bus-subscribe`, not ANSI output. |
+| Bash is glue only | No new Bash logic; TS host is Node.js. |
 
-The audit phases must be ordered so each builds on verified results from the previous.
+## Suggested Build Order (Respecting Dependencies)
 
 ```
-Phase 1: Command Inventory (no dependencies)
-  |-- Build CommandCatalogScanner
-  |-- Walk rootCmd tree, produce full catalog
-  |-- Output: cmd_audit_catalog.json
-  |-- Why first: every subsequent phase needs to know what commands exist
-  |
-Phase 2: YAML/Wrapper Parity (depends on Phase 1 catalog)
-  |-- Extend existing source-check with catalog-aware validation
-  |-- Verify YAML-to-wrapper generation chain completeness
-  |-- Verify command-guide catalog matches YAML
-  |-- Output: parity_violations.json
-  |-- Why second: needs the command catalog to cross-reference
-  |
-Phase 3: Data Flow Tracing (depends on Phase 1 catalog)
-  |-- For each command in catalog, trace data reads/writes
-  |-- Build DataFlowEdge map for all artifacts
-  |-- Identify dead-end artifacts (write-only, read-only, orphan)
-  |-- Output: data_flow_map.json
-  |-- Why third: needs command catalog to know which commands to trace
-  |
-Phase 4: Lifecycle Walkthrough (depends on Phase 3 data flow)
-  |-- Walk the init->colonize->plan->build->continue->seal lifecycle
-  |-- Verify each transition produces artifacts that the next transition consumes
-  |-- Identify lifecycle gaps (artifacts produced but never consumed downstream)
-  |-- Output: lifecycle_gaps.json
-  |-- Why fourth: needs data flow map to understand the full chain
-  |
-Phase 5: Regression Test Freezing (depends on Phases 1-4 findings)
-  |-- Write regression tests that snapshot the verified catalog
-  |-- Write regression tests that snapshot data flow edges
-  |-- Write regression tests that snapshot parity state
-  |-- Output: new test files in cmd/
-  |-- Why last: needs verified findings to know what to freeze
+Phase A: Foundation (can start immediately)
+  1. caste-config.ts — load YAML caste maps (no dependencies)
+  2. event-bridge.ts — consume Go event stream (depends on go-bridge.ts)
+  3. ceremony-narrator.ts — render from events (depends on event-bridge, caste-config)
+
+Phase B: Dispatch (depends on Phase A)
+  4. wave-dispatcher.ts — parallel wave execution (depends on worker-dispatch, event-bridge)
+  5. Update worker-dispatch.ts — real platform dispatch, emit events
+
+Phase C: Integration (depends on Phase B)
+  6. Update lifecycle.ts — wire wave-dispatcher, event-bridge lifecycle
+  7. Update host.ts — add build-wave command
+  8. Update build.md wrapper — invoke TS host, reduce Go ceremony calls
+
+Phase D: Verification
+  9. Golden parity tests (PARITY-01) — compare TS host output against v5.4 baseline
+  10. E2E tests for event bridge → ceremony narrator → wave dispatcher pipeline
 ```
 
-**Dependency graph:**
+## Scalability Considerations
 
-```
-Phase 1 (Inventory)
-    |
-    +---> Phase 2 (Parity)
-    |
-    +---> Phase 3 (Data Flow)
-              |
-              v
-          Phase 4 (Lifecycle)
-              |
-              v
-          Phase 5 (Regression)
-```
-
-Phases 2 and 3 can run in parallel. Phase 4 requires Phase 3. Phase 5 requires all prior phases.
-
-## Patterns to Follow
-
-### Pattern 1: Catalog-First Auditing
-
-**What:** Build a complete inventory before checking any individual item.
-**When:** Always. You cannot verify coherence without knowing what exists.
-**Example:**
-
-```go
-func buildCommandCatalog(t *testing.T) map[string]CommandCatalogEntry {
-    catalog := make(map[string]CommandCatalogEntry)
-    for _, cmd := range rootCmd.Commands() {
-        entry := CommandCatalogEntry{
-            Name:     cmd.Name(),
-            HasShort: cmd.Short != "",
-            HasRunE:  cmd.RunE != nil,
-        }
-        // ... populate flags, output mode, etc.
-        catalog[entry.Name] = entry
-    }
-    return catalog
-}
-```
-
-### Pattern 2: Snapshot Regression
-
-**What:** After verifying a surface is correct, freeze it as a test assertion so future drift fails CI.
-**When:** At the end of the audit, not during.
-**Example:**
-
-```go
-func TestCommandCatalogSnapshot(t *testing.T) {
-    catalog := buildCommandCatalog(t)
-    // Verify no commands were removed
-    knownCount := 317 // snapshot from audit
-    if len(catalog) < knownCount {
-        t.Fatalf("command count decreased: got %d, expected at least %d", len(catalog), knownCount)
-    }
-}
-```
-
-### Pattern 3: Cross-Reference Verification
-
-**What:** For every item in surface A, verify it exists in surface B.
-**When:** Parity checks across YAML, wrappers, command-guide, and runtime.
-**Example:**
-
-```go
-func TestYAMLHasGuideEntry(t *testing.T) {
-    yamlNames := loadYAMLCommandNames(t)
-    guideCatalog := commandGuideCatalog()
-    literalSet := make(map[string]bool)
-    for _, name := range commandGuideLiteralCommands() {
-        literalSet[name] = true
-    }
-    for name := range yamlNames {
-        _, inGuide := guideCatalog[name]
-        if !inGuide && !literalSet[name] {
-            t.Errorf("YAML command %q has no command-guide entry", name)
-        }
-    }
-}
-```
+| Concern | At 1 worker | At 10 workers | At 50 workers |
+|---------|-------------|---------------|---------------|
+| Event volume | ~20 events/build | ~200 events/build | ~1000 events/build |
+| JSONL file size | Negligible | ~500 KB | ~2 MB |
+| Polling overhead | 100ms latency OK | 100ms OK | Consider WebSocket |
+| TS host memory | <10 MB | <20 MB | <50 MB |
+| Parallel wave dispatch | Sequential fine | 2-3 parallel | Needs worktree mode |
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Audit That Modifies Behavior
-
-**What people do:** Write audit code that fixes issues as it finds them.
-**Why it is wrong:** Makes it impossible to distinguish findings from fixes. Breaks reproducibility.
-**Do this instead:** Audit produces findings. Fixes are separate phases with separate tests.
-
-### Anti-Pattern 2: Brittle Snapshot Tests
-
-**What people do:** Snapshot entire command bodies or YAML contents as strings.
-**Why it is wrong:** Any minor formatting change breaks the test, causing alert fatigue.
-**Do this instead:** Snapshot structural properties (command count, flag count, required ceremony surfaces, data flow edges). Use `>=` for counts (growth is fine), exact match for parity.
-
-### Anti-Pattern 3: Testing Wrappers Instead of Contracts
-
-**What people do:** Assert exact text in wrapper markdown files.
-**Why it is wrong:** Wrappers are generated and will change with generator improvements.
-**Do this instead:** Assert structural contracts: generated-from header exists, ceremony calls are present, finalizer/closeout ordering is correct, hand-editing guardrails are present.
-
-### Anti-Pattern 4: Ignoring Store Initialization
-
-**What people do:** Assume all commands that access data properly check `store != nil`.
-**Why it is wrong:** A command that runs without a store will panic or silently fail.
-**Do this instead:** Verify that every command with data reads/writes either checks store or is listed in `skipStoreInit()`.
-
-## Existing Audit Infrastructure (Extend, Do Not Replace)
-
-| Existing Tool | What It Checks | Extension Needed |
-|---------------|---------------|------------------|
-| `aether source-check` | YAML-to-wrapper headers, retired mirrors, canonical surfaces | Add command-guide alignment, wrapper contract field validation |
-| `command_parity_test.go` | Claude/OpenCode wrapper body parity | Add Codex command-guide parity |
-| `command_source_hygiene_test.go` | Wrapper generated-from headers, YAML source references | Add YAML field completeness (codex_orchestration, wrapper_contract) |
-| `visual_wrapper_contract_test.go` | Ceremony surface presence in lifecycle wrappers | Add ceremony parameter validation |
-| `platform_doc_hygiene_test.go` | Runtime CLI references in lifecycle docs | Extend to cover new commands |
-| `emoji_audit_test.go` | Emoji map coverage for visual commands | Add to catalog completeness check |
-
-## Integration Points Summary
-
-| Integration Point | Left Side | Right Side | Contract | Existing Test |
-|-------------------|-----------|------------|----------|--------------|
-| YAML -> Claude wrapper | `.aether/commands/*.yaml` | `.claude/commands/ant/*.md` | generated-from header, body content | `source-check`, `command_source_hygiene_test` |
-| YAML -> OpenCode wrapper | `.aether/commands/*.yaml` | `.opencode/commands/ant/*.md` | generated-from header, body content | Same as above |
-| Claude <-> OpenCode parity | `.claude/commands/ant/*.md` | `.opencode/commands/ant/*.md` | Identical body | `command_parity_test` |
-| YAML -> command-guide | `.aether/commands/*.yaml` | `commandGuideCatalog()` | Every YAML has a guide entry | GAP |
-| YAML -> Go runtime | `.aether/commands/*.yaml` | `cmd/codex_workflow_cmds.go` | wrapper_contract fields match real commands | GAP |
-| Lifecycle wrapper -> ceremony | `.claude/commands/ant/{build,plan,...}.md` | `ceremony_cmd.go` | All 4 ceremony surfaces called in order | `visual_wrapper_contract_test` |
-| Build -> Continue data flow | `codex/build/*` artifacts | `codex_continue.go` reads | Build artifacts consumed by continue | GAP |
-| Continue -> Seal data flow | `gates/*`, `review-ledgers/*` | `seal_final_review.go` | Gate results and ledgers consumed by seal | GAP |
-| Seal -> Hive promotion | `instincts/*` | `hive.go` | High-confidence instincts promoted | GAP |
-| Colony-prime -> Worker context | `COLONY_STATE.json`, `pheromones.json`, `QUEEN.md` | `colony_prime_context.go` | All injected into worker prompt | `colony_prime_test` |
+| Anti-Pattern | Why Bad | What To Do Instead |
+|--------------|---------|-------------------|
+| TS host writes to `.aether/data/event-bus.jsonl` | Violates boundary contract; races with Go file locking | TS host subscribes via CLI or pipe; never writes |
+| Wrapper parses TS host ANSI output for state | Fragile; visual output is for humans only | Wrapper uses Go JSON CLI for state; TS host events for progress |
+| TS host invents workers not in manifest | Breaks provenance; finalizer will reject | Dispatch only from `dispatch_manifest.dispatches` |
+| Go emits events but TS host ignores them | Wasted work; ceremony feels dead | TS host must consume and render every event |
+| Ceremony rendering duplicated in Go and TS | Maintenance burden; drift | Go owns canonical complex rendering; TS owns lightweight real-time |
 
 ## Sources
 
-- Direct source analysis: `cmd/root.go`, `cmd/codex_workflow_cmds.go`, `cmd/command_guide.go`, `cmd/source_check.go`, `cmd/ceremony_cmd.go`, `cmd/gate.go`
-- Test infrastructure: `cmd/command_parity_test.go`, `cmd/command_source_hygiene_test.go`, `cmd/visual_wrapper_contract_test.go`, `cmd/codex_e2e_test.go`
-- Data structures: `pkg/colony/colony.go` (ColonyState), `pkg/storage/storage.go` (Store)
-- Lifecycle flow: `cmd/codex_continue.go`, `cmd/seal_final_review.go`, `cmd/entomb_cmd.go`
-- YAML definitions: `.aether/commands/*.yaml` (60 files)
-- Project context: `.planning/PROJECT.md`
-
----
-*Architecture research for: Aether v1.15 Framework Coherence Audit*
-*Researched: 2026-05-07*
+- `pkg/events/bus.go` — Event bus implementation (in-memory pub/sub, JSONL persistence)
+- `pkg/events/event.go` — Event struct and topic matching
+- `pkg/events/ceremony.go` — Ceremony topics and payload schema
+- `cmd/ceremony_emitter.go` — Build ceremony emitter, lifecycle ceremony sequences
+- `cmd/ceremony_cmd.go` — Visual ceremony rendering commands
+- `cmd/narrator_launcher.go` — Node.js subprocess narrator pipe
+- `cmd/eventbus.go` — Event bus CLI (publish, query, replay, subscribe)
+- `cmd/serve.go` — SSE/WebSocket streaming server
+- `cmd/spawn.go` — spawn-log, spawn-complete with ceremony emission
+- `cmd/codex_build.go` — Build manifest generation, dispatch planning
+- `.aether/ts-host/src/lifecycle.ts` — Existing TS lifecycle orchestrator
+- `.aether/ts-host/src/worker-dispatch.ts` — Existing worker dispatch
+- `.aether/ts-host/src/go-bridge.ts` — Go CLI bridge
+- `.claude/commands/ant/build.md` — Build wrapper (ceremony invocation pattern)
+- `.aether/references/contracts/runtime-boundary-contract.md` — Boundary contract

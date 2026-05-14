@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-12T07:05:22Z |
+| **Last Updated** | 2026-05-13T17:34:20Z |
 | **Current Phase** | 6 |
 | **Phase Name** | End-to-end verification |
 | **Phase Status** | completed |
@@ -27,7 +27,7 @@ Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCo
 
 ## What's In Progress
 
-Colony sealed
+Pre-compact snapshot (auto): state=COMPLETED phase=6 goal=Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI. task=End-to-end verification
 
 ---
 
@@ -90,7 +90,7 @@ Colony sealed
 
 ## Next Steps
 
-1. Run `aether entomb`
+1. Run `aether seal`
 2. Run `aether phase --number 6` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 

@@ -1,0 +1,122 @@
+Step 1/5: Prepare (0s)
+━━ 🔨 B U I L D   D I S P A T C H   1 ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Worker wave dispatching.
+[Phase 1/1] [████████████████] 100%
+Phase: Golden phase
+
+━━ 🐜 S P A W N   P L A N ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Wave 1
+  Execution: serial — single task in this wave
+  🔨 Builder Worker-XX  First golden task
+
+Wave 2
+  Execution: serial — single task in this wave
+  🔨 Builder Worker-XX  Second golden task
+
+Post-Wave: Probe
+  Execution: serial — post-wave independent verification of builder claims
+  🧪 Probe Worker-XX  Independent probe verification of builder claims
+
+Post-Wave: Watcher
+  Execution: serial — post-wave watcher verification before advancement
+  👁️ Watcher Worker-XX  Independent verification before advancement
+
+Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher
+
+Total planned dispatches: 4
+
+  Step 2/5: Context (0s)
+  Step 3/5: Dispatch (0s)
+── Dispatch ──
+Wave 11 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+
+… 🔨 Builder Worker-XX  starting wave 11  Worker: Worker-XX
+
+… 🔨 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
+
+✓ 🔨 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+
+── Dispatch ──
+Wave 12 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+
+… 🔨 Builder Worker-XX  starting wave 12  Worker: Worker-XX
+
+… 🔨 Builder Worker-XX  running wave 12  Worker: Worker-XX  [simulated worker heartbeat observed]
+
+✓ 🔨 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-2 for worker Worker-XX (caste: builder)
+
+── Dispatch ──
+Wave 13 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+
+… 🧪 Probe Worker-XX  starting wave 13  Worker: Worker-XX
+
+… 🧪 Probe Worker-XX  running wave 13  Worker: Worker-XX  [simulated worker heartbeat observed]
+
+✓ 🧪 Probe Worker-XX  completed 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
+
+── Dispatch ──
+Wave 14 starting (in-repo, serial)
+  Execution: serial — single task in this wave
+
+… 👁️ Watcher Worker-XX  starting wave 14  Worker: Worker-XX
+
+… 👁️ Watcher Worker-XX  running wave 14  Worker: Worker-XX  [simulated worker heartbeat observed]
+
+✓ 👁️ Watcher Worker-XX  completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
+
+  Step 4/5: Verify (0s)
+  Step 5/5: Complete (0s)
+Ceremony complete in 0s
+━━ 🔨 B U I L D   P H A S E   1 ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Phase 1/1] [████████████████] 100%
+Phase: Golden phase
+Review depth: heavy (final phase)
+── Context ──
+── Tasks ──
+  [ ] First golden task
+  [ ] Second golden task
+
+── Dispatch ──
+━━ 🐜 S P A W N   P L A N ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Wave 1
+  Execution: serial — single task in this wave
+  🔨 Builder Worker-XX  First golden task  ✓ completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+
+Wave 2
+  Execution: serial — single task in this wave
+  🔨 Builder Worker-XX  Second golden task  ✓ completed 0.0s  FakeInvoker completed task g-task-2 for worker Worker-XX (caste: builder)
+
+Post-Wave: Probe
+  Execution: serial — post-wave independent verification of builder claims
+  🧪 Probe Worker-XX  Independent probe verification of builder claims  ✓ completed 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
+
+Post-Wave: Watcher
+  Execution: serial — post-wave watcher verification before advancement
+  👁️ Watcher Worker-XX  Independent verification before advancement
+
+Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
+
+Total planned dispatches: 4
+━━ 🗂️ A R T I F A C T S ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+.aether/data/build/phase-1/manifest.json
+.aether/data/last-build-claims.json
+.aether/data/spawn-tree.txt
+── Verification [heavy] ──
+Verification happens during `aether continue`.
+── Housekeeping ──
+Signal housekeeping runs during `aether continue`.
+── Colony Complete ──
+This is the final phase. Seal the colony after continue.
+
+━━ 🐜 N E X T   U P ━━
+Run `aether continue` after the work is implemented and independently verified.
+Alternative: Run `aether status` if you want to inspect progress before advancing.
+It's safe to clear your context now. Run `/ant-resume` to restore.

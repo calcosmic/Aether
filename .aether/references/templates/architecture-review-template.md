@@ -1,6 +1,7 @@
 ---
 schema_version: "1.0"
 id: architecture-review-template
+template: architecture-review
 kind: template
 category: templates
 title: Architecture Review Template
@@ -17,63 +18,19 @@ render:
   mode: full
   max_chars: 5000
 ---
-# Architecture Review Template
+# Architecture Review: {{title}}
 
-## Decision Summary
+## Context
+<!-- Current state and problem statement -->
 
-State the architecture decision in one paragraph. Name what changes and what remains stable.
+## Constraints
+<!-- Technical, business, and team constraints -->
 
-For beginners: this is the "what shape should the system have?" answer.
+## Options Considered
+<!-- List of architectural options -->
 
-## Current System Map
-
-Describe the existing code path:
-
-- Entry commands.
-- Core runtime modules.
-- State files.
-- Companion files.
-- Platform-specific surfaces.
-- Install/update/publish behavior if affected.
-
-## Proposed Shape
-
-Explain the new structure and why it fits existing Aether patterns. Prefer small, named boundaries over broad rewrites.
-
-## Ownership Boundaries
-
-Define which module owns:
-
-- Data model.
-- Matching or routing.
-- Prompt rendering.
-- File distribution.
-- User-local state.
-- Tests and fixtures.
-
-## Tradeoffs
-
-Include:
-
-- What gets simpler.
-- What gets more complex.
-- What future changes become easier.
-- What failure modes are introduced.
-- What migration cost exists.
-
-## Alternatives Considered
-
-Compare at least two alternatives, including "do nothing" when relevant.
-
-## Validation Plan
-
-Name the tests, smoke commands, and manual inspections needed to prove the architecture works.
+## Trade-off Analysis
+<!-- Pros/cons of each option -->
 
 ## Decision
-
-End with one of:
-
-- `Proceed`.
-- `Proceed with constraints`.
-- `Spike first`.
-- `Reject`.
+<!-- Selected option with rationale -->

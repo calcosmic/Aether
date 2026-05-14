@@ -1,172 +1,181 @@
 # Project Research Summary
 
-**Project:** Aether v1.15 -- Framework Coherence, Efficiency, and Ship Readiness
-**Domain:** Internal audit and hardening of a Go/Cobra multi-agent CLI framework (80+ subcommands, 3 platform surfaces, 7 data subsystems)
-**Researched:** 2026-05-07
+**Project:** Aether v1.17 Classic Restoration
+**Domain:** CLI colony framework — hybrid Go runtime + TypeScript orchestration host
+**Researched:** 2026-05-13
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Aether v1.15 is a systematic coherence audit of an 80+ subcommand Go CLI framework with three platform surfaces (Claude Code, OpenCode, Codex runtime-native), 60 YAML source-of-truth command definitions, and 7 data subsystems spanning the init-to-seal lifecycle. The audit must verify that every command has a contract, every spawned worker has justified purpose, every data artifact is consumed or pruned, and every platform surface agrees on what exists. This is not a feature milestone; it is an integrity milestone that locks in the accumulated work of v1.0 through v1.14 before the system grows further.
-
-The recommended approach is a layered scanner pattern. Layer 1 inventories what exists (317 Cobra commands, 60 YAML definitions, 12 lifecycle wrappers, 27 agent definitions). Layer 2 cross-references surfaces for parity violations (YAML vs wrappers vs command-guide vs runtime). Layer 3 traces data flow through the full lifecycle to find dead-end artifacts. Layer 4 writes regression tests that freeze the verified contracts so future drift fails CI. Aether already has partial audit infrastructure (`source-check`, `command_parity_test.go`, `visual_wrapper_contract_test.go`) that should be extended rather than replaced.
-
-The key risks are (1) the audit surface is large -- 317 commands across ~100 source files means manual verification is infeasible, requiring automated cataloging first; (2) the existing parity tests cover Claude/OpenCode body agreement but leave YAML-to-command-guide and YAML-to-wrapper-contract gaps unverified; and (3) regression tests must be structurally sound (checking properties, not string snapshots) to avoid alert fatigue from cosmetic changes.
+Aether v1.17 restores the living ceremony, animated swarm dashboard, and intelligent Queen orchestration that defined Classic v5.4, but within the modern hybrid architecture: Go runtime owns state and emits structured events; the TypeScript host consumes those events and dispatches platform workers; wrapper markdown renders the user-facing experience. This is not a rewrite — it is a restoration. The recommended approach is to build the event bridge first, then layer ceremony rendering and swarm display on top, then wire real worker dispatch and workflow patterns. The biggest risks are state corruption (if TS host writes directly to `.aether/data/`), ceremony drift across platforms, and scope creep disguised as improvement. Mitigation is strict boundary enforcement, shared YAML ceremony config, and golden parity tests locked to the v5.4 baseline.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The milestone requires zero new dependencies. The audit uses Go's testing package, Cobra's command tree introspection, and existing test infrastructure in `cmd/`. All findings come from direct source code analysis.
+The TS host currently has zero runtime dependencies. v1.17 adds a lean, purpose-built terminal rendering stack — no heavy frameworks like Ink or Blessed. The core additions are `chalk` + `boxen` + `figlet` for ceremony banners and boxes, `ora` + `cli-progress` for animated spinners and progress bars, `log-update` for live dashboard refresh, and `chokidar` for watching Go's JSONL event file. All packages are ESM-native and compatible with Node >=20 (the TS host engine should bump from >=18 to >=20, since Node 18 is already EOL). Dev dependencies are only `@types/figlet` and `@types/cli-progress`. See `STACK.md` for full version table and rejected alternatives.
 
 **Core technologies:**
-- **Go 1.24 + Cobra v1.10.2:** Command registration and tree walking via `rootCmd.Commands()` -- provides the complete command surface for cataloging
-- **Existing test infrastructure:** `source-check`, `command_parity_test.go`, `command_source_hygiene_test.go`, `visual_wrapper_contract_test.go` -- extend, do not replace
-- **YAML source-of-truth chain:** 60 `.aether/commands/*.yaml` files define the canonical command set; wrappers and command-guide are derived surfaces
-- **pkg/storage.Store:** All state mutations use `UpdateJSONAtomically`; the audit verifies store initialization for every data-touching command
+- `chalk@5.6.2`: ANSI color/style — zero deps, auto-detects color support, chainable API
+- `boxen@8.0.1`: Framed boxes for banners — 9 border styles, lightweight (~24 KB)
+- `figlet@1.11.0`: ASCII art banners — sync API, 300+ fonts, types via `@types/figlet`
+- `ora@9.4.0`: Per-worker spinners — 100+ styles, TTY-aware auto-disable
+- `cli-progress@3.12.0`: Multi-bar progress — `MultiBar` container for concurrent workers
+- `log-update@8.0.0`: Live terminal refresh — partial redraws, `done()`/`clear()` lifecycle
+- `chokidar@5.0.0`: Watch Go JSONL event file — de-facto standard, atomic-write handling
 
 ### Expected Features
 
-**Must have (table stakes for audit integrity):**
-- **Command catalog scanner** -- walks all 317 registered Cobra commands, produces structured JSON catalog with metadata (flags, output mode, store requirement, YAML source match)
-- **Three-surface parity verification** -- YAML, Claude wrappers, OpenCode wrappers, and Codex command-guide all agree on what commands exist and their contracts
-- **Data flow lifecycle trace** -- every artifact in `.aether/data/` has at least one writer and one reader; dead-end (write-only) artifacts are flagged
-- **Regression test suite** -- snapshot-based tests that catch future command removal, parity drift, and data flow disconnection
+**Must have (table stakes):**
+- Event bridge (Go JSONL -> TS host) — infrastructure for everything else
+- Real worker dispatch (replace 100ms simulation) — the host must actually spawn agents
+- Parallel wave execution — concurrent workers per wave
+- Error recovery / retry / timeout — graceful fallback when workers fail
 
-**Should have (efficiency and polish):**
-- **Worker economy audit** -- every agent definition has a caste assignment, a clear output, and is referenced by at least one command
-- **Gate system integrity check** -- all 11 gates have explicit classification (hard_block/soft_block/advisory) with no unclassified gates
-- **Visual ceremony audit** -- all 12 lifecycle wrappers (6 workflows x 2 platforms) call all four ceremony surfaces in correct order
-- **Command contract completeness** -- every command has non-empty `Short`, registered flags match `RunE` usage, output mode is explicit
+**Should have (differentiators):**
+- Ceremony narrator — ASCII banners, caste identity, stage separators, spawn notifications
+- Animated swarm dashboard — per-ant spinners, progress bars, chamber activity map, live refresh
+- Builder-Probe Lock — builders return `code_written`, Probe upgrades to `completed`
+- Workflow pattern selection — Queen picks pattern based on phase name
+- Tiered escalation — retry -> reassignment -> Queen -> user
 
-**Defer (post-audit):**
-- Performance benchmarking of the scanner itself
-- Automated fix generation (audit finds, humans fix)
-- Cross-milestone drift monitoring (future CI integration)
+**Defer (v1.18+):**
+- WebSocket/SSE server for events — JSONL tail is sufficient now
+- Oracle phase-aware prompts / diminishing returns — Go-side, not blocking ceremony restoration
+- Real-time web dashboard — out of scope per PROJECT.md
+- Cross-colony ledger sharing — out of scope per PROJECT.md
 
 ### Architecture Approach
 
-The audit follows a catalog-first scanner pattern: build a complete inventory, then cross-reference, then trace flows, then freeze verified state. The critical constraint is that the audit must not change runtime behavior -- it reads and cross-references only. Fixes are separate phases.
+The architecture is a three-layer pipeline: **Go emits events** (from `pkg/events/` and `cmd/ceremony_emitter.go`), the **TS host subscribes and orchestrates dispatch** (`.aether/ts-host/`), and **wrappers render ceremony** (`.claude/commands/ant/build.md`). The TS host consumes events via a hybrid of JSONL tail (for startup replay) and subprocess narrator pipe (for live streaming). This requires no background server, respects the boundary contract, and works within the existing wrapper->Go->TS call chain. The TS host never writes to `.aether/data/`; it calls Go finalizers for all state commits.
 
 **Major components:**
-1. **CommandCatalogScanner** -- walks the Cobra command tree, produces `map[string]CommandCatalogEntry` with name, flags, output mode, store requirement, YAML source, guide presence, data reads/writes
-2. **YAMLGuideAlignmentScanner** -- reads all YAML `codex_orchestration` entries, reads `commandGuideCatalog()`, reports mismatches (currently untested gap)
-3. **LifecycleDataFlowScanner** -- traces write/read relationships for all `.aether/data/` artifacts across the init->colonize->plan->build->continue->seal lifecycle
-4. **ThreeSurfaceParityScanner** -- extends existing Claude/OpenCode parity to include Codex command-guide coverage
-5. **Regression test suite** -- structural snapshot tests (command count >= N, parity exact match, data flow edges present)
+1. **Event Bridge** (`src/event-bridge.ts`) — Consumes Go events via JSONL tail or subprocess pipe; emits typed events to TS consumers
+2. **Ceremony Narrator** (`src/ceremony-narrator.ts`) — Renders ANSI/plain ceremony from event stream: wave banners, worker status, progress bars
+3. **Wave Dispatcher** (`src/wave-dispatcher.ts`) — Parallel execution of manifest waves with event-driven status updates
+4. **Caste Config Loader** (`src/caste-config.ts`) — Loads shared YAML caste emoji/color/label map (prevents platform drift)
+5. **Go Runtime** (existing, modified) — Emits `ceremony.*` events, provides manifest + finalizers, owns all state mutation
 
 ### Critical Pitfalls
 
-1. **Audit that modifies behavior** -- The audit must be read-only. Findings and fixes are separate phases with separate tests. Mixing them destroys reproducibility.
-
-2. **Brittle snapshot tests** -- Snapshot entire command bodies or YAML strings and any formatting change breaks CI. Instead, snapshot structural properties (command count, flag count, ceremony presence). Use `>=` for counts, exact match for parity.
-
-3. **Testing wrappers instead of contracts** -- Asserting exact text in generated markdown wrappers is fragile. Assert structural contracts: generated-from header exists, ceremony calls present, finalizer/closeout ordering correct.
-
-4. **Missing store initialization checks** -- Commands that access data without a store will panic. Verify every data-touching command either checks store or is listed in `skipStoreInit()`.
-
-5. **Existing parity test gaps** -- `command_parity_test.go` covers Claude/OpenCode body agreement but leaves three gaps: (a) YAML `codex_orchestration` vs `commandGuideCatalog()` alignment, (b) YAML `wrapper_contract` fields vs actual runtime subcommands, (c) YAML `guardrails` presence. These gaps are where drift silently accumulates.
+1. **TS Host Writes State Directly (Frankenstein Regression)** — TS host must never write to `.aether/data/`. Prevention: ESLint rule banning `fs` imports for data paths, runtime bridge rejection, contract tests. See PITFALLS.md Pitfall 1.
+2. **Duplicate Orchestration Logic in Go and TS** — Go generates the full `execution_plan`; TS host dispatches strictly from manifest. No TS-side wave logic. See PITFALLS.md Pitfall 2.
+3. **Ceremony Drift Across Platforms** — Use shared YAML ceremony config consumed by Go, TS host, and wrappers. Codex fallback via Go `codex_visuals.go`. See PITFALLS.md Pitfall 3.
+4. **Rewriting Instead of Restoring (Scope Creep)** — v5.4 baseline is read-only. Golden tests lock behavior. Any deviation must be explicitly approved as intentional. See PITFALLS.md Pitfall 4.
+5. **Race Conditions in Hybrid Event Streaming** — Use `event-bus-subscribe --stream` (not polling). Handle duplicate event IDs idempotently. Replay from timestamp on crash recovery. See PITFALLS.md Pitfall 5.
+6. **Animated Dashboard Breaks in Non-TTY** — Three output modes: `json` (machine), `visual` (TTY ANSI), `markdown` (plain text). TS host respects `AETHER_OUTPUT_MODE`. See PITFALLS.md Pitfall 6.
+7. **Builder-Probe Lock Bypassed** — TS host must not translate `code_written` to `completed`. Only Go finalizer (or Probe result) upgrades status. See PITFALLS.md Pitfall 7.
+8. **Worktree Merge-Back Orphans Code** — Manifest includes `requires_merge_back: true` in worktree mode. TS host calls `aether worktree-merge-back` between waves. See PITFALLS.md Pitfall 10.
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Command Inventory and Catalog
-**Rationale:** Every subsequent phase needs to know what commands exist. This is the foundation for all cross-referencing.
-**Delivers:** Structured JSON catalog of all 317 registered Cobra commands with metadata; `audit-catalog` runtime command.
-**Addresses:** Lifecycle coherence -- every command has a contract and durable output.
-**Avoids:** Audit-that-modifies-behavior pitfall; catalog is read-only.
+### Phase 1: Foundation — Event Bridge + Ceremony Config
+**Rationale:** Everything else depends on the TS host being able to consume Go events. The shared YAML ceremony config prevents drift from day one.
+**Delivers:** `event-bridge.ts`, `caste-config.ts`, shared `ceremony.yaml`, basic TypeScript types for `CeremonyEvent` / `CeremonyPayload`.
+**Addresses:** Event bridge (Category 1), ceremony config foundation (Category 2).
+**Avoids:** Pitfall 3 (drift), Pitfall 5 (races — uses subscription not polling).
+**Research flag:** LOW — event bus already exists in Go; patterns are well-documented.
 
-### Phase 2: YAML-to-Wrapper Parity Verification
-**Rationale:** With the catalog complete, cross-reference the 60 YAML source definitions against generated wrappers and command-guide. Extends existing parity tests to cover known gaps.
-**Delivers:** Complete three-surface parity report (YAML, Claude, OpenCode, Codex); regression tests that freeze alignment.
-**Addresses:** Platform parity -- Go runtime, YAML, Claude, OpenCode, Codex all agree.
-**Avoids:** Testing-wrappers-instead-of-contracts pitfall; check structural properties, not exact text.
-**Uses:** Command catalog from Phase 1; extends `source-check`, `command_parity_test.go`.
+### Phase 2: Ceremony Narrator
+**Rationale:** Once events flow, render them. This restores the "living" feel and provides immediate user-visible value.
+**Delivers:** `ceremony-narrator.ts`, `banners.ts`, `caste-render.ts`, `stage-markers.ts`, `boxes.ts`.
+**Addresses:** ASCII banners, spawn notifications, worker completion lines, build summary block (Category 2).
+**Avoids:** Pitfall 6 (non-TTY breakage — implement three output modes here).
+**Research flag:** LOW — rendering libraries are standard; output modes are known pattern.
 
-### Phase 3: Data Flow Lifecycle Trace
-**Rationale:** With command catalog available, trace which commands read and write which data artifacts. Identify dead-end artifacts that are written but never consumed.
-**Delivers:** Data flow map showing producer-consumer relationships for all `.aether/data/` artifacts; dead-end report.
-**Addresses:** Data wiring -- every artifact consumed or pruned.
-**Avoids:** Missing store initialization pitfall; every data-touching command must have store or be in skipStoreInit.
-**Uses:** Command catalog from Phase 1; source analysis of cmd/*.go.
+### Phase 3: Real Worker Dispatch + Parallel Waves
+**Rationale:** Replace simulation with actual platform agent spawning. Parallel wave execution is a prerequisite for the swarm dashboard to have meaningful data.
+**Delivers:** Updated `worker-dispatch.ts` with real platform spawn, `wave-dispatcher.ts` for parallel execution, error recovery / retry / timeout.
+**Addresses:** Real worker dispatch, parallel waves, error recovery (Category 1).
+**Avoids:** Pitfall 2 (duplicate orchestration — dispatch strictly from manifest), Pitfall 7 (Builder-Probe Lock), Pitfall 10 (worktree merge-back).
+**Research flag:** MEDIUM — platform agent spawning varies by environment; needs validation.
 
-### Phase 4: Worker Economy and Ceremony Audit
-**Rationale:** Verify that the 27 agent definitions across 3 platforms have caste assignments, clear outputs, and are referenced by commands. Verify ceremony surface integrity.
-**Delivers:** Worker economy report; ceremony integrity report; gate classification completeness check.
-**Addresses:** Worker economy -- every spawned worker has justified purpose; visual ceremony backed by real state.
-**Avoids:** Brittle snapshot tests; check structural properties (caste assigned, output defined, referenced).
-**Uses:** Command catalog and data flow map from prior phases.
+### Phase 4: Swarm Dashboard
+**Rationale:** The animated dashboard is the visual payoff. It needs real events and real workers, so it comes after dispatch works.
+**Delivers:** `dashboard.ts`, `worker-row.ts`, `wave-panel.ts`, `chamber-map.ts`, `renderer.ts`.
+**Addresses:** Animated spinners, per-ant progress bars, tool counters, elapsed time, chamber activity map, live refresh (Category 3).
+**Avoids:** Pitfall 6 (non-TTY), Pitfall 5 (event races).
+**Research flag:** LOW — dashboard components are standard terminal UI patterns.
 
-### Phase 5: Regression Test Suite and Release Integrity
-**Rationale:** With all findings verified, write regression tests that freeze the contracts. These become the CI gate for future development.
-**Delivers:** New test files in `cmd/` covering command catalog snapshot, data flow edges, parity state, and gate classification.
-**Addresses:** Test contracts -- regression gates against drift; release integrity -- one coherent system.
-**Avoids:** Brittle snapshot tests by checking structural properties, not string content.
-**Uses:** Verified findings from all prior phases.
+### Phase 5: Queen Orchestration Intelligence
+**Rationale:** Workflow patterns, Builder-Probe Lock, and tiered escalation are safety and quality features. They depend on real dispatch and event flow.
+**Delivers:** Workflow pattern selection, Builder-Probe Lock enforcement, tiered escalation chain, intra-build midden checks.
+**Addresses:** Workflow patterns, Builder-Probe Lock, tiered escalation, phase mode awareness (Category 4).
+**Avoids:** Pitfall 7 (Builder-Probe Lock), Pitfall 9 (infinite escalation loops — escalation level in completion file).
+**Research flag:** MEDIUM — escalation logic has edge cases; needs careful testing.
 
-### Phase 6: Findings Remediation
-**Rationale:** The audit phases produce findings but do not fix them. This phase acts on the findings: fixing parity gaps, pruning dead-end artifacts, completing missing contracts.
-**Delivers:** All audit findings resolved; regression tests pass clean.
-**Addresses:** Release integrity -- one coherent system that ships.
-**Avoids:** All pitfalls apply; fixes are separate from findings with separate verification.
+### Phase 6: Oracle Behavioral Richness
+**Rationale:** Oracle improvements are Go-side prompt/template changes. They can proceed in parallel with TS host work but are lower priority than ceremony restoration.
+**Delivers:** Phase-aware prompts, diminishing returns detection, template synthesis, signal injection.
+**Addresses:** Oracle RALF loop richness (Category 5).
+**Avoids:** Pitfall 8 (Oracle state loss — stateless TS host loop, re-read from Go each iteration).
+**Research flag:** LOW — prompt engineering, no new infrastructure.
+
+### Phase 7: Integration + Parity Verification
+**Rationale:** Wire everything together and prove parity with Classic v5.4.
+**Delivers:** Updated `lifecycle.ts`, `host.ts`, `build.md` wrapper, golden parity tests, end-to-end pipeline tests.
+**Addresses:** Integration (Category 1-5), verification.
+**Avoids:** Pitfall 1 (state writes), Pitfall 4 (scope creep — golden tests enforce baseline), Pitfall 14 (simulated code ships as real).
+**Research flag:** MEDIUM — golden tests need careful design to avoid brittleness (Pitfall 15).
 
 ### Phase Ordering Rationale
 
-- **Catalog first:** You cannot verify coherence without knowing what exists. Phase 1 is the prerequisite for everything else.
-- **Parallelism after catalog:** Phases 2 and 3 both depend on the catalog but are independent of each other; they can run in parallel.
-- **Worker audit after data flow:** Phase 4 needs both the command catalog and the data flow map to verify that agents are referenced by commands that actually dispatch them.
-- **Regression last:** Phase 5 needs all findings verified before freezing them as test assertions. Freezing premature findings wastes effort.
-- **Remediation after audit:** Phase 6 is the only phase that modifies behavior. Keeping it separate preserves audit integrity.
+- **Foundation first:** Event bridge is the data layer for everything else. Without it, ceremony and dashboard have nothing to render.
+- **Ceremony before dispatch:** Ceremony narrator can be tested with synthetic events while real dispatch is being built. This gives user-visible progress early.
+- **Dispatch before dashboard:** Dashboard needs real worker status events. Simulated workers would produce a fake dashboard.
+- **Orchestration after dispatch:** Workflow patterns and escalation operate on the dispatch layer. They are safety features, not prerequisites.
+- **Oracle last:** Oracle richness is independent of TS host ceremony. It can proceed in parallel but is lower priority for the milestone.
+- **Verification at the end:** Golden parity tests need all components stable. Running them too early creates noise from incomplete features.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3 (Data Flow):** Tracing data reads/writes across ~100 source files requires careful source analysis. The exact set of data artifacts and their lifecycle transitions need verification during execution.
-- **Phase 4 (Worker Economy):** Agent-to-command reference tracking requires understanding the dispatch contract system. The exact mapping between agent names, caste assignments, and dispatch invocations needs runtime verification.
-- **Phase 6 (Remediation):** The scope of fixes is unknown until the audit completes. This phase may need sub-phasing based on finding severity.
+- **Phase 3 (Real Worker Dispatch):** Platform agent spawning mechanics vary by environment (Claude Code Tasks, OpenCode, Codex). Needs validation of spawn-log / spawn-complete flow.
+- **Phase 5 (Queen Orchestration):** Escalation chain edge cases and circuit breaker behavior. Classic v5.4 had infinite loop bugs here.
+- **Phase 7 (Parity Verification):** Golden test design — how to compare hybrid output against Classic Bash output without brittle string snapshots.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Catalog):** Walking the Cobra command tree is well-documented and Aether already does it in tests.
-- **Phase 2 (Parity):** Extends existing parity tests with known, documented patterns.
-- **Phase 5 (Regression):** Writing structural snapshot tests is a standard Go testing pattern.
+- **Phase 1 (Event Bridge):** Well-documented in Go codebase; `event-bus-subscribe --stream` is existing CLI.
+- **Phase 2 (Ceremony Narrator):** Standard terminal rendering libraries; output mode pattern already in Go.
+- **Phase 4 (Swarm Dashboard):** Standard terminal UI components; no novel algorithms.
+- **Phase 6 (Oracle Richness):** Prompt engineering; no new infrastructure or patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Zero new dependencies. All components are existing Go/Cobra infrastructure. Verified against source code and go.mod. |
-| Features | HIGH | Features are audit operations (catalog, cross-reference, trace, snapshot). Each maps to a specific, existing integration point in the codebase. |
-| Architecture | HIGH | Scanner pattern is well-established. Aether already has partial audit infrastructure. Direct source analysis confirms the gap map. |
-| Pitfalls | HIGH | Pitfalls come from direct codebase analysis and prior milestone experience. The "audit must not modify behavior" constraint is learned from v1.11/v1.12 regressions. |
+| Stack | HIGH | Verified via npm registry + official GitHub sources. All versions confirmed ESM-native and Node >=20 compatible. Rejected alternatives well-justified. |
+| Features | HIGH | Direct comparison against Classic v5.4 codebase. Feature gaps are well-documented in migration map and ceremony-revival handoff. |
+| Architecture | HIGH | Based on direct source code analysis of Go event bus, TS host, and wrapper contracts. Three integration options analyzed; hybrid approach is lowest-risk. |
+| Pitfalls | HIGH | Derived from runtime boundary contract, migration map, known issues, and MEMORY.md entries. Many pitfalls reference existing tests and detection mechanisms. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Exact command count verification:** The research references 317 commands but this needs runtime verification during Phase 1. The count may have drifted since research.
-- **Command-guide catalog coverage:** No existing test verifies that `commandGuideCatalog()` covers all YAML commands. The gap size is unknown until Phase 2 runs.
-- **Dead-end artifact count:** The number of write-only artifacts in `.aether/data/` is unknown. Phase 3 will reveal the scope. Prior milestones added artifacts without always wiring consumers.
-- **Agent dispatch mapping completeness:** The mapping from agent definitions to actual dispatch invocations across all three platforms needs runtime verification in Phase 4.
-- **Regression test baseline:** The structural properties to snapshot (minimum command count, required flags per command, data flow edges) need to be determined during Phases 1-4 before Phase 5 can freeze them.
+- **Node engine bump:** TS host currently specifies `>=18`. `chokidar@5` requires `>=20.19.0`, `log-update@8` requires `>=22`. Decision needed: bump to `>=20` or downgrade packages. Recommendation: bump to `>=20` (Node 18 EOL April 2025).
+- **Worktree merge-back in manifest:** The `requires_merge_back` flag is recommended but not yet in the Go manifest schema. Needs a small Go change in Phase 3.
+- **Escalation level in completion file:** Completion file schema may need `escalation_level` field added for Pitfall 9 prevention. Needs Go change.
+- **Golden test baseline:** Classic v5.4 output must be captured and stored before any restoration work begins, or parity tests have no reference.
+- **Codex skill update:** Any change to plan/build/continue orchestration must update 5 artifacts together (command guide, YAML, Claude wrapper, OpenCode wrapper, Codex skill). Manual process is error-prone.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct source analysis: `cmd/root.go`, `cmd/codex_workflow_cmds.go`, `cmd/command_guide.go`, `cmd/source_check.go`, `cmd/ceremony_cmd.go`, `cmd/gate.go`, `cmd/fixer_dispatch.go`, `cmd/circuit_breaker.go`, `cmd/codex_dispatch_contract.go`
-- Test infrastructure: `cmd/command_parity_test.go`, `cmd/command_source_hygiene_test.go`, `cmd/visual_wrapper_contract_test.go`, `cmd/codex_e2e_test.go`
-- Data structures: `pkg/colony/colony.go`, `pkg/storage/storage.go`
-- YAML definitions: `.aether/commands/*.yaml` (60 files)
-- Go module: `go.mod` (Go 1.24, Cobra v1.10.2, modernc.org/sqlite v1.50.0)
+- `STACK.md` — npm registry verified versions, GitHub official repos, Aether codebase integration points
+- `ARCHITECTURE.md` — Direct source analysis of `pkg/events/`, `cmd/ceremony_*.go`, `.aether/ts-host/src/`, wrapper markdown
+- `FEATURES-V117.md` — Classic v5.4 comparison, 4 research agent synthesis, complexity assessment
+- `PITFALLS.md` — Runtime boundary contract, migration map, ceremony-revival handoff, wrapper-runtime UX contract, state contract, known issues, command playbooks, MEMORY.md
 
 ### Secondary (MEDIUM confidence)
-- Prior milestone audit reports: `.planning/v1.10-MILESTONE-AUDIT.md` through `v1.14-MILESTONE-AUDIT.md` -- patterns for what drifts between milestones
-- Project context: `.planning/PROJECT.md` -- milestone history, key decisions, architecture patterns
-- Feature research references: Erlang/OTP Supervisor, Google ADK, LangGraph multi-agent patterns -- informed the feature categories from FEATURES.md
+- Bazel BEP / Turborepo / GitHub CLI `gh run watch` — External tool comparison for ceremony and dashboard patterns
+- LangGraph / OpenAI Agents JS / Temporal — Workflow pattern comparison
 
 ### Tertiary (LOW confidence)
-- Pitfall research from v1.13 (SQLite integration, process lifecycle) -- these are from an older milestone scope but contain still-relevant patterns for data integrity and cross-platform behavior
+- k9s / Lazygit / Docker Compose `up` — TUI/dashboard analogs, mostly for "what to avoid" validation
 
 ---
-*Research completed: 2026-05-07*
+*Research completed: 2026-05-13*
 *Ready for roadmap: yes*

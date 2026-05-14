@@ -32,22 +32,72 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
+## Current Milestone: v1.19 (TBD)
+
+**Goal:** Define next milestone goals. Run `/gsd-new-milestone` to start the next milestone cycle.
+
 ## Current State
 
-- Go runtime is healthy, v1.0.35 shipped
-- Milestone v1.15 Framework Coherence shipped (2026-05-08): command inventory, worker economy audit, data flow audit, release integrity, findings remediation
-- Milestone v1.16 in progress: Queen-Owned Adaptive Caste Orchestration
-- 2900+ tests passing, full E2E regression coverage
-- Stable and dev publish channels with integrity verification
-- Queen coordinates phases autonomously — gate classification, auto-recovery, wave lifecycle
-- 11 continue gates with watcher veto, auditor blocking, and runtime verification
-- Reference library system with indexed, scored, matchable global references
-- Worker economy audit documented 18 actively dispatched castes, 9 defined but never dispatched
-- Current pain: static depth-based agent lists ignore phase content, causing unnecessary timeouts and blocks
+- **v1.18 Hybrid Runtime Parity & Release Gate shipped (2026-05-14)** — Full milestone archive in `.planning/milestones/`
+- **Product version: v1.0.38**
+- Go runtime is healthy, all 17 Go test packages passing
+- TS host is stable: typecheck clean, 168 tests passing, no hangs
+- Platform dispatch is correct: Codex prompt passing fixed, all 3 platforms tested
+- Classic parity verified: golden tests match v5.4 baseline
+- Dev channel publish verified: downstream smoke test passed
+
+**Key accomplishments (v1.18):**
+- TS host stabilized — typecheck clean, 168 tests passing, event bridge teardown fixed
+- Platform dispatch corrected — Codex prompt passing fixed, Claude/OpenCode/Codex arg tests added
+- Go test suite restored — 7 failures resolved, all 17 packages green
+- Classic parity verified — golden tests match v5.4 baseline, 34 Oracle tests, 17 swarm tests
+- Release gate passed — dev channel publish succeeded, downstream smoke verified
+
+**Stretch from v1.18:**
+- Write v1.19 Interactive Shell readiness spec (deferred — not yet started)
+
+<details>
+<summary>v1.18 Hybrid Runtime Parity & Release Gate Summary</summary>
+
+**Shipped:** 2026-05-14
+**Phases:** 5 (119-123)
+**Requirements:** 25/25 Complete
+**Product Version:** v1.0.38
+
+Key accomplishments:
+- TS host stabilized — typecheck clean, 168 tests passing, event bridge teardown fixed
+- Platform dispatch corrected — Codex prompt passing fixed, Claude/OpenCode/Codex arg tests added
+- Go test suite restored — 7 failures resolved (time-bomb + archived docs), all 17 packages green
+- Classic parity verified — golden tests match v5.4 baseline for build, continue, Oracle, dashboard, install/update, state
+- Release gate passed — dev channel publish v1.0.38 succeeded, downstream smoke test verified
+
+Full details: `.planning/milestones/v1.18-ROADMAP.md`
+</details>
+
+<details>
+<summary>v1.17 Classic Restoration Summary</summary>
+
+**Shipped:** 2026-05-14
+**Phases:** 7 (112-118)
+**Requirements:** 32/32 Complete
+
+Key accomplishments:
+- TS host consumes Go ceremony events via JSONL stream and renders banners, spawn frames, stage separators
+- Real platform worker dispatch (Claude Code, OpenCode, Codex) with parallel waves and retry logic
+- Live terminal swarm dashboard with animated spinners, progress bars, chamber activity map
+- Queen Orchestrator with workflow pattern selection, Builder-Probe Lock, midden checks
+- Oracle RALF loop with phase-aware prompts, diminishing returns detection, template-specific synthesis
+- Golden workflow snapshot tests proving restored system matches Classic v5.4 behavior
+- Cross-platform parity tests + state safety integration tests
+
+Full details: `.planning/milestones/v1.17-ROADMAP.md`
+</details>
 
 <details>
 <summary>Prior State History</summary>
 
+- v1.17 (Classic Restoration, Phases 112-118): TS host control plane, ceremony narrator, swarm dashboard, Queen orchestration, Oracle enhancement, parity verification — shipped 2026-05-14
+- v1.16 (Hybrid Runtime Boundary, Phases 106-111): Boundary contract, Classic baseline, TS host prototype, Go safety invariants — shipped 2026-05-13
 - v1.0 (MVP, Phases 1-6): Colony ceremony and runtime visibility
 - v1.1 (Trusted Context, Phases 7-11): Context proof and skill routing
 - v1.2 (Live Dispatch Truth, Phases 12-16): Worker dispatch honesty
@@ -89,7 +139,8 @@ That means:
 - [x] v1.13 Recovery Hardening & Hive Learning -- Phases 88-92 (shipped 2026-05-03)
 - [x] v1.14 Queen Authority -- Phases 93-99 (shipped 2026-05-04)
 - [x] v1.15 Framework Coherence, Efficiency, and Ship Readiness -- Phases 100-105 (shipped 2026-05-08)
-- [ ] v1.16 Queen-Owned Adaptive Caste Orchestration -- Phases 106-111
+- [x] v1.16 Hybrid Runtime Boundary and Orchestration Recovery -- Phases 106-111 (shipped 2026-05-13)
+- [ ] v1.17 Classic Restoration -- Phases 112+
 
 ## Requirements
 
@@ -132,14 +183,22 @@ That means:
 
 ### Active
 
-- [ ] ORCH-01: Caste relevance registry exists with keywords and conditions for all 26 castes
-- [ ] ORCH-02: `queenOrchestrate()` function reads phase content and returns scored caste list
-- [ ] ORCH-03: Build flow uses adaptive dispatch instead of static depth strings
-- [ ] ORCH-04: Continue flow uses adaptive review instead of static `codexContinueReviewSpecs`
-- [ ] ORCH-05: Plan, colonize, swarm, and seal flows use adaptive dispatch
-- [ ] ORCH-06: Tests prove correct castes spawn for known phase types (UI, auth, refactor, discovery)
-- [ ] ORCH-07: No regression in existing depth flag behavior (flags still respected as override)
-- [ ] ORCH-08: Previously never-dispatched castes (Weaver, Keeper, Chronicler, etc.) now have dispatch paths
+- [ ] TSHOST-01: TS host dispatches real platform workers (not simulated) with parallel wave execution
+- [ ] TSHOST-02: TS host handles error recovery, retry logic, and timeout management
+- [ ] TSHOST-03: Event bridge streams Go ceremony events to TS/wrapper consumers
+- [ ] CEREMONY-01: Ceremony restored to command wrappers as editable markdown (banners, art, spawn notifications, seal rituals)
+- [ ] CEREMONY-02: Shared ceremony config in YAML (caste emoji/color/label maps, naming conventions)
+- [ ] CEREMONY-03: Go ceremony rendering code replaced by event emission (Go emits, wrappers render)
+- [ ] ORCHESTRA-01: Queen selects workflow patterns (SPBV, Investigate-Fix, Refactor, Compliance, Documentation Sprint) based on phase type
+- [ ] ORCHESTRA-02: Builder-Probe Lock restored — builders return code_written, only Probe upgrades to completed
+- [ ] ORCHESTRA-03: Tiered escalation chain (worker retry → parent reassignment → Queen reassignment → user escalation)
+- [ ] ORCHESTRA-04: Intra-build midden threshold checks with auto-REDIRECT pheromone emission
+- [ ] ORACLE-01: Phase-aware prompt directives (survey/investigate/synthesize/verify) injected into Oracle worker briefs
+- [ ] ORACLE-02: Diminishing returns detection with novelty delta tracking and forced phase advancement
+- [ ] ORACLE-03: Template-specific synthesis sections (tech-eval, architecture-review, bug-investigation, best-practices)
+- [ ] SWARM-01: Live terminal dashboard with animated spinners, per-ant progress bars, and tool usage counters
+- [ ] SWARM-02: Chamber activity map showing which project areas have active workers
+- [ ] PARITY-01: Golden workflow tests comparing output and behavior against v5.4 Classic baseline
 
 ### Out of Scope
 
@@ -222,25 +281,31 @@ This document evolves at phase transitions and milestone boundaries.
 
 *Last updated: 2026-05-01 — v1.12 Safe Colony milestone shipped*
 
-## Current Milestone: v1.16 Queen-Owned Adaptive Caste Orchestration
+## Current Milestone: v1.16 Hybrid Runtime Boundary and Orchestration Recovery
 
-**Goal:** Replace static depth-based agent lists with a Queen decision function that reads phase content and selects relevant castes for build, continue, plan, colonize, swarm, and seal flows.
+**Goal:** Prove one lifecycle workflow can be restored through a hybrid architecture — Go as safety kernel, TypeScript as orchestration control plane, Markdown/YAML/TOML as editable colony brain, Bash only as small glue.
 
 **Why this matters:**
-- The current system spawns agents based on dumb depth strings ("full", "deep", "standard", "light")
-- A "settings UI panel" phase gets the same agents as an "auth token rotation" phase if both are "deep"
-- This causes unnecessary timeouts (Probe sitting for 10 minutes on simple UI work), false blocks (Gatekeeper flagging security on non-security work), and wasted compute
-- 9 of 26 defined castes are never dispatched because there's no logic connecting them to phase content
-- The Queen already decides gate outcomes — she should also decide which agents to spawn
+- The Go runtime has valuable safety machinery, but the Bash/Node-to-Go migration caused regressions in the living parts of Aether
+- Queen orchestration, visible worker waves, ceremony, Oracle/RALF confidence iteration, swarm visibility, and platform-specific agent dispatch behavior all degraded
+- Research converges on a boundary fix, not a language rewrite: keep Go for safety, restore orchestration in TypeScript, keep editable assets as the colony brain
+- The best Classic version (likely v5.4.0) should be used as a behavior baseline, not a permanent second product
 
-**Target areas:**
-1. Caste Relevance Engine — keyword/condition registry scoring every caste against phase content
-2. Queen Orchestrate Function — central decision replacing static depth switches in all flows
-3. Build Flow Wiring — replace `plannedBuildDispatchesForSelection` with adaptive dispatch
-4. Continue Flow Wiring — replace `codexContinueReviewSpecs` with adaptive review dispatch
-5. Other Flow Wiring — plan, colonize, swarm, seal all use the same Queen decision
-6. Verification & Regression — tests proving the right castes spawn for known phase types
+**Target features:**
+1. Runtime boundary contract — what Go owns, what TypeScript owns, what editable assets own, what Bash may still do
+2. Classic baseline identification and smoke-test — verify v5.4.0 as the behavior comparison anchor
+3. Golden workflow tests — snapshot/golden tests for `plan -> build 1 -> continue` covering ceremony, worker activity, and state side effects
+4. Minimal TypeScript orchestration host — calls Go manifests/finalizers, dispatches visible workers, records spawn-log/spawn-complete, never writes `.aether/data` directly
+5. Go safety invariants preserved — Go remains sole authority for state mutation, finalizers, locking, install/update/publish, verification contracts
+6. Follow-up migration map — concrete next steps for Oracle confidence iteration, swarm visibility, and broader build/continue parity
 
-**Core principle:** The Queen reads what the phase is about, then decides who should work on it. No more spawning security auditors for UI polish.
+**Core principle:** Go should own safety, not soul. The TypeScript control plane restores the living orchestration behavior; the Go kernel remains the only authority for state mutation.
 
-*Last updated: 2026-05-08 — milestone created after v1.15 shipped*
+**Non-goals:**
+- Do not rewrite the whole runtime in TypeScript
+- Do not restore raw Bash state mutation
+- Do not maintain Classic and Go as two long-term products
+- Do not move install/update/publish safety out of Go
+- Do not make visual output parsing authoritative
+
+*Last updated: 2026-05-12 — milestone pivoted from adaptive caste orchestration to hybrid runtime recovery*

@@ -1,0 +1,160 @@
+castes:
+  queen:
+    emoji: "👑"
+    color: "#FF00FF"
+    label: "Queen"
+  builder:
+    emoji: "🔨"
+    color: "#FFD700"
+    label: "Builder"
+  watcher:
+    emoji: "👁️"
+    color: "#00FFFF"
+    label: "Watcher"
+  scout:
+    emoji: "🔍"
+    color: "#00FF00"
+    label: "Scout"
+  colonizer:
+    emoji: "🗺️"
+    color: "#0000FF"
+    label: "Colonizer"
+  surveyor:
+    emoji: "📊"
+    color: "#0000FF"
+    label: "Surveyor"
+  architect:
+    emoji: "🏛️"
+    color: "#FF00FF"
+    label: "Architect"
+  chaos:
+    emoji: "🎲"
+    color: "#FF0000"
+    label: "Chaos"
+  archaeologist:
+    emoji: "🏺"
+    color: "#FFFF00"
+    label: "Archaeologist"
+  oracle:
+    emoji: "🔮"
+    color: "#FF00FF"
+    label: "Oracle"
+  route_setter:
+    emoji: "📋"
+    color: "#00FFFF"
+    label: "Route-Setter"
+  ambassador:
+    emoji: "🔌"
+    color: "#00FFFF"
+    label: "Ambassador"
+  auditor:
+    emoji: "👥"
+    color: "#FFFFFF"
+    label: "Auditor"
+  chronicler:
+    emoji: "📝"
+    color: "#00FF00"
+    label: "Chronicler"
+  gatekeeper:
+    emoji: "⚔️"
+    color: "#FF0000"
+    label: "Gatekeeper"
+  guardian:
+    emoji: "🛡️"
+    color: "#00FFFF"
+    label: "Guardian"
+  includer:
+    emoji: "♿"
+    color: "#00FFFF"
+    label: "Includer"
+  keeper:
+    emoji: "📚"
+    color: "#00FF00"
+    label: "Keeper"
+  measurer:
+    emoji: "⚡"
+    color: "#FFFF00"
+    label: "Measurer"
+  probe:
+    emoji: "🧪"
+    color: "#00FFFF"
+    label: "Probe"
+  tracker:
+    emoji: "🐛"
+    color: "#FF0000"
+    label: "Tracker"
+  weaver:
+    emoji: "🔄"
+    color: "#FF00FF"
+    label: "Weaver"
+  dreamer:
+    emoji: "💭"
+    color: "#808080"
+    label: "Dreamer"
+  medic:
+    emoji: "🩹"
+    color: "#00FFFF"
+    label: "Medic"
+  fixer:
+    emoji: "🔧"
+    color: "#FFD700"
+    label: "Fixer"
+  porter:
+    emoji: "📦"
+    color: "#00FFFF"
+    label: "Porter"
+  sage:
+    emoji: "🦉"
+    color: "#808080"
+    label: "Sage"
+
+stage_separator:
+  prefix: "── "
+  suffix: " ──"
+
+naming:
+  deterministic_prefixes:
+    builder: ["Mason", "Carpenter", "Smith", "Stone", "Forge"]
+    watcher: ["Hawk", "Owl", "Sentinel", "Vigil", "Sentry"]
+    scout: ["Ranger", "Pathfinder", "Trail", "Seeker", "Guide"]
+    queen: ["Sovereign", "Monarch", "Regent", "Crown", "Matriarch"]
+    architect: ["Forge", "Spire", "Pillar", "Vault", "Keystone"]
+    chaos: ["Storm", "Tempest", "Rift", "Void", "Abyss"]
+    archaeologist: ["Dust", "Relic", "Shard", "Ruin", "Stratum"]
+    oracle: ["Prophet", "Seer", "Vision", "Augur", "Harbinger"]
+    route_setter: ["Compass", "Chart", "Meridian", "Vector", "Azimuth"]
+    ambassador: ["Envoy", "Diplomat", "Legate", "Courier", "Emissary"]
+    auditor: ["Lens", "Scale", "Gauge", "Measure", "Calipers"]
+    chronicler: ["Quill", "Ledger", "Archive", "Scroll", "Codex"]
+    gatekeeper: ["Bastion", "Bulwark", "Rampart", "Palisade", "Redoubt"]
+    guardian: ["Shield", "Aegis", "Ward", "Sanctum", "Haven"]
+    includer: ["Bridge", "Span", "Arch", "Gate", "Portal"]
+    keeper: ["Vault", "Tome", "Reliquary", "Cache", "Hoard"]
+    measurer: ["Chronometer", "Metric", "Datum", "Index", "Benchmark"]
+    probe: ["Sounding", "Drill", "Core", "Specimen", "Assay"]
+    tracker: ["Spoor", "Trace", "Trail", "Scent", "Imprint"]
+    weaver: ["Loom", "Tapestry", "Thread", "Weft", "Pattern"]
+    dreamer: ["Reverie", "Muse", "Visions", "Nebula", "Eidolon"]
+    medic: ["Salve", "Tincture", "Elixir", "Balm", "Remedy"]
+    fixer: ["Mend", "Patch", "Weld", "Splice", "Restore"]
+    porter: ["Barge", "Haul", "Tote", "Bearer", "Convey"]
+    sage: ["Wisdom", "Axiom", "Tenet", "Precept", "Doctrine"]
+    colonizer: ["Pioneer", "Frontier", "Outpost", "Settlement", "Claim"]
+    surveyor: ["Transit", "Theodolite", "Plumb", "Datum", "Benchmark"]
+
+banners:
+  build_start:
+    figlet_font: "Standard"
+    text: "BUILD"
+  seal_complete:
+    figlet_font: "Standard"
+    text: "CROWNED ANTHILL"
+
+excavation_phrases:
+  - "Excavating chamber..."
+  - "Laying foundation..."
+  - "Expanding tunnel..."
+  - "Carrying substrate..."
+  - "Sealing passage..."
+  - "Polishing surface..."
+  - "Fortifying walls..."

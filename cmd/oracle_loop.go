@@ -269,38 +269,45 @@ func oracleInvokerPlatform(invoker codex.WorkerInvoker) string {
 	return oracleDetectedPlatform()
 }
 
+type noveltyTracker struct {
+	LastKeywords   map[string]bool
+	ConsecutiveLow int
+	Threshold      float64
+}
+
 type oracleStateFile struct {
-	Version            string   `json:"version,omitempty"`
-	Topic              string   `json:"topic,omitempty"`
-	Scope              string   `json:"scope,omitempty"`
-	Template           string   `json:"template,omitempty"`
-	Phase              string   `json:"phase,omitempty"`
-	Iteration          int      `json:"iteration,omitempty"`
-	MaxIterations      int      `json:"max_iterations,omitempty"`
-	TargetConfidence   int      `json:"target_confidence,omitempty"`
-	OverallConfidence  int      `json:"overall_confidence,omitempty"`
-	StartedAt          string   `json:"started_at,omitempty"`
-	LastUpdated        string   `json:"last_updated,omitempty"`
-	Status             string   `json:"status,omitempty"`
-	Strategy           string   `json:"strategy,omitempty"`
-	FocusAreas         []string `json:"focus_areas,omitempty"`
-	Platform           string   `json:"platform,omitempty"`
-	StopReason         string   `json:"stop_reason,omitempty"`
-	Summary            string   `json:"summary,omitempty"`
-	ActiveQuestionID   string   `json:"active_question_id,omitempty"`
-	ActiveQuestionText string   `json:"active_question_text,omitempty"`
-	ActiveAttempt      int      `json:"active_attempt,omitempty"`
-	ActiveReasoning    string   `json:"active_reasoning,omitempty"`
-	ActiveTimeoutSec   int      `json:"active_timeout_sec,omitempty"`
-	ActiveElapsedSec   int      `json:"active_elapsed_sec,omitempty"`
-	ActiveStartedAt    string   `json:"active_started_at,omitempty"`
-	ActiveDeadlineAt   string   `json:"active_deadline_at,omitempty"`
-	LastArtifactPath   string   `json:"last_artifact_path,omitempty"`
-	OpenGaps           []string `json:"open_gaps,omitempty"`
-	Contradictions     []string `json:"contradictions,omitempty"`
-	Recommendation     string   `json:"recommendation,omitempty"`
-	ControllerPID      int      `json:"controller_pid,omitempty"`
-	Depth              string   `json:"depth,omitempty"`
+	Version            string         `json:"version,omitempty"`
+	Topic              string         `json:"topic,omitempty"`
+	Scope              string         `json:"scope,omitempty"`
+	Template           string         `json:"template,omitempty"`
+	Phase              string         `json:"phase,omitempty"`
+	Iteration          int            `json:"iteration,omitempty"`
+	MaxIterations      int            `json:"max_iterations,omitempty"`
+	TargetConfidence   int            `json:"target_confidence,omitempty"`
+	OverallConfidence  int            `json:"overall_confidence,omitempty"`
+	StartedAt          string         `json:"started_at,omitempty"`
+	LastUpdated        string         `json:"last_updated,omitempty"`
+	Status             string         `json:"status,omitempty"`
+	Strategy           string         `json:"strategy,omitempty"`
+	FocusAreas         []string       `json:"focus_areas,omitempty"`
+	Platform           string         `json:"platform,omitempty"`
+	StopReason         string         `json:"stop_reason,omitempty"`
+	Summary            string         `json:"summary,omitempty"`
+	ActiveQuestionID   string         `json:"active_question_id,omitempty"`
+	ActiveQuestionText string         `json:"active_question_text,omitempty"`
+	ActiveAttempt      int            `json:"active_attempt,omitempty"`
+	ActiveReasoning    string         `json:"active_reasoning,omitempty"`
+	ActiveTimeoutSec   int            `json:"active_timeout_sec,omitempty"`
+	ActiveElapsedSec   int            `json:"active_elapsed_sec,omitempty"`
+	ActiveStartedAt    string         `json:"active_started_at,omitempty"`
+	ActiveDeadlineAt   string         `json:"active_deadline_at,omitempty"`
+	LastArtifactPath   string         `json:"last_artifact_path,omitempty"`
+	OpenGaps           []string       `json:"open_gaps,omitempty"`
+	Contradictions     []string       `json:"contradictions,omitempty"`
+	Recommendation     string         `json:"recommendation,omitempty"`
+	ControllerPID      int            `json:"controller_pid,omitempty"`
+	Depth              string         `json:"depth,omitempty"`
+	Novelty            noveltyTracker `json:"novelty,omitempty"`
 }
 
 type oraclePlanFile struct {
@@ -843,8 +850,13 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		}
 
 		state.Iteration++
+		previousPhase := state.Phase
 		state.Phase = nextOraclePhase(plan, state)
+		if previousPhase != "" && previousPhase != state.Phase {
+			emitOraclePhaseTransition(previousPhase, state.Phase, state.Iteration)
+		}
 		target := selectOracleQuestionSmart(plan, state)
+		emitOracleIteration(state.Iteration, target.Text, state.Phase)
 		state.Status = "active"
 		state.StopReason = ""
 		state.ActiveQuestionID = strings.TrimSpace(target.ID)
@@ -1521,11 +1533,19 @@ func renderOracleContextCapsule(state oracleStateFile, plan oraclePlanFile, dete
 }
 
 func oraclePhaseDirective(state oracleStateFile, plan oraclePlanFile) string {
-	switch strings.ToLower(strings.TrimSpace(state.Phase)) {
+	return buildOraclePhaseDirective(state.Phase)
+}
+
+func buildOraclePhaseDirective(phase string) string {
+	switch strings.ToLower(strings.TrimSpace(phase)) {
 	case "survey":
-		return "Survey pass: prioritize untouched questions first and establish the evidence map."
+		return "Your task is to survey the landscape. Identify key concepts, existing solutions, and open questions. Do not form conclusions yet."
 	case "verify":
-		return "Verify pass: resolve contradictions, tighten confidence scores, and sharpen the release recommendation."
+		return "Your task is to verify previous findings. Test assumptions, look for contradictions, and assess confidence levels."
+	case "investigate":
+		return "Your task is to investigate specific questions. Deep-dive into the most promising areas identified in the survey."
+	case "synthesize":
+		return "Your task is to synthesize all findings into a coherent report. Connect dots, resolve contradictions, and formulate recommendations."
 	default:
 		return "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."
 	}
@@ -2360,6 +2380,22 @@ func applyOracleWorkerResponse(state oracleStateFile, plan oraclePlanFile, respo
 	state.OverallConfidence = oracleOverallConfidence(plan)
 	state.Summary = response.Summary
 	state.LastUpdated = now
+
+	// Update novelty tracker
+	currentKeywords := extractKeywordsSet(response.Summary + " " + response.Recommendation)
+	if state.Novelty.LastKeywords != nil && len(state.Novelty.LastKeywords) > 0 {
+		delta := computeNoveltyDelta(currentKeywords, state.Novelty.LastKeywords)
+		if state.Novelty.Threshold == 0 {
+			state.Novelty.Threshold = 0.15
+		}
+		if delta < state.Novelty.Threshold {
+			state.Novelty.ConsecutiveLow++
+		} else {
+			state.Novelty.ConsecutiveLow = 0
+		}
+	}
+	state.Novelty.LastKeywords = currentKeywords
+
 	return state, plan, nil
 }
 
@@ -2594,6 +2630,19 @@ func writeOracleGapsReport(path string, state oracleStateFile, plan oraclePlanFi
 }
 
 func writeOracleSynthesisReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	switch state.Template {
+	case "tech-eval", "technology-evaluation":
+		return writeTechEvaluationReport(path, state, plan)
+	case "architecture-review":
+		return writeArchitectureReviewReport(path, state, plan)
+	case "bug-investigation":
+		return writeBugInvestigationReport(path, state, plan)
+	default:
+		return writeGenericReport(path, state, plan)
+	}
+}
+
+func writeGenericReport(path string, state oracleStateFile, plan oraclePlanFile) error {
 	var b strings.Builder
 	b.WriteString("# Research Synthesis\n\n")
 	b.WriteString("## Topic\n")
@@ -2643,6 +2692,204 @@ func writeOracleSynthesisReport(path string, state oracleStateFile, plan oracleP
 			source := plan.Sources[id]
 			fmt.Fprintf(&b, "- [%s] %s — %s (%s, accessed %s)\n", id, emptyFallback(source.Title, source.URL), source.URL, emptyFallback(source.Type, "codebase"), emptyFallback(source.AccessedAt, "unknown"))
 		}
+	}
+
+	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
+	return os.WriteFile(path, []byte(strings.TrimSpace(b.String())+"\n"), 0644)
+}
+
+func writeTechEvaluationReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	var b strings.Builder
+	b.WriteString("# Tech Evaluation: ")
+	b.WriteString(emptyFallback(oracleTopicHeadline(state.Topic), "Oracle research topic"))
+	b.WriteString("\n\n## Overview\n")
+	if topicSummary := oracleTopicSummary(state.Topic); topicSummary != "" {
+		b.WriteString(topicSummary)
+	} else {
+		b.WriteString("Technology evaluation conducted via Oracle research loop.\n")
+	}
+
+	b.WriteString("\n## Alternatives Considered\n")
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n### %s\n", oracleQuestionLabel(q))
+		for _, finding := range q.KeyFindings {
+			b.WriteString("- ")
+			b.WriteString(finding.Text)
+			if len(finding.SourceIDs) > 0 {
+				b.WriteString(" ")
+				for i, sourceID := range finding.SourceIDs {
+					if i > 0 {
+						b.WriteString(" ")
+					}
+					fmt.Fprintf(&b, "[%s]", sourceID)
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+	if plan.Questions == nil || len(plan.Questions) == 0 {
+		b.WriteString("- No alternatives evaluated yet.\n")
+	}
+
+	b.WriteString("\n## Evaluation Criteria\n")
+	for _, q := range plan.Questions {
+		fmt.Fprintf(&b, "- **%s** (confidence: %d%%)\n", oracleQuestionLabel(q), q.Confidence)
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("- No criteria defined yet.\n")
+	}
+
+	b.WriteString("\n## Scoring Matrix\n")
+	b.WriteString("| Alternative | Score | Rationale |\n")
+	b.WriteString("|-------------|-------|-----------|\n")
+	for _, q := range plan.Questions {
+		for _, finding := range q.KeyFindings {
+			fmt.Fprintf(&b, "| %s | %d | %s |\n", oracleQuestionLabel(q), q.Confidence, truncateString(finding.Text, 80))
+		}
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("| — | — | No scores yet |\n")
+	}
+
+	b.WriteString("\n## Recommendation\n")
+	if strings.TrimSpace(state.Recommendation) != "" {
+		b.WriteString(state.Recommendation)
+	} else {
+		b.WriteString("No recommendation has been reached yet.\n")
+	}
+
+	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
+	return os.WriteFile(path, []byte(strings.TrimSpace(b.String())+"\n"), 0644)
+}
+
+func writeArchitectureReviewReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	var b strings.Builder
+	b.WriteString("# Architecture Review: ")
+	b.WriteString(emptyFallback(oracleTopicHeadline(state.Topic), "Oracle research topic"))
+	b.WriteString("\n\n## Context\n")
+	if topicSummary := oracleTopicSummary(state.Topic); topicSummary != "" {
+		b.WriteString(topicSummary)
+	} else {
+		b.WriteString("Architecture review conducted via Oracle research loop.\n")
+	}
+
+	b.WriteString("\n## Constraints\n")
+	for _, area := range state.FocusAreas {
+		fmt.Fprintf(&b, "- %s\n", area)
+	}
+	if len(state.FocusAreas) == 0 {
+		b.WriteString("- No specific constraints recorded.\n")
+	}
+
+	b.WriteString("\n## Options Considered\n")
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n### %s\n", oracleQuestionLabel(q))
+		for _, finding := range q.KeyFindings {
+			b.WriteString("- ")
+			b.WriteString(finding.Text)
+			if len(finding.SourceIDs) > 0 {
+				b.WriteString(" ")
+				for i, sourceID := range finding.SourceIDs {
+					if i > 0 {
+						b.WriteString(" ")
+					}
+					fmt.Fprintf(&b, "[%s]", sourceID)
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+	if plan.Questions == nil || len(plan.Questions) == 0 {
+		b.WriteString("- No options evaluated yet.\n")
+	}
+
+	b.WriteString("\n## Trade-off Analysis\n")
+	for _, q := range plan.Questions {
+		fmt.Fprintf(&b, "- **%s** (status: %s, confidence: %d%%)\n", oracleQuestionLabel(q), emptyFallback(q.Status, "open"), q.Confidence)
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("- No trade-offs analyzed yet.\n")
+	}
+
+	b.WriteString("\n## Decision\n")
+	if strings.TrimSpace(state.Recommendation) != "" {
+		b.WriteString(state.Recommendation)
+	} else {
+		b.WriteString("No architecture decision has been reached yet.\n")
+	}
+
+	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
+	return os.WriteFile(path, []byte(strings.TrimSpace(b.String())+"\n"), 0644)
+}
+
+func writeBugInvestigationReport(path string, state oracleStateFile, plan oraclePlanFile) error {
+	var b strings.Builder
+	b.WriteString("# Bug Investigation: ")
+	b.WriteString(emptyFallback(oracleTopicHeadline(state.Topic), "Oracle research topic"))
+	b.WriteString("\n\n## Symptoms\n")
+	if topicSummary := oracleTopicSummary(state.Topic); topicSummary != "" {
+		b.WriteString(topicSummary)
+	} else {
+		b.WriteString("Bug investigation conducted via Oracle research loop.\n")
+	}
+
+	b.WriteString("\n## Root Cause Analysis\n")
+	for _, q := range plan.Questions {
+		if len(q.KeyFindings) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n### %s\n", oracleQuestionLabel(q))
+		for _, finding := range q.KeyFindings {
+			b.WriteString("- ")
+			b.WriteString(finding.Text)
+			if len(finding.SourceIDs) > 0 {
+				b.WriteString(" ")
+				for i, sourceID := range finding.SourceIDs {
+					if i > 0 {
+						b.WriteString(" ")
+					}
+					fmt.Fprintf(&b, "[%s]", sourceID)
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+	if plan.Questions == nil || len(plan.Questions) == 0 {
+		b.WriteString("- No root cause identified yet.\n")
+	}
+
+	b.WriteString("\n## Fix Applied\n")
+	if strings.TrimSpace(state.Recommendation) != "" {
+		b.WriteString(state.Recommendation)
+	} else {
+		b.WriteString("No fix has been applied yet.\n")
+	}
+
+	b.WriteString("\n## Verification Steps\n")
+	for _, q := range plan.Questions {
+		if strings.EqualFold(strings.TrimSpace(q.Status), "answered") {
+			fmt.Fprintf(&b, "- [x] %s (confidence: %d%%)\n", oracleQuestionLabel(q), q.Confidence)
+		} else {
+			fmt.Fprintf(&b, "- [ ] %s (confidence: %d%%)\n", oracleQuestionLabel(q), q.Confidence)
+		}
+	}
+	if len(plan.Questions) == 0 {
+		b.WriteString("- No verification steps defined yet.\n")
+	}
+
+	b.WriteString("\n## Prevention\n")
+	if len(state.FocusAreas) > 0 {
+		for _, area := range state.FocusAreas {
+			fmt.Fprintf(&b, "- %s\n", area)
+		}
+	} else {
+		b.WriteString("- No prevention measures recorded yet.\n")
 	}
 
 	fmt.Fprintf(&b, "\n## Last Updated\nIteration %d -- %s\n", state.Iteration, emptyFallback(state.LastUpdated, time.Now().UTC().Format(time.RFC3339)))
@@ -2713,6 +2960,9 @@ func nextOraclePhase(plan oraclePlanFile, state oracleStateFile) string {
 		}
 	}
 	if oracleReadyForCompletion(plan, state) || state.Iteration >= state.MaxIterations {
+		if strings.EqualFold(strings.TrimSpace(state.Phase), "verify") {
+			return "synthesize"
+		}
 		return "verify"
 	}
 	return "investigate"
@@ -2745,6 +2995,10 @@ func oracleProgressedSince(before oracleProgressSnapshot, plan oraclePlanFile, s
 		if containsOracleIteration(q.IterationsTouched, state.Iteration) {
 			return true
 		}
+	}
+	// Diminishing returns check: if novelty < threshold for 3 consecutive iterations, stop
+	if state.Novelty.ConsecutiveLow >= 3 {
+		return false
 	}
 	return false
 }
@@ -3244,4 +3498,61 @@ func oracleDurationLabel(d time.Duration) string {
 		return "0s"
 	}
 	return d.Truncate(time.Second).String()
+}
+
+// oracleStopWords is the set of common English words filtered out by extractKeywordsSet.
+var oracleStopWords = map[string]bool{
+	"the": true, "and": true, "a": true, "an": true, "in": true, "on": true, "at": true,
+	"to": true, "for": true, "of": true, "with": true, "by": true, "is": true, "are": true,
+	"was": true, "were": true, "be": true, "been": true, "being": true, "have": true, "has": true,
+	"had": true, "do": true, "does": true, "did": true, "will": true, "would": true, "could": true,
+	"should": true, "may": true, "might": true, "can": true, "this": true, "that": true, "these": true,
+	"those": true,
+}
+
+// extractKeywordsSet splits text into unique lowercase words of 3+ characters,
+// filtering out stop words. Returns a set (map[string]bool) for novelty comparison.
+func extractKeywordsSet(text string) map[string]bool {
+	words := strings.Fields(text)
+	seen := make(map[string]bool, len(words))
+	for _, w := range words {
+		lower := strings.ToLower(w)
+		lower = strings.Trim(lower, ".,;:!?\"'()[]{}")
+		if len(lower) < 3 {
+			continue
+		}
+		if oracleStopWords[lower] {
+			continue
+		}
+		seen[lower] = true
+	}
+	return seen
+}
+
+// computeNoveltyDelta calculates Jaccard distance between two keyword sets:
+// 1 - |intersection| / |union|. Returns 0.0 for identical sets, 1.0 for completely different.
+func computeNoveltyDelta(current, previous map[string]bool) float64 {
+	if len(current) == 0 && len(previous) == 0 {
+		return 0.0
+	}
+	if len(current) == 0 || len(previous) == 0 {
+		return 1.0
+	}
+	intersection := 0
+	for kw := range current {
+		if previous[kw] {
+			intersection++
+		}
+	}
+	union := make(map[string]bool, len(current)+len(previous))
+	for kw := range current {
+		union[kw] = true
+	}
+	for kw := range previous {
+		union[kw] = true
+	}
+	if len(union) == 0 {
+		return 0.0
+	}
+	return 1.0 - float64(intersection)/float64(len(union))
 }
