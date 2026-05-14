@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -179,23 +179,22 @@ export function writeCompletionFile(
   filename: string,
   data: unknown
 ): string {
-  const targetDir = join(tmpdir(), dir);
-  const targetPath = join(targetDir, filename);
-
-  // Boundary enforcement: reject Go-owned paths and paths escaping tmpdir
-  assertNoDirectDataWrites(targetPath);
-  const resolvedTarget = targetPath.replace(/\\/g, "/");
+  // Validate prefix does not escape tmpdir before creating the unique directory
+  const prefix = join(tmpdir(), `${dir}-`);
+  const resolvedPrefix = prefix.replace(/\\/g, "/");
   const resolvedTmpdir = tmpdir().replace(/\\/g, "/");
-  if (!resolvedTarget.startsWith(resolvedTmpdir)) {
+  if (!resolvedPrefix.startsWith(resolvedTmpdir)) {
     throw new Error(
-      `Completion file path escapes tmpdir: ${targetPath}`
+      `Completion file path escapes tmpdir: ${prefix}`
     );
   }
 
-  // Ensure directory exists
-  if (!existsSync(targetDir)) {
-    mkdirSync(targetDir, { recursive: true });
-  }
+  // Create a unique temp directory per run to avoid collisions
+  const targetDir = mkdtempSync(prefix);
+  const targetPath = join(targetDir, filename);
+
+  // Boundary enforcement: reject Go-owned paths
+  assertNoDirectDataWrites(targetPath);
 
   writeFileSync(targetPath, JSON.stringify(data, null, 2), "utf-8");
   return targetPath;

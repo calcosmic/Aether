@@ -44,8 +44,9 @@ function scanSourceForViolations(srcDir: string): string[] {
         const content = readFileSync(path, "utf-8");
         const lines = content.split("\n");
         for (let i = 0; i < lines.length; i++) {
-          if (forbiddenPattern.test(lines[i])) {
-            violations.push(`${path}:${i + 1}: ${lines[i].trim()}`);
+          const line = lines[i]!;
+          if (forbiddenPattern.test(line)) {
+            violations.push(`${path}:${i + 1}: ${line.trim()}`);
           }
         }
       }

@@ -40,7 +40,7 @@ export interface EventBridgeOptions extends GoBridgeOptions {
 
 export interface EventBridgeController {
   /** Stop the stream and clean up resources. */
-  stop(): void;
+  stop(): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,11 +169,28 @@ export async function startEventBridge(
 
   // --- Controller ----------------------------------------------------------
   const controller: EventBridgeController = {
-    stop() {
+    async stop() {
+      rl.close();
+      child.stdout?.destroy();
+      child.stderr?.destroy();
       if (!child.killed) {
         child.kill("SIGTERM");
+        // Wait for subprocess to actually exit (max 2 seconds)
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            child.removeListener("exit", onExit);
+            if (!child.killed) {
+              child.kill("SIGKILL");
+            }
+            resolve();
+          }, 2000);
+          const onExit = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          child.once("exit", onExit);
+        });
       }
-      rl.close();
       seen.clear();
     },
   };
@@ -184,8 +201,8 @@ export async function startEventBridge(
 /**
  * Convenience wrapper to stop an event bridge controller.
  */
-export function stopEventBridge(controller: EventBridgeController): void {
-  controller.stop();
+export async function stopEventBridge(controller: EventBridgeController): Promise<void> {
+  await controller.stop();
 }
 
 // ---------------------------------------------------------------------------

@@ -60,8 +60,8 @@ function makeWorkerResult(
   return {
     name,
     status,
-    caste,
     task: `Task for ${name}`,
+    ...(caste !== undefined ? { caste } : {}),
   };
 }
 
@@ -272,7 +272,7 @@ describe("types and defaults", () => {
     // Create a minimal wave dispatch with a worker that always fails.
     // With default retryLimit=1, only 1 attempt should be made.
     const dispatches: BuildDispatch[] = [
-      makeDispatch("Retry-Default", 1),
+      makeDispatch("Retry-Default", "builder"),
     ];
 
     let callCount = 0;

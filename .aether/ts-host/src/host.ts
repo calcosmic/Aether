@@ -155,7 +155,7 @@ async function main(): Promise<void> {
 
       const result = await runLifecycle(lifecycleOpts);
 
-      bridge.stop();
+      await bridge.stop();
       narrator.stop();
 
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");

@@ -220,31 +220,42 @@ describe("lifecycle", () => {
 
     // The .aether/data/ directory will have files modified by Go finalizers
     // (COLONY_STATE.json, session.json, spawn-tree.txt, etc.) but NOT
-    // completion files. Completion files should only exist in tmpdir.
-    const aetherLifecycleDir = join(tmpdir(), "aether-lifecycle");
+    // completion files. Completion files should only exist in unique tmpdirs.
+    const { readdirSync } = await import("node:fs");
+    const tmpEntries = readdirSync(tmpdir(), { withFileTypes: true });
+    const completionDirs = tmpEntries
+      .filter((e) => e.isDirectory() && e.name.startsWith("aether-lifecycle-"))
+      .map((e) => join(tmpdir(), e.name));
+
     assert.ok(
-      existsSync(aetherLifecycleDir),
-      "Completion files directory should exist in tmpdir"
+      completionDirs.length >= 3,
+      `Expected at least 3 unique completion dirs, found ${completionDirs.length}`
     );
 
-    // Check that completion files exist in tmpdir
+    // Collect all completion files across unique dirs
+    const completionFiles = new Set<string>();
+    for (const dir of completionDirs) {
+      for (const f of readdirSync(dir)) {
+        completionFiles.add(f);
+      }
+    }
+
     assert.ok(
-      existsSync(join(aetherLifecycleDir, "plan-completion.json")),
+      completionFiles.has("plan-completion.json"),
       "Plan completion file should exist in tmpdir"
     );
     assert.ok(
-      existsSync(join(aetherLifecycleDir, "build-completion.json")),
+      completionFiles.has("build-completion.json"),
       "Build completion file should exist in tmpdir"
     );
     assert.ok(
-      existsSync(join(aetherLifecycleDir, "continue-completion.json")),
+      completionFiles.has("continue-completion.json"),
       "Continue completion file should exist in tmpdir"
     );
 
     // Verify none of the completion files are in .aether/data/
     const dataFilesAfter = new Set<string>();
     try {
-      const { readdirSync } = await import("node:fs");
       const files = readdirSync(dataDir, { recursive: true });
       for (const f of files) {
         const path = String(f);
@@ -258,7 +269,9 @@ describe("lifecycle", () => {
     }
 
     // Cleanup completion files
-    rmSync(aetherLifecycleDir, { recursive: true, force: true });
+    for (const dir of completionDirs) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("runLifecycle handles plan-finalize correctly", async () => {
@@ -454,8 +467,8 @@ describe("lifecycle", () => {
             return {
               name: dispatch.name,
               status: "completed",
-              caste: dispatch.caste,
-              task: dispatch.task,
+              caste: dispatch.caste ?? "builder",
+              task: dispatch.task ?? "Build task",
               files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
             };
           });
@@ -504,8 +517,8 @@ describe("lifecycle", () => {
             return {
               name: dispatch.name,
               status: "completed",
-              caste: dispatch.caste,
-              task: dispatch.task,
+              caste: dispatch.caste ?? "builder",
+              task: dispatch.task ?? "Build task",
               files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
             };
           });
@@ -553,8 +566,8 @@ describe("lifecycle", () => {
             return {
               name: dispatch.name,
               status: "completed",
-              caste: dispatch.caste,
-              task: dispatch.task,
+              caste: dispatch.caste ?? "builder",
+              task: dispatch.task ?? "Build task",
               files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
             };
           });
@@ -600,8 +613,8 @@ describe("lifecycle", () => {
             return {
               name: dispatch.name,
               status: "completed",
-              caste: dispatch.caste,
-              task: dispatch.task,
+              caste: dispatch.caste ?? "builder",
+              task: dispatch.task ?? "Build task",
               files_modified: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"],
             };
           });

@@ -41,7 +41,7 @@ describe("event-bridge", () => {
     assert.equal(events[1]!.id, "evt-2");
     assert.equal(events[2]!.id, "evt-3");
 
-    stopEventBridge(controller);
+    await stopEventBridge(controller);
   });
 
   it("deduplicates events by id", async () => {
@@ -58,7 +58,7 @@ describe("event-bridge", () => {
     const evt1Count = events.filter((e) => e.id === "evt-1").length;
     assert.equal(evt1Count, 1, "Duplicate evt-1 should be deduplicated");
 
-    stopEventBridge(controller);
+    await stopEventBridge(controller);
   });
 
   it("stopEventBridge kills the subprocess", async () => {
@@ -69,7 +69,7 @@ describe("event-bridge", () => {
     });
 
     // Should not throw
-    assert.doesNotThrow(() => stopEventBridge(controller));
+    await assert.doesNotReject(stopEventBridge(controller));
   });
 
   it("BoundaryViolationError is exported and has correct shape", () => {
