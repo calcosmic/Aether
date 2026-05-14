@@ -1,0 +1,7 @@
+     106 .claude/commands/ant/plan.md
+     110 .claude/commands/ant/build.md
+      89 .claude/commands/ant/continue.md
+     157 .opencode/commands/ant/plan.md
+     111 .opencode/commands/ant/build.md
+      89 .opencode/commands/ant/continue.md
+     662 total
