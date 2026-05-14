@@ -225,8 +225,11 @@ function resolveBinaryName(platform: Platform): string {
   }
 }
 
-/** Build CLI arguments per platform. */
-function buildArgs(config: WorkerConfig): string[] {
+/**
+ * Build CLI arguments per platform.
+ * @internal — exported for testing only
+ */
+export function buildArgs(config: WorkerConfig): string[] {
   switch (config.platform) {
     case "claude": {
       const schemaJSON = JSON.stringify(workerClaimsSchema());
@@ -261,6 +264,7 @@ function buildArgs(config: WorkerConfig): string[] {
         "--ephemeral",
         "--skip-git-repo-check",
         "--output-schema", schemaPath,
+        config.prompt,
       ];
     }
   }

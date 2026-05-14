@@ -7,12 +7,14 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
 
 import {
   detectAvailablePlatforms,
   isPlatformAvailable,
   spawnWorker,
   createPlatformDispatcher,
+  buildArgs,
   type Platform,
   type WorkerConfig,
 } from "../src/platform-dispatcher.js";
@@ -124,5 +126,88 @@ describe("platform-dispatcher", () => {
     } finally {
       delete process.env["AETHER_CODEX_PATH"];
     }
+  });
+
+  it("buildArgs for Claude includes required flags and prompt", () => {
+    const config: WorkerConfig = {
+      platform: "claude",
+      agentName: "aether-builder",
+      caste: "builder",
+      name: "Test-01",
+      task: "Build task",
+      root: REPO_ROOT,
+      prompt: "Build the thing",
+    };
+    const args = buildArgs(config);
+    assert.ok(args.includes("-p"), "Should include -p flag");
+    assert.ok(args.includes("--output-format"), "Should include --output-format");
+    assert.ok(args.includes("json"), "Should include json output format");
+    assert.ok(args.includes("--json-schema"), "Should include --json-schema");
+    assert.ok(args.includes("--agent"), "Should include --agent");
+    assert.ok(args.includes("aether-builder"), "Should include agent name");
+    assert.ok(args.includes("--permission-mode"), "Should include --permission-mode");
+    assert.ok(args.includes("bypassPermissions"), "Should include permission mode value");
+    assert.ok(args.includes("Build the thing"), "Should include prompt as final arg");
+    assert.equal(args[args.length - 1], "Build the thing", "Prompt should be last arg");
+  });
+
+  it("buildArgs for OpenCode includes run, agent, format, and prompt", () => {
+    const config: WorkerConfig = {
+      platform: "opencode",
+      agentName: "aether-builder",
+      caste: "builder",
+      name: "Test-02",
+      task: "Build task",
+      root: REPO_ROOT,
+      prompt: "Build the thing",
+    };
+    const args = buildArgs(config);
+    assert.ok(args.includes("run"), "Should include run subcommand");
+    assert.ok(args.includes("--agent"), "Should include --agent");
+    assert.ok(args.includes("aether-builder"), "Should include agent name");
+    assert.ok(args.includes("--format"), "Should include --format");
+    assert.ok(args.includes("json"), "Should include json format");
+    assert.equal(args[args.length - 1], "Build the thing", "Prompt should be last arg");
+  });
+
+  it("buildArgs for Codex includes exec, json, ephemeral, output-schema, and prompt", () => {
+    const config: WorkerConfig = {
+      platform: "codex",
+      agentName: "aether-builder",
+      caste: "builder",
+      name: "Test-03",
+      task: "Build task",
+      root: REPO_ROOT,
+      prompt: "Build the thing",
+    };
+    const args = buildArgs(config);
+    assert.ok(args.includes("exec"), "Should include exec subcommand");
+    assert.ok(args.includes("--json"), "Should include --json");
+    assert.ok(args.includes("--ephemeral"), "Should include --ephemeral");
+    assert.ok(args.includes("--output-schema"), "Should include --output-schema");
+    assert.ok(args.includes("--sandbox"), "Should include --sandbox");
+    assert.ok(args.includes("workspace-write"), "Should include sandbox value");
+    assert.equal(args[args.length - 1], "Build the thing", "Prompt should be last arg");
+  });
+
+  it("buildArgs for Codex writes schema to tmpdir", () => {
+    const config: WorkerConfig = {
+      platform: "codex",
+      agentName: "aether-builder",
+      caste: "builder",
+      name: "Test-04",
+      task: "Build task",
+      root: REPO_ROOT,
+      prompt: "Build the thing",
+    };
+    const args = buildArgs(config);
+    const schemaIdx = args.indexOf("--output-schema");
+    assert.ok(schemaIdx !== -1, "Should include --output-schema");
+    const schemaPath = args[schemaIdx + 1];
+    assert.ok(schemaPath, "Schema path should exist");
+    const resolved = schemaPath!.replace(/\\/g, "/");
+    const tmp = tmpdir().replace(/\\/g, "/");
+    assert.ok(resolved.startsWith(tmp), `Schema should be in tmpdir, got ${schemaPath}`);
+    assert.ok(!resolved.includes(".aether/data"), "Schema must NOT be in .aether/data");
   });
 });

@@ -114,6 +114,10 @@ export async function dispatchSingleWorker(
 ): Promise<DispatchResult> {
   const depth = "1"; // Default depth for prototype
 
+  // NOTE: This function is only called from dispatchWaves with manifest
+  // dispatches (from the Go build manifest). spawn-log/spawn-complete
+  // therefore only record manifest workers, never internal/system workers.
+
   // Step 1: Record spawn-log before dispatch.
   // Spawn-log failure is logged but does not block dispatch.
   try {
@@ -140,6 +144,21 @@ export async function dispatchSingleWorker(
   // Step 2: Execute the worker.
   let result: DispatchResult;
   const simulate = opts.simulateWorkers !== false; // default true
+
+  if (simulate) {
+    if (opts.simulateWorkers === true) {
+      process.stderr.write(
+        `ℹ️  Simulating worker ${dispatch.name} (simulateWorkers=true)\n`
+      );
+    } else if (opts.simulateWorkers === undefined) {
+      const available = await detectAvailablePlatforms();
+      if (available.length === 0) {
+        process.stderr.write(
+          `⚠️  No platforms available; simulating worker ${dispatch.name}\n`
+        );
+      }
+    }
+  }
 
   try {
     if (simulate) {
