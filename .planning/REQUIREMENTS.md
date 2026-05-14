@@ -7,31 +7,31 @@
 
 ### TS Host Foundation (TS)
 
-- [ ] **TS-01:** TS host dispatches real platform workers (Claude Code, OpenCode, Codex) instead of simulated delays
-- [ ] **TS-02:** TS host executes workers within a wave in parallel (concurrent Agent tool spawns)
-- [ ] **TS-03:** TS host handles worker errors with retry logic, timeout, and graceful fallback
-- [ ] **TS-04:** Event bridge reads Go ceremony events from JSONL stream and tails live events
-- [ ] **TS-05:** Node engine bumped to >=20 for chokidar/log-update compatibility
-- [ ] **TS-06:** Boundary contract enforced — TS host never writes to `.aether/data/`
+- [x] **TS-01:** TS host dispatches real platform workers (Claude Code, OpenCode, Codex) instead of simulated delays
+- [x] **TS-02:** TS host executes workers within a wave in parallel (concurrent Agent tool spawns)
+- [x] **TS-03:** TS host handles worker errors with retry logic, timeout, and graceful fallback
+- [x] **TS-04:** Event bridge reads Go ceremony events from JSONL stream and tails live events
+- [x] **TS-05:** Node engine bumped to >=20 for chokidar/log-update compatibility
+- [x] **TS-06:** Boundary contract enforced — TS host never writes to `.aether/data/`
 
 ### Ceremony & Visuals (CER)
 
-- [ ] **CER-01:** Ceremony banners and art restored to command wrappers (editable markdown, not compiled Go)
-- [ ] **CER-02:** Shared ceremony config in YAML (caste emoji/color/label maps, naming conventions)
-- [ ] **CER-03:** Go ceremony rendering code replaced by event emission (Go emits, wrappers render from templates)
-- [ ] **CER-04:** Crowned Anthill seal ASCII art in editable template
-- [ ] **CER-05:** Worker spawn notifications with caste identity frames
-- [ ] **CER-06:** Build summary and closeout rituals with template frames
-- [ ] **CER-07:** Seal ceremony with Sage, Chronicler, wisdom review, and commit suggestion steps
+- [x] **CER-01:** Ceremony banners and art restored to command wrappers (editable markdown, not compiled Go)
+- [x] **CER-02:** Shared ceremony config in YAML (caste emoji/color/label maps, naming conventions)
+- [x] **CER-03:** Go ceremony rendering code replaced by event emission (Go emits, wrappers render from templates)
+- [x] **CER-04:** Crowned Anthill seal ASCII art in editable template
+- [x] **CER-05:** Worker spawn notifications with caste identity frames
+- [x] **CER-06:** Build summary and closeout rituals with template frames
+- [x] **CER-07:** Seal ceremony with Sage, Chronicler, wisdom review, and commit suggestion steps
 
 ### Swarm Dashboard (SW)
 
-- [ ] **SW-01:** Live terminal dashboard with animated spinners per active worker
-- [ ] **SW-02:** Per-ant progress bars with excavation status phrases
-- [ ] **SW-03:** Tool usage counters per worker (reads/writes/fetches/commands)
-- [ ] **SW-04:** Chamber activity map showing which project areas have active workers
-- [ ] **SW-05:** Elapsed time and token consumption per worker
-- [ ] **SW-06:** Auto-refresh via chokidar watching JSONL event file
+- [x] **SW-01:** Live terminal dashboard with animated spinners per active worker
+- [x] **SW-02:** Per-ant progress bars with excavation status phrases
+- [x] **SW-03:** Tool usage counters per worker (reads/writes/fetches/commands)
+- [x] **SW-04:** Chamber activity map showing which project areas have active workers
+- [x] **SW-05:** Elapsed time and token consumption per worker
+- [x] **SW-06:** Auto-refresh via chokidar watching JSONL event file
 
 ### Queen Orchestration (ORC)
 
@@ -44,16 +44,16 @@
 
 ### Oracle Enhancement (ORA)
 
-- [ ] **ORA-01:** Phase-aware prompt directives (survey/investigate/synthesize/verify) injected into worker briefs
-- [ ] **ORA-02:** Diminishing returns detection with novelty delta tracking
-- [ ] **ORA-03:** Template-specific synthesis sections (tech-eval, architecture-review, bug-investigation)
+- [x] **ORA-01:** Phase-aware prompt directives (survey/investigate/synthesize/verify) injected into worker briefs
+- [x] **ORA-02:** Diminishing returns detection with novelty delta tracking
+- [x] **ORA-03:** Template-specific synthesis sections (tech-eval, architecture-review, bug-investigation)
 
 ### Parity & Verification (PAR)
 
-- [ ] **PAR-01:** Golden workflow tests comparing ceremony and behavior against v5.4 Classic baseline
-- [ ] **PAR-02:** Ceremony snapshot tests (banners, spawn plans, seal rituals match templates)
-- [ ] **PAR-03:** Cross-platform smoke tests (Claude Code, OpenCode, Codex)
-- [ ] **PAR-04:** State safety tests — all writes go through Go finalizers
+- [x] **PAR-01:** Golden workflow tests comparing ceremony and behavior against v5.4 Classic baseline
+- [x] **PAR-02:** Ceremony snapshot tests (banners, spawn plans, seal rituals match templates)
+- [x] **PAR-03:** Cross-platform smoke tests (Claude Code, OpenCode, Codex)
+- [x] **PAR-04:** State safety tests — all writes go through Go finalizers
 
 ## Out of Scope
 
@@ -70,38 +70,38 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TS-01 | Phase 114 | Pending |
-| TS-02 | Phase 114 | Pending |
-| TS-03 | Phase 114 | Pending |
-| TS-04 | Phase 112 | Pending |
-| TS-05 | Phase 112 | Pending |
-| TS-06 | Phase 112 | Pending |
-| CER-01 | Phase 113 | Pending |
-| CER-02 | Phase 112 | Pending |
-| CER-03 | Phase 113 | Pending |
-| CER-04 | Phase 113 | Pending |
-| CER-05 | Phase 113 | Pending |
-| CER-06 | Phase 113 | Pending |
-| CER-07 | Phase 118 | Pending |
+| TS-01 | Phase 114 | Complete |
+| TS-02 | Phase 114 | Complete |
+| TS-03 | Phase 114 | Complete |
+| TS-04 | Phase 112 | Complete |
+| TS-05 | Phase 112 | Complete |
+| TS-06 | Phase 112 | Complete |
+| CER-01 | Phase 113 | Complete |
+| CER-02 | Phase 112 | Complete |
+| CER-03 | Phase 113 | Complete |
+| CER-04 | Phase 113 | Complete |
+| CER-05 | Phase 113 | Complete |
+| CER-06 | Phase 113 | Complete |
+| CER-07 | Phase 118 | Complete |
 | SW-01 | Phase 115 | Complete |
 | SW-02 | Phase 115 | Complete |
-| SW-03 | Phase 115 | Pending |
+| SW-03 | Phase 115 | Complete |
 | SW-04 | Phase 115 | Complete |
-| SW-05 | Phase 115 | Pending |
-| SW-06 | Phase 115 | Pending |
+| SW-05 | Phase 115 | Complete |
+| SW-06 | Phase 115 | Complete |
 | ORC-01 | Phase 116 | Complete |
 | ORC-02 | Phase 116 | Complete |
 | ORC-03 | Phase 116 | Complete |
 | ORC-04 | Phase 116 | Complete |
 | ORC-05 | Phase 116 | Complete |
 | ORC-06 | Phase 116 | Complete |
-| ORA-01 | Phase 117 | Pending |
-| ORA-02 | Phase 117 | Pending |
-| ORA-03 | Phase 117 | Pending |
-| PAR-01 | Phase 118 | Pending |
-| PAR-02 | Phase 118 | Pending |
-| PAR-03 | Phase 118 | Pending |
-| PAR-04 | Phase 118 | Pending |
+| ORA-01 | Phase 117 | Complete |
+| ORA-02 | Phase 117 | Complete |
+| ORA-03 | Phase 117 | Complete |
+| PAR-01 | Phase 118 | Complete |
+| PAR-02 | Phase 118 | Complete |
+| PAR-03 | Phase 118 | Complete |
+| PAR-04 | Phase 118 | Complete |
 
 ---
 
