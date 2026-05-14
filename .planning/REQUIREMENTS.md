@@ -1,110 +1,93 @@
-# Requirements: Aether v1.17
+# Requirements: Aether v1.18
 
-**Defined:** 2026-05-13
+**Defined:** 2026-05-14
 **Core Value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
 
-## v1.17 Requirements: Classic Restoration
+## v1.18 Requirements: Hybrid Runtime Parity & Release Gate
 
-### TS Host Foundation (TS)
+### TS Host Reliability (REL)
 
-- [x] **TS-01:** TS host dispatches real platform workers (Claude Code, OpenCode, Codex) instead of simulated delays
-- [x] **TS-02:** TS host executes workers within a wave in parallel (concurrent Agent tool spawns)
-- [x] **TS-03:** TS host handles worker errors with retry logic, timeout, and graceful fallback
-- [x] **TS-04:** Event bridge reads Go ceremony events from JSONL stream and tails live events
-- [x] **TS-05:** Node engine bumped to >=20 for chokidar/log-update compatibility
-- [x] **TS-06:** Boundary contract enforced — TS host never writes to `.aether/data/`
+- [ ] **REL-01:** `npm --prefix .aether/ts-host run typecheck` passes with zero errors
+- [ ] **REL-02:** Full TS test suite (`npm --prefix .aether/ts-host test`) exits cleanly without hangs
+- [ ] **REL-03:** Event bridge teardown awaits full subprocess/readline cleanup
+- [ ] **REL-04:** Completion file paths are unique per lifecycle run (no fixed `/tmp/aether-lifecycle/`)
+- [ ] **REL-05:** Individual tests and suite mode both pass for lifecycle and golden workflow
 
-### Ceremony & Visuals (CER)
+### Platform Dispatch Correctness (DSP)
 
-- [x] **CER-01:** Ceremony banners and art restored to command wrappers (editable markdown, not compiled Go)
-- [x] **CER-02:** Shared ceremony config in YAML (caste emoji/color/label maps, naming conventions)
-- [x] **CER-03:** Go ceremony rendering code replaced by event emission (Go emits, wrappers render from templates)
-- [x] **CER-04:** Crowned Anthill seal ASCII art in editable template
-- [x] **CER-05:** Worker spawn notifications with caste identity frames
-- [x] **CER-06:** Build summary and closeout rituals with template frames
-- [x] **CER-07:** Seal ceremony with Sage, Chronicler, wisdom review, and commit suggestion steps
+- [ ] **DSP-01:** Codex dispatch passes the worker prompt to `codex exec` (not just `--output-schema`)
+- [ ] **DSP-02:** Claude argument construction is tested and verified
+- [ ] **DSP-03:** OpenCode argument construction is tested and verified
+- [ ] **DSP-04:** Simulation fallback is explicit and does not mask broken real dispatch
+- [ ] **DSP-05:** Spawn-log/spawn-complete only records manifest workers
 
-### Swarm Dashboard (SW)
+### Go Runtime Test Restoration (GOT)
 
-- [x] **SW-01:** Live terminal dashboard with animated spinners per active worker
-- [x] **SW-02:** Per-ant progress bars with excavation status phrases
-- [x] **SW-03:** Tool usage counters per worker (reads/writes/fetches/commands)
-- [x] **SW-04:** Chamber activity map showing which project areas have active workers
-- [x] **SW-05:** Elapsed time and token consumption per worker
-- [x] **SW-06:** Auto-refresh via chokidar watching JSONL event file
+- [ ] **GOT-01:** `go test ./cmd` passes with zero failures
+- [ ] **GOT-02:** Resume dashboard signal injection failure is resolved
+- [ ] **GOT-03:** Workspace/planning cleanup state is resolved (deleted files committed or archived)
+- [ ] **GOT-04:** Scratch files (`seal-debug.ts`, etc.) are removed or promoted
+- [ ] **GOT-05:** Go remains sole authority for `.aether/data` mutation
 
-### Queen Orchestration (ORC)
+### Classic Parity Coverage (PAR)
 
-- [ ] **ORC-01:** Queen selects workflow patterns (SPBV, Investigate-Fix, Refactor, Compliance, Documentation Sprint) based on phase name/content
-- [ ] **ORC-02:** Builder-Probe Lock restored — builders return `code_written`, only Probe upgrades to `completed`
-- [ ] **ORC-03:** Tiered escalation chain (worker retry → parent reassignment → Queen reassignment → user escalation)
-- [ ] **ORC-04:** Intra-build midden threshold checks with auto-REDIRECT pheromone emission
-- [ ] **ORC-05:** Phase mode awareness (discovery/prototype/production/maintenance) mapping to verification depth
-- [ ] **ORC-06:** Ambassador conditional spawn for integration tasks
+- [ ] **PAR-01:** Golden tests verify build ceremony matches v5.4 baseline
+- [ ] **PAR-02:** Golden tests verify continue ceremony matches v5.4 baseline
+- [ ] **PAR-03:** Oracle confidence loop behavior is tested against v5.4 baseline
+- [ ] **PAR-04:** Swarm/dashboard visibility is tested against v5.4 baseline
+- [ ] **PAR-05:** Install/update flow is tested against v5.4 baseline
+- [ ] **PAR-06:** State mutation through approved APIs is tested against v5.4 baseline
+- [ ] **PAR-07:** Any Classic behavior intentionally not restored is documented
 
-### Oracle Enhancement (ORA)
+### Release Gate (REL)
 
-- [x] **ORA-01:** Phase-aware prompt directives (survey/investigate/synthesize/verify) injected into worker briefs
-- [x] **ORA-02:** Diminishing returns detection with novelty delta tracking
-- [x] **ORA-03:** Template-specific synthesis sections (tech-eval, architecture-review, bug-investigation)
+- [ ] **REL-06:** Dev channel publish succeeds
+- [ ] **REL-07:** Downstream smoke test passes: `aether update --force`, `aether init`, `aether plan`, `aether build 1`, `aether continue`, `aether oracle`
+- [ ] **REL-08:** Exact blocker list is recorded before stable release
 
-### Parity & Verification (PAR)
-
-- [x] **PAR-01:** Golden workflow tests comparing ceremony and behavior against v5.4 Classic baseline
-- [x] **PAR-02:** Ceremony snapshot tests (banners, spawn plans, seal rituals match templates)
-- [x] **PAR-03:** Cross-platform smoke tests (Claude Code, OpenCode, Codex)
-- [x] **PAR-04:** State safety tests — all writes go through Go finalizers
-
-## Out of Scope
+## Non-Goals
 
 | Feature | Reason |
 |---------|--------|
-| Real-time web dashboard | Out of scope per PROJECT.md |
-| Cross-colony ledger sharing | Findings go stale across repos |
-| Durable execution engine for Oracle | Only justified if Oracle becomes long-running and resumable |
-| Full TUI framework adoption | Ink/Blessed are too heavy; custom composite is sufficient |
-| Workflow graph engine (LangGraph-style) | Aether's patterns are LLM-driven, not deterministic graphs |
-| Multi-agent Oracle crew | Oracle is single-agent with phase transitions |
+| Interactive Shell | Deferred to v1.19 — blocked until release gate passes |
+| New framework adoption | Out of scope — tighten what exists |
+| Runtime rewrite | Out of scope — fix what exists |
+| Moving Go responsibilities to TS | Violates architecture boundary |
+| Restoring raw Bash state mutation | Violates architecture boundary |
+| Stable release before gate passes | Gate must be green first |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TS-01 | Phase 114 | Complete |
-| TS-02 | Phase 114 | Complete |
-| TS-03 | Phase 114 | Complete |
-| TS-04 | Phase 112 | Complete |
-| TS-05 | Phase 112 | Complete |
-| TS-06 | Phase 112 | Complete |
-| CER-01 | Phase 113 | Complete |
-| CER-02 | Phase 112 | Complete |
-| CER-03 | Phase 113 | Complete |
-| CER-04 | Phase 113 | Complete |
-| CER-05 | Phase 113 | Complete |
-| CER-06 | Phase 113 | Complete |
-| CER-07 | Phase 118 | Complete |
-| SW-01 | Phase 115 | Complete |
-| SW-02 | Phase 115 | Complete |
-| SW-03 | Phase 115 | Complete |
-| SW-04 | Phase 115 | Complete |
-| SW-05 | Phase 115 | Complete |
-| SW-06 | Phase 115 | Complete |
-| ORC-01 | Phase 116 | Complete |
-| ORC-02 | Phase 116 | Complete |
-| ORC-03 | Phase 116 | Complete |
-| ORC-04 | Phase 116 | Complete |
-| ORC-05 | Phase 116 | Complete |
-| ORC-06 | Phase 116 | Complete |
-| ORA-01 | Phase 117 | Complete |
-| ORA-02 | Phase 117 | Complete |
-| ORA-03 | Phase 117 | Complete |
-| PAR-01 | Phase 118 | Complete |
-| PAR-02 | Phase 118 | Complete |
-| PAR-03 | Phase 118 | Complete |
-| PAR-04 | Phase 118 | Complete |
+| REL-01 | Phase 119 | Pending |
+| REL-02 | Phase 119 | Pending |
+| REL-03 | Phase 119 | Pending |
+| REL-04 | Phase 119 | Pending |
+| REL-05 | Phase 119 | Pending |
+| DSP-01 | Phase 120 | Pending |
+| DSP-02 | Phase 120 | Pending |
+| DSP-03 | Phase 120 | Pending |
+| DSP-04 | Phase 120 | Pending |
+| DSP-05 | Phase 120 | Pending |
+| GOT-01 | Phase 121 | Pending |
+| GOT-02 | Phase 121 | Pending |
+| GOT-03 | Phase 121 | Pending |
+| GOT-04 | Phase 121 | Pending |
+| GOT-05 | Phase 121 | Pending |
+| PAR-01 | Phase 122 | Pending |
+| PAR-02 | Phase 122 | Pending |
+| PAR-03 | Phase 122 | Pending |
+| PAR-04 | Phase 122 | Pending |
+| PAR-05 | Phase 122 | Pending |
+| PAR-06 | Phase 122 | Pending |
+| PAR-07 | Phase 122 | Pending |
+| REL-06 | Phase 123 | Pending |
+| REL-07 | Phase 123 | Pending |
+| REL-08 | Phase 123 | Pending |
 
 ---
 
 ## Prior Requirements
 
-See `.planning/MILESTONES.md` for validated requirements from v1.0 through v1.16.
+See `.planning/milestones/v1.17-REQUIREMENTS.md` for validated requirements from v1.17.

@@ -32,9 +32,19 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
-## Current Milestone: v1.18 (TBD)
+## Current Milestone: v1.18 Hybrid Runtime Parity & Release Gate
 
-**Goal:** *(To be defined via `/gsd-new-milestone`)*
+**Goal:** Make the hybrid runtime reliable enough to publish and build future features on. Restore confidence by proving Classic parity for the workflows that matter: build, continue, Oracle, ceremony, install/update, and safe state mutation.
+
+**Target features:**
+- TS Host Reliability: typecheck passes, test suite exits cleanly, event bridge teardown is complete, temp files are unique per run
+- Platform Dispatch Correctness: Codex passes prompts, all three platforms have tested argument construction, simulation fallback is explicit
+- Go Runtime Test Restoration: `go test ./cmd` passes, workspace cleanup resolved, scratch files removed
+- Classic Parity Coverage: golden tests match v5.4 baseline for build, continue, Oracle, dashboard, install/update, state mutation
+- Dev Publish + Downstream Smoke: dev channel publish succeeds, clean downstream repo verifies full workflow
+
+**Stretch (only if all gates pass):**
+- Write v1.19 Interactive Shell readiness spec (do not implement)
 
 ## Current State
 
