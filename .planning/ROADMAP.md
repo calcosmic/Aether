@@ -19,7 +19,7 @@
 - **v1.14 Queen Authority** - Phases 93-99 (shipped 2026-05-04)
 - **v1.15 Framework Coherence, Efficiency, and Ship Readiness** - Phases 100-105 (shipped 2026-05-08)
 - **v1.16 Hybrid Runtime Boundary and Orchestration Recovery** - Phases 106-111 (shipped 2026-05-13)
-- **v1.17 Classic Restoration** - Phases 112-118 (in progress)
+- **v1.17 Classic Restoration** - Phases 112-118 (shipped 2026-05-14)
 
 ## Phases
 
@@ -42,7 +42,7 @@ See `.planning/milestones/` for full archived phase details.
 
 </details>
 
-### v1.17 Classic Restoration (In Progress)
+### v1.17 Classic Restoration (Shipped 2026-05-14)
 
 **Milestone Goal:** Restore the full Aether lifecycle to v5.4-level richness — ceremony, Queen intelligence, swarm display, and the whole build/continue flow — with Go as the utility belt and the TS host as the control plane.
 
@@ -51,8 +51,8 @@ See `.planning/milestones/` for full archived phase details.
 - [x] **Phase 114: Real Worker Dispatch** - Replace simulation with actual platform worker spawning, parallel waves, error recovery — completed 2026-05-13
 - [x] **Phase 115: Swarm Dashboard** - Live terminal dashboard with animated spinners, progress bars, and chamber activity map — completed 2026-05-13
 - [x] **Phase 116: Queen Orchestration** - Workflow pattern selection, Builder-Probe Lock, tiered escalation, midden checks — completed 2026-05-14
-- [ ] **Phase 117: Oracle Enhancement** - Phase-aware prompts, diminishing returns detection, template-specific synthesis
-- [ ] **Phase 118: Integration & Parity Verification** - Golden workflow tests, ceremony snapshots, cross-platform smoke, state safety
+- [x] **Phase 117: Oracle Enhancement** - Phase-aware prompts, diminishing returns detection, template-specific synthesis (completed 2026-05-13)
+- [x] **Phase 118: Integration & Parity Verification** - Golden workflow tests, ceremony snapshots, cross-platform smoke, state safety — completed 2026-05-14
 
 ## Phase Details
 
@@ -159,5 +159,5 @@ Plans:
 | 114. Real Worker Dispatch | v1.17 | 2/2 | Complete | 2026-05-13 |
 | 115. Swarm Dashboard | v1.17 | 0/TBD | Not started | - |
 | 116. Queen Orchestration | v1.17 | 2/2 | Complete | 2026-05-14 |
-| 117. Oracle Enhancement | v1.17 | 0/TBD | Not started | - |
+| 117. Oracle Enhancement | v1.17 | 2/2 | Complete   | 2026-05-13 |
 | 118. Integration & Parity | v1.17 | 0/TBD | Not started | - |

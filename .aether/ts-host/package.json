@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
+    "test:all": "tsx --test test/*.test.ts",
     "test:update-snapshots": "AETHER_UPDATE_SNAPSHOTS=1 tsx --test test/*.test.ts"
   },
   "dependencies": {
