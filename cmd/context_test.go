@@ -384,7 +384,7 @@ func TestResumeDashboardIncludesSignalsBlockersSurveyAndRecoverySource(t *testin
 			{
 				ID:        "sig-1",
 				Type:      "FOCUS",
-				CreatedAt: "2026-04-17T09:30:00Z",
+				CreatedAt: time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
 				Active:    true,
 				Strength:  &strength,
 				Content:   []byte(`{"text":"protect recovery parity"}`),

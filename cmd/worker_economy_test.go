@@ -49,6 +49,7 @@ func loadWorkerEconomySnapshot(t *testing.T) *WorkerEconomySnapshot {
 }
 
 // readWorkerEconomyReport reads the WORKER-ECONOMY.md report from the phase directory.
+// Skips the test if the file was archived (e.g. during milestone cleanup).
 func readWorkerEconomyReport(t *testing.T) string {
 	t.Helper()
 	repoRoot, err := repoRootForCommandSourceTest()
@@ -58,6 +59,9 @@ func readWorkerEconomyReport(t *testing.T) string {
 	path := repoRoot + "/.planning/phases/102-worker-economy-visual-ceremony-audit/WORKER-ECONOMY.md"
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			t.Skip("WORKER-ECONOMY.md archived")
+		}
 		t.Fatalf("read WORKER-ECONOMY.md: %v", err)
 	}
 	return string(data)
