@@ -32,30 +32,47 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
-## Current Milestone: v1.18 Hybrid Runtime Parity & Release Gate
+## Current Milestone: v1.19 (TBD)
 
-**Goal:** Make the hybrid runtime reliable enough to publish and build future features on. Restore confidence by proving Classic parity for the workflows that matter: build, continue, Oracle, ceremony, install/update, and safe state mutation.
-
-**Target features:**
-- TS Host Reliability: typecheck passes, test suite exits cleanly, event bridge teardown is complete, temp files are unique per run
-- Platform Dispatch Correctness: Codex passes prompts, all three platforms have tested argument construction, simulation fallback is explicit
-- Go Runtime Test Restoration: `go test ./cmd` passes, workspace cleanup resolved, scratch files removed
-- Classic Parity Coverage: golden tests match v5.4 baseline for build, continue, Oracle, dashboard, install/update, state mutation
-- Dev Publish + Downstream Smoke: dev channel publish succeeds, clean downstream repo verifies full workflow
-
-**Stretch (only if all gates pass):**
-- Write v1.19 Interactive Shell readiness spec (do not implement)
+**Goal:** Define next milestone goals. Run `/gsd-new-milestone` to start the next milestone cycle.
 
 ## Current State
 
-- **v1.17 Classic Restoration shipped (2026-05-14)** — Full milestone archive in `.planning/milestones/`
-- Go runtime is healthy, v1.0.34 shipped
-- TS host is the active control plane: event bridge, ceremony narrator, worker dispatch, swarm dashboard, Queen orchestration
-- 44+ TS host tests passing + 2900+ Go tests passing
-- 10 ceremony snapshot files prove deterministic renderer output
-- Cross-platform parity verified: 27 castes on Claude, OpenCode, and Codex
-- State safety verified: 3-layer defense (runtime boundary, static analysis, integration tests)
-- All 32 v1.17 requirements met
+- **v1.18 Hybrid Runtime Parity & Release Gate shipped (2026-05-14)** — Full milestone archive in `.planning/milestones/`
+- **Product version: v1.0.38**
+- Go runtime is healthy, all 17 Go test packages passing
+- TS host is stable: typecheck clean, 168 tests passing, no hangs
+- Platform dispatch is correct: Codex prompt passing fixed, all 3 platforms tested
+- Classic parity verified: golden tests match v5.4 baseline
+- Dev channel publish verified: downstream smoke test passed
+
+**Key accomplishments (v1.18):**
+- TS host stabilized — typecheck clean, 168 tests passing, event bridge teardown fixed
+- Platform dispatch corrected — Codex prompt passing fixed, Claude/OpenCode/Codex arg tests added
+- Go test suite restored — 7 failures resolved, all 17 packages green
+- Classic parity verified — golden tests match v5.4 baseline, 34 Oracle tests, 17 swarm tests
+- Release gate passed — dev channel publish succeeded, downstream smoke verified
+
+**Stretch from v1.18:**
+- Write v1.19 Interactive Shell readiness spec (deferred — not yet started)
+
+<details>
+<summary>v1.18 Hybrid Runtime Parity & Release Gate Summary</summary>
+
+**Shipped:** 2026-05-14
+**Phases:** 5 (119-123)
+**Requirements:** 25/25 Complete
+**Product Version:** v1.0.38
+
+Key accomplishments:
+- TS host stabilized — typecheck clean, 168 tests passing, event bridge teardown fixed
+- Platform dispatch corrected — Codex prompt passing fixed, Claude/OpenCode/Codex arg tests added
+- Go test suite restored — 7 failures resolved (time-bomb + archived docs), all 17 packages green
+- Classic parity verified — golden tests match v5.4 baseline for build, continue, Oracle, dashboard, install/update, state
+- Release gate passed — dev channel publish v1.0.38 succeeded, downstream smoke test verified
+
+Full details: `.planning/milestones/v1.18-ROADMAP.md`
+</details>
 
 <details>
 <summary>v1.17 Classic Restoration Summary</summary>

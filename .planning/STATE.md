@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.18
 milestone_name: Hybrid Runtime Parity & Release Gate
-status: completed
-stopped_at: Phase 123 complete
+status: archived
+stopped_at: Milestone archived
 last_updated: "2026-05-14T00:00:00.000Z"
-last_activity: 2026-05-14 -- Phase 123 Dev Publish + Downstream Smoke execution complete
+last_activity: 2026-05-14 -- Milestone v1.18 archived
 progress:
   total_phases: 5
   completed_phases: 5
