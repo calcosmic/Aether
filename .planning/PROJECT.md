@@ -32,9 +32,23 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
-## Current Milestone: v1.19 (TBD)
+## Current Milestone: v1.19 TypeScript Host Cutover + Oracle Confidence Recovery
 
-**Goal:** Define next milestone goals. Run `/gsd-new-milestone` to start the next milestone cycle.
+**Goal:** Make the TypeScript host the primary orchestration layer for real user workflows. Cut over plan/build/continue wrappers from manual Go command chains to host-backed orchestration. Restore Oracle/RALF confidence iteration through the hybrid manifest/finalizer boundary.
+
+**Target features:**
+- Host Entry Point: `aether host <workflow>` runs the TS host from installed assets
+- Wrapper Cutover: Claude/OpenCode plan/build/continue call TS host, not manual Go chains
+- Oracle Iteration Manifests: Go owns Oracle state, confidence math, and finalizers
+- TS Host Oracle Lifecycle: `runOracleLifecycle()` dispatches workers and loops until target
+- Swarm/Watch Host Bridge: Live visibility via Go JSON output, not visual parsing
+- Release Gate: Typecheck, tests, downstream smoke, cross-platform consistency
+
+**Non-goals:**
+- Interactive shell (deferred to v1.20)
+- Rewrite Go runtime in TypeScript
+- Remove AETHER_OUTPUT_MODE (centralize behind host instead)
+- Raw Bash orchestration
 
 ## Current State
 

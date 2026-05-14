@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.18
-milestone_name: Hybrid Runtime Parity & Release Gate
-status: archived
-stopped_at: Milestone archived
+milestone: v1.19
+milestone_name: TypeScript Host Cutover + Oracle Confidence Recovery
+status: in_progress
+stopped_at: Milestone initialization
 last_updated: "2026-05-14T00:00:00.000Z"
-last_activity: 2026-05-14 -- Milestone v1.18 archived
+last_activity: 2026-05-14 -- Milestone v1.19 initialized
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,27 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 123 — Dev Publish + Downstream Smoke
+**Current focus:** Phase 124 — Host Entry Point
 
 ## Current Position
 
-Phase: 123 of 123 (Dev Publish + Downstream Smoke)
-Plan: 01 complete
-Status: Completed
+Phase: 124 of 129 (Host Entry Point)
+Plan: Not started
+Status: In Progress
 
 ## Known Blockers
 
-None — smoke test passed.
-
-## Blocker List for Stable Release
-
-| Item | Status | Notes |
-|------|--------|-------|
-| REL-06 Dev channel publish | PASS | v1.0.38 published to ~/.aether-dev |
-| REL-07 Downstream smoke test | PASS | init, plan, build, continue, oracle all functional |
-| REL-08 Blocker list recorded | PASS | No blockers — ready for stable release |
+None
 
 ## Next Actions
 
-Milestone v1.18 complete. Archive or proceed to v1.19 planning.
-3. Proceed to Phase 120 (Platform Dispatch Correctness)
+1. Run `/gsd-plan-phase 124` to plan Host Entry Point phase
+2. Add `aether host <workflow>` CLI entry point
+3. Ensure publish/update installs TS host correctly
