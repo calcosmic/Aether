@@ -337,22 +337,13 @@ This file already emits all required events. The narrator consumes them.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Which Go commands besides `build`, `plan`, `continue`, `colonize`, `seal` need ceremony events?**
-   - What we know: The 29 existing topics cover build, plan, colonize, continue, pheromone, skill, chamber, midden, queen, hive, and loop break.
-   - What's unclear: Whether `init`, `status`, `watch`, or other commands have visual output that should move to the narrator.
-   - Recommendation: Audit `cmd/codex_visuals.go` for all `render*` function call sites. Only migrate commands that are part of the lifecycle (build/plan/continue/colonize/seal).
+1. **Which Go commands besides `build`, `plan`, `continue`, `colonize`, `seal` need ceremony events?** — RESOLVED: Only lifecycle commands (build/plan/continue/colonize/seal) are migrated. `aether version` and other non-lifecycle commands keep Go-side rendering. Verified by audit of `cmd/codex_visuals.go` render* call sites in Plan 113-02.
 
-2. **Should the TS host narrator run as a singleton per command, or per lifecycle session?**
-   - What we know: The event bridge starts per command invocation.
-   - What's unclear: Whether multiple commands in one wrapper invocation (e.g., build then continue) share a narrator instance.
-   - Recommendation: Start with per-command narrator instance. Simpler, matches event bridge lifecycle.
+2. **Should the TS host narrator run as a singleton per command, or per lifecycle session?** — RESOLVED: Per-command narrator instance. Matches event bridge lifecycle (one bridge per command invocation). Plan 113-02 Task 2 implements this.
 
-3. **How are templates distributed via `aether publish`?**
-   - What we know: `aether publish` syncs companion files to the hub.
-   - What's unclear: Whether `.aether/templates/ceremony/` is in the publish manifest.
-   - Recommendation: Verify `.aether/docs/publish-update-runbook.md` for template directory inclusion. Add fallback templates in code as safety net.
+3. **How are templates distributed via `aether publish`?** — RESOLVED: `DEFAULT_TEMPLATES` inline fallback in `template-loader.ts` ensures templates work even if `.aether/templates/ceremony/` is missing from publish manifest. Plan 113-01 Task 1 includes this safety net.
 
 ---
 
