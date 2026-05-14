@@ -2,7 +2,8 @@ name: ant-plan
 description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>"
+  command: "aether host plan --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>"
+  fallback: "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2>"
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
@@ -25,7 +26,7 @@ wrapper_additions:
   orchestration: |
     Restore real wrapper planning orchestration:
     1. Run `AETHER_OUTPUT_MODE=visual aether status`.
-    2. Run `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2>` for normal wrapper planning, or run the user's requested `aether plan --refresh` when refreshing an existing plan, and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+    2. Run `aether host plan --depth <choice> --planning-depth <choice2>` for normal wrapper planning, or run the user's requested `aether plan --refresh` when refreshing an existing plan, and save the full JSON envelope to a temporary manifest file outside `.aether/data/`. If the TS host is unavailable, fall back to `AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2>`.
     3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
     4. Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the planning flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
     5. If the runtime reports `dispatch_mode: agent-delegate`, treat it as the same host-dispatch contract: do not run nested subprocess planning; dispatch the manifest workers through the current host platform and finish with `plan-finalize`.

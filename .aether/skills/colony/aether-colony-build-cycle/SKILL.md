@@ -67,6 +67,12 @@ answer, or store boundary questions in Codex chat or wrapper state.
 3. Run:
 
 ```bash
+aether host plan --depth <choice> --planning-depth <choice>
+```
+
+If the TS host is unavailable, fall back to:
+
+```bash
 AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice>
 ```
 
@@ -153,6 +159,12 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 3. Run:
 
 ```bash
+aether host build <phase>
+```
+
+If the TS host is unavailable, fall back to:
+
+```bash
 AETHER_OUTPUT_MODE=json aether build <phase> --plan-only
 ```
 
@@ -203,6 +215,12 @@ AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth s
 Use external review orchestration only when the user explicitly requested heavy
 review or the runtime asks for wrapper-spawned review workers. In that case,
 request the runtime manifest:
+
+```bash
+aether host continue --verification-depth heavy <args>
+```
+
+If the TS host is unavailable, fall back to:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy <args>

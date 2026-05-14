@@ -3,6 +3,7 @@ description: "👁️ Verify build work, extract learnings, and advance the colo
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
+  fallback: "AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS"
 codex_orchestration:
   category: "semi-intelligent"
   skill: "aether-colony-build-cycle"
@@ -20,7 +21,7 @@ wrapper_additions:
     2. Do not use plan-only, spawn wrapper workers, or call continue-finalize on the default path.
 
     Heavy external review path:
-    1. Only when the user explicitly requested `--verification-depth heavy` or `--heavy`, or the runtime specifically asks for wrapper-spawned review workers, run `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+    1. Only when the user explicitly requested `--verification-depth heavy` or `--heavy`, or the runtime specifically asks for wrapper-spawned review workers, run `aether host continue --verification-depth heavy $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`. If the TS host is unavailable, fall back to `AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS`.
     2. Parse `result.continue_manifest`; do not parse visual output.
     3. Before rendering spawn ceremonies or spawning reviewers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the heavy-review flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
     4. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>` so the user sees the heavy-review spawn plan before reviewers appear.
