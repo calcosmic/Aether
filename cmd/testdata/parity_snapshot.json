@@ -423,6 +423,8 @@
     "milestone-detect",
     "normalize-args",
     "oracle",
+    "oracle-iterate",
+    "oracle-iterate-finalize",
     "parallel-mode",
     "patrol-check",
     "pause-colony",

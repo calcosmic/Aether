@@ -63,7 +63,7 @@ function printUsage(): void {
       "  plan          Call aether plan --plan-only\n" +
       "  build <N>     Call aether build N --plan-only\n" +
       "  continue      Call aether continue --plan-only\n" +
-      "  oracle        Run oracle workflow (stub — Phase 127 will implement full lifecycle)\n" +
+      "  oracle        Call aether oracle-iterate --plan-only\n" +
       "  lifecycle [N] Full plan->build->continue sequence (default phase: 1)\n\n" +
       "Options:\n" +
       "  --cwd <path>        Working directory\n" +
@@ -121,13 +121,14 @@ async function main(): Promise<void> {
     }
 
     case "oracle": {
-      process.stderr.write(
-        "Oracle lifecycle: Phase 127 will implement runOracleLifecycle().\n" +
-          "For now, use the Go CLI: aether oracle-iterate\n"
-      );
-      process.stdout.write(
-        JSON.stringify({ success: true, status: "stub" }, null, 2) + "\n"
-      );
+      const topic = positional[0] || "auto";
+      const result = callGoJSON(bridge, [
+        "oracle-iterate",
+        "--plan-only",
+        "--topic",
+        topic,
+      ]);
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
 

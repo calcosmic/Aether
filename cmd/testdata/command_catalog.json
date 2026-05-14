@@ -1808,6 +1808,30 @@
     "output_mode": "unknown"
   },
   {
+    "name": "oracle-iterate",
+    "short_description": "Generate an Oracle iteration manifest",
+    "flags": [
+      "confidence-target",
+      "depth",
+      "max-iterations",
+      "plan-only",
+      "topic"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "oracle-iterate-finalize",
+    "short_description": "Commit Oracle iteration results and update state",
+    "flags": [
+      "completion-file"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "parallel-mode",
     "short_description": "Get or set parallel execution mode",
     "flags": [],
