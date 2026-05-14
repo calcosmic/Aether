@@ -32,35 +32,45 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
-## Current Milestone: v1.17 Classic Restoration
+## Current Milestone: v1.18 (TBD)
 
-**Goal:** Restore the full Aether lifecycle to v5.4-level richness — ceremony, Queen intelligence, swarm display, and the whole build/continue flow — with Go as the utility belt and the TS host as the control plane.
-
-**Target features:**
-- TS host becomes the real control plane (actual worker dispatch, parallel waves, error recovery)
-- Ceremony restored to command wrappers (banners, art, spawn notifications, seal rituals — editable in markdown)
-- Shared ceremony config in YAML (caste emoji/color/label maps — not duplicated across commands)
-- Go emits structured events via ceremony topics; wrappers render from events
-- Queen workflow pattern selection (SPBV, Investigate-Fix, Refactor, etc.) based on phase type
-- Builder-Probe Lock restored (builders cannot self-certify)
-- Tiered escalation chain (worker retry → reassignment → Queen → user)
-- Oracle enriched with phase-aware prompts, diminishing returns detection, template-specific synthesis
-- Swarm display with live terminal dashboard
-- Golden parity tests proving restored system matches Classic behavior
+**Goal:** *(To be defined via `/gsd-new-milestone`)*
 
 ## Current State
 
+- **v1.17 Classic Restoration shipped (2026-05-14)** — Full milestone archive in `.planning/milestones/`
 - Go runtime is healthy, v1.0.34 shipped
-- Milestone v1.16 Hybrid Runtime Boundary shipped (2026-05-13): boundary contract, Classic baseline, golden workflow tests, TypeScript orchestration host, Go safety invariants, migration map
-- v1.16 TS host prototype proves Go manifests → TS orchestration → Go finalizers works
-- 2900+ tests passing, full E2E regression coverage
-- Event bus has ceremony topics already defined (ceremony.build.spawn, ceremony.build.wave.start, etc.)
-- Core insight from research: "Go owns safety, not soul" — ~12% of cmd/ should shrink (ceremony rendering, orchestration logic)
-- Classic v5.4 research complete: ceremony was 100% wrapper-driven, Queen selected workflow patterns, Oracle had phase-aware prompts, swarm was a 277-line animated bash dashboard
+- TS host is the active control plane: event bridge, ceremony narrator, worker dispatch, swarm dashboard, Queen orchestration
+- 44+ TS host tests passing + 2900+ Go tests passing
+- 10 ceremony snapshot files prove deterministic renderer output
+- Cross-platform parity verified: 27 castes on Claude, OpenCode, and Codex
+- State safety verified: 3-layer defense (runtime boundary, static analysis, integration tests)
+- All 32 v1.17 requirements met
+
+<details>
+<summary>v1.17 Classic Restoration Summary</summary>
+
+**Shipped:** 2026-05-14
+**Phases:** 7 (112-118)
+**Requirements:** 32/32 Complete
+
+Key accomplishments:
+- TS host consumes Go ceremony events via JSONL stream and renders banners, spawn frames, stage separators
+- Real platform worker dispatch (Claude Code, OpenCode, Codex) with parallel waves and retry logic
+- Live terminal swarm dashboard with animated spinners, progress bars, chamber activity map
+- Queen Orchestrator with workflow pattern selection, Builder-Probe Lock, midden checks
+- Oracle RALF loop with phase-aware prompts, diminishing returns detection, template-specific synthesis
+- Golden workflow snapshot tests proving restored system matches Classic v5.4 behavior
+- Cross-platform parity tests + state safety integration tests
+
+Full details: `.planning/milestones/v1.17-ROADMAP.md`
+</details>
 
 <details>
 <summary>Prior State History</summary>
 
+- v1.17 (Classic Restoration, Phases 112-118): TS host control plane, ceremony narrator, swarm dashboard, Queen orchestration, Oracle enhancement, parity verification — shipped 2026-05-14
+- v1.16 (Hybrid Runtime Boundary, Phases 106-111): Boundary contract, Classic baseline, TS host prototype, Go safety invariants — shipped 2026-05-13
 - v1.0 (MVP, Phases 1-6): Colony ceremony and runtime visibility
 - v1.1 (Trusted Context, Phases 7-11): Context proof and skill routing
 - v1.2 (Live Dispatch Truth, Phases 12-16): Worker dispatch honesty
