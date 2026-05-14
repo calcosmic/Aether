@@ -16,132 +16,63 @@ Before planning the dispatch, ground yourself in runtime truth:
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
 2. Keep that runtime context in view while framing the phase.
-3. Do not inspect or mutate `.aether/data/` by hand — read runtime context through the CLI only.
 
 ## Active Signals
 
 Before spawning workers, present active pheromones as a compact steering block:
 
-- `REDIRECT` first — make hard constraints explicit.
-- `FOCUS` second — summarize the main areas that deserve extra attention.
-- `FEEDBACK` last — mention only the lightweight adjustments that matter for this phase.
-- Include strength or remaining-life context so the user understands why each signal matters right now.
-- If there are no active signals, say so plainly and keep the block short.
+- `REDIRECT` first — hard constraints.
+- `FOCUS` second — main attention areas.
+- `FEEDBACK` last — lightweight adjustments.
+- Include strength or remaining-life context.
+- If no active signals, say so plainly.
 
 ## Phase Framing
 
-Use the grounded status context to frame the requested work:
-
-- Present it as `Phase N of M — Name`.
-- Add a one-line purpose that explains why this phase matters to the colony goal.
-- Keep the framing concise; orient the user without replaying the full plan.
+Frame the requested work as `Phase N of M — Name` with a one-line purpose.
 
 ## Dispatch Manifest
 
-Use the Go `aether` CLI as the source of truth. Ask the Go runtime for the authoritative worker plan. Immediately before the command, say:
+Run the TS host to fetch the authoritative dispatch manifest:
 
-`Asking the runtime for the dispatch manifest...`
+```
+aether host build $ARGUMENTS
+```
+
+If the TS host is unavailable, fall back to:
 
 ```
 AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only
 ```
 
-Parse `result.dispatch_manifest`. This manifest is the only source for worker names, castes, execution waves, task waves, task IDs, playbooks, selected tasks, and success criteria. Do not parse visual output.
-
-Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the old visual stack comes from the same runtime manifest you parsed.
+Parse `result.dispatch_manifest`. Save the JSON envelope to a temporary manifest file outside `.aether/data/`.
 
 ## Guided Boundary Gate
 
-Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`.
+Before spawning workers, inspect `result.orchestrator_boundary_guidance`:
 
-- If it is active or `next` is `aether discuss`, stop the build flow and show its summary.
-- Route to `aether discuss` so the user can resolve the runtime-owned questions.
-- Tell the user to rerun `after_discuss_next` after answers are resolved.
-- Request a fresh plan-only manifest after the guided answer is resolved. Do not reuse the pre-discuss manifest and do not ask, answer, or store boundary questions in wrapper markdown.
+- If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest.
 
-## Runtime Spawn Ceremony
+## Worker Spawning
 
-Immediately after parsing the JSON manifest, render the runtime-owned spawn ceremony for the user:
+For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 
-```
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
-```
+- Use visible live Task/subagent calls. Do not set `run_in_background`.
+- Each worker description: `{caste emoji} {Caste} {name}: {task}`.
+- Inject phase objective, task metadata, dependencies, success criteria, active signals, and `skill_section` when present.
+- Require terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `blockers`, `duration`.
 
-This visual output is for the user only. Do not parse it as state. It should show the caste-colored spawn plan before live workers appear.
+Respect `execution_plan`: serial steps stay serial; parallel steps may spawn together.
 
-## Playbook Procedure
+## Finalize
 
-Load the build-wave playbook from the installed hub (`~/.aether/system/docs/command-playbooks/build-wave.md`, or the matching dev hub when using `aether-dev`) and use it as the spawning procedure. The runtime owns the dispatch manifest; the playbook owns the wrapper ceremony and prompt structure.
-
-## Live Worker Ceremony
-
-The visible live Task/subagent stack is part of the Aether ceremony.
-
-- Issue all parallel-wave Task calls in one assistant message so the platform shows workers stacked together.
-- Do not set `run_in_background`.
-- Do not describe the wave as `background agents launched` or say you will be notified later.
-- Do not replace the live stack with a markdown worker table. The runtime spawn ceremony plus live Task panels are the display.
-- Each worker description parameter must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`.
-- Preserve platform agent caste color/icon metadata by using the manifest `agent_name` as `subagent_type`.
-
-## Wave Execution
-
-For each step in `dispatch_manifest.execution_plan`, execute the matching `dispatch_manifest.dispatches` entries whose `execution_wave` matches that step:
-
-1. Before spawning a manifest step, render the old-style wave banner:
-   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
-2. Then run:
-   `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
-3. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
-4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. Inject the phase objective, task metadata, dependencies, success criteria, active signals, the dispatch `skill_section` when present, relevant playbook instructions, and any specialist findings already collected.
-6. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `tool_count`, `blockers`, and `duration`.
-7. After each worker returns, run:
-   `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
-8. Write that one terminal result to a temporary worker JSON file and render:
-   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`
-
-Multiple agent calls issued in one assistant message may run in parallel when the platform supports it. Respect `dispatch_manifest.execution_plan`: serial steps stay serial; parallel steps may spawn together. Pre-wave specialists such as Archaeologist, Oracle, Architect, or Ambassador must complete before builder/scout task waves. Post-wave specialists such as Probe, Watcher, Measurer, or Chaos must run after builder/scout task waves.
-
-## Completion Packet
-
-After all workers have terminal results, write a temporary completion JSON file outside `.aether/data/` with this shape:
-
-```json
-{
-  "dispatch_manifest": {
-    "...": "the exact result.dispatch_manifest object"
-  },
-  "dispatches": [
-    {
-      "name": "Mason-67",
-      "caste": "builder",
-      "stage": "wave",
-      "wave": 1,
-      "execution_wave": 11,
-      "task_id": "1.1",
-      "status": "completed",
-      "summary": "Implemented the assigned work.",
-      "files_created": [],
-      "files_modified": [],
-      "tests_written": [],
-      "tool_count": 0,
-      "blockers": [],
-      "duration": 0
-    }
-  ]
-}
-```
-
-Then finalize the external worker packet through the runtime:
+After all workers return, collect results into a completion JSON and finalize:
 
 ```
 AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <completion_file>
 ```
 
-The runtime records `dispatch_mode: external-task`, claims, spawn-tree statuses, state transition to `BUILT`, and next-step truth.
-
-Render the user-facing closeout after the JSON finalizer succeeds:
+Then render the user-facing closeout:
 
 ```
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <completion_file>
@@ -149,17 +80,14 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
 
 ## After the Build
 
-Once `build-finalize` succeeds:
-
 1. Use the visual closeout's next-step line as the source of truth.
-2. Summarize what moved forward and which workers/castes actually ran.
-3. Note only the most relevant signal or risk that should stay in view.
-4. Guide the user first to `/ant-continue` as the next command.
-5. Keep the closeout tight — one clear next move is better than an option menu.
+2. Summarize what moved forward and which workers/castes ran.
+3. Note the most relevant signal or risk.
+4. Guide the user first to `/ant-continue`.
 
 ## Verification Depth
 
-The runtime supports `--verification-depth <light|standard|heavy>` to control post-build review thoroughness. The default is "standard" (probe-only review). Use `--verification-depth heavy` for full quality gates (gatekeeper + auditor + probe) or `--light` to skip review agents entirely. The old `--light` and `--heavy` flags still work as backward-compatible aliases.
+The runtime supports `--verification-depth <light|standard|heavy>` for post-build review. Default is "standard". Use `--heavy` for full gates or `--light` to skip review agents.
 
 ## Cross-Platform Drift Guard
 
@@ -174,7 +102,7 @@ flow.
 
 - Do NOT run `aether build` without `--plan-only` from this wrapper.
 - Do NOT run `aether build --synthetic` after real agent workers complete.
-- Do NOT describe parallel workers as background agents or say you will be notified later; keep the live worker stack visible until terminal results return.
+- Do NOT describe parallel workers as background agents or say you will be notified later.
 - Do NOT read or write colony state files by hand.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, or pheromone files.
 - Do NOT parse visual output as authoritative state.

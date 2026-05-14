@@ -43,7 +43,13 @@ Use that output to keep the user oriented, but do not parse visual output as aut
 
 ## Planning Manifest
 
-Ask the Go runtime for the authoritative planning manifest:
+Run the TS host to fetch the authoritative planning manifest:
+
+```
+aether host plan --depth <choice> --planning-depth <choice2> $ARGUMENTS
+```
+
+If the TS host is unavailable, fall back to:
 
 ```
 AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2> $ARGUMENTS
@@ -98,115 +104,25 @@ For each dispatch in the manifest, execute the planned workers by wave:
 
 1. Before spawning a manifest wave, render:
    `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
-2. Then run:
-   `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
-3. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
-4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. Inject the selected depth, planning depth selection, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
-6. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
-7. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
-8. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
-9. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
-10. After each worker returns, run:
-   `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
-11. Write that one terminal result to a temporary worker JSON file and render:
-   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`
+2. Spawn the matching platform agent using the platform's Task/subagent mechanism with `subagent_type="{agent_name}"` or its equivalent.
+3. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+4. Inject the selected depth, planning depth selection, survey context, manifest `brief`, active signals, dispatch `skill_section` when present, and exact task metadata.
+5. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading. The brief contains the read budget, no-repeat loop guard, output contract, and stop condition.
+6. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
+7. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
+8. Require every worker to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `blockers`, and `duration`.
 
-Wave 1 Scout must complete before wave 2 Route-Setter starts. The Route-Setter result must include `phase_plan` using the manifest's required `phase-plan.json` schema:
+Wave 1 Scout must complete before wave 2 Route-Setter starts. The Route-Setter result must include `phase_plan` using the manifest's required `phase-plan.json` schema.
 
-```json
-{
-  "phases": [
-    {
-      "name": "",
-      "description": "",
-      "tasks": [
-        {
-          "goal": "",
-          "constraints": [],
-          "hints": [],
-          "success_criteria": [],
-          "depends_on": []
-        }
-      ],
-      "success_criteria": []
-    }
-  ],
-  "confidence": {
-    "knowledge": 0,
-    "requirements": 0,
-    "risks": 0,
-    "dependencies": 0,
-    "effort": 0,
-    "overall": 0
-  },
-  "gaps": []
-}
-```
+## Finalize
 
-## Completion Packet
-
-After Scout and Route-Setter have terminal results, write a temporary completion JSON file outside `.aether/data/` with this shape:
-
-```json
-{
-  "plan_manifest": {
-    "...": "the exact result.plan_manifest object"
-  },
-  "dispatches": [
-    {
-      "name": "Track-80",
-      "caste": "scout",
-      "stage": "scouting",
-      "wave": 1,
-      "task_id": "plan-scout",
-      "status": "completed",
-      "summary": "Mapped the planning surface.",
-      "blockers": [],
-      "duration": 0,
-      "scout_report": {
-        "findings": [],
-        "gaps": [],
-        "confidence": 90,
-        "study_files": []
-      }
-    },
-    {
-      "name": "Route-12",
-      "caste": "route_setter",
-      "stage": "routing",
-      "wave": 2,
-      "task_id": "plan-route-setter",
-      "status": "completed",
-      "summary": "Produced the executable phase plan.",
-      "blockers": [],
-      "duration": 0,
-      "phase_plan": {
-        "phases": [],
-        "confidence": {
-          "knowledge": 0,
-          "requirements": 0,
-          "risks": 0,
-          "dependencies": 0,
-          "effort": 0,
-          "overall": 0
-        },
-        "gaps": []
-      }
-    }
-  ]
-}
-```
-
-Then finalize through the runtime:
+After Scout and Route-Setter have terminal results, write a temporary completion JSON file outside `.aether/data/` and finalize through the runtime:
 
 ```
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <completion_file>
 ```
 
-The runtime writes canonical planning artifacts, updates `COLONY_STATE.json`, records spawn-tree statuses, updates session/CONTEXT/HANDOFF, and emits next-step truth.
-
-Render the user-facing closeout after the JSON finalizer succeeds:
+Then render the user-facing closeout:
 
 ```
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <completion_file>
@@ -236,6 +152,6 @@ the matching Codex flow.
 - Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand.
 - Do NOT parse visual output as authoritative state.
 - Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`.
-- Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table.
+- Do NOT describe platform workers as background agents or replace the live worker stack with a markdown worker table.
 - Do NOT write `.aether/data/planning` as the authority path; pass results to `plan-finalize`.
 - If docs and runtime disagree, runtime wins.
