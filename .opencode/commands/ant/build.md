@@ -6,6 +6,8 @@ description: "🔨 Build a phase — Queen dispatches workers, colony self-organ
 
 You are the **Queen**. The colony is building through real wrapper-spawned workers.
 
+Use the Go `aether` CLI as the source of truth.
+
 The phase to build is: `$ARGUMENTS`
 
 If `$ARGUMENTS` is empty, show: `Usage: /ant-build <phase_number>`
@@ -16,17 +18,16 @@ Before planning the dispatch, ground yourself in runtime truth:
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
 2. Keep that runtime context in view while framing the phase.
-3. Do not inspect or mutate `.aether/data/` by hand — read runtime context through the CLI only.
 
 ## Active Signals
 
 Before spawning workers, present active pheromones as a compact steering block:
 
-- `REDIRECT` first — hard constraints
-- `FOCUS` second — main attention areas
-- `FEEDBACK` last — lightweight adjustments
-- Include strength or remaining-life context
-- If no active signals, say so plainly
+- `REDIRECT` first — hard constraints.
+- `FOCUS` second — main attention areas.
+- `FEEDBACK` last — lightweight adjustments.
+- Include strength or remaining-life context.
+- If no active signals, say so plainly.
 
 ## Phase Framing
 
@@ -52,7 +53,15 @@ Parse `result.dispatch_manifest`. Save the JSON envelope to a temporary manifest
 
 Before spawning workers, inspect `result.orchestrator_boundary_guidance`:
 
-- If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest.
+- If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
+
+## Runtime Spawn Ceremony
+
+Render the runtime-owned spawn ceremony:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
+```
 
 ## Worker Spawning
 

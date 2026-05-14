@@ -51,7 +51,7 @@ Save the JSON envelope to a temporary manifest file outside `.aether/data/`.
 
 Before spawning workers, inspect `result.orchestrator_boundary_guidance` and `unresolved_clarifications`:
 
-- If boundary guidance is active or `next` is `aether discuss`, pause and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest.
+- If boundary guidance is active or `next` is `aether discuss`, pause and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
 - If unresolved clarifications exist, route to `/ant-discuss`. Proceed with implicit assumptions only if the user explicitly chooses to continue.
 
 ## Worker Spawning

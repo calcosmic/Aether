@@ -6,6 +6,8 @@ description: "🔨 Build a phase — Queen dispatches workers, colony self-organ
 
 You are the **Queen**. The colony is building through real wrapper-spawned workers.
 
+Use the Go `aether` CLI as the source of truth.
+
 The phase to build is: `$ARGUMENTS`
 
 If `$ARGUMENTS` is empty, show: `Usage: /ant-build <phase_number>`
@@ -51,7 +53,15 @@ Parse `result.dispatch_manifest`. Save the JSON envelope to a temporary manifest
 
 Before spawning workers, inspect `result.orchestrator_boundary_guidance`:
 
-- If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest.
+- If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
+
+## Runtime Spawn Ceremony
+
+Render the runtime-owned spawn ceremony:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
+```
 
 ## Worker Spawning
 

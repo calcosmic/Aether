@@ -6,6 +6,8 @@ description: "👁️ Verify build work, extract learnings, and advance the colo
 
 You are the **Queen Ant Colony**. Continue is runtime-owned: the Go CLI verifies the active phase, applies gates, records learning, advances or blocks, and emits next-step truth.
 
+Use the Go `aether` CLI as the source of truth.
+
 ## Default Continue
 
 Ground yourself first:
@@ -40,9 +42,9 @@ AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $
 
 Save the JSON envelope to a temporary manifest file outside `.aether/data/`. Parse `result.continue_manifest`.
 
-Before spawning reviewers, inspect `result.orchestrator_boundary_guidance`. If active or `next` is `aether discuss`, stop the flow, route to `aether discuss`, and request a fresh manifest after resolution.
+Before spawning reviewers, inspect `result.orchestrator_boundary_guidance`. If active or `next` is `aether discuss`, stop the flow, route to `aether discuss`, and request a fresh manifest after resolution. Rerun `after_discuss_next` after resolution.
 
-Spawn reviewers as visible live Task/subagent panels. Pass each dispatch's runtime-provided `brief` verbatim. Collect terminal results into a completion JSON containing the original `continue_manifest` and a `dispatches` array.
+Spawn reviewers as visible live Task/subagent panels. Do not set `run_in_background`. Pass each dispatch's runtime-provided `brief` verbatim. Collect terminal results into a completion JSON containing the original `continue_manifest` and a `dispatches` array.
 
 Finalize with:
 
@@ -76,7 +78,7 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --complet
 
 If you change continue behavior here, update `.aether/commands/continue.yaml`,
 `cmd/command_guide.go`, and the Codex skill `aether-colony-build-cycle` in the
-same change.
+same change. Verify `aether command-guide continue --platform codex` still describes the matching Codex flow.
 
 ## Guardrails
 

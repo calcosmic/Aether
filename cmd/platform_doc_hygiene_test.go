@@ -88,13 +88,11 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"## Depth Ceremony",
-				"AETHER_OUTPUT_MODE=visual aether status",
-				"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+				"aether host plan",
 				"result.plan_manifest",
 				"result.planning_manifest",
 				"## Clarification Gate",
 				"/ant-discuss",
-				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
 			},
 			forbidden: []string{
@@ -197,10 +195,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
+				"aether host build",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
-				"## Live Worker Ceremony",
-				"~/.aether/system/docs/command-playbooks/build-wave.md",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
 			forbidden: []string{
@@ -218,12 +214,9 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"## Verification Gates",
-				"## Learning Extraction",
 				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
-				"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+				"aether host continue",
 				"result.continue_manifest",
-				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 			},
 			forbidden: []string{
@@ -405,13 +398,11 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"## Depth Ceremony",
-				"AETHER_OUTPUT_MODE=visual aether status",
-				"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+				"aether host plan",
 				"result.plan_manifest",
 				"result.planning_manifest",
 				"## Clarification Gate",
 				"/ant-discuss",
-				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
 			},
 			forbidden: []string{
@@ -512,10 +503,8 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only",
+				"aether host build",
 				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
-				"## Live Worker Ceremony",
-				"~/.aether/system/docs/command-playbooks/build-wave.md",
 				"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 			},
 			forbidden: []string{
@@ -531,12 +520,9 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"## Verification Gates",
-				"## Learning Extraction",
 				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
-				"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+				"aether host continue",
 				"result.continue_manifest",
-				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 			},
 			forbidden: []string{
