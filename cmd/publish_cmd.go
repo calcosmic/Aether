@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -91,6 +92,11 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Build TS host assets (best-effort — warn but don't fail publish)
+	if tsHostErr := buildTsHostAssets(sourceRoot); tsHostErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: TS host build skipped: %v\n", tsHostErr)
+	}
+
 	hubDir := resolveHubPathForHome(homeDir, channel)
 
 	if err := validateChannelIsolation(channel, hubDir); err != nil {
@@ -104,6 +110,12 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
 		return fmt.Errorf("hub sync failed: %v", errVal)
 	}
+
+	// Sync TS host assets to hub (best-effort)
+	if tsHostErr := syncTsHostToHub(hubDir, sourceRoot); tsHostErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: TS host hub sync skipped: %v\n", tsHostErr)
+	}
+
 	if shouldSyncPlatformHomes(channel) {
 		_, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel)
 		if len(platformErrors) > 0 {
@@ -178,4 +190,76 @@ func readHubVersionAtPath(hubDir string) string {
 		}
 	}
 	return ""
+}
+
+// buildTsHostAssets runs npm ci and npm run build in .aether/ts-host/.
+// Returns an error if npm is missing or the build fails.
+func buildTsHostAssets(sourceRoot string) error {
+	tsHostDir := filepath.Join(sourceRoot, ".aether", "ts-host")
+	if _, err := os.Stat(tsHostDir); os.IsNotExist(err) {
+		return fmt.Errorf("ts-host directory not found: %s", tsHostDir)
+	}
+
+	// Check npm availability
+	if _, err := exec.LookPath("npm"); err != nil {
+		return fmt.Errorf("npm not found in PATH: %w", err)
+	}
+
+	// npm ci
+	cmd := exec.Command("npm", "ci", "--prefix", tsHostDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("npm ci failed: %w", err)
+	}
+
+	// npm run build
+	cmd = exec.Command("npm", "run", "build", "--prefix", tsHostDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("npm run build failed: %w", err)
+	}
+
+	return nil
+}
+
+// syncTsHostToHub copies TS host dist/ and package.json to the hub system/ts-host/.
+func syncTsHostToHub(hubDir, sourceRoot string) error {
+	srcDir := filepath.Join(sourceRoot, ".aether", "ts-host")
+	dstDir := filepath.Join(hubDir, "system", "ts-host")
+
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dstDir, err)
+	}
+
+	// Copy dist/
+	srcDist := filepath.Join(srcDir, "dist")
+	dstDist := filepath.Join(dstDir, "dist")
+	if _, err := os.Stat(srcDist); err == nil {
+		res := syncDir(srcDist, dstDist, syncOptions{cleanup: true})
+		if len(res.errors) > 0 {
+			return fmt.Errorf("sync dist/: %s", strings.Join(res.errors, "; "))
+		}
+	}
+
+	// Copy package.json
+	srcPkg := filepath.Join(srcDir, "package.json")
+	dstPkg := filepath.Join(dstDir, "package.json")
+	if _, err := os.Stat(srcPkg); err == nil {
+		if err := copyFile(srcPkg, dstPkg); err != nil {
+			return fmt.Errorf("copy package.json: %w", err)
+		}
+	}
+
+	// Copy package-lock.json if present
+	srcLock := filepath.Join(srcDir, "package-lock.json")
+	dstLock := filepath.Join(dstDir, "package-lock.json")
+	if _, err := os.Stat(srcLock); err == nil {
+		if err := copyFile(srcLock, dstLock); err != nil {
+			return fmt.Errorf("copy package-lock.json: %w", err)
+		}
+	}
+
+	return nil
 }

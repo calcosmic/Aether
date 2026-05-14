@@ -1290,6 +1290,14 @@
     "output_mode": "unknown"
   },
   {
+    "name": "host",
+    "short_description": "Run the TypeScript orchestration host",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
     "name": "immune-auto-scar",
     "short_description": "Auto-detect failure patterns from midden",
     "flags": [],
@@ -3839,6 +3847,46 @@
       "output"
     ],
     "parent_command": "export",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "build",
+    "short_description": "Run build workflow via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "continue",
+    "short_description": "Run continue workflow via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "lifecycle",
+    "short_description": "Run full plan-\u003ebuild-\u003econtinue lifecycle via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "oracle",
+    "short_description": "Run oracle workflow via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "plan",
+    "short_description": "Run plan workflow via TS host",
+    "flags": [],
+    "parent_command": "host",
     "has_subcommands": false,
     "output_mode": "unknown"
   },

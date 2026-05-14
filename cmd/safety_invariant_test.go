@@ -504,7 +504,20 @@ func TestInstallPureGo(t *testing.T) {
 		"typescript-host",
 	}
 
+	// The `host` command is explicitly the bridge between Go CLI and TS host.
+	// It is exempt from the "no ts-host references" invariant because its
+	// entire purpose is to delegate to the TS host. The invariant applies to
+	// install/update/publish only, which must remain pure Go.
+	exemptFiles := map[string]bool{
+		"host":    true,
+		"publish": true,
+		"update":  true,
+	}
+
 	for _, f := range files {
+		if exemptFiles[f.name] {
+			continue
+		}
 		t.Run(f.name+"_no_ts_host", func(t *testing.T) {
 			data, err := os.ReadFile(f.path)
 			if err != nil {
