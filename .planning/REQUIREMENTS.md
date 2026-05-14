@@ -60,31 +60,31 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REL-01 | Phase 119 | Pending |
-| REL-02 | Phase 119 | Pending |
-| REL-03 | Phase 119 | Pending |
-| REL-04 | Phase 119 | Pending |
-| REL-05 | Phase 119 | Pending |
-| DSP-01 | Phase 120 | Pending |
-| DSP-02 | Phase 120 | Pending |
-| DSP-03 | Phase 120 | Pending |
-| DSP-04 | Phase 120 | Pending |
-| DSP-05 | Phase 120 | Pending |
-| GOT-01 | Phase 121 | Pending |
-| GOT-02 | Phase 121 | Pending |
-| GOT-03 | Phase 121 | Pending |
-| GOT-04 | Phase 121 | Pending |
-| GOT-05 | Phase 121 | Pending |
-| PAR-01 | Phase 122 | Pending |
-| PAR-02 | Phase 122 | Pending |
-| PAR-03 | Phase 122 | Pending |
-| PAR-04 | Phase 122 | Pending |
-| PAR-05 | Phase 122 | Pending |
-| PAR-06 | Phase 122 | Pending |
-| PAR-07 | Phase 122 | Pending |
-| REL-06 | Phase 123 | Pending |
-| REL-07 | Phase 123 | Pending |
-| REL-08 | Phase 123 | Pending |
+| REL-01 | Phase 119 | Completed |
+| REL-02 | Phase 119 | Completed |
+| REL-03 | Phase 119 | Completed |
+| REL-04 | Phase 119 | Completed |
+| REL-05 | Phase 119 | Completed |
+| DSP-01 | Phase 120 | Completed |
+| DSP-02 | Phase 120 | Completed |
+| DSP-03 | Phase 120 | Completed |
+| DSP-04 | Phase 120 | Completed |
+| DSP-05 | Phase 120 | Completed |
+| GOT-01 | Phase 121 | Completed |
+| GOT-02 | Phase 121 | Completed |
+| GOT-03 | Phase 121 | Completed |
+| GOT-04 | Phase 121 | Completed |
+| GOT-05 | Phase 121 | Completed |
+| PAR-01 | Phase 122 | Completed |
+| PAR-02 | Phase 122 | Completed |
+| PAR-03 | Phase 122 | Completed |
+| PAR-04 | Phase 122 | Completed |
+| PAR-05 | Phase 122 | Completed |
+| PAR-06 | Phase 122 | Completed |
+| PAR-07 | Phase 122 | Completed |
+| REL-06 | Phase 123 | Completed |
+| REL-07 | Phase 123 | Completed |
+| REL-08 | Phase 123 | Completed |
 
 ---
 
