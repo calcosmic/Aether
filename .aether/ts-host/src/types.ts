@@ -504,3 +504,140 @@ export interface OracleWorkerEvidence {
   /** Evidence type: code, doc, test, external. */
   type: string;
 }
+
+// ---------------------------------------------------------------------------
+// Status types (cmd/status.go)
+// ---------------------------------------------------------------------------
+
+/**
+ * Summary of a single active pheromone signal.
+ * Mirrors the visual-mode pheromone row in renderPheromoneSummary.
+ */
+export interface PheromoneSummary {
+  /** Signal type: FOCUS, REDIRECT, or FEEDBACK. */
+  type: string;
+  /** Signal content text. */
+  content: string;
+  /** Decay-adjusted signal strength. */
+  strength: number;
+}
+
+/**
+ * Colony memory health metrics.
+ * Mirrors the summary rendered in renderMemoryHealthTable.
+ */
+export interface MemoryHealth {
+  /** Number of event bus entries. */
+  events: number;
+  /** Number of recorded learnings. */
+  learnings: number;
+  /** Number of applied instincts. */
+  instincts: number;
+  /** Number of active pheromone signals. */
+  pheromones: number;
+}
+
+/**
+ * Result from `aether status` in JSON mode.
+ * Mirrors the Go buildStatusResult map[string]interface{}.
+ *
+ * Required fields are always present. Optional fields map to Go omitempty.
+ */
+export interface StatusResult {
+  /** Colony goal string. */
+  goal: string;
+  /** Colony state label (e.g., "planning", "executing", "completed"). */
+  state: string;
+  /** Current phase number (0 if not started). */
+  current_phase: number;
+  /** Total number of phases in the plan. */
+  total_phases: number;
+  /** Number of phases completed so far. */
+  phases_completed: number;
+  /** Name of the current phase. */
+  phase_name: string;
+  /** Number of tasks completed in the current phase. */
+  tasks_completed: number;
+  /** Total number of tasks in the current phase. */
+  tasks_total: number;
+  /** Colony mode (e.g., "standard", "deep"). */
+  colony_mode?: string;
+  /** Whether this is an agent-delegate session. */
+  agent_delegate_session?: boolean;
+  /** Display phase number (may differ from current_phase during recovery). */
+  display_phase?: number;
+  /** Actionable warnings computed from colony state. */
+  warnings?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Swarm types (cmd/swarm_cmd.go)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single worker plan inside a swarm manifest.
+ * Mirrors the Go swarmWorkerPlan struct.
+ */
+export interface SwarmWorkerPlan {
+  /** Stage name (e.g., "investigation", "fix", "verification"). */
+  stage?: string;
+  /** Wave number (1-based). */
+  wave: number;
+  /** Worker name (deterministic). */
+  name: string;
+  /** Worker caste. */
+  caste: string;
+  /** Worker role (usually same as caste). */
+  role: string;
+  /** Task description. */
+  task: string;
+  /** Optional task identifier. */
+  task_id?: string;
+  /** Agent name for dispatch. */
+  agent_name: string;
+  /** Detailed brief for the worker. */
+  brief?: string;
+  /** Expected output file paths. */
+  output_paths?: string[];
+  /** Response contract describing expected worker output shape. */
+  response_contract?: Record<string, unknown>;
+  /** Per-worker timeout in seconds. */
+  timeout_seconds?: number;
+}
+
+/**
+ * Swarm dispatch manifest from `aether swarm --plan-only`.
+ * Mirrors the Go swarmManifest struct.
+ */
+export interface SwarmManifest {
+  /** Workflow name (always "swarm"). */
+  workflow: string;
+  /** Dispatch mode (e.g., "plan-only", "agent-delegate"). */
+  dispatch_mode: string;
+  /** Whether a finalizer command is required after worker dispatch. */
+  requires_finalizer: boolean;
+  /** RFC3339 timestamp when the manifest was generated. */
+  generated_at: string;
+  /** Absolute path to the workspace root. */
+  root: string;
+  /** Unique swarm identifier. */
+  swarm_id: string;
+  /** Target problem description. */
+  target: string;
+  /** Number of waves in the swarm. */
+  wave_count: number;
+  /** Number of workers in the swarm. */
+  worker_count: number;
+  /** Total run timeout in seconds. */
+  run_timeout_seconds: number;
+  /** Per-worker timeout in seconds. */
+  worker_timeout_seconds: number;
+  /** Dispatch contract describing execution model and constraints. */
+  dispatch_contract: Record<string, unknown>;
+  /** Array of worker dispatches. */
+  dispatches: SwarmWorkerPlan[];
+  /** Execution plan as generic maps (mirrors Go []map[string]interface{}). */
+  execution_plan: Record<string, unknown>[];
+  /** Finalizer command to run after workers complete. */
+  finalizer_command: string;
+}
