@@ -250,8 +250,13 @@ func setupOracleTestDir(t *testing.T) func() {
 	}
 	originalWD, _ := os.Getwd()
 	os.Chdir(tmpDir)
+	// Reset the global store so that direct saveOracleState/loadOracleState calls
+	// fall back to plain file I/O instead of using a stale store from a prior test.
+	origStore := store
+	store = nil
 	return func() {
 		os.Chdir(originalWD)
+		store = origStore
 	}
 }
 

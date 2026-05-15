@@ -256,8 +256,23 @@ func oracleStatePath() string {
 }
 
 func loadOracleState() (*oracleState, error) {
-	path := oracleStatePath()
-	data, err := os.ReadFile(path)
+	if store == nil {
+		// Fallback to plain file I/O when store is not initialized
+		// (e.g., in tests that bypass PersistentPreRunE)
+		path := oracleStatePath()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var state oracleState
+		if err := json.Unmarshal(data, &state); err != nil {
+			return nil, err
+		}
+		return &state, nil
+	}
+
+	// Store basePath is already .aether/data/, so use the relative path within it.
+	data, err := store.ReadFile("oracle/state.json")
 	if err != nil {
 		return nil, err
 	}
@@ -269,14 +284,20 @@ func loadOracleState() (*oracleState, error) {
 }
 
 func saveOracleState(state *oracleState) error {
-	path := oracleStatePath()
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
+	if store == nil {
+		// Fallback to plain file I/O when store is not initialized
+		path := oracleStatePath()
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(state, "", "  ")
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(path, data, 0644)
 	}
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
+
+	// Store basePath is already .aether/data/, so use the relative path within it.
+	return store.SaveJSON("oracle/state.json", state)
 }
 
