@@ -14,7 +14,7 @@ import (
 var hostCmd = &cobra.Command{
 	Use:   "host",
 	Short: "Run the TypeScript orchestration host",
-	Long:  "Delegate to the TypeScript host for plan, build, continue, lifecycle, and oracle workflows.",
+	Long:  "Delegate to the TypeScript host for plan, build, continue, lifecycle, oracle, watch, and swarm workflows.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("a subcommand is required. Run 'aether host --help' for usage")
 	},
@@ -23,40 +23,63 @@ var hostCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(hostCmd)
 
+	// All host subcommands disable cobra flag parsing so flags are forwarded
+	// raw to the TS host, which is the authoritative parser.
+
 	// lifecycle
 	hostCmd.AddCommand(&cobra.Command{
-		Use:   "lifecycle [phase]",
-		Short: "Run full plan->build->continue lifecycle via TS host",
-		RunE:  makeHostSubcommand("lifecycle", true),
+		Use:                    "lifecycle [phase]",
+		Short:                  "Run full plan->build->continue lifecycle via TS host",
+		DisableFlagParsing:     true,
+		RunE:                   makeHostSubcommand("lifecycle", true),
 	})
 
 	// plan
 	hostCmd.AddCommand(&cobra.Command{
-		Use:   "plan",
-		Short: "Run plan workflow via TS host",
-		RunE:  makeHostSubcommand("plan", false),
+		Use:                    "plan",
+		Short:                  "Run plan workflow via TS host",
+		DisableFlagParsing:     true,
+		RunE:                   makeHostSubcommand("plan", false),
 	})
 
 	// build
 	hostCmd.AddCommand(&cobra.Command{
-		Use:   "build <phase>",
-		Short: "Run build workflow via TS host",
-		Args:  cobra.ExactArgs(1),
-		RunE:  makeHostSubcommand("build", true),
+		Use:                    "build <phase>",
+		Short:                  "Run build workflow via TS host",
+		DisableFlagParsing:     true,
+		RunE:                   makeHostSubcommand("build", true),
 	})
 
 	// continue
 	hostCmd.AddCommand(&cobra.Command{
-		Use:   "continue",
-		Short: "Run continue workflow via TS host",
-		RunE:  makeHostSubcommand("continue", false),
+		Use:                    "continue",
+		Short:                  "Run continue workflow via TS host",
+		DisableFlagParsing:     true,
+		RunE:                   makeHostSubcommand("continue", false),
 	})
 
 	// oracle
 	hostCmd.AddCommand(&cobra.Command{
-		Use:   "oracle",
-		Short: "Run oracle workflow via TS host",
-		RunE:  makeHostSubcommand("oracle", false),
+		Use:                    "oracle [topic]",
+		Short:                  "Run oracle workflow via TS host",
+		DisableFlagParsing:     true,
+		RunE:                   makeHostSubcommand("oracle", true),
+	})
+
+	// watch
+	hostCmd.AddCommand(&cobra.Command{
+		Use:                    "watch",
+		Short:                  "Show colony status via TS host",
+		DisableFlagParsing:     true,
+		RunE:                   makeHostSubcommand("watch", false),
+	})
+
+	// swarm
+	hostCmd.AddCommand(&cobra.Command{
+		Use:                    "swarm [target]",
+		Short:                  "Show swarm plan for a target problem via TS host",
+		DisableFlagParsing:     true,
+		RunE:                   makeHostSubcommand("swarm", true),
 	})
 }
 

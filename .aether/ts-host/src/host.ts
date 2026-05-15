@@ -29,6 +29,13 @@ function parseArgs(argv: string[]): {
   simulate: boolean;
   noDashboard: boolean;
   skipMiddenCheck: boolean;
+  depth: string | undefined;
+  planningDepth: string | undefined;
+  verificationDepth: string | undefined;
+  light: boolean;
+  heavy: boolean;
+  workerTimeout: string | undefined;
+  help: boolean;
   positional: string[];
 } {
   const args = argv.slice(2); // skip node and script path
@@ -37,6 +44,13 @@ function parseArgs(argv: string[]): {
   let simulate = false;
   let noDashboard = false;
   let skipMiddenCheck = false;
+  let depth: string | undefined = undefined;
+  let planningDepth: string | undefined = undefined;
+  let verificationDepth: string | undefined = undefined;
+  let light = false;
+  let heavy = false;
+  let workerTimeout: string | undefined = undefined;
+  let help = false;
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -49,6 +63,20 @@ function parseArgs(argv: string[]): {
       noDashboard = true;
     } else if (arg === "--skip-midden-check") {
       skipMiddenCheck = true;
+    } else if (arg === "--depth" && i + 1 < args.length) {
+      depth = args[++i]!;
+    } else if (arg === "--planning-depth" && i + 1 < args.length) {
+      planningDepth = args[++i]!;
+    } else if (arg === "--verification-depth" && i + 1 < args.length) {
+      verificationDepth = args[++i]!;
+    } else if (arg === "--light") {
+      light = true;
+    } else if (arg === "--heavy") {
+      heavy = true;
+    } else if (arg === "--worker-timeout" && i + 1 < args.length) {
+      workerTimeout = args[++i]!;
+    } else if (arg === "--help" || arg === "-h") {
+      help = true;
     } else if (!command) {
       command = arg;
     } else {
@@ -56,7 +84,7 @@ function parseArgs(argv: string[]): {
     }
   }
 
-  return { command, cwd, simulate, noDashboard, skipMiddenCheck, positional };
+  return { command, cwd, simulate, noDashboard, skipMiddenCheck, depth, planningDepth, verificationDepth, light, heavy, workerTimeout, help, positional };
 }
 
 function printUsage(): void {
@@ -72,19 +100,25 @@ function printUsage(): void {
       "  watch         Show colony status, optionally with live dashboard\n" +
       "  swarm [target] Show swarm plan for a target problem\n\n" +
       "Options:\n" +
-      "  --cwd <path>        Working directory\n" +
-      "  --simulate          Run in simulation mode (no real worker spawning)\n" +
-      "  --no-dashboard      Disable live dashboard, use plain text output\n" +
-      "  --skip-midden-check Skip pre-build midden threshold check\n"
+      "  --cwd <path>           Working directory\n" +
+      "  --simulate             Run in simulation mode (no real worker spawning)\n" +
+      "  --no-dashboard         Disable live dashboard, use plain text output\n" +
+      "  --skip-midden-check    Skip pre-build midden threshold check\n" +
+      "  --depth <level>        fast | balanced | deep | exhaustive\n" +
+      "  --planning-depth <lvl> light | standard | deep\n" +
+      "  --verification-depth <lvl> light | standard | heavy\n" +
+      "  --light                Force light review\n" +
+      "  --heavy                Force heavy review\n" +
+      "  --worker-timeout <dur> Override per-worker timeout (e.g. 5m, 15m)\n"
   );
 }
 
 async function main(): Promise<void> {
-  const { command, cwd, simulate, noDashboard, skipMiddenCheck, positional } = parseArgs(process.argv);
+  const { command, cwd, simulate, noDashboard, skipMiddenCheck, depth, planningDepth, verificationDepth, light, heavy, workerTimeout, help, positional } = parseArgs(process.argv);
 
-  if (!command) {
+  if (help || !command) {
     printUsage();
-    process.exit(1);
+    process.exit(help ? 0 : 1);
   }
 
   const goBinaryPath = discoverGoBinary();
@@ -92,12 +126,13 @@ async function main(): Promise<void> {
 
   switch (command) {
     case "plan": {
-      const result = callGoJSON<PlanCompletion>(bridge, [
-        "plan",
-        "--plan-only",
-        "--depth",
-        "fast",
-      ]);
+      const args = ["plan", "--plan-only"];
+      if (depth) args.push("--depth", depth);
+      if (planningDepth) args.push("--planning-depth", planningDepth);
+      if (verificationDepth) args.push("--verification-depth", verificationDepth);
+      if (simulate) args.push("--synthetic");
+      if (workerTimeout) args.push("--worker-timeout", workerTimeout);
+      const result = callGoJSON<PlanCompletion>(bridge, args);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
@@ -108,20 +143,23 @@ async function main(): Promise<void> {
         process.stderr.write("Error: build requires a phase number\n");
         process.exit(1);
       }
-      const result = callGoJSON<BuildManifest>(bridge, [
-        "build",
-        phase,
-        "--plan-only",
-      ]);
+      const args = ["build", phase, "--plan-only"];
+      if (simulate) args.push("--synthetic");
+      if (light) args.push("--light");
+      if (workerTimeout) args.push("--worker-timeout", workerTimeout);
+      const result = callGoJSON<BuildManifest>(bridge, args);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
 
     case "continue": {
-      const result = callGoJSON<ContinueCompletion>(bridge, [
-        "continue",
-        "--plan-only",
-      ]);
+      const args = ["continue", "--plan-only"];
+      if (verificationDepth) args.push("--verification-depth", verificationDepth);
+      if (light) args.push("--light");
+      if (heavy) args.push("--heavy");
+      if (simulate) args.push("--synthetic");
+      if (workerTimeout) args.push("--worker-timeout", workerTimeout);
+      const result = callGoJSON<ContinueCompletion>(bridge, args);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
