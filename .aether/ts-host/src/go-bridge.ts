@@ -90,7 +90,10 @@ export function discoverGoBinary(): string {
  * @returns Parsed result from Go's {"ok":true,"result":<data>} envelope
  * @throws Error if Go returns an error envelope or subprocess fails
  */
-export function callGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
+// Mutable reference for test injection.
+let _callGoJSONRef = _realCallGoJSON;
+
+function _realCallGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
   let raw: string;
   try {
     raw = execFileSync(opts.goBinaryPath, args, {
@@ -128,6 +131,20 @@ export function callGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
   }
 
   return parsed.result as T;
+}
+
+export function callGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
+  return _callGoJSONRef<T>(opts, args);
+}
+
+/** Test-only: inject a mock callGoJSON. */
+export function __setCallGoJSON(fn: typeof callGoJSON): void {
+  _callGoJSONRef = fn;
+}
+
+/** Test-only: restore the real callGoJSON. */
+export function __restoreCallGoJSON(): void {
+  _callGoJSONRef = _realCallGoJSON;
 }
 
 // ---------------------------------------------------------------------------

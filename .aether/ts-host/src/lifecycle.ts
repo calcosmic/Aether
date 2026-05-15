@@ -317,19 +317,14 @@ export async function runLifecycle(
     const availablePlatforms = await detectAvailablePlatforms();
     const hasPlatforms = availablePlatforms.length > 0;
 
-    // Default simulateWorkers to false (real dispatch) when platforms are available.
-    // If no platforms are available and simulateWorkers is not explicitly true,
-    // warn and fall back to simulation.
-    let simulateWorkers = opts.simulateWorkers;
-    if (simulateWorkers === undefined) {
-      if (hasPlatforms) {
-        simulateWorkers = false;
-      } else {
-        process.stderr.write(
-          "Warning: no platform CLI available. Falling back to simulation mode.\n"
-        );
-        simulateWorkers = true;
-      }
+    // Default to real dispatch. Simulation requires explicit --simulate opt-in.
+    const simulateWorkers = opts.simulateWorkers ?? false;
+
+    if (!hasPlatforms && !simulateWorkers) {
+      throw new Error(
+        "No platform CLI available (claude, opencode, or codex). " +
+        "Install a platform CLI or run with --simulate to use simulation mode."
+      );
     }
 
     // Create a placeholder file for simulated worker file claims.
@@ -337,21 +332,23 @@ export async function runLifecycle(
     // and are within the repository. For simulated workers, we create a real
     // file in .aether/ts-host/ (TS-host-owned, NOT in GO_OWNED_PATHS) that
     // can be claimed as file_created by the simulated workers.
-    const placeholderDir = join(opts.cwd, ".aether", "ts-host");
-    const placeholderRel = ".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt";
-    try {
-      if (!existsSync(placeholderDir)) {
-        mkdirSync(placeholderDir, { recursive: true });
+    if (simulateWorkers) {
+      const placeholderDir = join(opts.cwd, ".aether", "ts-host");
+      const placeholderRel = ".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt";
+      try {
+        if (!existsSync(placeholderDir)) {
+          mkdirSync(placeholderDir, { recursive: true });
+        }
+        writeFileSync(
+          join(opts.cwd, placeholderRel),
+          "Simulated build output for TS host prototype lifecycle test.\n",
+          "utf-8"
+        );
+      } catch {
+        // If we can't write the placeholder, continue without file claims.
+        // The build-finalizer will reject the build if no files are claimed,
+        // which is the expected behavior for a prototype that doesn't do real work.
       }
-      writeFileSync(
-        join(opts.cwd, placeholderRel),
-        "Simulated build output for TS host prototype lifecycle test.\n",
-        "utf-8"
-      );
-    } catch {
-      // If we can't write the placeholder, continue without file claims.
-      // The build-finalizer will reject the build if no files are claimed,
-      // which is the expected behavior for a prototype that doesn't do real work.
     }
 
     // Start dashboard before build dispatch when active
@@ -366,7 +363,7 @@ export async function runLifecycle(
     );
 
     // Build step with Queen orchestration
-    const queen = createQueenOrchestrator({
+    const queenOpts = {
       goBinaryPath: opts.goBinaryPath,
       cwd: opts.cwd,
       phase: targetPhase,
@@ -374,8 +371,9 @@ export async function runLifecycle(
       parallel: opts.parallel ?? true,
       dashboard: useDashboard,
       skipMiddenCheck: opts.skipMiddenCheck ?? false,
-      simulatedFileClaims: [placeholderRel],
-    });
+      ...(simulateWorkers ? { simulatedFileClaims: [".aether/ts-host/SIMULATED_BUILD_OUTPUT.txt"] as string[] } : {}),
+    };
+    const queen = createQueenOrchestrator(queenOpts);
     const queenResult = await queen.runBuild(buildManifest);
 
     // Log midden warnings and recovery actions if present

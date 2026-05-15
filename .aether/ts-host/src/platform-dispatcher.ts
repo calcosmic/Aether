@@ -64,7 +64,10 @@ export interface SpawnResult {
  *
  * @returns Array of available platform names
  */
-export async function detectAvailablePlatforms(): Promise<Platform[]> {
+// Mutable reference for test injection.
+let _detectAvailablePlatformsRef = _realDetectAvailablePlatforms;
+
+async function _realDetectAvailablePlatforms(): Promise<Platform[]> {
   const available: Platform[] = [];
 
   for (const platform of ["claude", "opencode", "codex"] as Platform[]) {
@@ -74,6 +77,20 @@ export async function detectAvailablePlatforms(): Promise<Platform[]> {
   }
 
   return available;
+}
+
+export async function detectAvailablePlatforms(): Promise<Platform[]> {
+  return _detectAvailablePlatformsRef();
+}
+
+/** Test-only: inject a mock detectAvailablePlatforms. */
+export function __setDetectAvailablePlatforms(fn: typeof detectAvailablePlatforms): void {
+  _detectAvailablePlatformsRef = fn;
+}
+
+/** Test-only: restore the real detectAvailablePlatforms. */
+export function __restoreDetectAvailablePlatforms(): void {
+  _detectAvailablePlatformsRef = _realDetectAvailablePlatforms;
 }
 
 /**

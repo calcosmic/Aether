@@ -143,21 +143,13 @@ export async function dispatchSingleWorker(
 
   // Step 2: Execute the worker.
   let result: DispatchResult;
-  const simulate = opts.simulateWorkers !== false; // default true
+  // Default to real execution; simulation only with explicit opt-in.
+  const simulate = opts.simulateWorkers === true;
 
   if (simulate) {
-    if (opts.simulateWorkers === true) {
-      process.stderr.write(
-        `ℹ️  Simulating worker ${dispatch.name} (simulateWorkers=true)\n`
-      );
-    } else if (opts.simulateWorkers === undefined) {
-      const available = await detectAvailablePlatforms();
-      if (available.length === 0) {
-        process.stderr.write(
-          `⚠️  No platforms available; simulating worker ${dispatch.name}\n`
-        );
-      }
-    }
+    process.stderr.write(
+      `ℹ️  Simulating worker ${dispatch.name} (simulateWorkers=true)\n`
+    );
   }
 
   try {
