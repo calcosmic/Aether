@@ -133,14 +133,12 @@ var oracleIterateCmd = &cobra.Command{
 				OK:                true,
 				IterationManifest: manifest,
 			}
-			data, _ := json.MarshalIndent(result, "", "  ")
-			cmd.Println(string(data))
+			outputOK(result)
 			return nil
 		}
 
 		// Non-plan-only mode: just output the current state as JSON
-		data, _ := json.MarshalIndent(state, "", "  ")
-		cmd.Println(string(data))
+		outputOK(state)
 		return nil
 	},
 }
@@ -235,8 +233,7 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 			ShouldContinue:    state.ShouldContinue,
 			NextCommand:       nextCmd,
 		}
-		out, _ := json.MarshalIndent(result, "", "  ")
-		cmd.Println(string(out))
+		outputOK(result)
 		return nil
 	},
 }

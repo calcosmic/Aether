@@ -25,7 +25,59 @@ import type {
   OracleStopConditions,
   BuildDispatch,
 } from "./types.js";
-import { dispatchSingleWorker, type DispatchOptions } from "./worker-dispatch.js";
+import { dispatchSingleWorker, type DispatchOptions, type DispatchResult } from "./worker-dispatch.js";
+
+// Mutable references for test injection.
+let _callGoJSONRef = callGoJSON;
+let _writeCompletionFileRef = writeCompletionFile;
+let _dispatchSingleWorkerRef = dispatchSingleWorker;
+
+/** Test-only: inject a mock callGoJSON. */
+export function __setCallGoJSON(fn: typeof callGoJSON): void {
+  _callGoJSONRef = fn;
+}
+
+/** Test-only: restore the real callGoJSON. */
+export function __restoreCallGoJSON(): void {
+  _callGoJSONRef = callGoJSON;
+}
+
+/** Test-only: inject a mock writeCompletionFile. */
+export function __setWriteCompletionFile(fn: typeof writeCompletionFile): void {
+  _writeCompletionFileRef = fn;
+}
+
+/** Test-only: restore the real writeCompletionFile. */
+export function __restoreWriteCompletionFile(): void {
+  _writeCompletionFileRef = writeCompletionFile;
+}
+
+/** Test-only: inject a mock dispatchSingleWorker. */
+export function __setDispatchSingleWorker(
+  fn: (opts: DispatchOptions, dispatch: BuildDispatch) => Promise<DispatchResult>
+): void {
+  _dispatchSingleWorkerRef = fn;
+}
+
+/** Test-only: restore the real dispatchSingleWorker. */
+export function __restoreDispatchSingleWorker(): void {
+  _dispatchSingleWorkerRef = dispatchSingleWorker;
+}
+
+function callGoJSONRef<T>(opts: GoBridgeOptions, args: string[]): T {
+  return _callGoJSONRef(opts, args);
+}
+
+function writeCompletionFileRef(dir: string, filename: string, data: unknown): string {
+  return _writeCompletionFileRef(dir, filename, data);
+}
+
+function dispatchSingleWorkerRef(
+  opts: DispatchOptions,
+  dispatch: BuildDispatch
+): Promise<DispatchResult> {
+  return _dispatchSingleWorkerRef(opts, dispatch);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,7 +148,7 @@ export async function runOracleLifecycle(
     // eslint-disable-next-line no-constant-condition
     while (true) {
       // ── Step 1: Get iteration manifest from Go ───────────────────────────
-      const manifest = callGoJSON<OracleIterationManifest>(opts, [
+      const manifest = callGoJSONRef<OracleIterationManifest>(opts, [
         "oracle-iterate",
         "--plan-only",
         "--topic",
@@ -138,7 +190,7 @@ export async function runOracleLifecycle(
         summary: oracleWorker.brief,
       };
 
-      const dispatchResult = await dispatchSingleWorker(opts, dispatch);
+      const dispatchResult = await dispatchSingleWorkerRef(opts, dispatch);
 
       stepsCompleted.push(`iteration-${state.current_iteration}-dispatch`);
 
@@ -167,7 +219,7 @@ export async function runOracleLifecycle(
         should_continue: true,
       };
 
-      const completionPath = writeCompletionFile(
+      const completionPath = writeCompletionFileRef(
         "aether-oracle",
         `oracle-completion-${state.current_iteration}.json`,
         completionData
@@ -176,7 +228,7 @@ export async function runOracleLifecycle(
       stepsCompleted.push(`iteration-${state.current_iteration}-completion`);
 
       // ── Step 5: Finalize via Go ──────────────────────────────────────────
-      const finalizeResult = callGoJSON<OracleIterationCompletion>(opts, [
+      const finalizeResult = callGoJSONRef<OracleIterationCompletion>(opts, [
         "oracle-iterate-finalize",
         "--completion-file",
         completionPath,

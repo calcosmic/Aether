@@ -16,13 +16,17 @@ func TestOracleIteratePlanOnlyReturnsManifest(t *testing.T) {
 
 	out, _ := runCmd(t, []string{"oracle-iterate", "--plan-only", "--topic", "test-topic"})
 
-	var result oracleIterationResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
-		t.Fatalf("unmarshal result: %v\noutput: %s", err, out)
+	var envelope struct {
+		OK     bool                `json:"ok"`
+		Result oracleIterationResult `json:"result"`
 	}
-	if !result.OK {
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v\noutput: %s", err, out)
+	}
+	if !envelope.OK {
 		t.Fatalf("expected ok=true, got false")
 	}
+	result := envelope.Result
 	m := result.IterationManifest
 	if m.Topic != "test-topic" {
 		t.Errorf("topic=%q, want test-topic", m.Topic)
@@ -63,10 +67,14 @@ func TestOracleIterateRespectsDepthFlag(t *testing.T) {
 
 	out, _ := runCmd(t, []string{"oracle-iterate", "--plan-only", "--topic", "x", "--depth", "quick"})
 
-	var result oracleIterationResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	var envelope struct {
+		OK     bool                `json:"ok"`
+		Result oracleIterationResult `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, out)
 	}
+	result := envelope.Result
 	if result.IterationManifest.MaxIterations != 5 {
 		t.Errorf("max_iterations=%d, want 5 for quick depth", result.IterationManifest.MaxIterations)
 	}
@@ -99,11 +107,14 @@ func TestOracleIterateFinalizeWritesState(t *testing.T) {
 
 	out, _ := runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})
 
-	var result oracleFinalizeResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	var envelope struct {
+		OK     bool               `json:"ok"`
+		Result oracleFinalizeResult `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, out)
 	}
-	if !result.OK {
+	if !envelope.OK {
 		t.Fatalf("expected ok=true")
 	}
 
@@ -147,10 +158,14 @@ func TestOracleIterateFinalizeStopsAtConfidenceTarget(t *testing.T) {
 
 	out, _ := runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})
 
-	var result oracleFinalizeResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	var envelope struct {
+		OK     bool               `json:"ok"`
+		Result oracleFinalizeResult `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, out)
 	}
+	result := envelope.Result
 	if result.ShouldContinue {
 		t.Error("expected should_continue=false when confidence >= target")
 	}
@@ -178,10 +193,14 @@ func TestOracleIterateFinalizeStopsAtMaxIterations(t *testing.T) {
 
 	out, _ := runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})
 
-	var result oracleFinalizeResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	var envelope struct {
+		OK     bool               `json:"ok"`
+		Result oracleFinalizeResult `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, out)
 	}
+	result := envelope.Result
 	if result.ShouldContinue {
 		t.Error("expected should_continue=false when iteration >= max")
 	}
@@ -207,10 +226,14 @@ func TestOracleIterateResumeFromExistingState(t *testing.T) {
 
 	out, _ := runCmd(t, []string{"oracle-iterate", "--plan-only", "--topic", "resume-test"})
 
-	var result oracleIterationResult
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	var envelope struct {
+		OK     bool                `json:"ok"`
+		Result oracleIterationResult `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
 		t.Fatalf("unmarshal: %v\noutput: %s", err, out)
 	}
+	result := envelope.Result
 	if result.IterationManifest.CurrentIteration != 4 {
 		t.Errorf("current_iteration=%d, want 4 (resumed)", result.IterationManifest.CurrentIteration)
 	}
