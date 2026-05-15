@@ -43,7 +43,7 @@ See `.planning/milestones/` for full archived phase details.
 | 132. Wrapper Ownership Decision | v1.20 | — | Not started | — |
 | 133. Lifecycle Honesty | v1.20 | — | Not started | — |
 | 134. Oracle Storage Pattern | v1.20 | 1/1 | Complete    | 2026-05-15 |
-| 135. Doc-CLI Alignment Smoke Test | v1.20 | 2/2 | Ready to execute | — |
+| 135. Doc-CLI Alignment Smoke Test | v1.20 | 2/2 | Complete   | 2026-05-15 |
 
 ## Phase Details
 
@@ -107,7 +107,7 @@ See `.planning/milestones/` for full archived phase details.
   1. YAML smoke test exercises every documented command
   2. Test fails if documented flag is rejected by CLI
   3. Smoke test runs in CI or release gate
-**Plans:** 1 plan
+**Plans:** 2/2 plans complete
 
 ---
 
