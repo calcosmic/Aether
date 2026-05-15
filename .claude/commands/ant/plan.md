@@ -37,11 +37,7 @@ Run the TS host to fetch the authoritative planning manifest:
 aether host plan --depth <choice> --planning-depth <choice2> $ARGUMENTS
 ```
 
-If the TS host is unavailable, fall back to:
-
-```
-AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice2> $ARGUMENTS
-```
+The TS host is the sole entry point to the Go CLI for manifest generation. See `.aether/docs/wrapper-host-contract.md`.
 
 Parse `result.plan_manifest` or `result.planning_manifest`. This manifest is the only source for worker names, castes, waves, task IDs, briefs, and finalizer contract.
 

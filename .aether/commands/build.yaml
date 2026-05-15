@@ -3,7 +3,7 @@ description: "🔨 Build a phase — Queen dispatches workers, colony self-organ
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "aether host build $ARGUMENTS"
-  fallback: "AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only"
+  contract: ".aether/docs/wrapper-host-contract.md"
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
@@ -19,7 +19,7 @@ wrapper_additions:
     5. Immediately before requesting the manifest, say: `Asking the runtime for the dispatch manifest...`
   orchestration: |
     Restore real wrapper orchestration:
-    1. Run `aether host build $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`. If the TS host is unavailable, fall back to `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only`.
+    1. Run `aether host build $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The TS host is the sole entry point to the Go CLI for manifest generation (per `.aether/docs/wrapper-host-contract.md`).
     2. Parse `result.dispatch_manifest`; do not parse visual output.
     3. Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the build flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
     4. Immediately render the runtime-owned old-style spawn ceremony for the user with `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>`; do not parse this output.

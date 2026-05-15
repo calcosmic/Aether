@@ -34,11 +34,7 @@ Run the TS host to fetch the heavy-review manifest:
 aether host continue --verification-depth heavy $ARGUMENTS
 ```
 
-If the TS host is unavailable, fall back to:
-
-```
-AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS
-```
+The TS host is the sole entry point to the Go CLI for manifest generation. See `.aether/docs/wrapper-host-contract.md`.
 
 Save the JSON envelope to a temporary manifest file outside `.aether/data/`. Parse `result.continue_manifest`.
 
