@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/smoke"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -44,12 +45,8 @@ func TestSmokeTestWritesPlatformHealth(t *testing.T) {
 		}
 	}
 
-	// Write platform-health.json (producer side)
-	healthData := map[string]interface{}{
-		"failed_commands": failedCommands,
-		"flag_mismatches": []interface{}{},
-	}
-	if err := s.SaveJSON("platform-health.json", healthData); err != nil {
+	// Write platform-health.json via shared writer (producer side)
+	if err := smoke.WritePlatformHealth(s, failedCommands, nil, nil); err != nil {
 		t.Fatalf("failed to write platform-health.json: %v", err)
 	}
 

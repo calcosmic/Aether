@@ -90,9 +90,20 @@ func TestDocCLIAlignment(t *testing.T) {
 		})
 	}
 
-	// 5. Write platform-health.json
-	healthData := buildHealthData(s, yamlCommands, blocking, warnings)
-	if err := s.SaveJSON("platform-health.json", healthData); err != nil {
+	// 5. Write platform-health.json via shared writer
+	hostCriticalChecked := 0
+	for _, cmd := range yamlCommands {
+		if smoke.IsHostCritical(cmd.Name) {
+			hostCriticalChecked++
+		}
+	}
+	alignment := &smoke.DocCLIAlignment{
+		CommandsChecked:      len(yamlCommands),
+		HostCriticalChecked:  hostCriticalChecked,
+		HostCriticalFailures: blocking,
+		Warnings:             warnings,
+	}
+	if err := smoke.WritePlatformHealth(s, nil, nil, alignment); err != nil {
 		t.Fatalf("failed to write platform-health.json: %v", err)
 	}
 
