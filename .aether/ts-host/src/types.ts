@@ -331,3 +331,176 @@ export const CEREMONY_TOPICS = [
 ] as const;
 
 export type CeremonyTopic = (typeof CEREMONY_TOPICS)[number];
+
+// ---------------------------------------------------------------------------
+// Oracle iteration types (cmd/oracle_iterate_cmd.go)
+// ---------------------------------------------------------------------------
+
+/**
+ * Outer result envelope from `aether oracle-iterate --plan-only`.
+ * callGoJSON returns the inner `result` field, which matches this shape.
+ */
+export interface OracleIterationManifest {
+  /** Whether the iteration is valid. */
+  ok: boolean;
+  /** The iteration manifest describing this Oracle loop step. */
+  iteration_manifest: OracleIterationState;
+}
+
+/**
+ * State of a single Oracle iteration as returned by Go.
+ * Mirrors the Go `iterationManifest` struct.
+ */
+export interface OracleIterationState {
+  /** Research topic. */
+  topic: string;
+  /** Research depth: quick, balanced, deep, exhaustive. */
+  depth: string;
+  /** Maximum number of iterations allowed. */
+  max_iterations: number;
+  /** Target confidence percentage (1-100). */
+  confidence_target: number;
+  /** Current iteration number (1-based). */
+  current_iteration: number;
+  /** Workers assigned to this iteration. */
+  workers: OracleWorker[];
+}
+
+/**
+ * A single Oracle worker dispatch.
+ * Mirrors the Go `oracleWorker` struct.
+ */
+export interface OracleWorker {
+  /** Worker name (e.g., Oracle-01). */
+  name: string;
+  /** Worker caste (always "oracle"). */
+  caste: string;
+  /** Task description. */
+  task: string;
+  /** Detailed brief for the worker. */
+  brief: string;
+}
+
+/**
+ * An Oracle research question.
+ * For future use if the Go command adds question fields.
+ */
+export interface OracleQuestion {
+  /** Question identifier. */
+  id: string;
+  /** Question text. */
+  text: string;
+  /** Status: open, answered, shelved. */
+  status: string;
+  /** Confidence in the answer (0-100). */
+  confidence?: number;
+}
+
+/**
+ * Stop conditions for the Oracle RALF loop.
+ * Computed by the TS host from manifest fields, not returned by Go.
+ */
+export interface OracleStopConditions {
+  /** True when current confidence meets or exceeds the target. */
+  confidence_met: boolean;
+  /** True when current iteration reaches max_iterations. */
+  max_iterations_met: boolean;
+  /** True when the user manually requested a stop. */
+  manual_stop: boolean;
+  /** True when no progress was made in the last iteration. */
+  no_progress: boolean;
+}
+
+/**
+ * Question count summary.
+ * Computed by the TS host.
+ */
+export interface OracleQuestionCounts {
+  /** Total questions. */
+  total: number;
+  /** Questions with status "answered". */
+  answered: number;
+  /** Questions touched in the current iteration. */
+  touched: number;
+}
+
+/**
+ * Paths to Oracle workspace files.
+ * For reference only — the TS host never writes to these directly.
+ */
+export interface OracleWorkspacePaths {
+  /** Path to the persisted Oracle state file. */
+  state_path: string;
+  /** Path to the research plan. */
+  plan_path: string;
+  /** Path to the gaps analysis. */
+  gaps_path: string;
+  /** Path to the synthesis document. */
+  synthesis_path: string;
+  /** Path to the research plan document. */
+  research_plan_path: string;
+}
+
+/**
+ * Result from `aether oracle-iterate-finalize --completion-file`.
+ * Mirrors the Go `oracleFinalizeResult` struct.
+ */
+export interface OracleIterationCompletion {
+  /** Whether finalization succeeded. */
+  ok: boolean;
+  /** Path to the persisted state file. */
+  state_path: string;
+  /** Current confidence after this iteration. */
+  current_confidence: number;
+  /** Target confidence percentage. */
+  confidence_target: number;
+  /** Whether another iteration should run. */
+  should_continue: boolean;
+  /** Suggested next command for the TS host. */
+  next_command: string;
+}
+
+/**
+ * Response from a single Oracle worker after dispatch.
+ * Built by the TS host from the DispatchResult.
+ */
+export interface OracleWorkerResponse {
+  /** Question identifier this response addresses. */
+  question_id: string;
+  /** Worker status: completed, failed, blocked. */
+  status: string;
+  /** Confidence in the findings (0-100). */
+  confidence: number;
+  /** Summary of the worker's research output. */
+  summary: string;
+  /** Structured findings from the worker. */
+  findings?: OracleWorkerFinding[];
+  /** Identified knowledge gaps. */
+  gaps?: string[];
+  /** Contradictions found during research. */
+  contradictions?: string[];
+  /** Primary recommendation from the worker. */
+  recommendation?: string;
+}
+
+/**
+ * A single finding reported by an Oracle worker.
+ */
+export interface OracleWorkerFinding {
+  /** Finding text. */
+  text: string;
+  /** Supporting evidence for the finding. */
+  evidence?: OracleWorkerEvidence[];
+}
+
+/**
+ * Evidence supporting an Oracle worker finding.
+ */
+export interface OracleWorkerEvidence {
+  /** Evidence title or description. */
+  title: string;
+  /** Where the evidence was found (file, URL, etc.). */
+  location: string;
+  /** Evidence type: code, doc, test, external. */
+  type: string;
+}
