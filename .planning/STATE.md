@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.19
 milestone_name: TypeScript Host Cutover + Oracle Confidence Recovery
 status: executing
-last_updated: "2026-05-15T09:18:00Z"
+last_updated: "2026-05-15T09:56:18Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 6
-  completed_plans: 5
-  percent: 83
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 ## Current Position
 
 Phase: 128 of 129 (Swarm/Watch Host Bridge)
-Plan: 128-01 complete
+Plan: 128-02 complete
 Status: Executed, all tasks committed, SUMMARY.md created
 
 ## Completed Plans
@@ -32,6 +32,7 @@ Status: Executed, all tasks committed, SUMMARY.md created
 - 126-01: Oracle Iteration Manifests (Go commands)
 - 127-01: TS Host Oracle Lifecycle (TypeScript orchestration)
 - 128-01: Swarm/Watch Host Bridge (TypeScript display modules)
+- 128-02: Swarm/Watch Host Bridge (host.ts wiring + tests)
 
 ## Known Blockers
 
@@ -39,10 +40,9 @@ None
 
 ## Next Actions
 
-1. Wire watch and swarm commands into host.ts command router
-2. Execute Phase 129 — Final Integration / TS Host Command Surface Completion
-3. Verify `npm run typecheck` passes in `.aether/ts-host/`
-4. Verify `go test ./...` passes
+1. Execute Phase 129 — Final Integration / TS Host Command Surface Completion
+2. Verify `npm run typecheck` passes in `.aether/ts-host/`
+3. Verify `go test ./...` passes
 
 ## Key Decisions
 
