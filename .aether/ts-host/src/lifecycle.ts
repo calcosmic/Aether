@@ -37,6 +37,8 @@ import { createNarrator, type Narrator } from "./narrator.js";
 import { startEventBridge, stopEventBridge, type EventBridgeController } from "./event-bridge.js";
 import { createQueenOrchestrator as _createQueenOrchestrator } from "./queen/orchestrator.js";
 import type { QueenOrchestratorResult } from "./queen/types.js";
+import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
+import type { OracleLifecycleResult } from "./oracle-lifecycle.js";
 
 // Mutable reference for test injection.
 let _createQueenOrchestratorRef = _createQueenOrchestrator;
@@ -77,6 +79,20 @@ export interface LifecycleOptions extends DispatchOptions {
   dashboard?: boolean;
   /** When true, skip the pre-build midden threshold check. */
   skipMiddenCheck?: boolean;
+  /** When true, run Oracle RALF research before planning. */
+  runOracle?: boolean;
+  /** Research topic for the Oracle step (default: "auto"). */
+  oracleTopic?: string;
+}
+
+/** Oracle result summary embedded in LifecycleResult. */
+export interface LifecycleOracleResult {
+  /** Number of Oracle iterations completed. */
+  iterations_completed: number;
+  /** Final confidence percentage after Oracle loop. */
+  final_confidence: number;
+  /** Reason the Oracle loop stopped. */
+  stop_reason: string;
 }
 
 /** Result of the lifecycle orchestration. */
@@ -85,6 +101,8 @@ export interface LifecycleResult {
   success: boolean;
   /** Steps completed in order. */
   steps_completed: string[];
+  /** Oracle result if the Oracle step ran. */
+  oracle_result?: LifecycleOracleResult;
   /** Error message if the lifecycle failed. */
   error?: string;
 }
@@ -160,12 +178,34 @@ export async function runLifecycle(
 ): Promise<LifecycleResult> {
   const stepsCompleted: string[] = [];
   const targetPhase = opts.phase ?? 1;
+  let oracleResult: OracleLifecycleResult | undefined;
 
   // Determine if dashboard should be active (default true when TTY)
   const useDashboard = opts.dashboard !== false && process.stdout.isTTY;
   let dashboard: Dashboard | undefined;
 
   try {
+    // ── Step 0: Oracle (optional) ────────────────────────────────────────
+    if (opts.runOracle) {
+      const oracleOpts: OracleLifecycleOptions = {
+        goBinaryPath: opts.goBinaryPath,
+        cwd: opts.cwd,
+        topic: opts.oracleTopic ?? "auto",
+        simulateWorkers: opts.simulateWorkers ?? false,
+        dashboard: useDashboard,
+      };
+
+      const oracleRes = await runOracleLifecycle(oracleOpts);
+      if (!oracleRes.success) {
+        throw new Error(oracleRes.error ?? "Oracle lifecycle failed");
+      }
+      oracleResult = oracleRes;
+      stepsCompleted.push("oracle");
+      process.stderr.write(
+        `Oracle completed: ${oracleRes.iterations_completed} iterations, confidence ${oracleRes.final_confidence}%\n`
+      );
+    }
+
     // ── Step 1: Plan ─────────────────────────────────────────────────────
 
     const planResult = callGoJSON<PlanManifestResult>(opts, [
@@ -458,10 +498,18 @@ export async function runLifecycle(
     stepsCompleted.push("continue");
     process.stderr.write("Continue finalized successfully\n");
 
-    return {
+    const result: LifecycleResult = {
       success: true,
       steps_completed: stepsCompleted,
     };
+    if (oracleResult) {
+      result.oracle_result = {
+        iterations_completed: oracleResult.iterations_completed,
+        final_confidence: oracleResult.final_confidence,
+        stop_reason: oracleResult.stop_reason,
+      };
+    }
+    return result;
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : String(err);

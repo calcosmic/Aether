@@ -65,7 +65,8 @@ function printUsage(): void {
       "  build <N>     Call aether build N --plan-only\n" +
       "  continue      Call aether continue --plan-only\n" +
       "  oracle [topic] Run Oracle RALF lifecycle loop (iterate -> dispatch -> finalize)\n" +
-      "  lifecycle [N] Full plan->build->continue sequence (default phase: 1)\n\n" +
+      "  lifecycle [N] [topic] Full plan->build->continue sequence (default phase: 1)\n" +
+      "                      Optional Oracle topic runs Oracle research before plan.\n\n" +
       "Options:\n" +
       "  --cwd <path>        Working directory\n" +
       "  --simulate          Run in simulation mode (no real worker spawning)\n" +
@@ -138,6 +139,7 @@ async function main(): Promise<void> {
 
     case "lifecycle": {
       const phaseArg = positional[0];
+      const oracleTopicArg = positional[1];
       if (phaseArg && isNaN(parseInt(phaseArg, 10))) {
         process.stderr.write("Error: lifecycle phase must be a number\n");
         process.exit(1);
@@ -154,6 +156,10 @@ async function main(): Promise<void> {
       };
       if (phaseArg) {
         lifecycleOpts.phase = parseInt(phaseArg, 10);
+      }
+      if (oracleTopicArg) {
+        lifecycleOpts.runOracle = true;
+        lifecycleOpts.oracleTopic = oracleTopicArg;
       }
 
       const narrator = createNarrator({
