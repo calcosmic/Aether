@@ -17,6 +17,7 @@ import type { BuildManifest, ContinueCompletion, PlanCompletion } from "./types.
 import { callGoJSON, discoverGoBinary } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
+import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
 import { createNarrator } from "./narrator.js";
 import { startEventBridge } from "./event-bridge.js";
 
@@ -63,7 +64,7 @@ function printUsage(): void {
       "  plan          Call aether plan --plan-only\n" +
       "  build <N>     Call aether build N --plan-only\n" +
       "  continue      Call aether continue --plan-only\n" +
-      "  oracle        Call aether oracle-iterate --plan-only\n" +
+      "  oracle [topic] Run Oracle RALF lifecycle loop (iterate -> dispatch -> finalize)\n" +
       "  lifecycle [N] Full plan->build->continue sequence (default phase: 1)\n\n" +
       "Options:\n" +
       "  --cwd <path>        Working directory\n" +
@@ -122,12 +123,15 @@ async function main(): Promise<void> {
 
     case "oracle": {
       const topic = positional[0] || "auto";
-      const result = callGoJSON(bridge, [
-        "oracle-iterate",
-        "--plan-only",
-        "--topic",
+      const oracleOpts: OracleLifecycleOptions = {
+        goBinaryPath,
+        cwd,
         topic,
-      ]);
+        simulateWorkers: simulate,
+        dashboard: !noDashboard,
+      };
+
+      const result = await runOracleLifecycle(oracleOpts);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
