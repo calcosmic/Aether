@@ -40,7 +40,7 @@ See `.planning/milestones/` for full archived phase details.
 | 124. Host Entry Point | v1.19 | 0/TBD | Not started | — |
 | 125. Wrapper Cutover: Plan/Build/Continue | v1.19 | 0/TBD | Not started | — |
 | 126. Oracle Iteration Manifests | v1.19 | 1/1 | Complete | 2026-05-14 |
-| 127. TS Host Oracle Lifecycle | v1.19 | 1/1 | Complete | 2026-05-15 |
+| 127. TS Host Oracle Lifecycle | v1.19 | 2/2 | Complete | 2026-05-15 |
 | 128. Swarm/Watch Host Bridge | v1.19 | 0/TBD | Not started | — |
 | 129. Release Gate | v1.19 | 0/TBD | Not started | — |
 
@@ -86,7 +86,7 @@ See `.planning/milestones/` for full archived phase details.
   1. TS dispatches Oracle workers via platform dispatcher
   2. TS loops until confidence target, max iterations, or stop
   3. TS never writes directly to `.aether/data/oracle`
-**Plans**: 1 plan
+**Plans**: 2 plans
 
 ### Phase 128: Swarm/Watch Host Bridge
 **Goal:** Add TS host watch/swarm display using Go JSON output for structured display.
