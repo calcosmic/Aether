@@ -32,43 +32,64 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
-## Current Milestone: v1.19 TypeScript Host Cutover + Oracle Confidence Recovery
+## Current Milestone: v1.20 Host Contract Hardening and Wrapper Reality Check
 
-**Goal:** Make the TypeScript host the primary orchestration layer for real user workflows. Cut over plan/build/continue wrappers from manual Go command chains to host-backed orchestration. Restore Oracle/RALF confidence iteration through the hybrid manifest/finalizer boundary.
+**Goal:** Make the TS host contract honest — docs, CLI flags, tests, and wrapper behavior agree on who owns what. Harden the host surface so every documented command works, every flag is tested, and the wrapper/host boundary is explicit.
 
 **Target features:**
-- Host Entry Point: `aether host <workflow>` runs the TS host from installed assets
-- Wrapper Cutover: Claude/OpenCode plan/build/continue call TS host, not manual Go chains
-- Oracle Iteration Manifests: Go owns Oracle state, confidence math, and finalizers
-- TS Host Oracle Lifecycle: `runOracleLifecycle()` dispatches workers and loops until target
-- Swarm/Watch Host Bridge: Live visibility via Go JSON output, not visual parsing
-- Release Gate: Typecheck, tests, downstream smoke, cross-platform consistency
+- Host Surface Completeness: all 7 `aether host` subcommands (plan, build, continue, oracle, watch, swarm, lifecycle) work end-to-end
+- Test Coverage: every documented `aether host` command with realistic flag combos is exercised in tests
+- Wrapper Ownership Decision: record whether wrappers are "host-assisted orchestrators" or thin pass-throughs
+- Lifecycle Honesty: remove or gate synthetic shortcuts behind `--simulate`
+- Oracle Storage: move iteration state to locked/atomic Go-owned storage pattern
+- Doc-CLI Alignment: executable YAML smoke test so docs and CLI cannot disagree
 
 **Non-goals:**
-- Interactive shell (deferred to v1.20)
-- Rewrite Go runtime in TypeScript
-- Remove AETHER_OUTPUT_MODE (centralize behind host instead)
-- Raw Bash orchestration
+- Interactive shell (deferred to v1.21)
+- New workflows or dashboard redesign
+- Worktree merge-back automation (out of scope)
 
 ## Current State
 
-- **v1.18 Hybrid Runtime Parity & Release Gate shipped (2026-05-14)** — Full milestone archive in `.planning/milestones/`
+- **v1.19 TypeScript Host Cutover + Oracle Confidence Recovery shipped (2026-05-15)** — Full milestone archive in `.planning/milestones/`
 - **Product version: v1.0.38**
 - Go runtime is healthy, all 17 Go test packages passing
-- TS host is stable: typecheck clean, 168 tests passing, no hangs
-- Platform dispatch is correct: Codex prompt passing fixed, all 3 platforms tested
-- Classic parity verified: golden tests match v5.4 baseline
-- Dev channel publish verified: downstream smoke test passed
+- TS host is primary orchestration layer: typecheck clean, 189 tests passing
+- All major workflows (plan, build, continue, oracle, watch, swarm) available through TS host
+- Cross-platform consistency verified: 60/60/27/27/86 counts match
+- Downstream publish/update pipeline verified
 
-**Key accomplishments (v1.18):**
-- TS host stabilized — typecheck clean, 168 tests passing, event bridge teardown fixed
-- Platform dispatch corrected — Codex prompt passing fixed, Claude/OpenCode/Codex arg tests added
-- Go test suite restored — 7 failures resolved, all 17 packages green
-- Classic parity verified — golden tests match v5.4 baseline, 34 Oracle tests, 17 swarm tests
-- Release gate passed — dev channel publish succeeded, downstream smoke verified
+**Key accomplishments (v1.19):**
+- TS host entry point — `aether host <workflow>` runs TS host for all major workflows
+- Wrapper cutover — Claude/OpenCode plan/build/continue delegate to TS host
+- Oracle lifecycle in TS — `runOracleLifecycle()` dispatches workers, loops until target
+- Swarm/Watch bridge — structured displays from Go JSON, no visual parsing
+- Release gate passed — all tests green, publish pipeline verified, zero new flag mismatches
 
-**Stretch from v1.18:**
-- Write v1.19 Interactive Shell readiness spec (deferred — not yet started)
+**Stretch from v1.19:**
+- Interactive Shell readiness spec (candidate for v1.20)
+- CLI flag mismatch cleanup (candidate for v1.20)
+
+<details>
+<summary>v1.19 TypeScript Host Cutover + Oracle Confidence Recovery Summary</summary>
+
+**Shipped:** 2026-05-15
+**Phases:** 6 (124-129)
+**Requirements:** 35/35 Complete
+**Product Version:** v1.0.38
+**Commits:** 109 (since 2026-05-01)
+**Files Changed:** 1,579 (+119,767 / -114,301)
+
+Key accomplishments:
+- TS host entry point — `aether host <workflow>` runs the TS host end-to-end
+- Wrapper cutover — Claude/OpenCode plan/build/continue wrappers delegate to TS host
+- Oracle iteration manifests — Go owns Oracle state, confidence math, and finalizers
+- TS host Oracle lifecycle — `runOracleLifecycle()` dispatches workers and loops until confidence target
+- Swarm/Watch host bridge — structured displays from Go JSON output, eliminating visual parsing
+- Release gate passed — 189 TS tests, 2900+ Go tests, downstream smoke verified, cross-platform consistency confirmed
+
+Full details: `.planning/milestones/v1.19-ROADMAP.md`
+</details>
 
 <details>
 <summary>v1.18 Hybrid Runtime Parity & Release Gate Summary</summary>

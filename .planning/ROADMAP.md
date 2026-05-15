@@ -21,94 +21,93 @@
 - **v1.16 Hybrid Runtime Boundary and Orchestration Recovery** - Phases 106-111 (shipped 2026-05-13)
 - **v1.17 Classic Restoration** - Phases 112-118 (shipped 2026-05-14) — [Archive](milestones/v1.17-ROADMAP.md)
 - **v1.18 Hybrid Runtime Parity & Release Gate** - Phases 119-123 (shipped 2026-05-14) — [Archive](milestones/v1.18-ROADMAP.md)
+- **v1.19 TypeScript Host Cutover + Oracle Confidence Recovery** - Phases 124-129 (shipped 2026-05-15) — [Archive](milestones/v1.19-ROADMAP.md)
 
 ## Phases
 
 <details>
-<summary>v1.0 through v1.18 Phase Summaries (archived)</summary>
+<summary>v1.0 through v1.19 Phase Summaries (archived)</summary>
 
 See `.planning/milestones/` for full archived phase details.
 
 </details>
 
-### Current Milestone: v1.19 TypeScript Host Cutover + Oracle Confidence Recovery
+### Current Milestone: v1.20 Host Contract Hardening and Wrapper Reality Check
 
-**Goal:** Make the TypeScript host the primary orchestration layer for real user workflows. Cut over plan/build/continue wrappers from manual Go command chains to host-backed orchestration. Restore Oracle/RALF confidence iteration through the hybrid manifest/finalizer boundary.
+**Goal:** Make the TS host contract honest — docs, CLI flags, tests, and wrapper behavior agree on who owns what. Harden the host surface so every documented command works, every flag is tested, and the wrapper/host boundary is explicit.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 124. Host Entry Point | v1.19 | 0/TBD | Not started | — |
-| 125. Wrapper Cutover: Plan/Build/Continue | v1.19 | 0/TBD | Not started | — |
-| 126. Oracle Iteration Manifests | v1.19 | 1/1 | Complete | 2026-05-14 |
-| 127. TS Host Oracle Lifecycle | v1.19 | 2/2 | Complete | 2026-05-15 |
-| 128. Swarm/Watch Host Bridge | v1.19 | 0/TBD | Not started | — |
-| 129. Release Gate | v1.19 | 0/TBD | Not started | — |
+| 130. Host Surface Completeness | v1.20 | — | Not started | — |
+| 131. Test Coverage for Host Commands | v1.20 | — | Not started | — |
+| 132. Wrapper Ownership Decision | v1.20 | — | Not started | — |
+| 133. Lifecycle Honesty | v1.20 | — | Not started | — |
+| 134. Oracle Storage Pattern | v1.20 | — | Not started | — |
+| 135. Doc-CLI Alignment Smoke Test | v1.20 | — | Not started | — |
 
 ## Phase Details
 
-### Phase 124: Host Entry Point
-**Goal:** Add a stable `aether host <workflow>` entry point that runs the built TypeScript host from installed Aether assets.
-**Depends on:** Phase 123 (v1.18 shipped)
-**Requirements:** HEP-01, HEP-02, HEP-03, HEP-04, HEP-05, HEP-06, HEP-07
-**Success Criteria**:
-  1. `aether host lifecycle` runs the TS host end-to-end
-  2. `aether host plan/build/continue/oracle` exist and delegate to TS
-  3. Publish/update installs and builds the TS host correctly
-  4. Fallback messaging when Node/host deps are missing
-**Plans**: 1-2 plans
+### Phase 130: Host Surface Completeness
+**Goal:** Ensure `aether host` exposes every workflow the docs claim: plan, build, continue, oracle, watch, swarm, lifecycle.
+**Depends on:** Phase 129 (v1.19 shipped)
+**Requirements:** HSC-01, HSC-02, HSC-03, HSC-04, HSC-05, HSC-06, HSC-07
+**Success Criteria:**
+  1. All 7 `aether host` subcommands exist and execute end-to-end
+  2. `--depth`, `--planning-depth`, `--verification-depth`, `--no-dashboard` flags accepted
+  3. No undocumented or broken host subcommands
+**Plans:** 1-2 plans
 
-### Phase 125: Wrapper Cutover — Plan/Build/Continue
-**Goal:** Update Claude/OpenCode wrappers and YAML command sources to call the TS host instead of manually performing plan-only/finalizer/spawn-log steps.
-**Depends on:** Phase 124
-**Requirements:** WCO-01, WCO-02, WCO-03, WCO-04, WCO-05, WCO-06, WCO-07
-**Success Criteria**:
-  1. Claude plan/build/continue wrappers call TS host
-  2. OpenCode plan/build/continue wrappers call TS host
-  3. Go CLI direct commands still work for fallback
-  4. Wrapper files are materially shorter
-**Plans**: 1-2 plans
+### Phase 131: Test Coverage for Host Commands
+**Goal:** Documented commands execute in tests with realistic flag combinations.
+**Depends on:** Phase 130
+**Requirements:** TCV-01, TCV-02, TCV-03, TCV-04, TCV-05
+**Success Criteria:**
+  1. `aether host plan --depth balanced --planning-depth standard` tested
+  2. `aether host continue --verification-depth heavy` tested
+  3. `aether host watch --no-dashboard` tested
+  4. `aether host swarm <target> --no-dashboard` tested
+  5. 100% of documented `aether host` commands have test coverage
+**Plans:** 1 plan
 
-### Phase 126: Oracle Iteration Manifests
-**Goal:** Add Go commands for Oracle iteration so Go owns state, confidence math, and finalizers.
-**Depends on:** Phase 124
-**Requirements:** OIM-01, OIM-02, OIM-03, OIM-04
-**Success Criteria**:
-  1. `oracle-iterate --plan-only` returns iteration manifest
-  2. `oracle-iterate-finalize` commits Oracle state
-  3. Go owns all Oracle state writes
-**Plans**: 1 plan
+### Phase 132: Wrapper Ownership Decision
+**Goal:** Decide and document whether wrappers are "host-assisted orchestrators" or thin pass-throughs.
+**Depends on:** Phase 130
+**Requirements:** WRO-01, WRO-02, WRO-03, WRO-04
+**Success Criteria:**
+  1. ADR or contract doc records the ownership decision
+  2. Wrapper code updated to match (no duplicate verification/gating)
+  3. Wrapper README explains the boundary
+**Plans:** 1 plan
 
-### Phase 127: TS Host Oracle Lifecycle
-**Goal:** Add `runOracleLifecycle()` in TS that dispatches Oracle workers and loops until confidence target/max iterations/stop.
-**Depends on:** Phase 126
-**Requirements:** TOL-01, TOL-02, TOL-03, TOL-04, TOL-05
-**Success Criteria**:
-  1. TS dispatches Oracle workers via platform dispatcher
-  2. TS loops until confidence target, max iterations, or stop
-  3. TS never writes directly to `.aether/data/oracle`
-**Plans**: 2 plans
+### Phase 133: Lifecycle Honesty
+**Goal:** Remove or gate synthetic lifecycle shortcuts.
+**Depends on:** Phase 132
+**Requirements:** LHO-01, LHO-02, LHO-03
+**Success Criteria:**
+  1. No production shortcuts that skip real worker dispatch
+  2. Any remaining synthetic paths behind `--simulate`
+  3. `--simulate` documented and tested
+**Plans:** 1 plan
 
-### Phase 128: Swarm/Watch Host Bridge
-**Goal:** Add TS host watch/swarm display using Go JSON output for structured display.
-**Depends on:** Phase 125
-**Requirements:** SWB-01, SWB-02, SWB-03
-**Success Criteria**:
-  1. TS host watch uses Go JSON output
-  2. TS host swarm uses Go JSON output
-  3. Live visibility without wrapper visual parsing
-**Plans**: 1 plan
+### Phase 134: Oracle Storage Pattern
+**Goal:** Move Oracle iteration state to locked/atomic Go-owned storage.
+**Depends on:** Phase 132
+**Requirements:** ORS-01, ORS-02, ORS-03
+**Success Criteria:**
+  1. Oracle state uses same atomic storage as colony state
+  2. TS host reads via Go CLI JSON, never writes directly
+  3. Interrupt recovery works for Oracle sessions
+**Plans:** 1 plan
 
-### Phase 129: Release Gate
-**Goal:** Verify typecheck, tests, downstream smoke, and cross-platform consistency.
-**Depends on:** Phase 125, Phase 127, Phase 128
-**Requirements:** REL-01, REL-02, REL-03, REL-04, REL-05
-**Success Criteria**:
-  1. `npm run typecheck` passes
-  2. `npm test` passes
-  3. `go test ./...` passes
-  4. Downstream smoke test passes
-  5. All 3 platforms behave consistently
-**Plans**: 1 plan
+### Phase 135: Doc-CLI Alignment Smoke Test
+**Goal:** Executable YAML smoke test so docs cannot agree with each other while the CLI rejects commands.
+**Depends on:** Phase 131
+**Requirements:** DCA-01, DCA-02, DCA-03
+**Success Criteria:**
+  1. YAML smoke test exercises every documented command
+  2. Test fails if documented flag is rejected by CLI
+  3. Smoke test runs in CI or release gate
+**Plans:** 1 plan
 
 ---
 

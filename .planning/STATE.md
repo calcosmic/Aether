@@ -1,33 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.19
-milestone_name: TypeScript Host Cutover + Oracle Confidence Recovery
-status: complete
-last_updated: "2026-05-15T10:13:08Z"
+milestone: v1.20
+milestone_name: Host Contract Hardening and Wrapper Reality Check
+status: planning
+last_updated: "2026-05-15T10:30:00Z"
 progress:
   total_phases: 6
-  completed_phases: 6
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-14)
+See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 129 complete -- v1.19 Release Gate passed
+**Current focus:** Phase 130 — Host Surface Completeness
 
 ## Current Position
 
-Phase: 129 of 129 (Release Gate)
-Plan: 129-01 complete
-Status: Phase 129 complete -- v1.19 Release Gate passed
+Phase: 130 of 135 (Host Surface Completeness)
+Plan: 130-01 pending
+Status: v1.20 milestone started — planning phase
 
-## Completed Plans
+## Completed Plans (v1.19)
 
 - 126-01: Oracle Iteration Manifests (Go commands)
 - 127-01: TS Host Oracle Lifecycle (TypeScript orchestration)
@@ -42,9 +42,10 @@ None
 
 ## Next Actions
 
-1. Run /ant-seal to seal the v1.19 colony
+1. Plan Phase 130: Host Surface Completeness
+2. Execute Phase 130 when plan is ready
 
-## Key Decisions
+## Key Decisions (Carried Forward)
 
 - OracleWorkerResponse findings built conditionally to satisfy exactOptionalPropertyTypes
 - Simulated current confidence uses 70 for completed workers, 30 for failed as a synthetic baseline
@@ -52,3 +53,4 @@ None
 - Watch and swarm display modules use exactOptionalPropertyTypes-compatible optional fields (| undefined)
 - Dashboard refresh loop capped at minimum 1000ms per threat model T-128-02
 - Swarm dashboard is one-shot (no refresh loop) since swarm --plan-only produces a static manifest
+- v1.20 ownership decision pending: wrappers as "host-assisted orchestrators" vs thin pass-throughs
