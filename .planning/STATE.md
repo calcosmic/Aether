@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.20
 milestone_name: Host Contract Hardening and Wrapper Reality Check
-status: planning
-last_updated: "2026-05-15T10:30:00Z"
+status: ready_to_plan
+last_updated: "2026-05-15T13:40:06.367Z"
 progress:
   total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 4
+  total_plans: 5
+  completed_plans: 3
+  percent: 67
 ---
 
 # Project State
@@ -19,13 +19,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 130 — Host Surface Completeness
+**Current focus:** Phase 134 — Oracle Storage Pattern
 
 ## Current Position
 
-Phase: 130 of 135 (Host Surface Completeness)
-Plan: 130-01 pending
-Status: v1.20 milestone started — planning phase
+Phase: 135
+Plan: Not started
+Status: Ready to plan
 
 ## Completed Plans (v1.19)
 

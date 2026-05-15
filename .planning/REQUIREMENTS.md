@@ -90,9 +90,9 @@ The v1.20 boundary decision: if wrappers become "host-assisted orchestrators", t
 | LHO-01 | Phase 133 | Pending |
 | LHO-02 | Phase 133 | Pending |
 | LHO-03 | Phase 133 | Pending |
-| ORS-01 | Phase 134 | Pending |
-| ORS-02 | Phase 134 | Pending |
-| ORS-03 | Phase 134 | Pending |
+| ORS-01 | Phase 134 | Complete |
+| ORS-02 | Phase 134 | Complete |
+| ORS-03 | Phase 134 | Complete |
 | DCA-01 | Phase 135 | Pending |
 | DCA-02 | Phase 135 | Pending |
 | DCA-03 | Phase 135 | Pending |
