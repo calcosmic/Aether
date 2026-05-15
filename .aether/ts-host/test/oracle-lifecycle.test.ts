@@ -304,4 +304,40 @@ describe("oracle-lifecycle", () => {
     assert.equal(check.stop, true);
     assert.equal(check.reason, "max_iterations_met");
   });
+
+  it("continues loop when Go manifest indicates resuming", async () => {
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        // First call returns resuming=true (interrupted iteration 2)
+        const manifest = makeMockManifest(iterateCallCount + 1, 5, 85);
+        if (iterateCallCount === 1) {
+          manifest.iteration_manifest.resuming = true;
+        }
+        return manifest as unknown as T;
+      }
+      if (args[0] === "oracle-iterate-finalize") {
+        finalizeCallCount++;
+        const finalize = makeMockFinalize(finalizeCallCount < 2, 50);
+        return finalize as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile(() => "/tmp/fake-completion.json");
+    __setDispatchSingleWorker(async () => makeMockDispatchResult("completed"));
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: true,
+    });
+
+    assert.equal(result.success, true, "Should succeed after resume");
+    assert.equal(result.iterations_completed, 3, "Should complete resumed iteration and advance");
+    assert.equal(iterateCallCount, 2, "Should call iterate twice");
+    assert.equal(finalizeCallCount, 2, "Should call finalize twice");
+    assert.equal(result.stop_reason, "finalize:should_continue=false", "Should stop when finalize says so");
+  });
 });

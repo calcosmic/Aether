@@ -364,6 +364,8 @@ export interface OracleIterationState {
   current_iteration: number;
   /** Workers assigned to this iteration. */
   workers: OracleWorker[];
+  /** When true, this iteration is resuming from a prior interrupt. */
+  resuming?: boolean;
 }
 
 /**
