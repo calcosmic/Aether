@@ -258,9 +258,17 @@ func setupOracleTestDir(t *testing.T) func() {
 	// fall back to plain file I/O instead of using a stale store from a prior test.
 	origStore := store
 	store = nil
+	// Isolate AETHER_ROOT so PersistentPreRunE resolves the store to this temp dir
+	origAetherRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
 	return func() {
 		os.Chdir(originalWD)
 		store = origStore
+		if origAetherRoot == "" {
+			os.Unsetenv("AETHER_ROOT")
+		} else {
+			os.Setenv("AETHER_ROOT", origAetherRoot)
+		}
 	}
 }
 
