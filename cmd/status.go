@@ -127,6 +127,26 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 			if mismatches, ok := ph["flag_mismatches"].([]interface{}); ok && len(mismatches) > 0 {
 				warnings = append(warnings, fmt.Sprintf("Platform health: %d CLI flag mismatch(es) detected. Run `aether cli-audit` to review.", len(mismatches)))
 			}
+			// 5a. Doc-CLI alignment warnings
+			if dcaRaw, ok := ph["doc_cli_alignment"]; ok {
+				var dca map[string]interface{}
+				if dcaMap, ok := dcaRaw.(map[string]interface{}); ok {
+					dca = dcaMap
+				} else {
+					// Try JSON round-trip for typed structs
+					b, _ := json.Marshal(dcaRaw)
+					json.Unmarshal(b, &dca)
+				}
+				if hcf, ok := dca["host_critical_failures"].([]interface{}); ok && len(hcf) > 0 {
+					warnings = append(warnings, fmt.Sprintf("Doc-CLI alignment: %d host-critical flag mismatch(es) detected", len(hcf)))
+				}
+				if w, ok := dca["warnings"].([]interface{}); ok && len(w) > 0 {
+					warnings = append(warnings, fmt.Sprintf("Doc-CLI alignment: %d non-critical flag mismatch(es) detected", len(w)))
+				}
+				if cc, ok := dca["commands_checked"].(float64); ok && cc == 0 {
+					warnings = append(warnings, "Doc-CLI alignment smoke test did not run")
+				}
+			}
 		}
 	}
 
