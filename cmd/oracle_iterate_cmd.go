@@ -22,6 +22,10 @@ type oracleState struct {
 	History           []oracleHistoryEntry `json:"history"`
 	ShouldContinue    bool                `json:"should_continue"`
 	UpdatedAt         string              `json:"updated_at"`
+	// Interrupt recovery fields
+	PendingIteration  int    `json:"pending_iteration,omitempty"`
+	PendingStartTime  string `json:"pending_start_time,omitempty"`
+	LastWorkerStatus  string `json:"last_worker_status,omitempty"`
 }
 
 type oracleHistoryEntry struct {
@@ -38,6 +42,7 @@ type iterationManifest struct {
 	ConfidenceTarget int            `json:"confidence_target"`
 	CurrentIteration int            `json:"current_iteration"`
 	Workers          []oracleWorker `json:"workers"`
+	Resuming         bool           `json:"resuming,omitempty"`
 }
 
 type oracleWorker struct {
@@ -113,7 +118,26 @@ var oracleIterateCmd = &cobra.Command{
 			}
 		}
 
+		// Interrupt recovery: detect and clear stale pending iterations.
+		resuming := false
+		if state.PendingIteration > 0 {
+			if isPendingStale(state.PendingStartTime) {
+				state.PendingIteration = 0
+				state.PendingStartTime = ""
+				state.LastWorkerStatus = ""
+			} else if state.PendingIteration == state.CurrentIteration {
+				resuming = true
+			}
+		}
+
 		if planOnly {
+			// Write pending marker before returning manifest so interrupt
+			// recovery can resume from this point.
+			state.PendingIteration = state.CurrentIteration
+			state.PendingStartTime = time.Now().UTC().Format(time.RFC3339)
+			state.LastWorkerStatus = "dispatched"
+			_ = saveOracleState(state)
+
 			manifest := iterationManifest{
 				Topic:            state.Topic,
 				Depth:            state.Depth,
@@ -128,6 +152,7 @@ var oracleIterateCmd = &cobra.Command{
 						Brief: fmt.Sprintf("Conduct research iteration %d/%d for '%s'. Target confidence: %d%%. Current confidence: %d%%. Return structured findings with confidence delta.", state.CurrentIteration, state.MaxIterations, state.Topic, state.ConfidenceTarget, state.CurrentConfidence),
 					},
 				},
+				Resuming: resuming,
 			}
 			result := oracleIterationResult{
 				OK:                true,
@@ -217,6 +242,11 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 			state.ShouldContinue = false
 		}
 
+		// Clear pending iteration marker on successful finalize
+		state.PendingIteration = 0
+		state.PendingStartTime = ""
+		state.LastWorkerStatus = ""
+
 		state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 
 		if err := saveOracleState(state); err != nil {
@@ -299,5 +329,17 @@ func saveOracleState(state *oracleState) error {
 
 	// Store basePath is already .aether/data/, so use the relative path within it.
 	return store.SaveJSON("oracle/state.json", state)
+}
+
+// isPendingStale returns true if the pending start time is older than 1 hour.
+func isPendingStale(startTime string) bool {
+	if startTime == "" {
+		return false
+	}
+	t, err := time.Parse(time.RFC3339, startTime)
+	if err != nil {
+		return false
+	}
+	return time.Since(t) > time.Hour
 }
 
