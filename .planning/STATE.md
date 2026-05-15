@@ -23,9 +23,16 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 
 ## Current Position
 
-Phase: 135
-Plan: 2/2 complete
+Phase: 133
+Plan: 1/1 complete
 Status: Complete
+
+## Completed Plans (v1.20)
+
+- 133-01: Lifecycle Honesty (worker dispatch defaults to real execution, simulation gated behind --simulate)
+- 134-01: Oracle Storage Pattern (Go-owned atomic storage, interrupt recovery)
+- 135-01: Doc-CLI Alignment Dashboard (command catalog, flag audit, release gate integration)
+- 135-02: Doc-CLI Alignment Smoke Test (executable YAML smoke tests)
 
 ## Completed Plans (v1.19)
 
@@ -43,7 +50,9 @@ None
 ## Next Actions
 
 1. Plan Phase 130: Host Surface Completeness
-2. Execute Phase 130 when plan is ready
+2. Plan Phase 131: Test Coverage for Host Commands
+3. Plan Phase 132: Wrapper Ownership Decision
+4. Execute remaining v1.20 phases when plans are ready
 
 ## Key Decisions (Carried Forward)
 

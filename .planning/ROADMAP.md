@@ -41,7 +41,7 @@ See `.planning/milestones/` for full archived phase details.
 | 130. Host Surface Completeness | v1.20 | — | Not started | — |
 | 131. Test Coverage for Host Commands | v1.20 | — | Not started | — |
 | 132. Wrapper Ownership Decision | v1.20 | — | Not started | — |
-| 133. Lifecycle Honesty | v1.20 | — | Not started | — |
+| 133. Lifecycle Honesty | v1.20 | 1/1 | Complete    | 2026-05-15 |
 | 134. Oracle Storage Pattern | v1.20 | 1/1 | Complete    | 2026-05-15 |
 | 135. Doc-CLI Alignment Smoke Test | v1.20 | 2/2 | Complete   | 2026-05-15 |
 

@@ -32,9 +32,9 @@
 
 ### Lifecycle Honesty (LHO)
 
-- [ ] **LHO-01:** No production-facing synthetic lifecycle shortcuts exist
-- [ ] **LHO-02:** Any remaining synthetic paths are gated behind `--simulate` flag
-- [ ] **LHO-03:** `--simulate` is documented and tested
+- [x] **LHO-01:** No production-facing synthetic lifecycle shortcuts exist
+- [x] **LHO-02:** Any remaining synthetic paths are gated behind `--simulate` flag
+- [x] **LHO-03:** `--simulate` is documented and tested
 
 ### Oracle Storage (ORS)
 
@@ -87,9 +87,9 @@ The v1.20 boundary decision: if wrappers become "host-assisted orchestrators", t
 | WRO-02 | Phase 132 | Pending |
 | WRO-03 | Phase 132 | Pending |
 | WRO-04 | Phase 132 | Pending |
-| LHO-01 | Phase 133 | Pending |
-| LHO-02 | Phase 133 | Pending |
-| LHO-03 | Phase 133 | Pending |
+| LHO-01 | Phase 133 | Complete |
+| LHO-02 | Phase 133 | Complete |
+| LHO-03 | Phase 133 | Complete |
 | ORS-01 | Phase 134 | Complete |
 | ORS-02 | Phase 134 | Complete |
 | ORS-03 | Phase 134 | Complete |
