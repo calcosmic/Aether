@@ -3915,6 +3915,22 @@
     "output_mode": "unknown"
   },
   {
+    "name": "swarm",
+    "short_description": "Show swarm plan for a target problem via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "watch",
+    "short_description": "Show colony status via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "pheromones",
     "short_description": "Import pheromone signals from XML",
     "flags": [],
