@@ -18,6 +18,10 @@ import {
 
 import { runLifecycle } from "../src/lifecycle.js";
 import {
+  dispatchSingleWorker,
+} from "../src/worker-dispatch.js";
+import type { BuildDispatch } from "../src/types.js";
+import {
   __setCallGoJSON,
   __restoreCallGoJSON,
 } from "../src/go-bridge.js";
@@ -123,5 +127,75 @@ describe("lifecycle honesty", { concurrency: false }, () => {
 
     assert.equal(buildCalled, true, "Build step should have been reached");
     assert.equal(result.success, true, "Should succeed with platforms available");
+  });
+});
+
+describe("worker-dispatch honesty", { concurrency: false }, () => {
+  afterEach(() => {
+    __restoreDetectAvailablePlatforms();
+    __restoreCallGoJSON();
+  });
+
+  const mockDispatch: BuildDispatch = {
+    stage: "build",
+    caste: "builder",
+    name: "Builder-01",
+    task: "Implement feature",
+    status: "pending",
+  };
+
+  it("defaults to real execution when simulateWorkers is undefined", async () => {
+    __setDetectAvailablePlatforms(async () => []);
+    __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+
+    await assert.rejects(
+      async () =>
+        dispatchSingleWorker(
+          {
+            goBinaryPath: "/usr/bin/true",
+            cwd: "/tmp",
+          } as import("../src/worker-dispatch.js").DispatchOptions,
+          mockDispatch
+        ),
+      /No platform CLI available/
+    );
+  });
+
+  it("simulates only with explicit simulateWorkers=true", async () => {
+    __setDetectAvailablePlatforms(async () => []);
+    __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+
+    const result = await dispatchSingleWorker(
+      {
+        goBinaryPath: "/usr/bin/true",
+        cwd: "/tmp",
+        simulateWorkers: true,
+      },
+      mockDispatch
+    );
+
+    assert.equal(result.status, "completed");
+    assert.ok(
+      result.summary.includes("Simulated"),
+      `Summary should indicate simulation, got: ${result.summary}`
+    );
+  });
+
+  it("throws error with explicit simulateWorkers=false and no platforms", async () => {
+    __setDetectAvailablePlatforms(async () => []);
+    __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+
+    await assert.rejects(
+      async () =>
+        dispatchSingleWorker(
+          {
+            goBinaryPath: "/usr/bin/true",
+            cwd: "/tmp",
+            simulateWorkers: false,
+          },
+          mockDispatch
+        ),
+      /No platform CLI available/
+    );
   });
 });
