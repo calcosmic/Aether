@@ -1,5 +1,38 @@
 # Aether Milestones
 
+## v1.20 — Host Contract Hardening and Wrapper Reality Check
+
+**Shipped:** 2026-05-15
+**Phases:** 6 (130-135) | **Plans:** 7 | **Commits:** 14
+
+### Accomplishments
+
+1. **Host Surface Completeness** — All 7 `aether host` subcommands exist and execute end-to-end with documented flags
+2. **Test Coverage for Host Commands** — 23 TS host tests exercising realistic flag combinations
+3. **Wrapper Ownership Decision** — Wrappers are "host-assisted orchestrators"; boundary documented in ADR
+4. **Lifecycle Honesty** — Simulation gated behind explicit `--simulate`; errors on missing platforms without it
+5. **Oracle Storage Pattern** — Atomic Go-owned storage with interrupt recovery and stale pending auto-clear
+6. **Doc-CLI Alignment Smoke Test** — Auto-discovers 60+ YAML commands, validates flags via Cobra introspection, blocks release gate on host-critical mismatches
+
+### Key Decisions
+
+- Wrappers call `aether host` for manifests but do not duplicate verification or mutate state
+- Host-critical flag mismatches are blocking; non-host mismatches are warnings
+- Oracle state uses the same atomic storage pattern as colony state
+
+### Tech Debt
+
+- `HostCriticalCombinations` hard-codes test cases (not auto-discoverable)
+- `exactOptionalPropertyTypes` workaround in lifecycle tests
+
+### Archives
+
+- [Roadmap](milestones/v1.20-ROADMAP.md)
+- [Requirements](milestones/v1.20-REQUIREMENTS.md)
+- [Audit](milestones/v1.20-MILESTONE-AUDIT.md)
+
+---
+
 ## v1.16 Hybrid Runtime Boundary and Orchestration Recovery (Shipped: 2026-05-13)
 
 **Phases completed:** 6 phases, 9 plans, 13 tasks

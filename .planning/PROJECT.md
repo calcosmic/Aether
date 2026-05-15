@@ -32,27 +32,46 @@ That means:
 - stuck colonies must be recoverable with a single command
 - review findings must survive `/clear` and accumulate across phases
 
-## Current Milestone: v1.20 Host Contract Hardening and Wrapper Reality Check
+## Current State
 
-**Goal:** Make the TS host contract honest — docs, CLI flags, tests, and wrapper behavior agree on who owns what. Harden the host surface so every documented command works, every flag is tested, and the wrapper/host boundary is explicit.
+- **v1.20 Host Contract Hardening and Wrapper Reality Check shipped (2026-05-15)** — Full milestone archive in `.planning/milestones/`
+- **Product version: v1.0.38**
+- All 7 `aether host` subcommands exist and execute end-to-end
+- 23 TS host tests covering realistic flag combinations
+- Wrapper-host boundary documented: wrappers are "host-assisted orchestrators"
+- Lifecycle simulation gated behind `--simulate`; errors on missing platforms without it
+- Oracle state uses atomic Go-owned storage with interrupt recovery
+- Doc-CLI alignment smoke test auto-discovers 60+ commands, validates flags, blocks release gate
+- Go tests: 2900+ passing; TS tests: 220 passing
+
+## Current Milestone: v1.21 (TBD)
+
+**Goal:** [To be defined — start with `/gsd-new-milestone`]
+
+**Non-goals:**
+- [To be defined]
+
+## Previous Milestone: v1.20 Host Contract Hardening and Wrapper Reality Check
+
+**Shipped:** 2026-05-15
+**Phases:** 6 (130-135) | **Plans:** 7
 
 **Target features:**
-- Host Surface Completeness: all 7 `aether host` subcommands (plan, build, continue, oracle, watch, swarm, lifecycle) work end-to-end
+- Host Surface Completeness: all 7 `aether host` subcommands work end-to-end
 - Test Coverage: every documented `aether host` command with realistic flag combos is exercised in tests
-- Wrapper Ownership Decision: record whether wrappers are "host-assisted orchestrators" or thin pass-throughs
-- Lifecycle Honesty: remove or gate synthetic shortcuts behind `--simulate`
-- Oracle Storage: move iteration state to locked/atomic Go-owned storage pattern
-- Doc-CLI Alignment: executable YAML smoke test so docs and CLI cannot disagree
+- Wrapper Ownership Decision: wrappers are "host-assisted orchestrators"
+- Lifecycle Honesty: simulation gated behind `--simulate`
+- Oracle Storage: atomic Go-owned storage with interrupt recovery
+- Doc-CLI Alignment: executable YAML smoke test blocking release gate on host-critical mismatches
 
 **Non-goals:**
 - Interactive shell (deferred to v1.21)
 - New workflows or dashboard redesign
 - Worktree merge-back automation (out of scope)
 
-## Current State
+## Current State (Previous)
 
 - **v1.19 TypeScript Host Cutover + Oracle Confidence Recovery shipped (2026-05-15)** — Full milestone archive in `.planning/milestones/`
-- **Product version: v1.0.38**
 - Go runtime is healthy, all 17 Go test packages passing
 - TS host is primary orchestration layer: typecheck clean, 189 tests passing
 - All major workflows (plan, build, continue, oracle, watch, swarm) available through TS host
@@ -175,7 +194,11 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.14 Queen Authority -- Phases 93-99 (shipped 2026-05-04)
 - [x] v1.15 Framework Coherence, Efficiency, and Ship Readiness -- Phases 100-105 (shipped 2026-05-08)
 - [x] v1.16 Hybrid Runtime Boundary and Orchestration Recovery -- Phases 106-111 (shipped 2026-05-13)
-- [ ] v1.17 Classic Restoration -- Phases 112+
+- [x] v1.17 Classic Restoration -- Phases 112-118 (shipped 2026-05-14)
+- [x] v1.18 Hybrid Runtime Parity & Release Gate -- Phases 119-123 (shipped 2026-05-14)
+- [x] v1.19 TypeScript Host Cutover + Oracle Confidence Recovery -- Phases 124-129 (shipped 2026-05-15)
+- [x] v1.20 Host Contract Hardening and Wrapper Reality Check -- Phases 130-135 (shipped 2026-05-15)
+- [ ] v1.21 (TBD)
 
 ## Requirements
 
@@ -215,6 +238,12 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Smart gates (depth-aware auto-resolve, hard blocks never auto-resolved) -- v1.14
 - Queen wave lifecycle (always-advance, dependency injection, recovery) -- v1.14
 - Output filtering (verbose-aware, phase-end summaries, queen audit) -- v1.14
+- Host Surface Completeness (all 7 subcommands, flag parsing, reference docs) -- v1.20
+- Test Coverage for Host Commands (23 TS tests, realistic flag combinations) -- v1.20
+- Wrapper Ownership Decision (host-assisted orchestrators, boundary ADR) -- v1.20
+- Lifecycle Honesty (simulation gated behind --simulate, error on missing platforms) -- v1.20
+- Oracle Storage Pattern (atomic Go-owned storage, interrupt recovery) -- v1.20
+- Doc-CLI Alignment Smoke Test (YAML auto-discovery, release gate blocking) -- v1.20
 
 ### Active
 
