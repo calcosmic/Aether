@@ -274,6 +274,14 @@ Companion file completeness checks verify expected counts:
 - 86 hub shipped skills
 - 4 Codex skill shims
 
+## Release Gate
+
+The release gate runs automatically during `aether publish` via GoReleaser `before.hooks`. It blocks the release if any gate check fails:
+
+- `go test ./cmd -run TestDocCLIAlignment -v` — Doc-CLI alignment smoke test. Host-critical flag mismatches between YAML documentation and the Go CLI will fail the release.
+
+This ensures documentation and CLI flags cannot diverge on any shipped release.
+
 ## Go Binary Change Checklist
 
 Use this checklist any time the change touches `cmd/`, `pkg/`, `.goreleaser.yml`, version resolution, install/update flows, binary download logic, or anything else that can affect the shipped Go runtime.
