@@ -18,6 +18,8 @@ import { callGoJSON, discoverGoBinary } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
 import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
+import { runWatchDisplay, type WatchDisplayOptions } from "./watch-display.js";
+import { runSwarmDisplay, type SwarmDisplayOptions } from "./swarm-display.js";
 import { createNarrator } from "./narrator.js";
 import { startEventBridge } from "./event-bridge.js";
 
@@ -66,7 +68,9 @@ function printUsage(): void {
       "  continue      Call aether continue --plan-only\n" +
       "  oracle [topic] Run Oracle RALF lifecycle loop (iterate -> dispatch -> finalize)\n" +
       "  lifecycle [N] [topic] Full plan->build->continue sequence (default phase: 1)\n" +
-      "                      Optional Oracle topic runs Oracle research before plan.\n\n" +
+      "                      Optional Oracle topic runs Oracle research before plan.\n" +
+      "  watch         Show colony status, optionally with live dashboard\n" +
+      "  swarm [target] Show swarm plan for a target problem\n\n" +
       "Options:\n" +
       "  --cwd <path>        Working directory\n" +
       "  --simulate          Run in simulation mode (no real worker spawning)\n" +
@@ -181,6 +185,33 @@ async function main(): Promise<void> {
       await bridge.stop();
       narrator.stop();
 
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      break;
+    }
+
+    case "watch": {
+      const watchOpts: WatchDisplayOptions = {
+        goBinaryPath,
+        cwd,
+        dashboard: !noDashboard,
+      };
+
+      const result = await runWatchDisplay(watchOpts);
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      break;
+    }
+
+    case "swarm": {
+      const target = positional[0] || "";
+      const swarmOpts: SwarmDisplayOptions = {
+        goBinaryPath,
+        cwd,
+        target,
+        dashboard: !noDashboard,
+        planOnly: true,
+      };
+
+      const result = await runSwarmDisplay(swarmOpts);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
