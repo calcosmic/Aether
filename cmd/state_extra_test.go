@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -442,6 +443,44 @@ func TestValidateOracleStateInvalidJSON(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	if result["valid"] != false {
 		t.Errorf("valid = %v, want false for invalid JSON", result["valid"])
+	}
+}
+
+func TestValidateOracleStatePathValidation(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Write oracle state via store.SaveJSON (the atomic storage path)
+	s.SaveJSON("oracle/state.json", map[string]string{"status": "active"})
+	s.SaveJSON("oracle/plan.json", map[string]string{"plan": "research"})
+
+	rootCmd.SetArgs([]string{"validate-oracle-state"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	result := env["result"].(map[string]interface{})
+	if result["valid"] != true {
+		t.Fatalf("expected valid=true when state written via SaveJSON, got: %v", result["valid"])
+	}
+	issues := result["issues"].([]interface{})
+	for _, issue := range issues {
+		if strings.Contains(issue.(string), "outside .aether/data/oracle") {
+			t.Errorf("unexpected path validation issue: %s", issue)
+		}
 	}
 }
 

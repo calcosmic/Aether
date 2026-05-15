@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
@@ -195,6 +196,12 @@ var validateOracleStateCmd = &cobra.Command{
 
 		issues := []string{}
 		files := map[string]bool{}
+
+		// Path validation: oracle state must be under .aether/data/oracle/
+		statePath := oracleStatePath()
+		if !strings.HasPrefix(statePath, filepath.Join(".aether", "data", "oracle")) {
+			issues = append(issues, fmt.Sprintf("oracle state path %q is outside .aether/data/oracle/", statePath))
+		}
 
 		// Check oracle/state.json
 		stateData, err := store.ReadFile("oracle/state.json")
