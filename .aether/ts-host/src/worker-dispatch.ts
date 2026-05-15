@@ -150,6 +150,15 @@ export async function dispatchSingleWorker(
     process.stderr.write(
       `ℹ️  Simulating worker ${dispatch.name} (simulateWorkers=true)\n`
     );
+  } else {
+    // Real dispatch path: verify platforms are available before attempting
+    const available = await detectAvailablePlatforms();
+    if (available.length === 0) {
+      throw new Error(
+        "No platform CLI available (claude, opencode, or codex). " +
+        "Install a platform CLI or run with --simulate to use simulation mode."
+      );
+    }
   }
 
   try {
