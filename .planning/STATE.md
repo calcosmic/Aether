@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.19
 milestone_name: TypeScript Host Cutover + Oracle Confidence Recovery
-status: executing
-last_updated: "2026-05-15T09:56:18Z"
+status: complete
+last_updated: "2026-05-15T10:13:08Z"
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  completed_phases: 6
+  total_plans: 7
+  completed_plans: 7
   percent: 100
 ---
 
@@ -19,20 +19,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 128 — Swarm/Watch Host Bridge
+**Current focus:** Phase 129 complete -- v1.19 Release Gate passed
 
 ## Current Position
 
-Phase: 128 of 129 (Swarm/Watch Host Bridge)
-Plan: 128-02 complete
-Status: Executed, all tasks committed, SUMMARY.md created
+Phase: 129 of 129 (Release Gate)
+Plan: 129-01 complete
+Status: Phase 129 complete -- v1.19 Release Gate passed
 
 ## Completed Plans
 
 - 126-01: Oracle Iteration Manifests (Go commands)
 - 127-01: TS Host Oracle Lifecycle (TypeScript orchestration)
+- 127-02: TS Host Oracle Lifecycle (host.ts wiring + tests)
 - 128-01: Swarm/Watch Host Bridge (TypeScript display modules)
 - 128-02: Swarm/Watch Host Bridge (host.ts wiring + tests)
+- 129-01: Release Gate (verification, publish, downstream smoke test)
 
 ## Known Blockers
 
@@ -40,9 +42,7 @@ None
 
 ## Next Actions
 
-1. Execute Phase 129 — Final Integration / TS Host Command Surface Completion
-2. Verify `npm run typecheck` passes in `.aether/ts-host/`
-3. Verify `go test ./...` passes
+1. Run /ant-seal to seal the v1.19 colony
 
 ## Key Decisions
 
