@@ -14,6 +14,23 @@ import { callGoJSON } from "./go-bridge.js";
 import type { SwarmManifest, SwarmWorkerPlan } from "./types.js";
 import { createDashboard } from "./dashboard.js";
 
+// Mutable reference for test injection.
+let _callGoJSONRef = callGoJSON;
+
+/** Test-only: inject a mock callGoJSON. */
+export function __setCallGoJSON(fn: typeof callGoJSON): void {
+  _callGoJSONRef = fn;
+}
+
+/** Test-only: restore the real callGoJSON. */
+export function __restoreCallGoJSON(): void {
+  _callGoJSONRef = callGoJSON;
+}
+
+function callGoJSONRef<T>(opts: GoBridgeOptions, args: string[]): T {
+  return _callGoJSONRef(opts, args);
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -116,7 +133,7 @@ function fetchSwarmManifest(
   if (opts.target) {
     args.push(opts.target);
   }
-  return callGoJSON<SwarmManifest>(opts, args);
+  return callGoJSONRef<SwarmManifest>(opts, args);
 }
 
 // ---------------------------------------------------------------------------

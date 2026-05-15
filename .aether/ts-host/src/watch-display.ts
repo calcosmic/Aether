@@ -14,6 +14,23 @@ import { callGoJSON } from "./go-bridge.js";
 import type { StatusResult } from "./types.js";
 import { createDashboard } from "./dashboard.js";
 
+// Mutable reference for test injection.
+let _callGoJSONRef = callGoJSON;
+
+/** Test-only: inject a mock callGoJSON. */
+export function __setCallGoJSON(fn: typeof callGoJSON): void {
+  _callGoJSONRef = fn;
+}
+
+/** Test-only: restore the real callGoJSON. */
+export function __restoreCallGoJSON(): void {
+  _callGoJSONRef = callGoJSON;
+}
+
+function callGoJSONRef<T>(opts: GoBridgeOptions, args: string[]): T {
+  return _callGoJSONRef(opts, args);
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -154,7 +171,7 @@ async function runDashboardWatch(
 // ---------------------------------------------------------------------------
 
 function fetchStatus(opts: GoBridgeOptions): StatusResult {
-  return callGoJSON<StatusResult>(opts, ["status"]);
+  return callGoJSONRef<StatusResult>(opts, ["status"]);
 }
 
 // ---------------------------------------------------------------------------
