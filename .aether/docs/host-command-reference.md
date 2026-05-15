@@ -135,3 +135,12 @@ User → aether host <subcommand> [flags]
 ```
 
 The TS host is the authoritative flag parser. Go CLI host subcommands use `DisableFlagParsing: true` to forward raw arguments to the TS host.
+
+## Test Coverage
+
+All subcommands and flags are exercised in the test suite:
+
+- **Flag parsing**: `.aether/ts-host/test/host-flags.test.ts` verifies `parseArgs` handles all documented flags correctly.
+- **Integration**: `.aether/ts-host/test/host-integration.test.ts` verifies each subcommand builds the correct Go CLI arguments.
+
+Run tests: `cd .aether/ts-host && npm test`

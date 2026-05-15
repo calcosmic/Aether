@@ -16,6 +16,19 @@
 import type { BuildManifest, ContinueCompletion, PlanCompletion } from "./types.js";
 import { callGoJSON, discoverGoBinary } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
+
+// Mutable reference for test injection.
+let _callGoJSONRef = callGoJSON;
+
+/** Test-only: inject a mock callGoJSON. */
+export function __setCallGoJSON(fn: typeof callGoJSON): void {
+  _callGoJSONRef = fn;
+}
+
+/** Test-only: restore the real callGoJSON. */
+export function __restoreCallGoJSON(): void {
+  _callGoJSONRef = callGoJSON;
+}
 import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
 import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
 import { runWatchDisplay, type WatchDisplayOptions } from "./watch-display.js";
@@ -23,7 +36,8 @@ import { runSwarmDisplay, type SwarmDisplayOptions } from "./swarm-display.js";
 import { createNarrator } from "./narrator.js";
 import { startEventBridge } from "./event-bridge.js";
 
-function parseArgs(argv: string[]): {
+/** Parse command-line arguments for the TS host. */
+export function parseArgs(argv: string[]): {
   command: string;
   cwd: string;
   simulate: boolean;
@@ -132,7 +146,7 @@ async function main(): Promise<void> {
       if (verificationDepth) args.push("--verification-depth", verificationDepth);
       if (simulate) args.push("--synthetic");
       if (workerTimeout) args.push("--worker-timeout", workerTimeout);
-      const result = callGoJSON<PlanCompletion>(bridge, args);
+      const result = _callGoJSONRef<PlanCompletion>(bridge, args);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
@@ -147,7 +161,7 @@ async function main(): Promise<void> {
       if (simulate) args.push("--synthetic");
       if (light) args.push("--light");
       if (workerTimeout) args.push("--worker-timeout", workerTimeout);
-      const result = callGoJSON<BuildManifest>(bridge, args);
+      const result = _callGoJSONRef<BuildManifest>(bridge, args);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
@@ -159,7 +173,7 @@ async function main(): Promise<void> {
       if (heavy) args.push("--heavy");
       if (simulate) args.push("--synthetic");
       if (workerTimeout) args.push("--worker-timeout", workerTimeout);
-      const result = callGoJSON<ContinueCompletion>(bridge, args);
+      const result = _callGoJSONRef<ContinueCompletion>(bridge, args);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
@@ -261,8 +275,14 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`Fatal: ${message}\n`);
-  process.exit(1);
-});
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+
+const isMainModule = fileURLToPath(import.meta.url) === resolve(process.argv[1]!);
+if (isMainModule) {
+  main().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Fatal: ${message}\n`);
+    process.exit(1);
+  });
+}
