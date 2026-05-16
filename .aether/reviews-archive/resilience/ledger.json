@@ -1,119 +1,42 @@
 {
   "entries": [
     {
-      "id": "res-1-001",
-      "phase": 1,
-      "agent": "chaos",
-      "generated_at": "2026-05-12T01:10:20Z",
-      "status": "open",
-      "severity": "MEDIUM",
-      "category": "edge_cases",
-      "description": ""
-    },
-    {
-      "id": "res-1-002",
-      "phase": 1,
-      "agent": "chaos",
-      "generated_at": "2026-05-12T01:10:20Z",
-      "status": "open",
-      "severity": "HIGH",
-      "category": "boundary_conditions",
-      "description": ""
-    },
-    {
-      "id": "res-1-003",
-      "phase": 1,
-      "agent": "chaos",
-      "generated_at": "2026-05-12T01:10:20Z",
-      "status": "open",
-      "severity": "MEDIUM",
-      "category": "error_handling",
-      "description": ""
-    },
-    {
-      "id": "res-1-004",
-      "phase": 1,
-      "agent": "chaos",
-      "generated_at": "2026-05-12T01:10:20Z",
-      "status": "open",
-      "severity": "MEDIUM",
-      "category": "state_corruption",
-      "description": ""
-    },
-    {
-      "id": "res-1-005",
-      "phase": 1,
-      "agent": "chaos",
-      "generated_at": "2026-05-12T01:10:20Z",
-      "status": "open",
-      "severity": "HIGH",
-      "category": "unexpected_inputs",
-      "description": ""
-    },
-    {
       "id": "res-2-001",
       "phase": 2,
+      "phase_name": "wrapper-contract",
       "agent": "chaos",
-      "agent_name": "Surge-40",
-      "generated_at": "2026-05-12T02:33:08Z",
+      "generated_at": "2026-05-15T20:51:04Z",
       "status": "open",
-      "severity": "HIGH",
-      "category": "Boundary Conditions",
-      "description": ""
+      "severity": "MEDIUM",
+      "file": "cmd/host_cmd.go",
+      "line": 74,
+      "category": "host_flag_forwarding",
+      "description": "Documented aether host watch --no-dashboard cannot reach the TS host because the watch subcommand disables Cobra flag parsing but calls makeHostSubcommand with forwardRawArgs=false. The raw --no-dashboard argument is therefore dropped before host.ts can set dashboard=false.",
+      "suggestion": "Forward raw args for host watch or remove the documented aether host watch --no-dashboard contract; add a Go forwarding regression test for watch."
     },
     {
       "id": "res-2-002",
       "phase": 2,
+      "phase_name": "wrapper-contract",
       "agent": "chaos",
-      "agent_name": "Surge-40",
-      "generated_at": "2026-05-12T02:33:08Z",
-      "status": "open",
-      "severity": "HIGH",
-      "category": "Unexpected Inputs",
-      "description": ""
-    },
-    {
-      "id": "res-2-003",
-      "phase": 2,
-      "agent": "chaos",
-      "agent_name": "Surge-40",
-      "generated_at": "2026-05-12T02:33:08Z",
+      "generated_at": "2026-05-15T20:51:04Z",
       "status": "open",
       "severity": "MEDIUM",
-      "category": "Error Handling",
-      "description": ""
-    },
-    {
-      "id": "res-2-004",
-      "phase": 2,
-      "agent": "chaos",
-      "agent_name": "Surge-40",
-      "generated_at": "2026-05-12T02:33:08Z",
-      "status": "open",
-      "severity": "MEDIUM",
-      "category": "Edge Cases",
-      "description": ""
-    },
-    {
-      "id": "res-2-005",
-      "phase": 2,
-      "agent": "chaos",
-      "agent_name": "Surge-40",
-      "generated_at": "2026-05-12T02:33:08Z",
-      "status": "open",
-      "severity": "LOW",
-      "category": "State Corruption",
-      "description": ""
+      "file": ".aether/ts-host/src/host.ts",
+      "line": 80,
+      "category": "argument_parsing",
+      "description": "TS host parseArgs only accepts split value flags such as --depth balanced and --verification-depth heavy. Common --flag=value forms are treated as positional extras and silently omitted from the Go plan-only or continue plan-only invocation.",
+      "suggestion": "Support --flag=value for value flags or fail fast on unknown flag-like positional values; add parseArgs tests for equals-form and missing-value flags."
     }
   ],
   "summary": {
-    "total": 10,
-    "open": 10,
+    "total": 2,
+    "open": 2,
     "resolved": 0,
     "by_severity": {
-      "high": 4,
-      "medium": 5,
-      "low": 1,
+      "high": 0,
+      "medium": 2,
+      "low": 0,
       "info": 0
     }
   }

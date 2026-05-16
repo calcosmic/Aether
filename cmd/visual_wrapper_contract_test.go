@@ -68,9 +68,14 @@ func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
 				t.Fatalf("read %s: %v", wrapperPath, err)
 			}
 			text := string(content)
-			// TS host workflows delegate to aether host; only require closeout ceremony
-			if !strings.Contains(text, "AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow "+workflow) {
-				t.Errorf("%s missing closeout ceremony", wrapperPath)
+			// TS host workflows delegate manifest orchestration to aether host and retain visual closeout.
+			for _, want := range []string{
+				"aether host " + workflow,
+				"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow " + workflow,
+			} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing TS host visual contract %q", wrapperPath, want)
+				}
 			}
 		}
 	}

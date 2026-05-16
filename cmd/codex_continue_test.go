@@ -230,7 +230,7 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 		t.Fatalf("continue_manifest finalize_surface = %q, want awaiting_wrapper_completion", plan["finalize_surface"])
 	}
 	wrapperContract := result["wrapper_contract"].(map[string]interface{})
-	if got := wrapperContract["source_command"].(string); got != "AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS" {
+	if got := wrapperContract["source_command"].(string); got != "aether host continue --verification-depth heavy $ARGUMENTS" {
 		t.Fatalf("wrapper_contract source_command = %q, want heavy external review command", got)
 	}
 	if got := result["queen_state_persisted"]; got != false {
@@ -307,7 +307,7 @@ func TestContinuePlanOnlySkipWatchersLightEmitsNoWorkerDispatches(t *testing.T) 
 		t.Fatalf("result skip_watchers = %v, want true", got)
 	}
 	wrapperContract := result["wrapper_contract"].(map[string]interface{})
-	if got := wrapperContract["source_command"].(string); got != "AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth light --skip-watchers $ARGUMENTS" {
+	if got := wrapperContract["source_command"].(string); got != "aether host continue --verification-depth light --skip-watchers $ARGUMENTS" {
 		t.Fatalf("wrapper_contract source_command = %q, want light skip-watchers command", got)
 	}
 }

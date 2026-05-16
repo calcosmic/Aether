@@ -1,6 +1,6 @@
 # Known Issues and Workarounds
 
-Updated: 2026-04-25
+Updated: 2026-05-15
 
 This file tracks live Aether limitations that are still relevant to the current Go-based runtime.
 Historical bash/npm migration bugs were removed once the affected paths stopped existing.
@@ -24,6 +24,18 @@ Historical bash/npm migration bugs were removed once the affected paths stopped 
 - **Area:** Codex `colonize` / `plan`
 - **Impact:** Real workers are now allowed to author survey and planning artifacts directly, and `plan` can consume a worker-written `phase-plan.json`. If a worker ignores that contract, Aether falls back to local synthesis.
 - **Mitigation:** The command output now reports explicit provenance (`dispatch_mode`, `artifact_source`, `plan_source`) so fallback behavior is visible instead of silent.
+
+### Provider availability preflight is not a post-launch API guarantee
+
+- **Area:** Real worker dispatch through Codex, Claude, and OpenCode-compatible platforms
+- **Impact:** Before worker launch, Aether checks whether a platform CLI exists and appears authenticated. That preflight can report categories such as `binary_missing`, `auth_probe_failed`, `auth_inactive`, `invalid_auth_output`, `credentials_missing`, or `probe_skipped`. It does not prove that the later worker request will be accepted by the selected model, account, proxy, or upstream API.
+- **Mitigation:** Show only the sanitized provider, cause category, and next action returned by the runtime. Do not expose raw provider stdout/stderr, tokens, or auth probe output in docs, wrapper narration, debug summaries, or generated context.
+
+### Post-launch provider/API/auth failures can look like worker parse failures
+
+- **Area:** Real worker dispatch through hosted platforms after the worker process starts
+- **Impact:** A real lifecycle smoke on 2026-05-15 launched OpenCode-compatible workers and rendered the expected ceremony, but the provider returned an auth/API failure payload instead of Aether worker claims JSON. Aether may report `parse worker output: no JSON found in output` or point to a worker-debug artifact because the terminal output was not valid worker claims.
+- **Mitigation:** `aether continue` correctly blocks advancement and `aether watch --once` / `aether swarm --watch` render recovery guidance. The next hardening pass should classify post-launch provider/API/auth payloads before worker-result parsing so users see a sanitized setup/provider problem instead of a generic JSON-claims parse failure.
 
 ### Slash-command docs still require periodic parity sweeps
 

@@ -114,6 +114,59 @@ describe("go-bridge", () => {
     }
   });
 
+  it("callGoJSON redacts failed subprocess provider output", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-failure-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf 'stdout sk-proj-secret-123\\n'\nprintf 'stderr ghp_secret_123\\n' >&2\nexit 42\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      assert.throws(
+        () => callGoJSON({ goBinaryPath: fakeGo, cwd: tempDir }, ["build", "2", "--plan-only"]),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok(err.message.includes("exit status 42"), err.message);
+          for (const forbidden of ["sk-proj-secret-123", "ghp_secret_123", "stdout sk", "stderr ghp"]) {
+            assert.ok(!err.message.includes(forbidden), `leaked ${forbidden}: ${err.message}`);
+          }
+          return true;
+        }
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("callGoJSON redacts Go error envelopes", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-envelope-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf '{\"ok\":false,\"error\":\"auth failed token sk-proj-secret-456 stderr: ghp_secret_456\",\"code\":2}\\n' >&2\nexit 2\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      assert.throws(
+        () => callGoJSON({ goBinaryPath: fakeGo, cwd: tempDir }, ["build", "2", "--plan-only"]),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok(err.message.includes("Go command failed"), err.message);
+          for (const forbidden of ["sk-proj-secret-456", "ghp_secret_456"]) {
+            assert.ok(!err.message.includes(forbidden), `leaked ${forbidden}: ${err.message}`);
+          }
+          assert.ok(err.message.includes("[redacted]") || err.message.includes("[omitted]"), err.message);
+          return true;
+        }
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("assertNoDirectDataWrites throws for .aether/data/ paths", () => {
     assert.throws(
       () => assertNoDirectDataWrites(".aether/data/COLONY_STATE.json"),

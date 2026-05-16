@@ -17,8 +17,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -31,6 +30,9 @@ jobs:
       release_tag: ${{ steps.release-meta.outputs.release_tag }}
       release_version: ${{ steps.release-meta.outputs.release_version }}
       publish_release: ${{ steps.release-meta.outputs.publish_release }}
+      npm_token_available: ${{ steps.npm-token.outputs.available }}
+    permissions:
+      contents: write
     steps:
       - name: Resolve release target
         id: release-meta
@@ -65,6 +67,17 @@ jobs:
           echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "release_version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "publish_release=$PUBLISH_RELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve npm token availability
+        id: npm-token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -118,11 +131,18 @@ jobs:
           printf '%s\n' '{"topic":"ceremony.build.spawn","payload":{"phase":1,"caste":"builder","name":"Mason-67","status":"starting"}}' | node .aether/ts/dist/narrator.js --visuals /tmp/aether-visuals.json
           mv .aether/ts/node_modules.disabled .aether/ts/node_modules
 
+      - name: Verify TypeScript host package
+        run: |
+          npm --prefix .aether/ts-host ci
+          npm --prefix .aether/ts-host run typecheck
+          npm --prefix .aether/ts-host test
+          npm --prefix .aether/ts-host run build
+
       - name: Build GoReleaser snapshot
         run: goreleaser build --snapshot --clean
 
       - name: Binary smoke test
-        run: ./dist/Aether_linux_amd64_v1/Aether version
+        run: ./dist/Aether_linux_amd64_v1/aether version
 
       - name: Run GoReleaser
         if: ${{ steps.release-meta.outputs.publish_release == 'true' }}
@@ -136,7 +156,7 @@ jobs:
 
   npm-bootstrap:
     needs: goreleaser
-    if: ${{ secrets.NPM_TOKEN != '' && needs.goreleaser.outputs.publish_release == 'true' }}
+    if: ${{ needs.goreleaser.outputs.npm_token_available == 'true' && needs.goreleaser.outputs.publish_release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

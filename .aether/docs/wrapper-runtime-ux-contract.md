@@ -57,6 +57,20 @@ gates, claims, housekeeping, blockers, and next-step suggestions.
 
 Visual output is the JSON data rendered through `codex_visuals.go` functions.
 
+### Provider Availability Diagnostics
+
+The runtime owns provider availability preflight before real worker dispatch.
+The preflight reports whether the selected Codex, Claude, or OpenCode-compatible
+CLI exists and appears authenticated. It does not guarantee that the launched
+worker request will later pass provider API/auth checks.
+
+Wrappers and Codex skills may surface only the sanitized provider, cause, and
+next action returned by the runtime. They must not expose raw provider
+stdout/stderr, tokens, or auth probe output. If a worker process starts and then
+returns provider API/auth output instead of worker claims JSON, describe it as a
+post-launch provider/API/auth failure and keep final state handling in the
+runtime/finalizer path.
+
 ### Orchestrator Boundary Guidance
 
 In Orchestrator Mode, plan-only lifecycle commands for `plan`, `build`, heavy
@@ -139,6 +153,10 @@ Wrappers MUST NOT:
 7. **Own boundary questions** — Never ask, answer, or store Orchestrator
    boundary questions in wrapper markdown or chat-only state. Route through
    `aether discuss`, then request a fresh manifest before continuing.
+
+8. **Expose provider secrets or raw output** — Never paste provider stdout,
+   stderr, tokens, or auth probe output into wrapper summaries or generated
+   context. Use the runtime's sanitized provider/cause/next-action wording.
 
 ## Codex Platform
 

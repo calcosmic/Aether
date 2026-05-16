@@ -132,6 +132,31 @@ aether host swarm "test bug" --no-dashboard
 
 - `--cwd <path>` — Working directory (default: current directory)
 
+## Provider Availability And Auth Diagnostics
+
+Before real worker dispatch, the Go runtime selects a platform provider and
+performs an availability preflight. That preflight checks whether the platform
+CLI exists and whether its auth probe reports usable credentials. It returns a
+structured `AvailabilityStatus` category such as `binary_missing`,
+`auth_probe_failed`, `auth_inactive`, `invalid_auth_output`,
+`credentials_missing`, `probe_skipped`, or `available`.
+
+In plain terms: preflight only says Aether can try to launch a worker. It does
+not prove that the provider account, model, proxy, or upstream API will accept
+the later worker request.
+
+Host and wrapper surfaces must show only the sanitized provider, cause, and
+next action from the Go-owned diagnostic. Do not print raw provider
+stdout/stderr, tokens, or auth probe output. If a worker launches but the
+provider later returns an API/auth payload instead of worker claims JSON, treat
+that as a post-launch provider/API/auth failure, not as provider availability
+preflight failure.
+
+Release-surface note: `.opencode/package.json` and
+`.opencode/package-lock.json`, when present, are ignored local OpenCode install
+artifacts. Do not treat them as release-surface package files unless that scope
+changes. The tracked TS-host package manifests live under `.aether/ts-host/`.
+
 ## Flag Distinction: `--synthetic` vs `--simulate`
 
 | Flag | Layer | Purpose |

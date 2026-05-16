@@ -15,6 +15,7 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 
 	wrapperPaths := []string{
 		filepath.Join(repoRoot, ".claude", "commands", "ant", "plan.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant-plan.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "plan.md"),
 	}
 
@@ -25,8 +26,8 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"Deep — quarter granularity, 8-12 phases",
 		"Exhaustive — major granularity, 13-20 phases",
 		"## Planning Manifest",
-		"aether host plan",
-		"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+		"aether host plan --depth <choice> --planning-depth <choice2> $ARGUMENTS",
+		"The TS host is the sole entry point to the Go CLI for manifest generation.",
 		"temporary manifest file outside `.aether/data/`",
 		"result.plan_manifest",
 		"result.planning_manifest",
@@ -39,7 +40,7 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file",
 		"## After Planning",
 		"/ant-build 1",
-		"Do NOT run `aether plan` without `--plan-only` from this wrapper.",
+		"Do NOT run direct `aether plan` from this wrapper for manifest generation; use `aether host plan`.",
 		"Do NOT run `aether plan --synthetic` after real agent workers complete.",
 	}
 
@@ -49,6 +50,7 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"aether host plan",
 		"## Clarification Gate",
 		"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
+		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file",
 		"## After Planning",
 		"## Guardrails",
 	}
@@ -68,6 +70,8 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		for _, forbidden := range []string{
 			"Execute `AETHER_OUTPUT_MODE=visual aether plan $ARGUMENTS` directly.",
 			"AETHER_OUTPUT_MODE=visual aether plan $ARGUMENTS",
+			"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> $ARGUMENTS",
+			"Do NOT run `aether plan` without `--plan-only` from this wrapper.",
 			"Update watch files for tmux visibility",
 			"Write COLONY_STATE.json",
 		} {

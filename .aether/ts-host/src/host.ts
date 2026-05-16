@@ -68,33 +68,47 @@ export function parseArgs(argv: string[]): {
   const positional: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
-    if (arg === "--cwd" && i + 1 < args.length) {
-      cwd = args[++i]!;
+    let arg = args[i]!;
+    const rawArg = arg;
+    let inlineValue: string | undefined;
+    if (arg.startsWith("--")) {
+      const eq = arg.indexOf("=");
+      if (eq > 2) {
+        inlineValue = arg.slice(eq + 1);
+        arg = arg.slice(0, eq);
+      }
+    }
+    const nextValue = (): string | undefined => {
+      if (inlineValue !== undefined) return inlineValue;
+      if (i + 1 < args.length) return args[++i]!;
+      return undefined;
+    };
+    if (arg === "--cwd" && (inlineValue !== undefined || i + 1 < args.length)) {
+      cwd = nextValue() ?? cwd;
     } else if (arg === "--simulate") {
       simulate = true;
     } else if (arg === "--no-dashboard") {
       noDashboard = true;
     } else if (arg === "--skip-midden-check") {
       skipMiddenCheck = true;
-    } else if (arg === "--depth" && i + 1 < args.length) {
-      depth = args[++i]!;
-    } else if (arg === "--planning-depth" && i + 1 < args.length) {
-      planningDepth = args[++i]!;
-    } else if (arg === "--verification-depth" && i + 1 < args.length) {
-      verificationDepth = args[++i]!;
+    } else if (arg === "--depth" && (inlineValue !== undefined || i + 1 < args.length)) {
+      depth = nextValue();
+    } else if (arg === "--planning-depth" && (inlineValue !== undefined || i + 1 < args.length)) {
+      planningDepth = nextValue();
+    } else if (arg === "--verification-depth" && (inlineValue !== undefined || i + 1 < args.length)) {
+      verificationDepth = nextValue();
     } else if (arg === "--light") {
       light = true;
     } else if (arg === "--heavy") {
       heavy = true;
-    } else if (arg === "--worker-timeout" && i + 1 < args.length) {
-      workerTimeout = args[++i]!;
+    } else if (arg === "--worker-timeout" && (inlineValue !== undefined || i + 1 < args.length)) {
+      workerTimeout = nextValue();
     } else if (arg === "--help" || arg === "-h") {
       help = true;
     } else if (!command) {
-      command = arg;
+      command = rawArg;
     } else {
-      positional.push(arg);
+      positional.push(rawArg);
     }
   }
 

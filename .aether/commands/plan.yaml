@@ -26,7 +26,7 @@ wrapper_additions:
   orchestration: |
     Restore real wrapper planning orchestration:
     1. Run `AETHER_OUTPUT_MODE=visual aether status`.
-    2. Run `aether host plan --depth <choice> --planning-depth <choice2>` for normal wrapper planning, or run the user's requested `aether plan --refresh` when refreshing an existing plan, and save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The TS host is the sole entry point to the Go CLI for manifest generation (per `.aether/docs/wrapper-host-contract.md`).
+    2. Run `aether host plan --depth <choice> --planning-depth <choice2>` for wrapper planning, passing refresh arguments through the host when refreshing an existing plan, and save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The TS host is the sole entry point to the Go CLI for manifest generation (per `.aether/docs/wrapper-host-contract.md`).
     3. Parse `result.plan_manifest` or `result.planning_manifest`; do not parse visual output.
     4. Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the planning flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
     5. If the runtime reports `dispatch_mode: agent-delegate`, treat it as the same host-dispatch contract: do not run nested subprocess planning; dispatch the manifest workers through the current host platform and finish with `plan-finalize`.
@@ -51,7 +51,7 @@ wrapper_additions:
     3. Route first to `/ant-build 1` or the runtime-surfaced next build command.
     4. If finalization blocks, follow the runtime recovery command first.
 guardrails:
-  - "Do NOT run `aether plan` without `--plan-only` from Claude/OpenCode wrapper orchestration."
+  - "Do NOT run direct `aether plan` from Claude/OpenCode wrapper orchestration for manifest generation; use `aether host plan`."
   - "Do NOT run `aether plan --synthetic` after real wrapper Task agents complete."
   - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."
   - "Do NOT parse visual output as authoritative state."

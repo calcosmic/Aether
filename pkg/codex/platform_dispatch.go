@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -41,8 +42,22 @@ type AvailabilityStatus struct {
 	Platform  Platform `json:"platform"`
 	Binary    string   `json:"binary"`
 	Available bool     `json:"available"`
-	Reason    string   `json:"reason,omitempty"`
+	// Category is the stable machine-readable diagnostic contract. Reason is prose.
+	Category AvailabilityCategory `json:"category"`
+	Reason   string               `json:"reason,omitempty"`
 }
+
+type AvailabilityCategory string
+
+const (
+	AvailabilityCategoryAvailable          AvailabilityCategory = "available"
+	AvailabilityCategoryBinaryMissing      AvailabilityCategory = "binary_missing"
+	AvailabilityCategoryAuthProbeFailed    AvailabilityCategory = "auth_probe_failed"
+	AvailabilityCategoryAuthInactive       AvailabilityCategory = "auth_inactive"
+	AvailabilityCategoryInvalidAuthOutput  AvailabilityCategory = "invalid_auth_output"
+	AvailabilityCategoryCredentialsMissing AvailabilityCategory = "credentials_missing"
+	AvailabilityCategoryProbeSkipped       AvailabilityCategory = "probe_skipped"
+)
 
 type PlatformDispatcher interface {
 	WorkerInvoker
@@ -52,6 +67,7 @@ type PlatformDispatcher interface {
 
 type selectionMetadata interface {
 	ActivePlatform() Platform
+	// CandidateStatuses returns ordered evaluated candidates, stopping after selection.
 	CandidateStatuses() []AvailabilityStatus
 }
 
@@ -115,7 +131,12 @@ func (s *SelectedInvoker) Platform() Platform {
 
 func (s *SelectedInvoker) Availability(ctx context.Context) AvailabilityStatus {
 	if s == nil || s.selected == nil {
-		return AvailabilityStatus{Platform: PlatformUnknown, Available: false, Reason: "no platform dispatcher selected"}
+		return AvailabilityStatus{
+			Platform:  PlatformUnknown,
+			Available: false,
+			Category:  AvailabilityCategoryBinaryMissing,
+			Reason:    "no platform dispatcher selected",
+		}
 	}
 	return s.selected.Availability(ctx)
 }
@@ -170,6 +191,7 @@ func (u *UnavailableInvoker) Availability(ctx context.Context) AvailabilityStatu
 	return AvailabilityStatus{
 		Platform:  PlatformUnknown,
 		Available: false,
+		Category:  availabilityCategoryForStatuses(u.available),
 		Reason:    describeAvailabilitySet(u.active, u.available),
 	}
 }
@@ -452,22 +474,28 @@ func (r *RealInvoker) Availability(ctx context.Context) AvailabilityStatus {
 		status.Binary = "codex"
 	}
 	if _, err := exec.LookPath(status.Binary); err != nil {
+		status.Category = AvailabilityCategoryBinaryMissing
 		status.Reason = fmt.Sprintf("%s binary %q not found in PATH", status.Platform, status.Binary)
 		return status
 	}
 	if !shouldProbeCLIAuth(status.Binary, "codex") {
 		status.Available = true
+		status.Category = AvailabilityCategoryProbeSkipped
+		status.Reason = formatAvailabilityProbeSkipped(status.Platform, status.Binary)
 		return status
 	}
 	output, err := runAvailabilityProbe(ctx, status.Binary, "login", "status")
 	if err != nil {
+		status.Category = AvailabilityCategoryAuthProbeFailed
 		status.Reason = formatAvailabilityProbeError(status.Platform, "login status", err, output)
 		return status
 	}
-	if strings.Contains(strings.ToLower(stripANSIEscapeCodes(output)), "logged in") {
+	if codexLoginStatusIsActive(output) {
 		status.Available = true
+		status.Category = AvailabilityCategoryAvailable
 		return status
 	}
+	status.Category = AvailabilityCategoryAuthInactive
 	status.Reason = fmt.Sprintf("%s login status did not confirm an authenticated session", status.Platform)
 	return status
 }
@@ -478,15 +506,19 @@ func (c *ClaudeDispatcher) Availability(ctx context.Context) AvailabilityStatus 
 		status.Binary = "claude"
 	}
 	if _, err := exec.LookPath(status.Binary); err != nil {
+		status.Category = AvailabilityCategoryBinaryMissing
 		status.Reason = fmt.Sprintf("%s binary %q not found in PATH", status.Platform, status.Binary)
 		return status
 	}
 	if !shouldProbeCLIAuth(status.Binary, "claude") {
 		status.Available = true
+		status.Category = AvailabilityCategoryProbeSkipped
+		status.Reason = formatAvailabilityProbeSkipped(status.Platform, status.Binary)
 		return status
 	}
 	output, err := runAvailabilityProbe(ctx, status.Binary, "auth", "status", "--json")
 	if err != nil {
+		status.Category = AvailabilityCategoryAuthProbeFailed
 		status.Reason = formatAvailabilityProbeError(status.Platform, "auth status", err, output)
 		return status
 	}
@@ -494,14 +526,17 @@ func (c *ClaudeDispatcher) Availability(ctx context.Context) AvailabilityStatus 
 		LoggedIn bool `json:"loggedIn"`
 	}
 	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		status.Category = AvailabilityCategoryInvalidAuthOutput
 		status.Reason = fmt.Sprintf("%s auth status returned invalid JSON: %v", status.Platform, err)
 		return status
 	}
 	if !payload.LoggedIn {
+		status.Category = AvailabilityCategoryAuthInactive
 		status.Reason = fmt.Sprintf("%s auth status reported no active login", status.Platform)
 		return status
 	}
 	status.Available = true
+	status.Category = AvailabilityCategoryAvailable
 	return status
 }
 
@@ -511,23 +546,29 @@ func (o *OpenCodeDispatcher) Availability(ctx context.Context) AvailabilityStatu
 		status.Binary = "opencode"
 	}
 	if _, err := exec.LookPath(status.Binary); err != nil {
+		status.Category = AvailabilityCategoryBinaryMissing
 		status.Reason = fmt.Sprintf("%s binary %q not found in PATH", status.Platform, status.Binary)
 		return status
 	}
 	if !shouldProbeCLIAuth(status.Binary, "opencode") {
 		status.Available = true
+		status.Category = AvailabilityCategoryProbeSkipped
+		status.Reason = formatAvailabilityProbeSkipped(status.Platform, status.Binary)
 		return status
 	}
 	output, err := runAvailabilityProbe(ctx, status.Binary, "auth", "list")
 	if err != nil {
+		status.Category = AvailabilityCategoryAuthProbeFailed
 		status.Reason = formatAvailabilityProbeError(status.Platform, "auth list", err, output)
 		return status
 	}
 	if countOpenCodeCredentials(output) == 0 {
+		status.Category = AvailabilityCategoryCredentialsMissing
 		status.Reason = fmt.Sprintf("%s auth list reported no configured credentials or environment keys", status.Platform)
 		return status
 	}
 	status.Available = true
+	status.Category = AvailabilityCategoryAvailable
 	return status
 }
 
@@ -686,15 +727,16 @@ waitLoop:
 
 	duration := time.Since(start)
 	rawOutput := combinedWorkerOutput(stdout.String(), stderr.String())
+	safeRawOutput := sanitizeWorkerDiagnosticOutput(rawOutput)
 	if ctx.Err() == context.DeadlineExceeded {
 		reportedTimeout := duration.Round(time.Millisecond)
 		if duration >= time.Second {
 			reportedTimeout = duration.Round(time.Second)
 		}
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "timeout", Duration: duration, RawOutput: rawOutput, Error: fmt.Errorf("worker timeout after %v", reportedTimeout)}, nil
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "timeout", Duration: duration, RawOutput: safeRawOutput, Error: fmt.Errorf("worker timeout after %v", reportedTimeout)}, nil
 	}
 	if waitErr != nil {
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: rawOutput, Error: classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())}, nil
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: classifyHostedExecutionError(label, waitErr, stderr.String(), running.Observed())}, nil
 	}
 	claims, parseErr := parseHostedWorkerOutput(label, rawOutput)
 	if parseErr != nil {
@@ -702,7 +744,7 @@ waitLoop:
 		if debugPath := writeHostedWorkerOutputDebug(config.Root, label, config, args, stdout.String(), stderr.String(), parseErr); debugPath != "" {
 			err = fmt.Errorf("%w (debug: %s)", err, debugPath)
 		}
-		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: rawOutput, Error: err}, nil
+		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: duration, RawOutput: safeRawOutput, Error: err}, nil
 	}
 	claims = normalizeWorkerClaims(claims, config)
 	return WorkerResult{
@@ -719,7 +761,7 @@ waitLoop:
 		Spawns:        claims.Spawns,
 		Handoff:       claims.Handoff,
 		Duration:      duration,
-		RawOutput:     rawOutput,
+		RawOutput:     safeRawOutput,
 	}, nil
 }
 
@@ -864,7 +906,7 @@ func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args 
 		"stderr_bytes":   len(stderrText),
 		"stdout_excerpt": workerOutputExcerpt(stdoutText),
 		"stderr_excerpt": workerOutputExcerpt(stderrText),
-		"error":          strings.TrimSpace(cause.Error()),
+		"error":          sanitizeWorkerDiagnosticOutput(cause.Error()),
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -890,7 +932,7 @@ func safeHostedWorkerArgs(args []string) []string {
 }
 
 func workerOutputExcerpt(value string) string {
-	value = strings.TrimSpace(stripANSIEscapeCodes(value))
+	value = sanitizeWorkerDiagnosticOutput(value)
 	const limit = 4000
 	runes := []rune(value)
 	if len(runes) <= limit {
@@ -1071,12 +1113,36 @@ func runAvailabilityProbe(ctx context.Context, binary string, args ...string) (s
 	return output, nil
 }
 
-func formatAvailabilityProbeError(platform Platform, action string, err error, output string) string {
-	output = strings.TrimSpace(stripANSIEscapeCodes(output))
-	if output != "" {
-		return fmt.Sprintf("%s %s failed: %v (%s)", platform, action, err, output)
+func formatAvailabilityProbeError(platform Platform, action string, err error, _ string) string {
+	detail := sanitizedProbeFailureDetail(err)
+	if detail != "" {
+		return fmt.Sprintf("%s %s failed: %s; sensitive details omitted", platform, action, detail)
 	}
-	return fmt.Sprintf("%s %s failed: %v", platform, action, err)
+	return fmt.Sprintf("%s %s failed; sensitive details omitted", platform, action)
+}
+
+func formatAvailabilityProbeSkipped(platform Platform, binary string) string {
+	name := strings.TrimSpace(filepath.Base(binary))
+	if name == "" {
+		name = "override binary"
+	}
+	return fmt.Sprintf("%s auth probe skipped for override binary %q; provider authentication was not verified", platform, name)
+}
+
+func sanitizedProbeFailureDetail(err error) string {
+	if err == nil {
+		return ""
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if code := exitErr.ExitCode(); code >= 0 {
+			return fmt.Sprintf("exit status %d", code)
+		}
+		return "process exited unsuccessfully"
+	}
+	if strings.EqualFold(strings.TrimSpace(err.Error()), "timed out") {
+		return "timed out"
+	}
+	return "probe command failed"
 }
 
 func stripANSIEscapeCodes(value string) string {
@@ -1110,6 +1176,19 @@ func countOpenCodeCredentials(output string) int {
 	}
 	return count
 }
+
+func codexLoginStatusIsActive(output string) bool {
+	cleaned := strings.ToLower(stripANSIEscapeCodes(output))
+	if !strings.Contains(cleaned, "logged in") {
+		return false
+	}
+	if negativeCodexLoginStatusPattern.MatchString(cleaned) {
+		return false
+	}
+	return true
+}
+
+var negativeCodexLoginStatusPattern = regexp.MustCompile(`\b(?:not|no|never|without)\b.{0,40}\blogged in\b|\bnot authenticated\b|\bunauthenticated\b|\bno authenticated session\b`)
 
 func validateMarkdownAgent(path string) error {
 	data, err := os.ReadFile(path)
@@ -1154,12 +1233,13 @@ func parseMarkdownAgentDefinition(data []byte) (markdownAgentDefinition, error) 
 }
 
 func classifyHostedExecutionError(label string, err error, stderr string, runningObserved bool) error {
-	detail := strings.TrimSpace(stderr)
+	rawDetail := strings.TrimSpace(stderr)
+	detail := sanitizeWorkerDiagnosticOutput(stderr)
 	prefix := strings.TrimSpace(label)
 	if prefix == "" {
 		prefix = "worker process"
 	}
-	if strings.EqualFold(prefix, "opencode") && looksLikeOpenCodeLocalServerFailure(detail) {
+	if strings.EqualFold(prefix, "opencode") && looksLikeOpenCodeLocalServerFailure(rawDetail) {
 		return fmt.Errorf("opencode worker dispatcher unavailable: local OpenCode server rejected the run request; ensure OpenCode is running for `opencode run`, or set AETHER_WORKER_PLATFORM=claude/codex to use another dispatcher: %w (stderr: %s)", err, detail)
 	}
 	if !runningObserved {
@@ -1201,4 +1281,18 @@ func describeAvailabilitySet(active Platform, statuses []AvailabilityStatus) str
 		return "no worker dispatchers available"
 	}
 	return strings.Join(parts, "; ")
+}
+
+func availabilityCategoryForStatuses(statuses []AvailabilityStatus) AvailabilityCategory {
+	for _, status := range statuses {
+		if status.Category != "" && !status.Available {
+			return status.Category
+		}
+	}
+	for _, status := range statuses {
+		if status.Category != "" {
+			return status.Category
+		}
+	}
+	return AvailabilityCategoryBinaryMissing
 }

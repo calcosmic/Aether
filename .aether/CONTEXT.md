@@ -8,26 +8,26 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-13T17:34:20Z |
-| **Current Phase** | 6 |
-| **Phase Name** | End-to-end verification |
+| **Last Updated** | 2026-05-16T13:27:04Z |
+| **Current Phase** | 5 |
+| **Phase Name** | Final Smoke and Release Readiness |
 | **Phase Status** | completed |
 | **Milestone** | Crowned Anthill |
 | **Colony Status** | COMPLETED |
-| **Colony Mode** | orchestrator |
+| **Colony Mode** | colony |
 | **Safe to Clear?** | YES — Colony complete |
 
 ---
 
 ## Current Goal
 
-Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI.
+Provider Auth Clarity and Release Hardening
 
 ---
 
 ## What's In Progress
 
-Pre-compact snapshot (auto): state=COMPLETED phase=6 goal=Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI. task=End-to-end verification
+Colony sealed
 
 ---
 
@@ -60,13 +60,20 @@ Pre-compact snapshot (auto): state=COMPLETED phase=6 goal=Stabilize Aether multi
 - Twist-44 was closed after stalling without writing /tmp/aether-build-1-worker-Twist-44.json after a parent-side malformed legacy timestamp hardening update. ...
 - Running AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard spawned Probe Excavat-92, which heartbeated until worker time...
 - Build plan-only created hard Orchestrator boundary question pd_1778424856613270000 for Phase 2, but AETHER_OUTPUT_MODE=visual aether discuss reported 0 quest...
+- test
+- test
+- test
+- test
+- test
+- test
 
 ---
 
-## Tasks For Phase 6 — End-to-end verification
+## Tasks For Phase 5 — Final Smoke and Release Readiness
 
-- [x] Add tests that prove colonize, plan, build, and continue record real worker activity
-- [x] Run a live colony loop and compare its outputs with the documented ant process
+- [x] Run the full local verification suite for runtime, race, release, and binary smoke.
+- [x] Smoke provider/auth UX in an isolated temp repo with fake provider CLIs and no real credentials.
+- [x] Prepare release readiness notes and residual-risk handoff for seal.
 
 ---
 
@@ -80,18 +87,18 @@ Pre-compact snapshot (auto): state=COMPLETED phase=6 goal=Stabilize Aether multi
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-12T06:14:12Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
-- 2026-05-12T06:14:12Z|watcher_verification|continue|watcher skipped; relying on verification commands
-- 2026-05-12T06:14:12Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
-- 2026-05-12T06:14:12Z|signal_housekeeping|continue|Signal housekeeping completed: 4 active -> 4 active
-- 2026-05-12T07:05:22Z|sealed|seal|Colony sealed at Crowned Anthill
+- 2026-05-16T13:10:45Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
+- 2026-05-16T13:10:45Z|watcher_verification|continue|watcher skipped; relying on verification commands
+- 2026-05-16T13:10:45Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
+- 2026-05-16T13:10:45Z|signal_housekeeping|continue|Signal housekeeping completed: 5 active -> 5 active
+- 2026-05-16T13:27:04Z|sealed|seal|Colony sealed at Crowned Anthill
 
 ---
 
 ## Next Steps
 
-1. Run `aether seal`
-2. Run `aether phase --number 6` to inspect the tracked phase details
+1. Run `aether entomb`
+2. Run `aether phase --number 5` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---

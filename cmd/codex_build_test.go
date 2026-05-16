@@ -295,6 +295,10 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if got := result["dispatch_mode"].(string); got != "plan-only" {
 		t.Fatalf("dispatch_mode = %q, want plan-only", got)
 	}
+	wrapperContract := result["wrapper_contract"].(map[string]interface{})
+	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
+	}
 	if got := result["colony_mode"].(string); got != "colony" {
 		t.Fatalf("colony_mode = %q, want colony", got)
 	}
@@ -381,6 +385,42 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 	if state.Plan.Phases[0].Status != colony.PhaseReady {
 		t.Fatalf("phase status = %s, want ready", state.Plan.Phases[0].Status)
+	}
+}
+
+func TestBuildQueenLedWrapperContractUsesHostSourceCommand(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupRuntimeSkillAssignmentHub(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Expose queen-led wrapper contract"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "Wrapper bridge",
+			Description: "Let the Queen dispatch workers from a runtime manifest",
+			Status:      colony.PhaseReady,
+			Tasks:       []colony.Task{{ID: &taskID, Goal: "Build the wrapper bridge", Status: colony.TaskPending}},
+		}}},
+	})
+
+	result, _, _, _, err := runCodexBuildQueenLed(root, 1, nil, codexBuildOptions{})
+	if err != nil {
+		t.Fatalf("runCodexBuildQueenLed returned error: %v", err)
+	}
+	wrapperContract := result["wrapper_contract"].(map[string]interface{})
+	if got := wrapperContract["source_command"].(string); got != "aether host build <phase>" {
+		t.Fatalf("wrapper_contract source_command = %q, want TS host build command", got)
 	}
 }
 

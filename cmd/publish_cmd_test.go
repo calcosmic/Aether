@@ -120,6 +120,46 @@ func TestPublishVerificationFailure(t *testing.T) {
 	}
 }
 
+func TestPublishHubVersionWarningIncludesRecoveryAndVerificationCommands(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+	packageDir := createMockSourceCheckout(t, "1.0.20")
+
+	hubDir := filepath.Join(homeDir, ".aether")
+	if err := os.MkdirAll(hubDir, 0755); err != nil {
+		t.Fatalf("failed to create hub dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.19","updated_at":"old"}`), 0644); err != nil {
+		t.Fatalf("failed to write stale version.json: %v", err)
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &errBuf
+
+	rootCmd.SetArgs([]string{"publish", "--package-dir", packageDir, "--home-dir", homeDir, "--skip-build-binary", "--channel", "stable"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+
+	warning := errBuf.String()
+	for _, want := range []string{
+		"Warning: hub version updated from 1.0.19 to 1.0.20",
+		"aether publish",
+		"aether version --check",
+		"aether integrity --source --channel stable",
+		"aether update --force",
+	} {
+		if !strings.Contains(warning, want) {
+			t.Fatalf("hub-version warning missing %q:\n%s", want, warning)
+		}
+	}
+}
+
 func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

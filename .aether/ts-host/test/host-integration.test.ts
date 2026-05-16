@@ -80,6 +80,23 @@ describe("host integration", () => {
     ]);
   });
 
+  it("plan passes equals-form depth flags to Go CLI", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "plan",
+      "--depth=balanced",
+      "--planning-depth=standard",
+    ]);
+
+    const args = buildPlanArgs(parsed);
+
+    assert.deepStrictEqual(args, [
+      "plan", "--plan-only",
+      "--depth", "balanced",
+      "--planning-depth", "standard",
+    ]);
+  });
+
   it("plan passes verification-depth and worker-timeout to Go CLI", () => {
     const parsed = parseArgs([
       "node", "host.js",
@@ -147,6 +164,21 @@ describe("host integration", () => {
       "node", "host.js",
       "continue",
       "--verification-depth", "heavy",
+    ]);
+
+    const args = buildContinueArgs(parsed);
+
+    assert.deepStrictEqual(args, [
+      "continue", "--plan-only",
+      "--verification-depth", "heavy",
+    ]);
+  });
+
+  it("continue passes equals-form verification-depth to Go CLI", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "continue",
+      "--verification-depth=heavy",
     ]);
 
     const args = buildContinueArgs(parsed);

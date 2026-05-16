@@ -267,7 +267,7 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 		"worker_name": workerResult.WorkerName,
 		"status":      emptyFallback(workerResult.Status, "completed"),
 		"summary":     strings.TrimSpace(workerResult.Summary),
-		"raw_output":  strings.TrimSpace(workerResult.RawOutput),
+		"raw_output":  codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
 		"duration_ms": workerResult.Duration.Milliseconds(),
 		"files":       workerResult.FilesModified,
 		"next":        "aether status",

@@ -101,13 +101,17 @@ function _realCallGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
       env: { ...process.env, AETHER_OUTPUT_MODE: "json" },
       encoding: "utf-8",
       maxBuffer: 10 * 1024 * 1024, // 10 MB safety limit
+      stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (err: unknown) {
-    // Surface ENOENT and spawn errors clearly
-    const message =
-      err instanceof Error ? err.message : String(err);
+    const envelope = parseGoErrorEnvelope(err);
+    if (envelope?.error) {
+      throw new Error(
+        `Go command failed: ${formatGoCommand(args)}: ${sanitizeBridgeMessage(envelope.error)}`
+      );
+    }
     throw new Error(
-      `Go subprocess failed for ${args.join(" ")}: ${message}`
+      `Go subprocess failed for ${formatGoCommand(args)}: ${subprocessFailureDetail(err)}; subprocess output omitted`
     );
   }
 
@@ -116,8 +120,7 @@ function _realCallGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
     parsed = JSON.parse(raw) as GoOutput<T>;
   } catch {
     throw new Error(
-      `Go subprocess returned invalid JSON for ${args.join(" ")}: ` +
-        raw.slice(0, 200)
+      `Go subprocess returned invalid JSON for ${formatGoCommand(args)}; subprocess output omitted`
     );
   }
 
@@ -126,11 +129,63 @@ function _realCallGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {
   // error field.
   if (!parsed.ok || parsed.error) {
     throw new Error(
-      `Go command failed: ${args.join(" ")}: ${parsed.error ?? "unknown error (ok=false)"}`
+      `Go command failed: ${formatGoCommand(args)}: ${sanitizeBridgeMessage(parsed.error ?? "unknown error (ok=false)")}`
     );
   }
 
   return parsed.result as T;
+}
+
+function formatGoCommand(args: string[]): string {
+  const command = args.slice(0, 3).join(" ").trim();
+  return command || "aether";
+}
+
+function parseGoErrorEnvelope(err: unknown): GoOutput<unknown> | undefined {
+  const output = [
+    bufferLikeToString((err as { stdout?: unknown })?.stdout),
+    bufferLikeToString((err as { stderr?: unknown })?.stderr),
+  ].find((value) => value.trim().startsWith("{"));
+  if (!output) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(output) as GoOutput<unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+function bufferLikeToString(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.toString("utf-8");
+  }
+  return "";
+}
+
+function subprocessFailureDetail(err: unknown): string {
+  const typed = err as { code?: unknown; status?: unknown; signal?: unknown };
+  if (typeof typed.code === "string" && typed.code.trim() !== "") {
+    return typed.code === "ENOENT" ? "binary not found" : typed.code;
+  }
+  if (typeof typed.status === "number") {
+    return `exit status ${typed.status}`;
+  }
+  if (typeof typed.signal === "string" && typed.signal.trim() !== "") {
+    return `signal ${typed.signal}`;
+  }
+  return "execution failed";
+}
+
+function sanitizeBridgeMessage(message: string): string {
+  return message
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
+    .replace(/ghp_[A-Za-z0-9_]+/g, "[redacted]")
+    .replace(/\btoken\s+[A-Za-z0-9._-]+/gi, "token [redacted]")
+    .replace(/\b(stdout|stderr):\s*[^\n;]+/gi, "$1: [omitted]");
 }
 
 export function callGoJSON<T>(opts: GoBridgeOptions, args: string[]): T {

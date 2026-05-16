@@ -56,7 +56,7 @@ For `plan`, `build`, heavy external-review `continue`, and `seal`, inspect
 finalizer packet. If guidance is active or `next` is `aether discuss`, stop the
 lifecycle flow, show the guidance summary, route to `aether discuss`, and tell
 the user to rerun `after_discuss_next` after the answer is resolved. Then request
-a fresh plan-only manifest; never reuse the pre-discuss manifest, and never ask,
+a fresh host manifest; never reuse the pre-discuss manifest, and never ask,
 answer, or store boundary questions in Codex chat or wrapper state.
 
 ## Plan Flow
@@ -64,16 +64,10 @@ answer, or store boundary questions in Codex chat or wrapper state.
 1. Select planning depth and decomposition depth unless arguments already make
    them clear.
 2. Run `AETHER_OUTPUT_MODE=visual aether status`.
-3. Run:
+3. Run the TS host manifest command:
 
 ```bash
 aether host plan --depth <choice> --planning-depth <choice>
-```
-
-If the TS host is unavailable, fall back to:
-
-```bash
-AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> --planning-depth <choice>
 ```
 
 4. Save the full JSON envelope to a temporary manifest file outside
@@ -156,16 +150,10 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
 2. Surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.
-3. Run:
+3. Run the TS host manifest command:
 
 ```bash
 aether host build <phase>
-```
-
-If the TS host is unavailable, fall back to:
-
-```bash
-AETHER_OUTPUT_MODE=json aether build <phase> --plan-only
 ```
 
 4. Save the full JSON envelope to a temporary manifest file outside
@@ -218,12 +206,6 @@ request the runtime manifest:
 
 ```bash
 aether host continue --verification-depth heavy <args>
-```
-
-If the TS host is unavailable, fall back to:
-
-```bash
-AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy <args>
 ```
 
 Save the JSON manifest envelope to a temporary file, parse

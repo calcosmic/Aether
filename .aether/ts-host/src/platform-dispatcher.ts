@@ -83,6 +83,24 @@ export async function detectAvailablePlatforms(): Promise<Platform[]> {
   return _detectAvailablePlatformsRef();
 }
 
+/**
+ * Return the TS-host-facing unavailable-provider message.
+ *
+ * Detailed provider classification is owned by Go's AvailabilityStatus
+ * contract. The TS host keeps only the legacy boolean preflight here, then
+ * tells users how to fetch the Go-owned diagnostic instead of inventing a
+ * second auth vocabulary.
+ */
+export function formatPlatformUnavailableMessage(context = "worker dispatch"): string {
+  return (
+    `No platform CLI available for ${context} (claude, opencode, or codex). ` +
+    "Detailed provider diagnostics are owned by the Go AvailabilityStatus contract; " +
+    "run `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only` or `aether status` " +
+    "to see the provider, cause, and next action. " +
+    "Install or authenticate a platform CLI, or run with --simulate to use simulation mode."
+  );
+}
+
 /** Test-only: inject a mock detectAvailablePlatforms. */
 export function __setDetectAvailablePlatforms(fn: typeof detectAvailablePlatforms): void {
   _detectAvailablePlatformsRef = fn;
@@ -131,7 +149,7 @@ export async function isPlatformAvailable(platform: Platform): Promise<boolean> 
       }
       case "codex": {
         const result = await runProbe(binary, ["login", "status"]);
-        return result.toLowerCase().includes("logged in");
+        return codexLoginStatusIsActive(result);
       }
     }
   } catch {
@@ -298,11 +316,15 @@ async function runProbe(binary: string, args: string[]): Promise<string> {
     child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
 
     child.on("error", reject);
-    child.on("close", () => {
-      resolve(
+    child.on("close", (exitCode) => {
+      const output =
         Buffer.concat(stdout).toString("utf-8") +
-        Buffer.concat(stderr).toString("utf-8")
-      );
+        Buffer.concat(stderr).toString("utf-8");
+      if (exitCode === 0) {
+        resolve(output);
+        return;
+      }
+      reject(new Error(`probe exited with status ${exitCode ?? "unknown"}`));
     });
   });
 }
@@ -316,6 +338,18 @@ function countOpenCodeCredentials(output: string): number {
     }
   }
   return count;
+}
+
+/** Return true only when Codex explicitly reports an active login. */
+function codexLoginStatusIsActive(output: string): boolean {
+  const cleaned = output.toLowerCase();
+  if (!cleaned.includes("logged in")) {
+    return false;
+  }
+  if (/\b(not|no|never|without)\b.{0,40}\blogged in\b|\bnot authenticated\b|\bunauthenticated\b|\bno authenticated session\b/.test(cleaned)) {
+    return false;
+  }
+  return /\blogged in\b/.test(cleaned);
 }
 
 /** Build the worker claims JSON schema used for --json-schema args. */

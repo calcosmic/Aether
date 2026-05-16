@@ -19,6 +19,7 @@ import type { BuildDispatch, WorkerResult, TerminalWorkerStatus } from "./types.
 import {
   createPlatformDispatcher,
   detectAvailablePlatforms,
+  formatPlatformUnavailableMessage,
   spawnWorker,
   type Platform,
   type WorkerConfig,
@@ -154,10 +155,7 @@ export async function dispatchSingleWorker(
     // Real dispatch path: verify platforms are available before attempting
     const available = await detectAvailablePlatforms();
     if (available.length === 0) {
-      throw new Error(
-        "No platform CLI available (claude, opencode, or codex). " +
-        "Install a platform CLI or run with --simulate to use simulation mode."
-      );
+      throw new Error(formatPlatformUnavailableMessage(`worker ${dispatch.name}`));
     }
   }
 
@@ -191,7 +189,7 @@ export async function dispatchSingleWorker(
     result = {
       name: dispatch.name,
       status: "failed",
-      summary: `Worker dispatch failed: ${errMsg}`,
+      summary: `Worker dispatch failed: ${sanitizeWorkerDiagnosticOutput(errMsg)}`,
     };
   }
 
@@ -271,10 +269,11 @@ async function dispatchRealWorker(
   const spawnResult = await spawnWorker(config);
 
   if (spawnResult.exitCode !== 0) {
+    const diagnostic = sanitizeWorkerDiagnosticOutput(spawnResult.stderr).slice(0, 200);
     return {
       name: dispatch.name,
       status: "failed",
-      summary: `Worker exited with code ${spawnResult.exitCode}: ${spawnResult.stderr.slice(0, 200)}`,
+      summary: `Worker exited with code ${spawnResult.exitCode}: ${diagnostic}`,
       duration: spawnResult.duration / 1000,
       detectedPlatform: platform,
     };
@@ -313,6 +312,27 @@ async function dispatchRealWorker(
   }
 
   return result;
+}
+
+export function sanitizeWorkerDiagnosticOutput(value: string): string {
+  let output = stripAnsi(value.trim());
+  if (!output) {
+    return "";
+  }
+  output = output.replace(
+    /\b(token|api[_-]?key|secret|password|authorization)\b\s*[:=]\s*["']?[^"'\s;]+/gi,
+    (_match, key: string) => `${key}=[redacted]`
+  );
+  return output
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
+    .replace(/github_pat_[A-Za-z0-9_]+/g, "[redacted]")
+    .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[redacted]")
+    .replace(/npm_[A-Za-z0-9_]+/g, "[redacted]")
+    .replace(/\b[A-Za-z0-9._-]*secret[A-Za-z0-9._-]*\b/gi, "[redacted]");
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 // ---------------------------------------------------------------------------

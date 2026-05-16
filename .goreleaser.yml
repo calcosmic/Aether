@@ -3,6 +3,7 @@ version: 2
 before:
   hooks:
     - go mod tidy
+    - git diff --exit-code -- go.mod go.sum
     - go test ./cmd -run TestDocCLIAlignment -v
 
 builds:

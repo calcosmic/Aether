@@ -238,7 +238,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"queen_execution_policy":   policy,
 		"selected_tasks":           selectedTaskIDs,
 		"wrapper_contract": map[string]interface{}{
-			"source_command":          "AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+			"source_command":          "aether host build <phase>",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "awaiting_wrapper_completion",
@@ -284,7 +284,7 @@ func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, 
 	result["queen_execution_policy"] = policy
 	result["next"] = "Queen/main agent executes dispatch_manifest, then runs aether build-finalize"
 	result["wrapper_contract"] = map[string]interface{}{
-		"source_command":          "aether build <phase>",
+		"source_command":          "aether host build <phase>",
 		"spawn_log_required":      true,
 		"spawn_complete_required": true,
 		"finalize_surface":        "awaiting_queen_completion",
@@ -1302,11 +1302,11 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		}
 		// Per D-02/D-04: print raw worker output only in verbose mode
 		if result.WorkerResult != nil && result.WorkerResult.RawOutput != "" {
-			filteredFprintln(stdout, result.WorkerResult.RawOutput)
+			filteredFprintln(stdout, codex.SanitizeWorkerDiagnosticOutput(result.WorkerResult.RawOutput))
 		}
 
 		if result.Error != nil && len(dispatches[idx].Blockers) == 0 {
-			dispatches[idx].Blockers = []string{result.Error.Error()}
+			dispatches[idx].Blockers = []string{codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())}
 		}
 	}
 

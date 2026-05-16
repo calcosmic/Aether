@@ -28,64 +28,64 @@ func init() {
 
 	// lifecycle
 	hostCmd.AddCommand(&cobra.Command{
-		Use:                    "lifecycle [phase]",
-		Short:                  "Run full plan->build->continue lifecycle via TS host",
-		DisableFlagParsing:     true,
-		RunE:                   makeHostSubcommand("lifecycle", true),
+		Use:                "lifecycle [phase]",
+		Short:              "Run full plan->build->continue lifecycle via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("lifecycle", true),
 	})
 
 	// plan
 	hostCmd.AddCommand(&cobra.Command{
-		Use:                    "plan",
-		Short:                  "Run plan workflow via TS host",
-		DisableFlagParsing:     true,
-		RunE:                   makeHostSubcommand("plan", false),
+		Use:                "plan",
+		Short:              "Run plan workflow via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("plan", true),
 	})
 
 	// build
 	hostCmd.AddCommand(&cobra.Command{
-		Use:                    "build <phase>",
-		Short:                  "Run build workflow via TS host",
-		DisableFlagParsing:     true,
-		RunE:                   makeHostSubcommand("build", true),
+		Use:                "build <phase>",
+		Short:              "Run build workflow via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("build", true),
 	})
 
 	// continue
 	hostCmd.AddCommand(&cobra.Command{
-		Use:                    "continue",
-		Short:                  "Run continue workflow via TS host",
-		DisableFlagParsing:     true,
-		RunE:                   makeHostSubcommand("continue", false),
+		Use:                "continue",
+		Short:              "Run continue workflow via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("continue", true),
 	})
 
 	// oracle
 	hostCmd.AddCommand(&cobra.Command{
-		Use:                    "oracle [topic]",
-		Short:                  "Run oracle workflow via TS host",
-		DisableFlagParsing:     true,
-		RunE:                   makeHostSubcommand("oracle", true),
+		Use:                "oracle [topic]",
+		Short:              "Run oracle workflow via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("oracle", true),
 	})
 
 	// watch
 	hostCmd.AddCommand(&cobra.Command{
-		Use:                    "watch",
-		Short:                  "Show colony status via TS host",
-		DisableFlagParsing:     true,
-		RunE:                   makeHostSubcommand("watch", false),
+		Use:                "watch",
+		Short:              "Show colony status via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("watch", true),
 	})
 
 	// swarm
 	hostCmd.AddCommand(&cobra.Command{
-		Use:                    "swarm [target]",
-		Short:                  "Show swarm plan for a target problem via TS host",
-		DisableFlagParsing:     true,
-		RunE:                   makeHostSubcommand("swarm", true),
+		Use:                "swarm [target]",
+		Short:              "Show swarm plan for a target problem via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("swarm", true),
 	})
 }
 
 // makeHostSubcommand returns a cobra RunE that delegates to the TS host.
-// If acceptsPositional is true, any positional args are forwarded.
-func makeHostSubcommand(subcommand string, acceptsPositional bool) func(cmd *cobra.Command, args []string) error {
+// If forwardRawArgs is true, remaining args and raw flags are forwarded.
+func makeHostSubcommand(subcommand string, forwardRawArgs bool) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		nodePath, err := discoverNode()
 		if err != nil {
@@ -105,7 +105,7 @@ func makeHostSubcommand(subcommand string, acceptsPositional bool) func(cmd *cob
 		}
 
 		tsArgs := []string{tsHostPath, subcommand}
-		if acceptsPositional && len(args) > 0 {
+		if forwardRawArgs && len(args) > 0 {
 			tsArgs = append(tsArgs, args...)
 		}
 
@@ -172,4 +172,3 @@ func resolveTsHostPath(cwd string) (string, string) {
 
 	return "", "TS host assets not found. Run `aether update --force` to install them."
 }
-

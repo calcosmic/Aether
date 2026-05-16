@@ -845,6 +845,66 @@ printf '{"ant_name":"Hammer-23","caste":"builder","task_id":"2.1","status":"comp
 	}
 }
 
+func TestRealInvoker_Invoke_RedactsExecutionDiagnostics(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	tomlPath := filepath.Join(dir, "aether-builder.toml")
+	if err := os.WriteFile(tomlPath, []byte(`name = "aether-builder"
+description = "Builder"
+nickname_candidates = ["builder", "hammer"]
+developer_instructions = '''
+You are the Builder.
+'''
+`), 0644); err != nil {
+		t.Fatalf("failed to write agent TOML: %v", err)
+	}
+
+	scriptPath := filepath.Join(dir, "fake-codex.sh")
+	script := `#!/bin/sh
+cat >/dev/null
+printf 'stdout sk-proj-stdout-secret\n'
+printf 'stderr ghp_stderr_secret token=stderr-secret\n' >&2
+exit 42
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake codex script: %v", err)
+	}
+
+	invoker := NewRealInvoker()
+	invoker.binaryName = scriptPath
+
+	result, err := invoker.Invoke(context.Background(), WorkerConfig{
+		AgentName:      "aether-builder",
+		AgentTOMLPath:  tomlPath,
+		Caste:          "builder",
+		WorkerName:     "Hammer-23",
+		TaskID:         "2.1",
+		TaskBrief:      "Build the feature.",
+		ContextCapsule: "Goal: test",
+		Root:           dir,
+	})
+	if err != nil {
+		t.Fatalf("Invoke returned process error: %v", err)
+	}
+	if result.Status != "failed" {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	haystacks := []string{result.RawOutput}
+	if result.Error != nil {
+		haystacks = append(haystacks, result.Error.Error())
+	}
+	for _, haystack := range haystacks {
+		for _, forbidden := range []string{"sk-proj-stdout-secret", "ghp_stderr_secret", "stderr-secret"} {
+			if strings.Contains(haystack, forbidden) {
+				t.Fatalf("worker diagnostic leaked %q in:\n%s", forbidden, haystack)
+			}
+		}
+	}
+}
+
 func TestClaudeDispatcher_Invoke_UsesJSONSchemaAndParsesResult(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stub uses POSIX sh")

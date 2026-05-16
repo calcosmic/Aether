@@ -35,6 +35,14 @@ line up.
 - Temporary manifest, worker, and completion files belong outside
   `.aether/data`.
 - Do not add shell execution from manifest, worker, or user-provided strings.
+- Provider availability preflight is separate from post-launch provider/API/auth
+  failure. Generated context must keep those failure classes distinct.
+- Generated context may surface only sanitized provider, cause, and next action.
+  Do not include raw provider stdout/stderr, tokens, or auth probe output.
+- `.opencode/package.json` and `.opencode/package-lock.json` are ignored local
+  OpenCode install artifacts when present. Do not call them release-surface
+  package files unless that scope changes; tracked TS-host package files live
+  under `.aether/ts-host/`.
 
 ## Command Map
 
@@ -76,6 +84,10 @@ line up.
 - Existing shell execution in this area is fixed command execution or
   verification command execution resolved from project docs/config. This phase
   did not add shell execution from manifest, worker, or user strings.
+- Provider availability guidance now belongs to the Go-owned diagnostic
+  contract. Wrapper and Codex generated-context wording should distinguish
+  preflight failures from launched-worker provider/API/auth payloads that fail
+  worker-claims parsing.
 
 ## Dependency-Ordered Next Slices
 
@@ -98,6 +110,9 @@ line up.
    dispatch contract wording without changing these safety boundaries. Preserve
    the phase-6 worker-activity tests that keep YAML, command-guide, and skill
    guidance aligned.
+7. Add post-launch provider/API/auth classification before worker-claims parsing
+   so valid availability preflight does not hide later provider rejection behind
+   generic parse errors.
 
 ## Forge-55 Handoff
 

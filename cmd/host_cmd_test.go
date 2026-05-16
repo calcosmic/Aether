@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -44,6 +45,78 @@ func TestHostSubcommands(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("expected subcommand %q in host command", w)
+		}
+	}
+}
+
+func TestHostPlanAndContinueForwardRawFlags(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	root := t.TempDir()
+	hostPath := filepath.Join(root, ".aether", "ts-host", "dist", "host.js")
+	if err := os.MkdirAll(filepath.Dir(hostPath), 0755); err != nil {
+		t.Fatalf("create host dir: %v", err)
+	}
+	if err := os.WriteFile(hostPath, []byte("// test host\n"), 0644); err != nil {
+		t.Fatalf("write host file: %v", err)
+	}
+	withWorkingDir(t, root)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get cwd: %v", err)
+	}
+	resolvedHostPath := filepath.Join(cwd, ".aether", "ts-host", "dist", "host.js")
+
+	fakeBin := t.TempDir()
+	argsFile := filepath.Join(root, "node-args.txt")
+	nodePath := filepath.Join(fakeBin, "node")
+	fakeNode := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo v20.0.0; exit 0; fi\n" +
+		"printf '%s\\n' \"$@\" > \"$AETHER_FAKE_NODE_ARGS\"\n"
+	if err := os.WriteFile(nodePath, []byte(fakeNode), 0755); err != nil {
+		t.Fatalf("write fake node: %v", err)
+	}
+	t.Setenv("PATH", fakeBin)
+	t.Setenv("AETHER_FAKE_NODE_ARGS", argsFile)
+
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "plan",
+			args: []string{"host", "plan", "--depth", "balanced", "--planning-depth", "deep", "--refresh"},
+			want: []string{resolvedHostPath, "plan", "--depth", "balanced", "--planning-depth", "deep", "--refresh"},
+		},
+		{
+			name: "continue",
+			args: []string{"host", "continue", "--verification-depth", "heavy", "$ARGUMENTS"},
+			want: []string{resolvedHostPath, "continue", "--verification-depth", "heavy", "$ARGUMENTS"},
+		},
+		{
+			name: "watch",
+			args: []string{"host", "watch", "--no-dashboard"},
+			want: []string{resolvedHostPath, "watch", "--no-dashboard"},
+		},
+	}
+
+	for _, tt := range tests {
+		if err := os.Remove(argsFile); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("remove args file: %v", err)
+		}
+		rootCmd.SetArgs(tt.args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("%s execute: %v", tt.name, err)
+		}
+		data, err := os.ReadFile(argsFile)
+		if err != nil {
+			t.Fatalf("%s read args file: %v", tt.name, err)
+		}
+		got := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if strings.Join(got, "\x00") != strings.Join(tt.want, "\x00") {
+			t.Fatalf("%s forwarded args = %#v, want %#v", tt.name, got, tt.want)
 		}
 	}
 }

@@ -25,6 +25,25 @@ describe("parseArgs", () => {
     assert.equal(result.help, false);
   });
 
+  it("parses equals-form value flags", () => {
+    const result = parseArgs([
+      "node", "host.js",
+      "plan",
+      "--depth=balanced",
+      "--planning-depth=deep",
+      "--verification-depth=heavy",
+      "--worker-timeout=5m",
+      "--cwd=/tmp/aether",
+    ]);
+
+    assert.equal(result.command, "plan");
+    assert.equal(result.depth, "balanced");
+    assert.equal(result.planningDepth, "deep");
+    assert.equal(result.verificationDepth, "heavy");
+    assert.equal(result.workerTimeout, "5m");
+    assert.equal(result.cwd, "/tmp/aether");
+  });
+
   it("parses continue with verification-depth and light", () => {
     const result = parseArgs(["node", "host.js", "continue", "--verification-depth", "heavy", "--light"]);
 

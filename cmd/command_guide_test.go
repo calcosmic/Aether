@@ -143,7 +143,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether colonize-finalize",
 		},
 		"plan": {
-			"AETHER_OUTPUT_MODE=json aether plan --plan-only",
+			"aether host plan --depth <choice> --planning-depth <choice>",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -151,7 +151,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether plan-finalize",
 		},
 		"build": {
-			"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+			"aether host build <phase>",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -160,7 +160,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 		},
 		"continue": {
 			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+			"aether host continue --verification-depth heavy",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -178,6 +178,33 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 		for _, want := range wants {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s command-guide missing visible worker activity anchor %q", command, want)
+			}
+		}
+	}
+}
+
+func TestCodexLifecycleGuidesDoNotDocumentRetiredHostFallbacks(t *testing.T) {
+	forbidden := map[string][]string{
+		"plan": {
+			"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+		},
+		"build": {
+			"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+		},
+		"continue": {
+			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+		},
+	}
+
+	for command, needles := range forbidden {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		for _, needle := range needles {
+			if strings.Contains(text, needle) {
+				t.Errorf("%s command-guide still documents retired host fallback %q", command, needle)
 			}
 		}
 	}
@@ -232,10 +259,10 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	text := string(content)
 	for _, want := range []string{
 		"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
-		"AETHER_OUTPUT_MODE=json aether plan --plan-only",
-		"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+		"aether host plan --depth <choice> --planning-depth <choice>",
+		"aether host build <phase>",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+		"aether host continue --verification-depth heavy",
 		"aether spawn-log",
 		"aether spawn-complete",
 		"aether ceremony worker-complete",
@@ -243,6 +270,15 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("%s missing lifecycle worker activity anchor %q", path, want)
+		}
+	}
+	for _, forbidden := range []string{
+		"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+		"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("%s still documents retired host fallback %q", path, forbidden)
 		}
 	}
 }

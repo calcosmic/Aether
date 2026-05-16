@@ -1,6 +1,9 @@
 package cmd
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // validateBuildProvenance checks that at least one worker completed successfully
 // and reported file changes (created, modified, or tests written). It rejects
@@ -27,6 +30,67 @@ func validateBuildProvenance(results []codexExternalBuildWorkerResult) error {
 		return fmt.Errorf("build provenance: no workers completed successfully -- all %d worker(s) are in a non-success state", len(results))
 	}
 	return fmt.Errorf("build provenance: %d worker(s) completed but none reported file changes (created, modified, or tests) -- the build produced no changes", completedCount)
+}
+
+func validateBuildProvenanceForManifest(manifest *codexBuildManifest, results []codexExternalBuildWorkerResult) error {
+	err := validateBuildProvenance(results)
+	if err == nil {
+		return nil
+	}
+	if manifest == nil || !isVerificationOnlyBuildManifest(*manifest) {
+		return err
+	}
+
+	completedCount := 0
+	for _, r := range results {
+		if normalizeExternalBuildStatus(r.Status) != "completed" || !isBuildImplementationWorker(r) {
+			continue
+		}
+		completedCount++
+		if len(r.Outputs) > 0 {
+			return nil
+		}
+	}
+	if completedCount == 0 {
+		return err
+	}
+	return fmt.Errorf("build provenance: verification-only phase completed but no implementation workers reported output evidence")
+}
+
+func isVerificationOnlyBuildManifest(manifest codexBuildManifest) bool {
+	if len(manifest.Tasks) == 0 {
+		return false
+	}
+	for _, task := range manifest.Tasks {
+		goal := strings.ToLower(strings.TrimSpace(task.Goal))
+		if !(strings.HasPrefix(goal, "run ") || strings.HasPrefix(goal, "verify ")) {
+			return false
+		}
+		if containsBuildMutationVerb(goal) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsBuildMutationVerb(text string) bool {
+	for _, needle := range []string{
+		"implement ",
+		"create ",
+		"fix ",
+		"update ",
+		"add ",
+		"write ",
+		"modify ",
+		"refactor ",
+		"delete ",
+		"remove ",
+	} {
+		if strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func isBuildImplementationWorker(result codexExternalBuildWorkerResult) bool {

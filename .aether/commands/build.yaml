@@ -21,17 +21,18 @@ wrapper_additions:
     Restore real wrapper orchestration:
     1. Run `aether host build $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The TS host is the sole entry point to the Go CLI for manifest generation (per `.aether/docs/wrapper-host-contract.md`).
     2. Parse `result.dispatch_manifest`; do not parse visual output.
-    3. Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the build flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
-    4. Immediately render the runtime-owned old-style spawn ceremony for the user with `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>`; do not parse this output.
-    5. Load the build-wave playbook from the installed hub (`~/.aether/system/docs/command-playbooks/build-wave.md`, or the matching dev hub when using `aether-dev`) as the spawning procedure.
-    6. Use visible live Task/subagent panels as the worker ceremony: issue all parallel-wave Task calls in one assistant message, do not set `run_in_background`, and do not replace the live stack with a markdown worker table.
-    7. Before each step in `dispatch_manifest.execution_plan`, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave <execution_wave>` so the user sees the stacked caste-colored wave banner.
-    8. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
-    9. After each terminal worker result, write that one worker result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>` before moving on.
-    10. Each spawned worker description must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`. Preserve the platform agent's caste color/icon metadata.
-    11. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
-    12. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.
-    13. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <file>` for the user-facing ceremony.
+    3. If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or probe output.
+    4. Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the build flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
+    5. Immediately render the runtime-owned old-style spawn ceremony for the user with `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>`; do not parse this output.
+    6. Load the build-wave playbook from the installed hub (`~/.aether/system/docs/command-playbooks/build-wave.md`, or the matching dev hub when using `aether-dev`) as the spawning procedure.
+    7. Use visible live Task/subagent panels as the worker ceremony: issue all parallel-wave Task calls in one assistant message, do not set `run_in_background`, and do not replace the live stack with a markdown worker table.
+    8. Before each step in `dispatch_manifest.execution_plan`, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave <execution_wave>` so the user sees the stacked caste-colored wave banner.
+    9. For each step in `dispatch_manifest.execution_plan`, call `aether spawn-log`, spawn the matching platform agent (`subagent_type` / equivalent) using `agent_name`, inject that dispatch's runtime-provided `skill_section` when present, then call `aether spawn-complete`.
+    10. After each terminal worker result, write that one worker result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>` before moving on.
+    11. Each spawned worker description must be exactly caste-labelled from the manifest: `{caste emoji} {Caste} {name}: {task}`. Preserve the platform agent's caste color/icon metadata.
+    12. Collect terminal worker results into a completion JSON file containing the original `dispatch_manifest` and a `dispatches` array.
+    13. Run `AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <file>` to record `dispatch_mode: external-task`, manifest, and claims.
+    14. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <file>` for the user-facing ceremony.
     Note: The runtime accepts `--verification-depth <light|standard|heavy>` to control review depth during continue. This flag does not affect the build command itself but is passed through to subsequent continue review.
   post_build: |
     Close with a short colony-language synthesis:
@@ -43,7 +44,8 @@ guardrails:
   - "Do NOT read or write colony state files by hand."
   - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."
   - "Do NOT parse visual output as authoritative state."
-  - "Do NOT run `aether build` without `--plan-only` from Claude/OpenCode wrapper orchestration."
+  - "Do NOT expose raw provider stdout/stderr, tokens, or auth probe output; use the Go availability category and sanitized next action."
+  - "Do NOT run direct `aether build` from Claude/OpenCode wrapper orchestration for manifest generation; use `aether host build`."
   - "Do NOT run `aether build --synthetic` after real wrapper Task agents complete."
   - "Do NOT describe parallel workers as background agents or say you will be notified later; keep the live worker stack visible until terminal results return."
   - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."

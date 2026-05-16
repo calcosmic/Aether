@@ -167,6 +167,69 @@ func TestValidateBuildProvenanceRequiresCompletedBuilderFileEvidence(t *testing.
 	}
 }
 
+func TestValidateBuildProvenanceForManifestAllowsVerificationOnlyOutputs(t *testing.T) {
+	manifest := &codexBuildManifest{
+		Tasks: []codexBuildTaskPlan{
+			{ID: "3.1", Goal: "Run go test ./... from the repo root."},
+			{ID: "3.2", Goal: "Verify TS host dependencies are available and Node satisfies >=20."},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:    "Brick-52",
+			Caste:   "builder",
+			Status:  "completed",
+			TaskID:  "3.1",
+			Outputs: []string{"go.mod"},
+		},
+	}
+
+	if err := validateBuildProvenanceForManifest(manifest, results); err != nil {
+		t.Fatalf("expected verification-only output evidence to pass provenance: %v", err)
+	}
+}
+
+func TestValidateBuildProvenanceForManifestRejectsOutputOnlyMutationPhase(t *testing.T) {
+	manifest := &codexBuildManifest{
+		Tasks: []codexBuildTaskPlan{
+			{ID: "2.1", Goal: "Update wrapper ceremony contract tests."},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:    "Weld-96",
+			Caste:   "builder",
+			Status:  "completed",
+			TaskID:  "2.1",
+			Outputs: []string{"cmd/codex_build_finalize.go"},
+		},
+	}
+
+	if err := validateBuildProvenanceForManifest(manifest, results); err == nil {
+		t.Fatal("expected output-only mutation phase to fail provenance")
+	}
+}
+
+func TestValidateBuildProvenanceForManifestRejectsWatcherOnlyVerificationEvidence(t *testing.T) {
+	manifest := &codexBuildManifest{
+		Tasks: []codexBuildTaskPlan{
+			{ID: "3.1", Goal: "Run go test ./... from the repo root."},
+		},
+	}
+	results := []codexExternalBuildWorkerResult{
+		{
+			Name:    "Hawk-45",
+			Caste:   "watcher",
+			Status:  "completed",
+			Outputs: []string{"go.mod"},
+		},
+	}
+
+	if err := validateBuildProvenanceForManifest(manifest, results); err == nil {
+		t.Fatal("expected watcher-only verification evidence to fail provenance")
+	}
+}
+
 func TestMergeExternalBuildResultsWithCodeWritten(t *testing.T) {
 	manifest := codexBuildManifest{
 		PlanOnly: true,

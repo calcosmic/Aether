@@ -81,6 +81,7 @@ describe("lifecycle honesty", { concurrency: false }, () => {
 
     assert.equal(result.success, false);
     assert.ok(result.error?.includes("No platform CLI available"), `Expected platform error but got: ${result.error}`);
+    assert.ok(result.error?.includes("Go AvailabilityStatus contract"), `Expected Go diagnostic delegation but got: ${result.error}`);
   });
 
   it("errors when no platforms available and simulateWorkers is undefined", async () => {
@@ -94,6 +95,7 @@ describe("lifecycle honesty", { concurrency: false }, () => {
 
     assert.equal(result.success, false);
     assert.ok(result.error?.includes("No platform CLI available"), `Expected platform error but got: ${result.error}`);
+    assert.ok(result.error?.includes("provider, cause, and next action"), `Expected next-action guidance but got: ${result.error}`);
   });
 
   it("succeeds with simulateWorkers=true even when no platforms available", async () => {
@@ -158,6 +160,23 @@ describe("worker-dispatch honesty", { concurrency: false }, () => {
           mockDispatch
         ),
       /No platform CLI available/
+    );
+  });
+
+  it("delegates detailed provider diagnostics to Go when no platforms are available", async () => {
+    __setDetectAvailablePlatforms(async () => []);
+    __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+
+    await assert.rejects(
+      async () =>
+        dispatchSingleWorker(
+          {
+            goBinaryPath: "/usr/bin/true",
+            cwd: "/tmp",
+          } as import("../src/worker-dispatch.js").DispatchOptions,
+          mockDispatch
+        ),
+      /Go AvailabilityStatus contract/
     );
   });
 

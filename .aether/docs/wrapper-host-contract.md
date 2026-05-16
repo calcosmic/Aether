@@ -25,9 +25,20 @@ The open question: should wrappers become thin pass-throughs (just call `aether 
 
 | Layer | May | Must Not |
 |-------|-----|----------|
-| **Wrappers** | Call `aether host`, spawn workers, render ceremony, add colony framing/narration | Call Go CLI directly, duplicate verification/gating, mutate colony state, parse visual output as authoritative |
-| **TS Host** | Parse flags, call Go CLI via JSON, render dashboards, manage event streams | Write to `.aether/data/` directly, duplicate Go-owned logic |
-| **Go CLI** | Own all state mutations, verification, gating, finalizers, canonical artifact writes | Spawn platform agents (Claude/OpenCode/Codex workers) |
+| **Wrappers** | Call `aether host`, spawn workers, render ceremony, add colony framing/narration | Call Go CLI directly, duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output |
+| **TS Host** | Parse flags, call Go CLI via JSON, render dashboards, manage event streams | Write to `.aether/data/` directly, duplicate Go-owned logic, invent provider/auth diagnostics |
+| **Go CLI** | Own all state mutations, verification, gating, finalizers, canonical artifact writes, provider availability preflight diagnostics | Spawn platform agents (Claude/OpenCode/Codex workers) |
+
+## Provider/Auth Boundary
+
+Provider availability preflight belongs to the Go runtime. Wrappers and the TS
+host may surface the sanitized provider, cause, and next action from the
+runtime, but must not paste raw provider output, tokens, or auth probe details.
+
+Post-launch provider/API/auth failures are a different class: the worker process
+may start and then return provider output instead of Aether worker claims JSON.
+Report those as launched-worker provider/API/auth failures using sanitized
+wording; do not reinterpret them as missing provider availability preflight.
 
 ## Rationale
 

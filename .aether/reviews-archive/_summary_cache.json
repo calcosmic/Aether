@@ -1,12 +1,9 @@
 {
-  "text": "## Prior Reviews\n\n- Quality (12 open): INFO -- , INFO -- .aether/docs/codex-ant-workflow-gap-map.md:41 Phase artifact is specific to plan/build/continue behavio... +10 more\n- Resilience (10 open): MEDIUM -- , HIGH --  +8 more\n- Testing (13 open): INFO -- , WARNING --  +11 more\n- Security (1 open)\n- Performance (1 open)\n",
+  "text": "## Prior Reviews\n\n- Security (5 open): HIGH -- pkg/codex/platform_dispatch.go Post-launch hosted worker failure paths can expose raw pr..., MEDIUM -- .aether/ts-host/src/platform-dispatcher.ts The TS host legacy platform dispatcher still returns raw ... +3 more\n- Testing (1 open): LOW -- .github/workflows/release.yml CI, release workflow, and release handoff now reference t...\n",
   "domain_counts": {
-    "performance": 1,
-    "quality": 12,
-    "resilience": 10,
-    "security": 1,
-    "testing": 13
+    "security": 5,
+    "testing": 1
   },
-  "total_open": 37,
-  "cache_write_at": "2026-05-12T06:49:37Z"
+  "total_open": 6,
+  "cache_write_at": "2026-05-16T13:10:36Z"
 }

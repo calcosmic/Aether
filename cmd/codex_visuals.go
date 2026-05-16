@@ -1286,7 +1286,7 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
 	b.WriteString(renderNextUp(
 		`Use the JSON `+"`dispatch_manifest`"+` to spawn wrapper agents with the Task tool.`,
-		`Run `+"`AETHER_OUTPUT_MODE=json aether build <phase> --plan-only`"+` when a machine-readable manifest is needed.`,
+		`Run `+"`aether host build <phase>`"+` when a machine-readable manifest is needed.`,
 	))
 	return b.String()
 }

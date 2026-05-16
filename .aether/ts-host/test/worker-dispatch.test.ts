@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import type { BuildDispatch } from "../src/types.js";
 import {
   dispatchWorkers,
+  sanitizeWorkerDiagnosticOutput,
   toWorkerResults,
   type DispatchResult,
   type DispatchOptions,
@@ -85,6 +86,23 @@ const defaultOpts: DispatchOptions = {
 // ---------------------------------------------------------------------------
 
 describe("worker-dispatch", () => {
+  it("sanitizeWorkerDiagnosticOutput redacts provider secrets for failed worker summaries", () => {
+    const sanitized = sanitizeWorkerDiagnosticOutput(
+      "stderr: auth failed token sk-proj-secret-123 ghp_worker_secret github_pat_abc npm_secret token=raw-secret"
+    );
+
+    for (const forbidden of [
+      "sk-proj-secret-123",
+      "ghp_worker_secret",
+      "github_pat_abc",
+      "npm_secret",
+      "raw-secret",
+    ]) {
+      assert.ok(!sanitized.includes(forbidden), `sanitized output leaked ${forbidden}: ${sanitized}`);
+    }
+    assert.ok(sanitized.includes("[redacted]"), sanitized);
+  });
+
   it("dispatchWorkers flattens wave results", async () => {
     resetMocks();
     __setDispatchSingleWorker(mockDispatchSingleWorker);

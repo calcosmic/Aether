@@ -923,7 +923,7 @@ func runSealFinalReview(root string, state colony.ColonyState, phase colony.Phas
 				}
 				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
 				step.Duration = result.WorkerResult.Duration.Seconds()
-				step.Report = strings.TrimSpace(result.WorkerResult.RawOutput)
+				step.Report = codex.SanitizeWorkerDiagnosticOutput(result.WorkerResult.RawOutput)
 				for _, blocker := range result.WorkerResult.Blockers {
 					if strings.TrimSpace(blocker) != "" {
 						blockers = append(blockers, fmt.Sprintf("%s reported blocker: %s", result.WorkerName, blocker))
@@ -931,7 +931,7 @@ func runSealFinalReview(root string, state colony.ColonyState, phase colony.Phas
 				}
 			}
 			if step.Summary == "" && result.Error != nil {
-				step.Summary = strings.TrimSpace(result.Error.Error())
+				step.Summary = codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())
 			}
 			if step.Summary == "" {
 				step.Summary = sealFinalReviewFlowSummary(step)

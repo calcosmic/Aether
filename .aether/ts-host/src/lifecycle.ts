@@ -31,7 +31,7 @@ import {
   toWorkerResults,
   type DispatchOptions,
 } from "./worker-dispatch.js";
-import { detectAvailablePlatforms } from "./platform-dispatcher.js";
+import { detectAvailablePlatforms, formatPlatformUnavailableMessage } from "./platform-dispatcher.js";
 import { createDashboard, type Dashboard } from "./dashboard.js";
 import { createNarrator, type Narrator } from "./narrator.js";
 import { startEventBridge, stopEventBridge, type EventBridgeController } from "./event-bridge.js";
@@ -321,10 +321,7 @@ export async function runLifecycle(
     const simulateWorkers = opts.simulateWorkers ?? false;
 
     if (!hasPlatforms && !simulateWorkers) {
-      throw new Error(
-        "No platform CLI available (claude, opencode, or codex). " +
-        "Install a platform CLI or run with --simulate to use simulation mode."
-      );
+      throw new Error(formatPlatformUnavailableMessage(`phase ${targetPhase} build`));
     }
 
     // Create a placeholder file for simulated worker file claims.

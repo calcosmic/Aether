@@ -94,7 +94,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 
 	// Build TS host assets (best-effort — warn but don't fail publish)
 	if tsHostErr := buildTsHostAssets(sourceRoot); tsHostErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: TS host build skipped: %v\n", tsHostErr)
+		warnTsHostBuildSkipped(channel, tsHostErr)
 	}
 
 	hubDir := resolveHubPathForHome(homeDir, channel)
@@ -113,7 +113,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 
 	// Sync TS host assets to hub (best-effort)
 	if tsHostErr := syncTsHostToHub(hubDir, sourceRoot); tsHostErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: TS host hub sync skipped: %v\n", tsHostErr)
+		warnTsHostHubSyncSkipped(channel, tsHostErr)
 	}
 
 	if shouldSyncPlatformHomes(channel) {
@@ -133,7 +133,7 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	}
 
 	if oldHubVersion != "" && oldHubVersion != version {
-		fmt.Fprintf(os.Stderr, "Warning: hub version updated from %s to %s\n", oldHubVersion, version)
+		warnHubVersionUpdated(channel, oldHubVersion, version)
 	}
 
 	outputWorkflow(map[string]interface{}{
@@ -178,8 +178,71 @@ func warnBinaryCoLocation(channel runtimeChannel, homeDir string) {
 	destDir := defaultLocalBinaryDest(homeDir, channel)
 	otherPath := filepath.Join(destDir, other)
 	if _, err := os.Stat(otherPath); err == nil {
-		fmt.Fprintf(os.Stderr, "Note: %s binary also present in %s\n", other, destDir)
+		fmt.Fprintf(stderr, "Note: %s binary also present in %s\nNext actions:\n  - Verify the intended %s binary: %s\n  - Verify the other channel before comparing behavior: %s\n",
+			other,
+			destDir,
+			defaultBinaryName(channel),
+			publishVersionCheckCommand(channel),
+			publishVersionCheckCommand(otherChannel(channel)),
+		)
 	}
+}
+
+func warnTsHostBuildSkipped(channel runtimeChannel, err error) {
+	fmt.Fprintf(stderr, "Warning: TS host build skipped: %v\nNext actions:\n  - Rebuild TS host assets: npm ci --prefix .aether/ts-host && npm run build --prefix .aether/ts-host\n  - Rerun publish from the Aether source repo: %s\n",
+		err,
+		publishRecoveryCommand(channel),
+	)
+}
+
+func warnTsHostHubSyncSkipped(channel runtimeChannel, err error) {
+	fmt.Fprintf(stderr, "Warning: TS host hub sync skipped: %v\nNext actions:\n  - Verify .aether/ts-host/dist exists after build: npm run build --prefix .aether/ts-host\n  - Rerun publish from the Aether source repo: %s\n",
+		err,
+		publishRecoveryCommand(channel),
+	)
+}
+
+func warnHubVersionUpdated(channel runtimeChannel, oldHubVersion, version string) {
+	fmt.Fprintf(stderr, "Warning: hub version updated from %s to %s\nNext actions:\n  - If this was unexpected, recover from the Aether source repo: %s\n  - Verify binary/hub agreement: %s\n  - Verify release metadata and hub completeness: %s\n  - Refresh downstream repos: %s\n",
+		oldHubVersion,
+		version,
+		publishRecoveryCommand(channel),
+		publishVersionCheckCommand(channel),
+		publishIntegrityCommand(channel),
+		publishDownstreamUpdateCommand(channel),
+	)
+}
+
+func publishRecoveryCommand(channel runtimeChannel) string {
+	if channel == channelDev {
+		return "aether publish --channel dev"
+	}
+	return "aether publish"
+}
+
+func publishVersionCheckCommand(channel runtimeChannel) string {
+	return fmt.Sprintf("%s version --check", defaultBinaryName(channel))
+}
+
+func publishIntegrityCommand(channel runtimeChannel) string {
+	if channel == channelDev {
+		return "aether-dev integrity --source --channel dev"
+	}
+	return "aether integrity --source --channel stable"
+}
+
+func publishDownstreamUpdateCommand(channel runtimeChannel) string {
+	if channel == channelDev {
+		return "aether-dev update --force"
+	}
+	return "aether update --force"
+}
+
+func otherChannel(channel runtimeChannel) runtimeChannel {
+	if channel == channelStable {
+		return channelDev
+	}
+	return channelStable
 }
 
 // readHubVersionAtPath reads the version from a hub directory's version.json.

@@ -485,6 +485,7 @@ waitLoop:
 
 	duration := time.Since(start)
 	rawOutput := combinedWorkerOutput(stdout.String(), stderr.String())
+	safeRawOutput := sanitizeWorkerDiagnosticOutput(rawOutput)
 
 	if ctx.Err() == context.DeadlineExceeded {
 		reportedTimeout := duration.Round(time.Millisecond)
@@ -497,7 +498,7 @@ waitLoop:
 			TaskID:     config.TaskID,
 			Status:     "timeout",
 			Duration:   duration,
-			RawOutput:  rawOutput,
+			RawOutput:  safeRawOutput,
 			Error:      fmt.Errorf("worker timeout after %v", reportedTimeout),
 		}, nil
 	}
@@ -509,7 +510,7 @@ waitLoop:
 			TaskID:     config.TaskID,
 			Status:     "failed",
 			Duration:   duration,
-			RawOutput:  rawOutput,
+			RawOutput:  safeRawOutput,
 			Error:      classifyWorkerExecutionError(waitErr, stderr.String(), running.Observed()),
 		}, nil
 	}
@@ -522,7 +523,7 @@ waitLoop:
 			TaskID:     config.TaskID,
 			Status:     "failed",
 			Duration:   duration,
-			RawOutput:  rawOutput,
+			RawOutput:  safeRawOutput,
 			Error:      classifyWorkerFinalMessageError("read final worker message", readErr, running.Observed()),
 		}, nil
 	}
@@ -535,7 +536,7 @@ waitLoop:
 			TaskID:     config.TaskID,
 			Status:     "failed",
 			Duration:   duration,
-			RawOutput:  strings.TrimSpace(rawOutput + "\n" + string(lastMessage)),
+			RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(rawOutput + "\n" + string(lastMessage))),
 			Error:      classifyWorkerFinalMessageError("parse worker output", parseErr, running.Observed()),
 		}, nil
 	}
@@ -557,7 +558,7 @@ waitLoop:
 		Spawns:        claims.Spawns,
 		Handoff:       claims.Handoff,
 		Duration:      duration,
-		RawOutput:     rawOutput,
+		RawOutput:     safeRawOutput,
 	}, nil
 }
 
@@ -1117,7 +1118,7 @@ func validateWorkerLaunchConfig(config WorkerConfig) error {
 func validateCallbackURL(url string) error {
 	trimmed := strings.TrimSpace(url)
 	if trimmed == "" {
-		return fmt.Errorf("Missing worker callback URL -- configure provider.callback_url before spawning workers")
+		return fmt.Errorf("missing worker callback URL -- configure provider.callback_url for worker messaging callbacks before spawning workers; this is separate from provider login credentials")
 	}
 	return validateCallbackURLScheme(trimmed)
 }
@@ -1152,7 +1153,7 @@ func combinedWorkerOutput(stdout, stderr string) string {
 }
 
 func classifyWorkerExecutionError(err error, stderr string, runningObserved bool) error {
-	detail := strings.TrimSpace(stderr)
+	detail := sanitizeWorkerDiagnosticOutput(stderr)
 	prefix := "codex exec failed"
 	if !runningObserved {
 		prefix = "worker startup failed"

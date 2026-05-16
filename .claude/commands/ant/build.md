@@ -45,6 +45,8 @@ The TS host is the sole entry point to the Go CLI for manifest generation. See `
 
 Parse `result.dispatch_manifest`. Save the JSON envelope to a temporary manifest file outside `.aether/data/`.
 
+If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output.
+
 ## Guided Boundary Gate
 
 Before spawning workers, inspect `result.orchestrator_boundary_guidance`:
@@ -106,11 +108,12 @@ flow.
 
 ## Guardrails
 
-- Do NOT run `aether build` without `--plan-only` from this wrapper.
+- Do NOT run direct `aether build` from this wrapper for manifest generation; use `aether host build`.
 - Do NOT run `aether build --synthetic` after real agent workers complete.
 - Do NOT describe parallel workers as background agents or say you will be notified later.
 - Do NOT read or write colony state files by hand.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, or pheromone files.
 - Do NOT parse visual output as authoritative state.
+- Do NOT expose raw provider stdout/stderr, tokens, or auth probe output; use the Go availability category and sanitized next action.
 - Do NOT invent worker names, castes, or waves; use `dispatch_manifest`.
 - If docs and runtime disagree, runtime wins.

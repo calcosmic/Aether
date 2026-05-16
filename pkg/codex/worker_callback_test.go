@@ -20,6 +20,12 @@ func TestValidateCallbackURL_Missing(t *testing.T) {
 	if !strings.Contains(err.Error(), "callback_url") {
 		t.Errorf("error should mention 'callback_url' config key, got: %v", err)
 	}
+	if !strings.Contains(err.Error(), "worker messaging callbacks") {
+		t.Errorf("error should describe callback_url as worker messaging transport, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "separate from provider login credentials") {
+		t.Errorf("error should distinguish callback_url from provider authentication, got: %v", err)
+	}
 }
 
 // TestValidateCallbackURL_Valid tests that a valid HTTP callback URL passes.

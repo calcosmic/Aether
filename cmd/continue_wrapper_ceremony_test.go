@@ -18,6 +18,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	wrapperPaths := []string{
 		filepath.Join(repoRoot, ".claude", "commands", "ant", "continue.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant-continue.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "continue.md"),
 	}
 
@@ -25,7 +26,8 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		"Use the Go `aether` CLI as the source of truth.",
 		"AETHER_OUTPUT_MODE=visual aether status",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+		"aether host continue --verification-depth heavy $ARGUMENTS",
+		"The TS host is the sole entry point to the Go CLI for manifest generation.",
 		"temporary manifest file outside `.aether/data/`",
 		"result.continue_manifest",
 		"Do not set `run_in_background`",
@@ -40,7 +42,9 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		"## Default Continue",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 		"## Heavy External Review",
-		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+		"aether host continue --verification-depth heavy $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
+		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file",
 		"## After Continue",
 	}
 
@@ -59,9 +63,12 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		if guardrail := "Do NOT use `--plan-only` or `continue-finalize` for default fast continue."; !strings.Contains(text, guardrail) {
 			t.Errorf("%s missing guardrail %q", wrapperPath, guardrail)
 		}
-		for _, forbidden := range []string{"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS"} {
+		for _, forbidden := range []string{
+			"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
+			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+		} {
 			if strings.Contains(text, forbidden) {
-				t.Errorf("%s should not contain direct visual continue pass-through %q", wrapperPath, forbidden)
+				t.Errorf("%s should not contain stale direct continue command %q", wrapperPath, forbidden)
 			}
 		}
 

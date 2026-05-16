@@ -1195,8 +1195,9 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 
 	invoker := newCodexWorkerInvoker()
 	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
-		fmt.Fprintf(os.Stderr, "⚠ Codex CLI unavailable — skipping review wave, proceeding with claims verification\n")
-		report.Workers = append(report.Workers, continueReviewSkippedFlowStep("review wave skipped; Codex CLI unavailable, proceeding with claims verification"))
+		availabilityMessage := dispatchAvailabilityMessage(invoker)
+		fmt.Fprintf(os.Stderr, "⚠ Worker dispatcher unavailable — skipping review wave, proceeding with claims verification: %s\n", availabilityMessage)
+		report.Workers = append(report.Workers, continueReviewSkippedFlowStep("review wave skipped; "+availabilityMessage+", proceeding with claims verification"))
 		report.Passed = true
 		return report
 	}
@@ -1247,10 +1248,10 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				}
 				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
 				step.Duration = result.WorkerResult.Duration.Seconds()
-				step.Report = strings.TrimSpace(result.WorkerResult.RawOutput)
+				step.Report = codex.SanitizeWorkerDiagnosticOutput(result.WorkerResult.RawOutput)
 			}
 			if step.Summary == "" && result.Error != nil {
-				step.Summary = strings.TrimSpace(result.Error.Error())
+				step.Summary = codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())
 			}
 			if step.Summary == "" {
 				step.Summary = continueReviewFlowSummary(step)
@@ -1428,10 +1429,22 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		continueWatcher = buildWatcher
 	} else if summary, ok := continueWatcherHostBoundarySkipSummary(manifest); ok {
 		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: summary}
-	} else if shellChecksPassed && !isCodexWorkerAvailable() {
-		// Auto-skip: shell verification passed but Codex CLI is unavailable.
-		// No point spawning a watcher that will immediately fail.
-		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; Codex CLI unavailable but runtime verification passed"}
+	} else if shellChecksPassed {
+		invoker := newCodexWorkerInvoker()
+		if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
+			// Auto-skip: shell verification passed but no authenticated worker provider is available.
+			// No point spawning a watcher that will immediately fail.
+			continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; " + dispatchAvailabilityMessage(invoker) + " but runtime verification passed"}
+		} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
+			// LOOP-01: Auto-skip watcher after consecutive failure threshold.
+			emitLoopBreakEvent("watcher_skip",
+				fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
+				"auto-skipped watcher, advancing on runtime verification",
+				"aether-continue")
+			continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
+		} else {
+			continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+		}
 	} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
 		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
 		emitLoopBreakEvent("watcher_skip",

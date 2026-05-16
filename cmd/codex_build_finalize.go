@@ -206,7 +206,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	// Per SAFE-01, SAFE-02: validate build provenance before proceeding.
 	// Rejects phantom builds where no worker produced successful results with file modifications.
-	if err := validateBuildProvenance(completion.workerResults()); err != nil {
+	if err := validateBuildProvenanceForManifest(manifest, completion.workerResults()); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	startedAt := parseManifestGeneratedAt(*manifest)

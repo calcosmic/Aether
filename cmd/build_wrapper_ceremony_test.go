@@ -15,6 +15,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 
 	wrapperPaths := []string{
 		filepath.Join(repoRoot, ".claude", "commands", "ant", "build.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant-build.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "build.md"),
 	}
 
@@ -35,7 +36,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"## Runtime Spawn Ceremony",
 		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 		"Do not set `run_in_background`",
-		"Do NOT run `aether build` without `--plan-only`",
+		"Do NOT run direct `aether build` from this wrapper for manifest generation; use `aether host build`.",
 		"Do NOT run `aether build --synthetic` after real",
 		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file",
@@ -71,6 +72,8 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		for _, forbidden := range []string{
 			"Do NOT load playbooks",
 			"\nAETHER_OUTPUT_MODE=visual aether build $ARGUMENTS\n",
+			"\nAETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only\n",
+			"Do NOT run `aether build` without `--plan-only` from this wrapper.",
 		} {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s still contains old pass-through contract %q", wrapperPath, forbidden)

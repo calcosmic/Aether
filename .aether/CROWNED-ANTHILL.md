@@ -1,51 +1,39 @@
 # CROWNED-ANTHILL
 
-- Goal: Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI.
-- Sealed at: 2026-05-12T07:05:22Z
-- Completed phases: 6
-- Final phase: 6
+- Goal: Provider Auth Clarity and Release Hardening
+- Sealed at: 2026-05-16T13:27:04Z
+- Completed phases: 5
+- Final phase: 5
 
 ## Review Warnings
-WARNING: 12 high-severity unresolved finding(s):
-- [quality] qlt-6-001: Phase 6 contract docs still label plan/build/continue plan-only mutation surfaces as P0 blocked, so the remaining gap is not clearly accepted as nonblocking seal backlog.
-- [quality] qlt-6-002: Unresolved finalizer-authority quality gap: continue plan-only writes queen-state before continue-finalize, while the project contract says runtime finalizers own wrapper-orchestrated .aether/data mutation.
-- [quality] qlt-6-003: runCodexContinuePlanOnly builds queen decisions and writes queen-state before wrapper completion and continue-finalize. This contradicts the inspected observable contract that finalizers are the only authority for wrapper-orchestrated .aether/data state mutation. (cmd/codex_continue_plan.go:123)
-- [quality] qlt-6-004: The phase artifact still marks plan/build/continue plan-only mutation guarantees as blocked contract surface, including plan-only .aether/data mutation before finalizers. (.aether/docs/codex-observable-output-contract.md:71)
-- [quality] qlt-6-005: The gap map still records P0 lifecycle gaps for plan-only/finalizer behavior across plan, build, and continue. These are directly in the milestone lifecycle reliability scope. (.aether/docs/codex-ant-workflow-gap-map.md:43)
-- [resilience] res-1-002: 
-- [resilience] res-1-005: 
-- [resilience] res-2-001: 
-- [resilience] res-2-002: 
-- [testing] tst-6-002: Branch/function coverage and mutation score were not available from inspected evidence. Mutation tooling was not installed in PATH, so mutation_score remains 0/unknown.
-- [testing] tst-6-003: Fresh coverage is 77.3% total statements, below the Probe target of 80% lines/statements. Seal should wait for either additional coverage on changed critical lifecycle paths or an explicit documented waiver from the Queen/runtime policy.
-- [testing] tst-6-004: Repository-wide Go statement coverage from the fresh seal probe run is 77.3%, below the Probe minimum target of 80%.
+WARNING: 1 high-severity unresolved finding(s):
+- [security] sec-5-001: Post-launch hosted worker failure paths can expose raw provider stderr and worker stdout/stderr excerpts. classifyHostedExecutionError includes stderr verbatim in returned errors, and writeHostedWorkerOutputDebug stores raw stdout_excerpt/stderr_excerpt and parse errors in .aether/data/worker-debug artifacts. This conflicts with the provider/auth boundary docs requiring raw provider stdout/stderr, tokens, and auth output to stay out of summaries, generated context, and debug summaries. (pkg/codex/platform_dispatch.go)
 
 ## Final Review Evidence
 - Passed: true
-- Workers reviewed: 2
-- Structured findings captured: 5
-- Ledger writes: quality=2 testing=3
-- Reusable lessons promoted to QUEEN.md: 2
+- Workers reviewed: 3
+- Structured findings captured: 47
+- Ledger writes: security=18 quality=10 performance=1 testing=18
+- Reusable lessons promoted to QUEEN.md: 9
 
 ## Post-Seal Review Backlog
-- [auditor/INFO] sec-1-001: Contract preserves state and path hygiene boundaries: temp files outside .aether/data, runtime finalizers own state mutation, and worker claim paths must be clean repo-relative paths. (.aether/docs/codex-observable-output-contract.md:40)
-- [watcher/INFO] qlt-1-001: 
-- [auditor/INFO] qlt-1-002: Phase artifact is specific to plan/build/continue behavior and lists concrete P0/P1 gaps instead of generic docs-only assertions. (.aether/docs/codex-ant-workflow-gap-map.md:41)
-- [watcher/INFO] qlt-3-001: Inspected final diffs once and verified Scout report preservation, dynamic planning dispatch contracts, plan-finalize validation, evidence preservation, verification_depth persistence behavior, and fallback REDIRECT constraints through targeted and broad Go tests. Requested domain planning-orchestration is not accepted by this runtime, so quality findings were persisted here.
-- [auditor/HIGH] qlt-6-001: Phase 6 contract docs still label plan/build/continue plan-only mutation surfaces as P0 blocked, so the remaining gap is not clearly accepted as nonblocking seal backlog.
-- [auditor/HIGH] qlt-6-002: Unresolved finalizer-authority quality gap: continue plan-only writes queen-state before continue-finalize, while the project contract says runtime finalizers own wrapper-orchestrated .aether/data mutation.
-- [auditor/HIGH] qlt-6-003: runCodexContinuePlanOnly builds queen decisions and writes queen-state before wrapper completion and continue-finalize. This contradicts the inspected observable contract that finalizers are the only authority for wrapper-orchestrated .aether/data state mutation. (cmd/codex_continue_plan.go:123)
-- [auditor/HIGH] qlt-6-004: The phase artifact still marks plan/build/continue plan-only mutation guarantees as blocked contract surface, including plan-only .aether/data mutation before finalizers. (.aether/docs/codex-observable-output-contract.md:71)
-- [auditor/HIGH] qlt-6-005: The gap map still records P0 lifecycle gaps for plan-only/finalizer behavior across plan, build, and continue. These are directly in the milestone lifecycle reliability scope. (.aether/docs/codex-ant-workflow-gap-map.md:43)
-- [auditor/INFO] qlt-6-006: After the fix, rerun go test ./... and the focused lifecycle contract tests listed in .aether/docs/codex-lifecycle-activity-verification.md.
+- [gatekeeper/HIGH] sec-5-001: Post-launch hosted worker failure paths can expose raw provider stderr and worker stdout/stderr excerpts. classifyHostedExecutionError includes stderr verbatim in returned errors, and writeHostedWorkerOutputDebug stores raw stdout_excerpt/stderr_excerpt and parse errors in .aether/data/worker-debug artifacts. This conflicts with the provider/auth boundary docs requiring raw provider stdout/stderr, tokens, and auth output to stay out of summaries, generated context, and debug summaries. (pkg/codex/platform_dispatch.go)
+- [gatekeeper/MEDIUM] sec-5-002: The TS host legacy platform dispatcher still returns raw spawnWorker stdout/stderr. Availability checks swallow probe output, but direct TS-host worker dispatch results are not sanitized if this surface is used by wrappers or tests. (.aether/ts-host/src/platform-dispatcher.ts)
+- [gatekeeper/MEDIUM] sec-5-003: Release and CI workflows use tag-pinned third-party actions such as actions/checkout@v4, setup-go@v5, setup-node@v4, and goreleaser/goreleaser-action@v6. The release job has contents:write and npm publish credentials, so mutable action tags remain a supply-chain risk. (.github/workflows/release.yml)
+- [gatekeeper/INFO] sec-5-004: npm audit --package-lock-only --audit-level=low for .aether/ts-host currently reports 0 vulnerabilities across 88 total dependencies. .aether/ts also reports 0 vulnerabilities across 34 total dependencies. (.aether/ts-host/package-lock.json)
+- [gatekeeper/INFO] sec-5-005: govulncheck is not installed in this environment, so a Go vulnerability database scan was not completed. go list -m all inventory succeeded, but no Go CVE claims are made from that inventory alone.
+- [auditor/INFO] sec-5-006: Seal audit verified the earlier Phase 5 post-launch provider diagnostic redaction finding has remediation evidence: hosted worker RawOutput is sanitized before publication, failure stderr is sanitized before error formatting, worker-debug excerpts route through the sanitizer, and downstream build/continue/seal/TS summaries sanitize worker diagnostics. (pkg/codex/platform_dispatch.go:730)
+- [gatekeeper/INFO] sec-5-007: Seal review verified provider and worker diagnostic sanitization is present in Go and TypeScript publication paths, with focused Go redaction tests and the TypeScript host test suite passing during review. (pkg/codex/diagnostic_sanitize.go)
+- [gatekeeper/INFO] sec-5-008: Tracked npm audit surfaces are clean: .aether/ts-host reports 0 vulnerabilities across 88 dependencies and .aether/ts reports 0 vulnerabilities across 34 dependencies. (.aether/ts-host/package-lock.json)
+- [gatekeeper/INFO] sec-5-009: govulncheck is not installed as a binary or Go tool in this environment, so no official Go vulnerability database result is claimed for seal review.
+- [gatekeeper/MEDIUM] sec-5-010: Privileged release workflow steps still use tag-pinned third-party Actions such as actions/checkout@v4, actions/setup-go@v5, actions/setup-node@v4, and goreleaser/goreleaser-action@v6. This is documented as an accepted residual risk for this milestone. (.github/workflows/release.yml)
 
 ## Phase Summary
-- Phase 1: Contract and gap mapping [completed]
-- Phase 2: Colonize orchestration [completed]
-- Phase 3: Planning orchestration [completed]
-- Phase 4: Build orchestration [completed]
-- Phase 5: Continue orchestration [completed]
-- Phase 6: End-to-end verification [completed]
+- Phase 1: Provider/Auth Diagnostic Classification [completed]
+- Phase 2: Provider/Auth UX and Host Parity [completed]
+- Phase 3: Dependency and Context Cleanup [completed]
+- Phase 4: Release Gate Hardening [completed]
+- Phase 5: Final Smoke and Release Readiness [completed]
 
 ## Colony Statistics
 | Metric | Count |
@@ -58,7 +46,8 @@ WARNING: 12 high-severity unresolved finding(s):
 | Flags resolved | 20 |
 
 ## Shelf Candidates
-9 shelf candidate(s) detected:
+10 shelf candidate(s) detected:
+- [user-note] test (auto-detected)
 - [user-note] Build plan-only created hard Orchestrator boundary question pd_1778424856613270000 for Phase 2, but AETHER_OUTPUT_MODE=visual aether discuss reported 0 questions and only stale resolved clarifications. Parent reused the active prior boundary answer 'phase tasks only' to avoid blocking orchestration. (auto-detected)
 - [user-note] Running AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard spawned Probe Excavat-92, which heartbeated until worker timeout after 5m0s. Runtime blocked advancement despite full tests, vet, build, and focused coverage passing inside the worker log. This reproduces the review-worker timeout/result collection issue. (auto-detected)
 - [user-note] Twist-44 was closed after stalling without writing /tmp/aether-build-1-worker-Twist-44.json after a parent-side malformed legacy timestamp hardening update. Builder, probe, watcher, vet, build, focused tests, and full go test evidence passed; this records the worker result collection/timeout symptom for later phases. (auto-detected)

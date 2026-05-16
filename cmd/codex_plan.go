@@ -2237,37 +2237,41 @@ func writeWorkerPlanArtifact(root, planningDir string, confidence codexPlanConfi
 func clearFallbackPlanningArtifacts(root string) {
 	planningDir := filepath.Join(root, ".aether", "data", "planning")
 	markerPath := filepath.Join(planningDir, ".fallback-marker")
-	markerTime := time.Time{}
-	if info, err := os.Stat(markerPath); err == nil {
-		markerTime = info.ModTime()
-	}
-
-	// Always remove the marker itself
-	os.Remove(markerPath)
+	_, markerErr := os.Stat(markerPath)
+	markerExists := markerErr == nil
 
 	fallbackArtifacts := []string{
-		filepath.Join(planningDir, "ROUTE-SETTER.md"),
-		filepath.Join(planningDir, "phase-plan.json"),
+		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "SCOUT.md")),
+		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "ROUTE-SETTER.md")),
+		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json")),
 	}
-	for _, f := range fallbackArtifacts {
-		// Only remove if the file predates or matches the fallback marker (it's a fallback artifact).
-		// If the file is newer than the marker, a real worker wrote it — preserve it.
-		if !markerTime.IsZero() {
-			if info, err := os.Stat(f); err == nil && info.ModTime().After(markerTime) {
-				continue
-			}
-		}
-		os.Remove(f)
+	for _, relPath := range fallbackArtifacts {
+		removeFallbackArtifact(root, relPath, markerExists)
 	}
 	clearPlanningBackupArtifacts(planningDir)
-	// Clear phase-research directory contents but keep the directory
+	clearFallbackPhaseResearchArtifacts(root, markerExists)
+	os.Remove(markerPath)
+}
+
+func removeFallbackArtifact(root, relPath string, markerExists bool) {
+	if markerExists && shouldPreserveWorkerArtifact(root, relPath, nil, nil) {
+		return
+	}
+	os.Remove(filepath.Join(root, filepath.FromSlash(relPath)))
+}
+
+func clearFallbackPhaseResearchArtifacts(root string, markerExists bool) {
 	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
 	entries, err := os.ReadDir(researchDir)
 	if err != nil {
 		return
 	}
 	for _, entry := range entries {
-		os.Remove(filepath.Join(researchDir, entry.Name()))
+		if entry.IsDir() {
+			continue
+		}
+		relPath := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research", entry.Name()))
+		removeFallbackArtifact(root, relPath, markerExists)
 	}
 }
 

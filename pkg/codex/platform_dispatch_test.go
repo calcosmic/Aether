@@ -1,9 +1,13 @@
 package codex
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -102,6 +106,338 @@ func TestAgentDefinitionPathFallsBackToHub(t *testing.T) {
 	}
 }
 
+func TestProviderAvailabilityCategories(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	const secretOutput = "sk-proj-provider-secret-123"
+
+	tests := []struct {
+		name             string
+		provider         Platform
+		makeDispatcher   func(t *testing.T, dir string) PlatformDispatcher
+		wantAvailable    bool
+		wantCategory     string
+		wantReasonPart   string
+		forbiddenReasons []string
+	}{
+		{
+			name:     "codex missing binary",
+			provider: PlatformCodex,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				return &RealInvoker{binaryName: filepath.Join(dir, "missing-codex-binary")}
+			},
+			wantCategory:   "binary_missing",
+			wantReasonPart: "not found",
+		},
+		{
+			name:     "codex probe failure redacts output",
+			provider: PlatformCodex,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "codex", "login status", "stdout "+secretOutput, "stderr ghp_codex_secret", 42)
+				return &RealInvoker{binaryName: binary}
+			},
+			wantCategory:     "auth_probe_failed",
+			wantReasonPart:   "login status failed",
+			forbiddenReasons: []string{secretOutput, "ghp_codex_secret", "stdout", "stderr"},
+		},
+		{
+			name:     "codex inactive session",
+			provider: PlatformCodex,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "codex", "login status", "Not logged in", "", 0)
+				return &RealInvoker{binaryName: binary}
+			},
+			wantCategory:   "auth_inactive",
+			wantReasonPart: "authenticated session",
+		},
+		{
+			name:     "codex inactive session with intervening wording",
+			provider: PlatformCodex,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "codex", "login status", "Not currently logged in", "", 0)
+				return &RealInvoker{binaryName: binary}
+			},
+			wantCategory:   "auth_inactive",
+			wantReasonPart: "authenticated session",
+		},
+		{
+			name:     "codex authenticated session",
+			provider: PlatformCodex,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "codex", "login status", "Logged in as test@example.com", "", 0)
+				return &RealInvoker{binaryName: binary}
+			},
+			wantAvailable:  true,
+			wantCategory:   "available",
+			wantReasonPart: "",
+		},
+		{
+			name:     "claude inactive session",
+			provider: PlatformClaude,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "claude", "auth status --json", `{"loggedIn":false}`, "", 0)
+				return &ClaudeDispatcher{binaryName: binary}
+			},
+			wantCategory:   "auth_inactive",
+			wantReasonPart: "no active login",
+		},
+		{
+			name:     "claude invalid provider output",
+			provider: PlatformClaude,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "claude", "auth status --json", "not-json", "", 0)
+				return &ClaudeDispatcher{binaryName: binary}
+			},
+			wantCategory:   "invalid_auth_output",
+			wantReasonPart: "invalid JSON",
+		},
+		{
+			name:     "claude authenticated session",
+			provider: PlatformClaude,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "claude", "auth status --json", `{"loggedIn":true}`, "", 0)
+				return &ClaudeDispatcher{binaryName: binary}
+			},
+			wantAvailable: true,
+			wantCategory:  "available",
+		},
+		{
+			name:     "opencode missing credentials",
+			provider: PlatformOpenCode,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "opencode", "auth list", "No credentials configured", "", 0)
+				return &OpenCodeDispatcher{binaryName: binary}
+			},
+			wantCategory:   "credentials_missing",
+			wantReasonPart: "no configured credentials",
+		},
+		{
+			name:     "opencode authenticated credentials",
+			provider: PlatformOpenCode,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "opencode", "auth list", "\u25cf default\n", "", 0)
+				return &OpenCodeDispatcher{binaryName: binary}
+			},
+			wantAvailable: true,
+			wantCategory:  "available",
+		},
+		{
+			name:     "opencode probe failure redacts output",
+			provider: PlatformOpenCode,
+			makeDispatcher: func(t *testing.T, dir string) PlatformDispatcher {
+				binary := writeFakeProviderCLI(t, dir, "opencode", "auth list", "token "+secretOutput, "stderr opencode-secret", 42)
+				return &OpenCodeDispatcher{binaryName: binary}
+			},
+			wantCategory:     "auth_probe_failed",
+			wantReasonPart:   "auth list failed",
+			forbiddenReasons: []string{secretOutput, "opencode-secret", "token"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			dispatcher := tt.makeDispatcher(t, dir)
+
+			status := dispatcher.Availability(context.Background())
+			if status.Platform != tt.provider {
+				t.Fatalf("Platform = %s, want %s", status.Platform, tt.provider)
+			}
+			if status.Available != tt.wantAvailable {
+				t.Fatalf("Available = %v, want %v; reason=%q", status.Available, tt.wantAvailable, status.Reason)
+			}
+			if got := string(status.Category); got != tt.wantCategory {
+				t.Fatalf("Category = %q, want %q; reason=%q", got, tt.wantCategory, status.Reason)
+			}
+			if tt.wantReasonPart != "" && !strings.Contains(status.Reason, tt.wantReasonPart) {
+				t.Fatalf("Reason = %q, want to contain %q", status.Reason, tt.wantReasonPart)
+			}
+			assertAvailabilityStatusRedacts(t, status, tt.forbiddenReasons...)
+		})
+	}
+}
+
+func TestProviderAvailabilityOverridePathReportsProbeSkipped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	tests := []struct {
+		name           string
+		makeDispatcher func(path string) PlatformDispatcher
+	}{
+		{
+			name: "codex override path",
+			makeDispatcher: func(path string) PlatformDispatcher {
+				return &RealInvoker{binaryName: path}
+			},
+		},
+		{
+			name: "claude override path",
+			makeDispatcher: func(path string) PlatformDispatcher {
+				return &ClaudeDispatcher{binaryName: path}
+			},
+		},
+		{
+			name: "opencode override path",
+			makeDispatcher: func(path string) PlatformDispatcher {
+				return &OpenCodeDispatcher{binaryName: path}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			wrapperPath := writeFakeProviderCLI(t, dir, "provider-wrapper", "should not be probed", "", "", 99)
+
+			status := tt.makeDispatcher(wrapperPath).Availability(context.Background())
+			if !status.Available {
+				t.Fatalf("Available = false, want true for override path; reason=%q", status.Reason)
+			}
+			if got := string(status.Category); got != "probe_skipped" {
+				t.Fatalf("Category = %q, want probe_skipped; reason=%q", got, status.Reason)
+			}
+			if !strings.Contains(status.Reason, "probe skipped") {
+				t.Fatalf("Reason = %q, want probe skipped explanation", status.Reason)
+			}
+		})
+	}
+}
+
+func TestSelectPlatformInvokerReportsOrderedEvaluatedFallbackCandidates(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	claudeWrapper := writeFakeProviderCLI(t, dir, "provider-wrapper", "should not be probed", "", "", 99)
+	opencodeCalled := filepath.Join(dir, "opencode-called")
+	opencode := writeInvokedMarkerCLI(t, dir, "opencode", opencodeCalled)
+
+	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv("AETHER_CODEX_PATH", filepath.Join(dir, "missing-codex-binary"))
+	t.Setenv(envClaudePath, claudeWrapper)
+	t.Setenv(envOpenCodePath, opencode)
+
+	invoker := SelectPlatformInvoker(context.Background())
+	if got := PlatformFromInvoker(invoker); got != PlatformClaude {
+		t.Fatalf("selected platform = %s, want %s", got, PlatformClaude)
+	}
+
+	meta, ok := invoker.(selectionMetadata)
+	if !ok {
+		t.Fatalf("selected invoker does not expose candidate metadata: %T", invoker)
+	}
+	statuses := meta.CandidateStatuses()
+	if len(statuses) != 2 {
+		t.Fatalf("candidate count = %d, want evaluated candidates only [codex, claude]: %+v", len(statuses), statuses)
+	}
+	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "binary_missing")
+	assertCandidateStatus(t, statuses[1], PlatformClaude, true, "probe_skipped")
+	if _, err := os.Stat(opencodeCalled); !os.IsNotExist(err) {
+		t.Fatalf("opencode candidate was probed despite evaluated-candidates semantics")
+	}
+}
+
+func TestSelectPlatformInvokerUnavailableStatusRedactsAndCategorizes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	token := "sk-proj-unavailable-secret-123"
+	codexPath := writeFakeProviderCLI(t, dir, "codex", "login status", "stdout "+token, "stderr ghp_unavailable_secret", 42)
+
+	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv("AETHER_CODEX_PATH", codexPath)
+	t.Setenv(envClaudePath, filepath.Join(dir, "missing-claude"))
+	t.Setenv(envOpenCodePath, filepath.Join(dir, "missing-opencode"))
+
+	invoker := SelectPlatformInvoker(context.Background())
+	if got := PlatformFromInvoker(invoker); got != PlatformUnknown {
+		t.Fatalf("selected platform = %s, want unknown for all unavailable", got)
+	}
+
+	meta, ok := invoker.(selectionMetadata)
+	if !ok {
+		t.Fatalf("unavailable invoker does not expose candidate metadata: %T", invoker)
+	}
+	statuses := meta.CandidateStatuses()
+	if len(statuses) != 3 {
+		t.Fatalf("candidate count = %d, want 3 unavailable candidates: %+v", len(statuses), statuses)
+	}
+	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "auth_probe_failed")
+	assertCandidateStatus(t, statuses[1], PlatformClaude, false, "binary_missing")
+	assertCandidateStatus(t, statuses[2], PlatformOpenCode, false, "binary_missing")
+
+	status := invoker.(interface {
+		Availability(context.Context) AvailabilityStatus
+	}).Availability(context.Background())
+	if got := string(status.Category); got != "auth_probe_failed" {
+		t.Fatalf("unavailable category = %q, want auth_probe_failed; reason=%q", got, status.Reason)
+	}
+	if !strings.Contains(status.Reason, "detected host platform codex") {
+		t.Fatalf("unavailable reason = %q, want active platform context", status.Reason)
+	}
+	assertAvailabilityStatusRedacts(t, status, token, "ghp_unavailable_secret", "stdout", "stderr")
+}
+
+func TestSelectPlatformInvokerNoCredentialsReportsUnavailable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	codexPath := writeFakeProviderCLI(t, dir, "codex", "login status", "Not logged in", "", 0)
+	claudePath := writeFakeProviderCLI(t, dir, "claude", "auth status --json", `{"loggedIn":false}`, "", 0)
+	opencodePath := writeFakeProviderCLI(t, dir, "opencode", "auth list", "No credentials configured", "", 0)
+
+	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv("AETHER_CODEX_PATH", codexPath)
+	t.Setenv(envClaudePath, claudePath)
+	t.Setenv(envOpenCodePath, opencodePath)
+
+	invoker := SelectPlatformInvoker(context.Background())
+	if got := PlatformFromInvoker(invoker); got != PlatformUnknown {
+		t.Fatalf("selected platform = %s, want unknown for all no-credential providers", got)
+	}
+
+	meta, ok := invoker.(selectionMetadata)
+	if !ok {
+		t.Fatalf("unavailable invoker does not expose candidate metadata: %T", invoker)
+	}
+	statuses := meta.CandidateStatuses()
+	if len(statuses) != 3 {
+		t.Fatalf("candidate count = %d, want 3 no-credential candidates: %+v", len(statuses), statuses)
+	}
+	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "auth_inactive")
+	assertCandidateStatus(t, statuses[1], PlatformClaude, false, "auth_inactive")
+	assertCandidateStatus(t, statuses[2], PlatformOpenCode, false, "credentials_missing")
+
+	status := invoker.(interface {
+		Availability(context.Context) AvailabilityStatus
+	}).Availability(context.Background())
+	if status.Available {
+		t.Fatalf("unavailable invoker reported available under no-credential conditions")
+	}
+	if got := string(status.Category); got != "auth_inactive" {
+		t.Fatalf("unavailable category = %q, want auth_inactive; reason=%q", got, status.Reason)
+	}
+	for _, want := range []string{
+		"detected host platform codex",
+		"codex login status did not confirm an authenticated session",
+		"claude auth status reported no active login",
+		"opencode auth list reported no configured credentials",
+	} {
+		if !strings.Contains(status.Reason, want) {
+			t.Fatalf("unavailable reason missing %q:\n%s", want, status.Reason)
+		}
+	}
+}
+
 func writeTestFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -109,6 +445,76 @@ func writeTestFile(t *testing.T, path string, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func writeFakeProviderCLI(t *testing.T, dir, name, expectedArgs, stdout, stderr string, exitCode int) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	script := `#!/bin/sh
+if [ "$*" != "` + expectedArgs + `" ]; then
+  echo "unexpected args: $*" >&2
+  exit 99
+fi
+cat <<'AETHER_STDOUT'
+` + stdout + `
+AETHER_STDOUT
+cat >&2 <<'AETHER_STDERR'
+` + stderr + `
+AETHER_STDERR
+exit ` + strconv.Itoa(exitCode) + `
+`
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake provider CLI %s: %v", path, err)
+	}
+	return path
+}
+
+func writeInvokedMarkerCLI(t *testing.T, dir, name, markerPath string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	script := `#!/bin/sh
+printf invoked > "` + markerPath + `"
+exit 77
+`
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("write marker CLI %s: %v", path, err)
+	}
+	return path
+}
+
+func assertCandidateStatus(t *testing.T, status AvailabilityStatus, wantPlatform Platform, wantAvailable bool, wantCategory string) {
+	t.Helper()
+	if status.Platform != wantPlatform {
+		t.Fatalf("candidate platform = %s, want %s", status.Platform, wantPlatform)
+	}
+	if status.Available != wantAvailable {
+		t.Fatalf("%s available = %v, want %v", status.Platform, status.Available, wantAvailable)
+	}
+	if got := string(status.Category); got != wantCategory {
+		t.Fatalf("%s category = %q, want %q; reason=%q", status.Platform, got, wantCategory, status.Reason)
+	}
+}
+
+func assertAvailabilityStatusRedacts(t *testing.T, status AvailabilityStatus, forbidden ...string) {
+	t.Helper()
+	if len(forbidden) == 0 {
+		return
+	}
+	encoded, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("marshal status: %v", err)
+	}
+	haystacks := map[string]string{
+		"reason": status.Reason,
+		"json":   string(encoded),
+	}
+	for label, haystack := range haystacks {
+		for _, needle := range forbidden {
+			if needle != "" && strings.Contains(haystack, needle) {
+				t.Fatalf("%s leaked forbidden provider output %q in %q", label, needle, haystack)
+			}
+		}
 	}
 }
 
@@ -390,6 +796,57 @@ func TestClassifyHostedExecutionErrorExplainsOpenCodeLocalServerFailure(t *testi
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("classified error missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestClassifyHostedExecutionErrorRedactsProviderOutput(t *testing.T) {
+	err := classifyHostedExecutionError("claude", os.ErrPermission, "auth failed token sk-proj-secret-123 stderr ghp_worker_secret", true)
+	text := err.Error()
+	for _, forbidden := range []string{"sk-proj-secret-123", "ghp_worker_secret"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("hosted execution error leaked %q:\n%s", forbidden, text)
+		}
+	}
+	if !strings.Contains(text, "[redacted]") {
+		t.Fatalf("hosted execution error did not show redaction marker:\n%s", text)
+	}
+}
+
+func TestWriteHostedWorkerOutputDebugRedactsProviderOutput(t *testing.T) {
+	root := t.TempDir()
+	rel := writeHostedWorkerOutputDebug(
+		root,
+		"opencode",
+		WorkerConfig{WorkerName: "Forge-2", Caste: "builder", TaskID: "2.2", AgentName: "aether-builder"},
+		[]string{"run", "--agent", "build", "prompt with sk-proj-prompt-secret"},
+		"stdout sk-proj-stdout-secret token=stdout-secret",
+		"stderr ghp_stderr_secret secret=stderr-secret",
+		fmt.Errorf("parse failed sk-proj-error-secret"),
+	)
+	if rel == "" {
+		t.Fatal("expected debug artifact path")
+	}
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatalf("read debug artifact: %v", err)
+	}
+	text := string(data)
+	for _, forbidden := range []string{
+		"sk-proj-prompt-secret",
+		"sk-proj-stdout-secret",
+		"stdout-secret",
+		"ghp_stderr_secret",
+		"stderr-secret",
+		"sk-proj-error-secret",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("debug artifact leaked %q:\n%s", forbidden, text)
+		}
+	}
+	for _, want := range []string{`"stdout_bytes"`, `"stderr_bytes"`, "[redacted]"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("debug artifact missing %q:\n%s", want, text)
 		}
 	}
 }

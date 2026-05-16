@@ -93,7 +93,7 @@ the matching Codex flow.
 
 ## Guardrails
 
-- Do NOT run `aether plan` without `--plan-only` from this wrapper.
+- Do NOT run direct `aether plan` from this wrapper for manifest generation; use `aether host plan`.
 - Do NOT run `aether plan --synthetic` after real agent workers complete.
 - Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand.
 - Do NOT parse visual output as authoritative state.

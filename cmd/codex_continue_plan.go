@@ -190,10 +190,9 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 
 func continuePlanOnlySourceCommand(reviewDepth colony.VerificationDepth, skipWatchers bool) string {
 	parts := []string{
-		"AETHER_OUTPUT_MODE=json",
 		"aether",
+		"host",
 		"continue",
-		"--plan-only",
 		"--verification-depth",
 		string(colony.NormalizeVerificationDepth(string(reviewDepth))),
 	}

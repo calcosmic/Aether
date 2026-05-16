@@ -1849,6 +1849,98 @@ developer_instructions = "test instructions"`), 0644); err != nil {
 	}
 }
 
+func TestClearFallbackPlanningArtifactsRemovesStaleFallbackArtifacts(t *testing.T) {
+	root := t.TempDir()
+	planningDir := filepath.Join(root, ".aether", "data", "planning")
+	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
+	markerTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	writeTestFileAtTime(t, filepath.Join(planningDir, ".fallback-marker"), "fallback", markerTime)
+	for _, rel := range []string{
+		filepath.Join("planning", "SCOUT.md"),
+		filepath.Join("planning", "ROUTE-SETTER.md"),
+		filepath.Join("planning", "phase-plan.json"),
+		filepath.Join("planning", "phase-plan.json.bak"),
+		filepath.Join("phase-research", "phase-1-research.md"),
+		filepath.Join("phase-research", "phase-2-research.md.bak"),
+	} {
+		writeTestFileAtTime(t, filepath.Join(root, ".aether", "data", rel), "stale fallback", markerTime.Add(-time.Minute))
+	}
+
+	clearFallbackPlanningArtifacts(root)
+
+	for _, rel := range []string{
+		filepath.Join("planning", ".fallback-marker"),
+		filepath.Join("planning", "SCOUT.md"),
+		filepath.Join("planning", "ROUTE-SETTER.md"),
+		filepath.Join("planning", "phase-plan.json"),
+		filepath.Join("planning", "phase-plan.json.bak"),
+		filepath.Join("phase-research", "phase-1-research.md"),
+		filepath.Join("phase-research", "phase-2-research.md.bak"),
+	} {
+		if _, err := os.Stat(filepath.Join(root, ".aether", "data", rel)); !os.IsNotExist(err) {
+			t.Fatalf("expected stale fallback artifact %s to be removed, got %v", rel, err)
+		}
+	}
+	if _, err := os.Stat(researchDir); err != nil {
+		t.Fatalf("expected phase-research directory to remain: %v", err)
+	}
+}
+
+func TestClearFallbackPlanningArtifactsPreservesNewerWorkerArtifacts(t *testing.T) {
+	root := t.TempDir()
+	planningDir := filepath.Join(root, ".aether", "data", "planning")
+	markerTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	workerTime := markerTime.Add(time.Hour)
+
+	writeTestFileAtTime(t, filepath.Join(planningDir, ".fallback-marker"), "fallback", markerTime)
+	for _, rel := range []string{
+		filepath.Join("planning", "SCOUT.md"),
+		filepath.Join("planning", "ROUTE-SETTER.md"),
+		filepath.Join("planning", "phase-plan.json"),
+		filepath.Join("phase-research", "phase-1-research.md"),
+	} {
+		writeTestFileAtTime(t, filepath.Join(root, ".aether", "data", rel), "worker-authored", workerTime)
+	}
+	writeTestFileAtTime(t, filepath.Join(root, ".aether", "data", "phase-research", "phase-2-research.md"), "stale fallback", markerTime.Add(-time.Minute))
+
+	clearFallbackPlanningArtifacts(root)
+
+	for _, rel := range []string{
+		filepath.Join("planning", "SCOUT.md"),
+		filepath.Join("planning", "ROUTE-SETTER.md"),
+		filepath.Join("planning", "phase-plan.json"),
+		filepath.Join("phase-research", "phase-1-research.md"),
+	} {
+		data, err := os.ReadFile(filepath.Join(root, ".aether", "data", rel))
+		if err != nil {
+			t.Fatalf("expected newer worker artifact %s to be preserved: %v", rel, err)
+		}
+		if string(data) != "worker-authored" {
+			t.Fatalf("expected newer worker artifact %s content to survive, got %q", rel, string(data))
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, ".aether", "data", "phase-research", "phase-2-research.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale phase research to be removed, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(planningDir, ".fallback-marker")); !os.IsNotExist(err) {
+		t.Fatalf("expected fallback marker to be removed, got %v", err)
+	}
+}
+
+func writeTestFileAtTime(t *testing.T, path, content string, modTime time.Time) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+	if err := os.Chtimes(path, modTime, modTime); err != nil {
+		t.Fatalf("set time %s: %v", path, err)
+	}
+}
+
 // TestE2EForceReplanRecovery proves the full recovery path:
 // colony with fallback plan artifacts → plan --force → fallback artifacts cleared,
 // new plan generated, phase status reset.

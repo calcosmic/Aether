@@ -7,13 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.38] - 2026-05-16
+
 ### Docs
 - AGENTS.md: add Runtime Lifecycle mermaid diagram (under Architecture Overview) and Wisdom Pipeline mermaid diagram (under Wisdom Pipeline). Model-agnostic, shows both `in-repo` and `worktree` parallel modes, and contains the `skill-match` sub-graph.
 - Added Phase 5 lifecycle integration guidance covering Orchestrator Mode routing, finalizer validation, wrapper parity, and changelog planning.
+- Added final release-readiness handoff notes covering smoke commands, provider/auth redaction evidence, seal-time blockers, explicit residual risks for tag-pinned Actions and absent `govulncheck`, and the publish-readiness handoff.
 - Documented runtime-owned `orchestrator_boundary_guidance` routing across command guides, Claude/OpenCode wrappers, Codex build-cycle skill, and wrapper-runtime contract docs.
+- Clarified Phase 3 provider/auth hardening docs: provider availability preflight is separate from post-launch provider/API/auth worker failures, generated context must use sanitized provider/cause/next-action wording only, and ignored `.opencode/package*.json` files are local install artifacts rather than release-surface manifests.
+- Updated the publish/update runbook with actionable publish-warning commands plus release metadata and auth-gate details for GitHub `GITHUB_TOKEN` and npm `NPM_TOKEN` paths.
 
 ### Changed
 - Lifecycle wrapper guidance now stops before worker spawning when Orchestrator Mode routes to `aether discuss`, then requires rerunning `after_discuss_next` with a fresh plan-only manifest after answers are resolved.
+- `aether publish` warnings now include exact recovery and verification commands for hub-version changes, skipped TS host publish steps, and stable/dev binary co-location.
+- Release and CI workflows now run TS-host install/typecheck/test/build gates and avoid direct secret references in release job conditionals.
+- Worker subprocess diagnostics now redact provider secrets before surfacing through errors, debug artifacts, RawOutput reports, or TypeScript host failure summaries.
 
 ## [1.0.30] - 2026-05-06
 
