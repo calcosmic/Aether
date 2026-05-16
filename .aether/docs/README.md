@@ -59,6 +59,8 @@ Distributed developer references:
 | `known-issues.md` | Active known issues and workarounds |
 | `publish-update-runbook.md` | Authoritative workflow for publishing hub/runtime updates and verifying downstream refreshes |
 | `phase5-lifecycle-integration-parity.md` | Phase 5 guidance for Orchestrator Mode lifecycle routing, finalizer validation, wrapper parity, and changelog planning |
+| `classic-command-parity-matrix.md` | Human-readable matrix for classic command parity and the TypeScript host command spine |
+| `classic-command-parity-release-summary.md` | Release-facing summary and gate for the classic command parity milestone |
 
 ---
 

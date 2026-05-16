@@ -72,6 +72,16 @@ For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 
 Respect `execution_plan`: serial steps stay serial; parallel steps may spawn together.
 
+For each manifest wave:
+
+1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each worker.
+3. Spawn the matching platform agent using `agent_name` as the subagent type.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Pass the worker brief verbatim and inject the runtime-provided `skill_section` when present.
+6. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
+7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`.
+
 ## Finalize
 
 After all workers return, collect results into a completion JSON and finalize:

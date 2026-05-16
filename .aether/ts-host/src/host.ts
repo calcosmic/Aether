@@ -7,15 +7,27 @@
  *   plan       -- Call `aether plan --plan-only` and print JSON manifest
  *   build <N>  -- Call `aether build N --plan-only` and print JSON manifest
  *   continue   -- Call `aether continue --plan-only` and print JSON manifest
- *   lifecycle  -- Full plan -> build -> continue sequence (not yet implemented)
+ *   oracle     -- Run the Oracle lifecycle loop
+ *   lifecycle  -- Run the plan -> build -> continue lifecycle sequence
+ *   watch      -- Show colony status through the host display surface
+ *   swarm      -- Show or plan swarm activity through the host display surface
  *
  * Options:
  *   --cwd <path>  Working directory (default: process.cwd())
  */
 
-import type { BuildManifest, ContinueCompletion, PlanCompletion } from "./types.js";
 import { callGoJSON, discoverGoBinary } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
+import {
+  buildHostGoArgs,
+  getHostCommandDefinition,
+  listHostCommandDefinitions,
+  type ParsedHostArgs,
+} from "./command-registry.js";
+import { runGoJSONCommand } from "./go-command.js";
+
+export { buildHostGoArgs } from "./command-registry.js";
+export type { ParsedHostArgs } from "./command-registry.js";
 
 // Mutable reference for test injection.
 let _callGoJSONRef = callGoJSON;
@@ -37,35 +49,33 @@ import { createNarrator } from "./narrator.js";
 import { startEventBridge } from "./event-bridge.js";
 
 /** Parse command-line arguments for the TS host. */
-export function parseArgs(argv: string[]): {
-  command: string;
-  cwd: string;
-  simulate: boolean;
-  noDashboard: boolean;
-  skipMiddenCheck: boolean;
-  depth: string | undefined;
-  planningDepth: string | undefined;
-  verificationDepth: string | undefined;
-  light: boolean;
-  heavy: boolean;
-  workerTimeout: string | undefined;
-  help: boolean;
-  positional: string[];
-} {
+export function parseArgs(argv: string[]): ParsedHostArgs {
   const args = argv.slice(2); // skip node and script path
   let command = "";
   let cwd = process.cwd();
   let simulate = false;
+  let synthetic = false;
   let noDashboard = false;
   let skipMiddenCheck = false;
+  let skipWatchers = false;
+  let refresh = false;
+  let force = false;
+  const tasks: string[] = [];
   let depth: string | undefined = undefined;
   let planningDepth: string | undefined = undefined;
   let verificationDepth: string | undefined = undefined;
+  let verificationTimeout: string | undefined = undefined;
   let light = false;
   let heavy = false;
   let workerTimeout: string | undefined = undefined;
+  let circuitBreakerThreshold: string | undefined = undefined;
+  let noSuggest = false;
+  let verbose = false;
+  const reconcileTasks: string[] = [];
+  let noLearn = false;
   let help = false;
   const positional: string[] = [];
+  const unknownFlags: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     let arg = args[i]!;
@@ -83,28 +93,61 @@ export function parseArgs(argv: string[]): {
       if (i + 1 < args.length) return args[++i]!;
       return undefined;
     };
-    if (arg === "--cwd" && (inlineValue !== undefined || i + 1 < args.length)) {
-      cwd = nextValue() ?? cwd;
+    const readValue = (flag: string): string | undefined => {
+      const value = nextValue();
+      if (value === undefined) {
+        unknownFlags.push(`${flag} requires a value`);
+      }
+      return value;
+    };
+    if (arg === "--cwd") {
+      cwd = readValue(arg) ?? cwd;
     } else if (arg === "--simulate") {
       simulate = true;
+    } else if (arg === "--synthetic") {
+      synthetic = true;
     } else if (arg === "--no-dashboard") {
       noDashboard = true;
     } else if (arg === "--skip-midden-check") {
       skipMiddenCheck = true;
-    } else if (arg === "--depth" && (inlineValue !== undefined || i + 1 < args.length)) {
-      depth = nextValue();
-    } else if (arg === "--planning-depth" && (inlineValue !== undefined || i + 1 < args.length)) {
-      planningDepth = nextValue();
-    } else if (arg === "--verification-depth" && (inlineValue !== undefined || i + 1 < args.length)) {
-      verificationDepth = nextValue();
+    } else if (arg === "--skip-watchers") {
+      skipWatchers = true;
+    } else if (arg === "--refresh") {
+      refresh = true;
+    } else if (arg === "--force") {
+      force = true;
+    } else if (arg === "--task") {
+      const value = readValue(arg);
+      if (value !== undefined) tasks.push(value);
+    } else if (arg === "--depth") {
+      depth = readValue(arg);
+    } else if (arg === "--planning-depth") {
+      planningDepth = readValue(arg);
+    } else if (arg === "--verification-depth") {
+      verificationDepth = readValue(arg);
+    } else if (arg === "--verification-timeout") {
+      verificationTimeout = readValue(arg);
     } else if (arg === "--light") {
       light = true;
     } else if (arg === "--heavy") {
       heavy = true;
-    } else if (arg === "--worker-timeout" && (inlineValue !== undefined || i + 1 < args.length)) {
-      workerTimeout = nextValue();
+    } else if (arg === "--worker-timeout") {
+      workerTimeout = readValue(arg);
+    } else if (arg === "--circuit-breaker-threshold") {
+      circuitBreakerThreshold = readValue(arg);
+    } else if (arg === "--no-suggest") {
+      noSuggest = true;
+    } else if (arg === "--verbose") {
+      verbose = true;
+    } else if (arg === "--reconcile-task") {
+      const value = readValue(arg);
+      if (value !== undefined) reconcileTasks.push(value);
+    } else if (arg === "--no-learn") {
+      noLearn = true;
     } else if (arg === "--help" || arg === "-h") {
       help = true;
+    } else if (arg.startsWith("-")) {
+      unknownFlags.push(rawArg);
     } else if (!command) {
       command = rawArg;
     } else {
@@ -112,37 +155,71 @@ export function parseArgs(argv: string[]): {
     }
   }
 
-  return { command, cwd, simulate, noDashboard, skipMiddenCheck, depth, planningDepth, verificationDepth, light, heavy, workerTimeout, help, positional };
+  return {
+    command,
+    cwd,
+    simulate,
+    synthetic,
+    noDashboard,
+    skipMiddenCheck,
+    skipWatchers,
+    refresh,
+    force,
+    tasks,
+    depth,
+    planningDepth,
+    verificationDepth,
+    verificationTimeout,
+    light,
+    heavy,
+    workerTimeout,
+    circuitBreakerThreshold,
+    noSuggest,
+    verbose,
+    reconcileTasks,
+    noLearn,
+    help,
+    positional,
+    unknownFlags,
+  };
 }
 
 function printUsage(): void {
+  const commandLines = listHostCommandDefinitions()
+    .map((definition) => `  ${definition.usage.padEnd(14)} ${definition.description}`)
+    .join("\n");
   process.stderr.write(
     "Usage: host <command> [options]\n\n" +
       "Commands:\n" +
-      "  plan          Call aether plan --plan-only\n" +
-      "  build <N>     Call aether build N --plan-only\n" +
-      "  continue      Call aether continue --plan-only\n" +
-      "  oracle [topic] Run Oracle RALF lifecycle loop (iterate -> dispatch -> finalize)\n" +
-      "  lifecycle [N] [topic] Full plan->build->continue sequence (default phase: 1)\n" +
-      "                      Optional Oracle topic runs Oracle research before plan.\n" +
-      "  watch         Show colony status, optionally with live dashboard\n" +
-      "  swarm [target] Show swarm plan for a target problem\n\n" +
+      commandLines + "\n\n" +
       "Options:\n" +
       "  --cwd <path>           Working directory\n" +
       "  --simulate             Run in simulation mode (no real worker spawning)\n" +
+      "  --synthetic            Forward Go synthetic mode for plan/build/continue\n" +
       "  --no-dashboard         Disable live dashboard, use plain text output\n" +
       "  --skip-midden-check    Skip pre-build midden threshold check\n" +
+      "  --skip-watchers        Skip continue watcher workers when Go allows it\n" +
+      "  --refresh              Refresh an existing plan\n" +
+      "  --force                Forward Go force aliases for plan/build\n" +
+      "  --task <id>            Limit build dispatch to a task id (repeatable)\n" +
       "  --depth <level>        fast | balanced | deep | exhaustive\n" +
       "  --planning-depth <lvl> light | standard | deep\n" +
       "  --verification-depth <lvl> light | standard | heavy\n" +
+      "  --verification-timeout <dur> Override continue verification timeout\n" +
       "  --light                Force light review\n" +
       "  --heavy                Force heavy review\n" +
-      "  --worker-timeout <dur> Override per-worker timeout (e.g. 5m, 15m)\n"
+      "  --worker-timeout <dur> Override per-worker timeout (e.g. 5m, 15m)\n" +
+      "  --circuit-breaker-threshold <n> Forward build circuit-breaker threshold\n" +
+      "  --no-suggest           Skip build suggestion analysis\n" +
+      "  --verbose              Forward verbose build output mode\n" +
+      "  --reconcile-task <id>  Mark continue task reconciliation (repeatable)\n" +
+      "  --no-learn             Disable continue learning capture when supported\n"
   );
 }
 
 async function main(): Promise<void> {
-  const { command, cwd, simulate, noDashboard, skipMiddenCheck, depth, planningDepth, verificationDepth, light, heavy, workerTimeout, help, positional } = parseArgs(process.argv);
+  const parsed = parseArgs(process.argv);
+  const { command, cwd, simulate, noDashboard, skipMiddenCheck, help, positional } = parsed;
 
   if (help || !command) {
     printUsage();
@@ -151,48 +228,35 @@ async function main(): Promise<void> {
 
   const goBinaryPath = discoverGoBinary();
   const bridge: GoBridgeOptions = { goBinaryPath, cwd };
+  const definition = getHostCommandDefinition(command);
 
-  switch (command) {
-    case "plan": {
-      const args = ["plan", "--plan-only"];
-      if (depth) args.push("--depth", depth);
-      if (planningDepth) args.push("--planning-depth", planningDepth);
-      if (verificationDepth) args.push("--verification-depth", verificationDepth);
-      if (simulate) args.push("--synthetic");
-      if (workerTimeout) args.push("--worker-timeout", workerTimeout);
-      const result = _callGoJSONRef<PlanCompletion>(bridge, args);
-      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
-      break;
-    }
+  if (!definition) {
+    process.stderr.write(`Unknown command: ${command}\n`);
+    printUsage();
+    process.exit(1);
+  }
 
-    case "build": {
-      const phase = positional[0];
-      if (!phase) {
-        process.stderr.write("Error: build requires a phase number\n");
+  if (parsed.unknownFlags.length > 0) {
+    process.stderr.write(`Error: Unsupported host flag(s): ${parsed.unknownFlags.join(", ")}\n`);
+    process.exit(1);
+  }
+
+  switch (definition.runner) {
+    case "go-json": {
+      let args: string[];
+      try {
+        args = buildHostGoArgs(parsed)!;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`Error: ${message}\n`);
         process.exit(1);
       }
-      const args = ["build", phase, "--plan-only"];
-      if (simulate) args.push("--synthetic");
-      if (light) args.push("--light");
-      if (workerTimeout) args.push("--worker-timeout", workerTimeout);
-      const result = _callGoJSONRef<BuildManifest>(bridge, args);
+      const result = runGoJSONCommand(bridge, args, _callGoJSONRef);
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
 
-    case "continue": {
-      const args = ["continue", "--plan-only"];
-      if (verificationDepth) args.push("--verification-depth", verificationDepth);
-      if (light) args.push("--light");
-      if (heavy) args.push("--heavy");
-      if (simulate) args.push("--synthetic");
-      if (workerTimeout) args.push("--worker-timeout", workerTimeout);
-      const result = _callGoJSONRef<ContinueCompletion>(bridge, args);
-      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
-      break;
-    }
-
-    case "oracle": {
+    case "oracle-lifecycle": {
       const topic = positional[0] || "auto";
       const oracleOpts: OracleLifecycleOptions = {
         goBinaryPath,
@@ -238,7 +302,7 @@ async function main(): Promise<void> {
         suppressOutput: !noDashboard && process.stdout.isTTY,
       });
 
-      const bridge = await startEventBridge({
+      const eventBridge = await startEventBridge({
         goBinaryPath,
         cwd,
         onEvent: (evt) => {
@@ -248,14 +312,14 @@ async function main(): Promise<void> {
 
       const result = await runLifecycle(lifecycleOpts);
 
-      await bridge.stop();
+      await eventBridge.stop();
       narrator.stop();
 
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
 
-    case "watch": {
+    case "watch-display": {
       const watchOpts: WatchDisplayOptions = {
         goBinaryPath,
         cwd,
@@ -267,7 +331,7 @@ async function main(): Promise<void> {
       break;
     }
 
-    case "swarm": {
+    case "swarm-display": {
       const target = positional[0] || "";
       const swarmOpts: SwarmDisplayOptions = {
         goBinaryPath,
@@ -281,11 +345,6 @@ async function main(): Promise<void> {
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       break;
     }
-
-    default:
-      process.stderr.write(`Unknown command: ${command}\n`);
-      printUsage();
-      process.exit(1);
   }
 }
 

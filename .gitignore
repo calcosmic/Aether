@@ -103,6 +103,7 @@ logs/
 # NPM
 node_modules/
 *.tgz
+.aether/ts-host/SIMULATED_BUILD_OUTPUT.txt
 
 # Allow bin/lib (Aether CLI libraries)
 !bin/lib/

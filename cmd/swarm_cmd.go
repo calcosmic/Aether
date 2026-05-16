@@ -133,12 +133,12 @@ var swarmFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalSwarmCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		result, err := runSwarmFinalize(resolveAetherRootPath(), completion)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderSwarmCompatibilityVisual(result))
 		return nil

@@ -11,44 +11,11 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildHostGoArgs,
   parseArgs,
   __setCallGoJSON,
   __restoreCallGoJSON,
 } from "../src/host.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function buildPlanArgs(parsed: ReturnType<typeof parseArgs>): string[] {
-  const args = ["plan", "--plan-only"];
-  if (parsed.depth) args.push("--depth", parsed.depth);
-  if (parsed.planningDepth) args.push("--planning-depth", parsed.planningDepth);
-  if (parsed.verificationDepth) args.push("--verification-depth", parsed.verificationDepth);
-  if (parsed.simulate) args.push("--synthetic");
-  if (parsed.workerTimeout) args.push("--worker-timeout", parsed.workerTimeout);
-  return args;
-}
-
-function buildBuildArgs(parsed: ReturnType<typeof parseArgs>): string[] {
-  const phase = parsed.positional[0];
-  if (!phase) throw new Error("build requires phase");
-  const args = ["build", phase, "--plan-only"];
-  if (parsed.simulate) args.push("--synthetic");
-  if (parsed.light) args.push("--light");
-  if (parsed.workerTimeout) args.push("--worker-timeout", parsed.workerTimeout);
-  return args;
-}
-
-function buildContinueArgs(parsed: ReturnType<typeof parseArgs>): string[] {
-  const args = ["continue", "--plan-only"];
-  if (parsed.verificationDepth) args.push("--verification-depth", parsed.verificationDepth);
-  if (parsed.light) args.push("--light");
-  if (parsed.heavy) args.push("--heavy");
-  if (parsed.simulate) args.push("--synthetic");
-  if (parsed.workerTimeout) args.push("--worker-timeout", parsed.workerTimeout);
-  return args;
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -71,7 +38,7 @@ describe("host integration", () => {
       "--planning-depth", "standard",
     ]);
 
-    const args = buildPlanArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -88,7 +55,7 @@ describe("host integration", () => {
       "--planning-depth=standard",
     ]);
 
-    const args = buildPlanArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -105,7 +72,7 @@ describe("host integration", () => {
       "--worker-timeout", "5m",
     ]);
 
-    const args = buildPlanArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -118,14 +85,31 @@ describe("host integration", () => {
     const parsed = parseArgs([
       "node", "host.js",
       "plan",
-      "--simulate",
+      "--synthetic",
     ]);
 
-    const args = buildPlanArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
       "--synthetic",
+    ]);
+  });
+
+  it("plan passes refresh and force to Go CLI", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "plan",
+      "--refresh",
+      "--force",
+    ]);
+
+    const args = buildHostGoArgs(parsed);
+
+    assert.deepStrictEqual(args, [
+      "plan", "--plan-only",
+      "--refresh",
+      "--force",
     ]);
   });
 
@@ -136,7 +120,7 @@ describe("host integration", () => {
       "--light",
     ]);
 
-    const args = buildBuildArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "build", "1", "--plan-only",
@@ -151,12 +135,64 @@ describe("host integration", () => {
       "--worker-timeout", "15m",
     ]);
 
-    const args = buildBuildArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "build", "2", "--plan-only",
       "--worker-timeout", "15m",
     ]);
+  });
+
+  it("build passes heavy and verification-depth to Go CLI", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "build", "3",
+      "--heavy",
+      "--verification-depth", "heavy",
+    ]);
+
+    const args = buildHostGoArgs(parsed);
+
+    assert.deepStrictEqual(args, [
+      "build", "3", "--plan-only",
+      "--heavy",
+      "--verification-depth", "heavy",
+    ]);
+  });
+
+  it("build passes force, repeated task, circuit breaker, no-suggest, and verbose to Go CLI", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "build", "5",
+      "--task", "5.1",
+      "--task=5.2",
+      "--force",
+      "--circuit-breaker-threshold", "4",
+      "--no-suggest",
+      "--verbose",
+    ]);
+
+    const args = buildHostGoArgs(parsed);
+
+    assert.deepStrictEqual(args, [
+      "build", "5", "--plan-only",
+      "--task", "5.1",
+      "--task", "5.2",
+      "--force",
+      "--circuit-breaker-threshold", "4",
+      "--no-suggest",
+      "--verbose",
+    ]);
+  });
+
+  it("build rejects unknown host flags before Go invocation", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "build", "5",
+      "--definitely-unknown",
+    ]);
+
+    assert.throws(() => buildHostGoArgs(parsed), /Unsupported host flag\(s\): --definitely-unknown/);
   });
 
   it("continue passes verification-depth heavy to Go CLI", () => {
@@ -166,7 +202,7 @@ describe("host integration", () => {
       "--verification-depth", "heavy",
     ]);
 
-    const args = buildContinueArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -181,7 +217,7 @@ describe("host integration", () => {
       "--verification-depth=heavy",
     ]);
 
-    const args = buildContinueArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -197,12 +233,27 @@ describe("host integration", () => {
       "--heavy",
     ]);
 
-    const args = buildContinueArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
       "--light",
       "--heavy",
+    ]);
+  });
+
+  it("continue passes skip-watchers to Go CLI", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "continue",
+      "--skip-watchers",
+    ]);
+
+    const args = buildHostGoArgs(parsed);
+
+    assert.deepStrictEqual(args, [
+      "continue", "--plan-only",
+      "--skip-watchers",
     ]);
   });
 
@@ -214,12 +265,33 @@ describe("host integration", () => {
       "--worker-timeout", "10m",
     ]);
 
-    const args = buildContinueArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
       "--synthetic",
       "--worker-timeout", "10m",
+    ]);
+  });
+
+  it("continue passes reconcile-task, verification-timeout, and no-learn to Go CLI", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "continue",
+      "--reconcile-task", "5.1",
+      "--reconcile-task=5.2",
+      "--verification-timeout", "30m",
+      "--no-learn",
+    ]);
+
+    const args = buildHostGoArgs(parsed);
+
+    assert.deepStrictEqual(args, [
+      "continue", "--plan-only",
+      "--reconcile-task", "5.1",
+      "--reconcile-task", "5.2",
+      "--verification-timeout", "30m",
+      "--no-learn",
     ]);
   });
 
@@ -240,13 +312,14 @@ describe("host integration", () => {
     });
 
     const parsed = parseArgs(["node", "host.js", "plan"]);
-    const args = buildPlanArgs(parsed);
+    const args = buildHostGoArgs(parsed);
 
     // Simulate what main() would do
     const result = { ok: true };
     __restoreCallGoJSON();
 
     assert.ok(!called || true, "Mock was set up correctly");
+    assert.ok(args);
     assert.equal(args[0], "plan");
   });
 });

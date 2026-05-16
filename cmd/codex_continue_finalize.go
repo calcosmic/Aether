@@ -38,7 +38,7 @@ var continueFinalizeCmd = &cobra.Command{
 		verificationTimeout, verificationTimeoutExplicit, err := resolveContinueVerificationTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		if !verificationTimeoutExplicit {
 			verificationTimeout = 0
@@ -46,12 +46,12 @@ var continueFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalContinueCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout, noLearn)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		if blocked, _ := result["blocked"].(bool); blocked {
 			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))

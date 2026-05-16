@@ -183,6 +183,63 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 	}
 }
 
+func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
+	tests := map[string]struct {
+		required []string
+		retired  []string
+	}{
+		"plan": {
+			required: []string{
+				"aether host plan --depth <choice> --planning-depth <choice>",
+				"Parse `result.plan_manifest` or `result.planning_manifest`",
+				"AETHER_OUTPUT_MODE=json aether plan-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+			},
+		},
+		"build": {
+			required: []string{
+				"aether host build <phase>",
+				"Parse `result.dispatch_manifest`",
+				"AETHER_OUTPUT_MODE=json aether build-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+			},
+		},
+		"continue": {
+			required: []string{
+				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+				"aether host continue --verification-depth heavy",
+				"Parse `result.continue_manifest`",
+				"continue-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+			},
+		},
+	}
+
+	for command, test := range tests {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		for _, want := range test.required {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing TS host spine anchor %q", command, want)
+			}
+		}
+		for _, forbidden := range test.retired {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s command-guide still documents retired direct manifest path %q", command, forbidden)
+			}
+		}
+	}
+}
+
 func TestCodexLifecycleGuidesDoNotDocumentRetiredHostFallbacks(t *testing.T) {
 	forbidden := map[string][]string{
 		"plan": {
@@ -205,6 +262,52 @@ func TestCodexLifecycleGuidesDoNotDocumentRetiredHostFallbacks(t *testing.T) {
 		for _, needle := range needles {
 			if strings.Contains(text, needle) {
 				t.Errorf("%s command-guide still documents retired host fallback %q", command, needle)
+			}
+		}
+	}
+}
+
+func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	tests := map[string][]string{
+		"plan": {
+			"aether host plan",
+			"--planning-depth",
+			"TS host is the sole entry point",
+			"plan-finalize",
+		},
+		"build": {
+			"aether host build",
+			"TS host is the sole entry point",
+			"build-finalize",
+		},
+		"continue": {
+			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+			"aether host continue --verification-depth heavy",
+			"continue-finalize",
+		},
+	}
+
+	for command, anchors := range tests {
+		files := []string{
+			filepath.Join(repoRoot, ".aether", "commands", command+".yaml"),
+			filepath.Join(repoRoot, ".claude", "commands", "ant", command+".md"),
+			filepath.Join(repoRoot, ".opencode", "commands", "ant", command+".md"),
+		}
+		for _, path := range files {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			text := string(content)
+			for _, want := range anchors {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing TS host spine anchor %q", path, want)
+				}
 			}
 		}
 	}

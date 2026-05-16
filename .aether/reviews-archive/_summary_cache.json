@@ -1,9 +1,8 @@
 {
-  "text": "## Prior Reviews\n\n- Security (5 open): HIGH -- pkg/codex/platform_dispatch.go Post-launch hosted worker failure paths can expose raw pr..., MEDIUM -- .aether/ts-host/src/platform-dispatcher.ts The TS host legacy platform dispatcher still returns raw ... +3 more\n- Testing (1 open): LOW -- .github/workflows/release.yml CI, release workflow, and release handoff now reference t...\n",
+  "text": "## Prior Reviews\n\n- History (4 open): MEDIUM -- , MEDIUM --  +2 more\n",
   "domain_counts": {
-    "security": 5,
-    "testing": 1
+    "history": 4
   },
-  "total_open": 6,
-  "cache_write_at": "2026-05-16T13:10:36Z"
+  "total_open": 4,
+  "cache_write_at": "2026-05-16T17:59:24Z"
 }

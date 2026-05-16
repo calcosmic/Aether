@@ -66,4 +66,18 @@ describe("host entry point", () => {
       `Should produce JSON output or lifecycle error. stdout: ${stdout.slice(0, 200)}, stderr: ${stderr.slice(0, 200)}`
     );
   });
+
+  it("host rejects unknown flags for display commands", () => {
+    const result = spawnSync(
+      "node",
+      ["--import", "tsx", hostPath, "watch", "--definitely-unknown", "--no-dashboard"],
+      {
+        encoding: "utf-8",
+        timeout: 10000,
+      }
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr ?? "", /Unsupported host flag\(s\): --definitely-unknown/);
+  });
 });

@@ -1,45 +1,14 @@
 {
-  "entries": [
-    {
-      "id": "prf-5-001",
-      "phase": 5,
-      "phase_name": "Final Smoke and Release Readiness",
-      "agent": "auditor",
-      "agent_name": "Scrutin-41",
-      "generated_at": "2026-05-16T13:20:42Z",
-      "status": "open",
-      "severity": "INFO",
-      "file": ".aether/data/event-bus.jsonl",
-      "line": 1594,
-      "category": "release-performance-safety",
-      "description": "Seal audit found fresh non-blocking evidence that the full release smoke included the race suite, GoReleaser snapshot build, and binary version smoke; dist metadata and artifact timestamps corroborate the snapshot build.",
-      "suggestion": "Keep race and snapshot-build evidence fresh for release sealing, and store exact command rows in the phase verification artifact so future performance/release reviewers do not need to reconstruct proof from event logs and dist files."
-    },
-    {
-      "id": "prf-5-002",
-      "phase": 5,
-      "phase_name": "Final Smoke and Release Readiness",
-      "agent": "auditor",
-      "agent_name": "Scrutin-41",
-      "generated_at": "2026-05-16T13:27:04Z",
-      "status": "open",
-      "severity": "INFO",
-      "file": ".aether/data/event-bus.jsonl",
-      "line": 1594,
-      "category": "release-performance-safety",
-      "description": "Fresh release evidence says the full smoke included the race suite, GoReleaser snapshot, and binary version smoke; dist metadata and artifacts corroborate a fresh snapshot build.",
-      "suggestion": "Store exact command rows in the phase verification artifact for future release and performance review."
-    }
-  ],
+  "entries": [],
   "summary": {
-    "total": 2,
-    "open": 2,
+    "total": 0,
+    "open": 0,
     "resolved": 0,
     "by_severity": {
       "high": 0,
       "medium": 0,
       "low": 0,
-      "info": 2
+      "info": 0
     }
   }
 }

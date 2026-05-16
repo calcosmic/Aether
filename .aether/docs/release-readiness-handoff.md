@@ -35,6 +35,21 @@ the release workflow use:
 
 For a local non-Linux run, use the matching produced binary path under `dist/`.
 
+## Classic Command Parity Evidence
+
+Before release signoff, prove the classic command parity matrix and TypeScript
+host command spine are still aligned with wrappers and runtime guidance:
+
+```bash
+go test ./cmd -run 'TestCodexHostBackedGuidesUseTypeScriptHostSpine|TestWrapperSourcesUseTypeScriptHostManifestSpine|TestClassicCommandParityMatrix' -count=1
+npm --prefix .aether/ts-host run typecheck
+npm --prefix .aether/ts-host test
+```
+
+Release notes may claim that TypeScript conducts host-backed workflows only if
+the tests above pass and the wording keeps Go as the state, verification,
+finalizer, provider-diagnostic, and ceremony authority.
+
 ## Provider/Auth Evidence
 
 Release smoke must preserve evidence for both auth preflight and launched-worker

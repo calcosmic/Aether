@@ -8,7 +8,10 @@
 
 ## Context
 
-v1.19 cut over wrappers to use the TypeScript host (`aether host <workflow>`) as the primary path for manifest generation. v1.20 hardened the host surface so all documented commands and flags work reliably.
+v1.19 cut over the primary plan/build/heavy-review wrapper paths to use the
+TypeScript host (`aether host <workflow>`) as the preferred manifest-generation
+spine. v1.20 hardened that host surface so the documented host commands and
+flags work reliably.
 
 The open question: should wrappers become thin pass-throughs (just call `aether host` and render output), or do they retain orchestration responsibilities?
 
@@ -16,18 +19,27 @@ The open question: should wrappers become thin pass-throughs (just call `aether 
 
 **Wrappers are host-assisted orchestrators.**
 
-- Wrappers call `aether host` for **manifest generation** (`--plan-only`)
+- Wrappers call `aether host` for **host-backed manifest generation**
+  (`plan`, `build`, and heavy-review `continue`)
 - Wrappers handle **colony ceremony**: worker spawning, wave management, closeout rendering
 - Wrappers do **not** duplicate verification, gating, or state mutation logic owned by the Go runtime
-- The TS host is the **sole entry point** between wrappers and Go CLI for manifest generation
+- The TS host is the **sole entry point** between wrappers and Go CLI for
+  host-backed manifest generation
 
 ## Boundary Rules
 
 | Layer | May | Must Not |
 |-------|-----|----------|
-| **Wrappers** | Call `aether host`, spawn workers, render ceremony, add colony framing/narration | Call Go CLI directly, duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output |
+| **Wrappers** | Call `aether host` for host-backed flows, call Go plan-only/finalizer commands for flows not yet on the host spine, spawn workers, render ceremony, add colony framing/narration | Duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output, document future host targets as implemented |
 | **TS Host** | Parse flags, call Go CLI via JSON, render dashboards, manage event streams | Write to `.aether/data/` directly, duplicate Go-owned logic, invent provider/auth diagnostics |
 | **Go CLI** | Own all state mutations, verification, gating, finalizers, canonical artifact writes, provider availability preflight diagnostics | Spawn platform agents (Claude/OpenCode/Codex workers) |
+
+Current wrapper host-backed manifest surfaces are `plan`, `build`, and
+heavy-review `continue`. The TS host also exposes `oracle`, `watch`, and `swarm`
+display/lifecycle surfaces, but canonical swarm wrappers still use the Go
+plan-only/finalizer path. `colonize` and `seal` also remain direct Go
+plan-only/finalizer wrapper flows until `aether host colonize` and
+`aether host seal` are implemented in the TS host registry and Go host command.
 
 ## Provider/Auth Boundary
 
@@ -44,15 +56,23 @@ wording; do not reinterpret them as missing provider availability preflight.
 
 1. **Thin pass-throughs would lose colony ceremony.** The interactive worker spawning, wave banners, and closeout rendering are core to the Aether user experience. Moving all of that into the TS host would be a massive v1.21+ effort, not v1.20 scope.
 
-2. **The host is reliable.** Phase 130 proved all 7 subcommands work end-to-end with correct flags. The fallback direct Go CLI calls in wrappers are now dead code.
+2. **The host is reliable for its implemented spine.** The supported host
+   commands work end-to-end with correct flags. Direct Go plan-only/finalizer
+   calls remain intentional for wrapper flows that are not yet host targets.
 
 3. **Verification stays in Go.** Wrappers do not reimplement gate logic — they call `aether *-finalize` and let the runtime decide advancement.
 
-4. **Single entry point.** Wrappers call ONLY `aether host` for manifest generation. No direct `aether plan`, `aether build`, etc. from wrappers.
+4. **Single entry point where implemented.** Wrappers call `aether host` for
+   host-backed manifest generation and clearly document exceptions for future
+   targets. Do not claim `aether host colonize` or `aether host seal` until they
+   exist.
 
 ## Migration Notes
 
-- **Remove fallback paths:** Wrappers previously fell back to direct Go CLI calls when the TS host was "unavailable." Since the host is now stable, these fallbacks are dead code and should be removed.
+- **Remove fallback paths for host-backed flows:** Wrappers previously fell back
+  to direct Go CLI calls when the TS host was "unavailable." For host-backed
+  plan/build/heavy-continue paths, those fallbacks are dead code and should stay
+  removed.
 - **Future direction:** As the TS host gains orchestration capabilities (worker dispatch, ceremony rendering), wrappers can become thinner over time. This ADR should be revisited in v1.21+.
 
 ## Consequences

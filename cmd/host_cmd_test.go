@@ -34,12 +34,15 @@ func TestHostSubcommands(t *testing.T) {
 		t.Fatal("host command not found")
 	}
 
-	want := []string{"lifecycle", "plan", "build", "continue", "oracle"}
+	want := []string{"lifecycle", "plan", "build", "continue", "oracle", "watch", "swarm"}
 	for _, w := range want {
 		found := false
 		for _, sub := range hostCmdFound.Commands() {
 			if sub.Name() == w {
 				found = true
+				if !sub.DisableFlagParsing {
+					t.Errorf("expected host subcommand %q to forward raw flags to the TS host", w)
+				}
 				break
 			}
 		}
@@ -91,14 +94,34 @@ func TestHostPlanAndContinueForwardRawFlags(t *testing.T) {
 			want: []string{resolvedHostPath, "plan", "--depth", "balanced", "--planning-depth", "deep", "--refresh"},
 		},
 		{
+			name: "build",
+			args: []string{"host", "build", "2", "--light", "--worker-timeout", "10m"},
+			want: []string{resolvedHostPath, "build", "2", "--light", "--worker-timeout", "10m"},
+		},
+		{
 			name: "continue",
 			args: []string{"host", "continue", "--verification-depth", "heavy", "$ARGUMENTS"},
 			want: []string{resolvedHostPath, "continue", "--verification-depth", "heavy", "$ARGUMENTS"},
 		},
 		{
+			name: "oracle",
+			args: []string{"host", "oracle", "release parity", "--simulate"},
+			want: []string{resolvedHostPath, "oracle", "release parity", "--simulate"},
+		},
+		{
+			name: "swarm",
+			args: []string{"host", "swarm", "Auth panic when session is missing", "--no-dashboard"},
+			want: []string{resolvedHostPath, "swarm", "Auth panic when session is missing", "--no-dashboard"},
+		},
+		{
 			name: "watch",
 			args: []string{"host", "watch", "--no-dashboard"},
 			want: []string{resolvedHostPath, "watch", "--no-dashboard"},
+		},
+		{
+			name: "lifecycle",
+			args: []string{"host", "lifecycle", "3", "classic commands", "--simulate", "--skip-midden-check"},
+			want: []string{resolvedHostPath, "lifecycle", "3", "classic commands", "--simulate", "--skip-midden-check"},
 		},
 	}
 

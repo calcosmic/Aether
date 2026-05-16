@@ -50,6 +50,16 @@ Before spawning workers, inspect `result.orchestrator_boundary_guidance` and `un
 - If boundary guidance is active or `next` is `aether discuss`, pause and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
 - If unresolved clarifications exist, route to `/ant-discuss`. Proceed with implicit assumptions only if the user explicitly chooses to continue.
 
+## Runtime Spawn Ceremony
+
+Before spawning planning workers, render the runtime-owned planning ceremony:
+
+```bash
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest_file>
+```
+
+This output is display-only; do not parse it as state.
+
 ## Worker Spawning
 
 Dispatch Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, and `agent_name` as `subagent_type`. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`.
@@ -57,6 +67,17 @@ Dispatch Scout from wave 1, then Route-Setter from wave 2, using manifest names,
 - Issue parallel workers as visible Task/subagent calls. Do not set `run_in_background`.
 - Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
 - For Route-Setter, include the Scout terminal result in the prompt.
+
+For each manifest wave:
+
+1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each worker.
+3. Spawn the matching platform agent using `agent_name` as the subagent type.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
+6. For Route-Setter, include the Scout terminal result in the prompt.
+7. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
+8. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`.
 
 Wave 1 Scout must complete before wave 2 Route-Setter starts.
 

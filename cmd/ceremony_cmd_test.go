@@ -42,6 +42,26 @@ func TestCeremonySpawnPlanRendersOldStyleManifest(t *testing.T) {
 	}
 }
 
+func TestCeremonySpawnPlanAcceptsDirectManifestPacket(t *testing.T) {
+	manifestFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"dispatch_manifest": ceremonyTestManifest(),
+	})
+
+	result, visual, err := renderCeremonySpawnPlanFromFile("build", manifestFile)
+	if err != nil {
+		t.Fatalf("render spawn plan: %v", err)
+	}
+
+	if got := stringValue(result["manifest"]); got != "dispatch_manifest" {
+		t.Fatalf("manifest key = %q, want dispatch_manifest", got)
+	}
+	for _, want := range []string{"S P A W N   P L A N", "Brick-79", "Watch-64"} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("direct manifest spawn plan missing %q\n%s", want, visual)
+		}
+	}
+}
+
 func TestCeremonyWaveStartRendersCasteBanner(t *testing.T) {
 	manifestFile := writeCeremonyTestJSON(t, map[string]interface{}{
 		"ok": true,

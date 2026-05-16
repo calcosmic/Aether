@@ -36,12 +36,12 @@ var colonizeFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalColonizeCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		result, err := runCodexColonizeFinalize(skillWorkspaceRoot(), completion)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderColonizeVisual(result))
 		return nil

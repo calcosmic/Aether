@@ -234,8 +234,26 @@ func TestSyncDirSkipsDSStoreAndRemovesStaleDSStore(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "ts", ".DS_Store"), []byte("metadata"), 0644); err != nil {
 		t.Fatalf("failed to write source nested metadata: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(src, "ts-host"), 0755); err != nil {
+		t.Fatalf("failed to create simulated output fixture dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts-host", "SIMULATED_BUILD_OUTPUT.txt"), []byte("simulated"), 0644); err != nil {
+		t.Fatalf("failed to write simulated output fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, "docs"), 0755); err != nil {
+		t.Fatalf("failed to create docs fixture dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "docs", "SIMULATED_BUILD_OUTPUT.txt"), []byte("legitimate doc fixture"), 0644); err != nil {
+		t.Fatalf("failed to write docs fixture: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(dest, "ts", ".DS_Store"), []byte("stale"), 0644); err != nil {
 		t.Fatalf("failed to write stale dest metadata: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dest, "ts-host"), 0755); err != nil {
+		t.Fatalf("failed to create stale simulated output fixture dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "ts-host", "SIMULATED_BUILD_OUTPUT.txt"), []byte("stale"), 0644); err != nil {
+		t.Fatalf("failed to write stale simulated output fixture: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(dest, "ts", "node_modules", "tsx", "index.js"), []byte("stale"), 0644); err != nil {
 		t.Fatalf("failed to write stale dest node_modules file: %v", err)
@@ -248,12 +266,16 @@ func TestSyncDirSkipsDSStoreAndRemovesStaleDSStore(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, "ts", "narrator.ts")); err != nil {
 		t.Fatalf("expected narrator fixture to sync: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dest, "docs", "SIMULATED_BUILD_OUTPUT.txt")); err != nil {
+		t.Fatalf("expected non-ts-host simulated-output-named file to sync: %v", err)
+	}
 	for _, path := range []string{
 		filepath.Join(dest, ".DS_Store"),
 		filepath.Join(dest, "ts", ".DS_Store"),
+		filepath.Join(dest, "ts-host", "SIMULATED_BUILD_OUTPUT.txt"),
 	} {
 		if _, err := os.Stat(path); err == nil {
-			t.Fatalf("syncDir should not leave .DS_Store at %s", path)
+			t.Fatalf("syncDir should not leave ignored file at %s", path)
 		} else if !os.IsNotExist(err) {
 			t.Fatalf("stat %s: %v", path, err)
 		}
@@ -291,8 +313,26 @@ func TestSyncDirToHubSkipsIgnoredAndExcludedArtifacts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "ts", ".DS_Store"), []byte("metadata"), 0644); err != nil {
 		t.Fatalf("failed to write source metadata: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(src, "ts-host"), 0755); err != nil {
+		t.Fatalf("failed to create source ts-host fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "ts-host", "SIMULATED_BUILD_OUTPUT.txt"), []byte("simulated"), 0644); err != nil {
+		t.Fatalf("failed to write simulated build output fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, "docs"), 0755); err != nil {
+		t.Fatalf("failed to create source docs fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "docs", "SIMULATED_BUILD_OUTPUT.txt"), []byte("legitimate doc fixture"), 0644); err != nil {
+		t.Fatalf("failed to write legitimate docs fixture: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(dest, "ts", ".DS_Store"), []byte("stale"), 0644); err != nil {
 		t.Fatalf("failed to write stale dest metadata: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dest, "ts-host"), 0755); err != nil {
+		t.Fatalf("failed to create stale ts-host fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dest, "ts-host", "SIMULATED_BUILD_OUTPUT.txt"), []byte("stale simulated"), 0644); err != nil {
+		t.Fatalf("failed to write stale simulated build output: %v", err)
 	}
 	for _, path := range []string{
 		filepath.Join(dest, "archive", "old.md"),
@@ -313,10 +353,18 @@ func TestSyncDirToHubSkipsIgnoredAndExcludedArtifacts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, "ts", "dist", "narrator.js")); err != nil {
 		t.Fatalf("expected narrator fixture to sync: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dest, "docs", "SIMULATED_BUILD_OUTPUT.txt")); err != nil {
+		t.Fatalf("expected non-ts-host simulated-output-named file to sync: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(dest, "ts", ".DS_Store")); err == nil {
 		t.Fatal("syncDirToHub should not leave .DS_Store in the hub")
 	} else if !os.IsNotExist(err) {
 		t.Fatalf("stat stale metadata: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "ts-host", "SIMULATED_BUILD_OUTPUT.txt")); err == nil {
+		t.Fatal("syncDirToHub should not publish simulated TS host build output")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat stale simulated build output: %v", err)
 	}
 	for _, path := range []string{
 		filepath.Join(dest, "archive"),

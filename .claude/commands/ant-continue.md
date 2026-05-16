@@ -40,7 +40,25 @@ Save the JSON envelope to a temporary manifest file outside `.aether/data/`. Par
 
 Before spawning reviewers, inspect `result.orchestrator_boundary_guidance`. If active or `next` is `aether discuss`, stop the flow, route to `aether discuss`, and request a fresh manifest after resolution. Rerun `after_discuss_next` after resolution.
 
-Spawn reviewers as visible live Task/subagent panels. Do not set `run_in_background`. Pass each dispatch's runtime-provided `brief` verbatim. Collect terminal results into a completion JSON containing the original `continue_manifest` and a `dispatches` array.
+Render the runtime-owned heavy-review ceremony:
+
+```bash
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>
+```
+
+Spawn reviewers as visible live Task/subagent panels. Do not set `run_in_background`. Pass each dispatch's runtime-provided `brief` verbatim.
+
+For each heavy-review wave:
+
+1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each reviewer.
+3. Spawn the matching platform agent using `agent_name` as the subagent type.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+5. Pass each dispatch's runtime-provided `brief` verbatim.
+6. After each reviewer returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
+7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>`.
+
+Collect terminal results into a completion JSON containing the original `continue_manifest` and a `dispatches` array.
 
 Finalize with:
 

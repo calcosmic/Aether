@@ -141,11 +141,11 @@ var sealFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalSealCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		if err := runSealFinalize(resolveAetherRootPath(), completion); err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		return nil
 	},

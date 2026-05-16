@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-16T13:27:04Z |
+| **Last Updated** | 2026-05-16T18:29:58Z |
 | **Current Phase** | 5 |
-| **Phase Name** | Final Smoke and Release Readiness |
+| **Phase Name** | Wrapper and Documentation Parity |
 | **Phase Status** | completed |
 | **Milestone** | Crowned Anthill |
 | **Colony Status** | COMPLETED |
@@ -21,7 +21,7 @@
 
 ## Current Goal
 
-Provider Auth Clarity and Release Hardening
+Classic Command Parity Matrix and TypeScript Host Command Spine
 
 ---
 
@@ -69,11 +69,13 @@ Colony sealed
 
 ---
 
-## Tasks For Phase 5 — Final Smoke and Release Readiness
+## Tasks For Phase 5 — Wrapper and Documentation Parity
 
-- [x] Run the full local verification suite for runtime, race, release, and binary smoke.
-- [x] Smoke provider/auth UX in an isolated temp repo with fake provider CLIs and no real credentials.
-- [x] Prepare release readiness notes and residual-risk handoff for seal.
+- [x] Add or update tests that command-guide references aether host for orchestrated commands.
+- [x] Update wrapper source metadata for Claude and OpenCode command parity if host semantics changed.
+- [x] Document the Classic Command Parity Matrix and TS Host Command Spine.
+- [x] Run full repository verification.
+- [x] Prepare release-facing summary for finalizer/Queen output.
 
 ---
 
@@ -87,11 +89,11 @@ Colony sealed
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-16T13:10:45Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
-- 2026-05-16T13:10:45Z|watcher_verification|continue|watcher skipped; relying on verification commands
-- 2026-05-16T13:10:45Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
-- 2026-05-16T13:10:45Z|signal_housekeeping|continue|Signal housekeeping completed: 5 active -> 5 active
-- 2026-05-16T13:27:04Z|sealed|seal|Colony sealed at Crowned Anthill
+- 2026-05-16T18:04:46Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
+- 2026-05-16T18:04:46Z|watcher_verification|continue|watcher skipped; relying on verification commands
+- 2026-05-16T18:04:46Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
+- 2026-05-16T18:04:46Z|signal_housekeeping|continue|Signal housekeeping completed: 5 active -> 5 active
+- 2026-05-16T18:29:58Z|sealed|seal|Colony sealed at Crowned Anthill
 
 ---
 

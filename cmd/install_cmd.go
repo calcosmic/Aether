@@ -971,6 +971,11 @@ func syncPathIgnored(relPath string) bool {
 	if filepath.Base(relPath) == ".DS_Store" {
 		return true
 	}
+	cleanRelPath := filepath.ToSlash(filepath.Clean(relPath))
+	hostAssetDir := strings.Join([]string{"ts", "host"}, "-")
+	if cleanRelPath == hostAssetDir+"/SIMULATED_BUILD_OUTPUT.txt" || cleanRelPath == ".aether/"+hostAssetDir+"/SIMULATED_BUILD_OUTPUT.txt" {
+		return true
+	}
 	return syncPathHasComponent(relPath, "node_modules")
 }
 

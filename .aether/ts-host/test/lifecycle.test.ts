@@ -22,6 +22,12 @@ import { discoverGoBinary, callGoJSON } from "../src/go-bridge.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
 import { runLifecycle } from "../src/lifecycle.js";
 import type { LifecycleOptions } from "../src/lifecycle.js";
+import {
+  __restoreCreateCeremonyAdapter,
+  __setCreateCeremonyAdapter,
+  type CeremonyAdapter,
+  type CeremonyWorkflow,
+} from "../src/ceremony-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -645,6 +651,65 @@ describe("lifecycle", () => {
       assert.ok(plan, "Colony state should have a plan after lifecycle");
     } finally {
       lifecycleModule.__restoreCreateQueenOrchestrator();
+    }
+  });
+
+  it("renders Go-owned ceremony sequencing around plan, build, and continue", async () => {
+    assert.ok(context, "Test context should be initialized");
+    const { bridge } = context;
+    const calls: string[] = [];
+
+    const fakeAdapter: CeremonyAdapter = {
+      renderSpawnPlan(workflow: CeremonyWorkflow) {
+        calls.push(`${workflow}:spawn-plan`);
+        return "";
+      },
+      renderWaveStart(workflow: CeremonyWorkflow, _manifest: unknown, executionWave: number) {
+        calls.push(`${workflow}:wave-start:${executionWave}`);
+        return "";
+      },
+      renderWorkerComplete(workflow: CeremonyWorkflow, worker: unknown) {
+        const name = (worker as { name?: string }).name ?? "unknown";
+        calls.push(`${workflow}:worker-complete:${name}`);
+        return "";
+      },
+      renderCloseout(workflow: CeremonyWorkflow) {
+        calls.push(`${workflow}:closeout`);
+        return "";
+      },
+    };
+
+    __setCreateCeremonyAdapter(() => fakeAdapter);
+    try {
+      const result = await runLifecycle({
+        goBinaryPath: bridge.goBinaryPath,
+        cwd: bridge.cwd,
+        simulateWorkers: true,
+        phase: 1,
+      });
+
+      assert.ok(result.success, `Lifecycle should succeed: ${result.error ?? "none"}`);
+      assert.deepEqual(
+        calls.filter((call) => call.endsWith("spawn-plan") || call.endsWith("closeout")),
+        [
+          "plan:spawn-plan",
+          "plan:closeout",
+          "build:spawn-plan",
+          "build:closeout",
+          "continue:spawn-plan",
+          "continue:closeout",
+        ]
+      );
+      assert.ok(
+        calls.some((call) => call.startsWith("build:wave-start:")),
+        `Expected build wave-start ceremony call, got ${JSON.stringify(calls)}`
+      );
+      assert.ok(
+        calls.some((call) => call.startsWith("build:worker-complete:")),
+        `Expected build worker completion ceremony call, got ${JSON.stringify(calls)}`
+      );
+    } finally {
+      __restoreCreateCeremonyAdapter();
     }
   });
 });

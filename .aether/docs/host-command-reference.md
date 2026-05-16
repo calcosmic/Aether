@@ -1,6 +1,8 @@
 # Host Command Reference
 
-The `aether host` command delegates to the TypeScript orchestration host for all major workflows. The Go CLI spawns the TS host process; the TS host parses arguments, calls Go CLI subcommands via JSON, and renders output.
+The `aether host` command delegates selected host-backed workflows to the
+TypeScript orchestration host. The Go CLI spawns the TS host process; the TS
+host parses arguments, calls Go CLI subcommands via JSON, and renders output.
 
 ## Subcommands
 
@@ -9,6 +11,8 @@ The `aether host` command delegates to the TypeScript orchestration host for all
 Run the plan workflow via the TS host.
 
 **Flags:**
+- `--refresh` — Regenerate the plan when one already exists
+- `--force` — Alias for `--refresh`
 - `--depth <level>` — fast | balanced | deep | exhaustive
 - `--planning-depth <level>` — light | standard | deep
 - `--verification-depth <level>` — light | standard | heavy
@@ -30,10 +34,17 @@ aether host plan --depth balanced --planning-depth standard
 Run the build workflow for a phase via the TS host.
 
 **Flags:**
+- `--task <id>` — Redispatch only the specified task ID; repeat for multiple IDs
+- `--force` — Force redispatch of an interrupted active phase
 - `--synthetic` — Skip real worker dispatch (Go CLI flag)
 - `--simulate` — Run in simulation mode (TS host flag). No real workers are spawned; synthetic results are produced. Required when no platform CLI is installed.
 - `--light` — Force light review
+- `--heavy` — Force heavy review
+- `--verification-depth <level>` — light | standard | heavy
 - `--worker-timeout <duration>` — e.g. `15m`
+- `--circuit-breaker-threshold <n>` — Consecutive failures before a worker circuit breaker trips
+- `--no-suggest` — Skip pheromone suggestion analysis during build
+- `--verbose` — Show full worker output
 - `--no-dashboard` — Plain text output
 
 **Error:** Without `--simulate`, build requires a platform CLI (claude, opencode, or codex) to be installed.
@@ -47,15 +58,23 @@ aether host build 1 --light
 
 ### `aether host continue [flags]`
 
-Run the continue workflow via the TS host.
+Run the heavy external-review continue manifest path via the TS host. The
+default continue path remains Go-owned through
+`aether continue --skip-watchers --verification-depth standard`; use
+`aether host continue` only when heavy review or runtime guidance asks for
+wrapper-spawned reviewers.
 
 **Flags:**
+- `--reconcile-task <id>` — Mark task reconciliation before continue gating; repeat for multiple IDs
 - `--verification-depth <level>` — light | standard | heavy
+- `--verification-timeout <duration>` — Override deterministic verification timeout, e.g. `30m`
 - `--light` — Force light review
 - `--heavy` — Force heavy review
+- `--skip-watchers` — Skip watcher agent spawn when Go allows it
 - `--synthetic` — Mark as synthetic (Go CLI flag)
 - `--simulate` — Run in simulation mode (TS host flag). No real workers are spawned.
 - `--worker-timeout <duration>` — e.g. `15m`
+- `--no-learn` — Disable learning capture when finalization uses the flag
 - `--no-dashboard` — Plain text output
 
 **Example:**
@@ -151,6 +170,41 @@ stdout/stderr, tokens, or auth probe output. If a worker launches but the
 provider later returns an API/auth payload instead of worker claims JSON, treat
 that as a post-launch provider/API/auth failure, not as provider availability
 preflight failure.
+
+## Command Spine Boundary
+
+The TypeScript host is the command spine for host-backed workflows, not a second
+runtime. Direct host commands parse host flags and call Go in JSON mode for
+manifests. The wrapper/lifecycle orchestration layer built on those manifests
+invokes Go-owned ceremony commands and returns worker completion packets to Go
+finalizers.
+
+For beginners: TypeScript lines up the work; Go remains the engine that changes
+state and decides the official result.
+
+Current host-backed orchestration surfaces:
+
+- `aether host plan` delegates to `aether plan --plan-only`; Go still owns
+  `aether plan-finalize`.
+- `aether host build` delegates to `aether build <phase> --plan-only`; Go still
+  owns `aether build-finalize`.
+- `continue` uses the host only for heavy external review; default continue is
+  Go-owned through `aether continue --skip-watchers --verification-depth standard`.
+- `aether host continue` delegates to `aether continue --plan-only` for that
+  heavy-review manifest path; Go still owns `aether continue-finalize`.
+- `aether host oracle`, `aether host watch`, and `aether host swarm` expose
+  lifecycle/display surfaces. `swarm` currently fetches and displays the Go
+  swarm plan; canonical wrapper finalization remains Go-owned.
+
+Known future targets:
+
+- `colonize` and `seal` still use Go plan-only/finalizer paths from wrappers.
+  Do not document `aether host colonize` or `aether host seal` as implemented
+  until the TS host registry and Go host command support them.
+
+The machine-readable parity contract is
+`.aether/commands/classic-command-parity.json`; the human-readable companion is
+`.aether/docs/classic-command-parity-matrix.md`.
 
 Release-surface note: `.opencode/package.json` and
 `.opencode/package-lock.json`, when present, are ignored local OpenCode install

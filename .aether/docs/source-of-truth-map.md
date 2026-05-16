@@ -110,6 +110,14 @@ source chain for those commands is:
    shipped skill bodies.
 5. `aether command-guide <command> --platform <platform>` for runtime-readable
    orchestration guidance.
+6. `.aether/ts-host/src/command-registry.ts` and `.aether/ts-host/src/host.ts`
+   for the implemented TypeScript host command spine.
 
 When changing intelligent behavior for `init`, `oracle`, `plan`, `build`,
 `continue`, `seal`, or `discuss`, update those artifacts together.
+
+Classic command parity is tracked by
+`.aether/commands/classic-command-parity.json` and explained in
+`.aether/docs/classic-command-parity-matrix.md`. Treat the JSON as a tested
+contract artifact for wrapper/runtime alignment, not as an execution source of
+truth.

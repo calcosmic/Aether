@@ -3,9 +3,11 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -13,25 +15,25 @@ import (
 
 // oracleState is the persisted Oracle iteration state.
 type oracleState struct {
-	Topic             string              `json:"topic"`
-	Depth             string              `json:"depth"`
-	MaxIterations     int                 `json:"max_iterations"`
-	ConfidenceTarget  int                 `json:"confidence_target"`
-	CurrentIteration  int                 `json:"current_iteration"`
-	CurrentConfidence int                 `json:"current_confidence"`
+	Topic             string               `json:"topic"`
+	Depth             string               `json:"depth"`
+	MaxIterations     int                  `json:"max_iterations"`
+	ConfidenceTarget  int                  `json:"confidence_target"`
+	CurrentIteration  int                  `json:"current_iteration"`
+	CurrentConfidence int                  `json:"current_confidence"`
 	History           []oracleHistoryEntry `json:"history"`
-	ShouldContinue    bool                `json:"should_continue"`
-	UpdatedAt         string              `json:"updated_at"`
+	ShouldContinue    bool                 `json:"should_continue"`
+	UpdatedAt         string               `json:"updated_at"`
 	// Interrupt recovery fields
-	PendingIteration  int    `json:"pending_iteration,omitempty"`
-	PendingStartTime  string `json:"pending_start_time,omitempty"`
-	LastWorkerStatus  string `json:"last_worker_status,omitempty"`
+	PendingIteration int    `json:"pending_iteration,omitempty"`
+	PendingStartTime string `json:"pending_start_time,omitempty"`
+	LastWorkerStatus string `json:"last_worker_status,omitempty"`
 }
 
 type oracleHistoryEntry struct {
-	Iteration int    `json:"iteration"`
-	Confidence int   `json:"confidence"`
-	Summary   string `json:"summary"`
+	Iteration  int    `json:"iteration"`
+	Confidence int    `json:"confidence"`
+	Summary    string `json:"summary"`
 }
 
 // iterationManifest is returned by oracle-iterate --plan-only.
@@ -58,12 +60,27 @@ type oracleIterationResult struct {
 	IterationManifest iterationManifest `json:"iteration_manifest"`
 }
 
+type oracleIterationDispatch struct {
+	Worker          string `json:"worker"`
+	Status          string `json:"status"`
+	Summary         string `json:"summary"`
+	ConfidenceDelta int    `json:"confidence_delta"`
+}
+
+type oracleIterationCompletion struct {
+	IterationManifest iterationManifest         `json:"iteration_manifest"`
+	Dispatches        []oracleIterationDispatch `json:"dispatches"`
+	CurrentConfidence int                       `json:"current_confidence"`
+	CurrentIteration  int                       `json:"current_iteration"`
+	ShouldContinue    bool                      `json:"should_continue"`
+}
+
 // oracleFinalizeResult is the top-level JSON envelope from oracle-iterate-finalize.
 type oracleFinalizeResult struct {
-	OK               bool   `json:"ok"`
-	StatePath        string `json:"state_path"`
-	CurrentConfidence int   `json:"current_confidence"`
-	ConfidenceTarget  int   `json:"confidence_target"`
+	OK                bool   `json:"ok"`
+	StatePath         string `json:"state_path"`
+	CurrentConfidence int    `json:"current_confidence"`
+	ConfidenceTarget  int    `json:"confidence_target"`
 	ShouldContinue    bool   `json:"should_continue"`
 	NextCommand       string `json:"next_command"`
 }
@@ -175,44 +192,22 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		completionPath, _ := cmd.Flags().GetString("completion-file")
-		if completionPath == "" {
-			outputError(1, "flag --completion-file is required", nil)
-			return nil
-		}
-
-		data, err := os.ReadFile(completionPath)
+		completion, err := loadExternalOracleIterationCompletion(completionPath)
 		if err != nil {
-			outputError(1, fmt.Sprintf("read completion file: %v", err), nil)
-			return nil
-		}
-
-		var completion struct {
-			IterationManifest iterationManifest    `json:"iteration_manifest"`
-			Dispatches        []struct {
-				Worker          string `json:"worker"`
-				Status          string `json:"status"`
-				Summary         string `json:"summary"`
-				ConfidenceDelta int    `json:"confidence_delta"`
-			} `json:"dispatches"`
-			CurrentConfidence int  `json:"current_confidence"`
-			CurrentIteration  int  `json:"current_iteration"`
-			ShouldContinue    bool `json:"should_continue"`
-		}
-		if err := json.Unmarshal(data, &completion); err != nil {
-			outputError(1, fmt.Sprintf("parse completion file: %v", err), nil)
-			return nil
+			outputError(1, err.Error(), nil)
+			return renderedErrorExit(1)
 		}
 
 		state, err := loadOracleState()
 		if err != nil {
 			state = &oracleState{
-				Topic:            completion.IterationManifest.Topic,
-				Depth:            completion.IterationManifest.Depth,
-				MaxIterations:    completion.IterationManifest.MaxIterations,
-				ConfidenceTarget: completion.IterationManifest.ConfidenceTarget,
-				CurrentIteration: completion.CurrentIteration,
+				Topic:             completion.IterationManifest.Topic,
+				Depth:             completion.IterationManifest.Depth,
+				MaxIterations:     completion.IterationManifest.MaxIterations,
+				ConfidenceTarget:  completion.IterationManifest.ConfidenceTarget,
+				CurrentIteration:  completion.CurrentIteration,
 				CurrentConfidence: completion.CurrentConfidence,
-				ShouldContinue:   completion.ShouldContinue,
+				ShouldContinue:    completion.ShouldContinue,
 			}
 		} else {
 			state.CurrentIteration = completion.CurrentIteration
@@ -226,9 +221,9 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 		for _, d := range completion.Dispatches {
 			if d.Status == "completed" {
 				state.History = append(state.History, oracleHistoryEntry{
-					Iteration: state.CurrentIteration,
+					Iteration:  state.CurrentIteration,
 					Confidence: state.CurrentConfidence,
-					Summary:   d.Summary,
+					Summary:    d.Summary,
 				})
 			}
 		}
@@ -251,7 +246,7 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 
 		if err := saveOracleState(state); err != nil {
 			outputError(1, fmt.Sprintf("save oracle state: %v", err), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 
 		nextCmd := fmt.Sprintf("aether oracle-iterate --plan-only --topic %s", strconv.Quote(state.Topic))
@@ -266,6 +261,51 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 		outputOK(result)
 		return nil
 	},
+}
+
+func loadExternalOracleIterationCompletion(path string) (oracleIterationCompletion, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return oracleIterationCompletion{}, fmt.Errorf("flag --completion-file is required")
+	}
+	var data []byte
+	var err error
+	if path == "-" {
+		data, err = io.ReadAll(os.Stdin)
+	} else {
+		data, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return oracleIterationCompletion{}, fmt.Errorf("read completion file: %w", err)
+	}
+
+	var completion oracleIterationCompletion
+	if err := json.Unmarshal(data, &completion); err != nil {
+		return oracleIterationCompletion{}, fmt.Errorf("parse completion file: %w", err)
+	}
+	if completion.hasIterationManifest() {
+		return completion, nil
+	}
+
+	var envelope struct {
+		Result oracleIterationCompletion `json:"result"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return oracleIterationCompletion{}, fmt.Errorf("parse completion envelope: %w", err)
+	}
+	if !envelope.Result.hasIterationManifest() {
+		return oracleIterationCompletion{}, fmt.Errorf("completion file must include iteration_manifest")
+	}
+	return envelope.Result, nil
+}
+
+func (c oracleIterationCompletion) hasIterationManifest() bool {
+	manifest := c.IterationManifest
+	return strings.TrimSpace(manifest.Topic) != "" &&
+		strings.TrimSpace(manifest.Depth) != "" &&
+		manifest.MaxIterations > 0 &&
+		manifest.ConfidenceTarget > 0 &&
+		manifest.CurrentIteration > 0
 }
 
 func init() {
@@ -342,4 +382,3 @@ func isPendingStale(startTime string) bool {
 	}
 	return time.Since(t) > time.Hour
 }
-

@@ -298,6 +298,13 @@ High-confidence behavioral patterns that have been validated through repeated co
 - Do not default unknown hosts to Codex
 
 ## Wisdom
+- Auth-probe tests should stay deterministic enough that provider CLI latency does not create release-blocking noise. (seal review phase 5, 2026-05-16)
+- Final seal audits should verify TS host checks directly when phase verification only records Go deterministic checks. (seal review phase 5, 2026-05-16)
+- Release handoff docs should name the active milestone when reused across colonies. (seal review phase 5, 2026-05-16)
+- Review ledgers should reject blank descriptions for non-INFO findings. (seal review phase 5, 2026-05-16)
+- Seal evidence should include the colony goal or run id, not only phase number and freshness, so old final-review files cannot be confused with current seal proof. (seal review phase 5, 2026-05-16)
+- Seal probes should rerun or accept fresh orchestrator reruns for environmental timeout failures before requiring code changes. (seal review phase 5, 2026-05-16)
+- Use the source-built CLI for seal review when local installed aether may lag behind the checkout. (seal review phase 5, 2026-05-16)
 - For seal readiness, required smoke commands should be machine-recorded in verification artifacts, not only summarized in worker handoffs. (seal review phase 5, 2026-05-16)
 - High-severity review-ledger findings need explicit closure or supersession evidence after builder fixes so stale risks are not confused with active blockers. (seal review phase 5, 2026-05-16)
 - Ignored local provider package artifacts should be excluded from release-surface dependency claims or kept absent to avoid false audit noise. (seal review phase 5, 2026-05-16)

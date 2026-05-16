@@ -44,6 +44,21 @@ describe("parseArgs", () => {
     assert.equal(result.cwd, "/tmp/aether");
   });
 
+  it("parses plan refresh, force, and synthetic flags", () => {
+    const result = parseArgs([
+      "node", "host.js",
+      "plan",
+      "--refresh",
+      "--force",
+      "--synthetic",
+    ]);
+
+    assert.equal(result.command, "plan");
+    assert.equal(result.refresh, true);
+    assert.equal(result.force, true);
+    assert.equal(result.synthetic, true);
+  });
+
   it("parses continue with verification-depth and light", () => {
     const result = parseArgs(["node", "host.js", "continue", "--verification-depth", "heavy", "--light"]);
 
@@ -75,6 +90,27 @@ describe("parseArgs", () => {
     assert.equal(result.command, "build");
     assert.deepStrictEqual(result.positional, ["1"]);
     assert.equal(result.light, true);
+  });
+
+  it("parses build task and release-hardening flags", () => {
+    const result = parseArgs([
+      "node", "host.js",
+      "build", "5",
+      "--task", "5.1",
+      "--task=5.2",
+      "--force",
+      "--circuit-breaker-threshold=4",
+      "--no-suggest",
+      "--verbose",
+    ]);
+
+    assert.equal(result.command, "build");
+    assert.deepStrictEqual(result.positional, ["5"]);
+    assert.deepStrictEqual(result.tasks, ["5.1", "5.2"]);
+    assert.equal(result.force, true);
+    assert.equal(result.circuitBreakerThreshold, "4");
+    assert.equal(result.noSuggest, true);
+    assert.equal(result.verbose, true);
   });
 
   it("parses oracle with topic and simulate", () => {
@@ -122,6 +158,36 @@ describe("parseArgs", () => {
     const result = parseArgs(["node", "host.js", "continue", "--heavy"]);
 
     assert.equal(result.heavy, true);
+  });
+
+  it("parses skip-watchers flag", () => {
+    const result = parseArgs(["node", "host.js", "continue", "--skip-watchers"]);
+
+    assert.equal(result.skipWatchers, true);
+  });
+
+  it("parses continue-only review flags", () => {
+    const result = parseArgs([
+      "node", "host.js",
+      "continue",
+      "--reconcile-task", "5.1",
+      "--reconcile-task=5.2",
+      "--verification-timeout=30m",
+      "--no-learn",
+    ]);
+
+    assert.equal(result.command, "continue");
+    assert.deepStrictEqual(result.reconcileTasks, ["5.1", "5.2"]);
+    assert.equal(result.verificationTimeout, "30m");
+    assert.equal(result.noLearn, true);
+  });
+
+  it("records unknown flags instead of positionalizing them", () => {
+    const result = parseArgs(["node", "host.js", "build", "1", "--mystery", "value"]);
+
+    assert.equal(result.command, "build");
+    assert.deepStrictEqual(result.positional, ["1", "value"]);
+    assert.deepStrictEqual(result.unknownFlags, ["--mystery"]);
   });
 
   it("passes unknown command through (main() handles error)", () => {

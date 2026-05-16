@@ -478,11 +478,12 @@ func TestLockingUnchanged(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SAFE-04: Install, update, publish have zero TS host involvement
+// SAFE-04: Install stays independent of TS host runtime execution
 // ---------------------------------------------------------------------------
 
-// TestInstallPureGo proves install, update, and publish commands contain no
-// references to the TypeScript host.
+// TestInstallPureGo proves install does not execute through the TypeScript
+// host. Publish and update may intentionally sync/build TS host assets, but
+// they must not delegate their own command behavior to the TS host runtime.
 func TestInstallPureGo(t *testing.T) {
 	files := []struct {
 		name    string
@@ -505,9 +506,8 @@ func TestInstallPureGo(t *testing.T) {
 	}
 
 	// The `host` command is explicitly the bridge between Go CLI and TS host.
-	// It is exempt from the "no ts-host references" invariant because its
-	// entire purpose is to delegate to the TS host. The invariant applies to
-	// install/update/publish only, which must remain pure Go.
+	// Publish and update are also exempt from this string check because they
+	// intentionally sync/build TS host assets while keeping command behavior in Go.
 	exemptFiles := map[string]bool{
 		"host":    true,
 		"publish": true,

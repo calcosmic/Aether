@@ -39,12 +39,12 @@ var planFinalizeCmd = &cobra.Command{
 		completion, err := loadExternalPlanCompletion(completionPath)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		result, err := runCodexPlanFinalize(skillWorkspaceRoot(), completion)
 		if err != nil {
 			outputError(1, err.Error(), nil)
-			return nil
+			return renderedErrorExit(1)
 		}
 		outputWorkflow(result, renderPlanVisual(result))
 		return nil

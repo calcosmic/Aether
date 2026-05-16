@@ -39,6 +39,11 @@ import { createQueenOrchestrator as _createQueenOrchestrator } from "./queen/orc
 import type { QueenOrchestratorResult } from "./queen/types.js";
 import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
 import type { OracleLifecycleResult } from "./oracle-lifecycle.js";
+import {
+  createCeremonyAdapter,
+  type CeremonyAdapter,
+  type CeremonyWorkflow,
+} from "./ceremony-adapter.js";
 
 // Mutable reference for test injection.
 let _createQueenOrchestratorRef = _createQueenOrchestrator;
@@ -123,6 +128,7 @@ interface PlanningDispatchResult {
   task?: string;
   task_id?: string;
   wave?: number;
+  execution_wave?: number;
   [key: string]: unknown;
 }
 
@@ -150,9 +156,57 @@ interface ContinueDispatchResult {
   task?: string;
   task_id?: string;
   wave?: number;
+  execution_wave?: number;
   status?: string;
   summary?: string;
   [key: string]: unknown;
+}
+
+interface CeremonyDispatchLike {
+  execution_wave?: number;
+  wave?: number;
+}
+
+function emitCeremonyOutput(output: string): void {
+  if (output.trim() === "") {
+    return;
+  }
+  process.stderr.write(output.endsWith("\n") ? output : `${output}\n`);
+}
+
+function ceremonyExecutionWaves(dispatches: CeremonyDispatchLike[]): number[] {
+  const waves = new Set<number>();
+  for (const dispatch of dispatches) {
+    const wave = dispatch.execution_wave ?? dispatch.wave ?? 0;
+    if (wave > 0) {
+      waves.add(wave);
+    }
+  }
+  return [...waves].sort((a, b) => a - b);
+}
+
+function renderManifestCeremony(
+  ceremony: CeremonyAdapter,
+  workflow: CeremonyWorkflow,
+  manifestEnvelope: unknown,
+  dispatches: CeremonyDispatchLike[]
+): void {
+  emitCeremonyOutput(ceremony.renderSpawnPlan(workflow, manifestEnvelope));
+  for (const executionWave of ceremonyExecutionWaves(dispatches)) {
+    emitCeremonyOutput(
+      ceremony.renderWaveStart(workflow, manifestEnvelope, executionWave)
+    );
+  }
+}
+
+function renderWorkerCeremony(
+  ceremony: CeremonyAdapter,
+  workflow: CeremonyWorkflow,
+  workers: unknown[]
+): void {
+  for (const worker of workers) {
+    emitCeremonyOutput(ceremony.renderWorkerComplete(workflow, worker));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +233,7 @@ export async function runLifecycle(
   const stepsCompleted: string[] = [];
   const targetPhase = opts.phase ?? 1;
   let oracleResult: OracleLifecycleResult | undefined;
+  const ceremony = createCeremonyAdapter(opts);
 
   // Determine if dashboard should be active (default true when TTY)
   const useDashboard = opts.dashboard !== false && process.stdout.isTTY;
@@ -225,6 +280,11 @@ export async function runLifecycle(
     // Extract planning dispatches from the result. These are the planning
     // workers (scout, route-setter) that would normally run during planning.
     const planDispatches = planResult.dispatches ?? [];
+    const planCeremonyEnvelope = {
+      plan_manifest: planManifest,
+      dispatches: planDispatches,
+    };
+    renderManifestCeremony(ceremony, "plan", planCeremonyEnvelope, planDispatches);
 
     // Build planning dispatch results: mark all as completed since the TS host
     // is orchestrating (not actually running planning agents for this prototype).
@@ -239,8 +299,10 @@ export async function runLifecycle(
       if (d.task !== undefined) result.task = d.task;
       if (d.task_id !== undefined) result.task_id = d.task_id;
       if (d.wave !== undefined) result.wave = d.wave;
+      if (d.execution_wave !== undefined) result.execution_wave = d.execution_wave;
       return result;
     });
+    renderWorkerCeremony(ceremony, "plan", planningResults);
 
     // Build plan completion file with a synthetic phase_plan.
     // The Go plan-finalizer requires a phase_plan (codexWorkerPlanArtifact)
@@ -286,6 +348,7 @@ export async function runLifecycle(
       "--completion-file",
       planCompletionPath,
     ]);
+    emitCeremonyOutput(ceremony.renderCloseout("plan", planCompletionPath));
 
     stepsCompleted.push("plan");
     process.stderr.write("Plan finalized successfully\n");
@@ -312,6 +375,8 @@ export async function runLifecycle(
     if (buildDispatches.length === 0) {
       throw new Error("Build manifest contains no dispatches");
     }
+    const buildCeremonyEnvelope = { dispatch_manifest: buildManifest };
+    renderManifestCeremony(ceremony, "build", buildCeremonyEnvelope, buildDispatches);
 
     // Detect available platforms before dispatching.
     const availablePlatforms = await detectAvailablePlatforms();
@@ -354,11 +419,6 @@ export async function runLifecycle(
       dashboard.start();
     }
 
-    // Emit wave start event
-    process.stderr.write(
-      `Ceremony: ceremony.build.wave.start wave=1 workers=${buildDispatches.length}\n`
-    );
-
     // Build step with Queen orchestration
     const queenOpts = {
       goBinaryPath: opts.goBinaryPath,
@@ -390,11 +450,6 @@ export async function runLifecycle(
       process.stderr.write(`Queen orchestrator error: ${queenResult.error}\n`);
     }
 
-    // Emit wave end event
-    process.stderr.write(
-      `Ceremony: ceremony.build.wave.end wave=1 workers=${buildDispatches.length}\n`
-    );
-
     // Stop dashboard after build dispatch completes
     if (dashboard) {
       dashboard.stop();
@@ -403,6 +458,7 @@ export async function runLifecycle(
 
     // Use worker results from Queen orchestrator for the finalizer
     const workerResults = queenResult.workerResults;
+    renderWorkerCeremony(ceremony, "build", workerResults);
 
     // Build completion file
     const buildCompletion = {
@@ -423,6 +479,7 @@ export async function runLifecycle(
       "--completion-file",
       buildCompletionPath,
     ]);
+    emitCeremonyOutput(ceremony.renderCloseout("build", buildCompletionPath));
 
     stepsCompleted.push("build");
     process.stderr.write("Build finalized successfully\n");
@@ -444,6 +501,16 @@ export async function runLifecycle(
 
     // Get continue dispatches from the manifest
     const continueDispatches = continueResult.dispatches ?? [];
+    const continueCeremonyEnvelope = {
+      continue_manifest: continueManifest,
+      dispatches: continueDispatches,
+    };
+    renderManifestCeremony(
+      ceremony,
+      "continue",
+      continueCeremonyEnvelope,
+      continueDispatches
+    );
 
     // Build continue dispatch results: mark all as completed for the prototype.
     // In production, these would be review worker results (watcher, auditor, etc.)
@@ -459,9 +526,11 @@ export async function runLifecycle(
         if (d.task !== undefined) result.task = d.task;
         if (d.task_id !== undefined) result.task_id = d.task_id;
         if (d.wave !== undefined) result.wave = d.wave;
+        if (d.execution_wave !== undefined) result.execution_wave = d.execution_wave;
         return result;
       }
     );
+    renderWorkerCeremony(ceremony, "continue", continueResults);
 
     // Build continue completion file
     const continueCompletion = {
@@ -481,6 +550,9 @@ export async function runLifecycle(
       "--completion-file",
       continueCompletionPath,
     ]);
+    emitCeremonyOutput(
+      ceremony.renderCloseout("continue", continueCompletionPath)
+    );
 
     // Check if continue was blocked by gates (informational, not a failure)
     const blocked = continueFinalizeResult["blocked"] === true;
