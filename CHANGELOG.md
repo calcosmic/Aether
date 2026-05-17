@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.39] - 2026-05-17
+
+### Added
+- Restored universal classic ceremony parity across Codex lifecycle flows, including spawn plans, wave starts, worker completions, and closeouts.
+- Added final seal evidence for the Universal Classic Ceremony Parity and Command UX Completion colony.
+
+### Changed
+- Bumped the Aether source and npm package version to 1.0.39 for hub-backed testing in other repositories.
+- Aligned Codex and Claude project guides plus README version references with the release version.
+
+### Fixed
+- Hardened Porter full-release readiness with persisted receipts, version agreement, binary smoke, Go/TypeScript/npm gates, and redacted failed-command diagnostics.
+- Strengthened final seal review so blocker-level security and quality findings stop sealing while non-blocking release lessons are preserved.
+
 ## [1.0.38] - 2026-05-16
 
 ### Docs

@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-25-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-50-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.34-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.39-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -121,7 +121,7 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.34` bootstraps Aether `1.0.34`.
+`aether-colony@1.0.39` bootstraps Aether `1.0.39`.
 
 **Option 1: Go binary**
 
@@ -1076,7 +1076,13 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.34 -- Released (Current)
+### 🎉 v1.0.39 -- Released (Current)
+
+- Restored universal classic ceremony parity across Codex lifecycle flows, including spawn plans, wave starts, worker completions, and closeouts.
+- Hardened Porter full-release readiness with persisted receipts, version agreement, binary smoke, Go/TypeScript/npm gates, and redacted failed-command diagnostics.
+- Strengthened final seal review so blocker-level security and quality findings stop sealing while non-blocking release lessons are preserved.
+
+### 🎉 v1.0.34 -- Released
 
 - Plan closeout ceremony now renders the actual planned phases, task goals, selected hints, and confidence directly in the runtime visual surface.
 - `aether ceremony closeout --workflow plan` can pull phase details from either the completion packet or the active colony state, so Claude/OpenCode no longer need to supply the rich plan recap as plain prose after the banner.
