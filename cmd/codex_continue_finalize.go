@@ -71,6 +71,9 @@ func loadExternalContinueCompletion(path string) (codexExternalContinueCompletio
 	if path == "" {
 		return codexExternalContinueCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return codexExternalContinueCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {
@@ -613,7 +616,13 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		if name == "" {
 			return nil, fmt.Errorf("external continue result missing name")
 		}
-		if _, exists := resultByName[name]; exists {
+		if existing, exists := resultByName[name]; exists {
+			if useIncoming, ok := preferCompletedResultOverTimeout(existing.Status, result.Status); ok {
+				if useIncoming {
+					resultByName[name] = result
+				}
+				continue
+			}
 			return nil, fmt.Errorf("duplicate external continue result for %s", name)
 		}
 		resultByName[name] = result

@@ -160,12 +160,17 @@ var pendingDecisionResolveCmd = &cobra.Command{
 		}
 
 		found := false
+		scope := loadCurrentPendingDecisionScope()
 		for i := range file.Decisions {
 			if file.Decisions[i].ID == id {
+				if !pendingDecisionMatchesScope(file.Decisions[i], scope) {
+					outputError(1, fmt.Sprintf("decision %q is stale for the current goal/session", id), nil)
+					return nil
+				}
 				file.Decisions[i].Resolved = true
 				file.Decisions[i].Resolution = resolution
 				file.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
-				stampPendingDecisionScope(&file.Decisions[i], loadCurrentPendingDecisionScope())
+				stampPendingDecisionScope(&file.Decisions[i], scope)
 				found = true
 				break
 			}

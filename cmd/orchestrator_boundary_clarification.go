@@ -32,8 +32,9 @@ func materializeOrchestratorBoundaryClarifications(workflow string, phase int, p
 		maxQuestions = len(candidates)
 	}
 	scope := loadCurrentPendingDecisionScope()
+	activePending, _ := filterPendingDecisionFileForScope(pending, scope)
 
-	existingBySource := clarificationDecisionIndex(pending)
+	existingBySource := clarificationDecisionIndex(activePending)
 	surfacedBySource := map[string]bool{}
 	questions := make([]discussQuestion, 0, maxQuestions)
 	createdCount := 0

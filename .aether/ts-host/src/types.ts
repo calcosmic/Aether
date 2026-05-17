@@ -61,7 +61,7 @@ export interface BuildManifest {
   tasks: BuildTaskPlan[];
   success_criteria: string[];
   review_depth?: string;
-  dispatch_contract?: Record<string, unknown>;
+  dispatch_contract?: DispatchContract;
   profile_contract?: WorkflowProfileContract;
   queen_recommendation?: QueenWorkflowRecommendation;
   queen_execution_policy?: QueenExecutionPolicy;
@@ -242,6 +242,12 @@ export interface WorkflowProfileContract {
   [key: string]: unknown;
 }
 
+export interface DispatchContract {
+  result_artifact_paths?: string[];
+  result_collection_policy?: string;
+  [key: string]: unknown;
+}
+
 export interface QueenWorkflowRecommendation {
   [key: string]: unknown;
 }
@@ -261,6 +267,9 @@ export interface QueenSpawnBudget {
   preserved_castes?: string[];
   required_castes?: string[];
   policy_added_castes?: string[];
+  selected_reasons?: Record<string, string>;
+  pruned_reasons?: Record<string, string>;
+  skipped_castes?: string[];
   overflow_required_workers?: number;
   relevance_threshold?: number;
   budget_unit?: string;

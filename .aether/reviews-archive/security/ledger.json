@@ -1,21 +1,30 @@
 {
   "entries": [
     {
-      "id": "sec-5-001",
-      "phase": 5,
-      "phase_name": "Full Safety Verification",
+      "id": "sec-3-001",
+      "phase": 3,
+      "phase_name": "Worker Result Collection Reliability",
       "agent": "gatekeeper",
-      "agent_name": "Checkpoint-8",
-      "generated_at": "2026-05-17T18:06:20Z",
+      "generated_at": "2026-05-17T19:20:02Z",
+      "status": "open",
+      "severity": "",
+      "description": ""
+    },
+    {
+      "id": "sec-4-001",
+      "phase": 4,
+      "phase_name": "Spawn Economy And Recovery Hygiene",
+      "agent": "gatekeeper",
+      "agent_name": "Guard-79-r4",
+      "generated_at": "2026-05-17T19:42:37Z",
       "status": "open",
       "severity": "INFO",
-      "category": "recommendation",
-      "description": "Run porter check after seal and commit all runtime/TS host changes before publish."
+      "description": ""
     }
   ],
   "summary": {
-    "total": 1,
-    "open": 1,
+    "total": 2,
+    "open": 2,
     "resolved": 0,
     "by_severity": {
       "high": 0,

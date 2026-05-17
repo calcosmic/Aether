@@ -21,6 +21,7 @@ import {
   discoverGoBinary,
   callGoJSON,
   assertNoDirectDataWrites,
+  approvedCompletionDirPrefix,
   writeCompletionFile,
 } from "../src/go-bridge.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
@@ -200,8 +201,9 @@ describe("go-bridge", () => {
   });
 
   it("writeCompletionFile writes to tmpdir not .aether/data", () => {
+    const dirPrefix = approvedCompletionDirPrefix("test-completions");
     const path = writeCompletionFile(
-      "aether-test-completions",
+      dirPrefix,
       "test-completion.json",
       { test: true, workers: [] }
     );
@@ -222,9 +224,15 @@ describe("go-bridge", () => {
     assert.ok(existsSync(path), `File should exist: ${path}`);
 
     // Cleanup
-    rmSync(join(tmpdir(), "aether-test-completions"), {
+    rmSync(join(tmpdir(), dirPrefix), {
       recursive: true,
       force: true,
     });
+  });
+
+  it("approvedCompletionDirPrefix normalizes workflow names", () => {
+    assert.equal(approvedCompletionDirPrefix("build"), "aether-build");
+    assert.equal(approvedCompletionDirPrefix("Seal Review"), "aether-seal-review");
+    assert.throws(() => approvedCompletionDirPrefix("   "), /workflow is required/);
   });
 });

@@ -251,6 +251,9 @@ func renderCeremonySpawnPlan(workflow string, manifest map[string]interface{}, d
 	b.WriteString(renderOldStyleCeremonyHeader(commandEmoji(emptyFallback(workflow, "spawn-plan")), "Spawn Plan"))
 	b.WriteString("\n")
 	writeCeremonyPhaseLine(&b, manifest)
+	if budget := renderCeremonyQueenSpawnBudget(manifest); budget != "" {
+		b.WriteString(budget)
+	}
 	if len(dispatches) == 0 {
 		b.WriteString("No workers planned.\n")
 		return b.String()
@@ -271,6 +274,87 @@ func renderCeremonySpawnPlan(workflow string, manifest map[string]interface{}, d
 	b.WriteString(ceremonyCasteCountSummary(dispatches))
 	b.WriteString(fmt.Sprintf(" = %d spawns\n", len(dispatches)))
 	return b.String()
+}
+
+func renderCeremonyQueenSpawnBudget(manifest map[string]interface{}) string {
+	policy := mapValue(manifest["queen_execution_policy"])
+	budget := mapValue(policy["spawn_budget"])
+	if len(budget) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	selectedCastes := intValue(budget["selected_castes"])
+	if selectedCastes == 0 {
+		selectedCastes = len(stringSliceValue(budget["castes"]))
+	}
+	maxSelectedCastes := intValue(budget["max_selected_castes"])
+	workerCount := intValue(budget["worker_count"])
+	if workerCount == 0 {
+		workerCount = intValue(budget["selected_workers"])
+	}
+	reason := strings.TrimSpace(stringValue(budget["reason"]))
+	if reason == "" {
+		reason = "Queen relevance budget"
+	}
+
+	fmt.Fprintf(&b, "Queen Budget: %d workers across %d castes", workerCount, selectedCastes)
+	if maxSelectedCastes > 0 {
+		fmt.Fprintf(&b, " (caste budget %d, %s)", maxSelectedCastes, reason)
+	} else {
+		fmt.Fprintf(&b, " (%s)", reason)
+	}
+	b.WriteString("\n")
+
+	if required := stringSliceValue(budget["required_castes"]); len(required) > 0 {
+		b.WriteString("Required: ")
+		b.WriteString(strings.Join(required, ", "))
+		b.WriteString("\n")
+	}
+
+	skipped := stringSliceValue(budget["skipped_castes"])
+	if len(skipped) == 0 {
+		if prunedReasons := ceremonyStringMapValue(budget["pruned_reasons"]); len(prunedReasons) > 0 {
+			for caste := range prunedReasons {
+				skipped = append(skipped, caste)
+			}
+			sort.Strings(skipped)
+		}
+	}
+	if len(skipped) > 0 {
+		prunedReasons := ceremonyStringMapValue(budget["pruned_reasons"])
+		b.WriteString("Not spawned: ")
+		parts := make([]string, 0, len(skipped))
+		for _, caste := range skipped {
+			if reason := strings.TrimSpace(prunedReasons[caste]); reason != "" {
+				parts = append(parts, fmt.Sprintf("%s (%s)", caste, reason))
+			} else {
+				parts = append(parts, caste)
+			}
+		}
+		b.WriteString(strings.Join(parts, "; "))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func ceremonyStringMapValue(value interface{}) map[string]string {
+	switch v := value.(type) {
+	case map[string]string:
+		return v
+	case map[string]interface{}:
+		out := make(map[string]string, len(v))
+		for key, raw := range v {
+			text := strings.TrimSpace(stringValue(raw))
+			if text != "" {
+				out[key] = text
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func renderCeremonyWaveStart(workflow string, executionWave int, dispatches []ceremonyDispatch, plan ceremonyExecutionPlan) string {

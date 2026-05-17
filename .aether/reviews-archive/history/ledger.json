@@ -1,54 +1,19 @@
 {
   "entries": [
     {
-      "id": "hst-4-001",
-      "phase": 4,
+      "id": "hst-2-001",
+      "phase": 2,
+      "phase_name": "Current Colony Boundary Isolation",
       "agent": "archaeologist",
-      "generated_at": "2026-05-16T22:48:06Z",
-      "status": "open",
-      "severity": "",
-      "description": ""
-    },
-    {
-      "id": "hst-4-002",
-      "phase": 4,
-      "agent": "archaeologist",
-      "generated_at": "2026-05-16T22:48:06Z",
-      "status": "open",
-      "severity": "",
-      "description": ""
-    },
-    {
-      "id": "hst-4-003",
-      "phase": 4,
-      "agent": "archaeologist",
-      "generated_at": "2026-05-16T22:48:06Z",
-      "status": "open",
-      "severity": "",
-      "description": ""
-    },
-    {
-      "id": "hst-4-004",
-      "phase": 4,
-      "agent": "archaeologist",
-      "generated_at": "2026-05-16T22:48:06Z",
-      "status": "open",
-      "severity": "",
-      "description": ""
-    },
-    {
-      "id": "hst-4-005",
-      "phase": 4,
-      "agent": "archaeologist",
-      "generated_at": "2026-05-16T22:48:06Z",
+      "generated_at": "2026-05-17T18:47:55Z",
       "status": "open",
       "severity": "",
       "description": ""
     }
   ],
   "summary": {
-    "total": 5,
-    "open": 5,
+    "total": 1,
+    "open": 1,
     "resolved": 0,
     "by_severity": {
       "high": 0,

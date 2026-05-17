@@ -256,7 +256,7 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	remaining := countPendingClarifications(activeFile)
 	next := "Run `aether discuss` to review remaining questions before planning."
 	if remaining == 0 {
-		next = "Run `aether plan` to generate phases with the clarified intent."
+		next = nextAfterClarificationResolution(file.Decisions[found])
 	}
 
 	return map[string]interface{}{
@@ -599,12 +599,22 @@ func pendingDecisionMatchesScope(decision PendingDecision, scope pendingDecision
 	// stronger scope boundary.
 	scopeSession := strings.TrimSpace(scope.SessionID)
 	decisionSession := strings.TrimSpace(decision.SessionID)
+	scopeGoal := strings.TrimSpace(scope.GoalHash)
+	decisionGoal := strings.TrimSpace(decision.GoalHash)
 	if scopeSession != "" && decisionSession != "" {
 		return scopeSession == decisionSession
 	}
+	if scopeSession != "" && decisionSession == "" && scope.InitializedAt != nil {
+		createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(decision.CreatedAt))
+		if err != nil || createdAt.Before(*scope.InitializedAt) {
+			return false
+		}
+		if scopeGoal != "" && decisionGoal != "" {
+			return scopeGoal == decisionGoal
+		}
+		return true
+	}
 
-	scopeGoal := strings.TrimSpace(scope.GoalHash)
-	decisionGoal := strings.TrimSpace(decision.GoalHash)
 	if scopeGoal != "" && decisionGoal != "" {
 		return scopeGoal == decisionGoal
 	}
@@ -894,6 +904,38 @@ func buildClarificationRedirect(decision PendingDecision, answer string) string 
 		return answer
 	}
 	return fmt.Sprintf("%s: %s", question, answer)
+}
+
+func nextAfterClarificationResolution(decision PendingDecision) string {
+	if command := orchestratorBoundaryAfterDiscussCommand(decision.Source); command != "" {
+		return fmt.Sprintf("Run `%s` to request a fresh manifest with the clarified boundary.", command)
+	}
+	return "Run `aether plan` to generate phases with the clarified intent."
+}
+
+func orchestratorBoundaryAfterDiscussCommand(source string) string {
+	parts := strings.Split(strings.TrimSpace(source), ":")
+	if len(parts) < 2 || parts[0] != orchestratorBoundarySourcePrefix {
+		return ""
+	}
+	workflow := normalizeOrchestratorBoundarySourcePart(parts[1], "")
+	switch workflow {
+	case "plan":
+		return "aether plan"
+	case "build":
+		if len(parts) >= 4 && parts[2] == "phase" {
+			if phase := strings.TrimSpace(parts[3]); phase != "" && phase != "0" {
+				return "aether build " + phase
+			}
+		}
+		return "aether build"
+	case "continue":
+		return "aether continue"
+	case "seal":
+		return "aether seal"
+	default:
+		return ""
+	}
 }
 
 func discussSource(category string, hard bool) string {

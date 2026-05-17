@@ -1,40 +1,24 @@
 {
   "entries": [
     {
-      "id": "qlt-5-001",
-      "phase": 5,
-      "phase_name": "Full Safety Verification",
+      "id": "qlt-4-001",
+      "phase": 4,
+      "phase_name": "Spawn Economy And Recovery Hygiene",
       "agent": "auditor",
-      "agent_name": "Scrutin-41",
-      "generated_at": "2026-05-17T18:06:20Z",
-      "status": "open",
-      "severity": "MEDIUM",
-      "file": "cmd/queen_spawn_budget.go",
-      "line": 1,
-      "category": "delivery-readiness",
-      "description": "Core implementation file is still untracked in git status, so a release commit could omit it if not staged intentionally.",
-      "suggestion": "Before publish, commit all colony changes and rerun aether porter check."
-    },
-    {
-      "id": "qlt-5-002",
-      "phase": 5,
-      "phase_name": "Full Safety Verification",
-      "agent": "auditor",
-      "agent_name": "Scrutin-41",
-      "generated_at": "2026-05-17T18:06:20Z",
+      "agent_name": "Review-93-r3",
+      "generated_at": "2026-05-17T19:42:37Z",
       "status": "open",
       "severity": "INFO",
-      "category": "recommendation",
-      "description": "Treat a dirty git tree as a porter/publish blocker after seal."
+      "description": ""
     }
   ],
   "summary": {
-    "total": 2,
-    "open": 2,
+    "total": 1,
+    "open": 1,
     "resolved": 0,
     "by_severity": {
       "high": 0,
-      "medium": 1,
+      "medium": 0,
       "low": 0,
       "info": 1
     }

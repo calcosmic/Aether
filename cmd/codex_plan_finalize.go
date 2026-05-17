@@ -75,6 +75,9 @@ func loadExternalPlanCompletion(path string) (codexExternalPlanCompletion, error
 	if path == "" {
 		return codexExternalPlanCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return codexExternalPlanCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {
@@ -385,7 +388,13 @@ func mergeExternalPlanResults(manifest codexPlanManifest, results []codexPlannin
 		if name == "" {
 			return nil, fmt.Errorf("external planning result missing name")
 		}
-		if _, exists := resultByName[name]; exists {
+		if existing, exists := resultByName[name]; exists {
+			if useIncoming, ok := preferCompletedResultOverTimeout(existing.Status, result.Status); ok {
+				if useIncoming {
+					resultByName[name] = result
+				}
+				continue
+			}
 			return nil, fmt.Errorf("duplicate external planning result for %s", name)
 		}
 		resultByName[name] = result

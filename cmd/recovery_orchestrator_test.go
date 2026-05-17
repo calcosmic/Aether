@@ -187,6 +187,52 @@ func TestOrchestrateRecovery_BlockingEscalatesImmediately(t *testing.T) {
 	}
 }
 
+func TestOrchestrateRecovery_RuntimeOwnedIssuesDoNotDispatchFixer(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  string
+		message string
+	}{
+		{
+			name:    "stale clarification",
+			status:  "timeout",
+			message: "stale clarification requires aether discuss before rebuilding",
+		},
+		{
+			name:    "missed result collection",
+			status:  "failed",
+			message: "result collection missed completion artifact for Watcher-1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			budget := newRecoveryBudget(1)
+			outcome := orchestrateRecovery(RecoveryContext{
+				Phase:          1,
+				Wave:           1,
+				WorkerName:     "Builder-1",
+				TaskID:         "task-1",
+				Caste:          "builder",
+				Status:         tt.status,
+				ErrorMessage:   tt.message,
+				Dispatches:     []codex.WorkerDispatch{},
+				CircuitBreaker: NewCircuitBreaker(3),
+				Budget:         budget,
+			})
+			if outcome.Classification != Blocking {
+				t.Fatalf("classification = %q, want blocking", outcome.Classification)
+			}
+			if outcome.Action.Type != "escalate" {
+				t.Fatalf("action = %q, want escalate", outcome.Action.Type)
+			}
+			if budget.FixerDispatchesUsed != 0 || budget.RetriesUsed != 0 || budget.ReassignsUsed != 0 {
+				t.Fatalf("runtime-owned issue should not consume recovery budget: %+v", budget)
+			}
+		})
+	}
+}
+
 func TestOrchestrateRecovery_RequiresAttemptSequence(t *testing.T) {
 	cb := NewCircuitBreaker(3)
 	budget := newRecoveryBudget(1)

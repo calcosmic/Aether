@@ -64,6 +64,43 @@ func TestClassifyWorkerFailure_Timeout(t *testing.T) {
 	}
 }
 
+func TestClassifyWorkerFailure_RuntimeOwnedIssuesBlockRecoveryWorkers(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  string
+		message string
+		want    string
+	}{
+		{
+			name:    "stale clarification overrides timeout",
+			status:  "timeout",
+			message: "stale resolved clarification: run aether discuss before redispatch",
+			want:    "clarification",
+		},
+		{
+			name:    "result collection overrides failure",
+			status:  "failed",
+			message: "result collection missed worker result artifact for Builder-1",
+			want:    "result collection",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			classification, failureType, rationale := classifyWorkerFailure(tt.status, tt.message)
+			if classification != Blocking {
+				t.Fatalf("classification = %q, want blocking", classification)
+			}
+			if failureType != Systemic {
+				t.Fatalf("failure type = %q, want systemic", failureType)
+			}
+			if !strings.Contains(strings.ToLower(rationale), tt.want) {
+				t.Fatalf("rationale = %q, want mention %q", rationale, tt.want)
+			}
+		})
+	}
+}
+
 // TestClassifyWorkerFailure_BadTaskSpec verifies bad_task_spec is Blocking+Systemic per RECV-01.
 func TestClassifyWorkerFailure_BadTaskSpec(t *testing.T) {
 	classification, failureType, rationale := classifyWorkerFailure("bad_task_spec", "")

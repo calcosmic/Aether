@@ -1,8 +1,11 @@
 {
-  "text": "## Prior Reviews\n\n- Testing (9 open): INFO -- , WARNING --  +7 more\n",
+  "text": "## Prior Reviews\n\n- Security (2 open):  -- , INFO -- \n- Quality (1 open): INFO -- \n- Testing (4 open):  -- ,  --  +2 more\n- History (1 open):  -- \n",
   "domain_counts": {
-    "testing": 9
+    "history": 1,
+    "quality": 1,
+    "security": 2,
+    "testing": 4
   },
-  "total_open": 9,
-  "cache_write_at": "2026-05-17T18:03:53Z"
+  "total_open": 8,
+  "cache_write_at": "2026-05-17T19:43:40Z"
 }

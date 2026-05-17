@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 func TestPendingDecisionAdd(t *testing.T) {
@@ -264,6 +267,58 @@ func TestPendingDecisionResolveNotFound(t *testing.T) {
 	env := parseEnvelope(t, buf.String())
 	if env["ok"] != false {
 		t.Errorf("expected ok:false for non-existent id, got: %v", env["ok"])
+	}
+}
+
+func TestPendingDecisionResolveRejectsStaleScopedDecision(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Resolve scoped pending decision"
+	currentSession := "session_current_pending"
+	oldSession := "session_old_pending"
+	initializedAt := time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC)
+	if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &currentSession,
+		InitializedAt: &initializedAt,
+	}); err != nil {
+		t.Fatalf("seed colony state: %v", err)
+	}
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
+		ID:          "pd_old_decision",
+		Type:        clarificationDecisionType,
+		Description: "old decision",
+		Resolved:    false,
+		CreatedAt:   "2026-05-11T10:00:00Z",
+		GoalHash:    pendingDecisionGoalHash(goal),
+		SessionID:   oldSession,
+	}}}); err != nil {
+		t.Fatalf("seed pending decisions: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"pending-decision-resolve", "--id", "pd_old_decision", "--resolution", "done"})
+	rootCmd.Execute()
+
+	env := parseEnvelope(t, errBuf.String())
+	if env["ok"] != false {
+		t.Fatalf("expected ok:false for stale decision resolve, got %v", env["ok"])
+	}
+	var file PendingDecisionFile
+	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+		t.Fatalf("load pending decisions: %v", err)
+	}
+	if file.Decisions[0].Resolved {
+		t.Fatal("stale scoped decision should not be resolved")
 	}
 }
 

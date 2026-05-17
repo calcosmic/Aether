@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { GoBridgeOptions } from "./go-bridge.js";
-import { callGoJSON, writeCompletionFile } from "./go-bridge.js";
+import { approvedCompletionDirPrefix, callGoJSON, writeCompletionFile } from "./go-bridge.js";
 import type {
   BuildManifest,
   BuildDispatch,
@@ -360,7 +360,7 @@ export async function runLifecycle(
     };
 
     const planCompletionPath = writeCompletionFile(
-      "aether-lifecycle",
+      approvedCompletionDirPrefix("plan"),
       "plan-completion.json",
       { result: planCompletion }
     );
@@ -496,7 +496,7 @@ export async function runLifecycle(
     };
 
     const buildCompletionPath = writeCompletionFile(
-      "aether-lifecycle",
+      approvedCompletionDirPrefix("build"),
       "build-completion.json",
       { result: buildCompletion }
     );
@@ -568,7 +568,7 @@ export async function runLifecycle(
     };
 
     const continueCompletionPath = writeCompletionFile(
-      "aether-lifecycle",
+      approvedCompletionDirPrefix("continue"),
       "continue-completion.json",
       { result: continueCompletion }
     );

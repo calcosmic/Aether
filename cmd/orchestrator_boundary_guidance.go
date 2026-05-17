@@ -99,7 +99,7 @@ func unresolvedOrchestratorBoundaryGuidanceError(workflow string, state colony.C
 }
 
 func unresolvedOrchestratorBoundaryDecisions(workflow string, manifestQuestions []discussQuestion) []PendingDecision {
-	pending := loadPendingDecisionFile()
+	pending, _ := filterPendingDecisionFileForScope(loadPendingDecisionFile(), loadCurrentPendingDecisionScope())
 	ids := map[string]bool{}
 	sources := map[string]bool{}
 	for _, question := range manifestQuestions {

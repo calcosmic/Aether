@@ -378,6 +378,39 @@ func TestClaimsOrAggregateWithAntName(t *testing.T) {
 	}
 }
 
+func TestClaimsOrAggregateMatchesRetrySuffixDrift(t *testing.T) {
+	root := t.TempDir()
+	writeClaimFileForTest(t, root, "cmd/reliability.go")
+	completion := codexExternalBuildCompletion{
+		Dispatches: []codexExternalBuildWorkerResult{{
+			Name:          "Hunt-33",
+			Caste:         "builder",
+			Stage:         "wave",
+			TaskID:        "1.1",
+			Status:        "completed",
+			FilesModified: []string{"cmd/reliability.go"},
+		}},
+	}
+	dispatches := []codexBuildDispatch{{
+		Name:   "Hunt-33-r4",
+		Caste:  "builder",
+		Stage:  "wave",
+		Status: "completed",
+		TaskID: "1.1",
+	}}
+
+	claims, err := completion.claimsOrAggregate(root, 1, time.Now().UTC(), dispatches)
+	if err != nil {
+		t.Fatalf("claimsOrAggregate with retry suffix drift: %v", err)
+	}
+	if len(claims.FilesModified) != 1 || claims.FilesModified[0] != "cmd/reliability.go" {
+		t.Fatalf("FilesModified = %+v, want retry-suffix matched worker file", claims.FilesModified)
+	}
+	if len(claims.TaskClaims) != 1 || claims.TaskClaims[0].TaskID != "1.1" {
+		t.Fatalf("TaskClaims = %+v, want task 1.1 claim", claims.TaskClaims)
+	}
+}
+
 func TestClaimsOrAggregateRejectsUnsafeClaimPaths(t *testing.T) {
 	root := t.TempDir()
 	completion := codexExternalBuildCompletion{

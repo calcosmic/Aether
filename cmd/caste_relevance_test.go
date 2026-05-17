@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -504,6 +505,33 @@ func TestQueenOrchestrateAppliesAdaptiveSpawnBudget(t *testing.T) {
 	}
 }
 
+func TestQueenSpawnBudgetAcceptanceContractIsCasteLevel(t *testing.T) {
+	phase := colony.Phase{
+		ID:          14,
+		Name:        "Failure Contract Reproduction",
+		Description: "Pin stale-boundary and missed worker-result contracts before changing runtime behavior.",
+		Mode:        colony.PhaseModePrototype,
+		Tasks: []colony.Task{
+			{Goal: "Map pending-decision source and session fields"},
+			{Goal: "Reproduce stale clarification masking"},
+			{Goal: "Reproduce missed worker result collection"},
+			{Goal: "Define lean-spawn recovery acceptance"},
+		},
+	}
+
+	budget := queenSpawnBudgetForPhase(phase, "build", colony.ColonyState{})
+	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+
+	for _, caste := range []string{"builder", "watcher", "probe"} {
+		if !HasCaste(dispatches, caste) {
+			t.Fatalf("failure contract phase should keep required build caste %s", caste)
+		}
+	}
+	if len(dispatches) > budget.MaxWorkers {
+		t.Fatalf("selected caste count = %d, want <= Queen budget %d: %+v", len(dispatches), budget.MaxWorkers, dispatches)
+	}
+}
+
 func TestQueenSpawnBudgetDecisionsPrunesDeterministically(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -542,6 +570,18 @@ func TestQueenSpawnBudgetDecisionsPrunesDeterministically(t *testing.T) {
 			}
 			if got := selectedBudgetDecisionCastes(decisions); !reflect.DeepEqual(got, tt.wantSelected) {
 				t.Fatalf("selected castes = %v, want %v", got, tt.wantSelected)
+			}
+			decision, ok := budgetDecisionForCaste(decisions, "chaos")
+			if !ok {
+				t.Fatal("missing pruned chaos decision")
+			}
+			if decision.Selected {
+				t.Fatalf("chaos decision should be pruned: %+v", decision)
+			}
+			for _, want := range []string{"not spawned", "Queen spawn budget"} {
+				if !strings.Contains(decision.Rationale, want) {
+					t.Fatalf("pruned rationale missing %q: %q", want, decision.Rationale)
+				}
 			}
 		})
 	}

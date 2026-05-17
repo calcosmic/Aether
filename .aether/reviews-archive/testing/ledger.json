@@ -3,48 +3,19 @@
     {
       "id": "tst-1-001",
       "phase": 1,
+      "phase_name": "Failure Contract Reproduction",
       "agent": "watcher",
-      "generated_at": "2026-05-17T14:31:39Z",
-      "status": "open",
-      "severity": "INFO",
-      "description": ""
-    },
-    {
-      "id": "tst-1-002",
-      "phase": 1,
-      "agent": "watcher",
-      "generated_at": "2026-05-17T14:31:39Z",
-      "status": "open",
-      "severity": "WARNING",
-      "description": ""
-    },
-    {
-      "id": "tst-1-003",
-      "phase": 1,
-      "agent": "watcher",
-      "generated_at": "2026-05-17T14:31:39Z",
-      "status": "open",
-      "severity": "WARNING",
-      "description": ""
-    },
-    {
-      "id": "tst-2-001",
-      "phase": 2,
-      "phase_name": "Implement Go Budgeted Relevance Selection",
-      "agent": "watcher",
-      "agent_name": "Watch-64-r6",
-      "generated_at": "2026-05-17T15:38:29Z",
+      "generated_at": "2026-05-17T18:34:29Z",
       "status": "open",
       "severity": "",
       "description": ""
     },
     {
-      "id": "tst-2-002",
+      "id": "tst-2-001",
       "phase": 2,
-      "phase_name": "Implement Go Budgeted Relevance Selection",
+      "phase_name": "Current Colony Boundary Isolation",
       "agent": "watcher",
-      "agent_name": "Watch-64-r6",
-      "generated_at": "2026-05-17T15:40:26Z",
+      "generated_at": "2026-05-17T18:47:55Z",
       "status": "open",
       "severity": "",
       "description": ""
@@ -52,77 +23,34 @@
     {
       "id": "tst-3-001",
       "phase": 3,
+      "phase_name": "Worker Result Collection Reliability",
       "agent": "watcher",
-      "agent_name": "Hawk-45-r6",
-      "generated_at": "2026-05-17T16:38:11Z",
+      "generated_at": "2026-05-17T19:20:02Z",
       "status": "open",
-      "severity": "INFO",
-      "description": "Targeted cmd spawn-budget and boundary tests passed with go test ./cmd -run pattern -count=1."
+      "severity": "",
+      "description": ""
     },
     {
-      "id": "tst-3-002",
-      "phase": 3,
+      "id": "tst-4-001",
+      "phase": 4,
+      "phase_name": "Spawn Economy And Recovery Hygiene",
       "agent": "watcher",
-      "agent_name": "Hawk-45-r6",
-      "generated_at": "2026-05-17T16:38:11Z",
+      "agent_name": "Vigil-16-r7",
+      "generated_at": "2026-05-17T19:42:37Z",
       "status": "open",
       "severity": "INFO",
-      "description": "go test ./cmd -count=1 and go test ./... -count=1 both passed."
-    },
-    {
-      "id": "tst-3-003",
-      "phase": 3,
-      "agent": "watcher",
-      "agent_name": "Hawk-45-r6",
-      "generated_at": "2026-05-17T16:38:11Z",
-      "status": "open",
-      "severity": "INFO",
-      "description": "go vet ./cmd and git diff --check on changed files passed."
-    },
-    {
-      "id": "tst-3-004",
-      "phase": 3,
-      "agent": "watcher",
-      "agent_name": "Hawk-45-r6",
-      "generated_at": "2026-05-17T16:38:11Z",
-      "status": "open",
-      "severity": "LOW",
-      "description": "cmd/queen_spawn_budget.go remains untracked but source is present in this worktree and compiled under tests; ensure it is added before release commit."
-    },
-    {
-      "id": "tst-5-001",
-      "phase": 5,
-      "phase_name": "Full Safety Verification",
-      "agent": "probe",
-      "agent_name": "Check-26",
-      "generated_at": "2026-05-17T18:06:20Z",
-      "status": "open",
-      "severity": "INFO",
-      "category": "recommendation",
-      "description": "Keep the inspect/spec classifier test in the suite because it protects Queen task routing from accidental substring matches."
-    },
-    {
-      "id": "tst-5-002",
-      "phase": 5,
-      "phase_name": "Full Safety Verification",
-      "agent": "probe",
-      "agent_name": "Check-26",
-      "generated_at": "2026-05-17T18:06:20Z",
-      "status": "open",
-      "severity": "INFO",
-      "category": "edge-case",
-      "description": "The inspect/spec substring routing regression is now covered by focused tests."
+      "description": ""
     }
   ],
   "summary": {
-    "total": 11,
-    "open": 11,
+    "total": 4,
+    "open": 4,
     "resolved": 0,
     "by_severity": {
       "high": 0,
       "medium": 0,
-      "low": 1,
-      "info": 6
+      "low": 0,
+      "info": 1
     }
   }
 }

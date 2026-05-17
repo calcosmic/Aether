@@ -40,10 +40,11 @@ wrapper_additions:
     13. For Route-Setter, include the Scout terminal result in the prompt so it can consume Scout findings directly instead of re-running the survey.
     14. If a planning worker keeps rereading the same file or command, stop waiting for more exploration and mark that worker `blocked` with a concrete blocker; do not manually reconcile it as completed.
     15. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
-    16. After each terminal worker result, write that one result to a temporary JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`.
-    17. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
-    18. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
-    19. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <file>` for the user-facing ceremony.
+    16. Write per-worker JSON and the final completion JSON under `${TMPDIR:-/tmp}/aether-plan-<run>/plan-completion.json`; never write wrapper result artifacts under `.aether/data`.
+    17. After each terminal worker result, write that one result to an approved temp JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <worker_file>`.
+    18. Collect terminal worker results into a completion JSON file outside `.aether/data/`.
+    19. Run `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <file>` to let the runtime write canonical planning artifacts and state.
+    20. After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <file>` for the user-facing ceremony.
   post_plan: |
     Close from the `plan-finalize` result only:
     1. Run the visual closeout command first; use its next-step line as the source of truth.

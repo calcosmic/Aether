@@ -52,17 +52,19 @@ func effectiveContinueVerificationTimeout(override time.Duration) time.Duration 
 }
 
 type codexDispatchContract struct {
-	ExecutionModel       string   `json:"execution_model"`
-	WaveCount            int      `json:"wave_count"`
-	WorkerCount          int      `json:"worker_count"`
-	SharedTimeoutSeconds int      `json:"shared_timeout_seconds"`
-	WorkerTimeoutSeconds int      `json:"worker_timeout_seconds"`
-	DeadlinePolicy       string   `json:"deadline_policy"`
-	DependencyBehavior   string   `json:"dependency_behavior"`
-	FallbackBehavior     string   `json:"fallback_behavior"`
-	FallbackVisibility   []string `json:"fallback_visibility"`
-	CoordinationPath     string   `json:"coordination_path"`
-	ArtifactPaths        []string `json:"artifact_paths"`
+	ExecutionModel         string   `json:"execution_model"`
+	WaveCount              int      `json:"wave_count"`
+	WorkerCount            int      `json:"worker_count"`
+	SharedTimeoutSeconds   int      `json:"shared_timeout_seconds"`
+	WorkerTimeoutSeconds   int      `json:"worker_timeout_seconds"`
+	DeadlinePolicy         string   `json:"deadline_policy"`
+	DependencyBehavior     string   `json:"dependency_behavior"`
+	FallbackBehavior       string   `json:"fallback_behavior"`
+	FallbackVisibility     []string `json:"fallback_visibility"`
+	CoordinationPath       string   `json:"coordination_path"`
+	ArtifactPaths          []string `json:"artifact_paths"`
+	ResultArtifactPaths    []string `json:"result_artifact_paths,omitempty"`
+	ResultCollectionPolicy string   `json:"result_collection_policy,omitempty"`
 }
 
 func surveyDispatchContract() map[string]interface{} {
@@ -71,16 +73,18 @@ func surveyDispatchContract() map[string]interface{} {
 
 func surveyDispatchContractWithTimeout(workerTimeout time.Duration) map[string]interface{} {
 	return codexDispatchContract{
-		ExecutionModel:       "1 wave, parallel read-only worker execution",
-		WaveCount:            1,
-		WorkerCount:          len(surveyorSpecs),
-		SharedTimeoutSeconds: 0,
-		WorkerTimeoutSeconds: int(effectiveSurveyorDispatchTimeout(workerTimeout) / time.Second),
-		DeadlinePolicy:       "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets.",
-		DependencyBehavior:   "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher.",
-		FallbackBehavior:     "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first.",
-		FallbackVisibility:   []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"},
-		CoordinationPath:     dataContractPath("spawn-tree.txt"),
+		ExecutionModel:         "1 wave, parallel read-only worker execution",
+		WaveCount:              1,
+		WorkerCount:            len(surveyorSpecs),
+		SharedTimeoutSeconds:   0,
+		WorkerTimeoutSeconds:   int(effectiveSurveyorDispatchTimeout(workerTimeout) / time.Second),
+		DeadlinePolicy:         "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets.",
+		DependencyBehavior:     "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher.",
+		FallbackBehavior:       "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first.",
+		FallbackVisibility:     []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"},
+		CoordinationPath:       dataContractPath("spawn-tree.txt"),
+		ResultArtifactPaths:    []string{finalizerCompletionTempPattern},
+		ResultCollectionPolicy: "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files.",
 		ArtifactPaths: []string{
 			dataContractPath("survey", "PROVISIONS.md"),
 			dataContractPath("survey", "TRAILS.md"),
@@ -104,16 +108,18 @@ func planningDispatchContract() map[string]interface{} {
 
 func planningDispatchContractWithTimeout(workerTimeout time.Duration) map[string]interface{} {
 	return codexDispatchContract{
-		ExecutionModel:       "2 staged workers, scout then route-setter",
-		WaveCount:            2,
-		WorkerCount:          len(planningWorkerSpecs),
-		SharedTimeoutSeconds: 0,
-		WorkerTimeoutSeconds: int(effectivePlanningDispatchTimeout(workerTimeout) / time.Second),
-		DeadlinePolicy:       "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.",
-		DependencyBehavior:   "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.",
-		FallbackBehavior:     "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first.",
-		FallbackVisibility:   []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source"},
-		CoordinationPath:     dataContractPath("spawn-tree.txt"),
+		ExecutionModel:         "2 staged workers, scout then route-setter",
+		WaveCount:              2,
+		WorkerCount:            len(planningWorkerSpecs),
+		SharedTimeoutSeconds:   0,
+		WorkerTimeoutSeconds:   int(effectivePlanningDispatchTimeout(workerTimeout) / time.Second),
+		DeadlinePolicy:         "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.",
+		DependencyBehavior:     "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.",
+		FallbackBehavior:       "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first.",
+		FallbackVisibility:     []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source"},
+		CoordinationPath:       dataContractPath("spawn-tree.txt"),
+		ResultArtifactPaths:    []string{finalizerCompletionTempPattern},
+		ResultCollectionPolicy: "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid.",
 		ArtifactPaths: []string{
 			dataContractPath("planning", "SCOUT.md"),
 			dataContractPath("planning", "ROUTE-SETTER.md"),
@@ -149,17 +155,19 @@ func planningDispatchContractForDispatches(dispatches []codexPlanningDispatch, w
 
 func (c codexDispatchContract) asMap() map[string]interface{} {
 	return map[string]interface{}{
-		"execution_model":        c.ExecutionModel,
-		"wave_count":             c.WaveCount,
-		"worker_count":           c.WorkerCount,
-		"shared_timeout_seconds": c.SharedTimeoutSeconds,
-		"worker_timeout_seconds": c.WorkerTimeoutSeconds,
-		"deadline_policy":        c.DeadlinePolicy,
-		"dependency_behavior":    c.DependencyBehavior,
-		"fallback_behavior":      c.FallbackBehavior,
-		"fallback_visibility":    append([]string{}, c.FallbackVisibility...),
-		"coordination_path":      c.CoordinationPath,
-		"artifact_paths":         append([]string{}, c.ArtifactPaths...),
+		"execution_model":          c.ExecutionModel,
+		"wave_count":               c.WaveCount,
+		"worker_count":             c.WorkerCount,
+		"shared_timeout_seconds":   c.SharedTimeoutSeconds,
+		"worker_timeout_seconds":   c.WorkerTimeoutSeconds,
+		"deadline_policy":          c.DeadlinePolicy,
+		"dependency_behavior":      c.DependencyBehavior,
+		"fallback_behavior":        c.FallbackBehavior,
+		"fallback_visibility":      append([]string{}, c.FallbackVisibility...),
+		"coordination_path":        c.CoordinationPath,
+		"artifact_paths":           append([]string{}, c.ArtifactPaths...),
+		"result_artifact_paths":    append([]string{}, c.ResultArtifactPaths...),
+		"result_collection_policy": c.ResultCollectionPolicy,
 	}
 }
 
@@ -241,6 +249,19 @@ func renderDispatchContract(raw interface{}) string {
 		}
 		b.WriteString("\n")
 	}
+	if resultArtifacts := stringSliceValue(contract["result_artifact_paths"]); len(resultArtifacts) > 0 {
+		b.WriteString("  - Result artifacts: ")
+		b.WriteString(strings.Join(limitStrings(resultArtifacts, 4), ", "))
+		if len(resultArtifacts) > 4 {
+			b.WriteString(fmt.Sprintf(", ... and %d more", len(resultArtifacts)-4))
+		}
+		b.WriteString("\n")
+	}
+	if policy := strings.TrimSpace(stringValue(contract["result_collection_policy"])); policy != "" {
+		b.WriteString("  - Result collection: ")
+		b.WriteString(policy)
+		b.WriteString("\n")
+	}
 
 	return b.String()
 }
@@ -277,24 +298,27 @@ type codexQueenExecutionPolicy struct {
 // Worker fields count concrete manifest dispatches; caste fields describe the
 // Queen's relevance budget before build-specific worker expansion.
 type codexQueenSpawnBudgetContract struct {
-	MaxWorkers              int            `json:"max_workers,omitempty"`
-	SelectedWorkers         int            `json:"selected_workers,omitempty"`
-	WorkerCount             int            `json:"worker_count,omitempty"`
-	MaxSelectedCastes       int            `json:"max_selected_castes,omitempty"`
-	SelectedCastes          int            `json:"selected_castes,omitempty"`
-	PrunedWorkers           *int           `json:"pruned_workers,omitempty"`
-	PrunedCastes            *int           `json:"pruned_castes,omitempty"`
-	PreservedCastes         []string       `json:"preserved_castes,omitempty"`
-	RequiredCastes          []string       `json:"required_castes,omitempty"`
-	PolicyAddedCastes       []string       `json:"policy_added_castes,omitempty"`
-	OverflowRequiredWorkers *int           `json:"overflow_required_workers,omitempty"`
-	RelevanceThreshold      *int           `json:"relevance_threshold,omitempty"`
-	BudgetUnit              string         `json:"budget_unit,omitempty"`
-	Reason                  string         `json:"reason,omitempty"`
-	FlowType                string         `json:"flow_type,omitempty"`
-	RiskLevel               string         `json:"risk_level,omitempty"`
-	Castes                  []string       `json:"castes,omitempty"`
-	Counts                  map[string]int `json:"counts,omitempty"`
+	MaxWorkers              int               `json:"max_workers,omitempty"`
+	SelectedWorkers         int               `json:"selected_workers,omitempty"`
+	WorkerCount             int               `json:"worker_count,omitempty"`
+	MaxSelectedCastes       int               `json:"max_selected_castes,omitempty"`
+	SelectedCastes          int               `json:"selected_castes,omitempty"`
+	PrunedWorkers           *int              `json:"pruned_workers,omitempty"`
+	PrunedCastes            *int              `json:"pruned_castes,omitempty"`
+	PreservedCastes         []string          `json:"preserved_castes,omitempty"`
+	RequiredCastes          []string          `json:"required_castes,omitempty"`
+	PolicyAddedCastes       []string          `json:"policy_added_castes,omitempty"`
+	SelectedReasons         map[string]string `json:"selected_reasons,omitempty"`
+	PrunedReasons           map[string]string `json:"pruned_reasons,omitempty"`
+	SkippedCastes           []string          `json:"skipped_castes,omitempty"`
+	OverflowRequiredWorkers *int              `json:"overflow_required_workers,omitempty"`
+	RelevanceThreshold      *int              `json:"relevance_threshold,omitempty"`
+	BudgetUnit              string            `json:"budget_unit,omitempty"`
+	Reason                  string            `json:"reason,omitempty"`
+	FlowType                string            `json:"flow_type,omitempty"`
+	RiskLevel               string            `json:"risk_level,omitempty"`
+	Castes                  []string          `json:"castes,omitempty"`
+	Counts                  map[string]int    `json:"counts,omitempty"`
 }
 
 // codexQueenExecutionPolicyInput is the input for recommendQueenExecutionPolicy.
@@ -383,7 +407,8 @@ func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase,
 		FlowType:           budget.FlowType,
 		RiskLevel:          budget.RiskLevel,
 	}
-	candidateBudgetCastes := casteDispatchSummary(queenCandidateDispatches(phase, flowType, budgetState))
+	candidateBudgetDispatches := queenCandidateDispatches(phase, flowType, budgetState)
+	candidateBudgetCastes := casteDispatchSummary(candidateBudgetDispatches)
 	selectedBudgetCastes := casteDispatchSummary(queenOrchestrate(phase, flowType, budgetState))
 	prunedBudgetCastes := stringSliceDifference(candidateBudgetCastes, selectedBudgetCastes)
 	contract.PrunedCastes = intRef(len(prunedBudgetCastes))
@@ -392,6 +417,25 @@ func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase,
 	// pruned_castes while budget_unit remains "caste".
 	contract.PrunedWorkers = intRef(len(prunedBudgetCastes))
 	contract.OverflowRequiredWorkers = intRef(maxInt(0, len(contract.RequiredCastes)-budget.MaxWorkers))
+	for _, decision := range queenSpawnBudgetDecisions(candidateBudgetDispatches, budget) {
+		rationale := strings.TrimSpace(decision.Rationale)
+		if rationale == "" {
+			continue
+		}
+		if decision.Selected {
+			if contract.SelectedReasons == nil {
+				contract.SelectedReasons = make(map[string]string)
+			}
+			contract.SelectedReasons[decision.Caste] = rationale
+			continue
+		}
+		if contract.PrunedReasons == nil {
+			contract.PrunedReasons = make(map[string]string)
+		}
+		contract.PrunedReasons[decision.Caste] = rationale
+		contract.SkippedCastes = append(contract.SkippedCastes, decision.Caste)
+	}
+	sort.Strings(contract.SkippedCastes)
 
 	if len(dispatches) > 0 {
 		castes, counts := concreteDispatchCasteSummary(dispatches)

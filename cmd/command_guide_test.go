@@ -132,6 +132,25 @@ func TestLifecycleGuidesCarryOrchestratorBoundaryGuidance(t *testing.T) {
 	}
 }
 
+func TestLifecycleGuidesSurfaceSpawnBudgetReasons(t *testing.T) {
+	for _, command := range []string{"plan", "build", "continue", "seal"} {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), guide.PostSteps...), "\n")
+		for _, want := range []string{
+			"queen_execution_policy.spawn_budget",
+			"selected/pruned caste reasons",
+			"why workers were or were not spawned",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing spawn budget reason anchor %q", command, want)
+			}
+		}
+	}
+}
+
 func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 	tests := map[string][]string{
 		"colonize": {
@@ -178,6 +197,25 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 		for _, want := range wants {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s command-guide missing visible worker activity anchor %q", command, want)
+			}
+		}
+	}
+}
+
+func TestLifecycleGuidesDocumentApprovedTempCompletionContract(t *testing.T) {
+	for _, command := range []string{"plan", "build", "continue", "seal"} {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+		}
+		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+		for _, want := range []string{
+			"${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json",
+			"never write wrapper result artifacts under `.aether/data`",
+			"<approved temp completion JSON>",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s command-guide missing approved temp completion contract %q", command, want)
 			}
 		}
 	}

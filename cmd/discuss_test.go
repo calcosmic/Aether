@@ -253,6 +253,62 @@ func TestDiscussResolveHardConstraintEmitsRedirect(t *testing.T) {
 	}
 }
 
+func TestDiscussResolveBoundaryRoutesToFreshWorkflowManifest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Resolve build boundary"
+	sessionID := "session_resolve_build_boundary"
+	initializedAt := time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC)
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &sessionID,
+		InitializedAt: &initializedAt,
+		ColonyMode:    colony.ColonyModeOrchestrator,
+	})
+
+	source := orchestratorBoundaryClarificationSource("build", 2, "build-scope", true)
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{
+		Decisions: []PendingDecision{{
+			ID:          "pd_build_boundary",
+			Type:        clarificationDecisionType,
+			Description: formatClarificationDescription("What boundary should builders protect for Phase 2?", []string{"phase tasks only", "pause"}),
+			Source:      source,
+			Resolved:    false,
+			CreatedAt:   "2026-05-12T09:01:00Z",
+			GoalHash:    pendingDecisionGoalHash(goal),
+			SessionID:   sessionID,
+		}},
+	}); err != nil {
+		t.Fatalf("seed boundary pending decision: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"discuss", "--resolve", "pd_build_boundary", "--answer", "Keep builders to phase tasks only."})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss resolve returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	next := stringValue(result["next"])
+	if !strings.Contains(next, "aether build 2") || !strings.Contains(next, "fresh manifest") {
+		t.Fatalf("next = %q, want fresh build manifest guidance", next)
+	}
+}
+
 func TestDiscussRejectsEmptyGoal(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -682,5 +738,62 @@ func TestDiscussSurfacesCandidatesDespiteOldColonyResolvedDecisions(t *testing.T
 	}
 	if got := int(result["ignored_stale_count"].(float64)); got != 1 {
 		t.Fatalf("ignored_stale_count = %d, want 1 (old session decision should be stale)", got)
+	}
+}
+
+func TestDiscussSurfacesCandidatesDespiteLegacySameGoalResolvedDecisionWithoutSession(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Build a dashboard for internal operations"
+	currentSession := "session_new_colony"
+	initializedAt := time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC)
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &currentSession,
+		InitializedAt: &initializedAt,
+	})
+
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{
+		Decisions: []PendingDecision{{
+			ID:          "pd_legacy_surface",
+			Type:        clarificationDecisionType,
+			Description: formatClarificationDescription("Which existing surface should own the first implementation slice?", []string{"admin-app", "new-module"}),
+			Source:      discussSource("surface", true),
+			Resolved:    true,
+			Resolution:  "Use admin-app",
+			ResolvedAt:  "2026-05-10T10:00:00Z",
+			CreatedAt:   "2026-05-10T09:00:00Z",
+			GoalHash:    pendingDecisionGoalHash(goal),
+		}},
+	}); err != nil {
+		t.Fatalf("seed legacy resolved decision: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if got := int(result["created_count"].(float64)); got != 3 {
+		t.Fatalf("created_count = %d, want 3 (legacy same-goal decision without session should not block current questions)", got)
+	}
+	if got := int(result["ignored_stale_count"].(float64)); got != 1 {
+		t.Fatalf("ignored_stale_count = %d, want 1 legacy stale clarification", got)
 	}
 }

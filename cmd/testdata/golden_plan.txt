@@ -49,6 +49,8 @@ Contract
   - Fallback: If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first. Visibility: dispatch_mode, planning_warning, provider_diagnostics, artifact_source, plan_source.
   - Coordination: .aether/data/spawn-tree.txt
   - Artifacts: .aether/data/planning/SCOUT.md, .aether/data/planning/ROUTE-SETTER.md, .aether/data/planning/phase-plan.json, .aether/data/phase-research
+  - Result artifacts: ${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json
+  - Result collection: A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid.
 
 Planning Artifacts
   - SCOUT.md

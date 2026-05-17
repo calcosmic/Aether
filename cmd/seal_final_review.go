@@ -156,6 +156,9 @@ func loadExternalSealCompletion(path string) (externalSealCompletion, error) {
 	if path == "" {
 		return externalSealCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return externalSealCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {
@@ -270,14 +273,16 @@ func runSealPlanOnly(root string, force bool) (map[string]interface{}, error) {
 		WorkerTimeout:     int(effectiveContinueReviewTimeout(0) / time.Second),
 		Dispatches:        dispatches,
 		DispatchContract: map[string]interface{}{
-			"execution_model":        "single final review wave before runtime seal",
-			"worker_count":           len(dispatches),
-			"required_castes":        append([]string{}, requiredCastes...),
-			"state_authority":        "runtime finalizer writes final review, sealed state, Crowned Anthill summary, and post-seal readiness output",
-			"wrapper_write_policy":   "workers return structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
-			"worker_status_values":   []string{"completed", "passed", "blocked", "failed", "timeout"},
-			"required_result_fields": []string{"name", "caste", "task", "status", "summary"},
-			"optional_result_fields": []string{"findings", "issues", "recommendations", "weak_spots", "edge_cases_discovered", "reusable_lessons"},
+			"execution_model":          "single final review wave before runtime seal",
+			"worker_count":             len(dispatches),
+			"required_castes":          append([]string{}, requiredCastes...),
+			"state_authority":          "runtime finalizer writes final review, sealed state, Crowned Anthill summary, and post-seal readiness output",
+			"wrapper_write_policy":     "workers return structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
+			"result_artifact_paths":    []string{finalizerCompletionTempPattern},
+			"result_collection_policy": "A structurally valid completed result wins over a timeout placeholder for the same reviewer; malformed JSON, duplicate terminal results, and .aether/data completion files are rejected.",
+			"worker_status_values":     []string{"completed", "passed", "blocked", "failed", "timeout"},
+			"required_result_fields":   []string{"name", "caste", "task", "status", "summary"},
+			"optional_result_fields":   []string{"findings", "issues", "recommendations", "weak_spots", "edge_cases_discovered", "reusable_lessons"},
 		},
 		PostSealDirectives: []string{
 			"After seal-finalize succeeds, follow the runtime's Porter readiness output.",

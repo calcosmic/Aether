@@ -649,6 +649,7 @@ func TestBuildPlanOnlyManifestQueenExecutionPolicyExposesSpawnBudget(t *testing.
 		"required_castes",
 		"overflow_required_workers",
 		"relevance_threshold",
+		"selected_reasons",
 		"budget_unit",
 		"reason",
 		"flow_type",
@@ -709,6 +710,9 @@ func TestBuildPlanOnlyManifestQueenExecutionPolicyExposesSpawnBudget(t *testing.
 	}
 	if strings.TrimSpace(stringValue(rawBudget["reason"])) == "" {
 		t.Fatalf("spawn_budget.reason missing or empty: %#v", rawBudget)
+	}
+	if selectedReasons, ok := rawBudget["selected_reasons"].(map[string]interface{}); !ok || len(selectedReasons) == 0 {
+		t.Fatalf("spawn_budget.selected_reasons missing or empty: %#v", rawBudget)
 	}
 }
 
@@ -931,6 +935,18 @@ func TestCodexBuildPlanOnlySpawnBudgetExplainsPrunedCastes(t *testing.T) {
 	}
 	if budget.PrunedWorkers == nil || *budget.PrunedWorkers != *budget.PrunedCastes {
 		t.Fatalf("pruned_workers should mirror pruned_castes for caste budget unit: %+v", budget)
+	}
+	if len(budget.SkippedCastes) == 0 {
+		t.Fatalf("skipped_castes should list Queen-pruned castes: %+v", budget)
+	}
+	if len(budget.PrunedReasons) == 0 {
+		t.Fatalf("pruned_reasons should explain Queen-pruned castes: %+v", budget)
+	}
+	for _, caste := range budget.SkippedCastes {
+		reason := budget.PrunedReasons[caste]
+		if !strings.Contains(reason, "not spawned") {
+			t.Fatalf("pruned reason for %s should explain not spawned decision: %q", caste, reason)
+		}
 	}
 }
 

@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-17T18:06:20Z |
+| **Last Updated** | 2026-05-17T20:06:45Z |
 | **Current Phase** | 5 |
-| **Phase Name** | Full Safety Verification |
+| **Phase Name** | Full Lifecycle Verification And Delivery Readiness |
 | **Phase Status** | completed |
 | **Milestone** | Crowned Anthill |
 | **Colony Status** | COMPLETED |
@@ -21,7 +21,7 @@
 
 ## Current Goal
 
-Adaptive Queen Spawn Budget and Relevance Pruning
+Worker Result Collection and Orchestrator Boundary Hygiene
 
 ---
 
@@ -35,12 +35,14 @@ Colony sealed
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
-| How should Phase 6 (Seal Evidence and Delivery Readiness Cleanup) handle blocked continue evidence: reconcile with evidence and reverify | pheromone | active |
 | What boundary should final seal reviewers enforce: block on security or quality issues | pheromone | active |
+| What boundary should builders protect for Phase 5 (Full Lifecycle Verification And Delivery Readiness): phase tasks only | pheromone | active |
+| What boundary should builders protect for Phase 4 (Spawn Economy And Recovery Hygiene): phase tasks only | pheromone | active |
+| What boundary should builders protect for Phase 3 (Worker Result Collection Reliability): phase tasks only | pheromone | active |
+| How should Phase 6 (Seal Evidence and Delivery Readiness Cleanup) handle blocked continue evidence: reconcile with evidence and reverify | pheromone | active |
 | What boundary should builders protect for Phase 6 (End-to-end verification): phase tasks only | pheromone | active |
 | Do not plan a language, protocol, grammar, parser, encoding, or communication DSL. The colony goal is Aether runtime lifecycle reliability: platform dispatch... | pheromone | active |
 | Which existing surface should own the first implementation slice: Own the first implementation slice in the Go runtime lifecycle code under cmd/ and pkg/code... | pheromone | active |
-| How tightly should this work reuse existing contracts and integrations: Reuse existing lifecycle contracts, manifests, finalizers, command-guide metadata, an... | pheromone | active |
 
 ---
 
@@ -70,12 +72,12 @@ Colony sealed
 
 ---
 
-## Tasks For Phase 5 — Full Safety Verification
+## Tasks For Phase 5 — Full Lifecycle Verification And Delivery Readiness
 
-- [x] Run the full Go runtime suite.
-- [x] Run race verification because Queen budget data flows through build, recovery, storage-adjacent manifests, and event-facing orchestration.
-- [x] Run TypeScript host verification if .aether/ts-host files changed.
-- [x] Run focused release/security/final safeguard checks and manually inspect any failures before closing.
+- [x] Run full Go and race suites after lifecycle fixes
+- [x] Run TS host typecheck/build/test after command-guide or manifest changes
+- [x] Smoke a fresh Orchestrator colony through discuss, plan, build, continue, seal with current-boundary and result-collection evidence
+- [x] Seal and run porter check with delivery caveats resolved
 
 ---
 
@@ -89,11 +91,11 @@ Colony sealed
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-17T18:00:59Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
-- 2026-05-17T18:00:59Z|watcher_verification|continue|watcher skipped; relying on verification commands
-- 2026-05-17T18:00:59Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
-- 2026-05-17T18:00:59Z|signal_housekeeping|continue|Signal housekeeping completed: 6 active -> 6 active
-- 2026-05-17T18:06:20Z|sealed|seal|Colony sealed at Crowned Anthill
+- 2026-05-17T20:02:18Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
+- 2026-05-17T20:02:18Z|watcher_verification|continue|watcher skipped; relying on verification commands
+- 2026-05-17T20:02:18Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
+- 2026-05-17T20:02:18Z|signal_housekeeping|continue|Signal housekeeping completed: 9 active -> 9 active
+- 2026-05-17T20:06:45Z|sealed|seal|Colony sealed at Crowned Anthill
 
 ---
 

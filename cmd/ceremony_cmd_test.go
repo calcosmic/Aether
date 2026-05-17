@@ -62,6 +62,42 @@ func TestCeremonySpawnPlanAcceptsDirectManifestPacket(t *testing.T) {
 	}
 }
 
+func TestCeremonySpawnPlanExplainsQueenSpawnBudget(t *testing.T) {
+	manifest := ceremonyTestManifest()
+	manifest["queen_execution_policy"] = map[string]interface{}{
+		"spawn_budget": map[string]interface{}{
+			"worker_count":        3,
+			"selected_castes":     2,
+			"max_selected_castes": 4,
+			"reason":              "standard build",
+			"required_castes":     []string{"builder", "watcher"},
+			"skipped_castes":      []string{"architect"},
+			"pruned_reasons":      map[string]string{"architect": "not spawned; outside Queen spawn budget 4 (standard build)"},
+			"selected_reasons":    map[string]string{"builder": "selected within Queen spawn budget 4 (standard build)"},
+		},
+	}
+	manifestFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"dispatch_manifest": manifest,
+	})
+
+	_, visual, err := renderCeremonySpawnPlanFromFile("build", manifestFile)
+	if err != nil {
+		t.Fatalf("render spawn plan: %v", err)
+	}
+
+	for _, want := range []string{
+		"Queen Budget:",
+		"Required: builder, watcher",
+		"Not spawned:",
+		"architect",
+		"not spawned",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("spawn budget ceremony missing %q\n%s", want, visual)
+		}
+	}
+}
+
 func TestCeremonyWaveStartRendersCasteBanner(t *testing.T) {
 	manifestFile := writeCeremonyTestJSON(t, map[string]interface{}{
 		"ok": true,

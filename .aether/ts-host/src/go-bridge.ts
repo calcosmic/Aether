@@ -235,6 +235,14 @@ export function assertNoDirectDataWrites(filePath: string): void {
 // Completion file helper
 // ---------------------------------------------------------------------------
 
+export function approvedCompletionDirPrefix(workflow: string): string {
+  const normalized = workflow.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  if (normalized === "") {
+    throw new Error("workflow is required for completion file path");
+  }
+  return `aether-${normalized}`;
+}
+
 /**
  * Write a completion JSON file to the system temp directory (NOT .aether/data/).
  *

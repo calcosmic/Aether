@@ -103,6 +103,9 @@ func queenSpawnBudgetDecisions(dispatches []CasteDispatch, budget queenSpawnBudg
 		if selected && !isRequired && budget.MaxWorkers > 0 && len(ordered) > budget.MaxWorkers {
 			rationale = appendQueenBudgetRationale(rationale, budget)
 		}
+		if !selected && budget.MaxWorkers > 0 {
+			rationale = appendQueenPrunedRationale(rationale, budget)
+		}
 
 		decisions = append(decisions, queenSpawnBudgetDecision{
 			Caste:     dispatch.Caste,
@@ -245,6 +248,14 @@ func stringSet(values []string) map[string]bool {
 
 func appendQueenBudgetRationale(rationale string, budget queenSpawnBudget) string {
 	suffix := fmt.Sprintf("selected within Queen spawn budget %d (%s)", budget.MaxWorkers, budget.Reason)
+	if strings.TrimSpace(rationale) == "" {
+		return suffix
+	}
+	return rationale + "; " + suffix
+}
+
+func appendQueenPrunedRationale(rationale string, budget queenSpawnBudget) string {
+	suffix := fmt.Sprintf("not spawned; outside Queen spawn budget %d (%s)", budget.MaxWorkers, budget.Reason)
 	if strings.TrimSpace(rationale) == "" {
 		return suffix
 	}

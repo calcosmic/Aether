@@ -1,7 +1,7 @@
 # CROWNED-ANTHILL
 
-- Goal: Adaptive Queen Spawn Budget and Relevance Pruning
-- Sealed at: 2026-05-17T18:06:20Z
+- Goal: Worker Result Collection and Orchestrator Boundary Hygiene
+- Sealed at: 2026-05-17T20:06:45Z
 - Completed phases: 5
 - Final phase: 5
 
@@ -13,23 +13,21 @@
 - Reusable lessons promoted to QUEEN.md: 3
 
 ## Post-Seal Review Backlog
-- [gatekeeper/INFO] sec-5-001: Run porter check after seal and commit all runtime/TS host changes before publish.
-- [auditor/MEDIUM] qlt-5-001: Core implementation file is still untracked in git status, so a release commit could omit it if not staged intentionally. (cmd/queen_spawn_budget.go:1)
-- [auditor/INFO] qlt-5-002: Treat a dirty git tree as a porter/publish blocker after seal.
-- [watcher/INFO] tst-1-001:
-- [watcher/WARNING] tst-1-002:
-- [watcher/WARNING] tst-1-003:
+- [gatekeeper/] sec-3-001:
+- [gatekeeper/INFO] sec-4-001:
+- [auditor/INFO] qlt-4-001:
+- [watcher/] tst-1-001:
 - [watcher/] tst-2-001:
-- [watcher/] tst-2-002:
-- [watcher/INFO] tst-3-001: Targeted cmd spawn-budget and boundary tests passed with go test ./cmd -run pattern -count=1.
-- [watcher/INFO] tst-3-002: go test ./cmd -count=1 and go test ./... -count=1 both passed.
+- [watcher/] tst-3-001:
+- [watcher/INFO] tst-4-001:
+- [archaeologist/] hst-2-001:
 
 ## Phase Summary
-- Phase 1: Pin Spawn Budget Contracts [completed]
-- Phase 2: Implement Go Budgeted Relevance Selection [completed]
-- Phase 3: Expose Budget In Build Manifests [completed]
-- Phase 4: Maintain Host And Catalog Parity [completed]
-- Phase 5: Full Safety Verification [completed]
+- Phase 1: Failure Contract Reproduction [completed]
+- Phase 2: Current Colony Boundary Isolation [completed]
+- Phase 3: Worker Result Collection Reliability [completed]
+- Phase 4: Spawn Economy And Recovery Hygiene [completed]
+- Phase 5: Full Lifecycle Verification And Delivery Readiness [completed]
 
 ## Colony Statistics
 | Metric | Count |
@@ -39,7 +37,7 @@
 | Hive-eligible instincts | 0 |
 | Hive-promoted instincts | 0 |
 | FOCUS signals expired | 0 |
-| Flags resolved | 24 |
+| Flags resolved | 28 |
 
 ## Shelf Candidates
 10 shelf candidate(s) detected:

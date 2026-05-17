@@ -342,6 +342,13 @@ describe("types and defaults", () => {
           max_selected_castes: 8,
           selected_castes: 7,
           budget_unit: "caste",
+          selected_reasons: {
+            builder: "selected within Queen spawn budget 8 (test)",
+          },
+          pruned_reasons: {
+            architect: "not spawned; outside Queen spawn budget 8 (test)",
+          },
+          skipped_castes: ["architect"],
           counts: { builder: 4, watcher: 1 },
         },
       },
@@ -351,6 +358,47 @@ describe("types and defaults", () => {
       manifest.queen_execution_policy?.spawn_budget?.counts?.builder,
       4
     );
+    assert.equal(
+      manifest.queen_execution_policy?.spawn_budget?.selected_reasons?.builder,
+      "selected within Queen spawn budget 8 (test)"
+    );
+    assert.equal(
+      manifest.queen_execution_policy?.spawn_budget?.pruned_reasons?.architect,
+      "not spawned; outside Queen spawn budget 8 (test)"
+    );
+    assert.deepEqual(
+      manifest.queen_execution_policy?.spawn_budget?.skipped_castes,
+      ["architect"]
+    );
+  });
+
+  it("BuildManifest preserves Go-owned boundary and result collection guidance", () => {
+    const manifest: Pick<
+      BuildManifest,
+      "dispatch_contract" | "orchestrator_boundary_guidance"
+    > = {
+      dispatch_contract: {
+        result_artifact_paths: [
+          "${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json",
+        ],
+        result_collection_policy:
+          "A structurally valid completed result wins over a timeout placeholder.",
+      },
+      orchestrator_boundary_guidance: {
+        active: false,
+        after_discuss_next: "aether build 4",
+      },
+    };
+
+    assert.deepEqual(manifest.dispatch_contract?.result_artifact_paths, [
+      "${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json",
+    ]);
+    assert.ok(
+      manifest.dispatch_contract?.result_collection_policy?.includes(
+        "structurally valid completed result"
+      )
+    );
+    assert.equal(manifest.orchestrator_boundary_guidance?.active, false);
   });
 
   it("wave orchestrator retryLimit defaults to 1", async () => {
@@ -451,5 +499,39 @@ describe("escalation", () => {
     assert.equal(actions[0]!.type, "fixer_dispatch");
     assert.equal(actions[0]!.worker, "Worker-1");
     assert.ok(actions[0]!.reason!.includes("requires-attempt"));
+  });
+
+  it("handleWaveFailures escalates runtime-owned stale clarification failures", () => {
+    const actions = handleWaveFailures(
+      { goBinaryPath: "/usr/bin/true", cwd: "/tmp" },
+      [
+        {
+          name: "Worker-1",
+          status: "timeout",
+          summary: "stale clarification requires aether discuss before rebuild",
+        },
+      ]
+    );
+
+    assert.equal(actions.length, 1);
+    assert.equal(actions[0]!.type, "escalate");
+    assert.ok(actions[0]!.reason!.includes("blocking"));
+  });
+
+  it("handleWaveFailures escalates missed result collection failures", () => {
+    const actions = handleWaveFailures(
+      { goBinaryPath: "/usr/bin/true", cwd: "/tmp" },
+      [
+        {
+          name: "Worker-1",
+          status: "failed",
+          summary: "result collection missed worker result artifact",
+        },
+      ]
+    );
+
+    assert.equal(actions.length, 1);
+    assert.equal(actions[0]!.type, "escalate");
+    assert.ok(actions[0]!.reason!.includes("blocking"));
   });
 });

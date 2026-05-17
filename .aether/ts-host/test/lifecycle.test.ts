@@ -253,12 +253,12 @@ describe("lifecycle", () => {
     const { readdirSync } = await import("node:fs");
     const tmpEntries = readdirSync(tmpdir(), { withFileTypes: true });
     const completionDirs = tmpEntries
-      .filter((e) => e.isDirectory() && e.name.startsWith("aether-lifecycle-"))
+      .filter((e) => e.isDirectory() && /^aether-(plan|build|continue)-/.test(e.name))
       .map((e) => join(tmpdir(), e.name));
 
     assert.ok(
       completionDirs.length >= 3,
-      `Expected at least 3 unique completion dirs, found ${completionDirs.length}`
+      `Expected at least 3 unique approved completion dirs, found ${completionDirs.length}`
     );
 
     // Collect all completion files across unique dirs

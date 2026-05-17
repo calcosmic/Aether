@@ -97,6 +97,9 @@ func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, err
 	if path == "" {
 		return codexExternalBuildCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return codexExternalBuildCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {
@@ -164,6 +167,10 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := validateFinalizerManifestRoot("dispatch_manifest", manifest.Root, root); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	now := time.Now().UTC()
+	if err := validateFinalizerManifestFreshness("dispatch_manifest", manifest.GeneratedAt, now); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 
 	state, err := loadActiveColonyState()
 	if err != nil {
@@ -210,11 +217,12 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	startedAt := parseManifestGeneratedAt(*manifest)
-	completedAt := time.Now().UTC()
+	completedAt := now
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	claimsRel := "last-build-claims.json"
+	resultCollectionRel := filepath.ToSlash(filepath.Join(buildDirRel, "result-collection.json"))
 
 	if err := store.SaveJSON(checkpointRel, state); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
@@ -254,6 +262,10 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := persistExternalBuildHandoffs(root, phaseNum, dispatches, completion.workerResults()); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	resultCollection := buildExternalBuildResultCollectionReport(phaseNum, updatedPhase.Name, manifest.Dispatches, completion.workerResults(), dispatches, completedAt)
+	if err := store.SaveJSON(resultCollectionRel, resultCollection); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write result collection diagnostics: %w", err)
+	}
 	recoveryInstructions, err := buildExternalBuildRecoveryInstructions(phaseNum, dispatches)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -271,20 +283,21 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
 	result := map[string]interface{}{
-		"phase":          phaseNum,
-		"phase_name":     updatedPhase.Name,
-		"state":          updatedState.State,
-		"plan_only":      false,
-		"dispatch_mode":  "external-task",
-		"dispatches":     codexBuildDispatchMaps(dispatches),
-		"dispatch_count": len(dispatches),
-		"wave_count":     len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
-		"parallel_mode":  string(effectiveParallelMode(updatedState)),
-		"selected_tasks": selectedTaskIDs,
-		"checkpoint":     displayDataPath(checkpointRel),
-		"manifest":       displayDataPath(manifestRel),
-		"claims_path":    displayDataPath(claimsRel),
-		"next":           "aether continue",
+		"phase":             phaseNum,
+		"phase_name":        updatedPhase.Name,
+		"state":             updatedState.State,
+		"plan_only":         false,
+		"dispatch_mode":     "external-task",
+		"dispatches":        codexBuildDispatchMaps(dispatches),
+		"dispatch_count":    len(dispatches),
+		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
+		"parallel_mode":     string(effectiveParallelMode(updatedState)),
+		"selected_tasks":    selectedTaskIDs,
+		"checkpoint":        displayDataPath(checkpointRel),
+		"manifest":          displayDataPath(manifestRel),
+		"claims_path":       displayDataPath(claimsRel),
+		"result_collection": displayDataPath(resultCollectionRel),
+		"next":              "aether continue",
 	}
 	if len(recoveryInstructions) > 0 {
 		result["recovery_instructions"] = recoveryInstructions
@@ -399,7 +412,13 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		if name == "" {
 			return nil, fmt.Errorf("external worker result missing name")
 		}
-		if _, exists := resultByName[name]; exists {
+		if existing, exists := resultByName[name]; exists {
+			if useIncoming, ok := preferCompletedResultOverTimeout(existing.Status, result.Status); ok {
+				if useIncoming {
+					resultByName[name] = result
+				}
+				continue
+			}
 			return nil, fmt.Errorf("duplicate external worker result for %s", name)
 		}
 		resultByName[name] = result
@@ -617,16 +636,21 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 			byName[name] = result
 		}
 	}
+	usedResults := make(map[string]bool, len(byName))
 	claims := codexBuildClaims{BuildPhase: phaseNum, Timestamp: startedAt.Format(time.RFC3339)}
 	taskClaims := map[string]*codexBuildTaskClaim{}
 	for _, dispatch := range dispatches {
 		if dispatch.Status != "completed" {
 			continue
 		}
-		result, ok := byName[dispatch.Name]
+		resultName, result, ok, err := selectExternalBuildResultForDispatch(dispatch.Name, byName, usedResults)
+		if err != nil {
+			return codexBuildClaims{}, err
+		}
 		if !ok {
 			continue
 		}
+		usedResults[resultName] = true
 		claims.FilesCreated = append(claims.FilesCreated, result.FilesCreated...)
 		claims.FilesModified = append(claims.FilesModified, result.FilesModified...)
 		claims.TestsWritten = append(claims.TestsWritten, result.TestsWritten...)
@@ -697,6 +721,80 @@ func validateExternalWorkerResultClaimPaths(root string, results []codexExternal
 		}
 	}
 	return nil
+}
+
+type codexResultCollectionReport struct {
+	Workflow                string                       `json:"workflow"`
+	Phase                   int                          `json:"phase,omitempty"`
+	PhaseName               string                       `json:"phase_name,omitempty"`
+	RecordedAt              string                       `json:"recorded_at"`
+	ExpectedWorkers         int                          `json:"expected_workers"`
+	ReceivedResults         int                          `json:"received_results"`
+	MatchedResults          int                          `json:"matched_results"`
+	StatusCounts            map[string]int               `json:"status_counts,omitempty"`
+	Issues                  []codexResultCollectionIssue `json:"issues,omitempty"`
+	Policy                  string                       `json:"policy"`
+	ApprovedTempPath        string                       `json:"approved_temp_path"`
+	SensitiveOutputRedacted bool                         `json:"sensitive_output_redacted"`
+}
+
+type codexResultCollectionIssue struct {
+	Worker string `json:"worker,omitempty"`
+	Caste  string `json:"caste,omitempty"`
+	Status string `json:"status,omitempty"`
+	Kind   string `json:"kind"`
+	Detail string `json:"detail,omitempty"`
+}
+
+func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, expected []codexBuildDispatch, results []codexExternalBuildWorkerResult, dispatches []codexBuildDispatch, recordedAt time.Time) codexResultCollectionReport {
+	report := codexResultCollectionReport{
+		Workflow:                "build",
+		Phase:                   phaseNum,
+		PhaseName:               strings.TrimSpace(phaseName),
+		RecordedAt:              recordedAt.UTC().Format(time.RFC3339),
+		ExpectedWorkers:         len(expected),
+		ReceivedResults:         len(results),
+		MatchedResults:          len(dispatches),
+		StatusCounts:            map[string]int{},
+		Policy:                  "A structurally valid completed or manually-reconciled worker result wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected.",
+		ApprovedTempPath:        finalizerCompletionTempPattern,
+		SensitiveOutputRedacted: true,
+	}
+	for _, dispatch := range dispatches {
+		status := normalizeExternalBuildStatus(dispatch.Status)
+		if status == "" {
+			status = "unknown"
+		}
+		report.StatusCounts[status]++
+		switch status {
+		case "completed", "manually-reconciled":
+		case "timeout":
+			report.Issues = append(report.Issues, codexResultCollectionIssue{
+				Worker: dispatch.Name,
+				Caste:  dispatch.Caste,
+				Status: status,
+				Kind:   "collection_timeout",
+				Detail: "worker reached terminal timeout status before a valid completed result was collected",
+			})
+		case "failed", "blocked":
+			report.Issues = append(report.Issues, codexResultCollectionIssue{
+				Worker: dispatch.Name,
+				Caste:  dispatch.Caste,
+				Status: status,
+				Kind:   "worker_failure",
+				Detail: codex.SanitizeWorkerDiagnosticOutput(firstNonEmpty(dispatch.Summary, strings.Join(dispatch.Blockers, "; "))),
+			})
+		default:
+			report.Issues = append(report.Issues, codexResultCollectionIssue{
+				Worker: dispatch.Name,
+				Caste:  dispatch.Caste,
+				Status: status,
+				Kind:   "unexpected_status",
+				Detail: "worker result reached finalization with an unexpected status",
+			})
+		}
+	}
+	return report
 }
 
 func validateAndNormalizeBuildClaims(root, owner string, claims *codexBuildClaims) error {
