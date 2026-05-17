@@ -133,10 +133,17 @@ export function formatQueenRecommendation(rec: QueenRecommendation): string {
  */
 export function deriveExecutionPolicy(
   rec: QueenRecommendation,
-  pattern: WorkflowPattern
+  pattern: WorkflowPattern,
+  existingPolicy?: Pick<QueenExecutionPolicy, "spawn_budget">
 ): QueenExecutionPolicy {
-  return {
+  const policy: QueenExecutionPolicy = {
     verification_depth: mapVerificationDepth(rec.review_depth),
     review_depth: rec.review_depth,
   };
+
+  if (existingPolicy?.spawn_budget !== undefined) {
+    policy.spawn_budget = existingPolicy.spawn_budget;
+  }
+
+  return policy;
 }

@@ -6,7 +6,7 @@
  * and delegates escalation recovery to Go CLI commands.
  */
 
-import type { BuildDispatch, WorkerResult } from "../types.js";
+import type { BuildDispatch, QueenSpawnBudget, WorkerResult } from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Queen recommendation types
@@ -26,6 +26,8 @@ export interface QueenExecutionPolicy {
   verification_depth: string;
   /** Review depth for the build (e.g., "fast", "standard", "final-review"). */
   review_depth: string;
+  /** Optional Go-authored Queen spawn selection budget metadata. */
+  spawn_budget?: QueenSpawnBudget;
 }
 
 // ---------------------------------------------------------------------------

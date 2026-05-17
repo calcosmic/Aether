@@ -1,58 +1,35 @@
 # CROWNED-ANTHILL
 
-- Goal: Universal Classic Ceremony Parity and Command UX Completion
-- Sealed at: 2026-05-17T13:16:27Z
-- Completed phases: 6
-- Final phase: 6
-
-## Review Warnings
-WARNING: 19 high-severity unresolved finding(s):
-- [security] sec-2-001: TypeScript lifecycle planning currently marks plan dispatches completed and supplies a synthetic top-level phase_plan without explicit synthesis provenance, so a completion file can look like real worker evidence when no planning workers ran. (.aether/ts-host/src/lifecycle.ts:289)
-- [security] sec-2-002: plan-finalize accepts completion-level phase_plan before proving it came from route-setter evidence or an explicit synthesis contract, allowing ambiguous host-generated plans to mutate COLONY_STATE.json. (cmd/codex_plan_finalize.go:153)
-- [security] sec-4-001: TS Oracle lifecycle synthesizes current_confidence from worker success and submits it to oracle-iterate-finalize; Go finalizer persists completion.CurrentConfidence, so dashboards can report invented research confidence. (.aether/ts-host/src/oracle-lifecycle.ts:203)
-- [security] sec-6-001: porter --full-release captures CombinedOutput from release commands run with the inherited environment and stores/prints the last output lines without applying the existing credential redaction path. A failed npm/go/goreleaser command that emits API keys or tokens could leak them into porter readiness evidence and user-visible output. (cmd/porter_cmd.go:520)
-- [security] sec-6-003: Full-release command failures store raw trailing command output in the check message, and the readiness result is persisted to .aether/data/porter/readiness.json; release tool output can contain auth/provider details or secrets. (cmd/porter_cmd.go:520)
-- [quality] qlt-5-001: Final continue evidence used skip_watchers=true and verification_depth=standard for a seal-readiness phase.
-- [quality] qlt-5-002: Full release verification is not concretely persisted in phase-5 verification evidence.
-- [quality] qlt-5-003: Phase 5 requires Go race and JS/TS package tests, but persisted verification steps only show go build, go vet twice, and go test ./.... Broader checks are only worker/event summaries, not command-level evidence. (.aether/data/build/phase-5/verification.json:5)
-- [quality] qlt-5-006: Required release checks are not persisted as concrete verification evidence. (.aether/data/build/phase-5/verification.json:5)
-- [quality] qlt-5-017: Uncommitted changes make push/release/publish unsafe and make seal-to-release traceability unclear.
-- [quality] qlt-5-019: aether porter check failed because git status reports 75 uncommitted changes. This blocks safe push/release/publish because the sealed state would not correspond to a committed release artifact. (git status --short)
-- [quality] qlt-5-020: Uncommitted changes make push/release/publish unsafe and make seal-to-release traceability unclear. (git status --short)
-- [quality] qlt-6-001: Phase 6 verification evidence is older than the current build claims and manifest, so the passed verification cannot prove the May 17 Phase 6 changes. (.aether/data/build/phase-6/verification.json:3)
-- [quality] qlt-6-002: The phase contract requires full verification without skipped watchers, but the verification report records the watcher as skipped via skip-watchers. (.aether/data/build/phase-6/verification.json:45)
-- [quality] qlt-6-004: Phase 6 source fixes appear substantive, but the canonical verification artifact still has watcher.passed=false, checks_passed=false, passed=false, and a blocking issue saying the evidence cannot justify advancement. (.aether/data/build/phase-6/verification.json:42)
-- [quality] qlt-6-005: review.json still has passed=false and blocking_issues for stale evidence and the old porter redaction blocker, despite newer manifest r2 worker summaries. (.aether/data/build/phase-6/review.json:111)
-- [testing] tst-3-001:
-- [bugs] bug-2-001: .aether/ts-host/src/lifecycle.ts maps plan-only dispatches into status=completed and writes a top-level synthetic phase_plan before calling plan-finalize; no real planning dispatcher supplies those results.
-- [bugs] bug-2-002: cmd/codex_plan_finalize.go returns completion.PhasePlan before checking route-setter-owned phase plans or claimed fresh artifacts, then labels the output external-task/external planning workers.
+- Goal: Adaptive Queen Spawn Budget and Relevance Pruning
+- Sealed at: 2026-05-17T18:06:20Z
+- Completed phases: 5
+- Final phase: 5
 
 ## Final Review Evidence
 - Passed: true
 - Workers reviewed: 3
-- Structured findings captured: 7
-- Ledger writes: security=2 quality=1 performance=1 testing=3
-- Reusable lessons promoted to QUEEN.md: 6
+- Structured findings captured: 5
+- Ledger writes: security=1 quality=2 testing=2
+- Reusable lessons promoted to QUEEN.md: 3
 
 ## Post-Seal Review Backlog
-- [gatekeeper/HIGH] sec-2-001: TypeScript lifecycle planning currently marks plan dispatches completed and supplies a synthetic top-level phase_plan without explicit synthesis provenance, so a completion file can look like real worker evidence when no planning workers ran. (.aether/ts-host/src/lifecycle.ts:289)
-- [gatekeeper/HIGH] sec-2-002: plan-finalize accepts completion-level phase_plan before proving it came from route-setter evidence or an explicit synthesis contract, allowing ambiguous host-generated plans to mutate COLONY_STATE.json. (cmd/codex_plan_finalize.go:153)
-- [gatekeeper/MEDIUM] sec-2-003: A generic root mismatch helper exists, but Phase 2 still needs a plan-finalize-specific regression proving mismatched plan_manifest.root leaves COLONY_STATE.json unchanged. (cmd/codex_plan_finalize.go:122)
-- [gatekeeper/MEDIUM] sec-2-004: Freshness and workspace checks exist, but missing phase_plan, empty phases, no buildable tasks, and ambiguous synthetic worker completion are not covered as one finalizer contract boundary. (cmd/codex_plan_finalize.go:153)
-- [gatekeeper/LOW] sec-2-005: Platform subprocesses inherit the process environment and collect provider stdout/stderr; Go bridge redaction exists, but planning dispatch changes must not surface raw provider auth output. (.aether/ts-host/src/platform-dispatcher.ts:187)
-- [gatekeeper/HIGH] sec-4-001: TS Oracle lifecycle synthesizes current_confidence from worker success and submits it to oracle-iterate-finalize; Go finalizer persists completion.CurrentConfidence, so dashboards can report invented research confidence. (.aether/ts-host/src/oracle-lifecycle.ts:203)
-- [gatekeeper/MEDIUM] sec-4-002: normalizeOracleWorkerResponse fills a default blocked summary before checking for blocker detail, so a blocked response with no findings or gaps can pass with a generic blocker. (cmd/oracle_loop.go:2305)
-- [gatekeeper/LOW] sec-4-003: status is documented as read-only, but the error path calls renderRecoveryMenu, which emits a loop-break event through the event bus and can mutate .aether/data on failed dashboard reads. (cmd/status.go:32)
-- [gatekeeper/LOW] sec-4-004: watch is described as read-only monitoring and lists watch-snapshot.json, but the implementation writes watch-status.txt and watch-progress.txt artifacts instead. (cmd/contracts/watch.md:25)
-- [gatekeeper/INFO] sec-5-001: Colony state is COMPLETED at current_phase 5 for the requested goal. (.aether/data/COLONY_STATE.json:8)
+- [gatekeeper/INFO] sec-5-001: Run porter check after seal and commit all runtime/TS host changes before publish.
+- [auditor/MEDIUM] qlt-5-001: Core implementation file is still untracked in git status, so a release commit could omit it if not staged intentionally. (cmd/queen_spawn_budget.go:1)
+- [auditor/INFO] qlt-5-002: Treat a dirty git tree as a porter/publish blocker after seal.
+- [watcher/INFO] tst-1-001:
+- [watcher/WARNING] tst-1-002:
+- [watcher/WARNING] tst-1-003:
+- [watcher/] tst-2-001:
+- [watcher/] tst-2-002:
+- [watcher/INFO] tst-3-001: Targeted cmd spawn-budget and boundary tests passed with go test ./cmd -run pattern -count=1.
+- [watcher/INFO] tst-3-002: go test ./cmd -count=1 and go test ./... -count=1 both passed.
 
 ## Phase Summary
-- Phase 1: Ceremony Taxonomy and Truthfulness Contract [completed]
-- Phase 2: Honest Plan Orchestration Across Go and TypeScript [completed]
-- Phase 3: Lifecycle Worker Theatre Parity [completed]
-- Phase 4: Research, Guided Rituals, and Read-Only Dashboards [completed]
-- Phase 5: Delivery, Internal Commands, and Release Verification [completed]
-- Phase 6: Seal Evidence and Delivery Readiness Cleanup [completed]
+- Phase 1: Pin Spawn Budget Contracts [completed]
+- Phase 2: Implement Go Budgeted Relevance Selection [completed]
+- Phase 3: Expose Budget In Build Manifests [completed]
+- Phase 4: Maintain Host And Catalog Parity [completed]
+- Phase 5: Full Safety Verification [completed]
 
 ## Colony Statistics
 | Metric | Count |

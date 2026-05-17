@@ -298,6 +298,9 @@ High-confidence behavioral patterns that have been validated through repeated co
 - Do not default unknown hosts to Codex
 
 ## Wisdom
+- Focused routing tests are needed when Queen relevance logic uses keyword matching. (seal review phase 5, 2026-05-17)
+- Seal review should separate security blockers from delivery-readiness caveats so porter can own publish readiness. (seal review phase 5, 2026-05-17)
+- When a colony creates a new core source file, seal evidence should mention its git tracking status before delivery. (seal review phase 5, 2026-05-17)
 - Cleanup phases should carry explicit tasks or success criteria in state. (seal review phase 6, 2026-05-17)
 - Do not treat stale pre-commit blocker records as current blockers when a fresh release receipt supersedes them. (seal review phase 6, 2026-05-17)
 - Durable release receipts are stronger than summary-only worker claims. (seal review phase 6, 2026-05-17)

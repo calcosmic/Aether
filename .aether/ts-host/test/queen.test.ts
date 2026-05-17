@@ -15,9 +15,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import type { BuildDispatch, WorkerResult } from "../src/types.js";
+import type {
+  BuildDispatch,
+  BuildManifest,
+  QueenSpawnBudget,
+  WorkerResult,
+} from "../src/types.js";
 import {
   deriveWorkflowPattern,
+  deriveExecutionPolicy,
   mapVerificationDepth,
   formatQueenRecommendation,
 } from "../src/queen/workflow-patterns.js";
@@ -126,6 +132,62 @@ describe("workflow-patterns", () => {
   it("formatQueenRecommendation formats correctly", () => {
     const rec = { review_depth: "standard", reason: "Test reason" };
     assert.equal(formatQueenRecommendation(rec), "standard: Test reason");
+  });
+
+  it("deriveExecutionPolicy preserves an existing spawn budget", () => {
+    const spawnBudget: QueenSpawnBudget = {
+      max_workers: 10,
+      selected_workers: 10,
+      worker_count: 10,
+      max_selected_castes: 8,
+      selected_castes: 7,
+      preserved_castes: [
+        "auditor",
+        "builder",
+        "gatekeeper",
+        "probe",
+        "watcher",
+      ],
+      required_castes: [
+        "auditor",
+        "builder",
+        "gatekeeper",
+        "probe",
+        "watcher",
+      ],
+      policy_added_castes: ["keeper"],
+      relevance_threshold: 60,
+      budget_unit: "caste",
+      reason: "high-risk or production build",
+      flow_type: "build",
+      risk_level: "low",
+      castes: [
+        "auditor",
+        "builder",
+        "gatekeeper",
+        "keeper",
+        "probe",
+        "watcher",
+      ],
+      counts: {
+        auditor: 1,
+        builder: 4,
+        gatekeeper: 1,
+        keeper: 1,
+        probe: 1,
+        watcher: 1,
+      },
+    };
+
+    const policy = deriveExecutionPolicy(
+      { review_depth: "final-review", reason: "Test reason" },
+      "Compliance",
+      { spawn_budget: spawnBudget }
+    );
+
+    assert.equal(policy.verification_depth, "Heavy");
+    assert.equal(policy.review_depth, "final-review");
+    assert.deepEqual(policy.spawn_budget, spawnBudget);
   });
 });
 
@@ -266,6 +328,29 @@ describe("types and defaults", () => {
   it("code_written is valid TerminalWorkerStatus", () => {
     const status: TerminalWorkerStatus = "code_written";
     assert.equal(status, "code_written");
+  });
+
+  it("BuildManifest accepts the Go-authored queen spawn budget contract", () => {
+    const manifest: Pick<BuildManifest, "queen_execution_policy"> = {
+      queen_execution_policy: {
+        verification_depth: "heavy",
+        review_depth: "heavy",
+        spawn_budget: {
+          max_workers: 10,
+          selected_workers: 10,
+          worker_count: 10,
+          max_selected_castes: 8,
+          selected_castes: 7,
+          budget_unit: "caste",
+          counts: { builder: 4, watcher: 1 },
+        },
+      },
+    };
+
+    assert.equal(
+      manifest.queen_execution_policy?.spawn_budget?.counts?.builder,
+      4
+    );
   });
 
   it("wave orchestrator retryLimit defaults to 1", async () => {

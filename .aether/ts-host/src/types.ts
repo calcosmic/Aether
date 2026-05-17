@@ -246,7 +246,35 @@ export interface QueenWorkflowRecommendation {
   [key: string]: unknown;
 }
 
+/**
+ * Go-authored Queen spawn budget metadata from queen_execution_policy.
+ * The TS host may preserve this object, but Go remains the source of truth.
+ */
+export interface QueenSpawnBudget {
+  max_workers?: number;
+  selected_workers?: number;
+  worker_count?: number;
+  max_selected_castes?: number;
+  selected_castes?: number;
+  pruned_workers?: number;
+  pruned_castes?: number;
+  preserved_castes?: string[];
+  required_castes?: string[];
+  policy_added_castes?: string[];
+  overflow_required_workers?: number;
+  relevance_threshold?: number;
+  budget_unit?: string;
+  reason?: string;
+  flow_type?: string;
+  risk_level?: string;
+  castes?: string[];
+  counts?: Record<string, number>;
+}
+
 export interface QueenExecutionPolicy {
+  verification_depth?: string;
+  review_depth?: string;
+  spawn_budget?: QueenSpawnBudget;
   [key: string]: unknown;
 }
 

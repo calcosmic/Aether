@@ -268,8 +268,33 @@ type codexQueenWorkflowRecommendation struct {
 
 // codexQueenExecutionPolicy captures the queen's execution policy decision.
 type codexQueenExecutionPolicy struct {
-	VerificationDepth string `json:"verification_depth,omitempty"`
-	ReviewDepth       string `json:"review_depth,omitempty"`
+	VerificationDepth string                         `json:"verification_depth,omitempty"`
+	ReviewDepth       string                         `json:"review_depth,omitempty"`
+	SpawnBudget       *codexQueenSpawnBudgetContract `json:"spawn_budget,omitempty"`
+}
+
+// codexQueenSpawnBudgetContract captures allowlisted spawn selection metadata.
+// Worker fields count concrete manifest dispatches; caste fields describe the
+// Queen's relevance budget before build-specific worker expansion.
+type codexQueenSpawnBudgetContract struct {
+	MaxWorkers              int            `json:"max_workers,omitempty"`
+	SelectedWorkers         int            `json:"selected_workers,omitempty"`
+	WorkerCount             int            `json:"worker_count,omitempty"`
+	MaxSelectedCastes       int            `json:"max_selected_castes,omitempty"`
+	SelectedCastes          int            `json:"selected_castes,omitempty"`
+	PrunedWorkers           *int           `json:"pruned_workers,omitempty"`
+	PrunedCastes            *int           `json:"pruned_castes,omitempty"`
+	PreservedCastes         []string       `json:"preserved_castes,omitempty"`
+	RequiredCastes          []string       `json:"required_castes,omitempty"`
+	PolicyAddedCastes       []string       `json:"policy_added_castes,omitempty"`
+	OverflowRequiredWorkers *int           `json:"overflow_required_workers,omitempty"`
+	RelevanceThreshold      *int           `json:"relevance_threshold,omitempty"`
+	BudgetUnit              string         `json:"budget_unit,omitempty"`
+	Reason                  string         `json:"reason,omitempty"`
+	FlowType                string         `json:"flow_type,omitempty"`
+	RiskLevel               string         `json:"risk_level,omitempty"`
+	Castes                  []string       `json:"castes,omitempty"`
+	Counts                  map[string]int `json:"counts,omitempty"`
 }
 
 // codexQueenExecutionPolicyInput is the input for recommendQueenExecutionPolicy.
@@ -333,6 +358,143 @@ func recommendQueenExecutionPolicy(state colony.ColonyState, phase colony.Phase,
 		VerificationDepth: string(depth),
 		ReviewDepth:       string(depth),
 	}
+}
+
+func enrichQueenExecutionPolicyWithSpawnBudget(policy codexQueenExecutionPolicy, state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch) codexQueenExecutionPolicy {
+	policy.SpawnBudget = buildQueenSpawnBudgetContract(state, phase, flowType, reviewDepth, dispatches)
+	return policy
+}
+
+func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch) *codexQueenSpawnBudgetContract {
+	flowType = normalizeQueenFlowType(flowType)
+	budgetState := state
+	if reviewDepth != "" {
+		budgetState.VerificationDepth = string(reviewDepth)
+	}
+
+	budget := queenSpawnBudgetForPhase(phase, flowType, budgetState)
+	threshold := spawnThreshold(flowType, budgetState)
+	contract := &codexQueenSpawnBudgetContract{
+		MaxSelectedCastes:  budget.MaxWorkers,
+		RequiredCastes:     append([]string{}, budget.RequiredCastes...),
+		RelevanceThreshold: &threshold,
+		BudgetUnit:         "caste",
+		Reason:             budget.Reason,
+		FlowType:           budget.FlowType,
+		RiskLevel:          budget.RiskLevel,
+	}
+	candidateBudgetCastes := casteDispatchSummary(queenCandidateDispatches(phase, flowType, budgetState))
+	selectedBudgetCastes := casteDispatchSummary(queenOrchestrate(phase, flowType, budgetState))
+	prunedBudgetCastes := stringSliceDifference(candidateBudgetCastes, selectedBudgetCastes)
+	contract.PrunedCastes = intRef(len(prunedBudgetCastes))
+	// The Queen's pruning budget operates on castes before build policy expands
+	// selected castes into concrete worker dispatches, so this count mirrors
+	// pruned_castes while budget_unit remains "caste".
+	contract.PrunedWorkers = intRef(len(prunedBudgetCastes))
+	contract.OverflowRequiredWorkers = intRef(maxInt(0, len(contract.RequiredCastes)-budget.MaxWorkers))
+
+	if len(dispatches) > 0 {
+		castes, counts := concreteDispatchCasteSummary(dispatches)
+		workerCount := len(dispatches)
+		contract.MaxWorkers = workerCount
+		contract.SelectedWorkers = workerCount
+		contract.WorkerCount = workerCount
+		contract.SelectedCastes = len(castes)
+		contract.PolicyAddedCastes = stringSliceDifference(castes, selectedBudgetCastes)
+		contract.PreservedCastes = stringSliceIntersection(castes, contract.RequiredCastes)
+		contract.Castes = castes
+		contract.Counts = counts
+		return contract
+	}
+
+	contract.MaxWorkers = len(selectedBudgetCastes)
+	contract.SelectedWorkers = len(selectedBudgetCastes)
+	contract.WorkerCount = len(selectedBudgetCastes)
+	contract.SelectedCastes = len(selectedBudgetCastes)
+	contract.PreservedCastes = stringSliceIntersection(selectedBudgetCastes, contract.RequiredCastes)
+	contract.Castes = selectedBudgetCastes
+	return contract
+}
+
+func concreteDispatchCasteSummary(dispatches []codexBuildDispatch) ([]string, map[string]int) {
+	counts := make(map[string]int)
+	for _, dispatch := range dispatches {
+		caste := strings.TrimSpace(dispatch.Caste)
+		if caste == "" {
+			continue
+		}
+		counts[caste]++
+	}
+	if len(counts) == 0 {
+		return nil, nil
+	}
+
+	castes := make([]string, 0, len(counts))
+	for caste := range counts {
+		castes = append(castes, caste)
+	}
+	sort.Strings(castes)
+	return castes, counts
+}
+
+func casteDispatchSummary(dispatches []CasteDispatch) []string {
+	if len(dispatches) == 0 {
+		return nil
+	}
+	castes := make([]string, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		caste := strings.TrimSpace(dispatch.Caste)
+		if caste == "" {
+			continue
+		}
+		castes = append(castes, caste)
+	}
+	sort.Strings(castes)
+	return castes
+}
+
+func intRef(value int) *int {
+	return &value
+}
+
+func stringSliceDifference(values []string, excluded []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	excludedSet := stringSet(excluded)
+	diff := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || excludedSet[value] {
+			continue
+		}
+		diff = append(diff, value)
+	}
+	if len(diff) == 0 {
+		return nil
+	}
+	sort.Strings(diff)
+	return diff
+}
+
+func stringSliceIntersection(values []string, allowed []string) []string {
+	if len(values) == 0 || len(allowed) == 0 {
+		return nil
+	}
+	allowedSet := stringSet(allowed)
+	intersection := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || !allowedSet[value] {
+			continue
+		}
+		intersection = append(intersection, value)
+	}
+	if len(intersection) == 0 {
+		return nil
+	}
+	sort.Strings(intersection)
+	return intersection
 }
 
 // persistDispatchWorkerHandoff persists a worker handoff for a dispatch.

@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-17T13:16:27Z |
-| **Current Phase** | 6 |
-| **Phase Name** | Seal Evidence and Delivery Readiness Cleanup |
+| **Last Updated** | 2026-05-17T18:06:20Z |
+| **Current Phase** | 5 |
+| **Phase Name** | Full Safety Verification |
 | **Phase Status** | completed |
 | **Milestone** | Crowned Anthill |
 | **Colony Status** | COMPLETED |
@@ -21,7 +21,7 @@
 
 ## Current Goal
 
-Universal Classic Ceremony Parity and Command UX Completion
+Adaptive Queen Spawn Budget and Relevance Pruning
 
 ---
 
@@ -70,9 +70,12 @@ Colony sealed
 
 ---
 
-## Tasks For Phase 6 — Seal Evidence and Delivery Readiness Cleanup
+## Tasks For Phase 5 — Full Safety Verification
 
-*No tasks defined*
+- [x] Run the full Go runtime suite.
+- [x] Run race verification because Queen budget data flows through build, recovery, storage-adjacent manifests, and event-facing orchestration.
+- [x] Run TypeScript host verification if .aether/ts-host files changed.
+- [x] Run focused release/security/final safeguard checks and manually inspect any failures before closing.
 
 ---
 
@@ -86,18 +89,18 @@ Colony sealed
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-17T13:05:16Z|continue_review|continue|Gatekeeper found no current security, release, or integrity blocker; Porter redaction now current, dependency findings are non-blocking advisories.
-- 2026-05-17T13:05:16Z|continue_review|continue|Auditor confirmed release proof is substantive, Porter full-release receipt is fresh and green, stale blocked artifacts are pre-commit only.
-- 2026-05-17T13:05:16Z|continue_review|continue|Probe confirmed focused regression coverage for Porter scope, readiness persistence, redacted diagnostics, and seal blocking; safe to advance.
-- 2026-05-17T13:05:16Z|signal_housekeeping|continue|Signal housekeeping completed: 6 active -> 6 active
-- 2026-05-17T13:16:27Z|sealed|seal|Colony sealed at Crowned Anthill
+- 2026-05-17T18:00:59Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
+- 2026-05-17T18:00:59Z|watcher_verification|continue|watcher skipped; relying on verification commands
+- 2026-05-17T18:00:59Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
+- 2026-05-17T18:00:59Z|signal_housekeeping|continue|Signal housekeeping completed: 6 active -> 6 active
+- 2026-05-17T18:06:20Z|sealed|seal|Colony sealed at Crowned Anthill
 
 ---
 
 ## Next Steps
 
 1. Run `aether entomb`
-2. Run `aether phase --number 6` to inspect the tracked phase details
+2. Run `aether phase --number 5` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---

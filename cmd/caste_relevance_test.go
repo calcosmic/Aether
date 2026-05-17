@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -390,6 +391,73 @@ func TestQueenOrchestrate_SealLightSkipsReviewGates(t *testing.T) {
 	}
 }
 
+func TestQueenOrchestratePreservesSafetyCastes(t *testing.T) {
+	safetyCastes := []string{"builder", "watcher", "probe", "gatekeeper", "auditor"}
+	tests := []struct {
+		name                string
+		phase               colony.Phase
+		belowThresholdCaste string
+	}{
+		{
+			name: "security",
+			phase: colony.Phase{
+				Name:        "Security hardening",
+				Description: "Protect privileged configuration before production rollout",
+				Mode:        colony.PhaseModeProduction,
+				Tasks: []colony.Task{
+					{Goal: "Build hardened configuration checks"},
+				},
+			},
+		},
+		{
+			name: "release",
+			phase: colony.Phase{
+				Name:        "Release candidate packaging",
+				Description: "Prepare the candidate for ship readiness",
+				Mode:        colony.PhaseModeProduction,
+				Tasks: []colony.Task{
+					{Goal: "Build release candidate artifacts"},
+				},
+			},
+			belowThresholdCaste: "gatekeeper",
+		},
+		{
+			name: "final-review",
+			phase: colony.Phase{
+				Name:        "Final review",
+				Description: "Complete final signoff before handoff",
+				Mode:        colony.PhaseModeProduction,
+				Tasks: []colony.Task{
+					{Goal: "Build final review evidence and address blockers"},
+				},
+			},
+			belowThresholdCaste: "gatekeeper",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := colony.ColonyState{}
+			if tt.belowThresholdCaste != "" {
+				score := casteRelevanceScore(tt.phase, tt.belowThresholdCaste)
+				threshold := spawnThreshold("build", state)
+				if score >= threshold {
+					t.Fatalf("%s fixture %s score = %d, want below build threshold %d so safety is not inferred from score",
+						tt.name, tt.belowThresholdCaste, score, threshold)
+				}
+			}
+
+			dispatches := queenOrchestrate(tt.phase, "build", state)
+
+			for _, caste := range safetyCastes {
+				if !HasCaste(dispatches, caste) {
+					t.Errorf("%s: expected safety caste %s to survive Queen orchestration", tt.name, caste)
+				}
+			}
+		})
+	}
+}
+
 func TestQueenOrchestrate_EmptyFlowDefaultsToBuild(t *testing.T) {
 	phase := colony.Phase{
 		Name: "Implementation phase",
@@ -409,6 +477,213 @@ func TestQueenOrchestrate_EmptyFlowDefaultsToBuild(t *testing.T) {
 			t.Errorf("Default flow: dispatch flow type = %q, want build", dispatch.FlowType)
 		}
 	}
+}
+
+func TestQueenOrchestrateAppliesAdaptiveSpawnBudget(t *testing.T) {
+	phase := colony.Phase{
+		ID:          13,
+		Name:        "Documentation maintenance",
+		Description: "Update the architecture guide, README, changelog, manual, project standards, and quality review notes.",
+		Mode:        colony.PhaseModeMaintenance,
+		Tasks: []colony.Task{
+			{Goal: "Write documentation, organize structure, preserve knowledge patterns, and validate examples."},
+		},
+	}
+
+	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+
+	for _, caste := range []string{"builder", "watcher", "probe"} {
+		if !HasCaste(dispatches, caste) {
+			t.Errorf("Low-risk docs: expected required build caste %s to survive budget pruning", caste)
+		}
+	}
+
+	const queenBudget = 4
+	if len(dispatches) > queenBudget {
+		t.Fatalf("Low-risk docs: selected %d castes, want <= Queen budget %d: %+v", len(dispatches), queenBudget, dispatches)
+	}
+}
+
+func TestQueenSpawnBudgetDecisionsPrunesDeterministically(t *testing.T) {
+	tests := []struct {
+		name         string
+		dispatches   []CasteDispatch
+		budget       queenSpawnBudget
+		wantOrder    []string
+		wantSelected []string
+	}{
+		{
+			name: "required before higher-scoring optional castes and optional ties by caste",
+			dispatches: []CasteDispatch{
+				{Caste: "chaos", Score: 90},
+				{Caste: "watcher", Score: 10},
+				{Caste: "auditor", Score: 90},
+				{Caste: "builder", Score: 5},
+				{Caste: "ambassador", Score: 90},
+				{Caste: "measurer", Score: 90},
+			},
+			budget: queenSpawnBudget{
+				FlowType:       "build",
+				MaxWorkers:     4,
+				RequiredCastes: []string{"builder", "watcher"},
+				Reason:         "test budget pressure",
+			},
+			wantOrder:    []string{"watcher", "builder", "ambassador", "auditor", "chaos", "measurer"},
+			wantSelected: []string{"watcher", "builder", "ambassador", "auditor"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decisions := queenSpawnBudgetDecisions(tt.dispatches, tt.budget)
+
+			if got := budgetDecisionCastes(decisions); !reflect.DeepEqual(got, tt.wantOrder) {
+				t.Fatalf("decision order = %v, want %v", got, tt.wantOrder)
+			}
+			if got := selectedBudgetDecisionCastes(decisions); !reflect.DeepEqual(got, tt.wantSelected) {
+				t.Fatalf("selected castes = %v, want %v", got, tt.wantSelected)
+			}
+		})
+	}
+}
+
+func TestQueenSpawnBudgetDecisionsKeepsRequiredOverflow(t *testing.T) {
+	budget := queenSpawnBudget{
+		FlowType:       "build",
+		MaxWorkers:     2,
+		RequiredCastes: []string{"auditor", "gatekeeper", "probe"},
+		Reason:         "required overflow",
+	}
+	dispatches := []CasteDispatch{
+		{Caste: "measurer", Score: 100},
+		{Caste: "auditor", Score: 20},
+		{Caste: "gatekeeper", Score: 20},
+		{Caste: "probe", Score: 20},
+		{Caste: "keeper", Score: 90},
+	}
+
+	decisions := queenSpawnBudgetDecisions(dispatches, budget)
+
+	wantSelected := []string{"auditor", "gatekeeper", "probe"}
+	if got := selectedBudgetDecisionCastes(decisions); !reflect.DeepEqual(got, wantSelected) {
+		t.Fatalf("selected castes = %v, want required castes despite max workers %d", got, budget.MaxWorkers)
+	}
+	for _, caste := range wantSelected {
+		decision, ok := budgetDecisionForCaste(decisions, caste)
+		if !ok {
+			t.Fatalf("missing decision for required caste %s", caste)
+		}
+		if !decision.Required || !decision.Selected {
+			t.Fatalf("%s decision = %+v, want required and selected", caste, decision)
+		}
+	}
+}
+
+func TestQueenSpawnBudgetDecisionsPreservesSafetyCastesUnderPressure(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase colony.Phase
+	}{
+		{
+			name: "security",
+			phase: colony.Phase{
+				Name:        "Security hardening",
+				Description: "Protect privileged configuration before rollout",
+				Mode:        colony.PhaseModePrototype,
+				Tasks: []colony.Task{
+					{Goal: "Build hardened configuration checks"},
+				},
+			},
+		},
+		{
+			name: "release",
+			phase: colony.Phase{
+				Name:        "Release candidate packaging",
+				Description: "Prepare candidate artifacts for handoff",
+				Mode:        colony.PhaseModePrototype,
+				Tasks: []colony.Task{
+					{Goal: "Build candidate artifacts"},
+				},
+			},
+		},
+		{
+			name: "final-review",
+			phase: colony.Phase{
+				Name:        "Final review",
+				Description: "Complete final signoff evidence before handoff",
+				Mode:        colony.PhaseModePrototype,
+				Tasks: []colony.Task{
+					{Goal: "Build final review evidence"},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			budget := queenSpawnBudgetForPhase(tt.phase, "build", colony.ColonyState{})
+			dispatches := budgetPressureDispatches()
+			if len(dispatches) <= budget.MaxWorkers {
+				t.Fatalf("fixture dispatch count = %d, want budget pressure beyond max workers %d", len(dispatches), budget.MaxWorkers)
+			}
+
+			decisions := queenSpawnBudgetDecisions(dispatches, budget)
+
+			for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
+				decision, ok := budgetDecisionForCaste(decisions, caste)
+				if !ok {
+					t.Fatalf("%s: missing decision for safety caste %s", tt.name, caste)
+				}
+				if !decision.Required || !decision.Selected {
+					t.Fatalf("%s: %s decision = %+v, want required and selected under budget pressure", tt.name, caste, decision)
+				}
+			}
+		})
+	}
+}
+
+func budgetPressureDispatches() []CasteDispatch {
+	return []CasteDispatch{
+		{Caste: "ambassador", Score: 95},
+		{Caste: "architect", Score: 94},
+		{Caste: "auditor", Score: 10},
+		{Caste: "builder", Score: 10},
+		{Caste: "chaos", Score: 93},
+		{Caste: "gatekeeper", Score: 10},
+		{Caste: "keeper", Score: 92},
+		{Caste: "measurer", Score: 91},
+		{Caste: "probe", Score: 10},
+		{Caste: "scout", Score: 90},
+		{Caste: "watcher", Score: 10},
+		{Caste: "weaver", Score: 89},
+	}
+}
+
+func budgetDecisionCastes(decisions []queenSpawnBudgetDecision) []string {
+	castes := make([]string, 0, len(decisions))
+	for _, decision := range decisions {
+		castes = append(castes, decision.Caste)
+	}
+	return castes
+}
+
+func selectedBudgetDecisionCastes(decisions []queenSpawnBudgetDecision) []string {
+	castes := make([]string, 0, len(decisions))
+	for _, decision := range decisions {
+		if decision.Selected {
+			castes = append(castes, decision.Caste)
+		}
+	}
+	return castes
+}
+
+func budgetDecisionForCaste(decisions []queenSpawnBudgetDecision, caste string) (queenSpawnBudgetDecision, bool) {
+	for _, decision := range decisions {
+		if decision.Caste == caste {
+			return decision, true
+		}
+	}
+	return queenSpawnBudgetDecision{}, false
 }
 
 func TestFilterCastesByMinScore(t *testing.T) {

@@ -1,12 +1,8 @@
 {
-  "text": "## Prior Reviews\n\n- Security (31 open): HIGH -- .aether/ts-host/src/lifecycle.ts:289 TypeScript lifecycle planning currently marks plan dispat..., HIGH -- cmd/codex_plan_finalize.go:153 plan-finalize accepts completion-level phase_plan before ... +29 more\n- Quality (32 open)\n- Testing (20 open):  -- , INFO -- Independent verification passed for TS host planning synt... +18 more\n- Bugs (4 open)\n",
+  "text": "## Prior Reviews\n\n- Testing (9 open): INFO -- , WARNING --  +7 more\n",
   "domain_counts": {
-    "bugs": 4,
-    "performance": 5,
-    "quality": 32,
-    "security": 31,
-    "testing": 20
+    "testing": 9
   },
-  "total_open": 92,
-  "cache_write_at": "2026-05-17T13:13:55Z"
+  "total_open": 9,
+  "cache_write_at": "2026-05-17T18:03:53Z"
 }

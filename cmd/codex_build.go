@@ -191,6 +191,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	attachBuildDispatchContext(phase.ID, dispatches)
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
@@ -271,6 +272,7 @@ func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, 
 		WorkerTimeout:     options.WorkerTimeout,
 		DispatchWorkers:   false,
 	})
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
 	if manifest, ok := result["dispatch_manifest"].(codexBuildManifest); ok {
 		manifest.DispatchMode = "queen-led"
@@ -443,8 +445,11 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	updatedState.State = colony.StateBUILT
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
-	if _, _, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy); err != nil {
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, updatedState, updatedPhase, "build", reviewDepth, dispatches)
+	if _, finalDispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, playbooks, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy); err != nil {
 		return nil, err
+	} else {
+		dispatches = finalDispatches
 	}
 
 	var committedState colony.ColonyState
@@ -463,6 +468,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	}
 	updatedState = committedState
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, updatedState, updatedPhase, "build", reviewDepth, dispatches)
 	if progress != nil {
 		progress.Advance("Verify")
 	}
@@ -1357,40 +1363,42 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	if briefs == nil {
 		briefs = []string{}
 	}
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		VerificationDepth: string(reviewDepth),
+		DispatchWorkers:   buildWorkerDispatchOptIn(dispatchMode),
+	})
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
 	return codexBuildManifest{
-		Phase:               phase.ID,
-		PhaseName:           phase.Name,
-		Goal:                goal,
-		Root:                root,
-		ColonyMode:          string(state.EffectiveColonyMode()),
-		PlanOnly:            planOnly,
-		ParallelMode:        string(effectiveParallelMode(state)),
-		WaveExecution:       buildWaveExecutionPlans(dispatches, effectiveParallelMode(state)),
-		ExecutionPlan:       buildExecutionPlans(dispatches, effectiveParallelMode(state)),
-		ColonyDepth:         normalizedBuildDepth(state.ColonyDepth),
-		DispatchMode:        strings.TrimSpace(dispatchMode),
-		HostPlatform:        buildHostPlatform(),
-		ExecutionOwner:      buildExecutionOwner(dispatchMode, planOnly),
-		WorkerDispatchOptIn: buildWorkerDispatchOptIn(dispatchMode),
-		GeneratedAt:         startedAt.Format(time.RFC3339),
-		State:               string(state.State),
-		Checkpoint:          checkpoint,
-		ClaimsPath:          claimsPath,
-		Playbooks:           append([]string{}, playbooks...),
-		WorkerBriefs:        briefs,
-		Dispatches:          append([]codexBuildDispatch{}, dispatches...),
-		SelectedTasks:       append([]string{}, selectedTaskIDs...),
-		Tasks:               codexBuildTaskPlans(phase),
-		SuccessCriteria:     append([]string{}, phase.SuccessCriteria...),
-		ReviewDepth:         string(reviewDepth),
-		DispatchContract:    buildDispatchContractForDispatches(dispatches, effectiveParallelMode(state), 0),
-		ProfileContract:     workflowProfileContract(reviewDepth),
-		QueenRecommendation: recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases)),
-		QueenExecutionPolicy: recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
-			VerificationDepth: string(reviewDepth),
-			DispatchWorkers:   buildWorkerDispatchOptIn(dispatchMode),
-		}),
+		Phase:                phase.ID,
+		PhaseName:            phase.Name,
+		Goal:                 goal,
+		Root:                 root,
+		ColonyMode:           string(state.EffectiveColonyMode()),
+		PlanOnly:             planOnly,
+		ParallelMode:         string(effectiveParallelMode(state)),
+		WaveExecution:        buildWaveExecutionPlans(dispatches, effectiveParallelMode(state)),
+		ExecutionPlan:        buildExecutionPlans(dispatches, effectiveParallelMode(state)),
+		ColonyDepth:          normalizedBuildDepth(state.ColonyDepth),
+		DispatchMode:         strings.TrimSpace(dispatchMode),
+		HostPlatform:         buildHostPlatform(),
+		ExecutionOwner:       buildExecutionOwner(dispatchMode, planOnly),
+		WorkerDispatchOptIn:  buildWorkerDispatchOptIn(dispatchMode),
+		GeneratedAt:          startedAt.Format(time.RFC3339),
+		State:                string(state.State),
+		Checkpoint:           checkpoint,
+		ClaimsPath:           claimsPath,
+		Playbooks:            append([]string{}, playbooks...),
+		WorkerBriefs:         briefs,
+		Dispatches:           append([]codexBuildDispatch{}, dispatches...),
+		SelectedTasks:        append([]string{}, selectedTaskIDs...),
+		Tasks:                codexBuildTaskPlans(phase),
+		SuccessCriteria:      append([]string{}, phase.SuccessCriteria...),
+		ReviewDepth:          string(reviewDepth),
+		DispatchContract:     buildDispatchContractForDispatches(dispatches, effectiveParallelMode(state), 0),
+		ProfileContract:      workflowProfileContract(reviewDepth),
+		QueenRecommendation:  recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases)),
+		QueenExecutionPolicy: policy,
 	}
 }
 
@@ -1511,7 +1519,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 	}
 
 	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, playbooks, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
-	manifest.QueenExecutionPolicy = policy
+	manifest.QueenExecutionPolicy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	if err := store.SaveJSON(manifestRel, manifest); err != nil {
 		return nil, nil, fmt.Errorf("failed to write build manifest: %w", err)

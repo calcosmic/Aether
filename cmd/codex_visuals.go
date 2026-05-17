@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -3307,19 +3308,44 @@ func filterBuildDispatches(dispatches []codexBuildDispatch, stage string) []code
 
 func suggestedBuildCaste(task colony.Task) string {
 	text := strings.ToLower(strings.TrimSpace(task.Goal + " " + strings.Join(task.Hints, " ") + " " + strings.Join(task.SuccessCriteria, " ")))
+	words := buildCasteKeywordWords(text)
 	// Check builder keywords first (higher priority)
 	for _, token := range []string{"implement", "build", "create", "fix", "add", "write", "code", "refactor", "test", "deploy"} {
-		if strings.Contains(text, token) {
+		if buildCasteWordMatches(words, token) {
 			return "builder"
 		}
 	}
 	// Then check scout keywords
 	for _, token := range []string{"research", "investigat", "survey", "analy", "document", "readme", "spec"} {
-		if strings.Contains(text, token) {
+		if buildCasteWordMatches(words, token) {
 			return "scout"
 		}
 	}
 	return "builder"
+}
+
+func buildCasteKeywordWords(text string) []string {
+	return strings.FieldsFunc(text, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+}
+
+func buildCasteWordMatches(words []string, token string) bool {
+	for _, word := range words {
+		if word == token || word == token+"s" || word == token+"ed" || word == token+"ing" {
+			return true
+		}
+		if token == "investigat" && strings.HasPrefix(word, token) {
+			return true
+		}
+		if token == "analy" && strings.HasPrefix(word, token) {
+			return true
+		}
+		if token == "spec" && (word == "specification" || word == "specifications") {
+			return true
+		}
+	}
+	return false
 }
 
 func taskWaves(tasks []colony.Task) [][]int {
