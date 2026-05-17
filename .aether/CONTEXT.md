@@ -8,26 +8,26 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-16T18:29:58Z |
-| **Current Phase** | 5 |
-| **Phase Name** | Wrapper and Documentation Parity |
-| **Phase Status** | completed |
-| **Milestone** | Crowned Anthill |
-| **Colony Status** | COMPLETED |
-| **Colony Mode** | colony |
-| **Safe to Clear?** | YES — Colony complete |
+| **Last Updated** | 2026-05-17T12:40:02Z |
+| **Current Phase** | 6 |
+| **Phase Name** | Seal Evidence and Delivery Readiness Cleanup |
+| **Phase Status** | in_progress |
+| **Milestone** | First Mound |
+| **Colony Status** | BUILT |
+| **Colony Mode** | orchestrator |
+| **Safe to Clear?** | YES — Build complete, ready to continue |
 
 ---
 
 ## Current Goal
 
-Classic Command Parity Matrix and TypeScript Host Command Spine
+Universal Classic Ceremony Parity and Command UX Completion
 
 ---
 
 ## What's In Progress
 
-Colony sealed
+Check-19 reported blocker: Persisted verification and review artifacts still record old blocked evidence despite source fix.
 
 ---
 
@@ -35,6 +35,7 @@ Colony sealed
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
+| How should Phase 6 (Seal Evidence and Delivery Readiness Cleanup) handle blocked continue evidence: reconcile with evidence and reverify | pheromone | active |
 | What boundary should final seal reviewers enforce: block on security or quality issues | pheromone | active |
 | What boundary should builders protect for Phase 6 (End-to-end verification): phase tasks only | pheromone | active |
 | Do not plan a language, protocol, grammar, parser, encoding, or communication DSL. The colony goal is Aether runtime lifecycle reliability: platform dispatch... | pheromone | active |
@@ -69,13 +70,9 @@ Colony sealed
 
 ---
 
-## Tasks For Phase 5 — Wrapper and Documentation Parity
+## Tasks For Phase 6 — Seal Evidence and Delivery Readiness Cleanup
 
-- [x] Add or update tests that command-guide references aether host for orchestrated commands.
-- [x] Update wrapper source metadata for Claude and OpenCode command parity if host semantics changed.
-- [x] Document the Classic Command Parity Matrix and TS Host Command Spine.
-- [x] Run full repository verification.
-- [x] Prepare release-facing summary for finalizer/Queen output.
+*No tasks defined*
 
 ---
 
@@ -89,18 +86,18 @@ Colony sealed
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-16T18:04:46Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
-- 2026-05-16T18:04:46Z|watcher_verification|continue|watcher skipped; relying on verification commands
-- 2026-05-16T18:04:46Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
-- 2026-05-16T18:04:46Z|signal_housekeeping|continue|Signal housekeeping completed: 5 active -> 5 active
-- 2026-05-16T18:29:58Z|sealed|seal|Colony sealed at Crowned Anthill
+- 2026-05-17T12:38:11Z|watcher_verification|continue|Watcher Hawk-41 closed independent verification with status blocked: Phase verification artifact and Porter readiness receipt are still inconsistent with advancement; Git status remains critical.
+- 2026-05-17T12:38:11Z|continue_review|continue|Porter redaction security blocker is resolved; remaining release critical is Git status only.
+- 2026-05-17T12:38:11Z|continue_review|continue|Persisted verification and review artifacts still record old blocked evidence despite source fix.
+- 2026-05-17T12:38:11Z|continue_review|continue|Redaction tests are adequate, but saved proof files still show release readiness and verification blockers.
+- 2026-05-17T12:38:11Z|continue_blocked|continue-finalize|Continue blocked before advancement
 
 ---
 
 ## Next Steps
 
-1. Run `aether entomb`
-2. Run `aether phase --number 5` to inspect the tracked phase details
+1. Run `aether continue`
+2. Run `aether phase --number 6` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +20,14 @@ type porterContext string
 const (
 	porterContextSource   porterContext = "source"
 	porterContextConsumer porterContext = "consumer"
+)
+
+type porterReadinessScope string
+
+const (
+	porterReadinessScopeQuick       porterReadinessScope = "quick"
+	porterReadinessScopeFullRelease porterReadinessScope = "full-release"
+	porterReadinessReportRel                             = "porter/readiness.json"
 )
 
 // detectPorterContext determines whether the current working directory is inside
@@ -39,9 +49,11 @@ var porterCmd = &cobra.Command{
 var porterCheckCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Validate pipeline readiness for delivery",
-	Long: "Runs a full pipeline readiness check including version alignment, " +
+	Long: "Runs a quick pipeline readiness check by default, including version alignment, " +
 		"hub companion files, git status, test status, and changelog completeness. " +
-		"Reuses existing integrity check functions. Works with or without an active colony.",
+		"Use --full-release for the expanded release gate, including source-surface, " +
+		"version agreement, race, vet, build, GoReleaser, TypeScript host, npm, and smoke checks. " +
+		"Works with or without an active colony.",
 	Args: cobra.NoArgs,
 	RunE: runPorterCheck,
 }
@@ -49,12 +61,14 @@ var porterCheckCmd = &cobra.Command{
 func init() {
 	porterCheckCmd.Flags().Bool("json", false, "Output JSON instead of visual report")
 	porterCheckCmd.Flags().String("channel", "", "Override channel (stable or dev)")
+	porterCheckCmd.Flags().Bool("full-release", false, "Run expanded release readiness checks, including slower release-tool commands")
 	porterCmd.AddCommand(porterCheckCmd)
 	rootCmd.AddCommand(porterCmd)
 }
 
 func runPorterCheck(cmd *cobra.Command, args []string) error {
 	channel := runtimeChannelFromFlag(cmd.Flags())
+	scope := porterReadinessScopeFromCommand(cmd)
 
 	// Resolve hub directory
 	homeDir, err := os.UserHomeDir()
@@ -77,6 +91,13 @@ func runPorterCheck(cmd *cobra.Command, args []string) error {
 			checkTestStatus(),
 			checkChangelogCompleteness(),
 		}
+		if scope == porterReadinessScopeFullRelease && ctx == porterContextSource {
+			checks = append(checks,
+				checkReleaseVersionAgreementAt(resolveAetherRootPath(), hubDir, resolveVersion()),
+				checkSourceSurfaceAlignmentAt(resolveAetherRootPath()),
+			)
+			checks = append(checks, buildFullReleaseCommandChecks(resolveAetherRootPath(), false)...)
+		}
 		overall := "critical"
 		recoveryCommands := []string{"Run aether install to populate the hub"}
 		for _, c := range checks {
@@ -84,37 +105,18 @@ func runPorterCheck(cmd *cobra.Command, args []string) error {
 				recoveryCommands = append(recoveryCommands, c.RecoveryCommand)
 			}
 		}
-		result := integrityResult{
-			Context:          string(ctx),
-			Channel:          string(channel),
-			Checks:           checks,
-			Overall:          overall,
-			RecoveryCommands: recoveryCommands,
-		}
+		result := buildPorterResult(ctx, string(channel), scope, checks)
+		result.Overall = overall
+		result.RecoveryCommands = uniqueSortedStrings(recoveryCommands)
+		result = recordPorterReadinessEvidenceForOutput(result)
 		return renderPorterResult(cmd, result)
 	}
 
-	checks := buildPorterChecks(string(channel), false)
+	checks := buildPorterChecksForContextWithScope(ctx, string(channel), false, scope)
 
 	// Aggregate results
-	overall := "ok"
-	var recoveryCommands []string
-	for _, c := range checks {
-		if c.Status == "fail" {
-			overall = "critical"
-			if c.RecoveryCommand != "" {
-				recoveryCommands = append(recoveryCommands, c.RecoveryCommand)
-			}
-		}
-	}
-
-	result := integrityResult{
-		Context:          string(ctx),
-		Channel:          string(channel),
-		Checks:           checks,
-		Overall:          overall,
-		RecoveryCommands: recoveryCommands,
-	}
+	result := buildPorterResult(ctx, string(channel), scope, checks)
+	result = recordPorterReadinessEvidenceForOutput(result)
 
 	return renderPorterResult(cmd, result)
 }
@@ -129,6 +131,10 @@ func buildPorterChecks(channel string, skipTests bool) []integrityCheck {
 // Source repos get version alignment, companion, test, changelog, and publish readiness.
 // Consumer repos get hub sync and update readiness.
 func buildPorterChecksForContext(ctx porterContext, channel string, skipTests bool) []integrityCheck {
+	return buildPorterChecksForContextWithScope(ctx, channel, skipTests, porterReadinessScopeQuick)
+}
+
+func buildPorterChecksForContextWithScope(ctx porterContext, channel string, skipTests bool, scope porterReadinessScope) []integrityCheck {
 	gitStatus := checkGitStatus()
 	gitStashes := checkGitStashes()
 	gitWorktrees := checkGitWorktrees()
@@ -151,7 +157,7 @@ func buildPorterChecksForContext(ctx porterContext, channel string, skipTests bo
 			testCheck = checkTestStatus()
 		}
 
-		return []integrityCheck{
+		checks := []integrityCheck{
 			checkSourceVersion(),
 			checkBinaryVersion(),
 			checkHubVersion(hubDir),
@@ -163,6 +169,14 @@ func buildPorterChecksForContext(ctx porterContext, channel string, skipTests bo
 			testCheck,
 			checkChangelogCompleteness(),
 		}
+		if scope == porterReadinessScopeFullRelease {
+			checks = append(checks,
+				checkReleaseVersionAgreementAt(resolveAetherRootPath(), hubDir, binaryVersion),
+				checkSourceSurfaceAlignmentAt(resolveAetherRootPath()),
+			)
+			checks = append(checks, buildFullReleaseCommandChecks(resolveAetherRootPath(), skipTests)...)
+		}
+		return checks
 	}
 
 	// Consumer repo checks
@@ -174,6 +188,359 @@ func buildPorterChecksForContext(ctx porterContext, channel string, skipTests bo
 		gitStashes,
 		gitWorktrees,
 	}
+}
+
+func porterReadinessScopeFromCommand(cmd *cobra.Command) porterReadinessScope {
+	fullRelease, _ := cmd.Flags().GetBool("full-release")
+	if fullRelease {
+		return porterReadinessScopeFullRelease
+	}
+	return porterReadinessScopeQuick
+}
+
+func buildPorterResult(ctx porterContext, channel string, scope porterReadinessScope, checks []integrityCheck) integrityResult {
+	overall := "ok"
+	var recoveryCommands []string
+	for _, c := range checks {
+		if c.Status == "fail" {
+			overall = "critical"
+			if c.RecoveryCommand != "" {
+				recoveryCommands = append(recoveryCommands, c.RecoveryCommand)
+			}
+		}
+	}
+
+	return integrityResult{
+		Context:          string(ctx),
+		Channel:          string(normalizeRuntimeChannel(channel)),
+		Scope:            string(scope),
+		GeneratedAt:      time.Now().UTC().Format(time.RFC3339),
+		Checks:           checks,
+		Overall:          overall,
+		SkippedChecks:    skippedPorterChecks(checks),
+		RecoveryCommands: uniqueSortedStrings(recoveryCommands),
+	}
+}
+
+func skippedPorterChecks(checks []integrityCheck) []string {
+	skipped := []string{}
+	for _, check := range checks {
+		if check.Status == "skip" {
+			skipped = append(skipped, check.Name)
+		}
+	}
+	return uniqueSortedStrings(skipped)
+}
+
+func recordPorterReadinessEvidenceForOutput(result integrityResult) integrityResult {
+	if store == nil {
+		return result
+	}
+	result.Evidence = displayDataPath(porterReadinessReportRel)
+	if _, err := recordPorterReadinessEvidence(result); err != nil {
+		result.Evidence = ""
+		result.EvidenceError = err.Error()
+	}
+	return result
+}
+
+func recordPorterReadinessEvidence(result integrityResult) (string, error) {
+	if store == nil {
+		return "", nil
+	}
+	if strings.TrimSpace(result.GeneratedAt) == "" {
+		result.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	if result.SkippedChecks == nil {
+		result.SkippedChecks = skippedPorterChecks(result.Checks)
+	}
+	if err := store.SaveJSON(porterReadinessReportRel, result); err != nil {
+		return "", err
+	}
+	return porterReadinessReportRel, nil
+}
+
+func checkReleaseVersionAgreementAt(root, hubDir, binaryVersion string) integrityCheck {
+	sourceVersion := readRepoVersion(root)
+	if sourceVersion == "" {
+		sourceVersion = resolveSourceVersion()
+	}
+	npmVersion := readNpmPackageVersion(root)
+	hubVersion := readHubVersionAtPath(hubDir)
+	binaryVersion = normalizeVersion(binaryVersion)
+
+	versions := []struct {
+		label   string
+		version string
+	}{
+		{"source version", sourceVersion},
+		{"npm package version", npmVersion},
+		{"binary version", binaryVersion},
+		{"hub version", hubVersion},
+	}
+
+	details := map[string]interface{}{}
+	var missing []string
+	for _, v := range versions {
+		details[strings.ReplaceAll(v.label, " ", "_")] = v.version
+		if v.version == "" || v.version == "unknown" {
+			missing = append(missing, v.label)
+		}
+	}
+	if len(missing) > 0 {
+		return integrityCheck{
+			Name:            "Release version agreement",
+			Status:          "fail",
+			Message:         fmt.Sprintf("Missing release version evidence: %s", strings.Join(missing, ", ")),
+			RecoveryCommand: "Align .aether/version.json, npm/package.json, binary, and hub versions before release",
+			Details:         details,
+		}
+	}
+
+	reference := sourceVersion
+	var mismatches []string
+	for _, v := range versions {
+		if v.version != reference {
+			mismatches = append(mismatches, fmt.Sprintf("%s %s", v.label, v.version))
+		}
+	}
+	if len(mismatches) > 0 {
+		return integrityCheck{
+			Name:            "Release version agreement",
+			Status:          "fail",
+			Message:         fmt.Sprintf("Release versions disagree: source version %s; %s", sourceVersion, strings.Join(mismatches, "; ")),
+			RecoveryCommand: "Align .aether/version.json, npm/package.json, binary, and hub versions before release",
+			Details:         details,
+		}
+	}
+
+	return integrityCheck{
+		Name:    "Release version agreement",
+		Status:  "pass",
+		Message: fmt.Sprintf("Source, npm package, binary, and hub all report %s", sourceVersion),
+		Details: details,
+	}
+}
+
+func readNpmPackageVersion(root string) string {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			root = findAetherModuleRoot(cwd)
+		}
+	}
+	if root == "" {
+		return ""
+	}
+	return readVersionJSONFile(filepath.Join(root, "npm", "package.json"))
+}
+
+func checkSourceSurfaceAlignmentAt(root string) integrityCheck {
+	sourceRoot, err := resolveSourceCheckRoot(root)
+	if err != nil {
+		return integrityCheck{
+			Name:            "Source surface alignment",
+			Status:          "fail",
+			Message:         err.Error(),
+			RecoveryCommand: "Run aether source-check --json from the Aether source checkout",
+		}
+	}
+	result := runSourceCheck(sourceRoot)
+	if result.OK {
+		return integrityCheck{
+			Name:    "Source surface alignment",
+			Status:  "pass",
+			Message: "source-check passed",
+			Details: map[string]interface{}{"checked_components": len(result.Components)},
+		}
+	}
+	return integrityCheck{
+		Name:            "Source surface alignment",
+		Status:          "fail",
+		Message:         fmt.Sprintf("source-check found %d issue(s)", len(result.Issues)),
+		RecoveryCommand: "Run aether source-check --json and fix reported source surface drift",
+		Details:         map[string]interface{}{"issue_count": len(result.Issues)},
+	}
+}
+
+type porterCommandCheck struct {
+	Name            string
+	Dir             string
+	Args            []string
+	Timeout         time.Duration
+	RecoveryCommand string
+}
+
+func buildFullReleaseCommandChecks(root string, skipCommands bool) []integrityCheck {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		root = resolveAetherRootPath()
+	}
+	specs := []porterCommandCheck{
+		{
+			Name:            "Go vet",
+			Dir:             root,
+			Args:            []string{"go", "vet", "./..."},
+			Timeout:         2 * time.Minute,
+			RecoveryCommand: "Fix go vet findings before release",
+		},
+		{
+			Name:            "Go race tests",
+			Dir:             root,
+			Args:            []string{"go", "test", "./...", "-race", "-count=1"},
+			Timeout:         10 * time.Minute,
+			RecoveryCommand: "Fix race test failures before release",
+		},
+		{
+			Name:            "Go binary build",
+			Dir:             root,
+			Args:            []string{"go", "build", "./cmd/aether"},
+			Timeout:         2 * time.Minute,
+			RecoveryCommand: "Fix binary build failures before release",
+		},
+		{
+			Name:            "GoReleaser config",
+			Dir:             root,
+			Args:            []string{"goreleaser", "check"},
+			Timeout:         2 * time.Minute,
+			RecoveryCommand: "Fix GoReleaser config before release",
+		},
+		{
+			Name:            "GoReleaser snapshot",
+			Dir:             root,
+			Args:            []string{"goreleaser", "build", "--snapshot", "--clean"},
+			Timeout:         10 * time.Minute,
+			RecoveryCommand: "Fix GoReleaser snapshot build before release",
+		},
+		{
+			Name:            "TS host typecheck",
+			Dir:             filepath.Join(root, ".aether", "ts-host"),
+			Args:            []string{"npm", "run", "typecheck"},
+			Timeout:         2 * time.Minute,
+			RecoveryCommand: "Fix TypeScript host typecheck failures before release",
+		},
+		{
+			Name:            "TS host tests",
+			Dir:             filepath.Join(root, ".aether", "ts-host"),
+			Args:            []string{"npm", "test"},
+			Timeout:         3 * time.Minute,
+			RecoveryCommand: "Fix TypeScript host tests before release",
+		},
+		{
+			Name:            "TS host build",
+			Dir:             filepath.Join(root, ".aether", "ts-host"),
+			Args:            []string{"npm", "run", "build"},
+			Timeout:         2 * time.Minute,
+			RecoveryCommand: "Fix TypeScript host build before release",
+		},
+		{
+			Name:            "npm package tests",
+			Dir:             filepath.Join(root, "npm"),
+			Args:            []string{"npm", "test"},
+			Timeout:         2 * time.Minute,
+			RecoveryCommand: "Fix npm package tests before release",
+		},
+		{
+			Name:            "Aether binary smoke",
+			Dir:             root,
+			Args:            []string{"go", "run", "./cmd/aether", "version"},
+			Timeout:         1 * time.Minute,
+			RecoveryCommand: "Fix Aether binary smoke failure before release",
+		},
+	}
+
+	checks := make([]integrityCheck, 0, len(specs))
+	for _, spec := range specs {
+		if skipCommands {
+			checks = append(checks, skippedPorterCommandCheck(spec))
+			continue
+		}
+		checks = append(checks, runPorterCommandCheck(spec))
+	}
+	return checks
+}
+
+func skippedPorterCommandCheck(spec porterCommandCheck) integrityCheck {
+	return integrityCheck{
+		Name:    spec.Name,
+		Status:  "skip",
+		Message: "Skipped by test-mode porter check construction",
+		Details: map[string]interface{}{
+			"command": strings.Join(spec.Args, " "),
+			"dir":     spec.Dir,
+		},
+	}
+}
+
+func runPorterCommandCheck(spec porterCommandCheck) integrityCheck {
+	if len(spec.Args) == 0 {
+		return integrityCheck{Name: spec.Name, Status: "skip", Message: "No command configured"}
+	}
+	if strings.TrimSpace(spec.Dir) != "" {
+		if _, err := os.Stat(spec.Dir); err != nil {
+			return integrityCheck{
+				Name:    spec.Name,
+				Status:  "skip",
+				Message: fmt.Sprintf("Required directory missing: %s", spec.Dir),
+				Details: map[string]interface{}{
+					"command": strings.Join(spec.Args, " "),
+					"dir":     spec.Dir,
+				},
+			}
+		}
+	}
+
+	timeout := spec.Timeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, spec.Args[0], spec.Args[1:]...)
+	cmd.Dir = spec.Dir
+	cmd.Env = porterTestEnv(os.Environ())
+	output, err := cmd.CombinedOutput()
+	details := map[string]interface{}{
+		"command": strings.Join(spec.Args, " "),
+		"dir":     spec.Dir,
+	}
+	if ctx.Err() == context.DeadlineExceeded {
+		return integrityCheck{
+			Name:            spec.Name,
+			Status:          "fail",
+			Message:         fmt.Sprintf("Timed out after %s", timeout),
+			RecoveryCommand: spec.RecoveryCommand,
+			Details:         details,
+		}
+	}
+	if err != nil {
+		return integrityCheck{
+			Name:            spec.Name,
+			Status:          "fail",
+			Message:         lastPorterOutputLines(output, 5),
+			RecoveryCommand: spec.RecoveryCommand,
+			Details:         details,
+		}
+	}
+	return integrityCheck{
+		Name:    spec.Name,
+		Status:  "pass",
+		Message: "Command passed",
+		Details: details,
+	}
+}
+
+func lastPorterOutputLines(output []byte, limit int) string {
+	text := strings.TrimSpace(string(output))
+	if text == "" {
+		return "Command failed without output"
+	}
+	lines := strings.Split(text, "\n")
+	if limit > 0 && len(lines) > limit {
+		lines = lines[len(lines)-limit:]
+	}
+	return codex.SanitizeWorkerDiagnosticOutput(strings.Join(lines, "\n"))
 }
 
 // checkHubCompanionSync wraps checkHubCompanionFiles for consumer repo context.
@@ -211,7 +578,22 @@ func buildPorterVisual(result integrityResult) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("\U0001f4e6", "Porter Delivery Readiness"))
 	b.WriteString(fmt.Sprintf("Channel: %s\n", result.Channel))
-	b.WriteString(fmt.Sprintf("Context: %s repo\n\n", result.Context))
+	b.WriteString(fmt.Sprintf("Context: %s repo\n", result.Context))
+	b.WriteString(fmt.Sprintf("Scope: %s\n", porterReadinessScopeVisualLabel(result.Scope)))
+	if note := porterReadinessScopeVisualNote(result.Scope); note != "" {
+		b.WriteString(note)
+		b.WriteString("\n")
+	}
+	if evidence := strings.TrimSpace(result.Evidence); evidence != "" {
+		b.WriteString(fmt.Sprintf("Evidence: %s\n", evidence))
+	}
+	if len(result.SkippedChecks) > 0 {
+		b.WriteString(fmt.Sprintf("Skipped: %s\n", strings.Join(result.SkippedChecks, ", ")))
+	}
+	if errText := strings.TrimSpace(result.EvidenceError); errText != "" {
+		b.WriteString(fmt.Sprintf("Evidence warning: %s\n", errText))
+	}
+	b.WriteString("\n")
 
 	passCount := 0
 	for _, c := range result.Checks {
@@ -249,6 +631,24 @@ func buildPorterVisual(result integrityResult) string {
 	}
 
 	return b.String()
+}
+
+func porterReadinessScopeVisualLabel(scope string) string {
+	switch porterReadinessScope(strings.TrimSpace(scope)) {
+	case porterReadinessScopeFullRelease:
+		return "full-release"
+	default:
+		return "quick"
+	}
+}
+
+func porterReadinessScopeVisualNote(scope string) string {
+	switch porterReadinessScope(strings.TrimSpace(scope)) {
+	case porterReadinessScopeFullRelease:
+		return "Full-release scope runs slower release-tool checks and blocks on failures."
+	default:
+		return "Quick scope omits slower release-tool checks; use --full-release before publishing."
+	}
 }
 
 // checkGitStatus runs `git status --porcelain` and fails if uncommitted changes exist.
@@ -365,16 +765,10 @@ func checkTestStatus() integrityCheck {
 		}
 	}
 	if err != nil {
-		// Extract last few lines of output for the message
-		lines := strings.Split(string(output), "\n")
-		lastLines := lines
-		if len(lines) > 5 {
-			lastLines = lines[len(lines)-5:]
-		}
 		return integrityCheck{
 			Name:            "Test status",
 			Status:          "fail",
-			Message:         strings.Join(lastLines, "\n"),
+			Message:         lastPorterOutputLines(output, 5),
 			RecoveryCommand: "Fix failing tests before delivery",
 		}
 	}

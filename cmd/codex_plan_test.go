@@ -187,6 +187,60 @@ func TestPlanReturnsExistingPlanWithoutRefresh(t *testing.T) {
 	}
 }
 
+func TestPlanOnlyExistingPlanDoesNotReturnFinalizerManifest(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Reuse the current plan without spawning planners"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Existing phase",
+				Status: colony.PhaseReady,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Use the existing plan", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--plan-only"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --plan-only returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if existing, _ := result["existing_plan"].(bool); !existing {
+		t.Fatalf("existing_plan = %v, want true", result["existing_plan"])
+	}
+	if requires, _ := result["requires_finalizer"].(bool); requires {
+		t.Fatalf("requires_finalizer = true for existing plan no-op: %+v", result)
+	}
+	if _, ok := result["plan_manifest"]; ok {
+		t.Fatalf("existing plan no-op returned plan_manifest: %+v", result["plan_manifest"])
+	}
+	if _, ok := result["planning_manifest"]; ok {
+		t.Fatalf("existing plan no-op returned planning_manifest: %+v", result["planning_manifest"])
+	}
+	if dispatches, ok := result["dispatches"].([]interface{}); ok && len(dispatches) > 0 {
+		t.Fatalf("existing plan no-op returned planning dispatches: %+v", dispatches)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "spawn-tree.txt")); err == nil {
+		t.Fatal("plan --plan-only existing plan unexpectedly wrote spawn-tree.txt")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat spawn-tree.txt: %v", err)
+	}
+}
+
 func TestPlanIgnoresPriorGoalPlanningArtifactForFreshSession(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -338,7 +392,7 @@ func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	}
 	assertDispatchHasRuntimeSkillAssignment(t, second)
 
-	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "session.json", "event-bus.jsonl", "runtime-spawn-runs.jsonl"} {
+	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "session.json", "event-bus.jsonl", "spawn-runs.json"} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); err == nil {
 			t.Fatalf("plan --plan-only unexpectedly wrote %s", rel)
 		} else if !os.IsNotExist(err) {
@@ -419,7 +473,7 @@ func TestPlanRefreshUsesAgentDelegatePathInsideHostedAgent(t *testing.T) {
 	if len(dispatches) != 2 {
 		t.Fatalf("expected 2 planning dispatches, got %d", len(dispatches))
 	}
-	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "runtime-spawn-runs.jsonl"} {
+	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "spawn-runs.json"} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); err == nil {
 			t.Fatalf("agent-delegate plan unexpectedly wrote %s", rel)
 		} else if !os.IsNotExist(err) {
@@ -718,7 +772,7 @@ func TestPlanIncludesDispatchContract(t *testing.T) {
 	}
 
 	visibility := stringSliceValue(contract["fallback_visibility"])
-	for _, want := range []string{"dispatch_mode", "planning_warning", "artifact_source", "plan_source"} {
+	for _, want := range []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source"} {
 		if !containsString(visibility, want) {
 			t.Fatalf("fallback_visibility missing %q: %v", want, visibility)
 		}

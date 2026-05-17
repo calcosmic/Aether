@@ -35,6 +35,15 @@ export type CeremonyCommandRunner = (
   args: string[]
 ) => string;
 
+const TERMINAL_WORKER_STATUSES = new Set([
+  "completed",
+  "failed",
+  "blocked",
+  "timeout",
+  "manually-reconciled",
+  "code_written",
+]);
+
 function runGoCeremonyCommand(opts: GoBridgeOptions, args: string[]): string {
   try {
     return execFileSync(opts.goBinaryPath, args, {
@@ -62,6 +71,17 @@ function runGoCeremonyCommand(opts: GoBridgeOptions, args: string[]): string {
       `Go ceremony command failed for ${args.slice(0, 3).join(" ")}: ${detail}; subprocess output omitted`
     );
   }
+}
+
+function isTerminalWorkerResult(data: unknown): boolean {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return false;
+  }
+  const status = (data as Record<string, unknown>)["status"];
+  return (
+    typeof status === "string" &&
+    TERMINAL_WORKER_STATUSES.has(status.trim().toLowerCase())
+  );
 }
 
 export class GoCeremonyAdapter implements CeremonyAdapter {
@@ -101,6 +121,9 @@ export class GoCeremonyAdapter implements CeremonyAdapter {
   }
 
   renderWorkerComplete(workflow: CeremonyWorkflow, workerResult: unknown): string {
+    if (!isTerminalWorkerResult(workerResult)) {
+      return "";
+    }
     const workerFile = this.writePacket(workflow, "worker", workerResult);
     return this.runner(this.opts, [
       "ceremony",

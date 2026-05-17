@@ -101,7 +101,9 @@ describe("swarm-display", () => {
   });
 
   it("runSwarmDisplay with dashboard disabled returns success and manifest", async () => {
+    let capturedArgs: string[] | undefined;
     __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      capturedArgs = [...args];
       if (args[0] === "swarm") {
         return makeMockManifest() as unknown as T;
       }
@@ -119,6 +121,34 @@ describe("swarm-display", () => {
     assert.ok(result.manifest, "Should have manifest");
     assert.equal(result.manifest!.swarm_id, "swarm-128-02-test", "Should capture swarm_id");
     assert.equal(result.dispatches_count, 4, "Should count dispatches correctly");
+    assert.deepEqual(
+      capturedArgs,
+      ["swarm", "--plan-only"],
+      "Swarm display should request a runtime plan-only manifest"
+    );
+  });
+
+  it("runSwarmDisplay passes target after plan-only flag", async () => {
+    let capturedArgs: string[] | undefined;
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      capturedArgs = [...args];
+      return makeMockManifest() as unknown as T;
+    });
+
+    const result = await runSwarmDisplay({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      dashboard: false,
+      planOnly: true,
+      target: "Fix navigation bug",
+    });
+
+    assert.equal(result.success, true, "Should succeed");
+    assert.deepEqual(
+      capturedArgs,
+      ["swarm", "--plan-only", "Fix navigation bug"],
+      "Problem-target swarm display remains runtime manifest driven"
+    );
   });
 
   it("runSwarmDisplay handles empty manifest gracefully", async () => {

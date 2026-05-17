@@ -25,6 +25,7 @@ import type {
   WorkerResult,
   PlanCompletion,
   ContinueCompletion,
+  PlanningDispatch,
 } from "./types.js";
 import {
   dispatchWorkers,
@@ -137,6 +138,7 @@ interface BuildManifestResult {
   dispatch_manifest?: BuildManifest;
   dispatches?: BuildDispatch[];
   dispatch_count?: number;
+  provider_diagnostics?: string;
   [key: string]: unknown;
 }
 
@@ -207,6 +209,35 @@ function renderWorkerCeremony(
   for (const worker of workers) {
     emitCeremonyOutput(ceremony.renderWorkerComplete(workflow, worker));
   }
+}
+
+function stringField(value: unknown, key: string): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "string" && field.trim() !== "" ? field.trim() : undefined;
+}
+
+function providerDiagnosticFromBuildResult(
+  buildResult: BuildManifestResult,
+  buildManifest: BuildManifest
+): string | undefined {
+  return (
+    stringField(buildResult, "provider_diagnostics") ??
+    stringField(buildManifest, "provider_diagnostics")
+  );
+}
+
+function formatLifecycleProviderUnavailableMessage(
+  context: string,
+  buildResult: BuildManifestResult,
+  buildManifest: BuildManifest
+): string {
+  return (
+    providerDiagnosticFromBuildResult(buildResult, buildManifest) ??
+    formatPlatformUnavailableMessage(context)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -286,28 +317,16 @@ export async function runLifecycle(
     };
     renderManifestCeremony(ceremony, "plan", planCeremonyEnvelope, planDispatches);
 
-    // Build planning dispatch results: mark all as completed since the TS host
-    // is orchestrating (not actually running planning agents for this prototype).
-    const planningResults = planDispatches.map((d): PlanningDispatchResult => {
-      const result: PlanningDispatchResult = {
-        name: d.name ?? "unknown",
-        status: "completed",
-        summary: `Planning dispatch completed by TS host (${d.name ?? "unknown"})`,
-      };
-      if (d.caste !== undefined) result.caste = d.caste;
-      if (d.stage !== undefined) result.stage = d.stage;
-      if (d.task !== undefined) result.task = d.task;
-      if (d.task_id !== undefined) result.task_id = d.task_id;
-      if (d.wave !== undefined) result.wave = d.wave;
-      if (d.execution_wave !== undefined) result.execution_wave = d.execution_wave;
-      return result;
-    });
+    // The TS host does not run planning workers here. Only real planning
+    // dispatch completions belong in this list; host-created plans are labeled
+    // with the synthesis envelope below.
+    const planningResults: PlanningDispatch[] = [];
     renderWorkerCeremony(ceremony, "plan", planningResults);
 
-    // Build plan completion file with a synthetic phase_plan.
+    // Build plan completion file with explicit host synthesis.
     // The Go plan-finalizer requires a phase_plan (codexWorkerPlanArtifact)
-    // with at least one phase containing tasks. The TS host provides this
-    // since it orchestrates planning rather than running real planning agents.
+    // with at least one phase containing tasks. The TS host labels this as
+    // synthesis instead of presenting it as worker evidence.
     const goal = typeof planManifest["goal"] === "string"
       ? planManifest["goal"] as string
       : "colony goal";
@@ -330,10 +349,14 @@ export async function runLifecycle(
       confidence: { coverage: 50, complexity: 50, dependencies: 50, effort: 50, overall: 50 },
     };
 
-    const planCompletion = {
+    const planCompletion: PlanCompletion = {
       plan_manifest: planManifest,
       dispatches: planningResults,
-      phase_plan: phasePlan,
+      synthesis: {
+        source: "ts-host",
+        reason: "TS lifecycle host created a fallback phase plan without running planning workers.",
+        phase_plan: phasePlan,
+      },
     };
 
     const planCompletionPath = writeCompletionFile(
@@ -386,7 +409,13 @@ export async function runLifecycle(
     const simulateWorkers = opts.simulateWorkers ?? false;
 
     if (!hasPlatforms && !simulateWorkers) {
-      throw new Error(formatPlatformUnavailableMessage(`phase ${targetPhase} build`));
+      throw new Error(
+        formatLifecycleProviderUnavailableMessage(
+          `phase ${targetPhase} build`,
+          buildResult,
+          buildManifest
+        )
+      );
     }
 
     // Create a placeholder file for simulated worker file claims.

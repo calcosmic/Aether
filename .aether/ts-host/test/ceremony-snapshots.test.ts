@@ -7,6 +7,7 @@
  * Snapshot update: AETHER_UPDATE_SNAPSHOTS=1 npm test
  */
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,12 +19,95 @@ import { visualRenderer } from "../src/renderers/visual.js";
 import { markdownRenderer } from "../src/renderers/markdown.js";
 import { jsonRenderer } from "../src/renderers/json.js";
 import { loadCeremonyConfig } from "../src/caste-config.js";
+import {
+  GoCeremonyAdapter,
+  type CeremonyCommandRunner,
+} from "../src/ceremony-adapter.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const REPO_ROOT = "/Users/callumcowie/repos/Aether";
 const config = loadCeremonyConfig(REPO_ROOT);
+const goCeremonyRunner: CeremonyCommandRunner = (_opts, args) => {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    AETHER_OUTPUT_MODE: "visual",
+    NO_COLOR: "1",
+  };
+  delete env["AETHER_FORCE_COLOR"];
+  delete env["CLICOLOR_FORCE"];
+  return execFileSync("go", ["run", "./cmd/aether", ...args], {
+    cwd: REPO_ROOT,
+    env,
+    encoding: "utf-8",
+    maxBuffer: 10 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+};
+const goCeremony = new GoCeremonyAdapter(
+  { goBinaryPath: "go", cwd: REPO_ROOT },
+  goCeremonyRunner
+);
+
+const buildManifestEnvelope = {
+  dispatch_manifest: {
+    phase: 3,
+    phase_name: "Ceremony Contract",
+    dispatches: [
+      {
+        name: "Bolt-69",
+        caste: "builder",
+        task: "Align TS ceremony adapter lifecycle snapshots with Go contract names",
+        execution_wave: 11,
+        status: "planned",
+      },
+    ],
+    execution_plan: [
+      {
+        execution_wave: 11,
+        stage: "wave",
+        strategy: "parallel",
+        worker_count: 1,
+        reason: "Phase 3 task 3.3",
+      },
+    ],
+  },
+};
+
+const continueManifestEnvelope = {
+  continue_manifest: {
+    phase: 3,
+    phase_name: "Ceremony Contract",
+    dispatches: [
+      {
+        name: "Keen-37",
+        caste: "watcher",
+        task: "Verify TS ceremony adapter lifecycle snapshots",
+        execution_wave: 12,
+        status: "planned",
+      },
+    ],
+    execution_plan: [
+      {
+        execution_wave: 12,
+        stage: "verification",
+        strategy: "serial",
+        worker_count: 1,
+        reason: "Verify worker result evidence",
+      },
+    ],
+  },
+  dispatches: [
+    {
+      name: "Keen-37",
+      caste: "watcher",
+      task: "Verify TS ceremony adapter lifecycle snapshots",
+      execution_wave: 12,
+      status: "planned",
+    },
+  ],
+};
 
 const SNAPSHOT_DIR = join(__dirname, "__snapshots__");
 const UPDATE_SNAPSHOTS = process.env["AETHER_UPDATE_SNAPSHOTS"] === "1";
@@ -97,11 +181,8 @@ describe("ceremony snapshots", () => {
     assertSnapshot("banner-seal-complete", result);
   });
 
-  it("renderSpawnFrame(builder) matches snapshot", () => {
-    const result = visualRenderer.renderSpawnFrame(
-      { caste: "builder", name: "Mason-67", task: "Build the wall" },
-      config
-    );
+  it("Go renderSpawnPlan(build) matches snapshot", () => {
+    const result = goCeremony.renderSpawnPlan("build", buildManifestEnvelope);
     assertSnapshot("spawn-frame-builder", result);
   });
 
@@ -113,19 +194,23 @@ describe("ceremony snapshots", () => {
     assertSnapshot("spawn-frame-oracle", result);
   });
 
-  it("renderStageSeparator(Build) matches snapshot", () => {
-    const result = visualRenderer.renderStageSeparator("Build", config);
+  it("Go renderWaveStart(build) matches snapshot", () => {
+    const result = goCeremony.renderWaveStart("build", buildManifestEnvelope, 11);
     assertSnapshot("stage-separator-build", result);
   });
 
-  it("renderStageSeparator(Continue) matches snapshot", () => {
-    const result = visualRenderer.renderStageSeparator("Continue", config);
+  it("Go renderWaveStart(continue) matches snapshot", () => {
+    const result = goCeremony.renderWaveStart(
+      "continue",
+      continueManifestEnvelope,
+      12
+    );
     assertSnapshot("stage-separator-continue", result);
   });
 
   it("renderBox(build-summary) matches snapshot", () => {
     const result = visualRenderer.renderBox(
-      "Completed: 3/3\nTools: 12\nTokens: 4200",
+      "Workers: 2 completed  0 blocked  0 failed  (2 total)\nWorker Results\n✓ Builder Bolt-69  Task 3.3 — Adapter snapshots aligned\n✓ Watcher Keen-37 — Verified focused ceremony tests",
       { borderStyle: "round", borderColor: "green" }
     );
     assertSnapshot("build-summary", result);

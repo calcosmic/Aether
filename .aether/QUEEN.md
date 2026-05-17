@@ -298,6 +298,16 @@ High-confidence behavioral patterns that have been validated through repeated co
 - Do not default unknown hosts to Codex
 
 ## Wisdom
+- Close stale review ledgers when fixes land, otherwise release review has to re-prove old issues are no longer real. (seal review phase 5, 2026-05-17)
+- Dependency audit scope must include hidden platform directories such as .opencode, not just root-visible manifests. (seal review phase 5, 2026-05-17)
+- Final release evidence should store command-level results for every acceptance criterion, not just worker summaries. (seal review phase 5, 2026-05-17)
+- Final-phase verification artifacts should mirror the actual seal criteria. (seal review phase 5, 2026-05-17)
+- Passing tests means the code works; a clean git state means the exact code can be shipped. (seal review phase 5, 2026-05-17)
+- Porter readiness must treat dirty worktrees as a delivery stop even when source, binary, and hub versions agree. (seal review phase 5, 2026-05-17)
+- Review ledgers need resolved/stale states kept current before seal. (seal review phase 5, 2026-05-17)
+- Seal evidence should include exact command, exit status, and output for broad release gates. (seal review phase 5, 2026-05-17)
+- Summary-only worker claims are insufficient for final release verification. (seal review phase 5, 2026-05-17)
+- Worker report claims are useful, but structured verification is stronger evidence. (seal review phase 5, 2026-05-17)
 - Auth-probe tests should stay deterministic enough that provider CLI latency does not create release-blocking noise. (seal review phase 5, 2026-05-16)
 - Final seal audits should verify TS host checks directly when phase verification only records Go deterministic checks. (seal review phase 5, 2026-05-16)
 - Release handoff docs should name the active milestone when reused across colonies. (seal review phase 5, 2026-05-16)

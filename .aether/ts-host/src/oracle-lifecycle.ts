@@ -200,10 +200,6 @@ export async function runOracleLifecycle(
         String(state.current_iteration)
       );
 
-      // Compute a synthetic current confidence based on worker success
-      const currentConfidence =
-        dispatchResult.status === "completed" ? 70 : 30;
-
       const completionData = {
         iteration_manifest: state,
         dispatches: [
@@ -211,12 +207,11 @@ export async function runOracleLifecycle(
             worker: dispatchResult.name,
             status: dispatchResult.status,
             summary: dispatchResult.summary,
-            confidence_delta: currentConfidence - finalConfidence,
           },
         ],
-        current_confidence: currentConfidence,
         current_iteration: state.current_iteration + 1,
         should_continue: true,
+        worker_response: workerResponse,
       };
 
       const completionPath = writeCompletionFileRef(
@@ -298,7 +293,6 @@ export function buildOracleWorkerResponse(
   const response: OracleWorkerResponse = {
     question_id: questionId,
     status: result.status,
-    confidence: result.status === "completed" ? 70 : 30,
     summary: result.summary,
   };
 

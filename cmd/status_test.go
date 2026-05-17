@@ -162,6 +162,81 @@ func TestStatusOutput(t *testing.T) {
 	}
 }
 
+func TestStatusJSONActiveColonyParseableDashboardFacts(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &envelope); err != nil {
+		t.Fatalf("status JSON is not parseable: %v\n%s", err, buf.String())
+	}
+	if envelope["ok"] != true {
+		t.Fatalf("ok = %v, want true", envelope["ok"])
+	}
+	result := envelope["result"].(map[string]interface{})
+	if result["goal"] == "" {
+		t.Fatalf("status JSON should report dashboard facts, got %v", result)
+	}
+	if _, exists := result["current_phase"]; !exists {
+		t.Fatalf("status JSON missing current_phase: %v", result)
+	}
+}
+
+func TestStatusVisualDashboardAvoidsWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := setupTestStore(t)
+	defer os.RemoveAll(tmpDir)
+
+	origRoot := os.Getenv("AETHER_ROOT")
+	os.Setenv("AETHER_ROOT", tmpDir)
+	defer os.Setenv("AETHER_ROOT", origRoot)
+
+	store = s
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	for _, forbidden := range []string{
+		"Worker Results",
+		"S P A W N   P L A N",
+		"Host platform should dispatch",
+		"build-finalize",
+		"swarm-finalize",
+		"completed a real worker pass",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("status dashboard implied worker theatre via %q\n%s", forbidden, output)
+		}
+	}
+}
+
 func TestStatusOutput_DefaultScopeDisplay(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer

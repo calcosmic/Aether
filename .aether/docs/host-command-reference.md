@@ -3,6 +3,8 @@
 The `aether host` command delegates selected host-backed workflows to the
 TypeScript orchestration host. The Go CLI spawns the TS host process; the TS
 host parses arguments, calls Go CLI subcommands via JSON, and renders output.
+Go remains the source of truth for state, finalizers, provider diagnostics, and
+canonical ceremony output.
 
 ## Subcommands
 
@@ -193,8 +195,10 @@ Current host-backed orchestration surfaces:
 - `aether host continue` delegates to `aether continue --plan-only` for that
   heavy-review manifest path; Go still owns `aether continue-finalize`.
 - `aether host oracle`, `aether host watch`, and `aether host swarm` expose
-  lifecycle/display surfaces. `swarm` currently fetches and displays the Go
-  swarm plan; canonical wrapper finalization remains Go-owned.
+  lifecycle/display surfaces. `watch` displays Go-owned status facts. `swarm`
+  fetches and displays the Go swarm plan for problem runs; `swarm --watch`
+  remains dashboard-style runtime facts. Canonical wrapper finalization remains
+  Go-owned.
 
 Known future targets:
 
@@ -205,6 +209,19 @@ Known future targets:
 The machine-readable parity contract is
 `.aether/commands/classic-command-parity.json`; the human-readable companion is
 `.aether/docs/classic-command-parity-matrix.md`.
+
+## Ceremony Classes Outside The Host Spine
+
+Some important commands are intentionally not host-backed. `update`, `publish`,
+`install`, `lay-eggs`, `porter`, `source-check`, `run`, `continue`, and
+`bump-version` are progress/delivery surfaces: the Go runtime owns the work and
+the wrapper should show progress without inventing worker dispatch. Finalizers,
+`command-guide`, spawn log helpers, ceremony helper commands, shell completion,
+version helpers, and generated progress helpers are quiet/internal surfaces.
+
+For beginners: these commands can be important, but they are not a colony worker
+show. They are the engine doing setup, checks, release chores, or wrapper
+plumbing.
 
 Release-surface note: `.opencode/package.json` and
 `.opencode/package-lock.json`, when present, are ignored local OpenCode install

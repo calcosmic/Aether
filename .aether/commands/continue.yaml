@@ -4,6 +4,10 @@ source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
   contract: ".aether/docs/wrapper-host-contract.md"
+ceremony_contract:
+  class: "progress"
+  authority: "Go owns deterministic verification, gate assessment, learning capture, signal housekeeping, phase advancement, and canonical continue output."
+  wrapper_role: "Default continue shows runtime verification progress. Only heavy external review may render worker theatre, and only from a runtime-provided continue manifest."
 codex_orchestration:
   category: "semi-intelligent"
   skill: "aether-colony-build-cycle"

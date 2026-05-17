@@ -93,11 +93,10 @@ export async function detectAvailablePlatforms(): Promise<Platform[]> {
  */
 export function formatPlatformUnavailableMessage(context = "worker dispatch"): string {
   return (
-    `No platform CLI available for ${context} (claude, opencode, or codex). ` +
-    "Detailed provider diagnostics are owned by the Go AvailabilityStatus contract; " +
-    "run `AETHER_OUTPUT_MODE=json aether build <phase> --plan-only` or `aether status` " +
-    "to see the provider, cause, and next action. " +
-    "Install or authenticate a platform CLI, or run with --simulate to use simulation mode."
+    `Worker dispatch cannot start for ${context}; the TypeScript host did not receive ` +
+    "a Go provider_diagnostics value. Detailed provider availability and fallback " +
+    "diagnostics are owned by the Go AvailabilityStatus contract; use the Go result " +
+    "or run `aether status` to inspect the runtime-owned diagnostic."
   );
 }
 

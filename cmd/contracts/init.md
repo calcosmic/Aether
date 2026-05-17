@@ -23,6 +23,12 @@ None
 ### Stdout
 JSON envelope via `outputWorkflow` (visual + structured). Contains state, goal, scope, colony_mode, version, phase, session, data_dir, shelf_backlog, shelf_backlog_count.
 
+### Ceremony Class
+`init` is a guided ritual. Wrappers may ask scoping questions and synthesize an
+approved charter, but Go owns state creation, session files, and canonical init
+visuals. Renderers must not claim implementation workers were dispatched during
+init.
+
 ### Files Created/Modified
 | File | Operation | When |
 |------|-----------|------|

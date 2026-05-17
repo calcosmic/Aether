@@ -11,9 +11,11 @@
  * All tests run against the real Go CLI binary with a temp colony.
  */
 
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -28,6 +30,27 @@ import {
   type CeremonyAdapter,
   type CeremonyWorkflow,
 } from "../src/ceremony-adapter.js";
+
+let sourceGoBinaryPath: string | undefined;
+
+function discoverSourceGoBinary(): string {
+  if (process.env["AETHER_BINARY_PATH"]) {
+    return discoverGoBinary();
+  }
+  if (sourceGoBinaryPath) {
+    return sourceGoBinaryPath;
+  }
+
+  const testDir = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(testDir, "..", "..", "..");
+  const buildDir = mkdtempSync(join(tmpdir(), "aether-ts-host-source-bin-"));
+  sourceGoBinaryPath = join(buildDir, "aether");
+  execFileSync("go", ["build", "-o", sourceGoBinaryPath, "./cmd/aether"], {
+    cwd: repoRoot,
+    stdio: "pipe",
+  });
+  return sourceGoBinaryPath;
+}
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -70,7 +93,7 @@ function setupTestColony(): {
   writeFileSync(join(dataDir, "constraints.json"), "[]", "utf-8");
   writeFileSync(join(dataDir, "session.json"), "{}", "utf-8");
 
-  const goBinaryPath = discoverGoBinary();
+  const goBinaryPath = discoverSourceGoBinary();
   const bridge: GoBridgeOptions = { goBinaryPath, cwd: tempDir };
 
   return {
@@ -328,7 +351,7 @@ describe("lifecycle", () => {
     );
 
     const opts: LifecycleOptions = {
-      goBinaryPath: discoverGoBinary(),
+      goBinaryPath: discoverSourceGoBinary(),
       cwd: tempDir,
       simulateWorkers: true,
     };

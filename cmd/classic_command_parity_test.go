@@ -52,6 +52,8 @@ var requiredClassicParityCommands = []string{
 	"swarm",
 	"watch",
 	"status",
+	"history",
+	"phase",
 	"resume",
 	"focus",
 	"redirect",

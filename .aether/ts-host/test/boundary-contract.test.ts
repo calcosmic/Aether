@@ -7,6 +7,9 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 
 import {
   assertNoDirectDataWrites,
@@ -78,6 +81,58 @@ describe("boundary-contract", () => {
     const path = writeCompletionFile("boundary-contract-test", "test.json", {
       ok: true,
     });
+    const resolvedPath = resolve(path);
+    const resolvedTmpdir = resolve(tmpdir());
+
+    assert.ok(
+      resolvedPath.startsWith(resolvedTmpdir),
+      `Should write completion files under tmpdir: ${path}`
+    );
     assert.ok(!path.includes(".aether/data"), "Should never write to .aether/data");
+    assert.ok(existsSync(path), `Completion file should exist: ${path}`);
+    assert.deepEqual(
+      JSON.parse(readFileSync(path, "utf-8")),
+      { ok: true },
+      "Completion file should contain the caller-provided payload"
+    );
+    assert.doesNotThrow(
+      () => assertNoDirectDataWrites(path),
+      "Completion files are host-owned temporary finalizer inputs"
+    );
+  });
+
+  it("keeps planning completion payloads as temp finalizer inputs, not data writes", () => {
+    const path = writeCompletionFile("aether-lifecycle", "plan-completion.json", {
+      result: {
+        plan_manifest: { goal: "boundary test" },
+        synthesis: {
+          source: "ts-host",
+          reason: "test fixture",
+        },
+      },
+    });
+
+    assert.ok(
+      resolve(path).startsWith(resolve(tmpdir())),
+      `Plan completion file should be temporary: ${path}`
+    );
+    assert.ok(
+      !path.includes(".aether/data"),
+      `Plan completion file should not be in Go-owned data paths: ${path}`
+    );
+    assert.doesNotThrow(
+      () => assertNoDirectDataWrites(path),
+      "Plan completion files are safe host-owned inputs to plan-finalize"
+    );
+    assert.throws(
+      () => assertNoWriteToData(".aether/data/planning/phase-plan.json", "write"),
+      BoundaryViolationError,
+      "Persisted planning artifacts are Go finalizer-owned"
+    );
+    assert.throws(
+      () => assertNoWriteToData(".aether/data/COLONY_STATE.json", "write"),
+      BoundaryViolationError,
+      "Colony state remains Go finalizer-owned"
+    );
   });
 });

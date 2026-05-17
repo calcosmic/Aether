@@ -50,13 +50,14 @@ type AvailabilityStatus struct {
 type AvailabilityCategory string
 
 const (
-	AvailabilityCategoryAvailable          AvailabilityCategory = "available"
-	AvailabilityCategoryBinaryMissing      AvailabilityCategory = "binary_missing"
-	AvailabilityCategoryAuthProbeFailed    AvailabilityCategory = "auth_probe_failed"
-	AvailabilityCategoryAuthInactive       AvailabilityCategory = "auth_inactive"
-	AvailabilityCategoryInvalidAuthOutput  AvailabilityCategory = "invalid_auth_output"
-	AvailabilityCategoryCredentialsMissing AvailabilityCategory = "credentials_missing"
-	AvailabilityCategoryProbeSkipped       AvailabilityCategory = "probe_skipped"
+	AvailabilityCategoryAvailable           AvailabilityCategory = "available"
+	AvailabilityCategoryBinaryMissing       AvailabilityCategory = "binary_missing"
+	AvailabilityCategoryAuthProbeFailed     AvailabilityCategory = "auth_probe_failed"
+	AvailabilityCategoryAuthInactive        AvailabilityCategory = "auth_inactive"
+	AvailabilityCategoryInvalidAuthOutput   AvailabilityCategory = "invalid_auth_output"
+	AvailabilityCategoryCredentialsMissing  AvailabilityCategory = "credentials_missing"
+	AvailabilityCategoryProbeSkipped        AvailabilityCategory = "probe_skipped"
+	AvailabilityCategoryUnsupportedProvider AvailabilityCategory = "unsupported_provider"
 )
 
 type PlatformDispatcher interface {
@@ -399,8 +400,17 @@ func fileExists(path string) bool {
 func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 	active := DetectActivePlatform()
 	preferred := active
-	if override := normalizePlatform(os.Getenv(envWorkerPlatform)); override != PlatformUnknown && override != PlatformFake {
-		preferred = override
+	if rawOverride := strings.TrimSpace(os.Getenv(envWorkerPlatform)); rawOverride != "" {
+		override := normalizePlatform(rawOverride)
+		if override == PlatformUnknown {
+			return &UnavailableInvoker{
+				active:    active,
+				available: []AvailabilityStatus{unsupportedWorkerPlatformStatus(rawOverride)},
+			}
+		}
+		if override != PlatformFake {
+			preferred = override
+		}
 	}
 
 	dispatchers := reorderDispatchers([]PlatformDispatcher{
@@ -426,6 +436,29 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 		active:    active,
 		available: statuses,
 	}
+}
+
+func unsupportedWorkerPlatformStatus(value string) AvailabilityStatus {
+	value = safeWorkerPlatformOverride(value)
+	return AvailabilityStatus{
+		Platform:  PlatformUnknown,
+		Binary:    value,
+		Available: false,
+		Category:  AvailabilityCategoryUnsupportedProvider,
+		Reason:    fmt.Sprintf("unsupported %s %q; expected codex, claude, or opencode", envWorkerPlatform, value),
+	}
+}
+
+func safeWorkerPlatformOverride(value string) string {
+	value = strings.TrimSpace(sanitizeWorkerDiagnosticOutput(value))
+	if value == "" {
+		return "(empty)"
+	}
+	runes := []rune(value)
+	if len(runes) <= 80 {
+		return value
+	}
+	return string(runes[:80]) + "..."
 }
 
 func DescribeInvokerAvailability(invoker WorkerInvoker, ctx context.Context) string {

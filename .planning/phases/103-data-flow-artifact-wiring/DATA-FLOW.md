@@ -88,7 +88,7 @@ Each artifact is traced from its writer function to its reader/consumer at comma
 | Artifact | Writer Functions | Reader Functions | Colony-Prime Section | Capsule Section | User-Facing CLI | Classification | Dead End? |
 |----------|-----------------|------------------|---------------------|-----------------|-----------------|----------------|-----------|
 | spawn-tree.txt | codex_dispatch_contract.go (build worker dispatch) | medic_scanner.go (scanJSONLFile), codex_plan_test.go | -- | -- | -- | async-pipeline | NO (transient, regenerated per run) |
-| runtime-spawn-runs.jsonl | codex_dispatch_contract.go | medic_scanner.go (scanJSONLFile) | -- | -- | -- | async-pipeline | NO (transient, regenerated per run) |
+| spawn-runs.json | agent/spawn_tree.go | recover_scanner.go, medic_scanner.go | -- | -- | -- | async-pipeline | NO (transient, regenerated per run) |
 | planning/ (directory) | codex_plan.go (planCmd writes plan files) | codex_plan.go (planCmd reads plans) | -- | -- | -- | specialized-consumer | NO |
 | phase-research/ (directory) | codex_plan.go (research storage) | codex_plan.go, codex_build.go | -- | -- | -- | specialized-consumer | NO |
 
@@ -210,7 +210,7 @@ Severity: Info because the artifact is consumed by a user-facing CLI command but
 | Colony-prime injected | 12 | COLONY_STATE, pheromones, instincts, pending-decisions (clarified_intent + blockers), entries, handoffs, hive_wisdom, global_queen_md, user_preferences, prior_reviews, local_queen_wisdom, medic-last-scan |
 | Capsule injected (not colony-prime) | 3 | rolling-summary.log, midden.json, flags.json (some also colony-prime) |
 | CLI consumed | 4 | session.json, assumptions.json, profile.json, behavior-observations.jsonl |
-| Async pipeline consumed | 3 | event-bus.jsonl, spawn-tree.txt, runtime-spawn-runs.jsonl |
+| Async pipeline consumed | 3 | event-bus.jsonl, spawn-tree.txt, spawn-runs.json |
 | Specialized consumer (not colony-prime) | 9 | survey (5), codebase-graph.json (1), instinct-graph.json (1), colony.db (1), registry.json (1) |
 | Dead-end / ghost files | 1 | constraints.json |
 | Total colony-prime sections | 16 | Verified against colony_prime_context.go source |

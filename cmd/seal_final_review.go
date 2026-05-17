@@ -645,7 +645,7 @@ func normalizeSealReviewSeverity(severity string) string {
 func sealReviewFindingBlockingIssues(findings []sealFinalReviewFinding) []string {
 	var blockers []string
 	for _, finding := range findings {
-		if !finding.Blocking && finding.Severity != "CRITICAL" {
+		if !sealReviewFindingBlocksSeal(finding) {
 			continue
 		}
 		label := finding.AgentName
@@ -657,10 +657,25 @@ func sealReviewFindingBlockingIssues(findings []sealFinalReviewFinding) []string
 	return blockers
 }
 
+func sealReviewFindingBlocksSeal(finding sealFinalReviewFinding) bool {
+	if finding.Blocking || finding.Severity == "CRITICAL" {
+		return true
+	}
+	if finding.Severity != "HIGH" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(finding.Domain)) {
+	case "security", "quality":
+		return true
+	default:
+		return false
+	}
+}
+
 func sealFinalReviewBacklog(findings []sealFinalReviewFinding) []sealFinalReviewFinding {
 	backlog := []sealFinalReviewFinding{}
 	for _, finding := range findings {
-		if finding.Blocking || finding.Severity == "CRITICAL" {
+		if sealReviewFindingBlocksSeal(finding) {
 			continue
 		}
 		backlog = append(backlog, finding)
@@ -1039,7 +1054,7 @@ func renderSealFinalReviewBrief(root string, state colony.ColonyState, phase col
 	b.WriteString(fmt.Sprintf("- Final phase verification, gates, continue, and review reports, if present: .aether/data/build/phase-%d/\n", phase.ID))
 	b.WriteString("- Review ledgers: .aether/data/reviews/\n")
 	b.WriteString("- Active constraints/signals from the injected pheromone section\n\n")
-	b.WriteString("Return structured findings when you discover useful release evidence. Use `findings` or `issues` with objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`. Use `blocking:true` or a CRITICAL severity only for issues that must stop sealing. Put durable process lessons in `reusable_lessons` so the runtime can promote them into repo-local QUEEN.md.\n\n")
+	b.WriteString("Return structured findings when you discover useful release evidence. Use `findings` or `issues` with objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`. Use `blocking:true` for any issue that must stop sealing. CRITICAL findings always stop sealing; HIGH security and HIGH quality findings are also seal blockers. Put durable process lessons in `reusable_lessons` so the runtime can promote them into repo-local QUEEN.md.\n\n")
 	if len(state.Plan.Phases) > 0 {
 		b.WriteString("Completed phase summary:\n")
 		if len(state.Plan.Phases) > 5 {

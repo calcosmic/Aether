@@ -79,7 +79,7 @@ func surveyDispatchContractWithTimeout(workerTimeout time.Duration) map[string]i
 		DeadlinePolicy:       "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets.",
 		DependencyBehavior:   "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher.",
 		FallbackBehavior:     "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first.",
-		FallbackVisibility:   []string{"dispatch_mode", "survey_warning", "artifact_source"},
+		FallbackVisibility:   []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"},
 		CoordinationPath:     dataContractPath("spawn-tree.txt"),
 		ArtifactPaths: []string{
 			dataContractPath("survey", "PROVISIONS.md"),
@@ -112,7 +112,7 @@ func planningDispatchContractWithTimeout(workerTimeout time.Duration) map[string
 		DeadlinePolicy:       "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.",
 		DependencyBehavior:   "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.",
 		FallbackBehavior:     "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first.",
-		FallbackVisibility:   []string{"dispatch_mode", "planning_warning", "artifact_source", "plan_source"},
+		FallbackVisibility:   []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source"},
 		CoordinationPath:     dataContractPath("spawn-tree.txt"),
 		ArtifactPaths: []string{
 			dataContractPath("planning", "SCOUT.md"),

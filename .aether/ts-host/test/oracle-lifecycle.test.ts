@@ -254,7 +254,7 @@ describe("oracle-lifecycle", () => {
 
     assert.equal(response.question_id, "q-1");
     assert.equal(response.status, "completed");
-    assert.equal(response.confidence, 70);
+    assert.equal(response.confidence, undefined, "TS must not invent Oracle confidence");
     assert.equal(response.summary, "Found patterns in codebase");
     assert.ok(response.findings, "Should have findings");
     const findings = response.findings!;
@@ -276,7 +276,7 @@ describe("oracle-lifecycle", () => {
 
     assert.equal(response.question_id, "q-2");
     assert.equal(response.status, "failed");
-    assert.equal(response.confidence, 30);
+    assert.equal(response.confidence, undefined, "TS must not invent Oracle confidence");
     assert.equal(response.summary, "Worker timed out");
     assert.equal(response.findings, undefined, "Failed worker should have no findings");
   });
@@ -339,5 +339,75 @@ describe("oracle-lifecycle", () => {
     assert.equal(iterateCallCount, 2, "Should call iterate twice");
     assert.equal(finalizeCallCount, 2, "Should call finalize twice");
     assert.equal(result.stop_reason, "finalize:should_continue=false", "Should stop when finalize says so");
+  });
+
+  it("does not synthesize current confidence in completion payload", async () => {
+    let capturedCompletion: Record<string, unknown> | undefined;
+
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        return makeMockManifest(iterateCallCount, 2, 85) as unknown as T;
+      }
+      if (args[0] === "oracle-iterate-finalize") {
+        finalizeCallCount++;
+        return makeMockFinalize(false, 42) as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile((_dir: string, _filename: string, data: unknown) => {
+      capturedCompletion = data as Record<string, unknown>;
+      return "/tmp/fake-oracle-completion.json";
+    });
+    __setDispatchSingleWorker(async () => makeMockDispatchResult("completed"));
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: true,
+    });
+
+    assert.equal(result.success, true, "Should let Go finalizer own confidence");
+    assert.equal(result.final_confidence, 42, "Should use Go finalizer confidence");
+    assert.ok(capturedCompletion, "Should capture completion payload");
+    assert.equal(
+      Object.hasOwn(capturedCompletion!, "current_confidence"),
+      false,
+      "TS completion payload must not include wrapper-synthesized current_confidence"
+    );
+    const dispatches = capturedCompletion!.dispatches as Array<Record<string, unknown>>;
+    assert.equal(
+      Object.hasOwn(dispatches[0]!, "confidence_delta"),
+      false,
+      "TS completion dispatch must not include wrapper-synthesized confidence_delta"
+    );
+  });
+
+  it("returns a clear blocker when Oracle dispatch throws", async () => {
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        return makeMockManifest(iterateCallCount, 2, 85) as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile(() => "/tmp/fake-oracle-completion.json");
+    __setDispatchSingleWorker(async () => {
+      throw new Error("worker timeout after 1ms");
+    });
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: false,
+    });
+
+    assert.equal(result.success, false, "Should fail visibly when dispatch fails");
+    assert.match(result.error ?? "", /worker timeout after 1ms/);
+    assert.equal(result.stop_reason, "error");
   });
 });

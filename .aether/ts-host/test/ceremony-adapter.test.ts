@@ -89,4 +89,26 @@ describe("ceremony adapter", () => {
       "/tmp/completion.json",
     ]);
   });
+
+  it("does not render worker-complete theatre for non-terminal manifest dispatches", () => {
+    const calls: string[][] = [];
+    const runner: CeremonyCommandRunner = (_opts, args) => {
+      calls.push(args);
+      return "worker complete\n";
+    };
+    const adapter = new GoCeremonyAdapter(
+      { goBinaryPath: "/bin/aether", cwd: process.cwd() },
+      runner
+    );
+
+    const output = adapter.renderWorkerComplete("build", {
+      name: "Mason-67",
+      caste: "builder",
+      status: "planned",
+      task: "Build the wall",
+    });
+
+    assert.equal(output, "");
+    assert.equal(calls.length, 0);
+  });
 });

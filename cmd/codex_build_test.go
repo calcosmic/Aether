@@ -583,6 +583,51 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 	}
 }
 
+func TestBuildPlanOnlyIncludesRuntimeProviderDiagnostics(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Surface provider diagnostics"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Provider diagnostics",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Validate diagnostics ownership", Status: colony.TaskPending}},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &buildProviderDiagnosticInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+
+	diagnostic := stringValue(result["provider_diagnostics"])
+	if !strings.Contains(diagnostic, "runtime-owned provider detail") {
+		t.Fatalf("provider_diagnostics = %q, want runtime-owned availability detail", diagnostic)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	if manifest.ProviderDiagnostics != diagnostic {
+		t.Fatalf("manifest provider diagnostics = %q, want %q", manifest.ProviderDiagnostics, diagnostic)
+	}
+	contract := result["dispatch_contract"].(map[string]interface{})
+	if visibility := stringSliceValue(contract["fallback_visibility"]); !containsString(visibility, "provider_diagnostics") {
+		t.Fatalf("fallback_visibility missing provider_diagnostics: %v", visibility)
+	}
+}
+
 func TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1578,6 +1623,26 @@ func (f *buildFailInvoker) Invoke(ctx context.Context, config codex.WorkerConfig
 func (f *buildFailInvoker) IsAvailable(ctx context.Context) bool { return false }
 
 func (f *buildFailInvoker) ValidateAgent(path string) error { return nil }
+
+type buildProviderDiagnosticInvoker struct{}
+
+func (i *buildProviderDiagnosticInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{}, context.DeadlineExceeded
+}
+
+func (i *buildProviderDiagnosticInvoker) IsAvailable(ctx context.Context) bool { return false }
+
+func (i *buildProviderDiagnosticInvoker) ValidateAgent(path string) error { return nil }
+
+func (i *buildProviderDiagnosticInvoker) Availability(context.Context) codex.AvailabilityStatus {
+	return codex.AvailabilityStatus{
+		Platform:  codex.PlatformCodex,
+		Binary:    "codex",
+		Available: false,
+		Category:  codex.AvailabilityCategoryAuthInactive,
+		Reason:    "runtime-owned provider detail",
+	}
+}
 
 type recordedWorkerCall struct {
 	TaskID  string

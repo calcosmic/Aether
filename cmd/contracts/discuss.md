@@ -26,6 +26,12 @@ JSON envelope via `outputWorkflow` (visual + structured). Two modes:
 - **Surface mode** (default): returns goal, question_count, created_count, existing_count, dry_run, questions, resolved, pending_count, signal_count, discussion_status.
 - **Resolve mode** (--resolve): returns resolved, id, answer, redirect_emitted, redirect_text, remaining.
 
+### Ceremony Class
+`discuss` is a guided ritual. Renderers should show the runtime-owned questions,
+options, reasoning, and resolution result. They must not describe Scout,
+Builder, Watcher, or other worker dispatch unless a separate lifecycle command
+actually emitted a worker manifest.
+
 ### Files Created/Modified
 | File | Operation | When |
 |------|-----------|------|

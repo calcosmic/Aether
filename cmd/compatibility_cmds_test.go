@@ -280,6 +280,57 @@ func TestSwarmCompatibilityWatchReportsActiveWorkers(t *testing.T) {
 	}
 }
 
+func TestSwarmCompatibilityWatchDashboardAvoidsWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	dataDir := setupBuildFlowTest(t)
+	goal := "Watch dashboard facts only"
+	now := time.Now().UTC()
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:        "3.0",
+		Goal:           &goal,
+		State:          colony.StateEXECUTING,
+		CurrentPhase:   1,
+		BuildStartedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Execution", Status: colony.PhaseInProgress},
+			},
+		},
+	})
+
+	rootCmd.SetArgs([]string{"swarm", "--watch"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm --watch returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"S W A R M",
+		"Colony activity snapshot.",
+		"A R T I F A C T S",
+		"watch-status.txt",
+		"watch-progress.txt",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("swarm watch dashboard missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{
+		"Swarm dispatch manifest ready",
+		"Host platform should dispatch",
+		"swarm-finalize",
+		"completed a real worker pass",
+		"Worker Results",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("swarm watch dashboard implied worker theatre via %q\n%s", forbidden, output)
+		}
+	}
+}
+
 func TestSwarmCompatibilityWatchPrefersCurrentRunWorkers(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

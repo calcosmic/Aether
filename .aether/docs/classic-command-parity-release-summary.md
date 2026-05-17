@@ -22,6 +22,14 @@ actions.
 - Heavy external continue review goes through `aether host continue`.
 - Classic visible ceremony is preserved through Go `aether ceremony ...`
   commands.
+- Read-only dashboards (`status`, `watch`, `history`, `phase`, and
+  `swarm --watch`) are kept factual instead of being dressed up as worker
+  dispatch.
+- Delivery and update surfaces (`update`, `publish`, `install`, `lay-eggs`,
+  `porter`, `source-check`, `run`, `continue`, and `bump-version`) use progress
+  ceremony: they show what the runtime is doing without implying a worker wave.
+- Internal helper commands and finalizers stay quiet, so wrapper plumbing does
+  not look like user-facing colony work.
 - Claude/OpenCode wrappers, Codex command-guide output, shipped Codex skills,
   and docs now describe the same host-assisted contract.
 - The parity matrix records classic command coverage, state ownership,

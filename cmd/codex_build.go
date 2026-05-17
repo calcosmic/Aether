@@ -77,6 +77,7 @@ type codexBuildManifest struct {
 	SuccessCriteria           []string                         `json:"success_criteria"`
 	ReviewDepth               string                           `json:"review_depth,omitempty"`
 	DispatchContract          map[string]interface{}           `json:"dispatch_contract,omitempty"`
+	ProviderDiagnostics       string                           `json:"provider_diagnostics,omitempty"`
 	ProfileContract           codexWorkflowProfileContract     `json:"profile_contract,omitempty"`
 	QueenRecommendation       codexQueenWorkflowRecommendation `json:"queen_recommendation,omitempty"`
 	QueenExecutionPolicy      codexQueenExecutionPolicy        `json:"queen_execution_policy,omitempty"`
@@ -195,8 +196,10 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
 	executionPlan := buildExecutionPlans(dispatches, parallelMode)
 	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
+	providerDiagnostics := dispatchProviderDiagnostics(newCodexWorkerInvoker())
 	manifest := buildCodexBuildManifest(root, state, phase, "", "", playbooks, dispatches, generatedAt, "plan-only", selectedTaskIDs, nil, true, reviewDepth)
 	manifest.DispatchContract = dispatchContract
+	manifest.ProviderDiagnostics = providerDiagnostics
 	profileContract := workflowProfileContract(reviewDepth)
 	queenRecommendation := recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases))
 	manifest.QueenExecutionPolicy = policy
@@ -231,6 +234,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"parallel_execution_waves": countParallelBuildExecutionPlans(executionPlan),
 		"dispatch_mode":            "plan-only",
 		"dispatch_contract":        dispatchContract,
+		"provider_diagnostics":     providerDiagnostics,
 		"host_platform":            string(codex.DetectActivePlatform()),
 		"execution_owner":          buildExecutionOwner("plan-only", true),
 		"profile_contract":         profileContract,
@@ -1169,7 +1173,7 @@ func buildDispatchContractForDispatches(dispatches []codexBuildDispatch, paralle
 		DeadlinePolicy:       "Each build worker gets its own timeout. The Queen runtime advances execution_wave stages in order and records each terminal worker result.",
 		DependencyBehavior:   "Builder task waves run before post-build specialist verification. Watcher verification is the final build execution stage before finalization.",
 		FallbackBehavior:     "Runtime worker dispatch rolls back failed direct builds; host-orchestrated plan-only builds must call build-finalize with fresh worker results.",
-		FallbackVisibility:   []string{"dispatch_mode", "dispatches", "execution_plan", "worker_handoffs"},
+		FallbackVisibility:   []string{"dispatch_mode", "dispatches", "execution_plan", "provider_diagnostics", "worker_handoffs"},
 		CoordinationPath:     dataContractPath("spawn-tree.txt"),
 		ArtifactPaths: []string{
 			dataContractPath("build", "phase-<phase>", "manifest.json"),

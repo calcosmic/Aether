@@ -319,6 +319,116 @@ func TestPhaseInsertAtEnd(t *testing.T) {
 	}
 }
 
+func TestPhaseInsertReopensCompletedUnsealedColony(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateCOMPLETED,
+		CurrentPhase: 2,
+		Milestone:    "Brood Stable",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: colony.PhaseCompleted, Tasks: []colony.Task{}},
+				{ID: 2, Name: "Phase 2", Status: colony.PhaseCompleted, Tasks: []colony.Task{}},
+			},
+		},
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	rootCmd.SetArgs([]string{"phase-insert", "--after", "2", "--name", "Corrective Phase", "--description", "Repair blocker"})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	var updated colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &updated); err != nil {
+		t.Fatalf("failed to load updated state: %v", err)
+	}
+	if updated.State != colony.StateREADY {
+		t.Fatalf("state = %s, want READY", updated.State)
+	}
+	if updated.CurrentPhase != 3 {
+		t.Fatalf("current_phase = %d, want 3", updated.CurrentPhase)
+	}
+	if got := updated.Plan.Phases[2].Status; got != colony.PhaseReady {
+		t.Fatalf("inserted phase status = %q, want ready", got)
+	}
+	if err := validateCodexBuildState(updated, 3, nil, false); err != nil {
+		t.Fatalf("inserted phase should be buildable: %v", err)
+	}
+}
+
+func TestPhaseInsertDoesNotReopenCrownedAnthill(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "test"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateCOMPLETED,
+		CurrentPhase: 2,
+		Milestone:    "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: colony.PhaseCompleted, Tasks: []colony.Task{}},
+				{ID: 2, Name: "Phase 2", Status: colony.PhaseCompleted, Tasks: []colony.Task{}},
+			},
+		},
+	}
+	s.SaveJSON("COLONY_STATE.json", state)
+
+	rootCmd.SetArgs([]string{"phase-insert", "--after", "2", "--name", "Post Seal", "--description", "Should not reopen"})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	if env["ok"] != true {
+		t.Fatalf("expected ok:true, got: %v", env["ok"])
+	}
+
+	var updated colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &updated); err != nil {
+		t.Fatalf("failed to load updated state: %v", err)
+	}
+	if updated.State != colony.StateCOMPLETED {
+		t.Fatalf("state = %s, want COMPLETED", updated.State)
+	}
+	if updated.CurrentPhase != 2 {
+		t.Fatalf("current_phase = %d, want 2", updated.CurrentPhase)
+	}
+	if got := updated.Plan.Phases[2].Status; got != colony.PhasePending {
+		t.Fatalf("inserted phase status = %q, want pending", got)
+	}
+	if err := validateCodexBuildState(updated, 3, nil, false); err == nil {
+		t.Fatal("sealed Crowned Anthill insertion should not make the new phase buildable")
+	}
+}
+
 func TestPhaseInsertInvalidAfter(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

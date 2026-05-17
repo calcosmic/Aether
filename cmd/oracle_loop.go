@@ -2270,7 +2270,8 @@ func normalizeOracleWorkerResponse(response oracleWorkerResponse, target oracleQ
 	}
 
 	response.Confidence = clampOracleConfidence(response.Confidence)
-	response.Summary = strings.TrimSpace(response.Summary)
+	originalSummary := strings.TrimSpace(response.Summary)
+	response.Summary = originalSummary
 	response.Gaps = compactOracleStrings(response.Gaps)
 	response.Contradictions = compactOracleStrings(response.Contradictions)
 	response.Recommendation = strings.TrimSpace(response.Recommendation)
@@ -2302,6 +2303,17 @@ func normalizeOracleWorkerResponse(response oracleWorkerResponse, target oracleQ
 	}
 	response.Findings = findings
 
+	switch response.Status {
+	case "answered", "partial":
+		if len(response.Findings) == 0 {
+			return oracleWorkerResponse{}, fmt.Errorf("oracle response for %s returned no findings", oracleQuestionLabel(target))
+		}
+	case "blocked":
+		if len(response.Findings) == 0 && len(response.Gaps) == 0 && originalSummary == "" && response.Recommendation == "" {
+			return oracleWorkerResponse{}, fmt.Errorf("oracle blocked response for %s omitted blocker detail", oracleQuestionLabel(target))
+		}
+	}
+
 	if response.Summary == "" {
 		switch response.Status {
 		case "blocked":
@@ -2310,17 +2322,6 @@ func normalizeOracleWorkerResponse(response oracleWorkerResponse, target oracleQ
 			response.Summary = fmt.Sprintf("Oracle worker made partial progress on %s.", oracleQuestionLabel(target))
 		default:
 			response.Summary = fmt.Sprintf("Oracle worker answered %s.", oracleQuestionLabel(target))
-		}
-	}
-
-	switch response.Status {
-	case "answered", "partial":
-		if len(response.Findings) == 0 {
-			return oracleWorkerResponse{}, fmt.Errorf("oracle response for %s returned no findings", oracleQuestionLabel(target))
-		}
-	case "blocked":
-		if len(response.Findings) == 0 && len(response.Gaps) == 0 && response.Summary == "" {
-			return oracleWorkerResponse{}, fmt.Errorf("oracle blocked response for %s omitted blocker detail", oracleQuestionLabel(target))
 		}
 	}
 

@@ -1,8 +1,9 @@
 
-   ╭────────────────────╮
-   │                    │
-   │   Completed: 3/3   │
-   │   Tools: 12        │
-   │   Tokens: 4200     │
-   │                    │
-   ╰────────────────────╯
+   ╭─────────────────────────────────────────────────────────────╮
+   │                                                             │
+   │   Workers: 2 completed  0 blocked  0 failed  (2 total)      │
+   │   Worker Results                                            │
+   │   ✓ Builder Bolt-69  Task 3.3 — Adapter snapshots aligned   │
+   │   ✓ Watcher Keen-37 — Verified focused ceremony tests       │
+   │                                                             │
+   ╰─────────────────────────────────────────────────────────────╯

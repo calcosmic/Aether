@@ -3,6 +3,11 @@ description: "🧱 View phase details through the Aether CLI runtime"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether phase $ARGUMENTS"
+ceremony_contract:
+  class: "dashboard"
+  authority: "Go owns phase selection, task status, progress counters, and visual phase rendering."
+  wrapper_role: "Display current phase facts and runtime next-step guidance only."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not claim viewing a phase dispatched or completed worker waves."
   - "If docs and runtime disagree, runtime wins."

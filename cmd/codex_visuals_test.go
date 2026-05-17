@@ -14,6 +14,344 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+func TestCommandCeremonyTaxonomyLevelsAreExplicit(t *testing.T) {
+	levels := map[commandCeremonyLevel]string{
+		commandCeremonyLevelWorkerTheatre: "worker_theatre",
+		commandCeremonyLevelGuidedRitual:  "guided_ritual",
+		commandCeremonyLevelDashboard:     "dashboard",
+		commandCeremonyLevelProgress:      "progress",
+		commandCeremonyLevelQuiet:         "quiet",
+	}
+
+	if len(levels) != 5 {
+		t.Fatalf("ceremony level count = %d, want 5", len(levels))
+	}
+	for level, want := range levels {
+		if got := string(level); got != want {
+			t.Errorf("ceremony level string = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestCommandCeremonyTaxonomyMapsRepresentativeCommands(t *testing.T) {
+	tests := []struct {
+		command string
+		want    commandCeremonyLevel
+	}{
+		{command: "plan", want: commandCeremonyLevelWorkerTheatre},
+		{command: "build", want: commandCeremonyLevelWorkerTheatre},
+		{command: "colonize", want: commandCeremonyLevelWorkerTheatre},
+		{command: "seal", want: commandCeremonyLevelWorkerTheatre},
+		{command: "swarm", want: commandCeremonyLevelWorkerTheatre},
+		{command: "swarm --plan-only Fix auth panic", want: commandCeremonyLevelWorkerTheatre},
+		{command: "swarm --watch", want: commandCeremonyLevelDashboard},
+		{command: "aether swarm --watch", want: commandCeremonyLevelDashboard},
+		{command: "init", want: commandCeremonyLevelGuidedRitual},
+		{command: "discuss", want: commandCeremonyLevelGuidedRitual},
+		{command: "oracle", want: commandCeremonyLevelGuidedRitual},
+		{command: "status", want: commandCeremonyLevelDashboard},
+		{command: "watch", want: commandCeremonyLevelDashboard},
+		{command: "history", want: commandCeremonyLevelDashboard},
+		{command: "phase", want: commandCeremonyLevelDashboard},
+		{command: "resume", want: commandCeremonyLevelDashboard},
+		{command: "run", want: commandCeremonyLevelProgress},
+		{command: "update", want: commandCeremonyLevelProgress},
+		{command: "publish", want: commandCeremonyLevelProgress},
+		{command: "continue", want: commandCeremonyLevelProgress},
+		{command: "plan-finalize", want: commandCeremonyLevelQuiet},
+		{command: "build-finalize", want: commandCeremonyLevelQuiet},
+		{command: "continue-finalize", want: commandCeremonyLevelQuiet},
+		{command: "seal-finalize", want: commandCeremonyLevelQuiet},
+		{command: "command-guide", want: commandCeremonyLevelQuiet},
+		{command: "unknown-command", want: commandCeremonyLevelQuiet},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			if got := classifyCommandCeremonyLevel(tt.command); got != tt.want {
+				t.Fatalf("classifyCommandCeremonyLevel(%q) = %q, want %q", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeliveryProgressCommandsClassifiedAsProgress(t *testing.T) {
+	commands := []string{
+		"run --max-phases 2",
+		"continue --skip-watchers",
+		"update --force --download-binary",
+		"publish --channel stable",
+		"install --download-binary",
+		"lay-eggs",
+		"porter check",
+		"source-check --json",
+		"bump-version 1.2.3",
+	}
+
+	for _, command := range commands {
+		t.Run(command, func(t *testing.T) {
+			if got := classifyCommandCeremonyLevel(command); got != commandCeremonyLevelProgress {
+				t.Fatalf("classifyCommandCeremonyLevel(%q) = %q, want %q", command, got, commandCeremonyLevelProgress)
+			}
+		})
+	}
+}
+
+func TestQuietInternalCommandsClassifiedAsQuiet(t *testing.T) {
+	commands := []string{
+		"plan-finalize --completion-file /tmp/plan.json",
+		"build-finalize 5 --completion-file /tmp/build.json",
+		"continue-finalize --completion-file /tmp/continue.json",
+		"seal-finalize --completion-file /tmp/seal.json",
+		"colonize-finalize --completion-file /tmp/colonize.json",
+		"swarm-finalize --completion-file /tmp/swarm.json",
+		"oracle-iterate-finalize --completion-file /tmp/oracle.json",
+		"command-guide build --platform codex",
+		"spawn-log --name Mason-1",
+		"spawn-complete --name Mason-1",
+		"ceremony spawn-plan --workflow build",
+		"completion zsh",
+		"version",
+		"generate-progress-bar --current 1 --total 5",
+		"version-check-cached",
+	}
+
+	for _, command := range commands {
+		t.Run(command, func(t *testing.T) {
+			if got := classifyCommandCeremonyLevel(command); got != commandCeremonyLevelQuiet {
+				t.Fatalf("classifyCommandCeremonyLevel(%q) = %q, want %q", command, got, commandCeremonyLevelQuiet)
+			}
+		})
+	}
+}
+
+func TestCeremonyCloseoutRealDispatchRendersWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Render real worker closeout"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Real dispatch", Status: colony.PhaseInProgress},
+		}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"ok":                true,
+		"dispatch_manifest": ceremonyTestManifest(),
+		"dispatches": []map[string]interface{}{
+			{"name": "Mason-37", "caste": "builder", "status": "completed", "summary": "Added ceremony tests", "tool_count": 9},
+			{"name": "Keen-11", "caste": "watcher", "status": "completed", "summary": "Verified focused tests", "tool_count": 3},
+		},
+	})
+
+	result, visual := renderCeremonyCloseout("build", completionFile)
+	if got := intValue(result["completion_worker_count"]); got != 2 {
+		t.Fatalf("completion_worker_count = %d, want 2", got)
+	}
+	for _, want := range []string{
+		"B U I L D   S U M M A R Y",
+		"Workers: 2 completed  0 blocked  0 failed",
+		"Worker Results",
+		"Mason-37",
+		"Keen-11",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("real dispatch closeout missing %q\n%s", want, visual)
+		}
+	}
+	for _, forbidden := range []string{
+		"No workers dispatched",
+		"Existing colony plan loaded",
+		"F I N A L I Z E R   F A I L E D",
+	} {
+		if strings.Contains(visual, forbidden) {
+			t.Fatalf("real dispatch closeout should not contain %q\n%s", forbidden, visual)
+		}
+	}
+}
+
+func TestCeremonyCloseoutNoWorkerExistingPlanDoesNotRenderWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Reuse the existing plan"
+	taskID := "1.1"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Existing phase", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &taskID, Goal: "Keep the existing work plan"}}},
+		}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"ok":                 true,
+		"existing_plan":      true,
+		"requires_finalizer": false,
+		"message":            "Existing colony plan loaded; no planning workers dispatched.",
+		"plan_manifest": map[string]interface{}{
+			"existing_plan": true,
+			"phase":         1,
+			"phase_name":    "Existing phase",
+			"dispatches":    []map[string]interface{}{},
+		},
+		"dispatches": []map[string]interface{}{},
+	})
+
+	result, visual := renderCeremonyCloseout("plan", completionFile)
+	if got := intValue(result["completion_worker_count"]); got != 0 {
+		t.Fatalf("completion_worker_count = %d, want 0", got)
+	}
+	for _, want := range []string{
+		"P L A N   S U M M A R Y",
+		"Existing colony plan loaded",
+		"No workers dispatched",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("no-worker closeout missing %q\n%s", want, visual)
+		}
+	}
+	for _, forbidden := range []string{
+		"\nWorkers:",
+		"Worker Results",
+		"S P A W N   P L A N",
+		"Scout and Route-Setter mapped",
+	} {
+		if strings.Contains(visual, forbidden) {
+			t.Fatalf("no-worker closeout rendered worker theatre via %q\n%s", forbidden, visual)
+		}
+	}
+}
+
+func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Keep blocked work honest"
+	taskID := "1.1"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Blocked verification", Status: colony.PhaseInProgress, Tasks: []colony.Task{{ID: &taskID, Goal: "Fix verification failure", Status: colony.TaskInProgress}}},
+		}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"ok":      true,
+		"blocked": true,
+		"next":    "Run `aether build 1 --force` after fixing blocked worker output.",
+		"continue_manifest": map[string]interface{}{
+			"phase":      1,
+			"phase_name": "Blocked verification",
+			"dispatches": []map[string]interface{}{
+				{"name": "Keen-37", "caste": "watcher", "status": "planned", "task": "Verify the phase"},
+			},
+		},
+		"dispatches": []map[string]interface{}{
+			{
+				"name":     "Keen-37",
+				"caste":    "watcher",
+				"status":   "blocked",
+				"summary":  "Verification blocked the phase",
+				"blockers": []string{"go test ./... failed"},
+			},
+		},
+	})
+
+	_, visual := renderCeremonyCloseout("continue", completionFile)
+	for _, want := range []string{
+		"C O N T I N U E   B L O C K E D",
+		"Verification blocked the phase",
+		"go test ./... failed",
+		"Run `aether build 1 --force`",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("blocked closeout missing %q\n%s", want, visual)
+		}
+	}
+	for _, forbidden := range []string{
+		"C O N T I N U E   S U M M A R Y",
+		"Run `aether build 1` to dispatch the next phase.",
+		"Run `aether seal`",
+	} {
+		if strings.Contains(visual, forbidden) {
+			t.Fatalf("blocked closeout hid blocked state behind %q\n%s", forbidden, visual)
+		}
+	}
+}
+
+func TestCeremonyCloseoutFailedFinalizerRendersFailureNotCompletion(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	goal := "Expose finalizer failure"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Rejected completion", Status: colony.PhaseReady},
+		}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save colony state: %v", err)
+	}
+
+	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
+		"ok":    false,
+		"error": "build-finalize rejected completion file: dispatch_manifest contains no dispatches",
+		"next":  "Fix the completion file and rerun `aether build-finalize 1 --completion-file <file>`.",
+	})
+
+	_, visual := renderCeremonyCloseout("build", completionFile)
+	for _, want := range []string{
+		"F I N A L I Z E R   F A I L E D",
+		"build-finalize rejected completion file",
+		"rerun `aether build-finalize 1 --completion-file <file>`",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("failed-finalizer closeout missing %q\n%s", want, visual)
+		}
+	}
+	for _, forbidden := range []string{
+		"B U I L D   S U M M A R Y",
+		"Run `aether continue`",
+		"Workers: 0 completed  0 blocked  0 failed",
+	} {
+		if strings.Contains(visual, forbidden) {
+			t.Fatalf("failed-finalizer closeout hid failure behind %q\n%s", forbidden, visual)
+		}
+	}
+}
+
 func TestPlanVisualOutput(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -281,7 +619,7 @@ func TestColonizeVisualOutputShowsDispatchContractDetails(t *testing.T) {
 		effectiveSurveyorDispatchTimeout(0).String() + " worker max",
 		"One surveyor timing out does not reduce sibling surveyor budgets",
 		"authenticated platform dispatcher",
-		"dispatch_mode, survey_warning, artifact_source",
+		"dispatch_mode, survey_warning, provider_diagnostics, artifact_source",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("colonize visual output missing %q\n%s", want, output)
@@ -354,7 +692,7 @@ func TestPlanVisualOutputShowsDispatchContractDetails(t *testing.T) {
 		effectivePlanningDispatchTimeout(0).String() + " worker max",
 		"route-setter only runs after a completed scout stage",
 		"authenticated platform dispatcher",
-		"dispatch_mode, planning_warning, artifact_source, plan_source",
+		"dispatch_mode, planning_warning, provider_diagnostics, artifact_source, plan_source",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)
@@ -1465,6 +1803,77 @@ func TestRenderPlanVisualAgentDelegatePlanOnly(t *testing.T) {
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("agent-delegate plan visual missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestRenderPlanVisualPlanOnlyPlannedDispatchesAreNotExecutionResults(t *testing.T) {
+	result := map[string]interface{}{
+		"plan_only":          true,
+		"existing_plan":      false,
+		"requires_finalizer": true,
+		"goal":               "Preview planning work honestly",
+		"granularity":        "sprint",
+		"dispatch_mode":      "plan-only",
+		"dispatches": []interface{}{
+			map[string]interface{}{"name": "Seek-70", "caste": "scout", "task": "Survey the repo", "status": "planned"},
+			map[string]interface{}{"name": "Route-70", "caste": "route_setter", "task": "Convert findings into phases", "status": "planned"},
+		},
+	}
+
+	output := renderPlanVisual(result)
+	for _, forbidden := range []string{
+		"Scout and Route-Setter mapped the colony goal into executable phases.",
+		"Dispatch: Real",
+		"workers completed",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("plan-only visual treated planned dispatches as execution results via %q\n%s", forbidden, output)
+		}
+	}
+	for _, want := range []string{
+		"plan_manifest",
+		"Seek-70",
+		"Route-70",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("plan-only visual missing pending manifest cue %q\n%s", want, output)
+		}
+	}
+}
+
+func TestRenderPlanVisualExistingPlanNoFinalizerDoesNotPromptPlanningWorkers(t *testing.T) {
+	phases := []colony.Phase{{
+		ID:     1,
+		Name:   "Existing phase",
+		Status: colony.PhaseReady,
+		Tasks:  []colony.Task{{Goal: "Keep using the existing plan"}},
+	}}
+	phaseMaps := make([]interface{}, len(phases))
+	for i, phase := range phases {
+		phaseMaps[i] = phaseToMap(phase)
+	}
+	result := map[string]interface{}{
+		"plan_only":          true,
+		"existing_plan":      true,
+		"requires_finalizer": false,
+		"goal":               "Reuse the current plan",
+		"phases":             phaseMaps,
+	}
+
+	output := renderPlanVisual(result)
+	if !strings.Contains(output, "Existing colony plan loaded") {
+		t.Fatalf("existing-plan visual missing no-op message\n%s", output)
+	}
+	for _, forbidden := range []string{
+		"Scout and Route-Setter mapped",
+		"Use the JSON `plan_manifest`",
+		"plan-finalize",
+		"\nWorkers\n",
+		"workers completed",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("existing-plan/no-finalizer visual implied planning worker execution via %q\n%s", forbidden, output)
 		}
 	}
 }

@@ -68,6 +68,126 @@ func TestDiscussCreatesClarificationQuestions(t *testing.T) {
 	}
 }
 
+func TestDiscussVisualPendingQuestionsAvoidsWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Build a dashboard for internal operations"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+		ColonyDepth:  "light",
+		Plan:         colony.Plan{},
+	})
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"D I S C U S S",
+		"Questions: 3",
+		"This answer becomes a hard constraint.",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("discuss visual missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{
+		"workers completed",
+		"Worker Results",
+		"S P A W N",
+		"worker-complete",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("discuss visual rendered worker theatre via %q\n%s", forbidden, output)
+		}
+	}
+}
+
+func TestDiscussVisualSettledPathAvoidsWorkerTheatre(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	goal := "Build a dashboard for internal operations"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	strength := 1.0
+	now := time.Now().UTC().Format(time.RFC3339)
+	makeContent := func(text string) json.RawMessage {
+		payload, _ := json.Marshal(map[string]string{"text": text})
+		return payload
+	}
+	if err := store.SaveJSON("pheromones.json", colony.PheromoneFile{
+		Signals: []colony.PheromoneSignal{
+			{ID: "sig_surface", Type: "REDIRECT", Priority: "high", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("use the current surface stack")},
+			{ID: "sig_integration", Type: "FOCUS", Priority: "normal", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("preserve the current api contract")},
+			{ID: "sig_scope", Type: "FEEDBACK", Priority: "low", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("prefer the smallest scope slice first")},
+			{ID: "sig_verification", Type: "FEEDBACK", Priority: "low", Source: "test", CreatedAt: now, Active: true, Strength: &strength, Content: makeContent("keep the test verification bar explicit")},
+		},
+	}); err != nil {
+		t.Fatalf("seed pheromones: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	output := stdout.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"D I S C U S S",
+		"Questions: 0",
+		"No new clarification questions are outstanding.",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("settled discuss visual missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{
+		"workers completed",
+		"Worker Results",
+		"S P A W N",
+		"worker-complete",
+	} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("settled discuss visual rendered worker theatre via %q\n%s", forbidden, output)
+		}
+	}
+}
+
 func TestDiscussResolveHardConstraintEmitsRedirect(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

@@ -120,9 +120,10 @@ describe("platform-dispatcher", () => {
 
   it("formatPlatformUnavailableMessage delegates detailed diagnostics to Go", () => {
     const message = formatPlatformUnavailableMessage("test dispatch");
-    assert.ok(message.includes("No platform CLI available"), message);
+    assert.ok(message.includes("Worker dispatch cannot start"), message);
+    assert.ok(message.includes("provider_diagnostics"), message);
     assert.ok(message.includes("Go AvailabilityStatus contract"), message);
-    assert.ok(message.includes("provider, cause, and next action"), message);
+    assert.ok(!message.includes("Install or authenticate"), message);
   });
 
   it("spawnWorker respects timeout via AbortController", async () => {

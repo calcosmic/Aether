@@ -3,6 +3,10 @@ description: "📦 Deliver colony work -- publish, push, and deploy after seal"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether porter $ARGUMENTS"
+ceremony_contract:
+  class: "progress"
+  authority: "Go owns delivery readiness checks, publish/push/deploy command execution, and stop-on-first-failure behavior."
+  wrapper_role: "Show Porter progress and the runtime's recovery command. Do not run delivery actions unless the user explicitly chose them."
 guardrails:
   - "Do not modify colony state files."
   - "If docs and runtime disagree, runtime wins."

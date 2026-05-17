@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -148,6 +149,7 @@ func TestPlanFinalizeRejectsStaleManifestBeforeStateMutation(t *testing.T) {
 		t.Fatalf("load survey context: %v", err)
 	}
 	dispatches := testPlanningDispatches()
+	stateBefore := readPlanFinalizeStateBytes(t)
 	completion := codexExternalPlanCompletion{
 		PlanManifest: testPlanManifest(root, goal, time.Now().UTC().Add(-25*time.Hour), survey, dispatches),
 		Dispatches:   testCompletedPlanningResults(dispatches),
@@ -157,6 +159,7 @@ func TestPlanFinalizeRejectsStaleManifestBeforeStateMutation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "stale plan_manifest") {
 		t.Fatalf("expected stale manifest error, got %v", err)
 	}
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
 	assertPlanFinalizeStateUnchanged(t, 0)
 }
 
@@ -231,6 +234,168 @@ func TestPlanFinalizeRejectsWorkspaceDriftBeforeStateMutation(t *testing.T) {
 		t.Fatalf("expected workspace drift error, got %v", err)
 	}
 	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
+func TestPlanFinalizeRejectsRootMismatchBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, "Reject mismatched planning roots")
+	manifest := testPlanManifest(root, "Reject mismatched planning roots", time.Now().UTC(), survey, dispatches)
+	manifest.Root = filepath.Join(root, "other-workspace")
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: manifest,
+		Dispatches:   testCompletedPlanningResults(dispatches),
+	})
+	assertPlanFinalizeErrorContains(t, err, "root does not match")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
+func TestPlanFinalizeRejectsMissingPhasePlanBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject missing route-setter phase plans"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = nil
+		}
+	}
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Dispatches:   results,
+	})
+	assertPlanFinalizeErrorContains(t, err, "route-setter phase_plan")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
+func TestPlanFinalizeRejectsEmptyPhasePlanBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject empty route-setter phase plans"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = &codexWorkerPlanArtifact{
+				Phases:     []codexWorkerPlanPhase{},
+				Confidence: testWorkerPlanArtifact().Confidence,
+			}
+		}
+	}
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Dispatches:   results,
+	})
+	assertPlanFinalizeErrorContains(t, err, "contains no phases")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
+func TestPlanFinalizeRejectsPhasePlanWithoutBuildableTasksBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject plans without buildable tasks"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = &codexWorkerPlanArtifact{
+				Phases: []codexWorkerPlanPhase{{
+					Name:        "No buildable work",
+					Description: "A phase without concrete tasks must not advance state.",
+				}},
+				Confidence: testWorkerPlanArtifact().Confidence,
+			}
+		}
+	}
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Dispatches:   results,
+	})
+	assertPlanFinalizeErrorContains(t, err, "no buildable")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeStateUnchanged(t, 0)
+	assertPlanFinalizeNoSpawnRuns(t)
+}
+
+func TestPlanFinalizeRejectsAmbiguousTopLevelPhasePlanBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject ambiguous synthetic planning claims"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = nil
+		}
+	}
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Dispatches:   results,
+		PhasePlan:    testWorkerPlanArtifact(),
+	})
+	assertPlanFinalizeErrorContains(t, err, "explicit synthesis")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeStateUnchanged(t, 0)
+	assertPlanFinalizeNoSpawnRuns(t)
+}
+
+func TestPlanFinalizeRejectsPlannedOrSpawnedResultsBeforeStateMutation(t *testing.T) {
+	for _, status := range []string{"planned", "spawned"} {
+		t.Run(status, func(t *testing.T) {
+			saveGlobals(t)
+
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			withWorkingDir(t, root)
+			if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/nonterminal-plan\n\ngo 1.24\n"), 0644); err != nil {
+				t.Fatalf("write go.mod: %v", err)
+			}
+
+			goal := "Reject non-terminal planning worker results"
+			createTestColonyState(t, dataDir, colony.ColonyState{
+				Version: "3.0",
+				Goal:    &goal,
+				State:   colony.StateREADY,
+				Plan:    colony.Plan{Phases: []colony.Phase{}},
+			})
+
+			survey, err := loadCodexSurveyContext(root)
+			if err != nil {
+				t.Fatalf("load survey context: %v", err)
+			}
+			dispatches := testPlanningDispatches()
+			results := testCompletedPlanningResults(dispatches)
+			for i := range results {
+				results[i].Status = status
+			}
+
+			_, err = runCodexPlanFinalize(root, codexExternalPlanCompletion{
+				PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+				Dispatches:   results,
+			})
+			if err == nil {
+				t.Fatalf("expected plan-finalize to reject %q planning results", status)
+			}
+			if !strings.Contains(err.Error(), "non-terminal") && !strings.Contains(err.Error(), "did not complete cleanly") {
+				t.Fatalf("expected non-terminal completion error for %q, got %v", status, err)
+			}
+			assertPlanFinalizeStateUnchanged(t, 0)
+		})
+	}
 }
 
 func TestPlanFinalizeUsesRouteSetterEvidenceWithDynamicWorkers(t *testing.T) {
@@ -566,6 +731,63 @@ func testWorkerPlanArtifact() *codexWorkerPlanArtifact {
 			SuccessCriteria: []string{"Route-setter plan is committed"},
 		}},
 		Confidence: codexPlanConfidence{Knowledge: 90, Requirements: 90, Risks: 80, Dependencies: 80, Effort: 80, Overall: 84},
+	}
+}
+
+func setupPlanFinalizeFailureFixture(t *testing.T, goal string) (string, codexSurveyContext, []codexPlanningDispatch) {
+	t.Helper()
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/plan-finalize-failure\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+	survey, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("load survey context: %v", err)
+	}
+	return root, survey, testPlanningDispatches()
+}
+
+func readPlanFinalizeStateBytes(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(store.BasePath(), "COLONY_STATE.json"))
+	if err != nil {
+		t.Fatalf("read colony state: %v", err)
+	}
+	return data
+}
+
+func assertPlanFinalizeStateBytesUnchanged(t *testing.T, before []byte) {
+	t.Helper()
+	after := readPlanFinalizeStateBytes(t)
+	if !bytes.Equal(after, before) {
+		t.Fatalf("plan-finalize changed COLONY_STATE.json before validation:\nbefore: %s\nafter: %s", string(before), string(after))
+	}
+}
+
+func assertPlanFinalizeErrorContains(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected plan-finalize error containing %q, got nil", want)
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("expected plan-finalize error containing %q, got %v", want, err)
+	}
+}
+
+func assertPlanFinalizeNoSpawnRuns(t *testing.T) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(store.BasePath(), "spawn-runs.json")); err == nil {
+		t.Fatal("plan-finalize wrote spawn-runs.json before validation failure")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat spawn-runs.json: %v", err)
 	}
 }
 

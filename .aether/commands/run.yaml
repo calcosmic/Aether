@@ -3,6 +3,10 @@ description: "⚡ Autopilot — builds, verifies, learns, and advances through p
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether run $ARGUMENTS"
+ceremony_contract:
+  class: "progress"
+  authority: "Go owns the autopilot build/continue loop, verification gates, phase advancement, and next-step routing."
+  wrapper_role: "Show the runtime progress and terminal result. Do not replace autopilot output with synthetic worker theatre or hand-edit colony state."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

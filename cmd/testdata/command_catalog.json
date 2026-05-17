@@ -3995,6 +3995,7 @@
     "short_description": "Validate pipeline readiness for delivery",
     "flags": [
       "channel",
+      "full-release",
       "json"
     ],
     "parent_command": "porter",

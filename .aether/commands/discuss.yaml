@@ -8,8 +8,13 @@ codex_orchestration:
   skill: "aether-colony-research"
   guide: "aether command-guide discuss --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+ceremony_contract:
+  class: "guided_ritual"
+  authority: "Go owns pending-decision persistence, REDIRECT emission, and visual question rendering."
+  wrapper_role: "Present runtime questions and captured answers clearly; do not invent answers or imply worker dispatch."
 guardrails:
   - "Do not write `pending-decisions.json`, `pheromones.json`, or `COLONY_STATE.json` by hand from this command spec."
+  - "Do not render Scout/Builder/Watcher worker theatre for discuss; this is a guided clarification ritual, not a spawned-worker lifecycle."
   - "If the runtime returns clarification questions, present them honestly instead of inventing answers on the user's behalf."
   - "If docs and runtime disagree, runtime wins."
 follow_up:

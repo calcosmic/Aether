@@ -340,6 +340,53 @@ func TestSelectPlatformInvokerReportsOrderedEvaluatedFallbackCandidates(t *testi
 	if _, err := os.Stat(opencodeCalled); !os.IsNotExist(err) {
 		t.Fatalf("opencode candidate was probed despite evaluated-candidates semantics")
 	}
+	description := DescribeInvokerAvailability(invoker, context.Background())
+	for _, want := range []string{"detected host codex", "falling back to claude worker dispatcher"} {
+		if !strings.Contains(description, want) {
+			t.Fatalf("DescribeInvokerAvailability() = %q, want to contain %q", description, want)
+		}
+	}
+	if strings.Contains(description, "opencode") {
+		t.Fatalf("DescribeInvokerAvailability() = %q, want evaluated fallback only", description)
+	}
+}
+
+func TestSelectPlatformInvokerRejectsUnsupportedWorkerPlatformOverride(t *testing.T) {
+	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv(envWorkerPlatform, "banana")
+	t.Setenv("AETHER_CODEX_PATH", "go")
+
+	invoker := SelectPlatformInvoker(context.Background())
+	if got := PlatformFromInvoker(invoker); got != PlatformUnknown {
+		t.Fatalf("selected platform = %s, want unknown for unsupported override", got)
+	}
+
+	meta, ok := invoker.(selectionMetadata)
+	if !ok {
+		t.Fatalf("unsupported override invoker does not expose candidate metadata: %T", invoker)
+	}
+	statuses := meta.CandidateStatuses()
+	if len(statuses) != 1 {
+		t.Fatalf("candidate count = %d, want one unsupported-provider status: %+v", len(statuses), statuses)
+	}
+	assertCandidateStatus(t, statuses[0], PlatformUnknown, false, "unsupported_provider")
+
+	status := invoker.(interface {
+		Availability(context.Context) AvailabilityStatus
+	}).Availability(context.Background())
+	if got := string(status.Category); got != "unsupported_provider" {
+		t.Fatalf("unavailable category = %q, want unsupported_provider; reason=%q", got, status.Reason)
+	}
+
+	description := DescribeInvokerAvailability(invoker, context.Background())
+	for _, want := range []string{"unsupported AETHER_WORKER_PLATFORM", "banana", "codex, claude, or opencode"} {
+		if !strings.Contains(description, want) {
+			t.Fatalf("DescribeInvokerAvailability() = %q, want to contain %q", description, want)
+		}
+	}
+	if strings.Contains(description, "falling back") {
+		t.Fatalf("DescribeInvokerAvailability() = %q, unsupported override must not fall back", description)
+	}
 }
 
 func TestSelectPlatformInvokerUnavailableStatusRedactsAndCategorizes(t *testing.T) {

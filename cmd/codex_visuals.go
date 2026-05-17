@@ -201,6 +201,51 @@ var commandEmojiMap = map[string]string{
 	"medic":                  "🩹",
 }
 
+type commandCeremonyLevel string
+
+const (
+	commandCeremonyLevelWorkerTheatre commandCeremonyLevel = "worker_theatre"
+	commandCeremonyLevelGuidedRitual  commandCeremonyLevel = "guided_ritual"
+	commandCeremonyLevelDashboard     commandCeremonyLevel = "dashboard"
+	commandCeremonyLevelProgress      commandCeremonyLevel = "progress"
+	commandCeremonyLevelQuiet         commandCeremonyLevel = "quiet"
+)
+
+func classifyCommandCeremonyLevel(command string) commandCeremonyLevel {
+	command = strings.TrimSpace(strings.ToLower(command))
+	command = strings.TrimPrefix(command, "aether ")
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return commandCeremonyLevelQuiet
+	}
+	command = fields[0]
+	if strings.HasSuffix(command, "-finalize") {
+		return commandCeremonyLevelQuiet
+	}
+	switch command {
+	case "plan", "build", "colonize", "seal":
+		return commandCeremonyLevelWorkerTheatre
+	case "swarm":
+		for _, field := range fields[1:] {
+			switch field {
+			case "--watch", "watch":
+				return commandCeremonyLevelDashboard
+			}
+		}
+		return commandCeremonyLevelWorkerTheatre
+	case "init", "discuss", "oracle":
+		return commandCeremonyLevelGuidedRitual
+	case "status", "watch", "history", "phase", "resume":
+		return commandCeremonyLevelDashboard
+	case "run", "update", "publish", "continue", "install", "lay-eggs", "porter", "source-check", "bump-version":
+		return commandCeremonyLevelProgress
+	case "command-guide", "spawn-log", "spawn-complete", "ceremony", "completion", "version", "generate-progress-bar", "version-check-cached":
+		return commandCeremonyLevelQuiet
+	default:
+		return commandCeremonyLevelQuiet
+	}
+}
+
 func commandEmoji(command string) string {
 	if emoji, ok := commandEmojiMap[command]; ok {
 		return emoji
@@ -807,11 +852,14 @@ func renderSurveyorResults(surveyors []codexSurveyorDispatch) string {
 	return b.String()
 }
 
-// hasRealPlanningExecutionData returns true if any planning worker has a non-"spawned" status,
-// indicating real worker execution data is available.
+// hasRealPlanningExecutionData returns true when a planning worker reports evidence
+// beyond a manifest placeholder. Planned and spawned entries are not completion evidence.
 func hasRealPlanningExecutionData(dispatches []codexPlanningDispatch) bool {
 	for _, d := range dispatches {
-		if d.Status != "spawned" {
+		switch strings.TrimSpace(d.Status) {
+		case "", "planned", "spawned":
+			continue
+		default:
 			return true
 		}
 	}
@@ -898,8 +946,13 @@ func renderPlanVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("plan"), "Plan"))
 	b.WriteString(visualDivider)
-	if existing, _ := result["existing_plan"].(bool); existing {
+	existing, _ := result["existing_plan"].(bool)
+	planOnly, _ := result["plan_only"].(bool)
+	requiresFinalizer, _ := result["requires_finalizer"].(bool)
+	if existing {
 		b.WriteString("Existing colony plan loaded.\n")
+	} else if planOnly && requiresFinalizer {
+		b.WriteString("Planning manifest prepared for host-dispatched Scout and Route-Setter workers.\n")
 	} else {
 		b.WriteString("Scout and Route-Setter mapped the colony goal into executable phases.\n")
 	}
@@ -1002,12 +1055,12 @@ func renderPlanVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\n")
 	}
-	if contract := renderDispatchContract(result["dispatch_contract"]); contract != "" {
+	if contract := renderDispatchContract(result["dispatch_contract"]); contract != "" && (!existing || requiresFinalizer) {
 		b.WriteString(contract)
 		b.WriteString("\n")
 	}
-	if planOnly, _ := result["plan_only"].(bool); planOnly {
-		if existing, _ := result["existing_plan"].(bool); !existing {
+	if planOnly {
+		if !existing {
 			if agentDelegate, _ := result["agent_delegate"].(bool); agentDelegate || strings.TrimSpace(stringValue(result["dispatch_mode"])) == "agent-delegate" {
 				if reason := strings.TrimSpace(stringValue(result["agent_delegate_reason"])); reason != "" {
 					b.WriteString("Agent-Delegate\n")

@@ -8,6 +8,10 @@ codex_orchestration:
   skill: "aether-colony-research"
   guide: "aether command-guide oracle --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+ceremony_contract:
+  class: "guided_ritual"
+  authority: "Go owns Oracle state, confidence calculation, workspace files, iteration manifests, and canonical visual output."
+  wrapper_role: "The TypeScript host may conduct the outer lifecycle loop and dispatch Oracle workers, but it must hand worker_response back to Go finalizers and render only Go-owned facts."
 intent_refinement:
   - "If the user provides a research topic, do a short AI-led scoping pass before running the runtime command."
   - "Ask one compact batch of 3-6 questions when scope, audience, desired output, constraints, or decision criteria are unclear."
@@ -23,6 +27,7 @@ intent_refinement:
   - "Run `AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> --background \"<synthesized prompt>\"` after the user confirms the refined prompt for long-running research. Omit `--background` only when the user explicitly wants foreground execution."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not synthesize Oracle confidence, confidence deltas, or completion summaries in TypeScript or wrapper markdown; Go finalizers derive those from real worker_response content."
   - "If docs and runtime disagree, runtime wins."
   - "If the shell/tool call times out, immediately run `aether oracle status` and report the runtime status; do not assume Oracle failed or bypass it with ad hoc agents."
   - "If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`."

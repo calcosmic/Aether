@@ -3,6 +3,10 @@ description: "🚀 Bump version across runtime files, docs, hub publish, commit,
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether bump-version $ARGUMENTS"
+ceremony_contract:
+  class: "progress"
+  authority: "Go owns version mutation and release-flow command guidance; publish, commit, push, and tag remain explicit follow-up actions."
+  wrapper_role: "Show version-bump progress and preserve the runtime's release checklist. Do not auto-publish or tag unless the user explicitly requests that delivery action."
 release_flow: |
   Run the runtime bump first. If it succeeds, preserve the historical release workflow:
   update human-facing version references in CLAUDE.md, AGENTS.md, README.md, and docs/phase3-section-roadmap.md when matching old-version markers exist; run go test ./...; publish with aether publish --channel stable --binary-dest "$HOME/.local/bin"; verify version agreement; commit the version/docs changes; push the branch; tag v<version>; push the tag.

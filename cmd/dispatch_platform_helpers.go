@@ -35,6 +35,20 @@ func dispatchAvailabilityMessage(invoker codex.WorkerInvoker) string {
 	return message
 }
 
+func dispatchProviderDiagnostics(invoker codex.WorkerInvoker) string {
+	if invoker == nil {
+		return ""
+	}
+	if _, ok := invoker.(*codex.FakeInvoker); ok {
+		return ""
+	}
+	message := dispatchAvailabilityDiagnosticMessage(invoker, context.Background())
+	if strings.HasPrefix(message, "using ") {
+		return ""
+	}
+	return strings.TrimSpace(message)
+}
+
 func dispatchUnavailableError(invoker codex.WorkerInvoker) error {
 	return fmt.Errorf("worker dispatcher is unavailable: %s", dispatchAvailabilityMessage(invoker))
 }
@@ -117,6 +131,8 @@ func defaultAvailabilityCause(status codex.AvailabilityStatus) string {
 		return "no configured credentials or environment keys were reported"
 	case codex.AvailabilityCategoryProbeSkipped:
 		return "auth probe was skipped for an override binary"
+	case codex.AvailabilityCategoryUnsupportedProvider:
+		return "worker provider override is unsupported"
 	case codex.AvailabilityCategoryAvailable:
 		return "available"
 	default:
@@ -142,6 +158,8 @@ func dispatchAvailabilityNextAction(status codex.AvailabilityStatus) string {
 		return fmt.Sprintf("add %s credentials or environment keys before rerunning this Aether command.", status.Platform)
 	case codex.AvailabilityCategoryProbeSkipped:
 		return fmt.Sprintf("use a real %s CLI path if you need auth verification, or rerun with this override intentionally.", status.Platform)
+	case codex.AvailabilityCategoryUnsupportedProvider:
+		return "set AETHER_WORKER_PLATFORM to codex, claude, or opencode, or unset it to allow automatic fallback."
 	case codex.AvailabilityCategoryAvailable:
 		return "rerun this Aether command."
 	default:

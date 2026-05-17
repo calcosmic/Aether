@@ -87,7 +87,7 @@ func TestDispatchAvailabilityMessageExplainsProviderCauseAndNextAction(t *testin
 				Binary:    "codex",
 				Available: false,
 				Category:  codex.AvailabilityCategoryAuthInactive,
-				Reason:    "codex login status did not confirm an authenticated session",
+				Reason:    "runtime-owned codex auth detail",
 			},
 			{
 				Platform:  codex.PlatformClaude,
@@ -103,7 +103,7 @@ func TestDispatchAvailabilityMessageExplainsProviderCauseAndNextAction(t *testin
 	for _, want := range []string{
 		"detected host platform codex",
 		"codex provider:",
-		"authenticated session",
+		"runtime-owned codex auth detail",
 		"Next: sign in to codex",
 		"claude provider:",
 		"Next: install claude",

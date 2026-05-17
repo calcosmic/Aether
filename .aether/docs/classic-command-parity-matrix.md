@@ -39,9 +39,11 @@ Runtime authority remains in:
 | `continue` | semi-intelligent | heavy-review manifest | Go runtime or Go finalizer | heavy only: `continue-finalize` | YAML, Claude, OpenCode | Default is Go-owned; heavy review is host-backed. |
 | `seal` | semi-intelligent | missing orchestration target | Go finalizer | `seal-finalize` | YAML, Claude, OpenCode | Future host target; current wrappers use Go plan-only. |
 | `oracle` | full orchestration | lifecycle loop | Go runtime or Go finalizer | iteration finalizer when used | YAML, Claude, OpenCode | Host owns loop conduct, Go owns state. |
-| `swarm` | full orchestration | display and plan | Go finalizer | `swarm-finalize` | YAML, Claude, OpenCode | Host display/plan surface exists. |
+| `swarm` | full orchestration + dashboard | display and plan | Go finalizer for problem runs; Go runtime for `--watch` | `swarm-finalize` for problem runs only | YAML, Claude, OpenCode | Problem-bearing swarm runs use worker theatre; `swarm --watch` is a dashboard. |
 | `watch` | literal/display | display | Go runtime | none | YAML, Claude, OpenCode | Host can display; Go owns data. |
 | `status` | literal | none | Go runtime | none | YAML, Claude, OpenCode | Direct runtime passthrough. |
+| `history` | literal/display | none | Go runtime | none | YAML, Claude, OpenCode | Dashboard only; reports stored events. |
+| `phase` | literal/display | none | Go runtime | none | YAML, Claude, OpenCode | Dashboard only; reports current phase facts. |
 | `resume` | literal | none | Go runtime | none | YAML, Claude, OpenCode | Direct runtime passthrough. |
 | `focus` | literal | none | Go runtime | none | YAML, Claude, OpenCode | Signal write stays Go-owned. |
 | `redirect` | literal | none | Go runtime | none | YAML, Claude, OpenCode | Signal write stays Go-owned. |
@@ -67,6 +69,23 @@ It must not:
   ceremony templates;
 - claim `aether host colonize` or `aether host seal` until those host surfaces
   are actually implemented.
+
+## Ceremony Routing
+
+- Worker theatre: `plan`, `build`, `colonize`, `seal`, and problem-bearing
+  `swarm` runs because they prepare or consume real worker manifests.
+- Guided rituals: `init`, `discuss`, and `oracle` because they guide intent,
+  research, or iteration while Go owns state and canonical facts.
+- Dashboards: `status`, `watch`, `history`, `phase`, `resume`, and
+  `swarm --watch` because they show current runtime facts without dispatching
+  new workers.
+- Progress/delivery: `run`, `continue`, `update`, `publish`, `install`,
+  `lay-eggs`, `porter`, `source-check`, and `bump-version` because they show
+  setup, verification, release, or delivery progress without inventing workers.
+- Quiet/internal: finalizers, `command-guide`, spawn log helpers, ceremony
+  helper commands, shell completion, version helpers, and generated progress
+  helpers because they are machine or wrapper plumbing rather than user-facing
+  worker ceremonies.
 
 ## Verification Anchors
 

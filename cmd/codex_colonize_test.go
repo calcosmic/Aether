@@ -217,7 +217,7 @@ func TestColonizeIncludesDispatchContract(t *testing.T) {
 	}
 
 	visibility := stringSliceValue(contract["fallback_visibility"])
-	for _, want := range []string{"dispatch_mode", "survey_warning", "artifact_source"} {
+	for _, want := range []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"} {
 		if !containsString(visibility, want) {
 			t.Fatalf("fallback_visibility missing %q: %v", want, visibility)
 		}

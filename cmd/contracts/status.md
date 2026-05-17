@@ -22,6 +22,11 @@ None
 - Default: Visual colony dashboard via `renderDashboard` showing phase progress, memory health, active signals, flags.
 - With AETHER_OUTPUT_MODE=json: JSON envelope via `outputOK` with structured state data.
 
+### Ceremony Class
+`status` is a dashboard. It reports current Go-owned facts only. Wrappers and
+TypeScript display helpers may render the returned fields, but must not infer
+worker completion, verification, or dispatch from status output.
+
 ### Files Created/Modified
 None -- read-only command.
 

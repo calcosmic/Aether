@@ -181,6 +181,38 @@
       "restore_target": "Keep as direct runtime passthrough."
     },
     {
+      "name": "history",
+      "category": "literal",
+      "runtime_command": "aether history",
+      "ts_host_surface": "none",
+      "state_mutation_owner": "go-runtime",
+      "mutates_aether_data": false,
+      "ts_write_policy": "never-write-aether-data",
+      "finalizer_required": false,
+      "finalizer_command": "",
+      "ceremony_steps": ["history-dashboard"],
+      "wrapper_coverage": {"yaml": true, "claude": true, "opencode": true},
+      "raw_bypass": true,
+      "classic_behavior": "Display stored colony event history.",
+      "restore_target": "Keep as direct runtime dashboard with no worker dispatch."
+    },
+    {
+      "name": "phase",
+      "category": "literal",
+      "runtime_command": "aether phase",
+      "ts_host_surface": "none",
+      "state_mutation_owner": "go-runtime",
+      "mutates_aether_data": false,
+      "ts_write_policy": "never-write-aether-data",
+      "finalizer_required": false,
+      "finalizer_command": "",
+      "ceremony_steps": ["phase-dashboard"],
+      "wrapper_coverage": {"yaml": true, "claude": true, "opencode": true},
+      "raw_bypass": true,
+      "classic_behavior": "Display current phase details and task status.",
+      "restore_target": "Keep as direct runtime dashboard with no worker dispatch."
+    },
+    {
       "name": "resume",
       "category": "literal",
       "runtime_command": "aether resume",

@@ -3,6 +3,10 @@ description: "🥚 Set up Aether in this repo — creates repo-local Aether stat
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether lay-eggs $ARGUMENTS"
+ceremony_contract:
+  class: "progress"
+  authority: "Go owns setup/update of repo-local Aether scaffolding from the installed hub."
+  wrapper_role: "Show setup progress and next steps. Do not infer worker activity from setup output."
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

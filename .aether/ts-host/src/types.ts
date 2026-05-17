@@ -8,6 +8,9 @@
  * - cmd/codex_plan_finalize.go (codexExternalPlanCompletion)
  * - cmd/codex_continue_finalize.go (codexExternalContinueCompletion)
  *
+ * The TS host also models explicit host-owned synthesis envelopes for planning
+ * completions so synthesized plans are not represented as worker evidence.
+ *
  * All optional Go fields (omitempty) are marked optional in TypeScript (use `?`).
  */
 
@@ -46,6 +49,7 @@ export interface BuildManifest {
   host_platform?: string;
   execution_owner?: string;
   worker_dispatch_opt_in?: boolean;
+  provider_diagnostics?: string;
   generated_at: string;
   state: string;
   checkpoint: string;
@@ -178,7 +182,7 @@ export interface PlanCompletion {
   results?: PlanningDispatch[];
   workers?: PlanningDispatch[];
   scout_report?: ScoutReport;
-  phase_plan?: WorkerPlanArtifact;
+  synthesis?: PlanSynthesis;
 }
 
 export interface PlanManifest {
@@ -189,7 +193,14 @@ export interface PlanningDispatch {
   name?: string;
   status?: string;
   summary?: string;
+  phase_plan?: WorkerPlanArtifact;
   [key: string]: unknown;
+}
+
+export interface PlanSynthesis {
+  source: "ts-host";
+  reason: string;
+  phase_plan: WorkerPlanArtifact;
 }
 
 export interface ScoutReport {
@@ -471,8 +482,8 @@ export interface OracleWorkerResponse {
   question_id: string;
   /** Worker status: completed, failed, blocked. */
   status: string;
-  /** Confidence in the findings (0-100). */
-  confidence: number;
+  /** Runtime-owned confidence in the findings (0-100), when provided by Go. */
+  confidence?: number;
   /** Summary of the worker's research output. */
   summary: string;
   /** Structured findings from the worker. */

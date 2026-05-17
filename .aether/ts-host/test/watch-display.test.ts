@@ -53,7 +53,9 @@ describe("watch-display", () => {
   });
 
   it("runWatchDisplay with dashboard disabled returns success and status", async () => {
+    let capturedArgs: string[] | undefined;
     __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      capturedArgs = [...args];
       if (args[0] === "status") {
         return makeMockStatus() as unknown as T;
       }
@@ -70,6 +72,7 @@ describe("watch-display", () => {
     assert.ok(result.final_status, "Should have final_status");
     assert.equal(result.final_status!.goal, "Test colony goal", "Should capture goal");
     assert.equal(result.snapshots_count, 1, "Should take one snapshot in plain-text mode");
+    assert.deepEqual(capturedArgs, ["status"], "Watch display must consume Go status JSON directly");
   });
 
   it("runWatchDisplay handles Go errors gracefully", async () => {

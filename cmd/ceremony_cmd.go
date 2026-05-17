@@ -229,11 +229,19 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		if state.Goal != nil {
 			result["goal"] = *state.Goal
 		}
-		result["next"] = closeoutNextCommand(workflow, state)
+		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
+			result["next"] = next
+		} else {
+			result["next"] = closeoutNextCommand(workflow, state)
+		}
 	} else {
 		result["state_available"] = false
 		result["message"] = colonyStateLoadMessage(err)
-		result["next"] = "Run `aether status` to inspect the colony."
+		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
+			result["next"] = next
+		} else {
+			result["next"] = "Run `aether status` to inspect the colony."
+		}
 	}
 	return result, renderCeremonyCloseoutVisual(result)
 }
@@ -319,11 +327,24 @@ func renderCeremonyWorkerComplete(workflow string, dispatch ceremonyDispatch) st
 
 func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	workflow := normalizedCeremonyWorkflow(stringValue(result["workflow"]))
+	title := fmt.Sprintf("%s Summary", workflow)
+	emoji := commandEmoji(workflow)
+	if boolValue(result["completion_finalizer_failed"]) {
+		title = "Finalizer Failed"
+		emoji = commandEmoji("closeout")
+	} else if boolValue(result["completion_path_blocked"]) || intValue(result["completion_blocked"]) > 0 {
+		title = fmt.Sprintf("%s Blocked", workflow)
+		if workflow == "continue" {
+			emoji = commandEmoji("continue-blocked")
+		}
+	} else if intValue(result["completion_failed"]) > 0 {
+		title = fmt.Sprintf("%s Failed", workflow)
+	}
 	var b strings.Builder
 	b.WriteString(visualDivider)
-	b.WriteString(commandEmoji(workflow))
+	b.WriteString(emoji)
 	b.WriteString(" ")
-	b.WriteString(spacedTitle(fmt.Sprintf("%s Summary", workflow)))
+	b.WriteString(spacedTitle(title))
 	b.WriteString("\n")
 	b.WriteString(visualDivider)
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
@@ -346,6 +367,16 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 		}
 		b.WriteString("\n")
 	}
+	if boolValue(result["completion_finalizer_failed"]) {
+		if errText := strings.TrimSpace(stringValue(result["completion_error_message"])); errText != "" {
+			b.WriteString("\nFinalizer error\n")
+			b.WriteString(renderIndentedList([]string{errText}))
+		}
+		next := emptyFallback(stringValue(result["next"]), "Fix the completion file and rerun the finalizer.")
+		b.WriteString(renderNextUp(next))
+		return b.String()
+	}
+	writeCeremonyCloseoutNotice(&b, result)
 	writeCeremonyWorkerSummary(&b, result)
 	writeCeremonyPlanSummary(&b, result)
 	if readiness := strings.TrimSpace(stringValue(result["porter_readiness"])); readiness != "" {
@@ -359,6 +390,31 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
 	b.WriteString(renderNextUp(next))
 	return b.String()
+}
+
+func writeCeremonyCloseoutNotice(b *strings.Builder, result map[string]interface{}) {
+	if !boolValue(result["completion_loaded"]) {
+		return
+	}
+	message := strings.TrimSpace(stringValue(result["completion_message"]))
+	if message == "" && boolValue(result["completion_existing_plan"]) {
+		message = "Existing colony plan loaded."
+	}
+	noWorkers := intValue(result["completion_worker_count"]) == 0
+	if message == "" && !noWorkers {
+		return
+	}
+	b.WriteString("\n")
+	if message != "" {
+		b.WriteString(message)
+		if !strings.HasSuffix(message, ".") {
+			b.WriteString(".")
+		}
+		b.WriteString("\n")
+	}
+	if noWorkers {
+		b.WriteString("No workers dispatched.\n")
+	}
 }
 
 func writeCeremonyPlanSummary(b *strings.Builder, result map[string]interface{}) {

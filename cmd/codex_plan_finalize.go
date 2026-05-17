@@ -23,6 +23,25 @@ type codexExternalPlanCompletion struct {
 	Workers          []codexPlanningDispatch  `json:"workers,omitempty"`
 	ScoutReport      *codexScoutReport        `json:"scout_report,omitempty"`
 	PhasePlan        *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
+	Synthesis        *codexPlanSynthesis      `json:"synthesis,omitempty"`
+}
+
+type codexPlanSynthesis struct {
+	Source    string                   `json:"source,omitempty"`
+	Reason    string                   `json:"reason,omitempty"`
+	PhasePlan *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
+}
+
+type codexPlanProvenance struct {
+	Dispatches      []codexPlanningDispatch
+	ScoutReport     codexScoutReport
+	PhasePlan       *codexWorkerPlanArtifact
+	DispatchMode    string
+	ArtifactSource  string
+	PlanSource      string
+	SourceSummary   string
+	PlanningWarning string
+	RecordWorkers   bool
 }
 
 const (
@@ -136,6 +155,25 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		return nil, err
 	}
 
+	provenance, err := completion.planProvenance(root, manifest)
+	if err != nil {
+		return nil, err
+	}
+	dispatches := provenance.Dispatches
+	scoutReport := provenance.ScoutReport
+	phasePlan := provenance.PhasePlan
+	if len(phasePlan.Phases) == 0 {
+		return nil, fmt.Errorf("phase_plan contains no phases")
+	}
+
+	phases := buildWorkerPlanPhases(*phasePlan)
+	if len(phases) == 0 || buildablePlanTaskCount(phases) == 0 {
+		return nil, fmt.Errorf("phase_plan contains no buildable tasks")
+	}
+	_, baseConfidence, baseGaps := synthesizeRouteSetterPlan(manifest.Goal, granularity, manifest.Survey, scoutReport)
+	confidence := mergePlanConfidence(baseConfidence, phasePlan.Confidence)
+	unresolvedGaps := limitStrings(uniqueSortedStrings(append(baseGaps, phasePlan.Gaps...)), 4)
+
 	runHandle, err := beginRuntimeSpawnRun("plan", now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize planning run: %w", err)
@@ -144,27 +182,6 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	defer func() {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
-
-	dispatches, err := mergeExternalPlanResults(*manifest, completion.workerResults())
-	if err != nil {
-		return nil, err
-	}
-	scoutReport := completion.scoutReport(dispatches, manifest)
-	phasePlan, err := completion.phasePlan(root, dispatches, manifest)
-	if err != nil {
-		return nil, err
-	}
-	if len(phasePlan.Phases) == 0 {
-		return nil, fmt.Errorf("phase_plan contains no phases")
-	}
-
-	phases := buildWorkerPlanPhases(*phasePlan)
-	if len(phases) == 0 {
-		return nil, fmt.Errorf("phase_plan produced no buildable phases")
-	}
-	_, baseConfidence, baseGaps := synthesizeRouteSetterPlan(manifest.Goal, granularity, manifest.Survey, scoutReport)
-	confidence := mergePlanConfidence(baseConfidence, phasePlan.Confidence)
-	unresolvedGaps := limitStrings(uniqueSortedStrings(append(baseGaps, phasePlan.Gaps...)), 4)
 
 	planningDir := filepath.Join(store.BasePath(), "planning")
 	phaseResearchDir := filepath.Join(store.BasePath(), "phase-research")
@@ -207,8 +224,10 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		return nil, err
 	}
 
-	if err := recordExternalPlanSpawnTree(dispatches); err != nil {
-		return nil, err
+	if provenance.RecordWorkers {
+		if err := recordExternalPlanSpawnTree(dispatches); err != nil {
+			return nil, err
+		}
 	}
 
 	updatedState := state
@@ -226,20 +245,22 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		Phases:      phases,
 	}
 	updatedState.Events = append(trimmedEvents(updatedState.Events),
-		fmt.Sprintf("%s|planning_scout|plan-finalize|External Scout summarized surveyed repo context", now.Format(time.RFC3339)),
-		fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d phases with %d%% confidence from external planning workers", now.Format(time.RFC3339), len(phases), confidence.Overall),
+		fmt.Sprintf("%s|planning_scout|plan-finalize|%s", now.Format(time.RFC3339), provenance.SourceSummary),
+		fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d phases with %d%% confidence from %s", now.Format(time.RFC3339), len(phases), confidence.Overall, provenance.SourceSummary),
 	)
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
 	}
-	emitPlanCeremonyDispatchSequence("aether-plan-finalize", dispatches)
+	if provenance.RecordWorkers {
+		emitPlanCeremonyDispatchSequence("aether-plan-finalize", dispatches)
+	}
 
 	nextPhase := firstBuildablePhase(phases)
 	nextCommand := "aether build 1"
 	if nextPhase > 0 {
 		nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 	}
-	updateSessionSummary("plan-finalize", nextCommand, fmt.Sprintf("Generated %d plan phases with %d%% confidence from external planning workers", len(phases), confidence.Overall))
+	updateSessionSummary("plan-finalize", nextCommand, fmt.Sprintf("Generated %d plan phases with %d%% confidence from %s", len(phases), confidence.Overall, provenance.SourceSummary))
 	runStatus = "completed"
 
 	result := map[string]interface{}{
@@ -260,14 +281,14 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		"phase_research_dir":        phaseResearchDir,
 		"phase_research_files":      phaseResearchFiles,
 		"dispatches":                planningDispatchMaps(dispatches),
-		"dispatch_mode":             "external-task",
+		"dispatch_mode":             provenance.DispatchMode,
 		"dispatch_contract":         manifest.DispatchContract,
-		"artifact_source":           "external-task",
-		"plan_source":               "external-task",
+		"artifact_source":           provenance.ArtifactSource,
+		"plan_source":               provenance.PlanSource,
 		"gaps":                      unresolvedGaps,
 		"survey_docs":               manifest.Survey.SurveyDocs,
 		"unresolved_clarifications": 0,
-		"planning_warning":          "",
+		"planning_warning":          provenance.PlanningWarning,
 		"next":                      nextCommand,
 	}
 	addOrchestratorBoundaryGuidance(result, "plan", updatedState, nextCommand, manifest.BoundaryQuestions)
@@ -418,6 +439,84 @@ func validateExternalPlanIdentity(dispatch codexPlanningDispatch, result codexPl
 	return validateWorkerResultIdentity(dispatch.Name, dispatchSpec, resultSpec)
 }
 
+func (c codexExternalPlanCompletion) planProvenance(root string, manifest *codexPlanManifest) (codexPlanProvenance, error) {
+	if c.Synthesis != nil {
+		return c.synthesisPlanProvenance(manifest)
+	}
+	if c.PhasePlan != nil {
+		return codexPlanProvenance{}, fmt.Errorf("top-level phase_plan requires explicit synthesis.source and synthesis.reason")
+	}
+
+	dispatches, err := mergeExternalPlanResults(*manifest, c.workerResults())
+	if err != nil {
+		return codexPlanProvenance{}, err
+	}
+	phasePlan, err := routeSetterPhasePlan(root, dispatches, manifest)
+	if err != nil {
+		return codexPlanProvenance{}, err
+	}
+	return codexPlanProvenance{
+		Dispatches:      dispatches,
+		ScoutReport:     c.scoutReport(dispatches, manifest),
+		PhasePlan:       phasePlan,
+		DispatchMode:    "external-task",
+		ArtifactSource:  "external-task",
+		PlanSource:      "external-task",
+		SourceSummary:   "external planning workers",
+		PlanningWarning: "",
+		RecordWorkers:   true,
+	}, nil
+}
+
+func (c codexExternalPlanCompletion) synthesisPlanProvenance(manifest *codexPlanManifest) (codexPlanProvenance, error) {
+	if c.PhasePlan != nil {
+		return codexPlanProvenance{}, fmt.Errorf("top-level phase_plan is ambiguous; put host-created plans under synthesis.phase_plan")
+	}
+	if len(c.workerResults()) > 0 {
+		return codexPlanProvenance{}, fmt.Errorf("synthesis completion must not include planning worker results")
+	}
+	source := strings.TrimSpace(c.Synthesis.Source)
+	if source != "ts-host" {
+		return codexPlanProvenance{}, fmt.Errorf("synthesis.source must be %q", "ts-host")
+	}
+	reason := strings.TrimSpace(c.Synthesis.Reason)
+	if reason == "" {
+		return codexPlanProvenance{}, fmt.Errorf("synthesis.reason is required")
+	}
+	if c.Synthesis.PhasePlan == nil {
+		return codexPlanProvenance{}, fmt.Errorf("synthesis.phase_plan is required")
+	}
+
+	dispatches := synthesizedPlanDispatches(manifest.Dispatches, reason)
+	return codexPlanProvenance{
+		Dispatches:      dispatches,
+		ScoutReport:     synthesizeScoutPlanningReport(manifest.Goal, manifest.Survey),
+		PhasePlan:       c.Synthesis.PhasePlan,
+		DispatchMode:    "synthesis",
+		ArtifactSource:  "ts-host-synthesis",
+		PlanSource:      "ts-host-synthesis",
+		SourceSummary:   "explicit ts-host synthesis",
+		PlanningWarning: fmt.Sprintf("Plan finalized from explicit ts-host synthesis. Reason: %s", reason),
+		RecordWorkers:   false,
+	}, nil
+}
+
+func synthesizedPlanDispatches(dispatches []codexPlanningDispatch, reason string) []codexPlanningDispatch {
+	synthesized := make([]codexPlanningDispatch, len(dispatches))
+	for i, dispatch := range dispatches {
+		dispatch.Status = "skipped"
+		dispatch.Summary = fmt.Sprintf("Skipped external planning worker; explicit ts-host synthesis was used. Reason: %s", reason)
+		dispatch.Duration = 0
+		dispatch.FilesCreated = nil
+		dispatch.FilesModified = nil
+		dispatch.Claimed = nil
+		dispatch.ScoutReport = nil
+		dispatch.PhasePlan = nil
+		synthesized[i] = dispatch
+	}
+	return synthesized
+}
+
 func (c codexExternalPlanCompletion) scoutReport(dispatches []codexPlanningDispatch, manifest *codexPlanManifest) codexScoutReport {
 	if c.ScoutReport != nil {
 		return *c.ScoutReport
@@ -444,18 +543,13 @@ func (c codexExternalPlanCompletion) scoutReport(dispatches []codexPlanningDispa
 	return report
 }
 
-func (c codexExternalPlanCompletion) phasePlan(root string, dispatches []codexPlanningDispatch, manifest *codexPlanManifest) (*codexWorkerPlanArtifact, error) {
-	if c.PhasePlan != nil {
-		return c.PhasePlan, nil
-	}
-	for _, dispatch := range dispatches {
-		if dispatch.PhasePlan != nil {
-			return dispatch.PhasePlan, nil
-		}
-	}
+func routeSetterPhasePlan(root string, dispatches []codexPlanningDispatch, manifest *codexPlanManifest) (*codexWorkerPlanArtifact, error) {
 	for _, dispatch := range dispatches {
 		if !strings.EqualFold(dispatch.Caste, "route_setter") {
 			continue
+		}
+		if dispatch.PhasePlan != nil {
+			return dispatch.PhasePlan, nil
 		}
 		for _, relPath := range dispatch.Claimed {
 			if filepath.ToSlash(filepath.Clean(relPath)) != filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json")) {
@@ -476,6 +570,14 @@ func (c codexExternalPlanCompletion) phasePlan(root string, dispatches []codexPl
 		}
 	}
 	return nil, fmt.Errorf("completion file must include route-setter phase_plan")
+}
+
+func buildablePlanTaskCount(phases []colony.Phase) int {
+	count := 0
+	for _, phase := range phases {
+		count += len(phase.Tasks)
+	}
+	return count
 }
 
 func validateClaimedPlanArtifactFreshness(root string, relPath string, manifest *codexPlanManifest) error {

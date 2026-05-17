@@ -1,1 +1,8 @@
-🔨 Builder Mason-67  Build the wall
+━━━ 🔨 S P A W N   P L A N ━━━
+
+Phase 3: Ceremony Contract
+
+Wave 11 — Parallel
+  🔨 Builder Bolt-69  Align TS ceremony adapter lifecycle snapshots with Go contract names •
+
+Total: 1 Builder = 1 spawns

@@ -871,6 +871,33 @@ func TestFinalizeOracleLoopBlocked(t *testing.T) {
 	}
 }
 
+func TestNormalizeOracleWorkerResponseBlockedRequiresConcreteDetail(t *testing.T) {
+	target := oracleQuestion{ID: "q1", Text: "Which command boundary is blocked?"}
+
+	_, err := normalizeOracleWorkerResponse(oracleWorkerResponse{
+		QuestionID: "q1",
+		Status:     "blocked",
+	}, target)
+	if err == nil {
+		t.Fatal("expected blocked response without detail to fail")
+	}
+	if !strings.Contains(err.Error(), "omitted blocker detail") {
+		t.Fatalf("error = %v, want omitted blocker detail", err)
+	}
+
+	response, err := normalizeOracleWorkerResponse(oracleWorkerResponse{
+		QuestionID: "q1",
+		Status:     "blocked",
+		Gaps:       []string{"Need runtime provider diagnostics before continuing."},
+	}, target)
+	if err != nil {
+		t.Fatalf("blocked response with gap detail returned error: %v", err)
+	}
+	if response.Summary == "" {
+		t.Fatal("blocked response with detail should get a user-facing summary")
+	}
+}
+
 func TestOracleReadyForCompletion(t *testing.T) {
 	tests := []struct {
 		name      string
