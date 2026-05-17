@@ -298,6 +298,12 @@ High-confidence behavioral patterns that have been validated through repeated co
 - Do not default unknown hosts to Codex
 
 ## Wisdom
+- Cleanup phases should carry explicit tasks or success criteria in state. (seal review phase 6, 2026-05-17)
+- Do not treat stale pre-commit blocker records as current blockers when a fresh release receipt supersedes them. (seal review phase 6, 2026-05-17)
+- Durable release receipts are stronger than summary-only worker claims. (seal review phase 6, 2026-05-17)
+- Final seal evidence should prefer fresh command-level receipts over stale ledger entries, while stale entries should be marked superseded. (seal review phase 6, 2026-05-17)
+- Gate reports should not combine passed:true with stale blocker text. (seal review phase 6, 2026-05-17)
+- Seal review should phase-check old final-review artifacts before considering reuse. (seal review phase 6, 2026-05-17)
 - Close stale review ledgers when fixes land, otherwise release review has to re-prove old issues are no longer real. (seal review phase 5, 2026-05-17)
 - Dependency audit scope must include hidden platform directories such as .opencode, not just root-visible manifests. (seal review phase 5, 2026-05-17)
 - Final release evidence should store command-level results for every acceptance criterion, not just worker summaries. (seal review phase 5, 2026-05-17)

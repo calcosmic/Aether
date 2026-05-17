@@ -8,14 +8,14 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-17T12:40:02Z |
+| **Last Updated** | 2026-05-17T13:16:27Z |
 | **Current Phase** | 6 |
 | **Phase Name** | Seal Evidence and Delivery Readiness Cleanup |
-| **Phase Status** | in_progress |
-| **Milestone** | First Mound |
-| **Colony Status** | BUILT |
+| **Phase Status** | completed |
+| **Milestone** | Crowned Anthill |
+| **Colony Status** | COMPLETED |
 | **Colony Mode** | orchestrator |
-| **Safe to Clear?** | YES — Build complete, ready to continue |
+| **Safe to Clear?** | YES — Colony complete |
 
 ---
 
@@ -27,7 +27,7 @@ Universal Classic Ceremony Parity and Command UX Completion
 
 ## What's In Progress
 
-Check-19 reported blocker: Persisted verification and review artifacts still record old blocked evidence despite source fix.
+Colony sealed
 
 ---
 
@@ -86,17 +86,17 @@ Check-19 reported blocker: Persisted verification and review artifacts still rec
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-17T12:38:11Z|watcher_verification|continue|Watcher Hawk-41 closed independent verification with status blocked: Phase verification artifact and Porter readiness receipt are still inconsistent with advancement; Git status remains critical.
-- 2026-05-17T12:38:11Z|continue_review|continue|Porter redaction security blocker is resolved; remaining release critical is Git status only.
-- 2026-05-17T12:38:11Z|continue_review|continue|Persisted verification and review artifacts still record old blocked evidence despite source fix.
-- 2026-05-17T12:38:11Z|continue_review|continue|Redaction tests are adequate, but saved proof files still show release readiness and verification blockers.
-- 2026-05-17T12:38:11Z|continue_blocked|continue-finalize|Continue blocked before advancement
+- 2026-05-17T13:05:16Z|continue_review|continue|Gatekeeper found no current security, release, or integrity blocker; Porter redaction now current, dependency findings are non-blocking advisories.
+- 2026-05-17T13:05:16Z|continue_review|continue|Auditor confirmed release proof is substantive, Porter full-release receipt is fresh and green, stale blocked artifacts are pre-commit only.
+- 2026-05-17T13:05:16Z|continue_review|continue|Probe confirmed focused regression coverage for Porter scope, readiness persistence, redacted diagnostics, and seal blocking; safe to advance.
+- 2026-05-17T13:05:16Z|signal_housekeeping|continue|Signal housekeeping completed: 6 active -> 6 active
+- 2026-05-17T13:16:27Z|sealed|seal|Colony sealed at Crowned Anthill
 
 ---
 
 ## Next Steps
 
-1. Run `aether continue`
+1. Run `aether entomb`
 2. Run `aether phase --number 6` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 

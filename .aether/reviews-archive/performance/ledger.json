@@ -1,14 +1,97 @@
 {
-  "entries": [],
+  "entries": [
+    {
+      "id": "prf-6-001",
+      "phase": 6,
+      "phase_name": "Seal Evidence and Delivery Readiness Cleanup",
+      "agent": "auditor",
+      "generated_at": "2026-05-17T11:45:17Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/porter_cmd.go",
+      "line": 373,
+      "category": "release-check-scope",
+      "description": "No blocking performance issue found in the reviewed Phase 6 code path; full-release checks are intentionally broader and slower than quick checks.",
+      "suggestion": "Keep full-release as explicit opt-in and monitor real runtime once porter readiness receipts are produced."
+    },
+    {
+      "id": "prf-6-002",
+      "phase": 6,
+      "agent": "auditor",
+      "generated_at": "2026-05-17T12:36:22Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/porter_cmd.go",
+      "line": 379,
+      "description": "The slower release checks are only added for full-release scope, and runPorterCommandCheck wraps command execution in a context timeout before collecting output. This keeps quick porter checks distinct from expensive release-tool verification.",
+      "suggestion": "Keep expensive GoReleaser, race, TypeScript, and npm checks behind --full-release unless release policy changes."
+    },
+    {
+      "id": "prf-6-003",
+      "phase": 6,
+      "agent": "auditor",
+      "generated_at": "2026-05-17T13:01:08Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/porter_cmd.go",
+      "line": 374,
+      "category": "release-check-scope",
+      "description": "Full-release Porter checks are intentionally behind the explicit --full-release scope, while quick checks remain smaller for routine readiness checks.",
+      "suggestion": "Keep full-release opt-in and use it only for seal/publish readiness so the slower race, GoReleaser, TS, and npm checks do not burden normal Porter checks."
+    },
+    {
+      "id": "prf-6-004",
+      "phase": 6,
+      "phase_name": "Seal Evidence and Delivery Readiness Cleanup",
+      "agent": "auditor",
+      "agent_name": "Audit-63",
+      "generated_at": "2026-05-17T13:13:14Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/porter_cmd.go",
+      "line": 374,
+      "category": "release-check-scope",
+      "description": "Expensive release checks are built only for the full-release Porter scope; quick readiness remains distinct, while the full-release receipt records race, GoReleaser, TypeScript, npm, and smoke checks.",
+      "suggestion": "Keep full-release opt-in so slower release verification does not burden routine readiness checks."
+    },
+    {
+      "id": "prf-6-005",
+      "phase": 6,
+      "phase_name": "Seal Evidence and Delivery Readiness Cleanup",
+      "agent": "auditor",
+      "agent_name": "Audit-63",
+      "generated_at": "2026-05-17T13:13:14Z",
+      "status": "open",
+      "severity": "INFO",
+      "file": "cmd/porter_cmd_test.go",
+      "line": 298,
+      "category": "regression-coverage",
+      "description": "TestPorterQuickAndFullReleaseScopesAreDistinct asserts that full-release adds slower checks and quick mode omits full-release-only checks.",
+      "suggestion": "Preserve this coverage when adding future Porter scopes."
+    },
+    {
+      "id": "prf-6-006",
+      "phase": 6,
+      "phase_name": "Seal Evidence and Delivery Readiness Cleanup",
+      "agent": "auditor",
+      "agent_name": "Audit-63",
+      "generated_at": "2026-05-17T13:16:27Z",
+      "status": "open",
+      "severity": "INFO",
+      "category": "release-readiness",
+      "description": "Full-release checks remain opt-in and regression-covered.",
+      "suggestion": "Continue keeping heavy release checks behind explicit full-release scope."
+    }
+  ],
   "summary": {
-    "total": 0,
-    "open": 0,
+    "total": 6,
+    "open": 6,
     "resolved": 0,
     "by_severity": {
       "high": 0,
       "medium": 0,
       "low": 0,
-      "info": 0
+      "info": 6
     }
   }
 }

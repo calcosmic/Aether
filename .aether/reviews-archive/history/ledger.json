@@ -1,49 +1,58 @@
 {
   "entries": [
     {
-      "id": "hst-2-001",
-      "phase": 2,
+      "id": "hst-4-001",
+      "phase": 4,
       "agent": "archaeologist",
-      "generated_at": "2026-05-16T15:04:33Z",
+      "generated_at": "2026-05-16T22:48:06Z",
       "status": "open",
-      "severity": "MEDIUM",
+      "severity": "",
       "description": ""
     },
     {
-      "id": "hst-2-002",
-      "phase": 2,
+      "id": "hst-4-002",
+      "phase": 4,
       "agent": "archaeologist",
-      "generated_at": "2026-05-16T15:04:33Z",
+      "generated_at": "2026-05-16T22:48:06Z",
       "status": "open",
-      "severity": "MEDIUM",
+      "severity": "",
       "description": ""
     },
     {
-      "id": "hst-2-003",
-      "phase": 2,
+      "id": "hst-4-003",
+      "phase": 4,
       "agent": "archaeologist",
-      "generated_at": "2026-05-16T15:04:33Z",
+      "generated_at": "2026-05-16T22:48:06Z",
       "status": "open",
-      "severity": "HIGH",
+      "severity": "",
       "description": ""
     },
     {
-      "id": "hst-2-004",
-      "phase": 2,
+      "id": "hst-4-004",
+      "phase": 4,
       "agent": "archaeologist",
-      "generated_at": "2026-05-16T15:05:17Z",
+      "generated_at": "2026-05-16T22:48:06Z",
       "status": "open",
-      "severity": "MEDIUM",
+      "severity": "",
+      "description": ""
+    },
+    {
+      "id": "hst-4-005",
+      "phase": 4,
+      "agent": "archaeologist",
+      "generated_at": "2026-05-16T22:48:06Z",
+      "status": "open",
+      "severity": "",
       "description": ""
     }
   ],
   "summary": {
-    "total": 4,
-    "open": 4,
+    "total": 5,
+    "open": 5,
     "resolved": 0,
     "by_severity": {
-      "high": 1,
-      "medium": 3,
+      "high": 0,
+      "medium": 0,
       "low": 0,
       "info": 0
     }
