@@ -15,7 +15,7 @@
 
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { callGoJSON } from "./go-bridge.js";
-import type { BuildDispatch, WorkerResult, TerminalWorkerStatus } from "./types.js";
+import type { BuildDispatch, WorkerResult, TerminalWorkerStatus, SpawnClaim } from "./types.js";
 import {
   createPlatformDispatcher,
   detectAvailablePlatforms,
@@ -55,6 +55,8 @@ export interface DispatchResult {
   tests_written?: string[];
   /** Detected platform for debugging. */
   detectedPlatform?: string;
+  /** Sub-workers requested by this worker via structured spawn claims. */
+  spawns?: SpawnClaim[];
 }
 
 /** Options for worker dispatch, extending Go bridge options. */
@@ -313,6 +315,17 @@ async function dispatchRealWorker(
   }
   if (claims.tests_written !== undefined) {
     result.tests_written = claims.tests_written;
+  }
+
+  // TODO(SPAWN-01): Extract spawns from real worker output once worker output format stabilizes.
+  // Currently claims.spawns is typed as (string | SpawnClaim)[] but DispatchResult.spawns
+  // expects SpawnClaim[]. The claims-parser normalizes spawns on parse, so when present
+  // they will already be SpawnClaim[].
+  if (claims.spawns !== undefined && claims.spawns.length > 0) {
+    // After normalization from parseWorkerClaims, all entries are SpawnClaim objects
+    result.spawns = claims.spawns.filter(
+      (s): s is SpawnClaim => typeof s === "object"
+    );
   }
 
   return result;
