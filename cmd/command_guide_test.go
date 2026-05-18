@@ -861,3 +861,102 @@ func TestCommandGuidePlanSmoke(t *testing.T) {
 		t.Errorf("PostSteps should have at least 1 entry, got %d", len(guide.PostSteps))
 	}
 }
+
+// --- Phase 144 execution path audit (CLEAN-02) ---
+// CLEAN-06 coverage note: cross-platform build ceremony alignment is verified
+// by .aether/ts-host/test/cross-platform-parity.test.ts which checks that
+// Claude and OpenCode build wrappers have matching ceremony invocation patterns
+// and that dispatched command wrappers contain all 4 ceremony invocations.
+
+type executionPathTest struct {
+	name          string
+	yamlFile      string
+	wantHostCmd   string // runtime.command should contain this
+	orchestration string // orchestration block should contain this (empty = no orchestration block expected)
+}
+
+func TestExecutionPathAudit_OneConductorPerWorkflow(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	tests := []executionPathTest{
+		{
+			name:        "build",
+			yamlFile:    "build.yaml",
+			wantHostCmd: "aether host build",
+		},
+		{
+			name:        "plan",
+			yamlFile:    "plan.yaml",
+			wantHostCmd: "aether host plan",
+		},
+		{
+			name:          "colonize",
+			yamlFile:      "colonize.yaml",
+			wantHostCmd:   "aether host colonize",
+			orchestration: "aether host colonize",
+		},
+		{
+			name:        "continue",
+			yamlFile:    "continue.yaml",
+			wantHostCmd: "aether continue",
+		},
+		{
+			name:        "seal",
+			yamlFile:    "seal.yaml",
+			wantHostCmd: "aether host seal",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			yamlPath := filepath.Join(repoRoot, ".aether", "commands", tc.yamlFile)
+			content, err := os.ReadFile(yamlPath)
+			if err != nil {
+				t.Fatalf("read %s: %v", yamlPath, err)
+			}
+			yamlText := string(content)
+
+			// Assert runtime.command field contains the expected host command
+			var meta struct {
+				Runtime struct {
+					Command string `yaml:"command"`
+				} `yaml:"runtime"`
+			}
+			if err := yaml.Unmarshal(content, &meta); err != nil {
+				t.Fatalf("parse %s: %v", yamlPath, err)
+			}
+			if meta.Runtime.Command == "" {
+				t.Errorf("%s: runtime.command is empty", tc.name)
+			}
+			if !strings.Contains(meta.Runtime.Command, tc.wantHostCmd) {
+				t.Errorf("%s: runtime.command = %q, want to contain %q", tc.name, meta.Runtime.Command, tc.wantHostCmd)
+			}
+
+			// For colonize: verify orchestration block references the host command
+			if tc.orchestration != "" {
+				if !strings.Contains(yamlText, tc.orchestration) {
+					t.Errorf("%s: YAML missing orchestration reference %q", tc.name, tc.orchestration)
+				}
+			}
+
+			// For continue: verify both default and heavy-review paths
+			if tc.name == "continue" {
+				if !strings.Contains(yamlText, "aether host continue --classic-ceremony") {
+					t.Errorf("%s: YAML missing heavy-review path reference", tc.name)
+				}
+			}
+
+			// Each workflow should produce non-empty Codex command-guide output
+			guide, err := buildCommandGuide(tc.name, "codex")
+			if err != nil {
+				t.Fatalf("buildCommandGuide(%q, codex): %v", tc.name, err)
+			}
+			if guide.RunCommand == "" {
+				t.Errorf("%s: Codex command-guide RunCommand should be non-empty", tc.name)
+			}
+		})
+	}
+}
