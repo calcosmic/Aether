@@ -85,10 +85,36 @@ Deferred to v1.22+.
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| HOST-01..09 | — | — |
-| SPAWN-01..06 | — | — |
-| ITER-01..06 | — | — |
-| HIVE-01..07 | — | — |
-| SKILL-01..03 | — | — |
+| HOST-01 | Phase 136 | Pending |
+| HOST-02 | Phase 136 | Pending |
+| HOST-03 | Phase 136 | Pending |
+| HOST-04 | Phase 136 | Pending |
+| HOST-05 | Phase 136 | Pending |
+| HOST-06 | Phase 136 | Pending |
+| HOST-07 | Phase 136 | Pending |
+| HOST-08 | Phase 136 | Pending |
+| HOST-09 | Phase 136 | Pending |
+| SPAWN-01 | Phase 138 | Pending |
+| SPAWN-02 | Phase 138 | Pending |
+| SPAWN-03 | Phase 138 | Pending |
+| SPAWN-04 | Phase 138 | Pending |
+| SPAWN-05 | Phase 138 | Pending |
+| SPAWN-06 | Phase 138 | Pending |
+| ITER-01 | Phase 139 | Pending |
+| ITER-02 | Phase 139 | Pending |
+| ITER-03 | Phase 139 | Pending |
+| ITER-04 | Phase 139 | Pending |
+| ITER-05 | Phase 139 | Pending |
+| ITER-06 | Phase 139 | Pending |
+| HIVE-01 | Phase 137 | Pending |
+| HIVE-02 | Phase 137 | Pending |
+| HIVE-03 | Phase 137 | Pending |
+| HIVE-04 | Phase 137 | Pending |
+| HIVE-05 | Phase 137 | Pending |
+| HIVE-06 | Phase 137 | Pending |
+| HIVE-07 | Phase 137 | Pending |
+| SKILL-01 | Phase 136 | Pending |
+| SKILL-02 | Phase 136 | Pending |
+| SKILL-03 | Phase 136 | Pending |
 
-*Traceability filled by roadmapper.*
+*Coverage: 31/31 requirements mapped to phases 136-140.*
