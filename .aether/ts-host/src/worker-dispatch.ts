@@ -15,7 +15,7 @@
 
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { callGoJSON } from "./go-bridge.js";
-import type { BuildDispatch, WorkerResult, TerminalWorkerStatus, SpawnClaim } from "./types.js";
+import type { BuildDispatch, WorkerResult, TerminalWorkerStatus, SpawnClaim, WorkerHandoff } from "./types.js";
 import {
   createPlatformDispatcher,
   detectAvailablePlatforms,
@@ -57,6 +57,8 @@ export interface DispatchResult {
   detectedPlatform?: string;
   /** Sub-workers requested by this worker via structured spawn claims. */
   spawns?: SpawnClaim[];
+  /** Worker handoff data, including child_results for spawned children (SPAWN-04). */
+  handoff?: WorkerHandoff;
 }
 
 /** Options for worker dispatch, extending Go bridge options. */
@@ -66,6 +68,11 @@ export interface DispatchOptions extends GoBridgeOptions {
    * a real platform CLI. The prototype uses simulation.
    */
   simulateWorkers?: boolean;
+  /**
+   * Spawn orchestrator for processing worker spawn claims after wave completion.
+   * Passed through to wave-orchestrator for child worker dispatch (SPAWN-01).
+   */
+  spawnOrchestrator?: import("./spawn-orchestrator.js").SpawnOrchestrator;
   /**
    * File paths that actually exist in the repo, used as simulated worker
    * file claims. Must be real repo-relative paths that exist on disk,
@@ -117,22 +124,26 @@ export async function dispatchSingleWorker(
   opts: DispatchOptions,
   dispatch: BuildDispatch
 ): Promise<DispatchResult> {
-  const depth = "1"; // Default depth for prototype
-
   // NOTE: This function is only called from dispatchWaves with manifest
   // dispatches (from the Go build manifest). spawn-log/spawn-complete
   // therefore only record manifest workers, never internal/system workers.
+
+  // SPAWN-05: Child spawns record actual parent worker name in spawn tree.
+  // Manifest workers (no parent field) log parent="Queen", depth=1.
+  // Spawned workers (have parent field) log parent="Builder-01", depth=2.
+  const parent = dispatch.parent || "Queen";
+  const spawnDepth = String(dispatch.depth || 1);
 
   // Step 1: Record spawn-log before dispatch.
   // Spawn-log failure is logged but does not block dispatch.
   try {
     const logResult = callGoJSON<{ recorded?: boolean }>(opts, [
       "spawn-log",
-      "--parent", "Queen",
+      "--parent", parent,
       "--caste", dispatch.caste,
       "--name", dispatch.name,
       "--task", dispatch.task,
-      "--depth", depth,
+      "--depth", spawnDepth,
     ]);
     if (!logResult.recorded) {
       process.stderr.write(
