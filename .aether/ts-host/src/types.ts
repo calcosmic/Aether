@@ -809,3 +809,45 @@ export interface SwarmManifest {
   /** Finalizer command to run after workers complete. */
   finalizer_command: string;
 }
+
+// ---------------------------------------------------------------------------
+// Confidence-driven iteration types (ITER-01, ITER-03, ITER-05, ITER-06)
+// ---------------------------------------------------------------------------
+
+/**
+ * A confidence measurement produced by a build or continue finalize step.
+ *
+ * The confidence loop aggregates these across iterations to decide whether
+ * to re-dispatch workers or stop iterating.
+ */
+export interface ConfidenceMetric {
+  /** Overall confidence score (0-100). */
+  score: number;
+  /** Fraction of tests that passed (0-1). */
+  test_pass_rate?: number;
+  /** Number of source files with passing tests. */
+  files_covered?: number;
+  /** Blocking issues that prevent further progress. */
+  blockers?: string[];
+  /** Where this metric was produced. */
+  source: "build-finalize" | "continue-finalize" | "worker-claims";
+}
+
+/**
+ * Ceremony data emitted after each iteration for progress visibility.
+ *
+ * Used by the ConfidenceLoop to render iteration markers in the build/continue
+ * ceremony output (ITER-06).
+ */
+export interface IterationCeremonyData {
+  /** Current iteration number (1-based). */
+  iteration: number;
+  /** Current confidence score (0-100). */
+  confidence: number;
+  /** Confidence change from the previous iteration. */
+  delta: number;
+  /** Workers remaining in the budget. */
+  budgetRemaining: number;
+  /** Why the iteration stopped (populated only on the final iteration). */
+  stopReason?: string;
+}
