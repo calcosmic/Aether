@@ -15,7 +15,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import type { BuildDispatch } from "../src/types.js";
+import type { BuildDispatch, SpawnClaim } from "../src/types.js";
 import type { DispatchResult } from "../src/worker-dispatch.js";
 import {
   dispatchWave,
@@ -25,6 +25,7 @@ import {
   __restoreDispatchSingleWorker,
   type WaveOrchestratorOptions,
 } from "../src/wave-orchestrator.js";
+import { createSpawnOrchestrator, type SpawnOrchestrator } from "../src/spawn-orchestrator.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -257,5 +258,247 @@ describe("wave-orchestrator", () => {
     assert.equal(result.results.length, 3);
     assert.equal(result.failures.length, 1);
     assert.equal(result.failures[0]!.name, "FAIL-1");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spawn processing tests (SPAWN-01, SPAWN-04)
+// ---------------------------------------------------------------------------
+
+describe("spawn processing (SPAWN-01, SPAWN-04)", () => {
+  it("dispatches child workers when parent returns spawns", async () => {
+    resetMocks();
+    const spawnClaim: SpawnClaim = {
+      caste: "scout",
+      task: "Research dependency patterns",
+      reason: "Need deeper analysis",
+    };
+
+    // First call: parent worker returns a spawn claim
+    // Second call: child worker completes
+    let callIndex = 0;
+    const spawnAwareMock = async (
+      _opts: WaveOrchestratorOptions,
+      dispatch: BuildDispatch
+    ): Promise<DispatchResult> => {
+      callIndex++;
+      if (dispatch.name === "Builder-01") {
+        return {
+          name: "Builder-01",
+          status: "completed",
+          summary: "Built feature",
+          spawns: [spawnClaim],
+        };
+      }
+      // Child worker
+      return {
+        name: dispatch.name,
+        status: "completed",
+        summary: `Child completed: ${dispatch.name}`,
+      };
+    };
+    __setDispatchSingleWorker(spawnAwareMock);
+
+    const orchestrator = createSpawnOrchestrator({
+      totalBudget: 10,
+      consumedBudget: 1,
+      currentDepth: 1,
+    });
+
+    const dispatches = [makeDispatch("Builder-01", 1)];
+    const results = await dispatchWaves(
+      { ...defaultOpts, spawnOrchestrator: orchestrator },
+      dispatches
+    );
+
+    __restoreDispatchSingleWorker();
+
+    // Should have 2 wave results: original wave + spawn wave
+    assert.equal(results.length, 2, "Should have 2 waves (original + spawn)");
+    // First wave has the parent
+    assert.equal(results[0]!.results.length, 1);
+    assert.equal(results[0]!.results[0]!.name, "Builder-01");
+    // Second wave has the child
+    assert.ok(results[1]!.results.length >= 1, "Spawn wave should have child workers");
+  });
+
+  it("attaches child results to parent handoff (SPAWN-04)", async () => {
+    resetMocks();
+    const spawnClaim: SpawnClaim = {
+      caste: "scout",
+      task: "Research patterns",
+    };
+
+    const spawnAwareMock = async (
+      _opts: WaveOrchestratorOptions,
+      dispatch: BuildDispatch
+    ): Promise<DispatchResult> => {
+      if (dispatch.name === "Builder-01") {
+        return {
+          name: "Builder-01",
+          status: "completed",
+          summary: "Built feature",
+          spawns: [spawnClaim],
+        };
+      }
+      return {
+        name: dispatch.name,
+        status: "completed",
+        summary: `Child done: ${dispatch.name}`,
+      };
+    };
+    __setDispatchSingleWorker(spawnAwareMock);
+
+    const orchestrator = createSpawnOrchestrator({
+      totalBudget: 10,
+      consumedBudget: 1,
+      currentDepth: 1,
+    });
+
+    const dispatches = [makeDispatch("Builder-01", 1)];
+    const results = await dispatchWaves(
+      { ...defaultOpts, spawnOrchestrator: orchestrator },
+      dispatches
+    );
+
+    __restoreDispatchSingleWorker();
+
+    // Find the parent worker in the first wave
+    const parentResult = results[0]!.results.find((r) => r.name === "Builder-01");
+    assert.ok(parentResult, "Parent worker should exist");
+    assert.ok(parentResult!.handoff, "Parent should have handoff");
+    assert.ok(
+      Array.isArray(parentResult!.handoff!.child_results),
+      "Parent handoff should have child_results array"
+    );
+    assert.equal(
+      parentResult!.handoff!.child_results!.length,
+      1,
+      "Should have exactly one child result"
+    );
+    assert.equal(
+      parentResult!.handoff!.child_results![0]!.name,
+      "Builder-01-spawn-0",
+      "Child name should follow parent-spawn-N pattern"
+    );
+  });
+
+  it("skips spawn processing when no spawnOrchestrator provided", async () => {
+    resetMocks();
+    const spawnClaim: SpawnClaim = {
+      caste: "scout",
+      task: "Research patterns",
+    };
+
+    const spawnAwareMock = async (
+      _opts: WaveOrchestratorOptions,
+      dispatch: BuildDispatch
+    ): Promise<DispatchResult> => {
+      if (dispatch.name === "Builder-01") {
+        return {
+          name: "Builder-01",
+          status: "completed",
+          summary: "Built feature",
+          spawns: [spawnClaim],
+        };
+      }
+      return { name: dispatch.name, status: "completed", summary: "Done" };
+    };
+    __setDispatchSingleWorker(spawnAwareMock);
+
+    const dispatches = [makeDispatch("Builder-01", 1)];
+    // No spawnOrchestrator provided
+    const results = await dispatchWaves(defaultOpts, dispatches);
+
+    __restoreDispatchSingleWorker();
+
+    // Only 1 wave result (no spawn wave)
+    assert.equal(results.length, 1, "Should have only the original wave (no spawn wave)");
+  });
+
+  it("rejects spawns exceeding budget", async () => {
+    resetMocks();
+    const claims: SpawnClaim[] = [
+      { caste: "scout", task: "Task 1" },
+      { caste: "scout", task: "Task 2" },
+      { caste: "scout", task: "Task 3" },
+    ];
+
+    const spawnAwareMock = async (
+      _opts: WaveOrchestratorOptions,
+      dispatch: BuildDispatch
+    ): Promise<DispatchResult> => {
+      if (dispatch.name === "Builder-01") {
+        return {
+          name: "Builder-01",
+          status: "completed",
+          summary: "Built",
+          spawns: claims,
+        };
+      }
+      return { name: dispatch.name, status: "completed", summary: "Done" };
+    };
+    __setDispatchSingleWorker(spawnAwareMock);
+
+    // Budget of 5, but 4 already consumed, so only 1 slot left
+    const orchestrator = createSpawnOrchestrator({
+      totalBudget: 5,
+      consumedBudget: 4,
+      currentDepth: 1,
+    });
+
+    const dispatches = [makeDispatch("Builder-01", 1)];
+    const results = await dispatchWaves(
+      { ...defaultOpts, spawnOrchestrator: orchestrator },
+      dispatches
+    );
+
+    __restoreDispatchSingleWorker();
+
+    // Should have a spawn wave with only 1 child (the others were rejected by budget)
+    if (results.length > 1) {
+      // At most 1 child was accepted (budget had 1 slot)
+      assert.ok(
+        results[1]!.results.length <= 1,
+        `Expected at most 1 child, got ${results[1]!.results.length}`
+      );
+    }
+    // The orchestrator should have consumed its budget
+    assert.equal(orchestrator.remainingBudget, 0, "Budget should be fully consumed");
+  });
+
+  it("rejects spawns exceeding depth", async () => {
+    resetMocks();
+    const spawnClaim: SpawnClaim = {
+      caste: "scout",
+      task: "Should be rejected",
+    };
+
+    const spawnAwareMock = async (
+      _opts: WaveOrchestratorOptions,
+      dispatch: BuildDispatch
+    ): Promise<DispatchResult> => {
+      return { name: dispatch.name, status: "completed", summary: "Done" };
+    };
+    __setDispatchSingleWorker(spawnAwareMock);
+
+    // Create orchestrator with depth already at 2 (max)
+    const orchestrator = createSpawnOrchestrator({
+      totalBudget: 20,
+      consumedBudget: 0,
+      currentDepth: 2,
+    });
+
+    // Process claims directly - parent at depth 2 should be rejected
+    const { accepted, rejected } = orchestrator.processClaims("Builder-01", 2, [spawnClaim]);
+
+    __restoreDispatchSingleWorker();
+
+    assert.equal(accepted.length, 0, "No children should be accepted at depth 2");
+    assert.equal(rejected.length, 1, "Spawn should be rejected at max depth");
+    assert.ok(
+      rejected[0]!.reason.includes("depth"),
+      `Rejection reason should mention depth: ${rejected[0]!.reason}`
+    );
   });
 });
