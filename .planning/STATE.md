@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.21
 milestone_name: Live Colony
 status: executing
-last_updated: "2026-05-18T10:48:41Z"
-last_activity: 2026-05-18 -- Completed 136-01-PLAN (simulation default + skill tests)
+last_updated: "2026-05-18T11:15:00Z"
+last_activity: 2026-05-18 -- Completed 136-02-PLAN (platform error diagnostics + error classification)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 1 of 5 (Production Foundation)
-Plan: 1 of 4 in current phase
-Status: 136-01 complete, ready for 136-02
-Last activity: 2026-05-18 -- Completed 136-01-PLAN (simulation default + skill tests)
+Plan: 2 of 4 in current phase
+Status: 136-02 complete, ready for 136-03
+Last activity: 2026-05-18 -- Completed 136-02-PLAN (platform error diagnostics + error classification)
 
 ## Known Blockers
 
@@ -37,8 +37,8 @@ Last activity: 2026-05-18 -- Completed 136-01-PLAN (simulation default + skill t
 
 ## Next Actions
 
-1. Execute Phase 136 Plan 02 (Platform error diagnostics)
-2. Execute Phase 136 Plans 03+04 (real dispatch pipelines, oracle/dry-run)
+1. Execute Phase 136 Plan 03 (Real dispatch pipelines for build, plan, continue with ceremony)
+2. Execute Phase 136 Plan 04 (Oracle real dispatch and --dry-run ceremony preview)
 3. Plan Phase 137 (Hive Wisdom Injection)
 
 ## Key Decisions (Carried Forward)
@@ -51,3 +51,9 @@ Last activity: 2026-05-18 -- Completed 136-01-PLAN (simulation default + skill t
 - worker-dispatch.ts simulateWorkers check already defaults to real dispatch; no source change needed
 - Lifecycle smoke harness (lifecycle.ts) stays simulate-only; production uses dedicated host commands
 - Skill section tests verify existing compactSection behavior without production code changes
+- Auth errors propagate upward from dispatchSingleWorker to halt the build (D-01)
+- Timeout/transient errors mark worker failed and continue remaining workers (D-02)
+- Error classification uses classifyPlatformError (auth/timeout/missing/unknown) from platform-dispatcher
+- Wave-end summaries include per-worker failure names when workers fail (D-02)
+- formatPlatformDiagnosticMessage provides per-platform plain English install messages (D-03)
+- formatPlatformUnavailableMessage accepts optional providerDiagnostics from Go (HOST-08)
