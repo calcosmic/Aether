@@ -46,7 +46,7 @@ See `.planning/milestones/` for full archived phase details.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 136. Production Foundation | v1.21 | 0/? | Not started | - |
+| 136. Production Foundation | v1.21 | 0/4 | Planned | - |
 | 137. Hive Wisdom Injection | v1.21 | 0/? | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 0/? | Not started | - |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
@@ -67,7 +67,13 @@ See `.planning/milestones/` for full archived phase details.
   6. `--dry-run` renders ceremony and manifest without spawning workers; `--simulate` retains old behavior and passes existing smoke test
   7. Missing platform CLI produces a clear diagnostic error identifying which platform is missing, not a generic TS host crash
   8. Worker prompts include a skill section when the Go manifest provides `skill_section`, and omit it cleanly when not present, with no prompt assembly failures from malformed skill data
-**Plans**: TBD
+**Plans:** 4 plans (4 waves, sequential due to file dependencies)
+
+Plans:
+- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
+- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 137: Hive Wisdom Injection
 **Goal**: Colony-prime reads cross-colony hive wisdom during prompt assembly and injects relevant wisdom into worker context, proving that colony B benefits from colony A's learnings.
@@ -79,7 +85,13 @@ See `.planning/milestones/` for full archived phase details.
   3. If `hive-read` fails (Go command error, missing hive directory), dispatch proceeds normally with a warning logged -- workers never blocked by hive
   4. Colony B completes a build faster or with fewer retries than colony A (without wisdom) on the same task, when colony A's learnings have been promoted to the hive
   5. Domain tags include technology stack details (e.g., "go", "typescript", "cli") and partial domain matches receive a relevance discount compared to exact matches
-**Plans**: TBD
+**Plans:** 4 plans (4 waves, sequential due to file dependencies)
+
+Plans:
+- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
+- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 138: Worker-to-Worker Spawning
 **Goal**: Workers can request additional workers mid-build through the `spawns` field, with orchestrator-level budget enforcement, spawn depth limits, and child results attached to parent handoffs.
@@ -92,7 +104,13 @@ See `.planning/milestones/` for full archived phase details.
   4. Child spawn results appear in the parent worker's handoff, visible to downstream workers in the same wave
   5. Spawn requests that would exceed the remaining budget are logged and skipped, never queued -- fail-closed behavior
   6. Go `spawn-log` and `spawn-complete` record child entries with parent worker references, not just "Queen"
-**Plans**: TBD
+**Plans:** 4 plans (4 waves, sequential due to file dependencies)
+
+Plans:
+- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
+- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 139: Confidence-Driven Build Iteration
 **Goal**: The build coordinator loops plan/dispatch/evaluate up to 3 iterations with diminishing returns detection, cumulative budget tracking, and visible iteration progress in ceremony output.
@@ -104,7 +122,13 @@ See `.planning/milestones/` for full archived phase details.
   3. Worker budget is cumulative across iterations -- if iteration 1 uses 70% of budget, iteration 2 only has 30% remaining, preventing runaway token spend
   4. Ceremony output shows iteration number, current confidence score, and delta from the previous iteration after each evaluation
   5. Confidence metrics come from Go finalizer gate results (test pass rate, coverage, quality scores), not from worker self-reports
-**Plans**: TBD
+**Plans:** 4 plans (4 waves, sequential due to file dependencies)
+
+Plans:
+- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
+- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 140: Hardening and Validation
 **Goal**: End-to-end integration tests prove the full production pipeline works, wrapper alignment is verified, and the milestone is audit-ready for ship.
@@ -115,4 +139,10 @@ See `.planning/milestones/` for full archived phase details.
   2. Wrapper commands (Claude plan/build/continue) produce equivalent ceremony and state outcomes to direct `aether host` invocations
   3. No regression in existing TS test suite (220+ tests) or Go test suite (2900+ tests)
   4. Temp files and completion artifacts are cleaned up after normal completion and after graceful shutdown
-**Plans**: TBD
+**Plans:** 4 plans (4 waves, sequential due to file dependencies)
+
+Plans:
+- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
+- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview

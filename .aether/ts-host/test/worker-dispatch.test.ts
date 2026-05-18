@@ -10,21 +10,35 @@
  * Uses __setDispatchSingleWorker to mock wave-orchestrator dispatch.
  */
 
-import { describe, it } from "node:test";
+import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 import type { BuildDispatch } from "../src/types.js";
 import {
+  buildPromptForDispatch,
   dispatchWorkers,
+  resolveGoPromptContext,
   sanitizeWorkerDiagnosticOutput,
   toWorkerResults,
   type DispatchResult,
   type DispatchOptions,
 } from "../src/worker-dispatch.js";
 import {
+  __restoreCallGoJSON,
+  __setCallGoJSON,
+  type GoBridgeOptions,
+} from "../src/go-bridge.js";
+import {
   __setDispatchSingleWorker,
   __restoreDispatchSingleWorker,
 } from "../src/wave-orchestrator.js";
+import {
+  __setDetectAvailablePlatforms,
+  __restoreDetectAvailablePlatforms,
+} from "../src/platform-dispatcher.js";
+import {
+  dispatchSingleWorker,
+} from "../src/worker-dispatch.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -74,7 +88,7 @@ function makeDispatch(name: string, wave: number): BuildDispatch {
 
 const defaultOpts: DispatchOptions = {
   goBinaryPath: "/usr/bin/true",
-  cwd: "/tmp",
+  cwd: "/Users/callumcowie/repos/Aether",
   simulateWorkers: true,
   parallel: true,
   retryLimit: 2,
@@ -101,6 +115,64 @@ describe("worker-dispatch", () => {
       assert.ok(!sanitized.includes(forbidden), `sanitized output leaked ${forbidden}: ${sanitized}`);
     }
     assert.ok(sanitized.includes("[redacted]"), sanitized);
+  });
+
+  it("resolveGoPromptContext reads Go colony-prime prompt_section", () => {
+    __setCallGoJSON(<T>(_opts: GoBridgeOptions, args: string[]): T => {
+      assert.deepEqual(args, ["colony-prime", "--compact"]);
+      return {
+        prompt_section: "## Colony State\n\nPhase: 6",
+      } as T;
+    });
+
+    try {
+      assert.equal(resolveGoPromptContext(defaultOpts), "## Colony State\n\nPhase: 6");
+    } finally {
+      __restoreCallGoJSON();
+    }
+  });
+
+  it("resolveGoPromptContext falls back to context when prompt_section is absent", () => {
+    __setCallGoJSON(<T>(_opts: GoBridgeOptions, _args: string[]): T => {
+      return {
+        context: "## Compact Context\n\nFallback section",
+      } as T;
+    });
+
+    try {
+      assert.equal(resolveGoPromptContext(defaultOpts), "## Compact Context\n\nFallback section");
+    } finally {
+      __restoreCallGoJSON();
+    }
+  });
+
+  it("buildPromptForDispatch preserves Go manifest context, handoff, and skill sections", () => {
+    const dispatch: BuildDispatch = {
+      stage: "wave",
+      wave: 1,
+      execution_wave: 11,
+      caste: "builder",
+      name: "Builder-Prompt",
+      task: "Implement prompt parity",
+      status: "planned",
+      task_id: "6.3",
+      context_capsule: "## Colony State\n\nGo-provided context",
+      handoff_section: "## Previous Worker Handoffs\n\nPrior worker result",
+      skill_section: "### Skill: worker-priming\n\nUse matched skill context",
+      task_brief: "# Codex Build Dispatch\n\nGo-authored task brief",
+    };
+
+    const prompt = buildPromptForDispatch(
+      defaultOpts,
+      dispatch,
+      "claude",
+      "aether-builder"
+    );
+
+    assert.match(prompt, /Go-provided context/);
+    assert.match(prompt, /Prior worker result/);
+    assert.match(prompt, /Skill: worker-priming/);
+    assert.match(prompt, /Go-authored task brief/);
   });
 
   it("dispatchWorkers flattens wave results", async () => {
@@ -246,5 +318,130 @@ describe("worker-dispatch", () => {
     assert.equal(workerResults[1]!.task_id, "1.2");
     assert.equal(workerResults[1]!.wave, 1);
     assert.equal(workerResults[1]!.duration, 0.05);
+  });
+
+  it("toWorkerResults treats missing terminal results as timeouts", () => {
+    const dispatches = [
+      {
+        stage: "verify",
+        wave: 1,
+        caste: "watcher",
+        name: "Watcher-Missing",
+        task: "Verify feature X",
+        status: "pending",
+        task_id: "1.2",
+      },
+    ];
+
+    const workerResults = toWorkerResults(dispatches, []);
+
+    assert.equal(workerResults.length, 1);
+    assert.equal(workerResults[0]!.name, "Watcher-Missing");
+    assert.equal(workerResults[0]!.status, "timeout");
+    assert.match(workerResults[0]!.summary ?? "", /No terminal worker result/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Real dispatch default tests (HOST-01, HOST-09)
+// ---------------------------------------------------------------------------
+
+describe("worker-dispatch: simulation default", { concurrency: false }, () => {
+  const mockDispatch: BuildDispatch = {
+    stage: "build",
+    caste: "builder",
+    name: "Builder-Default",
+    task: "Test default dispatch behavior",
+    status: "pending",
+  };
+
+  afterEach(() => {
+    __restoreDetectAvailablePlatforms();
+    __restoreCallGoJSON();
+  });
+
+  it("defaults to real execution when simulateWorkers is not set", async () => {
+    // With no platforms available and simulateWorkers undefined,
+    // the real dispatch path should be taken, which throws because
+    // no platform CLIs are found. This proves simulation is NOT the default.
+    __setDetectAvailablePlatforms(async () => []);
+    __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+
+    const capturedStderr: string[] = [];
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const originalStderrWrite = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      if (typeof chunk === "string") {
+        capturedStderr.push(chunk);
+      }
+      return originalWrite(chunk);
+    }) as typeof process.stderr.write;
+
+    try {
+      await dispatchSingleWorker(
+        {
+          goBinaryPath: "/usr/bin/true",
+          cwd: "/tmp",
+        },
+        mockDispatch
+      );
+      assert.fail("Should have thrown for missing platforms");
+    } catch (err: unknown) {
+      assert.ok(
+        err instanceof Error && /Worker dispatch cannot start/.test(err.message),
+        `Expected platform-unavailable error, got: ${err}`
+      );
+    } finally {
+      process.stderr.write = originalStderrWrite;
+    }
+
+    // Should NOT log "Simulating worker" because real dispatch is the default
+    const simulationLog = capturedStderr.find((line) => /Simulating worker/.test(line));
+    assert.equal(
+      simulationLog,
+      undefined,
+      `Should NOT log "Simulating worker" when simulateWorkers is not set, but found: ${simulationLog}`
+    );
+  });
+
+  it("simulates when simulateWorkers is explicitly true", async () => {
+    __setDetectAvailablePlatforms(async () => []);
+    __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+
+    const capturedStderr: string[] = [];
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const originalStderrWrite = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      if (typeof chunk === "string") {
+        capturedStderr.push(chunk);
+      }
+      return originalWrite(chunk);
+    }) as typeof process.stderr.write;
+
+    try {
+      const result = await dispatchSingleWorker(
+        {
+          goBinaryPath: "/usr/bin/true",
+          cwd: "/tmp",
+          simulateWorkers: true,
+        },
+        mockDispatch
+      );
+
+      assert.equal(result.status, "completed");
+      assert.ok(
+        result.summary.includes("Simulated"),
+        `Summary should indicate simulation, got: ${result.summary}`
+      );
+    } finally {
+      process.stderr.write = originalStderrWrite;
+    }
+
+    // Should log "Simulating" when simulateWorkers is explicitly true
+    const simulationLog = capturedStderr.find((line) => /Simulating/.test(line));
+    assert.ok(
+      simulationLog,
+      `Should log "Simulating" when simulateWorkers=true, captured stderr: ${capturedStderr.join("\\n")}`
+    );
   });
 });
