@@ -242,6 +242,13 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 		redirectEmitted = true
 	}
 
+	// Detect contradictory resolved decisions and emit FEEDBACK pheromones.
+	// Non-blocking: errors from pheromone creation are silently ignored.
+	conflicts := detectDecisionConflicts(file.Decisions)
+	for _, conflict := range conflicts {
+		_, _ = createPheromoneSignal("FEEDBACK", conflict, "discuss", "decision conflict detection", "", 0.5, "low")
+	}
+
 	if tracer != nil {
 		var state colony.ColonyState
 		if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
@@ -968,4 +975,74 @@ func derefGoal(goal *string) string {
 		return ""
 	}
 	return *goal
+}
+
+// contradictionPair defines a pair of terms that contradict each other when
+// both appear across resolved decisions. Positive and negative are lowercased
+// keywords; category is a human-readable label for the conflict message.
+type contradictionPair struct {
+	positive string
+	negative string
+	category string
+}
+
+// contradictionPairs is a conservative list of genuinely contradictory term
+// pairs. Keep the list small -- only add pairs where seeing both terms in
+// resolved decisions clearly signals divergent intent.
+var contradictionPairs = []contradictionPair{
+	{"postgresql", "serverless", "database"},
+	{"mysql", "serverless", "database"},
+	{"sqlite", "serverless", "database"},
+	{"monolith", "microservice", "architecture"},
+	{"react", "vue", "frontend"},
+	{"react", "svelte", "frontend"},
+	{"rest", "graphql", "api"},
+	{"docker", "no docker", "deployment"},
+	{"kubernetes", "no kubernetes", "deployment"},
+}
+
+// detectDecisionConflicts examines resolved decisions for contradictory
+// keyword pairs. For each contradiction pair where one resolved decision
+// contains the positive keyword and another contains the negative keyword,
+// it appends a formatted conflict string. Returns nil if no conflicts are
+// found. Unresolved decisions and decisions with empty Resolution text are
+// ignored.
+func detectDecisionConflicts(decisions []PendingDecision) []string {
+	if len(decisions) < 2 {
+		return nil
+	}
+
+	var resolutions []string
+	for _, d := range decisions {
+		if !d.Resolved || strings.TrimSpace(d.Resolution) == "" {
+			continue
+		}
+		resolutions = append(resolutions, strings.ToLower(d.Resolution))
+	}
+
+	if len(resolutions) < 2 {
+		return nil
+	}
+
+	var conflicts []string
+	for _, pair := range contradictionPairs {
+		hasPositive := false
+		hasNegative := false
+		for _, r := range resolutions {
+			if strings.Contains(r, pair.positive) {
+				hasPositive = true
+			}
+			if strings.Contains(r, pair.negative) {
+				hasNegative = true
+			}
+		}
+		if hasPositive && hasNegative {
+			conflicts = append(conflicts, fmt.Sprintf("Possible %s conflict: decisions reference both '%s' and '%s'", pair.category, pair.positive, pair.negative))
+		}
+	}
+
+	if len(conflicts) == 0 {
+		return nil
+	}
+	return conflicts
 }
