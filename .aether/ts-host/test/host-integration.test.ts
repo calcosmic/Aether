@@ -27,10 +27,24 @@ import {
   __setDetectAvailablePlatforms,
   __restoreDetectAvailablePlatforms,
   __restoreAllMocks,
+  runDispatchedBuildCommand,
+  runDispatchedPlanCommand,
+  runDispatchedContinueCommand,
+  runDryRunDispatchedCommand,
 } from "../src/host.js";
 
 import type { DispatchResult } from "../src/worker-dispatch.js";
 import type { Platform } from "../src/platform-dispatcher.js";
+import type { GoBridgeOptions } from "../src/go-bridge.js";
+import {
+  __setCallGoJSON as __setGoBridgeCallGoJSON,
+  __restoreCallGoJSON as __restoreGoBridgeCallGoJSON,
+} from "../src/go-bridge.js";
+import {
+  __setCreateCeremonyAdapter,
+  __restoreCreateCeremonyAdapter,
+} from "../src/ceremony-adapter.js";
+import type { CeremonyAdapter, CeremonyWorkflow } from "../src/ceremony-adapter.js";
 
 // Path to host entry point source
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -389,5 +403,459 @@ describe("dry-run ceremony preview", () => {
     assert.equal(parsed.dryRun, true, "dryRun should be true");
     // dispatchCalled is tracked by mock; in the dry-run path, dispatchWorkers
     // should never be called because the main() function exits before reaching dispatch
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hive wisdom injection (HIVE-04, HIVE-05)
+// ---------------------------------------------------------------------------
+
+function createMockCeremonyAdapter(): CeremonyAdapter {
+  return {
+    renderSpawnPlan: (_workflow: CeremonyWorkflow, _manifest: unknown) => "",
+    renderWaveStart: (_workflow: CeremonyWorkflow, _manifest: unknown, _wave: number) => "",
+    renderWorkerComplete: (_workflow: CeremonyWorkflow, _worker: unknown) => "",
+    renderCloseout: (_workflow: CeremonyWorkflow, _completionPath: string) => "",
+  };
+}
+
+describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
+  let goCalls: string[][];
+  let capturedDispatches: unknown[] | undefined;
+  let stderrOutput: string;
+
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+    goCalls = [];
+    capturedDispatches = undefined;
+    stderrOutput = "";
+
+    // Mock ceremony adapter to avoid Go subprocess calls
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    // Capture stderr output
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stderrOutput += chunk;
+      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stderr.write;
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  function mockHiveReadSuccess() {
+    const handler = <T>(_opts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return {
+          entries: [
+            {
+              id: "1",
+              text: "Use table-driven tests",
+              domain: "go",
+              confidence: 0.95,
+              source_repo: "other-repo",
+              source_repos: ["other-repo"],
+              created_at: "2026-05-18T00:00:00Z",
+              accessed_at: "2026-05-18T00:00:00Z",
+              access_count: 5,
+            },
+          ],
+          total: 1,
+        } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [
+            {
+              repo_path: process.cwd(),
+              domains: ["go"],
+              active: true,
+              registered_at: "2026-05-18T00:00:00Z",
+            },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+              { name: "Builder-02", caste: "builder", task: "Build more", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      if (cmd === "plan") {
+        return {
+          plan_manifest: { phases: 5 },
+          dispatches: [
+            { name: "Scout-01", caste: "scout", task: "Research", wave: 1, execution_wave: 1 },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "plan-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      if (cmd === "continue") {
+        return {
+          continue_manifest: { phase: 1 },
+          dispatches: [
+            { name: "Watcher-01", caste: "watcher", task: "Verify", wave: 1, execution_wave: 1 },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "continue-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    // Set mock at both levels: host.ts uses _callGoJSONRef; hive-injector.ts uses go-bridge module-level callGoJSON
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      capturedDispatches = dispatches;
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "completed",
+        summary: "Done",
+        duration: 5,
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as Platform,
+    ]);
+  }
+
+  function mockHiveReadFailure() {
+    const handler = <T>(_opts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        throw new Error("corrupted wisdom.json");
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [
+            {
+              repo_path: process.cwd(),
+              domains: ["go"],
+              active: true,
+              registered_at: "2026-05-18T00:00:00Z",
+            },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      capturedDispatches = dispatches;
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "completed",
+        summary: "Done",
+        duration: 5,
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as Platform,
+    ]);
+  }
+
+  it("build runner calls hive-read before dispatch and attaches hive_section to dispatches (HIVE-04)", async () => {
+    mockHiveReadSuccess();
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    // Verify hive-read was called
+    const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
+    assert.ok(hiveReadCall, "hive-read should have been called");
+
+    // Verify dispatches have hive_section
+    assert.ok(capturedDispatches, "dispatchWorkers should have been called");
+    assert.ok(capturedDispatches!.length > 0, "dispatches should not be empty");
+    for (const d of capturedDispatches!) {
+      const dispatch = d as Record<string, unknown>;
+      assert.ok(
+        typeof dispatch.hive_section === "string" && dispatch.hive_section.includes("HIVE WISDOM"),
+        `Dispatch ${dispatch.name} should have hive_section containing HIVE WISDOM. Got: ${dispatch.hive_section}`
+      );
+      assert.ok(
+        (dispatch.hive_section as string).includes("Use table-driven tests"),
+        `Dispatch ${dispatch.name} should contain the wisdom text`
+      );
+    }
+
+    // Verify stderr contains hive summary
+    assert.ok(
+      stderrOutput.includes("Injecting hive wisdom"),
+      `Stderr should contain hive summary. Got: ${stderrOutput.slice(0, 200)}`
+    );
+  });
+
+  it("hive-read failure does not block dispatch (HIVE-04)", async () => {
+    mockHiveReadFailure();
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    // Verify warning was logged
+    assert.ok(
+      stderrOutput.includes("Warning: hive-read failed: corrupted wisdom.json"),
+      `Stderr should contain hive-read failure warning. Got: ${stderrOutput.slice(0, 300)}`
+    );
+
+    // Verify dispatch still proceeded
+    assert.ok(capturedDispatches, "dispatchWorkers should still have been called despite hive-read failure");
+    assert.ok(capturedDispatches!.length > 0, "dispatches should not be empty");
+
+    // Verify dispatches have empty hive_section (graceful degradation)
+    for (const d of capturedDispatches!) {
+      const dispatch = d as Record<string, unknown>;
+      assert.equal(
+        dispatch.hive_section,
+        "",
+        `Dispatch ${dispatch.name} should have empty hive_section on failure`
+      );
+    }
+  });
+
+  it("plan runner attaches hive_section to dispatches", async () => {
+    mockHiveReadSuccess();
+
+    const parsed = parseArgs(["node", "host.js", "plan", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+
+    await runDispatchedPlanCommand(bridge, parsed);
+
+    const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
+    assert.ok(hiveReadCall, "hive-read should have been called for plan");
+
+    assert.ok(capturedDispatches, "dispatchWorkers should have been called for plan");
+    for (const d of capturedDispatches!) {
+      const dispatch = d as Record<string, unknown>;
+      assert.ok(
+        typeof dispatch.hive_section === "string" && dispatch.hive_section.includes("HIVE WISDOM"),
+        `Plan dispatch ${dispatch.name} should have hive_section`
+      );
+    }
+  });
+
+  it("continue runner attaches hive_section to dispatches", async () => {
+    mockHiveReadSuccess();
+
+    const parsed = parseArgs(["node", "host.js", "continue", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+
+    await runDispatchedContinueCommand(bridge, parsed);
+
+    const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
+    assert.ok(hiveReadCall, "hive-read should have been called for continue");
+
+    assert.ok(capturedDispatches, "dispatchWorkers should have been called for continue");
+    for (const d of capturedDispatches!) {
+      const dispatch = d as Record<string, unknown>;
+      assert.ok(
+        typeof dispatch.hive_section === "string" && dispatch.hive_section.includes("HIVE WISDOM"),
+        `Continue dispatch ${dispatch.name} should have hive_section`
+      );
+    }
+  });
+
+  it("dry-run calls hive-read and attaches hive_section", async () => {
+    mockHiveReadSuccess();
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--dry-run"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDryRunDispatchedCommand(bridge, parsed, def);
+
+    const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
+    assert.ok(hiveReadCall, "hive-read should have been called for dry-run");
+
+    // In dry-run, dispatchWorkers is NOT called, but we can verify
+    // the hive summary was logged and no error occurred
+    assert.ok(
+      stderrOutput.includes("Injecting hive wisdom"),
+      `Dry-run stderr should contain hive summary. Got: ${stderrOutput.slice(0, 200)}`
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-colony wisdom benefit (HIVE-05)
+// ---------------------------------------------------------------------------
+
+describe("cross-colony wisdom benefit (HIVE-05)", () => {
+  let goCalls: string[][];
+  let capturedDispatches: unknown[] | undefined;
+  let stderrOutput: string;
+
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+    goCalls = [];
+    capturedDispatches = undefined;
+    stderrOutput = "";
+
+    // Mock ceremony adapter to avoid Go subprocess calls
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stderrOutput += chunk;
+      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stderr.write;
+
+    // Mock: colony A promoted wisdom (source_repo = "colony-a")
+    const handler = <T>(_opts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return {
+          entries: [
+            {
+              id: "colony-a-1",
+              text: "Prefer early error returns over deep nesting",
+              domain: "go",
+              confidence: 0.92,
+              source_repo: "colony-a",
+              source_repos: ["colony-a"],
+              created_at: "2026-05-18T00:00:00Z",
+              accessed_at: "2026-05-18T00:00:00Z",
+              access_count: 3,
+            },
+          ],
+          total: 1,
+        } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [
+            {
+              repo_path: process.cwd(),
+              domains: ["go"],
+              active: true,
+              registered_at: "2026-05-18T00:00:00Z",
+            },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      capturedDispatches = dispatches;
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "completed",
+        summary: "Done",
+        duration: 5,
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as Platform,
+    ]);
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  it("colony B worker prompt contains colony A wisdom (presence proxy)", async () => {
+    // This test verifies the mechanism: wisdom from colony-a is present
+    // in colony-b's worker dispatches. The actual speedup ("faster or fewer
+    // retries") is a system property verified by observation, not by
+    // automated assertion. See RESEARCH.md HIVE-05 test strategy.
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    assert.ok(capturedDispatches, "dispatchWorkers should have been called");
+    assert.ok(capturedDispatches!.length > 0, "dispatches should not be empty");
+
+    for (const d of capturedDispatches!) {
+      const dispatch = d as Record<string, unknown>;
+      const hiveSection = dispatch.hive_section as string;
+      assert.ok(
+        typeof hiveSection === "string" && hiveSection.includes("HIVE WISDOM"),
+        `Dispatch should have hive_section with HIVE WISDOM header`
+      );
+      assert.ok(
+        hiveSection.includes("Prefer early error returns over deep nesting"),
+        `Dispatch should contain colony-a wisdom text`
+      );
+      // source_repo is in the data structure but not rendered in the formatted text;
+      // the presence of the wisdom text proves the cross-colony mechanism works
+    }
+
+    // Verify the hive summary was emitted
+    assert.ok(
+      stderrOutput.includes("Injecting hive wisdom"),
+      `Stderr should confirm hive wisdom injection`
+    );
   });
 });

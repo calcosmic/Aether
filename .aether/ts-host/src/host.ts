@@ -83,12 +83,17 @@ export function __restoreAllMocks(): void {
   __restoreDispatchWorkers();
   __restoreDetectAvailablePlatforms();
 }
+
+// Test-only: exported runner functions for integration testing.
+export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand };
+
 import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
 import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
 import { runWatchDisplay, type WatchDisplayOptions } from "./watch-display.js";
 import { runSwarmDisplay, type SwarmDisplayOptions } from "./swarm-display.js";
 import { createNarrator } from "./narrator.js";
 import { startEventBridge } from "./event-bridge.js";
+import { readHiveWisdom, resolveDomainTags } from "./hive-injector.js";
 
 /** Parse command-line arguments for the TS host. */
 export function parseArgs(argv: string[]): ParsedHostArgs {
@@ -416,6 +421,39 @@ function emitSkillSummary(dispatches: CeremonyDispatchLike[]): void {
   }
 }
 
+/** Build a hive wisdom injection summary line */
+function emitHiveSummary(dispatches: CeremonyDispatchLike[]): void {
+  const hiveCount = dispatches.filter(
+    (d) => typeof d.hive_section === "string" && d.hive_section.trim() !== ""
+  ).length;
+  if (hiveCount > 0) {
+    process.stderr.write(`Injecting hive wisdom into ${hiveCount} worker prompts.\n`);
+  }
+}
+
+/**
+ * Prepare the hive wisdom section for a dispatch pipeline.
+ * Resolves domain tags, reads hive wisdom, and returns a formatted section.
+ * Graceful degradation: any failure logs a warning and returns empty string.
+ */
+async function prepareHiveSection(bridge: GoBridgeOptions): Promise<string> {
+  try {
+    const domains = await resolveDomainTags(bridge);
+    return await readHiveWisdom({
+      goBinaryPath: bridge.goBinaryPath,
+      cwd: bridge.cwd,
+      domains,
+      minConfidence: 0.5,
+      maxEntries: 10,
+      budgetChars: 2500,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Warning: hive-read failed: ${msg}\n`);
+    return "";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Dry-run ceremony preview (HOST-07, D-06)
 // ---------------------------------------------------------------------------
@@ -438,11 +476,24 @@ async function runDryRunDispatchedCommand(
 
   // Extract dispatches from manifest for ceremony rendering
   const manifestEnvelope = manifestResult;
-  const dispatches = (manifestResult as Record<string, unknown>)?.dispatches as CeremonyDispatchLike[] | undefined ?? [];
-  const manifestObj = (manifestResult as Record<string, unknown>)?.dispatch_manifest
-    ?? (manifestResult as Record<string, unknown>)?.plan_manifest
-    ?? (manifestResult as Record<string, unknown>)?.planning_manifest
-    ?? (manifestResult as Record<string, unknown>)?.continue_manifest;
+  const topLevelDispatches = (manifestResult as Record<string, unknown>)?.dispatches as CeremonyDispatchLike[] | undefined;
+  const dispatchManifest = (manifestResult as Record<string, unknown>)?.dispatch_manifest as Record<string, unknown> | undefined;
+  const planManifest = (manifestResult as Record<string, unknown>)?.plan_manifest as Record<string, unknown> | undefined;
+  const planningManifest = (manifestResult as Record<string, unknown>)?.planning_manifest as Record<string, unknown> | undefined;
+  const continueManifest = (manifestResult as Record<string, unknown>)?.continue_manifest as Record<string, unknown> | undefined;
+  const dispatches = topLevelDispatches
+    ?? dispatchManifest?.dispatches as CeremonyDispatchLike[] | undefined
+    ?? planManifest?.dispatches as CeremonyDispatchLike[] | undefined
+    ?? planningManifest?.dispatches as CeremonyDispatchLike[] | undefined
+    ?? continueManifest?.dispatches as CeremonyDispatchLike[] | undefined
+    ?? [];
+  const manifestObj = dispatchManifest ?? planManifest ?? planningManifest ?? continueManifest;
+
+  // Attach hive wisdom to each dispatch (dry-run also fetches wisdom per RESEARCH.md Q4)
+  const hiveSection = await prepareHiveSection(bridge);
+  for (const d of dispatches) {
+    d.hive_section = hiveSection;
+  }
 
   if (manifestObj) {
     const envelope = { ...manifestEnvelope, [`${workflow}_manifest`]: manifestObj };
@@ -456,6 +507,9 @@ async function runDryRunDispatchedCommand(
 
   // Skill injection summary
   emitSkillSummary(dispatches);
+
+  // Hive wisdom injection summary
+  emitHiveSummary(dispatches);
 
   // Output manifest JSON to stdout
   process.stdout.write(JSON.stringify({ ok: true, dry_run: true, manifest: manifestResult }, null, 2) + "\n");
@@ -485,6 +539,12 @@ async function runDispatchedBuildCommand(
     throw new Error("Build manifest contains no dispatches. Nothing to build.");
   }
 
+  // Step 1b: Resolve hive wisdom and attach to each dispatch
+  const hiveSection = await prepareHiveSection(bridge);
+  for (const d of dispatches) {
+    d.hive_section = hiveSection;
+  }
+
   // Step 2: Render spawn-plan and wave-start ceremony
   const ceremonyEnvelope = { dispatch_manifest: buildManifest };
   renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
@@ -503,6 +563,9 @@ async function runDispatchedBuildCommand(
 
   // Step 4: Skill injection summary (D-07)
   emitSkillSummary(dispatches);
+
+  // Step 4b: Hive wisdom injection summary
+  emitHiveSummary(dispatches);
 
   // Step 5: Dispatch workers
   const dispatchOpts: DispatchOptions = {
@@ -560,6 +623,12 @@ async function runDispatchedPlanCommand(
     throw new Error("Plan manifest contains no dispatches. Nothing to plan.");
   }
 
+  // Step 1b: Resolve hive wisdom and attach to each dispatch
+  const hiveSection = await prepareHiveSection(bridge);
+  for (const d of dispatches) {
+    d.hive_section = hiveSection;
+  }
+
   // Step 2: Render spawn-plan and wave-start ceremony
   const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
   renderManifestCeremony(ceremony, "plan", ceremonyEnvelope, dispatches);
@@ -571,6 +640,9 @@ async function runDispatchedPlanCommand(
       throw new Error(formatPlatformUnavailableMessage("plan"));
     }
   }
+
+  // Step 3b: Hive wisdom injection summary
+  emitHiveSummary(dispatches);
 
   // Step 4: Dispatch planning workers
   const dispatchOpts: DispatchOptions = {
@@ -627,6 +699,12 @@ async function runDispatchedContinueCommand(
     throw new Error("Continue manifest contains no dispatches. Nothing to continue.");
   }
 
+  // Step 1b: Resolve hive wisdom and attach to each dispatch
+  const hiveSection = await prepareHiveSection(bridge);
+  for (const d of dispatches) {
+    d.hive_section = hiveSection;
+  }
+
   // Step 2: Render spawn-plan and wave-start ceremony
   const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
   renderManifestCeremony(ceremony, "continue", ceremonyEnvelope, dispatches);
@@ -638,6 +716,9 @@ async function runDispatchedContinueCommand(
       throw new Error(formatPlatformUnavailableMessage("continue"));
     }
   }
+
+  // Step 3b: Hive wisdom injection summary
+  emitHiveSummary(dispatches);
 
   // Step 4: Dispatch review workers
   const dispatchOpts: DispatchOptions = {
