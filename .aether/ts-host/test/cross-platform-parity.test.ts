@@ -145,3 +145,93 @@ describe("cross-platform parity", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wrapper Ceremony Alignment (D-01, D-03)
+// ---------------------------------------------------------------------------
+
+const DISPATCHED_CEREMONY_COMMANDS = [
+  "ceremony spawn-plan",
+  "ceremony wave-start",
+  "ceremony worker-complete",
+  "ceremony closeout",
+];
+
+// Commands whose wrappers contain all 4 dispatched ceremony invocations
+const CEREMONY_DISPATCHED_COMMANDS = [
+  "colonize", "plan", "build", "continue", "seal", "swarm",
+];
+
+// Commands whose wrappers should NOT contain dispatched ceremony commands
+const READ_ONLY_COMMANDS = [
+  "init", "discuss", "status", "resume", "focus",
+  "redirect", "feedback", "pheromones", "history", "phase", "watch",
+];
+
+function readWrapper(platform: string, command: string): string {
+  return readFileSync(
+    join(REPO_ROOT, platform, "commands", "ant", `${command}.md`),
+    "utf-8"
+  );
+}
+
+describe("wrapper ceremony alignment", () => {
+  it("dispatched command wrappers contain all 4 ceremony invocations", () => {
+    for (const command of CEREMONY_DISPATCHED_COMMANDS) {
+      const claudeContent = readWrapper(".claude", command);
+      const opencodeContent = readWrapper(".opencode", command);
+
+      for (const ceremonyCmd of DISPATCHED_CEREMONY_COMMANDS) {
+        assert.ok(
+          claudeContent.toLowerCase().includes(ceremonyCmd),
+          `Claude wrapper for "${command}" should contain "${ceremonyCmd}"`
+        );
+        assert.ok(
+          opencodeContent.toLowerCase().includes(ceremonyCmd),
+          `OpenCode wrapper for "${command}" should contain "${ceremonyCmd}"`
+        );
+      }
+    }
+  });
+
+  it("Claude and OpenCode wrappers have matching ceremony invocation patterns", () => {
+    for (const command of CEREMONY_DISPATCHED_COMMANDS) {
+      const claudeContent = readWrapper(".claude", command);
+      const opencodeContent = readWrapper(".opencode", command);
+
+      // Extract ceremony invocation lines from each wrapper
+      const ceremonyPattern = /aether ceremony (spawn-plan|wave-start|worker-complete|closeout)/g;
+      const claudeCeremonies = new Set(
+        [...claudeContent.matchAll(ceremonyPattern)].map((m) => m[0])
+      );
+      const opencodeCeremonies = new Set(
+        [...opencodeContent.matchAll(ceremonyPattern)].map((m) => m[0])
+      );
+
+      assert.deepEqual(
+        [...claudeCeremonies].sort(),
+        [...opencodeCeremonies].sort(),
+        `Claude and OpenCode wrappers for "${command}" should have matching ceremony invocation patterns`
+      );
+    }
+  });
+
+  it("read-only command wrappers do not contain dispatched ceremony commands", () => {
+    const dispatchedPatterns = [
+      "ceremony spawn-plan",
+      "ceremony wave-start",
+    ];
+
+    for (const command of READ_ONLY_COMMANDS) {
+      for (const platform of [".claude", ".opencode"]) {
+        const content = readWrapper(platform, command);
+        for (const pattern of dispatchedPatterns) {
+          assert.ok(
+            !content.toLowerCase().includes(pattern),
+            `${platform} wrapper for "${command}" should NOT contain "${pattern}"`
+          );
+        }
+      }
+    }
+  });
+});
