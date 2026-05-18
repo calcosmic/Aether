@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -145,32 +146,6 @@ var skillIndexRuntimeCache = struct {
 	entries map[string][]skillIndexEntry
 }{
 	entries: map[string][]skillIndexEntry{},
-}
-
-var skillScanSkipDirs = map[string]struct{}{
-	".git":          {},
-	".aether":       {},
-	".claude":       {},
-	".codex":        {},
-	".opencode":     {},
-	".idea":         {},
-	".vscode":       {},
-	".cache":        {},
-	".next":         {},
-	".nuxt":         {},
-	".svelte-kit":   {},
-	".venv":         {},
-	".tox":          {},
-	".pytest_cache": {},
-	".mypy_cache":   {},
-	"node_modules":  {},
-	"vendor":        {},
-	"dist":          {},
-	"build":         {},
-	"coverage":      {},
-	"tmp":           {},
-	"temp":          {},
-	"venv":          {},
 }
 
 var skillParseFrontmatterCmd = &cobra.Command{
@@ -1290,7 +1265,7 @@ func getWorkspaceFileSnapshot(root string) *workspaceFileSnapshot {
 			return nil
 		}
 		if d.IsDir() {
-			if _, skip := skillScanSkipDirs[d.Name()]; skip {
+			if codegraph.ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -1336,7 +1311,7 @@ func appendWorkspaceSnapshotPath(snapshot *workspaceFileSnapshot, rel string) {
 
 func shouldSkipSkillScanPath(rel string) bool {
 	for _, part := range strings.Split(rel, "/") {
-		if _, skip := skillScanSkipDirs[part]; skip {
+		if codegraph.ShouldSkipDir(part) {
 			return true
 		}
 	}

@@ -450,7 +450,7 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 	for _, entry := range entries {
 		if entry.IsDir() {
 			name := entry.Name()
-			if shouldSkipSurveyDir(name) {
+			if codegraph.ShouldSkipDir(name) {
 				continue
 			}
 			facts.TopLevelDirs = append(facts.TopLevelDirs, name)
@@ -519,7 +519,7 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 			if path != root {
 				facts.DirectoryCount++
 			}
-			if shouldSkipSurveyDir(d.Name()) {
+			if codegraph.ShouldSkipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -969,14 +969,6 @@ func surveyDocsExist(surveyDir string) bool {
 		if _, err := os.Stat(filepath.Join(surveyDir, name)); err == nil {
 			return true
 		}
-	}
-	return false
-}
-
-func shouldSkipSurveyDir(name string) bool {
-	switch name {
-	case ".git", ".cache", "node_modules", "dist", "build", "vendor", ".aether", ".claude", ".codex", ".opencode":
-		return true
 	}
 	return false
 }

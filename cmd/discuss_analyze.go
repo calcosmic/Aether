@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/spf13/cobra"
 )
 
@@ -128,7 +129,7 @@ func runDiscussAnalyze(target, goal string) analyzeScanData {
 			return nil
 		}
 		if d.IsDir() {
-			if extendedSkipDirs[d.Name()] && path != target {
+			if codegraph.ShouldSkipDir(d.Name()) && path != target {
 				return filepath.SkipDir
 			}
 			scan.TotalDirs++
