@@ -39,11 +39,11 @@
 - GROUND-04: Write source anchors to survey output so colony-prime and planners can use them
 - GROUND-05: Regression test: M4L fixture with `.venv` noise produces clean survey with zero `.venv` references
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 141-01-PLAN.md — Create canonical ScanFilter, migrate 5 call sites, add regression tests
-- [ ] 141-02-PLAN.md — Extract source anchors, wire through survey output to planner context
+- [x] 141-02-PLAN.md — Extract source anchors, wire through survey output to planner context
 
 **Why first:** Everything else depends on clean survey data. Grounding, anchors, and ceremony all assume the survey is right. Currently it's wrong.
 
