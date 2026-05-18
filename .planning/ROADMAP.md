@@ -48,7 +48,7 @@ See `.planning/milestones/` for full archived phase details.
 |-------|-----------|----------------|--------|-----------|
 | 136. Production Foundation | v1.21 | 4/4 | Complete | 2026-05-18 |
 | 137. Hive Wisdom Injection | v1.21 | 0/3 | Not started | - |
-| 138. Worker-to-Worker Spawning | v1.21 | 0/? | Not started | - |
+| 138. Worker-to-Worker Spawning | v1.21 | 1/4 | In Progress|  |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
 | 140. Hardening and Validation | v1.21 | 0/? | Not started | - |
 
@@ -115,7 +115,7 @@ Plans:
   4. Child spawn results appear in the parent worker's handoff, visible to downstream workers in the same wave
   5. Spawn requests that would exceed the remaining budget are logged and skipped, never queued -- fail-closed behavior
   6. Go `spawn-log` and `spawn-complete` record child entries with parent worker references, not just "Queen"
-**Plans:** 4 plans (4 waves, sequential due to file dependencies)
+**Plans:** 1/4 plans executed
 
 Plans:
 - [ ] (to be planned)
