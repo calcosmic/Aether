@@ -1,5 +1,6 @@
 export type HostCommandRunner =
   | "go-json"
+  | "dispatched"
   | "oracle-lifecycle"
   | "lifecycle"
   | "watch-display"
@@ -17,10 +18,14 @@ export interface ParsedHostArgs {
   skipWatchers: boolean;
   refresh: boolean;
   force: boolean;
+  forceResurvey: boolean;
   tasks: string[];
   depth: string | undefined;
   planningDepth: string | undefined;
   verificationDepth: string | undefined;
+  targetConfidence: string | undefined;
+  maxIterations: string | undefined;
+  accept: boolean;
   verificationTimeout: string | undefined;
   light: boolean;
   heavy: boolean;
@@ -30,6 +35,7 @@ export interface ParsedHostArgs {
   verbose: boolean;
   reconcileTasks: string[];
   noLearn: boolean;
+  classicCeremony: boolean;
   help: boolean;
   positional: string[];
   unknownFlags: string[];
@@ -69,6 +75,9 @@ function planArgs(parsed: ParsedHostArgs): string[] {
   if (parsed.depth) args.push("--depth", parsed.depth);
   if (parsed.planningDepth) args.push("--planning-depth", parsed.planningDepth);
   if (parsed.verificationDepth) args.push("--verification-depth", parsed.verificationDepth);
+  if (parsed.targetConfidence) args.push("--target", parsed.targetConfidence);
+  if (parsed.maxIterations) args.push("--max-iterations", parsed.maxIterations);
+  if (parsed.accept) args.push("--accept");
   if (parsed.synthetic || parsed.simulate) args.push("--synthetic");
   if (parsed.workerTimeout) args.push("--worker-timeout", parsed.workerTimeout);
   return args;
@@ -94,10 +103,19 @@ function buildArgs(parsed: ParsedHostArgs): string[] {
   return args;
 }
 
+function colonizeArgs(parsed: ParsedHostArgs): string[] {
+  rejectUnsupportedFlags(parsed);
+  const args = ["colonize", "--plan-only"];
+  if (parsed.force || parsed.forceResurvey) args.push("--force-resurvey");
+  if (parsed.workerTimeout) args.push("--worker-timeout", parsed.workerTimeout);
+  return args;
+}
+
 function continueArgs(parsed: ParsedHostArgs): string[] {
   rejectUnsupportedFlags(parsed);
   const args = ["continue", "--plan-only"];
   pushRepeatedFlag(args, "--reconcile-task", parsed.reconcileTasks);
+  if (parsed.classicCeremony) args.push("--classic-ceremony");
   if (parsed.verificationDepth) args.push("--verification-depth", parsed.verificationDepth);
   if (parsed.verificationTimeout) args.push("--verification-timeout", parsed.verificationTimeout);
   if (parsed.light) args.push("--light");
@@ -109,7 +127,27 @@ function continueArgs(parsed: ParsedHostArgs): string[] {
   return args;
 }
 
+function sealArgs(parsed: ParsedHostArgs): string[] {
+  rejectUnsupportedFlags(parsed);
+  const args = ["seal", "--plan-only"];
+  if (parsed.force) args.push("--force");
+  return args;
+}
+
 export const HOST_COMMANDS: readonly HostCommandDefinition[] = [
+  {
+    command: "colonize",
+    usage: "colonize",
+    description: "Call aether colonize --plan-only",
+    category: "orchestrated",
+    runner: "go-json",
+    goPlanCommand: "aether colonize --plan-only",
+    finalizerCommand: "aether colonize-finalize --completion-file <file>",
+    ceremonyWorkflow: "colonize",
+    supportsDashboard: false,
+    literalPassthrough: false,
+    buildGoArgs: colonizeArgs,
+  },
   {
     command: "plan",
     usage: "plan",
@@ -126,9 +164,9 @@ export const HOST_COMMANDS: readonly HostCommandDefinition[] = [
   {
     command: "build",
     usage: "build <N>",
-    description: "Call aether build N --plan-only",
+    description: "Dispatch real build workers in parallel waves with ceremony",
     category: "orchestrated",
-    runner: "go-json",
+    runner: "dispatched",
     goPlanCommand: "aether build <phase> --plan-only",
     finalizerCommand: "aether build-finalize <phase> --completion-file <file>",
     ceremonyWorkflow: "build",
@@ -150,6 +188,19 @@ export const HOST_COMMANDS: readonly HostCommandDefinition[] = [
     buildGoArgs: continueArgs,
   },
   {
+    command: "seal",
+    usage: "seal",
+    description: "Call aether seal --plan-only",
+    category: "orchestrated",
+    runner: "go-json",
+    goPlanCommand: "aether seal --plan-only",
+    finalizerCommand: "aether seal-finalize --completion-file <file>",
+    ceremonyWorkflow: "seal",
+    supportsDashboard: false,
+    literalPassthrough: false,
+    buildGoArgs: sealArgs,
+  },
+  {
     command: "oracle",
     usage: "oracle [topic]",
     description: "Run Oracle RALF lifecycle loop",
@@ -164,7 +215,7 @@ export const HOST_COMMANDS: readonly HostCommandDefinition[] = [
   {
     command: "lifecycle",
     usage: "lifecycle [N] [topic]",
-    description: "Run plan->build->continue sequence",
+    description: "Run experimental simulate-only plan->build->continue smoke",
     category: "lifecycle",
     runner: "lifecycle",
     ceremonyWorkflow: "lifecycle",

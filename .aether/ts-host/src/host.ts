@@ -4,11 +4,13 @@
  * Invoked as: node .aether/ts-host/dist/host.js <command> [options]
  *
  * Commands:
+ *   colonize   -- Call `aether colonize --plan-only` and print JSON manifest
  *   plan       -- Call `aether plan --plan-only` and print JSON manifest
  *   build <N>  -- Call `aether build N --plan-only` and print JSON manifest
  *   continue   -- Call `aether continue --plan-only` and print JSON manifest
+ *   seal       -- Call `aether seal --plan-only` and print JSON manifest
  *   oracle     -- Run the Oracle lifecycle loop
- *   lifecycle  -- Run the plan -> build -> continue lifecycle sequence
+ *   lifecycle  -- Run the experimental simulate-only lifecycle smoke harness
  *   watch      -- Show colony status through the host display surface
  *   swarm      -- Show or plan swarm activity through the host display surface
  *
@@ -16,15 +18,23 @@
  *   --cwd <path>  Working directory (default: process.cwd())
  */
 
-import { callGoJSON, discoverGoBinary } from "./go-bridge.js";
+import { callGoJSON, discoverGoBinary, writeCompletionFile, approvedCompletionDirPrefix } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import {
   buildHostGoArgs,
   getHostCommandDefinition,
   listHostCommandDefinitions,
+  HOST_COMMANDS,
   type ParsedHostArgs,
 } from "./command-registry.js";
 import { runGoJSONCommand } from "./go-command.js";
+import { dispatchWorkers, toWorkerResults, type DispatchOptions } from "./worker-dispatch.js";
+import { detectAvailablePlatforms, formatPlatformUnavailableMessage } from "./platform-dispatcher.js";
+import {
+  createCeremonyAdapter,
+  type CeremonyAdapter,
+  type CeremonyWorkflow,
+} from "./ceremony-adapter.js";
 
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
@@ -40,6 +50,37 @@ export function __setCallGoJSON(fn: typeof callGoJSON): void {
 /** Test-only: restore the real callGoJSON. */
 export function __restoreCallGoJSON(): void {
   _callGoJSONRef = callGoJSON;
+}
+
+// Mutable references for dispatch worker injection (testing).
+let _dispatchWorkersRef = dispatchWorkers;
+let _detectAvailablePlatformsRef = detectAvailablePlatforms;
+
+/** Test-only: inject a mock dispatchWorkers. */
+export function __setDispatchWorkers(fn: typeof dispatchWorkers): void {
+  _dispatchWorkersRef = fn;
+}
+
+/** Test-only: restore the real dispatchWorkers. */
+export function __restoreDispatchWorkers(): void {
+  _dispatchWorkersRef = dispatchWorkers;
+}
+
+/** Test-only: inject a mock detectAvailablePlatforms. */
+export function __setDetectAvailablePlatforms(fn: typeof detectAvailablePlatforms): void {
+  _detectAvailablePlatformsRef = fn;
+}
+
+/** Test-only: restore the real detectAvailablePlatforms. */
+export function __restoreDetectAvailablePlatforms(): void {
+  _detectAvailablePlatformsRef = detectAvailablePlatforms;
+}
+
+/** Restore all test mocks at once. */
+export function __restoreAllMocks(): void {
+  __restoreCallGoJSON();
+  __restoreDispatchWorkers();
+  __restoreDetectAvailablePlatforms();
 }
 import { runLifecycle, type LifecycleOptions } from "./lifecycle.js";
 import { runOracleLifecycle, type OracleLifecycleOptions } from "./oracle-lifecycle.js";
@@ -60,10 +101,14 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
   let skipWatchers = false;
   let refresh = false;
   let force = false;
+  let forceResurvey = false;
   const tasks: string[] = [];
   let depth: string | undefined = undefined;
   let planningDepth: string | undefined = undefined;
   let verificationDepth: string | undefined = undefined;
+  let targetConfidence: string | undefined = undefined;
+  let maxIterations: string | undefined = undefined;
+  let accept = false;
   let verificationTimeout: string | undefined = undefined;
   let light = false;
   let heavy = false;
@@ -73,6 +118,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
   let verbose = false;
   const reconcileTasks: string[] = [];
   let noLearn = false;
+  let classicCeremony = false;
   let help = false;
   const positional: string[] = [];
   const unknownFlags: string[] = [];
@@ -116,6 +162,8 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
       refresh = true;
     } else if (arg === "--force") {
       force = true;
+    } else if (arg === "--force-resurvey") {
+      forceResurvey = true;
     } else if (arg === "--task") {
       const value = readValue(arg);
       if (value !== undefined) tasks.push(value);
@@ -125,6 +173,12 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
       planningDepth = readValue(arg);
     } else if (arg === "--verification-depth") {
       verificationDepth = readValue(arg);
+    } else if (arg === "--target") {
+      targetConfidence = readValue(arg);
+    } else if (arg === "--max-iterations") {
+      maxIterations = readValue(arg);
+    } else if (arg === "--accept") {
+      accept = true;
     } else if (arg === "--verification-timeout") {
       verificationTimeout = readValue(arg);
     } else if (arg === "--light") {
@@ -144,6 +198,8 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
       if (value !== undefined) reconcileTasks.push(value);
     } else if (arg === "--no-learn") {
       noLearn = true;
+    } else if (arg === "--classic-ceremony") {
+      classicCeremony = true;
     } else if (arg === "--help" || arg === "-h") {
       help = true;
     } else if (arg.startsWith("-")) {
@@ -165,10 +221,14 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
     skipWatchers,
     refresh,
     force,
+    forceResurvey,
     tasks,
     depth,
     planningDepth,
     verificationDepth,
+    targetConfidence,
+    maxIterations,
+    accept,
     verificationTimeout,
     light,
     heavy,
@@ -178,6 +238,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
     verbose,
     reconcileTasks,
     noLearn,
+    classicCeremony,
     help,
     positional,
     unknownFlags,
@@ -201,10 +262,14 @@ function printUsage(): void {
       "  --skip-watchers        Skip continue watcher workers when Go allows it\n" +
       "  --refresh              Refresh an existing plan\n" +
       "  --force                Forward Go force aliases for plan/build\n" +
+      "  --force-resurvey       Refresh colonize survey artifacts\n" +
       "  --task <id>            Limit build dispatch to a task id (repeatable)\n" +
       "  --depth <level>        fast | balanced | deep | exhaustive\n" +
       "  --planning-depth <lvl> light | standard | deep\n" +
       "  --verification-depth <lvl> light | standard | heavy\n" +
+      "  --target <n>           Planning confidence target 70-99\n" +
+      "  --max-iterations <n>   Planning iteration budget 2-12\n" +
+      "  --accept               Accept current best plan below target\n" +
       "  --verification-timeout <dur> Override continue verification timeout\n" +
       "  --light                Force light review\n" +
       "  --heavy                Force heavy review\n" +
@@ -213,8 +278,213 @@ function printUsage(): void {
       "  --no-suggest           Skip build suggestion analysis\n" +
       "  --verbose              Forward verbose build output mode\n" +
       "  --reconcile-task <id>  Mark continue task reconciliation (repeatable)\n" +
-      "  --no-learn             Disable continue learning capture when supported\n"
+      "  --no-learn             Disable continue learning capture when supported\n" +
+      "  --classic-ceremony     Use continue's heavy visible review manifest\n"
   );
+}
+
+// ---------------------------------------------------------------------------
+// Ceremony helpers (shared with lifecycle.ts pattern)
+// ---------------------------------------------------------------------------
+
+interface CeremonyDispatchLike {
+  execution_wave?: number;
+  wave?: number;
+  skill_section?: string;
+  [key: string]: unknown;
+}
+
+function emitCeremonyOutput(output: string): void {
+  if (output.trim() === "") return;
+  process.stderr.write(output.endsWith("\n") ? output : `${output}\n`);
+}
+
+function ceremonyExecutionWaves(dispatches: CeremonyDispatchLike[]): number[] {
+  const waves = new Set<number>();
+  for (const dispatch of dispatches) {
+    const wave = dispatch.execution_wave ?? dispatch.wave ?? 0;
+    if (wave > 0) waves.add(wave);
+  }
+  return [...waves].sort((a, b) => a - b);
+}
+
+function renderManifestCeremony(
+  ceremony: CeremonyAdapter,
+  workflow: CeremonyWorkflow,
+  manifestEnvelope: unknown,
+  dispatches: CeremonyDispatchLike[]
+): void {
+  emitCeremonyOutput(ceremony.renderSpawnPlan(workflow, manifestEnvelope));
+  for (const executionWave of ceremonyExecutionWaves(dispatches)) {
+    emitCeremonyOutput(
+      ceremony.renderWaveStart(workflow, manifestEnvelope, executionWave)
+    );
+  }
+}
+
+function renderWorkerCeremony(
+  ceremony: CeremonyAdapter,
+  workflow: CeremonyWorkflow,
+  workers: unknown[]
+): void {
+  for (const worker of workers) {
+    emitCeremonyOutput(ceremony.renderWorkerComplete(workflow, worker));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Manifest result types (match Go JSON output shapes)
+// ---------------------------------------------------------------------------
+
+interface BuildManifestResult {
+  dispatch_manifest?: {
+    dispatches?: BuildDispatchLike[];
+    [key: string]: unknown;
+  };
+  dispatches?: BuildDispatchLike[];
+  provider_diagnostics?: string;
+  [key: string]: unknown;
+}
+
+interface BuildDispatchLike {
+  stage?: string;
+  wave?: number;
+  execution_wave?: number;
+  caste?: string;
+  name?: string;
+  task?: string;
+  status?: string;
+  summary?: string;
+  task_id?: string;
+  skill_section?: string;
+  [key: string]: unknown;
+}
+
+interface PlanManifestResult {
+  plan_manifest?: Record<string, unknown>;
+  planning_manifest?: Record<string, unknown>;
+  dispatches?: PlanDispatchLike[];
+  [key: string]: unknown;
+}
+
+interface PlanDispatchLike {
+  name?: string;
+  caste?: string;
+  stage?: string;
+  task?: string;
+  task_id?: string;
+  wave?: number;
+  execution_wave?: number;
+  [key: string]: unknown;
+}
+
+interface ContinueManifestResult {
+  continue_manifest?: Record<string, unknown>;
+  dispatches?: ContinueDispatchLike[];
+  phase?: number;
+  [key: string]: unknown;
+}
+
+interface ContinueDispatchLike {
+  name?: string;
+  caste?: string;
+  stage?: string;
+  task?: string;
+  task_id?: string;
+  wave?: number;
+  execution_wave?: number;
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Dispatched runner: real dispatch pipeline for build/plan/continue
+// ---------------------------------------------------------------------------
+
+/** Build a skill injection summary line (D-07) */
+function emitSkillSummary(dispatches: CeremonyDispatchLike[]): void {
+  const skillCount = dispatches.filter(
+    (d) => typeof d.skill_section === "string" && d.skill_section.trim() !== ""
+  ).length;
+  if (skillCount > 0) {
+    process.stderr.write(`Injecting ${skillCount} skills into worker prompts.\n`);
+  }
+}
+
+/**
+ * Run the dispatched build pipeline: fetch manifest, dispatch workers,
+ * write completion file, call finalizer, render ceremony.
+ */
+async function runDispatchedBuildCommand(
+  bridge: GoBridgeOptions,
+  parsed: ParsedHostArgs,
+  definition: typeof HOST_COMMANDS[number],
+): Promise<void> {
+  const ceremony = createCeremonyAdapter(bridge);
+  const goArgs = buildHostGoArgs(parsed)!;
+  const phase = parsed.positional[0] ?? "1";
+
+  // Step 1: Fetch manifest
+  const buildResult = _callGoJSONRef<BuildManifestResult>(bridge, goArgs);
+  const buildManifest = buildResult.dispatch_manifest;
+  if (!buildManifest) {
+    throw new Error("Build --plan-only returned no dispatch_manifest. Check colony state and try again.");
+  }
+  const dispatches: BuildDispatchLike[] = buildManifest.dispatches ?? buildResult.dispatches ?? [];
+  if (dispatches.length === 0) {
+    throw new Error("Build manifest contains no dispatches. Nothing to build.");
+  }
+
+  // Step 2: Render spawn-plan and wave-start ceremony
+  const ceremonyEnvelope = { dispatch_manifest: buildManifest };
+  renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
+
+  // Step 3: Check available platforms (unless simulating)
+  if (!parsed.simulate) {
+    const available = await _detectAvailablePlatformsRef();
+    if (available.length === 0) {
+      const diagnostic = buildResult.provider_diagnostics;
+      const msg = diagnostic
+        ? `No platform workers available. ${diagnostic}`
+        : formatPlatformUnavailableMessage(`build phase ${phase}`);
+      throw new Error(msg);
+    }
+  }
+
+  // Step 4: Skill injection summary (D-07)
+  emitSkillSummary(dispatches);
+
+  // Step 5: Dispatch workers
+  const dispatchOpts: DispatchOptions = {
+    goBinaryPath: bridge.goBinaryPath,
+    cwd: bridge.cwd,
+    simulateWorkers: parsed.simulate,
+  };
+  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
+  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+
+  // Step 6: Render worker-complete ceremony
+  renderWorkerCeremony(ceremony, "build", mappedResults);
+
+  // Step 7: Write completion file and call finalizer
+  const completion = {
+    dispatch_manifest: buildManifest,
+    dispatches: mappedResults,
+  };
+  const completionPath = writeCompletionFile(
+    approvedCompletionDirPrefix("build"),
+    "build-completion.json",
+    { result: completion }
+  );
+  _callGoJSONRef(bridge, [
+    "build-finalize", phase,
+    "--completion-file", completionPath,
+  ]);
+
+  // Step 8: Render closeout
+  emitCeremonyOutput(ceremony.renderCloseout("build", completionPath));
+
+  // Output result JSON to stdout
+  process.stdout.write(JSON.stringify({ ok: true, completion_file: completionPath }, null, 2) + "\n");
 }
 
 async function main(): Promise<void> {
@@ -242,6 +512,32 @@ async function main(): Promise<void> {
   }
 
   switch (definition.runner) {
+    case "dispatched": {
+      const workflow = definition.ceremonyWorkflow ?? "build";
+      try {
+        if (workflow === "build") {
+          await runDispatchedBuildCommand(bridge, parsed, definition);
+        } else {
+          // Plan and continue pipelines added in Task 2 -- fall back to go-json
+          let args: string[];
+          try {
+            args = buildHostGoArgs(parsed)!;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            process.stderr.write(`Error: ${message}\n`);
+            process.exit(1);
+          }
+          const result = runGoJSONCommand(bridge, args, _callGoJSONRef);
+          process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`Error: ${message}\n`);
+        process.exit(1);
+      }
+      break;
+    }
+
     case "go-json": {
       let args: string[];
       try {
@@ -276,6 +572,12 @@ async function main(): Promise<void> {
       const oracleTopicArg = positional[1];
       if (phaseArg && isNaN(parseInt(phaseArg, 10))) {
         process.stderr.write("Error: lifecycle phase must be a number\n");
+        process.exit(1);
+      }
+      if (!simulate) {
+        process.stderr.write(
+          "Error: lifecycle is experimental and simulate-only. Use --simulate for the smoke harness, or run aether plan/build/continue for real orchestration.\n"
+        );
         process.exit(1);
       }
       if (simulate) {
@@ -350,8 +652,20 @@ async function main(): Promise<void> {
 
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
 
-const isMainModule = fileURLToPath(import.meta.url) === resolve(process.argv[1]!);
+function normalizeEntrypointPath(path: string | undefined): string {
+  if (!path) return "";
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+const isMainModule =
+  normalizeEntrypointPath(fileURLToPath(import.meta.url)) ===
+  normalizeEntrypointPath(process.argv[1]);
 if (isMainModule) {
   main().catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
