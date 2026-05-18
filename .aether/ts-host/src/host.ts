@@ -40,6 +40,7 @@ import {
 import { ConfidenceLoop, type ConfidenceLoopOptions, type ConfidenceResult } from "./confidence-loop.js";
 import { ConfidenceEvaluator, type EvaluatedConfidence, type ConfidenceInput } from "./confidence-evaluator.js";
 import type { WorkerClaims } from "./claims-parser.js";
+import { loadPlaybooksForWorkflow, renderPlaybookContext } from "./playbook-loader.js";
 
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
@@ -500,6 +501,15 @@ async function runDryRunDispatchedCommand(
     d.hive_section = hiveSection;
   }
 
+  // Load playbooks for the active workflow and inject context into worker briefs (CEREMONY-06)
+  const dryRunPlaybooks = loadPlaybooksForWorkflow(bridge.cwd, workflow as "build" | "plan" | "continue");
+  const dryRunPlaybookContext = renderPlaybookContext(dryRunPlaybooks);
+  if (dryRunPlaybookContext) {
+    for (const d of dispatches) {
+      d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + dryRunPlaybookContext;
+    }
+  }
+
   if (manifestObj) {
     const envelope = { ...manifestEnvelope, [`${workflow}_manifest`]: manifestObj };
     renderManifestCeremony(ceremony, workflow, envelope, dispatches);
@@ -695,6 +705,15 @@ async function runDispatchedBuildCommand(
     d.hive_section = hiveSection;
   }
 
+  // Step 1c: Load build playbooks and inject context into worker briefs (CEREMONY-06)
+  const buildPlaybooks = loadPlaybooksForWorkflow(bridge.cwd, "build");
+  const buildPlaybookContext = renderPlaybookContext(buildPlaybooks);
+  if (buildPlaybookContext) {
+    for (const d of dispatches) {
+      d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + buildPlaybookContext;
+    }
+  }
+
   // Step 2: Render spawn-plan and wave-start ceremony
   const ceremonyEnvelope = { dispatch_manifest: buildManifest };
   renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
@@ -878,6 +897,15 @@ async function runDispatchedPlanCommand(
   const hiveSection = await prepareHiveSection(bridge);
   for (const d of dispatches) {
     d.hive_section = hiveSection;
+  }
+
+  // Step 1c: Load plan playbooks and inject context into worker briefs (CEREMONY-06)
+  const planPlaybooks = loadPlaybooksForWorkflow(bridge.cwd, "plan");
+  const planPlaybookContext = renderPlaybookContext(planPlaybooks);
+  if (planPlaybookContext) {
+    for (const d of dispatches) {
+      d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + planPlaybookContext;
+    }
   }
 
   // Step 2: Render spawn-plan and wave-start ceremony
