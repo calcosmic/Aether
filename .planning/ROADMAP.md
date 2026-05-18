@@ -50,7 +50,7 @@ See `.planning/milestones/` for full archived phase details.
 | 137. Hive Wisdom Injection | v1.21 | 0/3 | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 4/4 | Complete   | 2026-05-18 |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
-| 140. Hardening and Validation | v1.21 | 0/3 | Planned | - |
+| 140. Hardening and Validation | v1.21 | 1/3 | In Progress|  |
 
 ## Phase Details
 
@@ -144,11 +144,11 @@ Plans:
   2. Wrapper commands (Claude plan/build/continue) produce equivalent ceremony and state outcomes to direct `aether host` invocations
   3. No regression in existing TS test suite (220+ tests) or Go test suite (2900+ tests)
   4. Temp files and completion artifacts are cleaned up after normal completion and after graceful shutdown
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 140-01-PLAN.md -- Wrapper ceremony alignment tests for all commands (D-01, D-02, D-03)
+- [x] 140-01-PLAN.md -- Wrapper ceremony alignment tests for all commands (D-01, D-02, D-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 140-02-PLAN.md -- Cross-phase integration tests combining hive + spawn + iteration pipeline

@@ -1534,3 +1534,410 @@ describe("ceremony output", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-phase integration: hive + spawn + iteration (VAL-03)
+// ---------------------------------------------------------------------------
+
+describe("cross-phase integration (hive + spawn + iteration)", () => {
+  let goCalls: string[][];
+  let capturedAllDispatches: unknown[][];
+  let capturedDispatchOpts: unknown[];
+  let dispatchCallCount: number;
+  let stderrOutput: string;
+
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+    goCalls = [];
+    capturedAllDispatches = [];
+    capturedDispatchOpts = [];
+    dispatchCallCount = 0;
+    stderrOutput = "";
+
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stderrOutput += chunk;
+      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stderr.write;
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  it("build pipeline exercises hive, spawn, and iteration together", async () => {
+    // Set up mock callGoJSON that returns hive-read entries, registry-list,
+    // build manifest with queen_execution_policy (spawn budget: max_workers: 10),
+    // and build-finalize responses. First dispatch workers fail, second succeed.
+    const handler = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return {
+          entries: [
+            {
+              id: "1",
+              text: "Use table-driven tests for Go code",
+              domain: "go",
+              confidence: 0.92,
+              source_repo: "colony-a",
+              source_repos: ["colony-a"],
+              created_at: "2026-05-18T00:00:00Z",
+              accessed_at: "2026-05-18T00:00:00Z",
+              access_count: 3,
+            },
+          ],
+          total: 1,
+        } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [
+            {
+              repo_path: process.cwd(),
+              domains: ["go", "typescript"],
+              active: true,
+              registered_at: "2026-05-18T00:00:00Z",
+            },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Implement feature", wave: 1, execution_wave: 1, skill_section: "" },
+              { name: "Watcher-01", caste: "watcher", task: "Verify tests", wave: 1, execution_wave: 1, skill_section: "" },
+            ],
+            queen_execution_policy: {
+              spawn_budget: { max_workers: 10 },
+            },
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    // Set mock at both levels: host.ts uses _callGoJSONRef; hive-injector uses go-bridge module-level callGoJSON
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    let dispatchNum = 0;
+    __setDispatchWorkers(async (opts, dispatches) => {
+      dispatchNum++;
+      dispatchCallCount++;
+      capturedAllDispatches.push([...dispatches]);
+      capturedDispatchOpts.push(opts);
+
+      if (dispatchNum === 1) {
+        // First iteration: workers fail with blockers -> low confidence -> iterate
+        return [
+          { name: "Builder-01", status: "failed", summary: "Build failed", duration: 5,
+            blockers: ["missing import 'types'"] },
+          { name: "Watcher-01", status: "failed", summary: "Tests failed", duration: 3,
+            blockers: ["compile error in module"] },
+        ];
+      }
+      // Second iteration: workers succeed with test results -> high confidence -> stop
+      return [
+        { name: "Builder-01", status: "completed", summary: "Done", duration: 8,
+          files_created: ["src/feature.ts"], files_modified: ["src/helper.ts"],
+          tests_written: ["test/feature.test.ts"],
+          test_results: { passed: 10, total: 10 } },
+        { name: "Watcher-01", status: "completed", summary: "All green", duration: 4,
+          files_modified: ["test/feature.test.ts"],
+          test_results: { passed: 10, total: 10 } },
+      ];
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    // 1. hive-read was called
+    const hiveReadCall = goCalls.find((args) => args[0] === "hive-read");
+    assert.ok(hiveReadCall, "hive-read should have been called");
+
+    // 2. spawnOrchestrator in dispatch opts has totalBudget from manifest
+    assert.ok(capturedDispatchOpts.length >= 1, "Should have captured dispatch opts");
+    const firstOpts = capturedDispatchOpts[0] as Record<string, unknown>;
+    assert.ok(firstOpts.spawnOrchestrator, "Dispatch opts should include spawnOrchestrator");
+    const orchestrator = firstOpts.spawnOrchestrator as { totalBudget: number; consumedBudget: number };
+    assert.equal(orchestrator.totalBudget, 10, "Total budget should match manifest max_workers");
+    assert.equal(orchestrator.consumedBudget, 2, "Consumed budget should equal manifest dispatch count");
+
+    // 3. build-finalize called twice (2 iterations)
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 2, "Should call build-finalize twice (2 iterations)");
+
+    // 4. Second iteration dispatches have task_brief with blocker text from iteration 1
+    assert.ok(capturedAllDispatches.length >= 2, "Should have at least 2 dispatch calls");
+    const secondDispatches = capturedAllDispatches[1] as Array<Record<string, unknown>>;
+    assert.ok(secondDispatches.length > 0, "Second dispatch should have dispatches");
+    const hasBlockerFeedback = secondDispatches.some(
+      (d) => typeof d.task_brief === "string" && (
+        d.task_brief!.includes("missing import") ||
+        d.task_brief!.includes("compile error") ||
+        d.task_brief!.includes("Previous iteration feedback")
+      ),
+    );
+    assert.ok(hasBlockerFeedback, "Second iteration dispatches should contain blocker text from iteration 1");
+
+    // 5. stderr contains hive wisdom and iteration markers
+    assert.ok(
+      stderrOutput.includes("Injecting hive wisdom"),
+      `Stderr should contain hive wisdom injection marker. Got: ${stderrOutput.slice(0, 500)}`
+    );
+    assert.ok(
+      stderrOutput.includes("Iteration"),
+      `Stderr should contain iteration markers. Got: ${stderrOutput.slice(0, 500)}`
+    );
+  });
+
+  it("plan-through-build-through-continue pipeline", async () => {
+    // This test verifies the 3-step lifecycle runs end-to-end without errors.
+    // Each step uses its own mock setup and verifies its finalizer is called.
+    const handler = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [
+            {
+              repo_path: process.cwd(),
+              domains: ["go"],
+              active: true,
+              registered_at: "2026-05-18T00:00:00Z",
+            },
+          ],
+        } as unknown as T;
+      }
+
+      if (cmd === "plan") {
+        return {
+          plan_manifest: { phases: 5 },
+          dispatches: [
+            { name: "Scout-01", caste: "scout", task: "Research codebase", wave: 1, execution_wave: 1 },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "plan-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Implement", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      if (cmd === "continue") {
+        return {
+          continue_manifest: { phase: 1 },
+          dispatches: [
+            { name: "Watcher-01", caste: "watcher", task: "Verify", wave: 1, execution_wave: 1 },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "continue-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "completed",
+        summary: "Done",
+        duration: 5,
+        files_created: ["src/module.ts"],
+        test_results: { passed: 8, total: 8 },
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const buildDef = getHostCommandDefinition("build")!;
+
+    // Step 1: Run plan pipeline
+    const planParsed = parseArgs(["node", "host.js", "plan", "--simulate"]);
+    await runDispatchedPlanCommand(bridge, planParsed);
+
+    // Verify plan-finalize was called
+    const planFinalizeCount = countGoCommandCalls(goCalls, "plan-finalize");
+    assert.equal(planFinalizeCount, 1, "plan-finalize should have been called once");
+
+    // Step 2: Run build pipeline
+    const buildParsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    await runDispatchedBuildCommand(bridge, buildParsed, buildDef);
+
+    // Verify build-finalize was called
+    const buildFinalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.ok(buildFinalizeCount >= 1, "build-finalize should have been called at least once");
+
+    // Step 3: Run continue pipeline
+    const continueParsed = parseArgs(["node", "host.js", "continue", "--simulate"]);
+    await runDispatchedContinueCommand(bridge, continueParsed);
+
+    // Verify continue-finalize was called
+    const continueFinalizeCount = countGoCommandCalls(goCalls, "continue-finalize");
+    assert.equal(continueFinalizeCount, 1, "continue-finalize should have been called once");
+
+    // Verify all 3 steps completed without throwing
+    assert.equal(dispatchCallCount, 3, "Should have dispatched workers 3 times (plan + build + continue)");
+  });
+
+  it("spawn budget consumed across iterations", async () => {
+    // Manifest has max_workers: 5 with 3 dispatches. After iteration 1 consumes 3,
+    // verify iteration 2 still dispatches (budget allows it).
+    // Assert spawnOrchestrator.consumedBudget tracks correctly across iterations.
+    const handler = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [
+            {
+              repo_path: process.cwd(),
+              domains: ["go"],
+              active: true,
+              registered_at: "2026-05-18T00:00:00Z",
+            },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build A", wave: 1, execution_wave: 1 },
+              { name: "Builder-02", caste: "builder", task: "Build B", wave: 1, execution_wave: 1 },
+              { name: "Builder-03", caste: "builder", task: "Build C", wave: 1, execution_wave: 1 },
+            ],
+            queen_execution_policy: {
+              spawn_budget: { max_workers: 5 },
+            },
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    let dispatchNum = 0;
+    __setDispatchWorkers(async (opts, dispatches) => {
+      dispatchNum++;
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      capturedDispatchOpts.push(opts);
+
+      if (dispatchNum === 1) {
+        // First iteration: fail with blockers -> triggers second iteration
+        return dispatches.map((d: Record<string, unknown>) => ({
+          name: d.name,
+          status: "failed",
+          summary: "Failed",
+          duration: 5,
+          blockers: ["compile error"],
+        }));
+      }
+      // Second iteration: succeed with test results -> high confidence, stop
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "completed",
+        summary: "Done",
+        duration: 5,
+        files_created: ["src/module.ts"],
+        test_results: { passed: 10, total: 10 },
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    // Should have 2 iterations (first fails, second succeeds)
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 2, "Should call build-finalize twice");
+
+    // First dispatch opts should have spawnOrchestrator with totalBudget=5, consumedBudget=3
+    assert.ok(capturedDispatchOpts.length >= 2, "Should have captured dispatch opts for both iterations");
+    const firstOpts = capturedDispatchOpts[0] as Record<string, unknown>;
+    assert.ok(firstOpts.spawnOrchestrator, "First dispatch opts should include spawnOrchestrator");
+    const firstOrchestrator = firstOpts.spawnOrchestrator as { totalBudget: number; consumedBudget: number };
+    assert.equal(firstOrchestrator.totalBudget, 5, "First iteration totalBudget should be 5");
+    assert.equal(firstOrchestrator.consumedBudget, 3, "First iteration consumedBudget should be 3 (manifest dispatch count)");
+
+    // Second dispatch opts should also have spawnOrchestrator
+    const secondOpts = capturedDispatchOpts[1] as Record<string, unknown>;
+    assert.ok(secondOpts.spawnOrchestrator, "Second dispatch opts should include spawnOrchestrator");
+    const secondOrchestrator = secondOpts.spawnOrchestrator as { totalBudget: number; consumedBudget: number };
+    assert.equal(secondOrchestrator.totalBudget, 5, "Second iteration totalBudget should be 5");
+
+    // Budget allows second iteration: 5 total - 3 consumed from first = 2 remaining, and 3 new dispatches
+    // The host re-fetches manifest for iteration 2 which returns 3 dispatches, but the confidence loop
+    // checks budgetRemaining from the ConfidenceLoop (not SpawnOrchestrator), so iteration 2 should proceed
+    // since default budget of 20 is used by ConfidenceLoop (unless totalBudget < 20).
+    // With totalBudget=5 and 3 workers used in iteration 1, ConfidenceLoop budgetRemaining = 5-3 = 2.
+    // But dispatches for iteration 2 = 3 > 2 remaining -> budget exhausted after iteration 2.
+    // The second iteration DOES dispatch because budget check happens AFTER evaluate(), not before.
+    assert.equal(dispatchCallCount, 2, "Should dispatch 2 waves");
+
+    // Verify stderr contains iteration ceremony markers
+    assert.ok(
+      stderrOutput.includes("Iteration"),
+      `Stderr should contain iteration markers. Got: ${stderrOutput.slice(0, 500)}`
+    );
+  });
+});
