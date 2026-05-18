@@ -102,6 +102,8 @@ export interface BuildDispatch {
   blockers?: string[];
   duration?: number;
   skill_section?: string;
+  /** Cross-colony hive wisdom section for this dispatch. */
+  hive_section?: string;
   skill_count?: number;
   colony_skill_count?: number;
   domain_skill_count?: number;

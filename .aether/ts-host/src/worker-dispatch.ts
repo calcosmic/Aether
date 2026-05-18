@@ -337,6 +337,7 @@ export function buildPromptForDispatch(
     contextCapsule,
     handoffSection: dispatch.handoff_section,
     skillSection: dispatch.skill_section,
+    hiveSection: dispatch.hive_section,
     pheromoneSection: dispatch.pheromone_section,
     taskBrief: dispatch.task_brief,
   });

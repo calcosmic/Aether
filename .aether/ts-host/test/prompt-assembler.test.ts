@@ -249,4 +249,110 @@ describe("prompt-assembler", () => {
       "Prompt should not have empty section gaps from empty skillSection"
     );
   });
+
+  // ---------------------------------------------------------------------------
+  // Hive section injection tests (HIVE-03)
+  // ---------------------------------------------------------------------------
+
+  it("hive section appears in prompt when hiveSection is a non-empty string", () => {
+    const prompt = assemblePrompt({
+      cwd: REPO_ROOT,
+      caste: "builder",
+      name: "Mason-67",
+      task: "Implement feature X",
+      platform: "claude",
+      agentName: "aether-builder",
+      hiveSection: "## HIVE WISDOM (Cross-Colony Patterns)\n\n(go, 0.90) Prefer table-driven tests",
+    });
+
+    assert.ok(
+      prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
+      "Prompt should contain the hive section header when hiveSection is provided"
+    );
+    assert.ok(
+      prompt.includes("(go, 0.90) Prefer table-driven tests"),
+      "Prompt should contain the hive wisdom content text"
+    );
+  });
+
+  it("hive section is absent when hiveSection is undefined (HIVE-03)", () => {
+    const prompt = assemblePrompt({
+      cwd: REPO_ROOT,
+      caste: "builder",
+      name: "Mason-67",
+      task: "Implement feature X",
+      platform: "claude",
+      agentName: "aether-builder",
+      // hiveSection intentionally omitted
+    });
+
+    assert.ok(
+      !prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
+      "Prompt should not contain a hive section header when hiveSection is undefined"
+    );
+  });
+
+  it("hive section is absent when hiveSection is empty string", () => {
+    const prompt = assemblePrompt({
+      cwd: REPO_ROOT,
+      caste: "builder",
+      name: "Mason-67",
+      task: "Implement feature X",
+      platform: "claude",
+      agentName: "aether-builder",
+      hiveSection: "",
+    });
+
+    assert.ok(
+      !prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
+      "Prompt should not contain a hive section header when hiveSection is empty"
+    );
+    assert.ok(
+      !/\n\n\n\n/.test(prompt),
+      "Prompt should not have empty section gaps from empty hiveSection"
+    );
+  });
+
+  it("hive section appears after skill section when both present", () => {
+    const prompt = assemblePrompt({
+      cwd: REPO_ROOT,
+      caste: "builder",
+      name: "Mason-67",
+      task: "Implement feature X",
+      platform: "claude",
+      agentName: "aether-builder",
+      skillSection: "## Skills\n- Go testing patterns",
+      hiveSection: "## HIVE WISDOM (Cross-Colony Patterns)\n\n(go, 0.90) Prefer table-driven tests",
+    });
+
+    const skillIndex = prompt.indexOf("## Skills");
+    const hiveIndex = prompt.indexOf("## HIVE WISDOM (Cross-Colony Patterns)");
+    assert.ok(skillIndex > 0, "Prompt should contain skill section");
+    assert.ok(hiveIndex > 0, "Prompt should contain hive section");
+    assert.ok(
+      skillIndex < hiveIndex,
+      "Hive section should appear after skill section in prompt"
+    );
+  });
+
+  it("hive section handles non-string hiveSection gracefully", () => {
+    const prompt = assemblePrompt({
+      cwd: REPO_ROOT,
+      caste: "builder",
+      name: "Mason-67",
+      task: "Implement feature X",
+      platform: "claude",
+      agentName: "aether-builder",
+      hiveSection: 42 as unknown as string,
+    });
+
+    assert.ok(
+      typeof prompt === "string",
+      "assemblePrompt should return a string even with non-string hiveSection"
+    );
+    assert.ok(
+      !prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
+      "Prompt should not contain a hive section header for non-string hiveSection"
+    );
+  });
 });

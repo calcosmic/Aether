@@ -8,7 +8,8 @@
  * Satisfies TS-01 (real worker dispatch).
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Platform } from "./platform-dispatcher.js";
@@ -31,6 +32,20 @@ export interface PromptAssemblyConfig {
   platform: Platform;
   /** Agent name (e.g. "aether-builder"). */
   agentName: string;
+  /** Go-provided colony-prime context section. */
+  contextCapsule?: string | undefined;
+  /** Go-provided previous worker handoff section. */
+  handoffSection?: string | undefined;
+  /** Go-provided skill injection section. */
+  skillSection?: string | undefined;
+  /** Cross-colony hive wisdom section. Injected after skills when present. */
+  hiveSection?: string | undefined;
+  /** Go-provided pheromone section, if not folded into context. */
+  pheromoneSection?: string | undefined;
+  /** Go-provided task brief. */
+  taskBrief?: string | undefined;
+  /** Test override for global Queen scope. */
+  homeDir?: string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,15 +100,13 @@ export function loadAgentDefinition(
  *
  * Sections are assembled in order:
  * 1. Agent Definition
- * 2. Context Capsule (stub — to be filled with QUEEN.md, colony goal, etc.)
- * 3. Worker Handoff Section (stub)
- * 4. Skill Section (stub)
- * 5. Pheromone Section (stub)
+ * 2. Context Capsule (Go-provided, or a local/global Queen fallback)
+ * 3. Worker Handoff Section
+ * 4. Skill Section
+ * 4a. Hive Wisdom Section (when present)
+ * 5. Pheromone Section
  * 6. Task Brief
  * 7. Response Contract
- *
- * Stubs for context capsule, handoff, skills, and pheromones are included
- * as placeholders for future waves.
  *
  * @param config - Prompt assembly configuration
  * @returns Fully assembled prompt string
@@ -101,11 +114,12 @@ export function loadAgentDefinition(
 export function assemblePrompt(config: PromptAssemblyConfig): string {
   const agentDef = loadAgentDefinition(config.cwd, config.platform, config.agentName);
 
-  const contextCapsule = renderContextCapsule(config);
-  const handoffSection = ""; // stub
-  const skillSection = ""; // stub
-  const pheromoneSection = ""; // stub
-  const taskBrief = renderTaskBrief(config);
+  const contextCapsule = firstNonEmpty(config.contextCapsule, renderContextCapsule(config));
+  const handoffSection = compactSection(config.handoffSection);
+  const skillSection = compactSection(config.skillSection);
+  const hiveSection = compactSection(config.hiveSection);
+  const pheromoneSection = compactSection(config.pheromoneSection);
+  const taskBrief = firstNonEmpty(config.taskBrief, renderTaskBrief(config));
   const responseContract = renderResponseContract(config);
 
   const parts: string[] = [];
@@ -113,6 +127,7 @@ export function assemblePrompt(config: PromptAssemblyConfig): string {
   if (contextCapsule) parts.push(contextCapsule);
   if (handoffSection) parts.push(handoffSection);
   if (skillSection) parts.push(skillSection);
+  if (hiveSection) parts.push(hiveSection);
   if (pheromoneSection) parts.push(pheromoneSection);
   parts.push(taskBrief);
   parts.push(responseContract);
@@ -125,30 +140,55 @@ export function assemblePrompt(config: PromptAssemblyConfig): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Render a simplified context capsule.
+ * Render a simplified context capsule fallback.
  *
- * For now, this loads QUEEN.md if it exists and includes a colony goal
- * placeholder. Full context capsule assembly (skills, pheromones, hive
- * wisdom, etc.) will be added in a later wave.
+ * Real worker dispatch should pass Go's colony-prime prompt section through
+ * `contextCapsule`. This fallback only keeps direct prompt assembly usable in
+ * tests or platforms that have not yet fetched Go context.
  *
  * @param config - Prompt assembly configuration
  * @returns Context capsule string (may be empty if no context available)
  */
-function renderContextCapsule(config: PromptAssemblyConfig): string {
+export function renderContextCapsule(config: PromptAssemblyConfig): string {
   const parts: string[] = [];
 
-  // Try to load QUEEN.md from hub
-  try {
-    const { homedir } = require("node:os");
-    const queenPath = join(homedir(), ".aether", "QUEEN.md");
-    const queenContent = readFileSync(queenPath, "utf-8");
-    // Take first 2000 chars as a compact context capsule
-    parts.push("## Colony Wisdom (QUEEN.md)\n\n" + queenContent.slice(0, 2000));
-  } catch {
-    // QUEEN.md is optional
+  const localQueen = readOptionalText(join(config.cwd, ".aether", "QUEEN.md"));
+  if (localQueen) {
+    parts.push("## Repo Queen Wisdom (.aether/QUEEN.md)\n\n" + localQueen.slice(0, 2000));
+  }
+
+  const home = config.homeDir ?? homedir();
+  const globalQueen = readOptionalText(join(home, ".aether", "QUEEN.md"));
+  if (globalQueen) {
+    parts.push("## Global Queen Wisdom (~/.aether/QUEEN.md)\n\n" + globalQueen.slice(0, 2000));
   }
 
   return parts.join("\n\n");
+}
+
+function readOptionalText(path: string): string {
+  if (!existsSync(path)) {
+    return "";
+  }
+  try {
+    return readFileSync(path, "utf-8").trim();
+  } catch {
+    return "";
+  }
+}
+
+function compactSection(value: string | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const compacted = compactSection(value);
+    if (compacted) {
+      return compacted;
+    }
+  }
+  return "";
 }
 
 /**

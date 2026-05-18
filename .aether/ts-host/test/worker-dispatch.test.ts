@@ -176,6 +176,58 @@ describe("worker-dispatch", () => {
     assert.match(prompt, /Go-authored task brief/);
   });
 
+  it("buildPromptForDispatch passes hive_section from dispatch to prompt", () => {
+    const dispatch: BuildDispatch = {
+      stage: "wave",
+      wave: 1,
+      caste: "builder",
+      name: "Builder-Hive",
+      task: "Implement hive wiring",
+      status: "planned",
+      hive_section: "## HIVE WISDOM (Cross-Colony Patterns)\n\n(go, 0.90) Prefer table-driven tests",
+    };
+
+    const prompt = buildPromptForDispatch(
+      defaultOpts,
+      dispatch,
+      "claude",
+      "aether-builder"
+    );
+
+    assert.ok(
+      prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
+      "Prompt should contain hive section header from dispatch.hive_section"
+    );
+    assert.ok(
+      prompt.includes("(go, 0.90) Prefer table-driven tests"),
+      "Prompt should contain hive wisdom content from dispatch.hive_section"
+    );
+  });
+
+  it("buildPromptForDispatch omits hive section when hive_section is undefined", () => {
+    const dispatch: BuildDispatch = {
+      stage: "wave",
+      wave: 1,
+      caste: "builder",
+      name: "Builder-NoHive",
+      task: "Implement without hive",
+      status: "planned",
+      // hive_section intentionally omitted
+    };
+
+    const prompt = buildPromptForDispatch(
+      defaultOpts,
+      dispatch,
+      "claude",
+      "aether-builder"
+    );
+
+    assert.ok(
+      !prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
+      "Prompt should not contain hive section when dispatch.hive_section is undefined"
+    );
+  });
+
   it("dispatchWorkers flattens wave results", async () => {
     resetMocks();
     __setDispatchSingleWorker(mockDispatchSingleWorker);
