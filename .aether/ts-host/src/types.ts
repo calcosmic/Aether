@@ -587,6 +587,57 @@ export interface MemoryHealth {
   pheromones: number;
 }
 
+// ---------------------------------------------------------------------------
+// Hive wisdom types (cmd/hive.go, cmd/registry.go)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single wisdom entry from the Hive Brain.
+ * Mirrors the Go hiveWisdomEntry struct.
+ */
+export interface HiveWisdomEntry {
+  id: string;
+  text: string;
+  domain: string;
+  source_repo: string;
+  source_repos: string[];
+  confidence: number;
+  created_at: string;
+  accessed_at: string;
+  access_count: number;
+}
+
+/**
+ * Result from `aether hive-read` in JSON mode.
+ */
+export interface HiveReadResult {
+  entries: HiveWisdomEntry[] | null;
+  total: number;
+}
+
+/**
+ * A single colony registry entry.
+ * Mirrors the Go registryEntry struct.
+ */
+export interface RegistryEntry {
+  repo_path: string;
+  domains: string[];
+  active: boolean;
+  registered_at: string;
+}
+
+/**
+ * Result from `aether registry-list` in JSON mode.
+ */
+export interface RegistryListResult {
+  colonies: RegistryEntry[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Status types (cmd/status.go)
+// ---------------------------------------------------------------------------
+
 /**
  * Result from `aether status` in JSON mode.
  * Mirrors the Go buildStatusResult map[string]interface{}.
