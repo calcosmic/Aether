@@ -30,6 +30,7 @@ import {
 import { runGoJSONCommand } from "./go-command.js";
 import { dispatchWorkers, toWorkerResults, type DispatchOptions } from "./worker-dispatch.js";
 import { detectAvailablePlatforms, formatPlatformUnavailableMessage } from "./platform-dispatcher.js";
+import { createSpawnOrchestrator } from "./spawn-orchestrator.js";
 import {
   createCeremonyAdapter,
   type CeremonyAdapter,
@@ -567,11 +568,26 @@ async function runDispatchedBuildCommand(
   // Step 4b: Hive wisdom injection summary
   emitHiveSummary(dispatches);
 
-  // Step 5: Dispatch workers
+  // Step 5: Dispatch workers with spawn orchestrator
+  // Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
+  const spawnBudget = (buildManifest as Record<string, unknown>)?.queen_execution_policy != null
+    ? ((buildManifest as Record<string, unknown>).queen_execution_policy as Record<string, unknown>)?.spawn_budget != null
+      ? (((buildManifest as Record<string, unknown>).queen_execution_policy as Record<string, unknown>).spawn_budget as Record<string, unknown>)?.max_workers as number | undefined ?? 20
+      : 20
+    : 20;
+  const spawnOrchestrator = createSpawnOrchestrator({
+    goBinaryPath: bridge.goBinaryPath,
+    cwd: bridge.cwd,
+    totalBudget: spawnBudget,
+    consumedBudget: dispatches.length, // Manifest workers already count against budget
+    currentDepth: 1,
+  });
+
   const dispatchOpts: DispatchOptions = {
     goBinaryPath: bridge.goBinaryPath,
     cwd: bridge.cwd,
     simulateWorkers: parsed.simulate,
+    spawnOrchestrator,
   };
   const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
   const mappedResults = toWorkerResults(dispatches as any[], workerResults);
