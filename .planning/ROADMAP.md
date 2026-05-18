@@ -42,7 +42,7 @@ See `.planning/milestones/` for full archived phase details.
 - [ ] **Phase 137: Hive Wisdom Injection** - Call Go hive-read from TS host, inject wisdom into worker prompts, prove graceful degradation and domain tag expansion
 - [x] **Phase 138: Worker-to-Worker Spawning** - Workers request child workers mid-build with budget enforcement, spawn depth limits, and result attachment (completed 2026-05-18)
 - [ ] **Phase 139: Confidence-Driven Build Iteration** - Build coordinator loops dispatch/evaluate up to 3 iterations with diminishing returns detection and cumulative budget
-- [ ] **Phase 140: Hardening and Validation** - End-to-end integration tests, wrapper alignment verification, milestone audit
+- [x] **Phase 140: Hardening and Validation** - End-to-end integration tests, wrapper alignment verification, milestone audit (completed 2026-05-18)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -50,7 +50,7 @@ See `.planning/milestones/` for full archived phase details.
 | 137. Hive Wisdom Injection | v1.21 | 0/3 | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 4/4 | Complete   | 2026-05-18 |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
-| 140. Hardening and Validation | v1.21 | 2/3 | In Progress|  |
+| 140. Hardening and Validation | v1.21 | 3/3 | Complete   | 2026-05-18 |
 
 ## Phase Details
 
@@ -144,7 +144,7 @@ Plans:
   2. Wrapper commands (Claude plan/build/continue) produce equivalent ceremony and state outcomes to direct `aether host` invocations
   3. No regression in existing TS test suite (220+ tests) or Go test suite (2900+ tests)
   4. Temp files and completion artifacts are cleaned up after normal completion and after graceful shutdown
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
@@ -154,4 +154,4 @@ Plans:
 - [x] 140-02-PLAN.md -- Cross-phase integration tests combining hive + spawn + iteration pipeline
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 140-03-PLAN.md -- Milestone audit test and full regression verification
+- [x] 140-03-PLAN.md -- Milestone audit test and full regression verification
