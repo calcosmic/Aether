@@ -21,10 +21,29 @@ import {
   __setDetectAvailablePlatforms,
   __restoreDetectAvailablePlatforms,
   __restoreAllMocks,
+  runDispatchedBuildCommand,
+  runDispatchedPlanCommand,
+  runDryRunDispatchedCommand,
 } from "../src/host.js";
 
 import type { DispatchResult } from "../src/worker-dispatch.js";
 import type { Platform } from "../src/platform-dispatcher.js";
+import type { GoBridgeOptions } from "../src/go-bridge.js";
+import {
+  __setCreateCeremonyAdapter,
+  __restoreCreateCeremonyAdapter,
+} from "../src/ceremony-adapter.js";
+import type { CeremonyAdapter, CeremonyWorkflow } from "../src/ceremony-adapter.js";
+import {
+  __setCallGoJSON as __setGoBridgeCallGoJSON,
+  __restoreCallGoJSON as __restoreGoBridgeCallGoJSON,
+} from "../src/go-bridge.js";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+// Compute repo root from test file path: test/host.test.ts -> ts-host/test -> .aether -> repo root
+const _testDirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(_testDirname, "..", "..", "..");
 
 // ---------------------------------------------------------------------------
 // Host integration tests (existing)
@@ -545,5 +564,295 @@ describe("dispatched build runner", () => {
 
     __restoreDetectAvailablePlatforms();
     assert.equal(detectCalled, false, "Detect should not be called during restore");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Playbook context injection tests (CEREMONY-06)
+// ---------------------------------------------------------------------------
+
+function createMockCeremonyAdapterForHost(): CeremonyAdapter {
+  return {
+    renderSpawnPlan: (_workflow: CeremonyWorkflow, _manifest: unknown) => "",
+    renderWaveStart: (_workflow: CeremonyWorkflow, _manifest: unknown, _wave: number) => "",
+    renderWorkerComplete: (_workflow: CeremonyWorkflow, _worker: unknown) => "",
+    renderCloseout: (_workflow: CeremonyWorkflow, _completionPath: string) => "",
+  };
+}
+
+describe("playbook context injection (CEREMONY-06)", () => {
+  let capturedDispatches: unknown[] | undefined;
+  let goCalls: string[][];
+
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+    capturedDispatches = undefined;
+    goCalls = [];
+
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapterForHost());
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  it("build runner injects playbook context into worker task_briefs", async () => {
+    const handler = <T>(_opts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["typescript"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Implement feature", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    const allCapturedDispatches: unknown[][] = [];
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      allCapturedDispatches.push(dispatches);
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "completed",
+        summary: "Done",
+        duration: 5,
+        files_created: ["src/feature.ts"],
+        tests_written: ["test/feature.test.ts"],
+        test_results: { passed: 10, total: 10 },
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    // Use --max-iterations 1 to ensure single iteration (confidence high from test_results)
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate", "--max-iterations", "1"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    assert.ok(allCapturedDispatches.length > 0, "dispatchWorkers should have been called");
+
+    // Verify playbook context in first iteration dispatches
+    const firstIterationDispatches = allCapturedDispatches[0]!;
+    for (const d of firstIterationDispatches) {
+      const dispatch = d as Record<string, unknown>;
+      const brief = dispatch.task_brief as string;
+      assert.ok(
+        typeof brief === "string" && brief.includes("Relevant Playbooks"),
+        `Build dispatch ${dispatch.name} task_brief should contain playbook context. Got: ${brief?.slice(0, 200)}`
+      );
+    }
+  });
+
+  it("plan runner injects playbook context into worker task_briefs", async () => {
+    const handler = <T>(_opts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["typescript"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "plan") {
+        return {
+          plan_manifest: { phases: 5 },
+          dispatches: [
+            { name: "Scout-01", caste: "scout", task: "Research codebase", wave: 1, execution_wave: 1 },
+          ],
+        } as unknown as T;
+      }
+      if (cmd === "plan-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      capturedDispatches = dispatches;
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "completed",
+        summary: "Done",
+        duration: 5,
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "plan", "--simulate"]);
+    // Use repo root as cwd so plan playbooks are found at .aether/docs/command-playbooks/
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: REPO_ROOT };
+
+    await runDispatchedPlanCommand(bridge, parsed);
+
+    assert.ok(capturedDispatches, "dispatchWorkers should have been called for plan");
+    assert.ok(capturedDispatches!.length > 0, "dispatches should not be empty");
+
+    for (const d of capturedDispatches!) {
+      const dispatch = d as Record<string, unknown>;
+      const brief = dispatch.task_brief as string;
+      assert.ok(
+        typeof brief === "string" && brief.includes("Relevant Playbooks"),
+        `Plan dispatch ${dispatch.name} task_brief should contain playbook context. Got: ${brief?.slice(0, 200)}`
+      );
+    }
+  });
+
+  it("dry-run build injects playbook context into manifest dispatches", async () => {
+    const handler = <T>(_opts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["typescript"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--dry-run"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    // Capture stdout to inspect the dry-run manifest output
+    let stdoutOutput = "";
+    const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stdoutOutput += chunk;
+      return originalStdoutWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stdout.write;
+
+    try {
+      await runDryRunDispatchedCommand(bridge, parsed, def);
+
+      // Verify playbook context appears in the manifest output
+      assert.ok(
+        stdoutOutput.includes("Relevant Playbooks"),
+        `Dry-run output should contain playbook context. Got: ${stdoutOutput.slice(0, 500)}`
+      );
+    } finally {
+      process.stdout.write = originalStdoutWrite;
+    }
+  });
+
+  it("dry-run plan injects playbook context into manifest dispatches", async () => {
+    const handler = <T>(_opts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["typescript"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "plan") {
+        return {
+          plan_manifest: { phases: 5 },
+          dispatches: [
+            { name: "Scout-01", caste: "scout", task: "Research", wave: 1, execution_wave: 1 },
+          ],
+        } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(handler);
+    __setGoBridgeCallGoJSON(handler);
+
+    const parsed = parseArgs(["node", "host.js", "plan", "--dry-run"]);
+    // Use repo root as cwd so plan playbooks are found at .aether/docs/command-playbooks/
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: REPO_ROOT };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("plan")!;
+
+    let stdoutOutput = "";
+    const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stdoutOutput += chunk;
+      return originalStdoutWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stdout.write;
+
+    try {
+      await runDryRunDispatchedCommand(bridge, parsed, def);
+
+      assert.ok(
+        stdoutOutput.includes("Relevant Playbooks"),
+        `Dry-run plan output should contain playbook context. Got: ${stdoutOutput.slice(0, 500)}`
+      );
+    } finally {
+      process.stdout.write = originalStdoutWrite;
+    }
   });
 });

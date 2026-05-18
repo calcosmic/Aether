@@ -832,6 +832,15 @@ async function runDispatchedBuildCommand(
 
     // Update dispatches and spawn orchestrator consumed budget for new dispatches
     dispatches = newDispatches;
+
+    // Re-inject playbook context for re-fetched dispatches (playbook content
+    // is lost when manifest is re-fetched from Go on subsequent iterations)
+    if (buildPlaybookContext) {
+      for (const d of dispatches) {
+        d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + buildPlaybookContext;
+      }
+    }
+
     // Re-create spawn orchestrator with updated budget for the new dispatches
     // The confidence loop already tracks cumulative budget internally
   }
