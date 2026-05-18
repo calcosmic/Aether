@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-05-18T18:37:37.745Z"
 last_activity: 2026-05-18
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 140 — hardening-and-validation
+**Current focus:** Phase 141 — survey noise filter + source anchors
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 141 (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-18 — Milestone v1.22 started
+Status: Roadmap defined, ready to plan
+Last activity: 2026-05-18 — Roadmap created with 4 phases (141-144)
 
 ## Known Blockers
 
@@ -36,9 +36,9 @@ Last activity: 2026-05-18 — Milestone v1.22 started
 
 ## Next Actions
 
-1. Plan Phase 138 (Worker-to-Worker Spawning)
-2. Execute Phase 138 plans
-3. Plan Phase 139 (Runtime Iteration)
+1. Plan Phase 141 (Survey Noise Filter + Source Anchors)
+2. Execute Phase 141 plans
+3. Plan Phase 142 (Grounding Gate + Decision Binding)
 
 ## Key Decisions (Carried Forward)
 
