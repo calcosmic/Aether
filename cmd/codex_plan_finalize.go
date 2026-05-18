@@ -173,9 +173,15 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if len(phases) == 0 || buildablePlanTaskCount(phases) == 0 {
 		return nil, fmt.Errorf("phase_plan contains no buildable tasks")
 	}
+	groundingWarnings := checkPlanGrounding(phases, manifest.Survey.SourceAnchors)
 	_, baseConfidence, baseGaps := synthesizeRouteSetterPlan(manifest.Goal, granularity, manifest.Survey, scoutReport)
 	confidence := mergePlanConfidence(baseConfidence, phasePlan.Confidence)
 	unresolvedGaps := limitStrings(uniqueSortedStrings(append(baseGaps, phasePlan.Gaps...)), 4)
+	planningLoop := evaluatePlanningLoop(confidence, unresolvedGaps, codexPlanOptions{
+		TargetConfidence: manifest.PlanningLoop.TargetConfidence,
+		MaxIterations:    manifest.PlanningLoop.MaxIterations,
+		Accept:           manifest.PlanningLoop.Accept,
+	}, manifest.Depth)
 
 	runHandle, err := beginRuntimeSpawnRun("plan", now)
 	if err != nil {
@@ -214,11 +220,11 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err != nil {
 		return nil, err
 	}
-	routeSetterFile, _, err := writeRouteSetterArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, routeSetterDispatch, confidence, unresolvedGaps, phases, emptySnapshots)
+	routeSetterFile, _, err := writeRouteSetterArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, emptySnapshots)
 	if err != nil {
 		return nil, err
 	}
-	planArtifactFile, _, err := writeWorkerPlanArtifact(root, planningDir, confidence, unresolvedGaps, phases, emptySnapshots, nil)
+	planArtifactFile, _, err := writeWorkerPlanArtifact(root, planningDir, confidence, unresolvedGaps, phases, planningLoop, emptySnapshots, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +255,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	}
 	updatedState.Events = append(trimmedEvents(updatedState.Events),
 		fmt.Sprintf("%s|planning_scout|plan-finalize|%s", now.Format(time.RFC3339), provenance.SourceSummary),
-		fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d phases with %d%% confidence from %s", now.Format(time.RFC3339), len(phases), confidence.Overall, provenance.SourceSummary),
+		fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d phases with %d%% confidence from %s; planning loop stopped: %s", now.Format(time.RFC3339), len(phases), confidence.Overall, provenance.SourceSummary, planningLoop.StopReason),
 	)
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
@@ -278,6 +284,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		"granularity_min":           granularityMin(granularity),
 		"granularity_max":           granularityMax(granularity),
 		"confidence":                confidence,
+		"planning_loop":             planningLoop,
 		"planning_dir":              planningDir,
 		"planning_files":            []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
 		"plan_artifact":             filepath.Base(planArtifactFile),
@@ -293,6 +300,20 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		"unresolved_clarifications": 0,
 		"planning_warning":          provenance.PlanningWarning,
 		"next":                      nextCommand,
+	}
+	if len(groundingWarnings) > 0 {
+		result["grounding_warnings"] = groundingWarnings
+		warningTexts := make([]string, len(groundingWarnings))
+		for i, w := range groundingWarnings {
+			warningTexts[i] = fmt.Sprintf("Phase %d (%s): %d tasks with no file references (%d anchors available)",
+				w.PhaseID, w.PhaseName, w.UngroundedTasks, w.AnchorCount)
+		}
+		groundingMsg := fmt.Sprintf("Grounding gate: %s", strings.Join(warningTexts, "; "))
+		if existing := provenance.PlanningWarning; existing != "" {
+			result["planning_warning"] = existing + "; " + groundingMsg
+		} else {
+			result["planning_warning"] = groundingMsg
+		}
 	}
 	addOrchestratorBoundaryGuidance(result, "plan", updatedState, nextCommand, manifest.BoundaryQuestions)
 	return result, nil
