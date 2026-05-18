@@ -112,18 +112,23 @@ export class ConfidenceLoop {
    * @returns A ConfidenceResult with the continue decision and metadata.
    */
   evaluate(currentConfidence: number, workersUsed: number): ConfidenceResult {
-    // Track budget
-    this.budgetConsumed += workersUsed;
-    const budgetRemaining = this.totalBudget - this.budgetConsumed;
+    // Track budget (only when budget tracking is enabled)
+    if (this.totalBudget > 0) {
+      this.budgetConsumed += workersUsed;
+    }
+    const budgetRemaining = this.totalBudget > 0
+      ? this.totalBudget - this.budgetConsumed
+      : 0;
 
     // Record confidence
     this.confidenceHistory.push(currentConfidence);
     const iterationCount = this.confidenceHistory.length;
 
-    // Compute delta from previous iteration
-    const previousConfidence =
-      iterationCount >= 2 ? this.confidenceHistory[iterationCount - 2]! : 0;
-    const delta = currentConfidence - previousConfidence;
+    // Compute delta from previous iteration (0 on first iteration)
+    const delta =
+      iterationCount >= 2
+        ? currentConfidence - this.confidenceHistory[iterationCount - 2]!
+        : 0;
 
     // Check stop conditions in priority order
     const stopReason = this.checkStopConditions(
