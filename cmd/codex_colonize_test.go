@@ -1878,3 +1878,68 @@ func TestSkipListDivergence(t *testing.T) {
 		f.Close()
 	}
 }
+
+// --- Source anchor planner context tests (Plan 141-02, Task 2) ---
+
+func TestLoadSurveyContext_IncludesAnchors(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goMod := "module example.com/test\ngo 1.24\n"
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	surveyDir := filepath.Join(dataDir, "survey")
+	if err := os.MkdirAll(surveyDir, 0755); err != nil {
+		t.Fatalf("mkdir survey: %v", err)
+	}
+
+	anchorsData, _ := json.MarshalIndent(map[string]interface{}{
+		"source_anchors": []string{"cmd/main.go", "pkg/util.go"},
+		"anchor_count":   2,
+		"summary":        "Repo-owned source files for plan grounding",
+	}, "", "  ")
+	if err := os.WriteFile(filepath.Join(surveyDir, "anchors.json"), append(anchorsData, '\n'), 0644); err != nil {
+		t.Fatalf("write anchors.json: %v", err)
+	}
+
+	ctx, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("loadCodexSurveyContext error: %v", err)
+	}
+
+	if len(ctx.SourceAnchors) != 2 {
+		t.Fatalf("len(SourceAnchors) = %d, want 2; got %v", len(ctx.SourceAnchors), ctx.SourceAnchors)
+	}
+	if !containsString(ctx.SourceAnchors, "cmd/main.go") {
+		t.Errorf("SourceAnchors missing cmd/main.go: %v", ctx.SourceAnchors)
+	}
+	if !containsString(ctx.SourceAnchors, "pkg/util.go") {
+		t.Errorf("SourceAnchors missing pkg/util.go: %v", ctx.SourceAnchors)
+	}
+}
+
+func TestLoadSurveyContext_AnchorsEmptyWhenNoFile(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goMod := "module example.com/test\ngo 1.24\n"
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	ctx, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("loadCodexSurveyContext error: %v", err)
+	}
+
+	if ctx.SourceAnchors == nil {
+		t.Fatal("SourceAnchors should be empty slice, not nil")
+	}
+	if len(ctx.SourceAnchors) != 0 {
+		t.Errorf("len(SourceAnchors) = %d, want 0", len(ctx.SourceAnchors))
+	}
+}
