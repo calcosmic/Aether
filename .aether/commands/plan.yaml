@@ -36,6 +36,9 @@ wrapper_additions:
     3. Route first to `/ant-build 1` or the runtime-surfaced next build command.
     4. If finalization blocks, follow the runtime recovery command first.
 guardrails:
+  - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
+  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."
+  - "Use visible live Task/subagent panels for plan ceremony. Run aether spawn-log before each dispatch and aether spawn-complete after."
   - "Do NOT run direct `aether plan` from Claude/OpenCode wrapper orchestration for manifest generation; use `aether host plan`."
   - "Do NOT run `aether plan --synthetic` after real wrapper Task agents complete."
   - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."

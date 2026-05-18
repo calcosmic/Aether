@@ -24,6 +24,9 @@ wrapper_additions:
     3. Note only the most relevant signal or risk.
     4. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
 guardrails:
+  - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
+  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."
+  - "Use visible live Task/subagent panels for build ceremony. Run aether spawn-log before each dispatch and aether spawn-complete after. Call build-finalize only after all terminal worker results are collected."
   - "Do NOT read or write colony state files by hand."
   - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."
   - "Do NOT parse visual output as authoritative state."
