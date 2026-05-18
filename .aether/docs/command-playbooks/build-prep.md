@@ -330,3 +330,50 @@ if [[ -n "$progress_bar" ]]; then
   echo "[Phase ${current_phase}/${total_phases}] ${progress_bar}"
 fi
 ```
+
+### Confidence-Driven Iteration
+
+After each dispatch wave, the host evaluates confidence from actual worker results
+(test pass rates, files covered, blockers) and decides whether to iterate again.
+
+**Defaults:**
+- Up to 3 iterations per build
+- Confidence target: 80%
+- Diminishing returns threshold: stops when delta < 5% for 2 consecutive iterations
+- Cumulative worker budget tracked from the spawn budget in the manifest
+
+**Flags:**
+- `--max-iterations N`: Custom iteration cap (overrides default 3)
+- `--target-confidence N`: Custom target 0-100 (overrides default 80)
+
+**Stop conditions (in priority order):**
+1. `max_iterations_met` — hard cap reached
+2. `confidence_target_met` — confidence >= target
+3. `budget_exhausted` — cumulative workers consumed exceeds spawn budget
+4. `diminishing_returns` — last 2 deltas both below 5% threshold
+5. `manifest_re_fetch_failed` — re-fetching manifest for next iteration failed
+6. `no_dispatches` — re-fetched manifest has no dispatches
+
+**Iteration feedback:**
+When iterating, blockers from the previous iteration are injected into the next
+iteration's worker task briefs so workers know what went wrong.
+
+**Ceremony output:**
+Iteration markers appear between dispatch waves:
+```
+── Iteration 1: confidence 40% (delta +0%, budget 19 workers remaining) ──
+── Iteration 2: confidence 90% (delta +50%, budget 18 workers remaining) [confidence_target_met] ──
+── Iteration complete: confidence_target_met ──
+```
+
+**stdout JSON** includes an `iterations` summary field:
+```json
+{
+  "ok": true,
+  "iterations": {
+    "count": 2,
+    "final_confidence": 90,
+    "stop_reason": "confidence_target_met"
+  }
+}
+```
