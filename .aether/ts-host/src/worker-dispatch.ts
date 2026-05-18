@@ -20,8 +20,10 @@ import {
   createPlatformDispatcher,
   detectAvailablePlatforms,
   formatPlatformUnavailableMessage,
+  classifyPlatformError,
   spawnWorker,
   type Platform,
+  type PlatformErrorClass,
   type WorkerConfig,
 } from "./platform-dispatcher.js";
 import {
@@ -186,6 +188,16 @@ export async function dispatchSingleWorker(
   } catch (dispatchErr: unknown) {
     const errMsg =
       dispatchErr instanceof Error ? dispatchErr.message : String(dispatchErr);
+    const errorClass = classifyPlatformError("unknown", dispatchErr);
+
+    // Auth/config errors halt the build immediately (D-01).
+    if (errorClass === "auth") {
+      throw new Error(
+        `Worker dispatch halted: ${sanitizeWorkerDiagnosticOutput(errMsg)}`
+      );
+    }
+
+    // Timeout/transient errors mark the worker as failed and continue (D-02).
     result = {
       name: dispatch.name,
       status: "failed",
@@ -246,15 +258,7 @@ async function dispatchRealWorker(
   }
 
   const agentName = getAgentNameForCaste(dispatch.caste);
-
-  const prompt = assemblePrompt({
-    cwd: opts.cwd,
-    caste: dispatch.caste,
-    name: dispatch.name,
-    task: dispatch.task,
-    platform,
-    agentName,
-  });
+  const prompt = buildPromptForDispatch(opts, dispatch, platform, agentName);
 
   const config: WorkerConfig = {
     platform,
@@ -314,6 +318,51 @@ async function dispatchRealWorker(
   return result;
 }
 
+export function buildPromptForDispatch(
+  opts: GoBridgeOptions,
+  dispatch: BuildDispatch,
+  platform: Platform,
+  agentName = getAgentNameForCaste(dispatch.caste)
+): string {
+  const contextCapsule =
+    compactOptional(dispatch.context_capsule) || resolveGoPromptContext(opts);
+
+  return assemblePrompt({
+    cwd: opts.cwd,
+    caste: dispatch.caste,
+    name: dispatch.name,
+    task: dispatch.task,
+    platform,
+    agentName,
+    contextCapsule,
+    handoffSection: dispatch.handoff_section,
+    skillSection: dispatch.skill_section,
+    pheromoneSection: dispatch.pheromone_section,
+    taskBrief: dispatch.task_brief,
+  });
+}
+
+export interface GoPromptContextResult {
+  prompt_section?: string;
+  context?: string;
+}
+
+export function resolveGoPromptContext(opts: GoBridgeOptions): string {
+  try {
+    const result = callGoJSON<GoPromptContextResult>(opts, [
+      "colony-prime",
+      "--compact",
+    ]);
+    return compactOptional(result.prompt_section) || compactOptional(result.context);
+  } catch {
+    return "";
+  }
+}
+
+function compactOptional(value: string | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function sanitizeWorkerDiagnosticOutput(value: string): string {
   let output = stripAnsi(value.trim());
   if (!output) {
@@ -329,6 +378,19 @@ export function sanitizeWorkerDiagnosticOutput(value: string): string {
     .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[redacted]")
     .replace(/npm_[A-Za-z0-9_]+/g, "[redacted]")
     .replace(/\b[A-Za-z0-9._-]*secret[A-Za-z0-9._-]*\b/gi, "[redacted]");
+}
+
+/**
+ * Check if an error is classified as an authentication error.
+ *
+ * Auth errors should halt the build immediately (D-01).
+ * The build pipeline (Plan 03+) uses this to decide whether to halt.
+ *
+ * @param error - The error to check
+ * @returns true if the error is an auth/config error
+ */
+export function isAuthError(error: unknown): boolean {
+  return classifyPlatformError("unknown", error) === "auth";
 }
 
 function stripAnsi(value: string): string {
@@ -356,11 +418,22 @@ export async function dispatchWorkers(
 ): Promise<DispatchResult[]> {
   const waveResults = await dispatchWaves(opts, dispatches);
 
-  // Log wave summaries to stderr
+  // Log wave summaries to stderr with per-worker failure details (D-02).
   for (const wr of waveResults) {
-    process.stderr.write(
-      `Wave ${wr.wave}: ${wr.results.length - wr.failures.length}/${wr.results.length} succeeded, ${wr.retried} retries\n`
-    );
+    const succeeded = wr.results.length - wr.failures.length;
+    const failed = wr.failures.length;
+    if (failed > 0) {
+      const failureNames = wr.failures
+        .map((f) => `${f.name}: ${f.status}`)
+        .join(", ");
+      process.stderr.write(
+        `Wave ${wr.wave}: ${succeeded} succeeded, ${failed} failed (${failureNames})\n`
+      );
+    } else {
+      process.stderr.write(
+        `Wave ${wr.wave}: ${succeeded}/${wr.results.length} succeeded, ${wr.retried} retries\n`
+      );
+    }
   }
 
   // Flatten WaveResult array back to DispatchResult array
@@ -404,10 +477,14 @@ export function toWorkerResults(
     const result = resultByName.get(dispatch.name);
     // Build result object; omit optional fields when undefined for
     // exactOptionalPropertyTypes compatibility.
+    const status = result?.status ?? "timeout";
+    const summary =
+      result?.summary ??
+      `No terminal worker result was provided for ${dispatch.name}; treating as timeout.`;
     const worker: WorkerResult = {
       name: dispatch.name,
-      status: result?.status ?? "completed",
-      summary: result?.summary ?? `Simulated completion for ${dispatch.name}`,
+      status,
+      summary,
       caste: dispatch.caste,
       task: dispatch.task,
       stage: dispatch.stage,

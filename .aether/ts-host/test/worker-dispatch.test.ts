@@ -20,6 +20,7 @@ import {
   resolveGoPromptContext,
   sanitizeWorkerDiagnosticOutput,
   toWorkerResults,
+  isAuthError,
   type DispatchResult,
   type DispatchOptions,
 } from "../src/worker-dispatch.js";
@@ -442,6 +443,187 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
     assert.ok(
       simulationLog,
       `Should log "Simulating" when simulateWorkers=true, captured stderr: ${capturedStderr.join("\\n")}`
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Error classification tests (D-01, D-02)
+// ---------------------------------------------------------------------------
+
+describe("worker-dispatch: error classification", () => {
+  it("isAuthError returns true for auth-related errors", () => {
+    assert.equal(isAuthError(new Error("Authentication required")), true);
+    assert.equal(isAuthError(new Error("credentials expired")), true);
+    assert.equal(isAuthError(new Error("Permission denied")), true);
+  });
+
+  it("isAuthError returns false for non-auth errors", () => {
+    assert.equal(isAuthError(new Error("Connection timeout")), false);
+    assert.equal(isAuthError(new Error("ENOENT: file not found")), false);
+    assert.equal(isAuthError(new Error("Something went wrong")), false);
+  });
+
+  it("auth errors in dispatchSingleWorker propagate upward via wave-orchestrator (D-01)", async () => {
+    // Simulate what dispatchSingleWorker does for auth errors: throw with
+    // "halted" message. The wave-orchestrator mock throws the classified error
+    // that dispatchSingleWorker would produce after classifyPlatformError.
+    __setDispatchSingleWorker(async (_opts, dispatch) => {
+      if (dispatch.name === "Auth-Worker") {
+        // This matches what dispatchSingleWorker does when classifyPlatformError
+        // returns "auth" -- it throws with "halted" in the message.
+        throw new Error(
+          "Worker dispatch halted: Authentication credentials expired"
+        );
+      }
+      return { name: dispatch.name, status: "completed", summary: "Done" };
+    });
+
+    const dispatches: BuildDispatch[] = [
+      { stage: "implement", caste: "builder", name: "Auth-Worker", task: "Test auth", status: "pending" },
+    ];
+
+    try {
+      await dispatchWorkers(
+        { ...defaultOpts, retryLimit: 0, retryDelayMs: 10 },
+        dispatches
+      );
+      assert.fail("Should have thrown for auth error");
+    } catch (err: unknown) {
+      assert.ok(err instanceof Error, "Should throw an Error");
+      assert.match(err.message, /halted/, `Error message should mention halt: ${err.message}`);
+    } finally {
+      __restoreDispatchSingleWorker();
+    }
+  });
+
+  it("timeout errors in dispatchSingleWorker return failed status via wave-orchestrator (D-02)", async () => {
+    // Simulate what dispatchSingleWorker does for timeout errors: returns
+    // a DispatchResult with status "failed" instead of throwing.
+    __setDispatchSingleWorker(async (_opts, dispatch) => {
+      if (dispatch.name === "Timeout-Worker") {
+        // This matches what dispatchSingleWorker does for timeout/transient
+        // errors -- returns failed result instead of throwing.
+        return {
+          name: dispatch.name,
+          status: "failed" as const,
+          summary: "Worker dispatch failed: Connection ETIMEDOUT after 30s",
+        };
+      }
+      return { name: dispatch.name, status: "completed", summary: "Done" };
+    });
+
+    const dispatches: BuildDispatch[] = [
+      { stage: "implement", caste: "builder", name: "Timeout-Worker", task: "Test timeout", status: "pending" },
+      { stage: "implement", caste: "builder", name: "Good-Worker", task: "Test success", status: "pending" },
+    ];
+
+    const results = await dispatchWorkers(
+      { ...defaultOpts, retryLimit: 0, retryDelayMs: 10 },
+      dispatches
+    );
+    __restoreDispatchSingleWorker();
+
+    // Timeout errors should NOT propagate -- they return a failed result.
+    const timeoutResult = results.find((r) => r.name === "Timeout-Worker");
+    assert.ok(timeoutResult, "Should have a result for Timeout-Worker");
+    assert.equal(timeoutResult!.status, "failed", "Timeout should result in 'failed' status");
+
+    // The other worker should still succeed.
+    const goodResult = results.find((r) => r.name === "Good-Worker");
+    assert.ok(goodResult, "Should have a result for Good-Worker");
+    assert.equal(goodResult!.status, "completed", "Good worker should succeed despite sibling failure");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave-end failure summary tests (D-02)
+// ---------------------------------------------------------------------------
+
+describe("worker-dispatch: wave summary", { concurrency: false }, () => {
+  afterEach(() => {
+    __restoreDispatchSingleWorker();
+  });
+
+  it("wave summary includes per-worker failure names when workers fail", async () => {
+    resetMocks();
+
+    const dispatches = [
+      makeDispatch("Mason-01", 1),
+      makeDispatch("Mason-02", 1),
+      makeDispatch("Mason-03", 2),
+    ];
+
+    // Two succeed, one fails in wave 1
+    mockResults.set("Mason-01:0", { name: "Mason-01", status: "completed", summary: "Done" });
+    mockResults.set("Mason-02:0", { name: "Mason-02", status: "failed", summary: "Timed out" });
+    mockResults.set("Mason-03:0", { name: "Mason-03", status: "completed", summary: "Done" });
+
+    __setDispatchSingleWorker(mockDispatchSingleWorker);
+
+    const capturedStderr: string[] = [];
+    const originalStderrWrite = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      if (typeof chunk === "string") {
+        capturedStderr.push(chunk);
+      }
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      // Use retryLimit: 0 so failed workers stay failed (no retry to success)
+      await dispatchWorkers({ ...defaultOpts, retryLimit: 0, retryDelayMs: 10 }, dispatches);
+    } finally {
+      process.stderr.write = originalStderrWrite;
+    }
+
+    // dispatchWorkers writes a failure summary line after wave-orchestrator.
+    // Find the line from dispatchWorkers (not wave-orchestrator) that includes failure details.
+    const failureSummary = capturedStderr.find(
+      (line) => /Wave 1/.test(line) && /Mason-02/.test(line)
+    );
+    assert.ok(
+      failureSummary,
+      `Should have a Wave 1 summary with failed worker name, captured: ${capturedStderr.join("\\n")}`
+    );
+    assert.ok(
+      failureSummary!.includes("failed"),
+      `Failure summary should mention "failed": ${failureSummary}`
+    );
+  });
+
+  it("wave summary shows all-succeeded format when no failures", async () => {
+    resetMocks();
+
+    const dispatches = [makeDispatch("Worker-A", 1)];
+
+    mockResults.set("Worker-A:0", { name: "Worker-A", status: "completed", summary: "Done" });
+
+    __setDispatchSingleWorker(mockDispatchSingleWorker);
+
+    const capturedStderr: string[] = [];
+    const originalStderrWrite = process.stderr.write;
+    process.stderr.write = ((chunk: unknown) => {
+      if (typeof chunk === "string") {
+        capturedStderr.push(chunk);
+      }
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      await dispatchWorkers({ ...defaultOpts, retryLimit: 0, retryDelayMs: 10 }, dispatches);
+    } finally {
+      process.stderr.write = originalStderrWrite;
+    }
+
+    // Find the dispatchWorkers summary (not wave-orchestrator's "complete" line)
+    const successSummary = capturedStderr.find(
+      (line) => /Wave 1/.test(line) && /succeeded/.test(line)
+    );
+    assert.ok(successSummary, "Should have a Wave 1 summary with 'succeeded'");
+    assert.ok(
+      successSummary!.includes("1/1 succeeded"),
+      `Should show "1/1 succeeded": ${successSummary}`
     );
   });
 });
