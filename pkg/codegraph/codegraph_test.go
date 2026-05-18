@@ -331,7 +331,7 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 }
 
-func TestDirsToSkip(t *testing.T) {
+func TestScanSkipsNoiseDirs(t *testing.T) {
 	repo := createTestRepo(t, map[string]string{
 		"src/app.ts":                  `import { x } from './x';`,
 		"src/x.ts":                    `export const x = 1;`,
