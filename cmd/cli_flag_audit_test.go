@@ -35,7 +35,8 @@ func TestCLIFlagAudit(t *testing.T) {
 	// registered as direct subcommands (they are shell-only, aliases, or
 	// handled by other mechanisms).
 	skipSubcommands := map[string]bool{
-		"verify-castes": true, // markdown-only command, no Go subcommand
+		"verify-castes":     true, // markdown-only command, no Go subcommand
+		"pending-decisions": true, // playbook shorthand; actual Go subcommands are pending-decision-{add,list,resolve}
 	}
 
 	// Build lookup: subcommand name -> set of registered flags
