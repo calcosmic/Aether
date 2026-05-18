@@ -34,12 +34,33 @@ That means:
 
 ## Current State
 
-- **v1.21 Live Colony shipped (2026-05-18)** — TS host is the production orchestrator
+- **v1.22 Grounded Planning + Ceremony Restore in progress**
 - **Product version: v1.0.39**
-- TS host dispatches real platform workers with ceremony rendering, confidence-driven iteration, worker spawning, and hive wisdom injection
-- 465 TS tests, 2900+ Go tests, all green
-- 86 skills (55 colony + 31 domain), 60 commands per platform, 27 Codex agents
-- 39 requirements validated across HOST, SPAWN, ITER, HIVE, SKILL, and VAL categories
+- v1.21 shipped: TS host is production orchestrator with dispatch, ceremony, iteration, spawning, hive wisdom
+- Known bug: survey trusts dependency/cache paths (.venv, __pycache__); plans come out generic
+- Known gap: ceremony playbooks exist but commands no longer load them; YAML/TS/Go all try to be conductor
+- Go = truth (state, gates, finalizers), playbooks = soul, YAML = packaging
+- 465 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
+
+## Current Milestone: v1.22 Grounded Planning + Ceremony Restore
+
+**Goal:** Make Aether's planning evidence-based and ceremony-rich again — plans grounded in real repo files, not dependency noise; ceremony driven by playbooks, not duplicated across YAML/TS/Go.
+
+**Target features:**
+- Survey noise filtering (exclude .venv, caches, site-packages, binary artifacts from architecture inference)
+- Repo-owned source anchors for planning (surfaces real project files, not dependencies)
+- Discuss-decision binding into planning as hard constraints
+- Plan-grounding validation gate (reject generic plans when specific targets exist)
+- Build ceremony restore: wrapper loads build-wave.md, Go manifest-only, native worker spawning
+- Plan ceremony restore: Scout/Route-Setter native flow with grounding gate
+- One execution path per workflow per platform (no dual conductors)
+- Slim YAML to packaging; ceremony lives in playbooks
+- Regression test: M4L fixture with .venv noise must produce grounded plan
+
+**Non-goals:**
+- New runtime features (spawning, iteration, hive — already shipped)
+- Codex ceremony overhaul (Codex uses command-guide + skills, separate lane)
+- Interactive shell or dashboard redesign
 
 ## Previous Milestone: v1.21 Live Colony
 
