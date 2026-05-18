@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: completed
+status: ready_to_plan
 last_updated: "2026-05-18T22:07:19.951Z"
 last_activity: 2026-05-18 -- Phase 143 plan 02 complete (playbook-aware ceremony flow in TS host)
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 6
   completed_plans: 6
   percent: 100
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Current Position
 
-Phase: 143
-Plan: 02 (complete)
-Status: Phase 143 plan 02 complete
-Last activity: 2026-05-18 -- Phase 143 plan 02 complete (playbook-aware ceremony flow in TS host)
+Phase: 144
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-18
 
 ## Known Blockers
 
