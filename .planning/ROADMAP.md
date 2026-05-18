@@ -46,7 +46,7 @@ See `.planning/milestones/` for full archived phase details.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 136. Production Foundation | v1.21 | 0/4 | Planned | - |
+| 136. Production Foundation | v1.21 | 1/4 | In progress | - |
 | 137. Hive Wisdom Injection | v1.21 | 0/? | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 0/? | Not started | - |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
@@ -70,9 +70,16 @@ See `.planning/milestones/` for full archived phase details.
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+**Wave 1**
+- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 137: Hive Wisdom Injection
@@ -88,7 +95,7 @@ Plans:
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
 - [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
@@ -107,7 +114,7 @@ Plans:
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
 - [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
@@ -125,7 +132,7 @@ Plans:
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
 - [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
@@ -142,7 +149,7 @@ Plans:
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [ ] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
+- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [ ] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
 - [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview

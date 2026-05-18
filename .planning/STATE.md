@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.21
 milestone_name: Live Colony
-status: planning
-last_updated: "2026-05-18T10:45:00.000Z"
-last_activity: 2026-05-18 — Phase 136 planned (4 plans, 4 sequential waves)
+status: executing
+last_updated: "2026-05-18T10:48:41Z"
+last_activity: 2026-05-18 -- Completed 136-01-PLAN (simulation default + skill tests)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
@@ -24,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 1 of 5 (Production Foundation)
-Plan: 0 of 4 in current phase
-Status: Ready to execute
-Last activity: 2026-05-18 — Phase 136 planned (4 plans, 4 sequential waves)
+Plan: 1 of 4 in current phase
+Status: 136-01 complete, ready for 136-02
+Last activity: 2026-05-18 -- Completed 136-01-PLAN (simulation default + skill tests)
 
 ## Known Blockers
 
@@ -36,8 +37,8 @@ Last activity: 2026-05-18 — Phase 136 planned (4 plans, 4 sequential waves)
 
 ## Next Actions
 
-1. Execute Phase 136 Plans 01+02 (Wave 1, parallel)
-2. Execute Phase 136 Plans 03+04 (Wave 2, depends on Wave 1)
+1. Execute Phase 136 Plan 02 (Platform error diagnostics)
+2. Execute Phase 136 Plans 03+04 (real dispatch pipelines, oracle/dry-run)
 3. Plan Phase 137 (Hive Wisdom Injection)
 
 ## Key Decisions (Carried Forward)
@@ -47,3 +48,6 @@ Last activity: 2026-05-18 — Phase 136 planned (4 plans, 4 sequential waves)
 - Oracle state uses atomic Go-owned storage with interrupt recovery
 - Simulation is gated behind `--simulate` flag
 - v1.21 roadmap: 5 phases -- production foundation first, then hive, spawning, iteration, hardening
+- worker-dispatch.ts simulateWorkers check already defaults to real dispatch; no source change needed
+- Lifecycle smoke harness (lifecycle.ts) stays simulate-only; production uses dedicated host commands
+- Skill section tests verify existing compactSection behavior without production code changes
