@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: executing
+status: ready_to_plan
 last_updated: "2026-05-18T19:05:20.374Z"
 last_activity: 2026-05-18 -- Phase 141 execution started
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
   completed_plans: 0
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Current Position
 
-Phase: 141 (survey-noise-filter-source-anchors) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 141
-Last activity: 2026-05-18 -- Phase 141 execution started
+Phase: 142
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-18
 
 ## Known Blockers
 
