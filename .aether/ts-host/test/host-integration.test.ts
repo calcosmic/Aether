@@ -981,3 +981,556 @@ describe("spawn orchestrator initialization (SPAWN-03, SPAWN-05)", () => {
     assert.ok(buildFinalizeCall, "build-finalize should have been called");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Build iteration loop tests (ITER-01 through ITER-06)
+// ---------------------------------------------------------------------------
+
+/** Extract the last JSON object from stdout (handles multiple JSON writes). */
+function extractLastJSON(stdout: string): Record<string, unknown> {
+  const trimmed = stdout.trim();
+  // Find the last occurrence of a line that starts with { and parse backwards
+  const lines = trimmed.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!.trim();
+    if (line.startsWith("{")) {
+      try {
+        return JSON.parse(line);
+      } catch {
+        // Multi-line JSON: collect from this line to end
+        const remainder = lines.slice(i).join("\n");
+        // Find the last closing brace
+        const lastClose = remainder.lastIndexOf("}");
+        if (lastClose !== -1) {
+          return JSON.parse(remainder.slice(0, lastClose + 1));
+        }
+      }
+    }
+  }
+  throw new Error(`No JSON found in stdout: ${trimmed.slice(0, 300)}`);
+}
+
+/**
+ * Count how many times a specific Go command was called.
+ * Uses goCalls array to count invocations of the given command.
+ */
+function countGoCommandCalls(calls: string[][], command: string): number {
+  return calls.filter((args) => args[0] === command).length;
+}
+
+describe("build iteration loop", () => {
+  let goCalls: string[][];
+  let dispatchCallCount: number;
+  let capturedAllDispatches: unknown[][];
+  let stderrOutput: string;
+
+  /** Creates a mock callGoJSON that returns manifests with configurable dispatches. */
+  function createIterationMockGo(opts?: {
+    dispatchCount?: number;
+    workerResults?: ((callNum: number) => Array<Record<string, unknown>>);
+  }) {
+    const defaultWorkerResults = (_callNum: number) => [
+      { name: "Builder-01", status: "completed", summary: "Done", duration: 5,
+        files_created: ["src/module.ts"], files_modified: ["src/helper.ts"],
+        tests_written: ["test/module.test.ts"] },
+    ];
+    const workerResultsFn = opts?.workerResults ?? defaultWorkerResults;
+    const dispatchCount = opts?.dispatchCount ?? 1;
+
+    return <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["ts"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        const dispatches: Record<string, unknown>[] = [];
+        for (let i = 0; i < dispatchCount; i++) {
+          dispatches.push({
+            name: `Builder-${String(i + 1).padStart(2, "0")}`,
+            caste: "builder",
+            task: "Build",
+            wave: 1,
+            execution_wave: 1,
+            skill_section: "",
+          });
+        }
+        return {
+          dispatch_manifest: { dispatches },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+  }
+
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+    goCalls = [];
+    dispatchCallCount = 0;
+    capturedAllDispatches = [];
+    stderrOutput = "";
+
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stderrOutput += chunk;
+      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stderr.write;
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  it("single iteration when confidence is high", async () => {
+    __setCallGoJSON(createIterationMockGo({
+      workerResults: () => [
+        { name: "Builder-01", status: "completed", summary: "Done", duration: 5,
+          files_created: ["src/module.ts"], files_modified: ["src/helper.ts"],
+          tests_written: ["test/module.test.ts"],
+          test_results: { passed: 10, total: 10 } },
+      ],
+    }));
+    __setGoBridgeCallGoJSON(createIterationMockGo({
+      workerResults: () => [
+        { name: "Builder-01", status: "completed", summary: "Done", duration: 5,
+          files_created: ["src/module.ts"], files_modified: ["src/helper.ts"],
+          tests_written: ["test/module.test.ts"],
+          test_results: { passed: 10, total: 10 } },
+      ],
+    }));
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      return [
+        { name: "Builder-01", status: "completed", summary: "Done", duration: 5,
+          files_created: ["src/module.ts"], files_modified: ["src/helper.ts"],
+          tests_written: ["test/module.test.ts"],
+          test_results: { passed: 10, total: 10 } },
+      ];
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    // Verify exactly 1 build-finalize call = 1 iteration
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 1, "Should call build-finalize exactly once when confidence is high");
+    assert.equal(dispatchCallCount, 1, "Should dispatch exactly 1 wave when confidence is high");
+  });
+
+  it("two iterations when confidence is low then high", async () => {
+    const workerResults = (_callNum: number) => {
+      if (_callNum === 0) {
+        return [
+          { name: "Builder-01", status: "failed", summary: "Build failed", duration: 5,
+            blockers: ["missing import"] },
+        ];
+      }
+      return [
+        { name: "Builder-01", status: "completed", summary: "Done", duration: 5,
+          files_created: ["src/module.ts"],
+          test_results: { passed: 8, total: 8 } },
+      ];
+    };
+
+    __setCallGoJSON(createIterationMockGo({ workerResults }));
+    __setGoBridgeCallGoJSON(createIterationMockGo({ workerResults }));
+
+    let dispatchNum = 0;
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchNum++;
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      return workerResults(dispatchNum - 1);
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 2, "Should call build-finalize twice for 2 iterations");
+    assert.equal(dispatchCallCount, 2, "Should dispatch 2 waves");
+  });
+
+  it("stops at max iterations (default 3)", async () => {
+    const workerResults = () => [
+      { name: "Builder-01", status: "failed", summary: "Build failed", duration: 5,
+        blockers: ["compile error"] },
+    ];
+
+    __setCallGoJSON(createIterationMockGo({ workerResults }));
+    __setGoBridgeCallGoJSON(createIterationMockGo({ workerResults }));
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      return workerResults();
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 3, "Should call build-finalize 3 times (default max)");
+    assert.equal(dispatchCallCount, 3, "Should dispatch exactly 3 waves (default max)");
+  });
+
+  it("stops at custom --max-iterations", async () => {
+    const workerResults = () => [
+      { name: "Builder-01", status: "failed", summary: "Build failed", duration: 5,
+        blockers: ["compile error"] },
+    ];
+
+    __setCallGoJSON(createIterationMockGo({ workerResults }));
+    __setGoBridgeCallGoJSON(createIterationMockGo({ workerResults }));
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      return workerResults();
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate", "--max-iterations", "2"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 2, "Should call build-finalize 2 times (custom max)");
+    assert.equal(dispatchCallCount, 2, "Should dispatch exactly 2 waves (custom max)");
+  });
+
+  it("stops when budget exhausted", async () => {
+    const mockGo = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["ts"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+              { name: "Builder-02", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+              { name: "Builder-03", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+            ],
+            queen_execution_policy: {
+              spawn_budget: { max_workers: 3 },
+            },
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(mockGo);
+    __setGoBridgeCallGoJSON(mockGo);
+
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      return dispatches.map((d: Record<string, unknown>) => ({
+        name: d.name,
+        status: "failed",
+        summary: "Failed",
+        duration: 5,
+        blockers: ["compile error"],
+      }));
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 1, "Should call build-finalize only once when budget exhausted");
+    assert.equal(dispatchCallCount, 1, "Should dispatch only 1 wave when budget exhausted");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Feedback injection tests (ITER-02)
+// ---------------------------------------------------------------------------
+
+describe("feedback injection", () => {
+  let goCalls: string[][];
+  let dispatchCallCount: number;
+  let capturedAllDispatches: unknown[][];
+  let stderrOutput: string;
+
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+    goCalls = [];
+    dispatchCallCount = 0;
+    capturedAllDispatches = [];
+    stderrOutput = "";
+
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stderrOutput += chunk;
+      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stderr.write;
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  it("iteration 2 task briefs include blockers from iteration 1", async () => {
+    const mockGo = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["ts"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(mockGo);
+    __setGoBridgeCallGoJSON(mockGo);
+
+    let dispatchNum = 0;
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchNum++;
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      if (dispatchNum === 1) {
+        // First iteration: worker fails with blocker
+        return [
+          { name: "Builder-01", status: "failed", summary: "Build failed", duration: 5,
+            blockers: ["missing import foo"] },
+        ];
+      }
+      // Second iteration: worker succeeds
+      return [
+        { name: "Builder-01", status: "completed", summary: "Done", duration: 5,
+          files_created: ["src/module.ts"],
+          test_results: { passed: 5, total: 5 } },
+      ];
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    // Verify 2 dispatches occurred (confidence goes low then high)
+    const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
+    assert.equal(finalizeCount, 2, "Should call build-finalize twice");
+
+    // Verify second dispatch has feedback from first iteration's blockers
+    assert.ok(capturedAllDispatches.length >= 2, "Should have captured at least 2 dispatch calls");
+    const secondDispatch = capturedAllDispatches[1]!;
+    assert.ok(secondDispatch.length > 0, "Second dispatch should have dispatches");
+    const dispatch = secondDispatch[0] as Record<string, unknown>;
+    assert.ok(
+      typeof dispatch.task_brief === "string" && dispatch.task_brief.includes("missing import foo"),
+      `Second iteration task_brief should contain blocker text. Got: ${dispatch.task_brief}`
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ceremony output tests (ITER-06)
+// ---------------------------------------------------------------------------
+
+describe("ceremony output", () => {
+  let goCalls: string[][];
+  let stderrOutput: string;
+
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+    goCalls = [];
+    stderrOutput = "";
+
+    __setCreateCeremonyAdapter(() => createMockCeremonyAdapter());
+
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+      if (typeof chunk === "string") stderrOutput += chunk;
+      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+    }) as typeof process.stderr.write;
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  it("iteration markers in ceremony output", async () => {
+    const mockGo = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      const cmd = args[0];
+      if (cmd === "hive-read") {
+        return { entries: null, total: 0 } as unknown as T;
+      }
+      if (cmd === "registry-list") {
+        return {
+          colonies: [{
+            repo_path: process.cwd(),
+            domains: ["ts"],
+            active: true,
+            registered_at: "2026-05-18T00:00:00Z",
+          }],
+        } as unknown as T;
+      }
+      if (cmd === "build") {
+        return {
+          dispatch_manifest: {
+            dispatches: [
+              { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
+            ],
+          },
+        } as unknown as T;
+      }
+      if (cmd === "build-finalize") {
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+
+    __setCallGoJSON(mockGo);
+    __setGoBridgeCallGoJSON(mockGo);
+
+    __setDispatchWorkers(async () => {
+      return [
+        { name: "Builder-01", status: "completed", summary: "Done", duration: 5,
+          files_created: ["src/module.ts"],
+          test_results: { passed: 5, total: 5 } },
+      ];
+    });
+
+    __setDetectAvailablePlatforms(async () => [
+      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    ]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    const def = getHostCommandDefinition("build")!;
+
+    await runDispatchedBuildCommand(bridge, parsed, def);
+
+    // Verify ceremony output contains iteration markers
+    assert.ok(
+      stderrOutput.includes("Iteration"),
+      `Stderr should contain iteration markers. Got: ${stderrOutput.slice(0, 300)}`
+    );
+    assert.ok(
+      stderrOutput.includes("confidence"),
+      `Stderr should contain confidence text. Got: ${stderrOutput.slice(0, 300)}`
+    );
+    assert.ok(
+      stderrOutput.includes("Iteration complete"),
+      `Stderr should contain final iteration marker. Got: ${stderrOutput.slice(0, 300)}`
+    );
+  });
+});

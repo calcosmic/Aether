@@ -629,8 +629,9 @@ async function dispatchBuildWave(
     "--completion-file", completionPath,
   ]);
 
-  // Build worker claims from mapped results for confidence evaluation
-  const workerClaims: WorkerClaims[] = (mappedResults as unknown as Record<string, unknown>[]).map((w) => {
+  // Build worker claims from raw dispatch results for confidence evaluation.
+  // Raw results carry extra fields (blockers, test_results) that toWorkerResults drops.
+  const workerClaims: WorkerClaims[] = (workerResults as unknown as Record<string, unknown>[]).map((w) => {
     const claim: WorkerClaims = {
       status: (w.status as string) ?? "completed",
     };
@@ -642,6 +643,11 @@ async function dispatchBuildWave(
     if (Array.isArray(filesModified)) claim.files_modified = filesModified as string[];
     const testsWritten = w.tests_written;
     if (Array.isArray(testsWritten)) claim.tests_written = testsWritten as string[];
+    // Preserve test_results for ConfidenceEvaluator raw cast
+    const testResults = w.test_results;
+    if (typeof testResults === "object" && testResults !== null) {
+      (claim as unknown as Record<string, unknown>).test_results = testResults;
+    }
     return claim;
   });
 
