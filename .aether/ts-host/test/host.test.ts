@@ -514,14 +514,14 @@ describe("dispatched build runner", () => {
     assert.ok(args.includes("--synthetic"), "--simulate should forward as --synthetic to Go");
   });
 
-  it("plan and continue still use go-json runner before Task 2", async () => {
+  it("plan and continue now use dispatched runner", async () => {
     const { getHostCommandDefinition } = await import("../src/command-registry.js");
 
     const planDef = getHostCommandDefinition("plan");
-    assert.equal(planDef?.runner, "go-json", "plan should still be go-json before Task 2");
+    assert.equal(planDef?.runner, "dispatched", "plan should use dispatched runner");
 
     const continueDef = getHostCommandDefinition("continue");
-    assert.equal(continueDef?.runner, "go-json", "continue should still be go-json before Task 2");
+    assert.equal(continueDef?.runner, "dispatched", "continue should use dispatched runner");
   });
 
   it("mock injection and restore for dispatch workers works", () => {

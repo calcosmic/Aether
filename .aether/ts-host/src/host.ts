@@ -487,6 +487,140 @@ async function runDispatchedBuildCommand(
   process.stdout.write(JSON.stringify({ ok: true, completion_file: completionPath }, null, 2) + "\n");
 }
 
+/**
+ * Run the dispatched plan pipeline: fetch plan manifest, dispatch planning
+ * workers (Scout/Route-Setter), write completion file, call plan-finalizer.
+ */
+async function runDispatchedPlanCommand(
+  bridge: GoBridgeOptions,
+  parsed: ParsedHostArgs,
+): Promise<void> {
+  const ceremony = createCeremonyAdapter(bridge);
+  const goArgs = buildHostGoArgs(parsed)!;
+
+  // Step 1: Fetch plan manifest
+  const planResult = _callGoJSONRef<PlanManifestResult>(bridge, goArgs);
+  const planManifest = planResult.plan_manifest ?? planResult.planning_manifest;
+  if (!planManifest) {
+    throw new Error("Plan --plan-only returned no plan manifest. Check colony state and try again.");
+  }
+  const dispatches: PlanDispatchLike[] = planResult.dispatches ?? [];
+  if (dispatches.length === 0) {
+    throw new Error("Plan manifest contains no dispatches. Nothing to plan.");
+  }
+
+  // Step 2: Render spawn-plan and wave-start ceremony
+  const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
+  renderManifestCeremony(ceremony, "plan", ceremonyEnvelope, dispatches);
+
+  // Step 3: Check platforms (unless simulating)
+  if (!parsed.simulate) {
+    const available = await _detectAvailablePlatformsRef();
+    if (available.length === 0) {
+      throw new Error(formatPlatformUnavailableMessage("plan"));
+    }
+  }
+
+  // Step 4: Dispatch planning workers
+  const dispatchOpts: DispatchOptions = {
+    goBinaryPath: bridge.goBinaryPath,
+    cwd: bridge.cwd,
+    simulateWorkers: parsed.simulate,
+  };
+  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
+  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+
+  // Step 5: Render worker-complete ceremony
+  renderWorkerCeremony(ceremony, "plan", mappedResults);
+
+  // Step 6: Write completion file and call finalizer
+  const completion = {
+    plan_manifest: planManifest,
+    dispatches: mappedResults,
+  };
+  const completionPath = writeCompletionFile(
+    approvedCompletionDirPrefix("plan"),
+    "plan-completion.json",
+    { result: completion }
+  );
+  _callGoJSONRef(bridge, [
+    "plan-finalize",
+    "--completion-file", completionPath,
+  ]);
+
+  // Step 7: Render closeout
+  emitCeremonyOutput(ceremony.renderCloseout("plan", completionPath));
+
+  process.stdout.write(JSON.stringify({ ok: true, completion_file: completionPath }, null, 2) + "\n");
+}
+
+/**
+ * Run the dispatched continue pipeline: fetch continue manifest, dispatch
+ * review workers, write completion file, call continue-finalizer.
+ */
+async function runDispatchedContinueCommand(
+  bridge: GoBridgeOptions,
+  parsed: ParsedHostArgs,
+): Promise<void> {
+  const ceremony = createCeremonyAdapter(bridge);
+  const goArgs = buildHostGoArgs(parsed)!;
+
+  // Step 1: Fetch continue manifest
+  const continueResult = _callGoJSONRef<ContinueManifestResult>(bridge, goArgs);
+  const continueManifest = continueResult.continue_manifest;
+  if (!continueManifest) {
+    throw new Error("Continue --plan-only returned no continue manifest. Check colony state and try again.");
+  }
+  const dispatches: ContinueDispatchLike[] = continueResult.dispatches ?? [];
+  if (dispatches.length === 0) {
+    throw new Error("Continue manifest contains no dispatches. Nothing to continue.");
+  }
+
+  // Step 2: Render spawn-plan and wave-start ceremony
+  const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
+  renderManifestCeremony(ceremony, "continue", ceremonyEnvelope, dispatches);
+
+  // Step 3: Check platforms (unless simulating)
+  if (!parsed.simulate) {
+    const available = await _detectAvailablePlatformsRef();
+    if (available.length === 0) {
+      throw new Error(formatPlatformUnavailableMessage("continue"));
+    }
+  }
+
+  // Step 4: Dispatch review workers
+  const dispatchOpts: DispatchOptions = {
+    goBinaryPath: bridge.goBinaryPath,
+    cwd: bridge.cwd,
+    simulateWorkers: parsed.simulate,
+  };
+  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
+  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+
+  // Step 5: Render worker-complete ceremony
+  renderWorkerCeremony(ceremony, "continue", mappedResults);
+
+  // Step 6: Write completion file and call finalizer
+  const completion = {
+    continue_manifest: continueManifest,
+    dispatches: mappedResults,
+  };
+  const completionPath = writeCompletionFile(
+    approvedCompletionDirPrefix("continue"),
+    "continue-completion.json",
+    { result: completion }
+  );
+  _callGoJSONRef(bridge, [
+    "continue-finalize",
+    "--completion-file", completionPath,
+  ]);
+
+  // Step 7: Render closeout
+  emitCeremonyOutput(ceremony.renderCloseout("continue", completionPath));
+
+  process.stdout.write(JSON.stringify({ ok: true, completion_file: completionPath }, null, 2) + "\n");
+}
+
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv);
   const { command, cwd, simulate, noDashboard, skipMiddenCheck, help, positional } = parsed;
@@ -517,8 +651,12 @@ async function main(): Promise<void> {
       try {
         if (workflow === "build") {
           await runDispatchedBuildCommand(bridge, parsed, definition);
+        } else if (workflow === "plan") {
+          await runDispatchedPlanCommand(bridge, parsed);
+        } else if (workflow === "continue") {
+          await runDispatchedContinueCommand(bridge, parsed);
         } else {
-          // Plan and continue pipelines added in Task 2 -- fall back to go-json
+          // Fallback for colonize/seal/swarm -- go-json passthrough
           let args: string[];
           try {
             args = buildHostGoArgs(parsed)!;

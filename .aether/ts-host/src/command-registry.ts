@@ -151,9 +151,9 @@ export const HOST_COMMANDS: readonly HostCommandDefinition[] = [
   {
     command: "plan",
     usage: "plan",
-    description: "Call aether plan --plan-only",
+    description: "Dispatch real Scout/Route-Setter planning workers with ceremony",
     category: "orchestrated",
-    runner: "go-json",
+    runner: "dispatched",
     goPlanCommand: "aether plan --plan-only",
     finalizerCommand: "aether plan-finalize --completion-file <file>",
     ceremonyWorkflow: "plan",
@@ -177,9 +177,9 @@ export const HOST_COMMANDS: readonly HostCommandDefinition[] = [
   {
     command: "continue",
     usage: "continue",
-    description: "Call aether continue --plan-only",
+    description: "Dispatch real review workers with ceremony and continue-finalizer",
     category: "orchestrated",
-    runner: "go-json",
+    runner: "dispatched",
     goPlanCommand: "aether continue --plan-only",
     finalizerCommand: "aether continue-finalize --completion-file <file>",
     ceremonyWorkflow: "continue",
