@@ -66,11 +66,11 @@ Plans:
 
 **Risk:** Low-medium. Grounding regex is simple. Decision conflict detection needs design but scope is small.
 
-**Plans:** 2 plans (GROUND-08, GROUND-09 already implemented)
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 142-01-PLAN.md — Plan-grounding validation gate + planner brief anchor hint (GROUND-06, GROUND-07)
-- [ ] 142-02-PLAN.md — Decision conflict detection with FEEDBACK pheromone emission (GROUND-10)
+- [x] 142-01-PLAN.md — Plan-grounding validation gate + planner brief anchor hint (GROUND-06, GROUND-07)
+- [x] 142-02-PLAN.md — Decision conflict detection with FEEDBACK pheromone emission (GROUND-10)
 
 
 ---

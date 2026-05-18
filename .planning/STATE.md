@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: ready_to_execute
-last_updated: "2026-05-18T22:30:00.000Z"
-last_activity: 2026-05-18 -- Phase 142 planned
+status: phase_complete
+last_updated: "2026-05-18T23:30:00.000Z"
+last_activity: 2026-05-18 -- Phase 142 executed and verified
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 0
-  percent: 50
+  completed_plans: 2
+  percent: 75
 ---
 
 # Project State
@@ -20,13 +20,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 142 — grounding-gate-decision-binding
+**Current focus:** Phase 143 — build-plan-ceremony-restore
 
 ## Current Position
 
-Phase: 142
-Plan: 2 plans in 1 wave
-Status: Ready to execute
+Phase: 143
+Plan: awaiting planning
+Status: Phase 142 complete, ready for Phase 143
 Last activity: 2026-05-18
 
 ## Known Blockers
@@ -36,9 +36,9 @@ Last activity: 2026-05-18
 
 ## Next Actions
 
-1. Execute Phase 142 (Grounding Gate + Decision Binding)
-2. Plan Phase 143 (Build + Plan Ceremony Restore)
-3. Execute Phase 143 plans
+1. Plan Phase 143 (Build + Plan Ceremony Restore)
+2. Execute Phase 143 plans
+3. Plan Phase 144 (Regression + Execution Path Cleanup)
 
 ## Key Decisions (Carried Forward)
 
