@@ -8,6 +8,23 @@ canonical ceremony output.
 
 ## Subcommands
 
+### `aether host colonize [flags]`
+
+Run the colonize survey manifest path via the TS host.
+
+**Flags:**
+- `--force-resurvey` — Refresh existing survey artifacts
+- `--force` — Alias for `--force-resurvey`
+- `--worker-timeout <duration>` — e.g. `5m`
+- `--no-dashboard` — Plain text output
+
+**Example:**
+```bash
+aether host colonize --force-resurvey
+```
+
+---
+
 ### `aether host plan [flags]`
 
 Run the plan workflow via the TS host.
@@ -63,8 +80,8 @@ aether host build 1 --light
 Run the heavy external-review continue manifest path via the TS host. The
 default continue path remains Go-owned through
 `aether continue --skip-watchers --verification-depth standard`; use
-`aether host continue` only when heavy review or runtime guidance asks for
-wrapper-spawned reviewers.
+`aether host continue --classic-ceremony` only when the older visible review
+ritual, heavy review, or runtime guidance asks for wrapper-spawned reviewers.
 
 **Flags:**
 - `--reconcile-task <id>` — Mark task reconciliation before continue gating; repeat for multiple IDs
@@ -77,11 +94,27 @@ wrapper-spawned reviewers.
 - `--simulate` — Run in simulation mode (TS host flag). No real workers are spawned.
 - `--worker-timeout <duration>` — e.g. `15m`
 - `--no-learn` — Disable learning capture when finalization uses the flag
+- `--classic-ceremony` — Named shortcut for the real heavy-review manifest path
 - `--no-dashboard` — Plain text output
 
 **Example:**
 ```bash
-aether host continue --verification-depth heavy
+aether host continue --classic-ceremony
+```
+
+---
+
+### `aether host seal [flags]`
+
+Run the final seal review manifest path via the TS host.
+
+**Flags:**
+- `--force` — Forward the runtime force flag when blockers are intentionally accepted
+- `--no-dashboard` — Plain text output
+
+**Example:**
+```bash
+aether host seal
 ```
 
 ---
@@ -186,6 +219,8 @@ state and decides the official result.
 
 Current host-backed orchestration surfaces:
 
+- `aether host colonize` delegates to `aether colonize --plan-only`; Go still
+  owns `aether colonize-finalize`.
 - `aether host plan` delegates to `aether plan --plan-only`; Go still owns
   `aether plan-finalize`.
 - `aether host build` delegates to `aether build <phase> --plan-only`; Go still
@@ -193,18 +228,19 @@ Current host-backed orchestration surfaces:
 - `continue` uses the host only for heavy external review; default continue is
   Go-owned through `aether continue --skip-watchers --verification-depth standard`.
 - `aether host continue` delegates to `aether continue --plan-only` for that
-  heavy-review manifest path; Go still owns `aether continue-finalize`.
+  heavy-review manifest path. `--classic-ceremony` is the named shortcut for
+  that visible review ritual; Go still owns `aether continue-finalize`.
+- `aether host seal` delegates to `aether seal --plan-only`; Go still owns
+  `aether seal-finalize`.
 - `aether host oracle`, `aether host watch`, and `aether host swarm` expose
   lifecycle/display surfaces. `watch` displays Go-owned status facts. `swarm`
   fetches and displays the Go swarm plan for problem runs; `swarm --watch`
   remains dashboard-style runtime facts. Canonical wrapper finalization remains
   Go-owned.
 
-Known future targets:
-
-- `colonize` and `seal` still use Go plan-only/finalizer paths from wrappers.
-  Do not document `aether host colonize` or `aether host seal` as implemented
-  until the TS host registry and Go host command support them.
+All lifecycle manifest-generation surfaces that need wrapper worker ceremony are
+now on the TS host spine: `colonize`, `plan`, `build`, heavy/classic
+`continue`, and `seal`.
 
 The machine-readable parity contract is
 `.aether/commands/classic-command-parity.json`; the human-readable companion is
@@ -250,6 +286,34 @@ User → aether host <subcommand> [flags]
 ```
 
 The TS host is the authoritative flag parser. Go CLI host subcommands use `DisableFlagParsing: true` to forward raw arguments to the TS host.
+
+## Worker Spawning
+
+Workers can request additional child workers mid-build by returning a `spawns` array in their claims JSON:
+
+```json
+{
+  "status": "completed",
+  "spawns": [
+    { "caste": "scout", "task": "Research API options", "reason": "Need context" }
+  ]
+}
+```
+
+### Spawn Rules
+
+- **Budget**: Total workers (manifest + spawned) cannot exceed the Queen spawn budget (`max_workers` from manifest). Excess spawn requests are logged and skipped.
+- **Depth**: Maximum spawn depth is 2. Manifest workers (depth 1) can spawn children (depth 2). Children cannot spawn further.
+- **Parent tracking**: Child spawns are recorded in the spawn tree with their actual parent worker name, not "Queen".
+- **Results**: Child worker results are attached to the parent worker's handoff, visible to downstream workers.
+
+### Spawn Lifecycle
+
+1. Worker completes and returns claims with `spawns` array
+2. Wave orchestrator validates spawns against budget and depth
+3. Accepted spawns are synthesized into child dispatch entries
+4. Child workers dispatched in a spawn wave after the parent wave
+5. Child results attached to parent handoff
 
 ## Test Coverage
 
