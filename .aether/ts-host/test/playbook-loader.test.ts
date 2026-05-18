@@ -44,12 +44,18 @@ describe("playbook-loader", () => {
     it("returns repo-local, hub system, hub root, and bare paths for relative names", () => {
       const root = "/project";
       const candidates = resolvePlaybookCandidates(root, "build-prep.md");
-      // Should include: repo-local, repo-join, hub system, hub root, bare
+      // Should include: repo-join, repo-playbooks, hub system, hub root, bare
       assert.ok(candidates.length >= 3, `expected >=3 candidates, got ${candidates.length}`);
-      // repo-local path should be present
-      assert.ok(candidates.some((c: string) => c.includes(".aether/docs/command-playbooks/build-prep.md")));
+      // repo-local playbook dir path should be present
+      assert.ok(
+        candidates.some((c: string) => c === "/project/.aether/docs/command-playbooks/build-prep.md"),
+        "should include repo-local playbook dir path"
+      );
       // hub system path should be present
-      assert.ok(candidates.some((c: string) => c.includes(".aether/system/docs/command-playbooks/build-prep.md")));
+      assert.ok(
+        candidates.some((c: string) => c.includes(".aether/system/docs/command-playbooks/build-prep.md")),
+        "should include hub system path"
+      );
       // bare path should be last
       assert.equal(candidates[candidates.length - 1], "build-prep.md");
     });
@@ -68,10 +74,23 @@ describe("playbook-loader", () => {
     });
 
     it("deduplicates candidates", () => {
-      // If root equals homedir + something that produces duplicate paths
       const candidates = resolvePlaybookCandidates("/project", "build-prep.md");
       const unique = new Set(candidates);
       assert.equal(candidates.length, unique.size, "candidates should be deduplicated");
+    });
+
+    it("includes root + full relative path for paths with slashes", () => {
+      const candidates = resolvePlaybookCandidates("/project", ".aether/docs/command-playbooks/build-prep.md");
+      assert.ok(
+        candidates.some((c: string) => c === "/project/.aether/docs/command-playbooks/build-prep.md"),
+        "should join root with full relative path"
+      );
+    });
+
+    it("does not add duplicate playbook-dir path for names with slashes", () => {
+      const candidates = resolvePlaybookCandidates("/project", ".aether/docs/command-playbooks/build-prep.md");
+      const unique = new Set(candidates);
+      assert.equal(candidates.length, unique.size, "no duplicates for slash-containing names");
     });
   });
 
@@ -90,43 +109,50 @@ describe("playbook-loader", () => {
       writeFileSync(playbookPath, "# Test Playbook\n\nSome content here.");
 
       const result = loadPlaybook(tmpDir, "test-playbook.md");
-      assert.ok(result !== null);
+      assert.ok(result !== null, "should find playbook in repo-local playbook dir");
       assert.equal(result!.name, "test-playbook.md");
       assert.equal(result!.path, playbookPath);
       assert.ok(result!.content.includes("# Test Playbook"));
     });
 
     it("skips non-existent candidates and loads from later candidate", () => {
-      // Only create the bare-path file
+      // Only create the bare-path file (in tmpDir root)
       const barePath = join(tmpDir, "fallback-playbook.md");
       writeFileSync(barePath, "# Fallback\n\nFallback content.");
 
-      // Use a root that doesn't have the playbook in .aether/ dir
+      // No .aether/docs/command-playbooks/ exists, so it falls back to bare path
       const result = loadPlaybook(tmpDir, "fallback-playbook.md");
       assert.ok(result !== null);
       assert.equal(result!.name, "fallback-playbook.md");
       assert.ok(result!.content.includes("# Fallback"));
+    });
+
+    it("loads from hub when not found in repo", () => {
+      // "build-prep.md" exists in hub (~/.aether/system/docs/command-playbooks/)
+      // but not in tmpDir
+      const result = loadPlaybook(tmpDir, "build-prep.md");
+      assert.ok(result !== null, "should find build-prep.md in hub fallback");
+      assert.equal(result!.name, "build-prep.md");
+      assert.ok(result!.content.length > 0);
     });
   });
 
   // -- loadPlaybooksForWorkflow --
 
   describe("loadPlaybooksForWorkflow", () => {
-    it('returns build playbooks matching the 5-file list (only ones that exist on disk)', () => {
-      // Create some build playbooks in the test fixture
-      const playbookDir = join(tmpDir, ".aether/docs/command-playbooks");
-      mkdirSync(playbookDir, { recursive: true });
-      writeFileSync(join(playbookDir, "build-prep.md"), "# Build Prep");
-      writeFileSync(join(playbookDir, "build-wave.md"), "# Build Wave");
-      // Don't create the other 3 -- only 2 should be returned
-
+    it('returns build playbooks that exist on disk (repo-local or hub)', () => {
       const result = loadPlaybooksForWorkflow(tmpDir, "build");
-      assert.equal(result.length, 2);
-      assert.ok(result.some((p: Playbook) => p.name === "build-prep.md"));
-      assert.ok(result.some((p: Playbook) => p.name === "build-wave.md"));
+      // All 5 build playbooks should exist (either in hub or repo)
+      assert.ok(result.length >= 3, `expected >=3 build playbooks, got ${result.length}`);
+      const names = result.map((p: Playbook) => p.name);
+      // At minimum, hub should have the standard build playbooks
+      for (const expected of ["build-prep.md", "build-wave.md", "build-verify.md"]) {
+        assert.ok(names.includes(expected), `should include ${expected}`);
+      }
     });
 
-    it('returns plan playbooks when plan-prep and plan-dispatch exist', () => {
+    it('returns plan playbooks when they exist in repo-local or hub', () => {
+      // Create plan playbooks in tmpDir (they don't exist in hub yet)
       const playbookDir = join(tmpDir, ".aether/docs/command-playbooks");
       mkdirSync(playbookDir, { recursive: true });
       writeFileSync(join(playbookDir, "plan-prep.md"), "# Plan Prep");
@@ -138,24 +164,31 @@ describe("playbook-loader", () => {
       assert.ok(result.some((p: Playbook) => p.name === "plan-dispatch.md"));
     });
 
-    it('returns continue playbooks matching the 4-file list (only ones that exist)', () => {
-      const playbookDir = join(tmpDir, ".aether/docs/command-playbooks");
-      mkdirSync(playbookDir, { recursive: true });
-      writeFileSync(join(playbookDir, "continue-verify.md"), "# Continue Verify");
-      writeFileSync(join(playbookDir, "continue-advance.md"), "# Continue Advance");
-      writeFileSync(join(playbookDir, "continue-finalize.md"), "# Continue Finalize");
-      // Don't create continue-gates -- 3 should be returned
-
+    it('returns continue playbooks that exist on disk', () => {
       const result = loadPlaybooksForWorkflow(tmpDir, "continue");
-      assert.equal(result.length, 3);
-      assert.ok(result.some((p: Playbook) => p.name === "continue-verify.md"));
-      assert.ok(result.some((p: Playbook) => p.name === "continue-advance.md"));
-      assert.ok(result.some((p: Playbook) => p.name === "continue-finalize.md"));
+      // All 4 should exist in hub
+      assert.equal(result.length, 4);
+      const names = result.map((p: Playbook) => p.name);
+      for (const expected of ["continue-verify.md", "continue-gates.md", "continue-advance.md", "continue-finalize.md"]) {
+        assert.ok(names.includes(expected), `should include ${expected}`);
+      }
     });
 
     it("returns empty array for unknown workflow", () => {
       const result = loadPlaybooksForWorkflow(tmpDir, "unknown" as "build");
       assert.deepEqual(result, []);
+    });
+
+    it("prefers repo-local over hub when both exist", () => {
+      const playbookDir = join(tmpDir, ".aether/docs/command-playbooks");
+      mkdirSync(playbookDir, { recursive: true });
+      writeFileSync(join(playbookDir, "build-prep.md"), "# REPO LOCAL BUILD PREP");
+
+      const result = loadPlaybooksForWorkflow(tmpDir, "build");
+      const prep = result.find((p: Playbook) => p.name === "build-prep.md");
+      assert.ok(prep !== undefined, "should find build-prep.md");
+      assert.ok(prep.path.startsWith(tmpDir), "should load from repo-local, not hub");
+      assert.ok(prep.content.includes("# REPO LOCAL BUILD PREP"));
     });
   });
 
@@ -183,17 +216,19 @@ describe("playbook-loader", () => {
       ];
       const result = renderPlaybookContext(playbooks, 7000, 1000);
       assert.ok(result.includes("[playbook truncated]"), "should include truncation marker");
-      // The snippet should be <= 1000 chars plus the header and marker
+      // The snippet after the header should be <= maxPerFile + marker
       const afterHeader = result.split("### long.md\n\n")[1] ?? "";
       assert.ok(afterHeader.length <= 1200, `snippet too long: ${afterHeader.length}`);
     });
 
     it("stops adding playbooks when maxBudget chars are exhausted", () => {
       const bigPlaybooks: Playbook[] = [
-        { name: "first.md", path: "/tmp/first.md", content: "A".repeat(4000) },
-        { name: "second.md", path: "/tmp/second.md", content: "B".repeat(4000) },
+        { name: "first.md", path: "/tmp/first.md", content: "A".repeat(3000) },
+        { name: "second.md", path: "/tmp/second.md", content: "B".repeat(3000) },
       ];
-      const result = renderPlaybookContext(bigPlaybooks, 5000, 4000);
+      // Budget = header(23) + first_header(15) + content(3000) + "\n\n"(2) = 3040
+      // Adding just 2 chars of margin -- not enough for second playbook header (17 chars)
+      const result = renderPlaybookContext(bigPlaybooks, 3042, 3000);
       assert.ok(result.includes("### first.md"), "first playbook should be present");
       assert.ok(!result.includes("### second.md"), "second playbook should be omitted (budget exceeded)");
     });
