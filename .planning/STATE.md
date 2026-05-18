@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.21
 milestone_name: Live Colony
 status: executing
-last_updated: "2026-05-18T14:05:00Z"
+last_updated: "2026-05-18T14:12:00Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 11
-  completed_plans: 9
-  percent: 82
+  completed_plans: 10
+  percent: 91
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 3 of 5 (Worker-to-Worker Spawning)
-Plan: 1 of 3 in current phase -- COMPLETE
+Plan: 2 of 3 in current phase -- COMPLETE
 Status: Executing
 Last activity: 2026-05-18
 
@@ -65,3 +65,4 @@ Last activity: 2026-05-18
 - --dry-run flag renders ceremony preview without spawning workers; DRY RUN badge visible in stderr (HOST-07, D-06)
 - Oracle ceremony uses "build" CeremonyWorkflow since oracle has no dedicated workflow value
 - Dry-run path fetches manifest (read-only), renders ceremony, shows badge, exits without dispatch/finalizer
+- SpawnOrchestrator enforces max depth 2 and budget caps; child naming uses ${parent}-spawn-${index} pattern

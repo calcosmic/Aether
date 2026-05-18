@@ -111,6 +111,16 @@ export interface BuildDispatch {
   domain_skill_count?: number;
   matched_skills?: string[];
   handoff_section?: string;
+  /** Parent worker name for spawned workers (SPAWN-05). Undefined for manifest workers. */
+  parent?: string;
+  /** Spawn depth for spawned workers (SPAWN-05). Undefined for manifest workers (defaults to 1). */
+  depth?: number;
+  /** Context capsule section injected by colony-prime. */
+  context_capsule?: string;
+  /** Pheromone signals section for this dispatch. */
+  pheromone_section?: string;
+  /** Task brief for detailed worker instructions. */
+  task_brief?: string;
 }
 
 export interface BuildTaskPlan {
@@ -159,6 +169,16 @@ export interface WorkerResult {
   handoff?: WorkerHandoff;
 }
 
+/** Result from a child worker attached to a parent's handoff (SPAWN-04). */
+export interface ChildResult {
+  /** Child worker name. */
+  name: string;
+  /** Terminal status of the child worker. */
+  status: string;
+  /** Summary from the child worker. */
+  summary?: string;
+}
+
 export interface WorkerHandoff {
   changed_files?: string[];
   commands_run?: string[];
@@ -169,6 +189,8 @@ export interface WorkerHandoff {
   next_worker_instructions?: string[];
   things_not_to_repeat?: string[];
   freshness?: string;
+  /** Results from spawned child workers (SPAWN-04). */
+  child_results?: ChildResult[];
   [key: string]: unknown;
 }
 
