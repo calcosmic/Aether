@@ -38,7 +38,7 @@ See `.planning/milestones/` for full archived phase details.
 
 **Goal:** Make the TypeScript host the real production orchestrator for Aether -- genuine worker dispatch, visible ceremony, confidence-driven iteration, worker escalation, and reusable wisdom instead of simulation.
 
-- [ ] **Phase 136: Production Foundation** - Remove simulation guards, prove real dispatch for build/plan/continue/oracle, add ceremony, skill section verification, dry-run and error diagnostics
+- [x] **Phase 136: Production Foundation** - Remove simulation guards, prove real dispatch for build/plan/continue/oracle, add ceremony, skill section verification, dry-run and error diagnostics *(completed 2026-05-18)*
 - [ ] **Phase 137: Hive Wisdom Injection** - Call Go hive-read from TS host, inject wisdom into worker prompts, prove graceful degradation and domain tag expansion
 - [ ] **Phase 138: Worker-to-Worker Spawning** - Workers request child workers mid-build with budget enforcement, spawn depth limits, and result attachment
 - [ ] **Phase 139: Confidence-Driven Build Iteration** - Build coordinator loops dispatch/evaluate up to 3 iterations with diminishing returns detection and cumulative budget
