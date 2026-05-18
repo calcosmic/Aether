@@ -21,12 +21,12 @@ Requirements for the Live Colony milestone. Each maps to roadmap phases starting
 
 ### Worker Escalation (SPAWN)
 
-- [ ] **SPAWN-01**: Workers return `spawns[]` field in claims; TS host consumes it to dispatch child workers with budget enforcement
-- [ ] **SPAWN-02**: Maximum spawn depth of 2 (workers can spawn sub-workers, sub-workers cannot spawn further)
-- [ ] **SPAWN-03**: All child spawns count against the Queen spawn budget (sub-workers reduce available budget for manifest workers)
-- [ ] **SPAWN-04**: Child spawn results attach to parent worker's handoff for downstream worker visibility
-- [ ] **SPAWN-05**: Go `spawn-log` and `spawn-complete` record child spawn entries with parent reference (not just "Queen")
-- [ ] **SPAWN-06**: Spawn requests exceeding budget are logged and skipped, not queued (fail-closed, not fail-open)
+- [x] **SPAWN-01**: Workers return `spawns[]` field in claims; TS host consumes it to dispatch child workers with budget enforcement
+- [x] **SPAWN-02**: Maximum spawn depth of 2 (workers can spawn sub-workers, sub-workers cannot spawn further)
+- [x] **SPAWN-03**: All child spawns count against the Queen spawn budget (sub-workers reduce available budget for manifest workers)
+- [x] **SPAWN-04**: Child spawn results attach to parent worker's handoff for downstream worker visibility
+- [x] **SPAWN-05**: Go `spawn-log` and `spawn-complete` record child spawn entries with parent reference (not just "Queen")
+- [x] **SPAWN-06**: Spawn requests exceeding budget are logged and skipped, not queued (fail-closed, not fail-open)
 
 ### Confidence Iteration (ITER)
 
@@ -94,12 +94,12 @@ Deferred to v1.22+.
 | HOST-07 | Phase 136 | Pending |
 | HOST-08 | Phase 136 | Pending |
 | HOST-09 | Phase 136 | Pending |
-| SPAWN-01 | Phase 138 | Pending |
-| SPAWN-02 | Phase 138 | Pending |
-| SPAWN-03 | Phase 138 | Pending |
-| SPAWN-04 | Phase 138 | Pending |
-| SPAWN-05 | Phase 138 | Pending |
-| SPAWN-06 | Phase 138 | Pending |
+| SPAWN-01 | Phase 138 | Complete |
+| SPAWN-02 | Phase 138 | Complete |
+| SPAWN-03 | Phase 138 | Complete |
+| SPAWN-04 | Phase 138 | Complete |
+| SPAWN-05 | Phase 138 | Complete |
+| SPAWN-06 | Phase 138 | Complete |
 | ITER-01 | Phase 139 | Pending |
 | ITER-02 | Phase 139 | Pending |
 | ITER-03 | Phase 139 | Pending |

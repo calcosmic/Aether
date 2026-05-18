@@ -40,7 +40,7 @@ See `.planning/milestones/` for full archived phase details.
 
 - [x] **Phase 136: Production Foundation** - Remove simulation guards, prove real dispatch for build/plan/continue/oracle, add ceremony, skill section verification, dry-run and error diagnostics *(completed 2026-05-18)*
 - [ ] **Phase 137: Hive Wisdom Injection** - Call Go hive-read from TS host, inject wisdom into worker prompts, prove graceful degradation and domain tag expansion
-- [ ] **Phase 138: Worker-to-Worker Spawning** - Workers request child workers mid-build with budget enforcement, spawn depth limits, and result attachment
+- [x] **Phase 138: Worker-to-Worker Spawning** - Workers request child workers mid-build with budget enforcement, spawn depth limits, and result attachment (completed 2026-05-18)
 - [ ] **Phase 139: Confidence-Driven Build Iteration** - Build coordinator loops dispatch/evaluate up to 3 iterations with diminishing returns detection and cumulative budget
 - [ ] **Phase 140: Hardening and Validation** - End-to-end integration tests, wrapper alignment verification, milestone audit
 
@@ -48,7 +48,7 @@ See `.planning/milestones/` for full archived phase details.
 |-------|-----------|----------------|--------|-----------|
 | 136. Production Foundation | v1.21 | 4/4 | Complete | 2026-05-18 |
 | 137. Hive Wisdom Injection | v1.21 | 0/3 | Not started | - |
-| 138. Worker-to-Worker Spawning | v1.21 | 1/4 | In Progress|  |
+| 138. Worker-to-Worker Spawning | v1.21 | 4/4 | Complete   | 2026-05-18 |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
 | 140. Hardening and Validation | v1.21 | 0/? | Not started | - |
 
@@ -115,7 +115,7 @@ Plans:
   4. Child spawn results appear in the parent worker's handoff, visible to downstream workers in the same wave
   5. Spawn requests that would exceed the remaining budget are logged and skipped, never queued -- fail-closed behavior
   6. Go `spawn-log` and `spawn-complete` record child entries with parent worker references, not just "Queen"
-**Plans:** 1/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] (to be planned)
