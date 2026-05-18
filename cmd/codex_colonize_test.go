@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -1561,5 +1564,125 @@ func TestIdentifyPathogens_MultipleIssues(t *testing.T) {
 	got := identifyPathogens(facts)
 	if len(got) < 4 {
 		t.Errorf("expected at least 4 issues, got %d: %v", len(got), got)
+	}
+}
+
+// --- Phase 141 regression tests ---
+
+func createVenvNoiseFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	dirs := []string{
+		filepath.Join(root, ".venv", "lib", "site-packages", "requests"),
+		filepath.Join(root, "cmd"),
+		filepath.Join(root, "src"),
+		filepath.Join(root, "__pycache__"),
+	}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	files := map[string]string{
+		filepath.Join(".venv", "lib", "site-packages", "requests", "api.py"): `import urllib3\n`,
+		filepath.Join("cmd", "main.go"):                                      `package main\nfunc main() {}\n`,
+		filepath.Join("src", "app.py"):                                       `def app(): pass\n`,
+		filepath.Join("__pycache__", "cache.pyc"):                            "\x00\x00\x00\x00", // fake bytecode
+	}
+	for rel, content := range files {
+		target := filepath.Join(root, rel)
+		if err := os.WriteFile(target, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	return root
+}
+
+func TestVenvNoiseExclusion(t *testing.T) {
+	root := createVenvNoiseFixture(t)
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+
+	// No .venv references in any survey output
+	outputPaths := strings.Join(facts.TopLevelDirs, "\n") + "\n" +
+		strings.Join(facts.ConfigFiles, "\n") + "\n" +
+		strings.Join(facts.Languages, "\n") + "\n" +
+		strings.Join(facts.TestFiles, "\n")
+	for _, forbidden := range []string{".venv", "site-packages", "__pycache__"} {
+		if strings.Contains(outputPaths, forbidden) {
+			t.Errorf("survey output contains forbidden noise path %q:\n%s", forbidden, outputPaths)
+		}
+	}
+}
+
+func TestVenvNoiseExclusion_SourceFilesPreserved(t *testing.T) {
+	root := createVenvNoiseFixture(t)
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+
+	// Source directories (src, cmd) should appear in TopLevelDirs,
+	// proving they are NOT excluded by the noise filter.
+	srcFound := false
+	cmdFound := false
+	for _, dir := range facts.TopLevelDirs {
+		if dir == "src" {
+			srcFound = true
+		}
+		if dir == "cmd" {
+			cmdFound = true
+		}
+	}
+	if !srcFound {
+		t.Errorf("src/ not found in TopLevelDirs; source directories must not be excluded. Got: %v", facts.TopLevelDirs)
+	}
+	if !cmdFound {
+		t.Errorf("cmd/ not found in TopLevelDirs; source directories must not be excluded. Got: %v", facts.TopLevelDirs)
+	}
+
+	// .venv must NOT appear in TopLevelDirs
+	for _, dir := range facts.TopLevelDirs {
+		if dir == ".venv" || strings.Contains(dir, "site-packages") {
+			t.Errorf("noise directory %q found in TopLevelDirs", dir)
+		}
+	}
+}
+
+func TestSkipListDivergence(t *testing.T) {
+	// Grep cmd/*.go (non-test) for local skip-list map patterns.
+	// This prevents anyone from re-introducing a divergent skip list.
+	skipListPattern := regexp.MustCompile(`var\s+\w*[Ss]kip\w*\s*=\s*map\[string\]`)
+
+	// Resolve the cmd/ directory relative to this test file's location.
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	cmdDir := filepath.Join(filepath.Dir(thisFile))
+
+	entries, err := os.ReadDir(cmdDir)
+	if err != nil {
+		t.Fatalf("ReadDir %s: %v", cmdDir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		f, err := os.Open(filepath.Join(cmdDir, entry.Name()))
+		if err != nil {
+			t.Fatalf("open %s: %v", entry.Name(), err)
+		}
+		scanner := bufio.NewScanner(f)
+		lineNum := 0
+		for scanner.Scan() {
+			lineNum++
+			if skipListPattern.MatchString(scanner.Text()) {
+				t.Errorf("%s:%d: local skip-list map found: %s", entry.Name(), lineNum, scanner.Text())
+			}
+		}
+		f.Close()
 	}
 }
