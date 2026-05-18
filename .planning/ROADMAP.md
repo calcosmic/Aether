@@ -46,7 +46,7 @@ See `.planning/milestones/` for full archived phase details.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 136. Production Foundation | v1.21 | 2/4 | In progress | - |
+| 136. Production Foundation | v1.21 | 3/4 | In progress | - |
 | 137. Hive Wisdom Injection | v1.21 | 0/? | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 0/? | Not started | - |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
@@ -77,7 +77,7 @@ Plans:
 - [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
@@ -97,7 +97,7 @@ Plans:
 Plans:
 - [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 138: Worker-to-Worker Spawning
@@ -116,7 +116,7 @@ Plans:
 Plans:
 - [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 139: Confidence-Driven Build Iteration
@@ -134,7 +134,7 @@ Plans:
 Plans:
 - [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 140: Hardening and Validation
@@ -151,5 +151,5 @@ Plans:
 Plans:
 - [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
 - [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [ ] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
+- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 - [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
