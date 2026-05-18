@@ -10,7 +10,7 @@
  * Satisfies TS-01 (real worker dispatch).
  */
 
-import type { WorkerHandoff } from "./types.js";
+import type { WorkerHandoff, SpawnClaim } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,8 +42,12 @@ export interface WorkerClaims {
   tool_count?: number;
   /** Blocking issues reported. */
   blockers?: string[];
-  /** Sub-workers spawned. */
-  spawns?: string[];
+  /**
+   * Sub-workers spawned.
+   * Accepts both string[] (deprecated) and SpawnClaim[] for backward compatibility.
+   * String spawns are deprecated; workers should return structured SpawnClaim objects.
+   */
+  spawns?: (string | SpawnClaim)[];
   /** Worker handoff relay data. */
   handoff?: WorkerHandoff;
 }
@@ -73,7 +77,7 @@ export function parseWorkerClaims(stdout: string): WorkerClaims {
   // Strategy 1: direct JSON.parse
   try {
     const parsed = JSON.parse(trimmed) as unknown;
-    return validateWorkerClaims(parsed);
+    return normalizeClaimsSpawns(validateWorkerClaims(parsed));
   } catch {
     // Continue to next strategy
   }
@@ -83,7 +87,7 @@ export function parseWorkerClaims(stdout: string): WorkerClaims {
     const stripped = stripCodeFences(trimmed);
     if (stripped !== trimmed) {
       const parsed = JSON.parse(stripped) as unknown;
-      return validateWorkerClaims(parsed);
+      return normalizeClaimsSpawns(validateWorkerClaims(parsed));
     }
   } catch {
     // Continue to next strategy
@@ -93,7 +97,7 @@ export function parseWorkerClaims(stdout: string): WorkerClaims {
   try {
     const extracted = extractJSONBlock(trimmed);
     const parsed = JSON.parse(extracted) as unknown;
-    return validateWorkerClaims(parsed);
+    return normalizeClaimsSpawns(validateWorkerClaims(parsed));
   } catch {
     // Continue to error
   }
@@ -214,7 +218,39 @@ export function validateWorkerClaims(claims: unknown): WorkerClaims {
     result.blockers = obj.blockers.filter((v): v is string => typeof v === "string");
   }
   if (Array.isArray(obj.spawns)) {
-    result.spawns = obj.spawns.filter((v): v is string => typeof v === "string");
+    // Cap spawn claims at 50 entries to prevent DoS (T-138-02).
+    const rawSpawns = obj.spawns.slice(0, 50);
+    const validSpawns: (string | SpawnClaim)[] = [];
+    for (let i = 0; i < rawSpawns.length; i++) {
+      const entry = rawSpawns[i];
+      if (typeof entry === "string") {
+        // Backward compatibility: accept string spawns
+        validSpawns.push(entry);
+      } else if (typeof entry === "object" && entry !== null) {
+        const obj2 = entry as Record<string, unknown>;
+        if (typeof obj2.caste === "string" && typeof obj2.task === "string") {
+          const claim: SpawnClaim = { caste: obj2.caste, task: obj2.task };
+          if (typeof obj2.reason === "string") claim.reason = obj2.reason;
+          validSpawns.push(claim);
+        } else {
+          process.stderr.write(
+            `Warning: invalid spawn claim at index ${i}, skipping\n`
+          );
+        }
+      } else {
+        process.stderr.write(
+          `Warning: invalid spawn claim at index ${i}, skipping\n`
+        );
+      }
+    }
+    if (validSpawns.length > 0) {
+      result.spawns = validSpawns;
+    }
+    if (obj.spawns.length > 50) {
+      process.stderr.write(
+        `Warning: spawn claims truncated from ${obj.spawns.length} to 50\n`
+      );
+    }
   }
 
   if (typeof obj.handoff === "object" && obj.handoff !== null) {
@@ -222,4 +258,40 @@ export function validateWorkerClaims(claims: unknown): WorkerClaims {
   }
 
   return result;
+}
+
+/**
+ * Normalize spawns on a WorkerClaims object to SpawnClaim[].
+ *
+ * If the claims have spawns, runs them through normalizeSpawnClaims.
+ * Otherwise returns claims unchanged.
+ */
+function normalizeClaimsSpawns(claims: WorkerClaims): WorkerClaims {
+  if (claims.spawns !== undefined && claims.spawns.length > 0) {
+    return { ...claims, spawns: normalizeSpawnClaims(claims.spawns) };
+  }
+  return claims;
+}
+
+/**
+ * Normalize mixed spawn claims to a uniform SpawnClaim array.
+ *
+ * Converts legacy string entries to SpawnClaim objects with caste="builder"
+ * (default), task=the original string, and an auto-conversion reason.
+ * Existing SpawnClaim objects pass through unchanged.
+ *
+ * @param spawns - Array of string or SpawnClaim entries
+ * @returns Normalized array of SpawnClaim objects
+ */
+export function normalizeSpawnClaims(spawns: (string | SpawnClaim)[]): SpawnClaim[] {
+  return spawns.map((entry): SpawnClaim => {
+    if (typeof entry === "string") {
+      return {
+        caste: "builder",
+        task: entry,
+        reason: "auto-converted from string spawn",
+      };
+    }
+    return entry;
+  });
 }
