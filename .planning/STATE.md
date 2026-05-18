@@ -1,47 +1,32 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.20
-milestone_name: Host Contract Hardening and Wrapper Reality Check
-status: ready_to_plan
-last_updated: "2026-05-15T18:00:00.000Z"
+milestone: v1.21
+milestone_name: Live Colony
+status: planning
+last_updated: "2026-05-18T12:00:00.000Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-15)
+See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Milestone v1.20 complete — all phases shipped
+**Current focus:** Milestone v1.21 — Live Colony
 
 ## Current Position
 
-Phase: 133
-Plan: 1/1 complete
-Status: Complete
-
-## Completed Plans (v1.20)
-
-- 133-01: Lifecycle Honesty (worker dispatch defaults to real execution, simulation gated behind --simulate)
-- 134-01: Oracle Storage Pattern (Go-owned atomic storage, interrupt recovery)
-- 135-01: Doc-CLI Alignment Dashboard (command catalog, flag audit, release gate integration)
-- 135-02: Doc-CLI Alignment Smoke Test (executable YAML smoke tests)
-
-## Completed Plans (v1.19)
-
-- 126-01: Oracle Iteration Manifests (Go commands)
-- 127-01: TS Host Oracle Lifecycle (TypeScript orchestration)
-- 127-02: TS Host Oracle Lifecycle (host.ts wiring + tests)
-- 128-01: Swarm/Watch Host Bridge (TypeScript display modules)
-- 128-02: Swarm/Watch Host Bridge (host.ts wiring + tests)
-- 129-01: Release Gate (verification, publish, downstream smoke test)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-18 — Milestone v1.21 Live Colony started
 
 ## Known Blockers
 
@@ -49,17 +34,13 @@ None
 
 ## Next Actions
 
-1. Plan Phase 130: Host Surface Completeness
-2. Plan Phase 131: Test Coverage for Host Commands
-3. Plan Phase 132: Wrapper Ownership Decision
-4. Execute remaining v1.20 phases when plans are ready
+1. Define requirements for v1.21
+2. Create roadmap with phases starting at 136
+3. Plan Phase 136
 
 ## Key Decisions (Carried Forward)
 
-- OracleWorkerResponse findings built conditionally to satisfy exactOptionalPropertyTypes
-- Simulated current confidence uses 70 for completed workers, 30 for failed as a synthetic baseline
-- Loop termination checks both Go finalizeResult.should_continue and a local max_iterations ceiling for safety
-- Watch and swarm display modules use exactOptionalPropertyTypes-compatible optional fields (| undefined)
-- Dashboard refresh loop capped at minimum 1000ms per threat model T-128-02
-- Swarm dashboard is one-shot (no refresh loop) since swarm --plan-only produces a static manifest
-- v1.20 ownership decision pending: wrappers as "host-assisted orchestrators" vs thin pass-throughs
+- Wrappers are "host-assisted orchestrators"; they call `aether host` for manifests
+- Go remains sole authority for state mutation and finalizers
+- Oracle state uses atomic Go-owned storage with interrupt recovery
+- Simulation is gated behind `--simulate` flag

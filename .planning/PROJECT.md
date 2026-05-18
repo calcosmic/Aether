@@ -34,22 +34,29 @@ That means:
 
 ## Current State
 
-- **v1.20 Host Contract Hardening and Wrapper Reality Check shipped (2026-05-15)** — Full milestone archive in `.planning/milestones/`
-- **Product version: v1.0.38**
-- All 7 `aether host` subcommands exist and execute end-to-end
-- 23 TS host tests covering realistic flag combinations
-- Wrapper-host boundary documented: wrappers are "host-assisted orchestrators"
-- Lifecycle simulation gated behind `--simulate`; errors on missing platforms without it
-- Oracle state uses atomic Go-owned storage with interrupt recovery
-- Doc-CLI alignment smoke test auto-discovers 60+ commands, validates flags, blocks release gate
-- Go tests: 2900+ passing; TS tests: 220 passing
+- **v1.21 Live Colony in progress** — Wiring TS host into production orchestration
+- **Product version: v1.0.39**
+- v1.20 shipped: all 7 `aether host` subcommands work, wrappers are host-assisted orchestrators
+- TS host has complete dispatch code that has never run a real worker (simulate-only)
+- Go runtime is solid: 2900+ tests, ceremony rendering, Queen spawn budget, Oracle confidence loops
+- 86 skills (55 colony + 31 domain), 60 commands per platform, 27 Codex agents
+- Go tests: 2900+ passing; TS tests: 220+ passing
 
-## Current Milestone: v1.21 (TBD)
+## Current Milestone: v1.21 Live Colony
 
-**Goal:** [To be defined — start with `/gsd-new-milestone`]
+**Goal:** Make the TypeScript host the real production orchestrator for Aether, so that running a colony produces genuine worker dispatch, visible ceremony, confidence-driven iteration, worker escalation, and reusable wisdom — not simulation.
+
+**Target features:**
+- Production TS host for plan, build, continue, and Oracle (real workers, real ceremony, real finalizers)
+- Worker-to-worker spawning (workers request additional workers mid-build)
+- Confidence-driven iteration (plan and build iterate until confidence targets are met)
+- Hive wisdom reuse proof (colony B starts faster because of colony A)
 
 **Non-goals:**
-- [To be defined]
+- Cross-colony ledger sharing (code-specific paths go stale)
+- Ledger web UI (CLI-only for now)
+- Self-mutating agents / evolution engine
+- New platforms beyond Claude, OpenCode, Codex
 
 ## Previous Milestone: v1.20 Host Contract Hardening and Wrapper Reality Check
 
@@ -198,7 +205,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.18 Hybrid Runtime Parity & Release Gate -- Phases 119-123 (shipped 2026-05-14)
 - [x] v1.19 TypeScript Host Cutover + Oracle Confidence Recovery -- Phases 124-129 (shipped 2026-05-15)
 - [x] v1.20 Host Contract Hardening and Wrapper Reality Check -- Phases 130-135 (shipped 2026-05-15)
-- [ ] v1.21 (TBD)
+- [ ] v1.21 Live Colony -- Phases 136+
 
 ## Requirements
 
