@@ -87,6 +87,12 @@ Plans:
 - CEREMONY-05: Go ceremony adapter emits events; TS host renders them following playbook timing
 - CEREMONY-06: Document-injection pattern for playbook consumption (not step-parsing) — same pattern as existing Go `renderBuildPlaybookContext`
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 143-01-PLAN.md — PlaybookLoader module, plan playbooks, YAML orchestration removal (CEREMONY-01, CEREMONY-02, CEREMONY-03, CEREMONY-06)
+- [ ] 143-02-PLAN.md — Host integration, conductor unification, ceremony-coupled test updates (CEREMONY-04, CEREMONY-05)
+
 **Why third:** Ceremony restore is medium complexity and touches all 3 platform surfaces. Requires grounding (Phase 142) to be meaningful — pretty ceremony on bad plans is worse than no ceremony.
 
 **Risk:** Medium-high. 465 TS tests are ceremony-coupled and will break. Phase-by-phase test updates needed.
