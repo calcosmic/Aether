@@ -104,6 +104,8 @@ export interface BuildDispatch {
   skill_section?: string;
   /** Cross-colony hive wisdom section for this dispatch. */
   hive_section?: string;
+  /** Sub-workers requested by this dispatch via structured spawn claims. */
+  spawns?: SpawnClaim[];
   skill_count?: number;
   colony_skill_count?: number;
   domain_skill_count?: number;
@@ -152,6 +154,8 @@ export interface WorkerResult {
   files_created?: string[];
   files_modified?: string[];
   tests_written?: string[];
+  /** Sub-workers requested by this worker via structured spawn claims. */
+  spawns?: SpawnClaim[];
   handoff?: WorkerHandoff;
 }
 
@@ -166,6 +170,45 @@ export interface WorkerHandoff {
   things_not_to_repeat?: string[];
   freshness?: string;
   [key: string]: unknown;
+}
+
+/**
+ * A structured spawn claim returned by a worker.
+ *
+ * Workers request sub-workers by emitting an array of SpawnClaim objects
+ * in their claims output. The orchestration host reads these claims and
+ * decides whether to spawn additional workers.
+ */
+export interface SpawnClaim {
+  /** The worker caste to spawn (e.g., "builder", "scout", "watcher"). */
+  caste: string;
+  /** Task description for the spawned worker. */
+  task: string;
+  /** Optional explanation for why this spawn is needed. */
+  reason?: string;
+}
+
+/**
+ * A worker that was spawned from a parent worker's SpawnClaim.
+ *
+ * Tracks the full lifecycle of a spawned worker including its relationship
+ * to the parent, execution depth, and completion state.
+ */
+export interface SpawnedWorker {
+  /** The original spawn claim that triggered this worker. */
+  claim: SpawnClaim;
+  /** Auto-generated worker name (e.g., "Builder-42"). */
+  name: string;
+  /** Parent worker name that issued the spawn claim. */
+  parent: string;
+  /** Spawn depth (1 = child of manifest worker, 2 = grandchild). */
+  depth: number;
+  /** Terminal status of the spawned worker. */
+  status: string;
+  /** Completion summary from the spawned worker. */
+  summary?: string;
+  /** Handoff relay data from the spawned worker, attached to parent's handoff. */
+  handoff?: WorkerHandoff;
 }
 
 export interface BuildClaims {
