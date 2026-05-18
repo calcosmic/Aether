@@ -1,5 +1,28 @@
 # Aether Milestones
 
+## v1.21 Live Colony (Shipped: 2026-05-18)
+
+**Phases completed:** 5 phases, 18 plans, 25 tasks
+
+**Key accomplishments:**
+
+- Verified real dispatch is default, --simulate is opt-in, and skill section injection handles all edge cases through 7 new tests
+- Added plain English platform diagnostics and error classification with 16 new tests -- auth errors halt, timeouts continue, all messages are human-readable.
+- Added dispatched runner with full build/plan/continue pipelines and ceremony -- 16 new tests across host.test.ts and host-integration.test.ts.
+- Wired Oracle lifecycle for real dispatch with ceremony rendering and added --dry-run ceremony preview with DRY RUN badge -- 11 new tests across oracle-lifecycle.test.ts and host-integration.test.ts.
+- Plan:
+- One-liner:
+- 1. [Rule 3 - Blocking] spawn-orchestrator.ts pre-committed from prior execution
+- 1. [Rule 1 - Bug] Fixed pre-existing TypeScript errors in types.ts
+- confidence-evaluator.ts
+- Confidence-driven build iteration loop in host.ts with wave extraction, feedback injection, ceremony markers, and 7 integration tests
+- E2E tests proving full iteration cycle with ceremony output, feedback injection, and diminishing returns detection
+- Ceremony alignment validation tests confirming all dispatched command wrappers contain expected invocation instructions and parity matrix ceremony_steps are lifecycle-complete across all 18 commands
+- Integration tests proving hive wisdom injection, spawn budget tracking, and confidence iteration compose correctly in the build pipeline, plus a plan-build-continue lifecycle end-to-end test
+- Milestone audit test verifying all 31 v1.21 requirements map to test files, plus full regression confirmation across 464 TS tests and 18 Go packages
+
+---
+
 ## v1.20 — Host Contract Hardening and Wrapper Reality Check
 
 **Shipped:** 2026-05-15

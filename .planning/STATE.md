@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.21
 milestone_name: Live Colony
-status: milestone_complete
-last_updated: "2026-05-18T18:06:20.347Z"
-last_activity: 2026-05-18
+status: Awaiting next milestone
+last_updated: "2026-05-18T18:30:30.422Z"
+last_activity: 2026-05-18 — Milestone v1.21 completed and archived
 progress:
   total_phases: 5
-  completed_phases: 6
+  completed_phases: 5
   total_plans: 18
   completed_plans: 18
-  percent: 120
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Current Position
 
-Phase: 140
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-18
+Phase: Milestone v1.21 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-18 — Milestone v1.21 completed and archived
 
 ## Known Blockers
 
@@ -67,3 +67,7 @@ Last activity: 2026-05-18
 - Dry-run path fetches manifest (read-only), renders ceremony, shows badge, exits without dispatch/finalizer
 - SpawnOrchestrator enforces max depth 2 and budget caps; child naming uses ${parent}-spawn-${index} pattern
 - Cross-phase integration tests verify hive + spawn + iteration compose correctly in unified pipeline
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
