@@ -47,7 +47,7 @@ See `.planning/milestones/` for full archived phase details.
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 136. Production Foundation | v1.21 | 4/4 | Complete | 2026-05-18 |
-| 137. Hive Wisdom Injection | v1.21 | 0/? | Not started | - |
+| 137. Hive Wisdom Injection | v1.21 | 0/3 | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 0/? | Not started | - |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
 | 140. Hardening and Validation | v1.21 | 0/? | Not started | - |
@@ -92,13 +92,17 @@ Plans:
   3. If `hive-read` fails (Go command error, missing hive directory), dispatch proceeds normally with a warning logged -- workers never blocked by hive
   4. Colony B completes a build faster or with fewer retries than colony A (without wisdom) on the same task, when colony A's learnings have been promoted to the hive
   5. Domain tags include technology stack details (e.g., "go", "typescript", "cli") and partial domain matches receive a relevance discount compared to exact matches
-**Plans:** 4 plans (4 waves, sequential due to file dependencies)
+**Plans:** 3 plans (3 waves, sequential due to file dependencies)
 
 Plans:
-- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
-- [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
-- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
+**Wave 1**
+- [ ] 137-01-PLAN.md -- Create hive-injector.ts module, types, and unit tests (HIVE-01, HIVE-02, HIVE-06, HIVE-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 137-02-PLAN.md -- Integrate hive wisdom into prompt-assembler and worker-dispatch pipeline (HIVE-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 137-03-PLAN.md -- Integrate hive-read into dispatched runners in host.ts with graceful degradation and integration tests (HIVE-04, HIVE-05)
 
 ### Phase 138: Worker-to-Worker Spawning
 **Goal**: Workers can request additional workers mid-build through the `spawns` field, with orchestrator-level budget enforcement, spawn depth limits, and child results attached to parent handoffs.
@@ -114,10 +118,7 @@ Plans:
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
-- [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
-- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
+- [ ] (to be planned)
 
 ### Phase 139: Confidence-Driven Build Iteration
 **Goal**: The build coordinator loops plan/dispatch/evaluate up to 3 iterations with diminishing returns detection, cumulative budget tracking, and visible iteration progress in ceremony output.
@@ -132,10 +133,7 @@ Plans:
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
-- [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
-- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
+- [ ] (to be planned)
 
 ### Phase 140: Hardening and Validation
 **Goal**: End-to-end integration tests prove the full production pipeline works, wrapper alignment is verified, and the milestone is audit-ready for ship.
@@ -149,7 +147,4 @@ Plans:
 **Plans:** 4 plans (4 waves, sequential due to file dependencies)
 
 Plans:
-- [x] 136-01-PLAN.md -- Flip simulation default, verify --simulate retention, add skill section tests
-- [x] 136-02-PLAN.md -- Platform error diagnostics, error classification for auth vs timeout
-- [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
-- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
+- [ ] (to be planned)
