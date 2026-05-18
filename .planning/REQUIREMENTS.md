@@ -53,6 +53,17 @@ Requirements for the Live Colony milestone. Each maps to roadmap phases starting
 - [ ] **SKILL-02**: Worker prompts omit skill section when dispatch has no `skill_section` (no empty section headers)
 - [ ] **SKILL-03**: Skill injection never fails the prompt assembly; missing or malformed skill section is handled gracefully
 
+### Validation (VAL)
+
+- [x] **VAL-01**: Ceremony steps match between wrapper markdown and host for all dispatched commands
+- [x] **VAL-02**: All 18 commands have non-empty ceremony_steps in parity matrix
+- [x] **VAL-03**: Build pipeline exercises hive wisdom injection, worker spawning, and confidence iteration together in a single test
+- [x] **VAL-04**: Wrapper markdown for dispatched commands contains all 4 ceremony invocation commands (substring containment)
+- [x] **VAL-05**: Claude and OpenCode wrappers have matching ceremony invocation patterns for each command
+- [x] **VAL-06**: Milestone audit verifies all 31 v1.21 requirements have at least one test file covering them
+- [x] **VAL-07**: Full TS host test suite passes with zero unexpected failures
+- [x] **VAL-08**: Full Go test suite passes with zero failures
+
 ## Future Requirements
 
 Deferred to v1.22+.
@@ -116,5 +127,13 @@ Deferred to v1.22+.
 | SKILL-01 | Phase 136 | Pending |
 | SKILL-02 | Phase 136 | Pending |
 | SKILL-03 | Phase 136 | Pending |
+| VAL-01 | Phase 140 | Complete |
+| VAL-02 | Phase 140 | Complete |
+| VAL-03 | Phase 140 | Complete |
+| VAL-04 | Phase 140 | Complete |
+| VAL-05 | Phase 140 | Complete |
+| VAL-06 | Phase 140 | Complete |
+| VAL-07 | Phase 140 | Complete |
+| VAL-08 | Phase 140 | Complete |
 
-*Coverage: 31/31 requirements mapped to phases 136-140.*
+*Coverage: 39/39 requirements mapped to phases 136-140.*

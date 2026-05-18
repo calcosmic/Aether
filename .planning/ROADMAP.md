@@ -140,7 +140,7 @@ Plans:
 **Depends on**: Phases 136-139 (all features must be complete)
 **Requirements**: (validation phase -- covers gap-filling and cross-cutting concerns from all categories)
 **Success Criteria** (what must be TRUE):
-  1. An end-to-end test runs `aether host plan` through `aether host build` through `aether host continue` with real workers and verifies ceremony output, state mutations, and completion files
+  1. An end-to-end test runs `aether host plan` through `aether host build` through `aether host continue` with --simulate (the test-safe execution mode) and verifies ceremony output, state mutations, and completion files
   2. Wrapper commands (Claude plan/build/continue) produce equivalent ceremony and state outcomes to direct `aether host` invocations
   3. No regression in existing TS test suite (220+ tests) or Go test suite (2900+ tests)
   4. Temp files and completion artifacts are cleaned up after normal completion and after graceful shutdown

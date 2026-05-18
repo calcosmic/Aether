@@ -18,7 +18,7 @@
  *   --cwd <path>  Working directory (default: process.cwd())
  */
 
-import { callGoJSON, discoverGoBinary, writeCompletionFile, approvedCompletionDirPrefix } from "./go-bridge.js";
+import { callGoJSON, discoverGoBinary, writeCompletionFile, approvedCompletionDirPrefix, cleanupCompletionDir } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import {
   buildHostGoArgs,
@@ -628,6 +628,7 @@ async function dispatchBuildWave(
     "build-finalize", phase,
     "--completion-file", completionPath,
   ]);
+  cleanupCompletionDir(completionPath);
 
   // Build worker claims from raw dispatch results for confidence evaluation.
   // Raw results carry extra fields (blockers, test_results) that toWorkerResults drops.
@@ -920,6 +921,7 @@ async function runDispatchedPlanCommand(
     "plan-finalize",
     "--completion-file", completionPath,
   ]);
+  cleanupCompletionDir(completionPath);
 
   // Step 7: Render closeout
   emitCeremonyOutput(ceremony.renderCloseout("plan", completionPath));
@@ -996,6 +998,7 @@ async function runDispatchedContinueCommand(
     "continue-finalize",
     "--completion-file", completionPath,
   ]);
+  cleanupCompletionDir(completionPath);
 
   // Step 7: Render closeout
   emitCeremonyOutput(ceremony.renderCloseout("continue", completionPath));

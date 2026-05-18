@@ -1941,3 +1941,37 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     );
   });
 });
+
+describe("temp file cleanup after finalizer", () => {
+  beforeEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  afterEach(() => {
+    __restoreAllMocks();
+    __restoreGoBridgeCallGoJSON();
+    __restoreCreateCeremonyAdapter();
+  });
+
+  it("cleanup removes aether temp dirs and is safe on non-existent paths", async () => {
+    const { writeCompletionFile, cleanupCompletionDir } = await import("../src/go-bridge.js");
+
+    // Create a temp completion file like the host would
+    const completionPath = writeCompletionFile(
+      "aether-build",
+      "test-completion.json",
+      { ok: true }
+    );
+    assert.ok(existsSync(completionPath), "Completion file should exist before cleanup");
+
+    // Cleanup should remove it
+    cleanupCompletionDir(completionPath);
+    assert.ok(!existsSync(completionPath), "Completion file should be gone after cleanup");
+
+    // Calling again on non-existent path should not throw
+    assert.doesNotThrow(() => cleanupCompletionDir(completionPath));
+    assert.doesNotThrow(() => cleanupCompletionDir("/tmp/aether-build-nonexistent-abc/completion.json"));
+  });
+});

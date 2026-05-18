@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -278,4 +278,21 @@ export function writeCompletionFile(
 
   writeFileSync(targetPath, JSON.stringify(data, null, 2), "utf-8");
   return targetPath;
+}
+
+/**
+ * Remove a completion file's temp directory after the Go finalizer reads it.
+ *
+ * Safe to call with a non-existent path (no-op). Only removes directories
+ * that match the expected aether temp dir pattern.
+ */
+export function cleanupCompletionDir(completionPath: string): void {
+  if (!existsSync(completionPath)) return;
+
+  const dir = join(completionPath, "..");
+  const resolved = dir === ".." ? "" : dir;
+  const base = resolved.split("/").pop() ?? "";
+  if (base.startsWith("aether-")) {
+    rmSync(resolved, { recursive: true, force: true });
+  }
 }
