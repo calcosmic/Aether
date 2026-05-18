@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: Ready for plan 02
-last_updated: "2026-05-18T21:48:29.965Z"
-last_activity: 2026-05-18 -- Phase 143 plan 01 complete (PlaybookLoader + plan playbooks + YAML slim)
+status: completed
+last_updated: "2026-05-18T22:07:19.951Z"
+last_activity: 2026-05-18 -- Phase 143 plan 02 complete (playbook-aware ceremony flow in TS host)
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
-  percent: 83
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 143 — build-plan-ceremony-restore
+**Current focus:** Phase 143 -- build-plan-ceremony-restore (complete)
 
 ## Current Position
 
 Phase: 143
-Plan: 01 (complete)
-Status: Ready for plan 02
-Last activity: 2026-05-18 -- Phase 143 plan 01 complete (PlaybookLoader + plan playbooks + YAML slim)
+Plan: 02 (complete)
+Status: Phase 143 plan 02 complete
+Last activity: 2026-05-18 -- Phase 143 plan 02 complete (playbook-aware ceremony flow in TS host)
 
 ## Known Blockers
 
@@ -36,9 +36,8 @@ Last activity: 2026-05-18 -- Phase 143 plan 01 complete (PlaybookLoader + plan p
 
 ## Next Actions
 
-1. Plan 143-02 (wire PlaybookLoader into host, build ceremony restore)
-2. Execute Phase 143 plan 02
-3. Plan Phase 144 (Regression + Execution Path Cleanup)
+1. Plan Phase 144 (Regression + Execution Path Cleanup)
+2. Execute Phase 144 plan 01
 
 ## Key Decisions (Carried Forward)
 
@@ -70,6 +69,8 @@ Last activity: 2026-05-18 -- Phase 143 plan 01 complete (PlaybookLoader + plan p
 - PlaybookLoader resolves candidates: absolute -> root+path -> root+playbooks-dir -> hub-system -> hub-root -> bare (mirrors Go)
 - Hub fallback is a feature -- loadPlaybooksForWorkflow finds playbooks in hub when repo-local absent
 - YAML orchestration blocks removed from build.yaml and plan.yaml wrapper_additions; codex_orchestration preserved (CEREMONY-04)
+- Playbook context is document-injection, not parsed steps -- host.ts loads playbooks and appends to task_brief (CEREMONY-06)
+- Playbook context re-injected after manifest re-fetch in build iteration loop (bug fix)
 
 ## Operator Next Steps
 
