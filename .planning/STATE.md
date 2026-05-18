@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: executing
-last_updated: "2026-05-18T21:27:28.095Z"
-last_activity: 2026-05-18 -- Phase 143 planning complete
+status: Ready for plan 02
+last_updated: "2026-05-18T21:48:29.965Z"
+last_activity: 2026-05-18 -- Phase 143 plan 01 complete (PlaybookLoader + plan playbooks + YAML slim)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 6
-  completed_plans: 4
-  percent: 67
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 143
-Plan: awaiting planning
-Status: Ready to execute
-Last activity: 2026-05-18 -- Phase 143 planning complete
+Plan: 01 (complete)
+Status: Ready for plan 02
+Last activity: 2026-05-18 -- Phase 143 plan 01 complete (PlaybookLoader + plan playbooks + YAML slim)
 
 ## Known Blockers
 
@@ -36,8 +36,8 @@ Last activity: 2026-05-18 -- Phase 143 planning complete
 
 ## Next Actions
 
-1. Plan Phase 143 (Build + Plan Ceremony Restore)
-2. Execute Phase 143 plans
+1. Plan 143-02 (wire PlaybookLoader into host, build ceremony restore)
+2. Execute Phase 143 plan 02
 3. Plan Phase 144 (Regression + Execution Path Cleanup)
 
 ## Key Decisions (Carried Forward)
@@ -67,6 +67,9 @@ Last activity: 2026-05-18 -- Phase 143 planning complete
 - Dry-run path fetches manifest (read-only), renders ceremony, shows badge, exits without dispatch/finalizer
 - SpawnOrchestrator enforces max depth 2 and budget caps; child naming uses ${parent}-spawn-${index} pattern
 - Cross-phase integration tests verify hive + spawn + iteration compose correctly in unified pipeline
+- PlaybookLoader resolves candidates: absolute -> root+path -> root+playbooks-dir -> hub-system -> hub-root -> bare (mirrors Go)
+- Hub fallback is a feature -- loadPlaybooksForWorkflow finds playbooks in hub when repo-local absent
+- YAML orchestration blocks removed from build.yaml and plan.yaml wrapper_additions; codex_orchestration preserved (CEREMONY-04)
 
 ## Operator Next Steps
 
