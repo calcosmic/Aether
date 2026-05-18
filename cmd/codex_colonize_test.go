@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1651,6 +1652,197 @@ func TestVenvNoiseExclusion_SourceFilesPreserved(t *testing.T) {
 	}
 }
 
+// --- Source anchor tests (Plan 141-02) ---
+
+func createAnchorTestFixture(t *testing.T, files map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	for path, content := range files {
+		full := filepath.Join(root, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(full), err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", full, err)
+		}
+	}
+	return root
+}
+
+func TestExtractSourceAnchors_Basic(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"cmd/main.go":    "package main",
+		"src/app.ts":     "export class App {}",
+		"pkg/util.go":    "package util",
+		"README.md":      "# readme",
+		"config.json":    "{}",
+		"docs/guide.md":  "# guide",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+
+	want := []string{"cmd/main.go", "pkg/util.go", "src/app.ts"}
+	if len(anchors) != len(want) {
+		t.Fatalf("len(anchors) = %d, want %d; got %v", len(anchors), len(want), anchors)
+	}
+	for i, w := range want {
+		if anchors[i] != w {
+			t.Errorf("anchors[%d] = %q, want %q", i, anchors[i], w)
+		}
+	}
+}
+
+func TestExtractSourceAnchors_CapAt50(t *testing.T) {
+	files := make(map[string]string, 60)
+	for i := 0; i < 60; i++ {
+		name := fmt.Sprintf("file%02d.go", i)
+		files[name] = fmt.Sprintf("package p%d", i)
+	}
+	root := createAnchorTestFixture(t, files)
+
+	anchors := extractSourceAnchors(root, 50)
+	if len(anchors) != 50 {
+		t.Fatalf("len(anchors) = %d, want 50", len(anchors))
+	}
+}
+
+func TestExtractSourceAnchors_ExcludesNoise(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"main.go":                          "package main",
+		".venv/lib/api.py":                 "def api(): pass",
+		"node_modules/react/index.js":      "module.exports = {}",
+		"__pycache__/cache.py":             "# cached",
+		"src/app.go":                       "package src",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	for _, a := range anchors {
+		if strings.Contains(a, ".venv") || strings.Contains(a, "node_modules") || strings.Contains(a, "__pycache__") {
+			t.Errorf("anchor %q should have been excluded (noise dir)", a)
+		}
+	}
+	if !containsString(anchors, "main.go") {
+		t.Errorf("anchors missing main.go: %v", anchors)
+	}
+	if !containsString(anchors, "src/app.go") {
+		t.Errorf("anchors missing src/app.go: %v", anchors)
+	}
+}
+
+func TestExtractSourceAnchors_ExcludesTests(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"main.go":      "package main",
+		"main_test.go": "package main_test",
+		"app.test.ts":  "describe('app')",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	if !containsString(anchors, "main.go") {
+		t.Errorf("anchors missing main.go: %v", anchors)
+	}
+	for _, a := range anchors {
+		if strings.HasSuffix(a, "_test.go") || strings.HasSuffix(a, ".test.ts") {
+			t.Errorf("anchor %q should have been excluded (test file)", a)
+		}
+	}
+}
+
+func TestExtractSourceAnchors_ExcludesMinified(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"app.js":           "const x = 1;",
+		"vendor.min.js":    "var a,b,c",
+		"styles.css":       "body { }",
+		"bundle.min.css":   ".a{b:c}",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	if !containsString(anchors, "app.js") {
+		t.Errorf("anchors missing app.js: %v", anchors)
+	}
+	for _, a := range anchors {
+		if strings.HasSuffix(a, ".min.js") || strings.HasSuffix(a, ".min.css") {
+			t.Errorf("anchor %q should have been excluded (minified)", a)
+		}
+	}
+}
+
+func TestExtractSourceAnchors_SortsByDepthThenAlpha(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"a/b/c/deep.go": "package deep",
+		"shallow.go":    "package shallow",
+		"a/mid.go":      "package mid",
+	})
+
+	anchors := extractSourceAnchors(root, 50)
+	want := []string{"shallow.go", "a/mid.go", "a/b/c/deep.go"}
+	if len(anchors) != len(want) {
+		t.Fatalf("len(anchors) = %d, want %d; got %v", len(anchors), len(want), anchors)
+	}
+	for i, w := range want {
+		if anchors[i] != w {
+			t.Errorf("anchors[%d] = %q, want %q", i, anchors[i], w)
+		}
+	}
+}
+
+func TestAnchorsWrittenToSurvey(t *testing.T) {
+	root := createAnchorTestFixture(t, map[string]string{
+		"cmd/main.go":   "package main",
+		"pkg/util.go":   "package util",
+		"src/app.ts":    "export class App {}",
+		"main_test.go":  "package main_test",
+		"config.json":   "{}",
+		"README.md":     "# readme",
+	})
+
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+
+	surveyDir := t.TempDir()
+	if err := writeSurveyCompatibilityJSON(surveyDir, facts); err != nil {
+		t.Fatalf("writeSurveyCompatibilityJSON error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(surveyDir, "anchors.json"))
+	if err != nil {
+		t.Fatalf("anchors.json not found: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("anchors.json parse error: %v", err)
+	}
+
+	anchorsRaw, ok := payload["source_anchors"].([]interface{})
+	if !ok {
+		t.Fatalf("source_anchors missing or wrong type: %T", payload["source_anchors"])
+	}
+	anchors := make([]string, len(anchorsRaw))
+	for i, a := range anchorsRaw {
+		anchors[i], _ = a.(string)
+	}
+
+	if len(anchors) < 2 {
+		t.Fatalf("expected at least 2 anchors, got %d: %v", len(anchors), anchors)
+	}
+	if !containsString(anchors, "cmd/main.go") {
+		t.Errorf("anchors.json missing cmd/main.go: %v", anchors)
+	}
+	if !containsString(anchors, "pkg/util.go") {
+		t.Errorf("anchors.json missing pkg/util.go: %v", anchors)
+	}
+	if containsString(anchors, "main_test.go") {
+		t.Errorf("anchors.json should not contain test file main_test.go: %v", anchors)
+	}
+
+	count, ok := payload["anchor_count"].(float64)
+	if !ok || int(count) != len(anchors) {
+		t.Errorf("anchor_count = %v, want %d", payload["anchor_count"], len(anchors))
+	}
+}
+
 func TestSkipListDivergence(t *testing.T) {
 	// Grep cmd/*.go (non-test) for local skip-list map patterns.
 	// This prevents anyone from re-introducing a divergent skip list.
@@ -1684,5 +1876,70 @@ func TestSkipListDivergence(t *testing.T) {
 			}
 		}
 		f.Close()
+	}
+}
+
+// --- Source anchor planner context tests (Plan 141-02, Task 2) ---
+
+func TestLoadSurveyContext_IncludesAnchors(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goMod := "module example.com/test\ngo 1.24\n"
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	surveyDir := filepath.Join(dataDir, "survey")
+	if err := os.MkdirAll(surveyDir, 0755); err != nil {
+		t.Fatalf("mkdir survey: %v", err)
+	}
+
+	anchorsData, _ := json.MarshalIndent(map[string]interface{}{
+		"source_anchors": []string{"cmd/main.go", "pkg/util.go"},
+		"anchor_count":   2,
+		"summary":        "Repo-owned source files for plan grounding",
+	}, "", "  ")
+	if err := os.WriteFile(filepath.Join(surveyDir, "anchors.json"), append(anchorsData, '\n'), 0644); err != nil {
+		t.Fatalf("write anchors.json: %v", err)
+	}
+
+	ctx, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("loadCodexSurveyContext error: %v", err)
+	}
+
+	if len(ctx.SourceAnchors) != 2 {
+		t.Fatalf("len(SourceAnchors) = %d, want 2; got %v", len(ctx.SourceAnchors), ctx.SourceAnchors)
+	}
+	if !containsString(ctx.SourceAnchors, "cmd/main.go") {
+		t.Errorf("SourceAnchors missing cmd/main.go: %v", ctx.SourceAnchors)
+	}
+	if !containsString(ctx.SourceAnchors, "pkg/util.go") {
+		t.Errorf("SourceAnchors missing pkg/util.go: %v", ctx.SourceAnchors)
+	}
+}
+
+func TestLoadSurveyContext_AnchorsEmptyWhenNoFile(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goMod := "module example.com/test\ngo 1.24\n"
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	ctx, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("loadCodexSurveyContext error: %v", err)
+	}
+
+	if ctx.SourceAnchors == nil {
+		t.Fatal("SourceAnchors should be empty slice, not nil")
+	}
+	if len(ctx.SourceAnchors) != 0 {
+		t.Errorf("len(SourceAnchors) = %d, want 0", len(ctx.SourceAnchors))
 	}
 }

@@ -53,6 +53,7 @@ type codexSurveyContext struct {
 	TestFiles        []string
 	Issues           []string
 	SecurityPatterns []string
+	SourceAnchors    []string
 }
 
 type codexScoutFinding struct {
@@ -1160,6 +1161,7 @@ func loadCodexSurveyContext(root string) (codexSurveyContext, error) {
 		TestFiles:        []string{},
 		Issues:           []string{},
 		SecurityPatterns: []string{},
+		SourceAnchors:    []string{},
 	}
 
 	for _, name := range []string{"PROVISIONS.md", "TRAILS.md", "BLUEPRINT.md", "CHAMBERS.md", "DISCIPLINES.md", "SENTINEL-PROTOCOLS.md", "PATHOGENS.md"} {
@@ -1203,6 +1205,9 @@ func loadCodexSurveyContext(root string) (codexSurveyContext, error) {
 	if payload := readSummary("pathogens.json"); payload != nil {
 		ctx.Issues = append(ctx.Issues, jsonStringSlice(payload["issues"])...)
 	}
+	if payload := readSummary("anchors.json"); payload != nil {
+		ctx.SourceAnchors = append(ctx.SourceAnchors, jsonStringSlice(payload["source_anchors"])...)
+	}
 
 	facts, err := surveyWorkspace(root)
 	if err == nil {
@@ -1227,6 +1232,7 @@ func loadCodexSurveyContext(root string) (codexSurveyContext, error) {
 	ctx.TestFiles = uniqueSortedStrings(ctx.TestFiles)
 	ctx.Issues = uniqueSortedStrings(ctx.Issues)
 	ctx.SecurityPatterns = uniqueSortedStrings(ctx.SecurityPatterns)
+	ctx.SourceAnchors = uniqueSortedStrings(ctx.SourceAnchors)
 	return ctx, nil
 }
 

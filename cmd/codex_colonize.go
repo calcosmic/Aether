@@ -56,6 +56,7 @@ type codexWorkspaceFacts struct {
 	TypeSafetyGaps   []string
 	SecurityPatterns []string
 	Integrations     []string
+	SourceAnchors    []string
 }
 
 type codexColonizeOptions struct {
@@ -568,6 +569,7 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 	sort.Strings(facts.Frameworks)
 	sort.Strings(facts.Languages)
 	sort.Strings(facts.Integrations)
+	facts.SourceAnchors = extractSourceAnchors(root, 50)
 	return facts, nil
 }
 
@@ -894,6 +896,60 @@ func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch) (map[s
 	return byOutput, nil
 }
 
+// extractSourceAnchors walks root and returns up to maxAnchors non-test,
+// non-config, non-noise source file paths sorted by path depth (shallowest
+// first) then alphabetically within the same depth.
+func extractSourceAnchors(root string, maxAnchors int) []string {
+	sourceExts := map[string]bool{
+		".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true,
+		".py": true, ".rb": true, ".java": true, ".rs": true, ".c": true, ".cpp": true,
+	}
+
+	var candidates []string
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != root && codegraph.ShouldSkipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		base := d.Name()
+		if codegraph.ShouldSkipFile(base) {
+			return nil
+		}
+		if isTestFile(base) || isConfigFile(base) {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(base))
+		if !sourceExts[ext] {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		candidates = append(candidates, filepath.ToSlash(rel))
+		return nil
+	})
+
+	sort.Slice(candidates, func(i, j int) bool {
+		di := strings.Count(candidates[i], "/")
+		dj := strings.Count(candidates[j], "/")
+		if di != dj {
+			return di < dj
+		}
+		return candidates[i] < candidates[j]
+	})
+
+	if len(candidates) > maxAnchors {
+		candidates = candidates[:maxAnchors]
+	}
+	return candidates
+}
+
 func writeSurveyCompatibilityJSON(surveyDir string, facts codexWorkspaceFacts) error {
 	summaries := map[string]map[string]interface{}{
 		"blueprint.json": {
@@ -917,6 +973,11 @@ func writeSurveyCompatibilityJSON(surveyDir string, facts codexWorkspaceFacts) e
 		"pathogens.json": {
 			"issues":  identifyPathogens(facts),
 			"summary": "Known technical concerns",
+		},
+		"anchors.json": {
+			"source_anchors": facts.SourceAnchors,
+			"anchor_count":  len(facts.SourceAnchors),
+			"summary":        "Repo-owned source files for plan grounding",
 		},
 	}
 
