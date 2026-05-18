@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: executing
-last_updated: "2026-05-18T22:50:10Z"
-last_activity: 2026-05-18 -- 144-01: fix Phase 143 regression tests
+status: complete
+last_updated: "2026-05-18T22:57:15Z"
+last_activity: 2026-05-18 -- 144-02: M4L regression, Codex smoke tests, execution path audit
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 144
-Plan: 01 (complete)
-Status: Plan 01 complete, awaiting next plan
-Last activity: 2026-05-18 -- 144-01: fix Phase 143 regression tests
+Plan: 02 (complete)
+Status: Phase 144 complete -- all 8 plans done
+Last activity: 2026-05-18 -- 144-02: M4L regression, Codex smoke tests, execution path audit
 
 ## Known Blockers
 
@@ -72,6 +72,9 @@ Last activity: 2026-05-18 -- 144-01: fix Phase 143 regression tests
 - YAML orchestration blocks removed from build.yaml and plan.yaml wrapper_additions; codex_orchestration preserved (CEREMONY-04)
 - Playbook context is document-injection, not parsed steps -- host.ts loads playbooks and appends to task_brief (CEREMONY-06)
 - Playbook context re-injected after manifest re-fetch in build iteration loop (bug fix)
+- M4L regression test proves end-to-end survey-to-grounding pipeline composition (Phases 141+142)
+- Execution path audit test programmatically verifies one conductor per workflow per platform
+- Codex command-guide smoke tests verify output without playbook loading
 
 ## Operator Next Steps
 

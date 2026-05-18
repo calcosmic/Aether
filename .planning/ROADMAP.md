@@ -24,7 +24,7 @@
 - **v1.19 TypeScript Host Cutover + Oracle Confidence Recovery** - Phases 124-129 (shipped 2026-05-15) — [Archive](milestones/v1.19-ROADMAP.md)
 - **v1.20 Host Contract Hardening and Wrapper Reality Check** - Phases 130-135 (shipped 2026-05-15) — [Archive](milestones/v1.20-ROADMAP.md)
 - **v1.21 Live Colony** - Phases 136-140 (shipped 2026-05-18) — [Archive](milestones/v1.21-ROADMAP.md)
-- **v1.22 Grounded Planning + Ceremony Restore** - Phases 141-144 (in progress)
+- **v1.22 Grounded Planning + Ceremony Restore** - Phases 141-144 (shipped 2026-05-18)
 
 ## Phases
 
@@ -111,11 +111,11 @@ Plans:
 - CLEAN-05: Codex smoke test: command-guide + skills produce correct behavior without playbook loading
 - CLEAN-06: Cross-platform parity: build ceremony output matches between Claude Code and OpenCode
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 144-01-PLAN.md — Fix YAML anchors, Go test failures, CLI flag audit (CLEAN-03, CLEAN-04)
-- [ ] 144-02-PLAN.md — M4L regression test, execution path audit, Codex smoke, parity check (CLEAN-01, CLEAN-02, CLEAN-05, CLEAN-06)
+- [x] 144-02-PLAN.md — M4L regression test, execution path audit, Codex smoke, parity check (CLEAN-01, CLEAN-02, CLEAN-05, CLEAN-06)
 
 **Why last:** Validates all previous phases. The M4L fixture is the proof that the entire pipeline (survey → anchor → grounding → ceremony) works correctly.
 
