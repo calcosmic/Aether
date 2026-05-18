@@ -580,27 +580,31 @@ export function loadTemplate(cwd: string, name: string): ParsedTemplate {
 | A4 | The TS host already loads templates via `template-loader.ts` using the same file resolution pattern | Pattern 1 | Verified -- `loadTemplate` at `template-loader.ts:133-148` reads from `.aether/templates/ceremony/` |
 | A5 | Codex does NOT use the TS host for ceremony | CEREMONY-04, Pitfall #6 | Medium -- Codex uses `command-guide` and skills per YAML `codex_orchestration` sections; no TS host dependency |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should plan playbooks be new files or can we use the existing YAML guardrails as the "plan playbook"?**
    - What we know: CEREMONY-02 says "TS host reads plan playbooks." No plan playbooks exist.
    - What's unclear: Whether we need full markdown playbooks or can inject YAML guardrails as the plan context.
    - Recommendation: Create minimal `plan-prep.md` and `plan-dispatch.md` that capture the Scout -> Route-Setter flow. The plan ceremony is simpler than build (no archaeology, no suggestion analysis, no verification workers) so the playbooks can be short.
+   - RESOLVED: Plans create `plan-prep.md` and `plan-dispatch.md` as new markdown playbooks (Plan 01 Task 2).
 
 2. **Should the PlaybookConductor be a class or a set of functions?**
    - What we know: The TS host uses functional patterns (exported functions, not classes) for ceremony adapter, template loader, and narrator.
    - What's unclear: Whether a conductor class provides better testability.
    - Recommendation: Follow existing patterns -- use exported functions. The conductor is stateless (it receives ceremony adapter and manifest, returns rendered output).
+   - RESOLVED: Plans use exported functions (`loadPlaybooksForWorkflow`, `renderPlaybookContext`) in `playbook-loader.ts`, consistent with existing TS host patterns (Plan 01 Task 1).
 
 3. **How does the grounding gate (Phase 142) integrate into the plan playbook flow?**
    - What we know: GROUND-06/07 add a plan-grounding validation gate in `plan-finalize`. CEREMONY-02 says "with grounding gate integration."
    - What's unclear: Whether the TS host needs to check grounding before dispatching workers, or if the Go finalizer handles it.
    - Recommendation: Grounding is a Go finalizer concern. The TS host doesn't need to check grounding -- it just follows the playbook flow. The Go `plan-finalize` already has the grounding check from Phase 142.
+   - RESOLVED: Grounding is handled entirely by Go `plan-finalize`. TS host loads plan playbooks as context, Go finalizer runs the grounding check (Plan 02 Task 1).
 
 4. **Should the continue flow also become playbook-driven?**
    - What we know: Continue has 4 playbooks (continue-verify, continue-gates, continue-advance, continue-finalize). The continue YAML has 14 orchestration steps.
    - What's unclear: Whether CEREMONY-03 applies to continue as well, or only build and plan.
    - Recommendation: CEREMONY-03 says "remove orchestration procedure from build.yaml wrapper_additions.orchestration (the 15-step duplicate)." This implies the scope is build and plan. Continue YAML can be slimmed in a follow-up phase if needed.
+   - RESOLVED: Continue is explicitly out of scope. Plan 02 Task 1 specifies "Do NOT modify runDispatchedContinueCommand." Follow-up phase for continue if needed.
 
 ## Environment Availability
 
