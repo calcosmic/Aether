@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.21
 milestone_name: Live Colony
 status: executing
-last_updated: "2026-05-18T12:00:00Z"
-last_activity: 2026-05-18 -- Completed 136-03-PLAN (real dispatch pipelines for build, plan, continue)
+last_updated: "2026-05-18T12:10:00Z"
+last_activity: 2026-05-18 -- Completed 136-04-PLAN (Oracle real dispatch and --dry-run ceremony preview)
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 
 ## Current Position
 
-Phase: 1 of 5 (Production Foundation)
-Plan: 3 of 4 in current phase
-Status: 136-03 complete, ready for 136-04
-Last activity: 2026-05-18 -- Completed 136-03-PLAN (real dispatch pipelines for build, plan, continue)
+Phase: 1 of 5 (Production Foundation) -- COMPLETE
+Plan: 4 of 4 in current phase
+Status: 136-04 complete, Phase 136 finished, ready for Phase 137
+Last activity: 2026-05-18 -- Completed 136-04-PLAN (Oracle real dispatch and --dry-run ceremony preview)
 
 ## Known Blockers
 
@@ -36,9 +36,9 @@ Last activity: 2026-05-18 -- Completed 136-03-PLAN (real dispatch pipelines for 
 
 ## Next Actions
 
-1. Execute Phase 136 Plan 04 (Oracle real dispatch and --dry-run ceremony preview)
-2. Plan Phase 137 (Hive Wisdom Injection)
-3. Execute Phase 137 plans
+1. Plan Phase 137 (Hive Wisdom Injection)
+2. Execute Phase 137 plans
+3. Plan Phase 138 (Worker-to-Worker Spawning)
 
 ## Key Decisions (Carried Forward)
 
@@ -61,3 +61,7 @@ Last activity: 2026-05-18 -- Completed 136-03-PLAN (real dispatch pipelines for 
 - Skill injection summary shows count when dispatches have skill_section (D-07)
 - Plan pipeline dispatches Scout/Route-Setter workers with plan-finalize (HOST-03)
 - Continue pipeline dispatches review workers with continue-finalize (HOST-04)
+- Oracle lifecycle dispatches real workers with ceremony rendering; Go-computed confidence drives termination (HOST-05)
+- --dry-run flag renders ceremony preview without spawning workers; DRY RUN badge visible in stderr (HOST-07, D-06)
+- Oracle ceremony uses "build" CeremonyWorkflow since oracle has no dedicated workflow value
+- Dry-run path fetches manifest (read-only), renders ceremony, shows badge, exits without dispatch/finalizer

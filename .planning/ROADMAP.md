@@ -46,7 +46,7 @@ See `.planning/milestones/` for full archived phase details.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 136. Production Foundation | v1.21 | 3/4 | In progress | - |
+| 136. Production Foundation | v1.21 | 4/4 | Complete | 2026-05-18 |
 | 137. Hive Wisdom Injection | v1.21 | 0/? | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 0/? | Not started | - |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
@@ -80,7 +80,7 @@ Plans:
 - [x] 136-03-PLAN.md -- Real dispatch pipelines for build, plan, and continue with ceremony
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
+- [x] 136-04-PLAN.md -- Oracle real dispatch and --dry-run ceremony preview
 
 ### Phase 137: Hive Wisdom Injection
 **Goal**: Colony-prime reads cross-colony hive wisdom during prompt assembly and injects relevant wisdom into worker context, proving that colony B benefits from colony A's learnings.
