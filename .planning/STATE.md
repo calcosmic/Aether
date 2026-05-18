@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: complete
+status: milestone_complete
 last_updated: "2026-05-18T22:57:15Z"
 last_activity: 2026-05-18 -- 144-02: M4L regression, Codex smoke tests, execution path audit
 progress:
   total_phases: 4
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 8
   completed_plans: 8
-  percent: 100
+  percent: 125
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 144
-Plan: 02 (complete)
-Status: Phase 144 complete -- all 8 plans done
-Last activity: 2026-05-18 -- 144-02: M4L regression, Codex smoke tests, execution path audit
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-05-18
 
 ## Known Blockers
 
