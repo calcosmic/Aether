@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.21
 milestone_name: Live Colony
 status: executing
-last_updated: "2026-05-18T17:59:44.131Z"
+last_updated: "2026-05-18T18:02:34.118Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 18
-  completed_plans: 16
-  percent: 89
+  completed_plans: 17
+  percent: 94
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-05-18)
 ## Current Position
 
 Phase: 140 (hardening-and-validation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-05-18
 
@@ -66,3 +66,4 @@ Last activity: 2026-05-18
 - Oracle ceremony uses "build" CeremonyWorkflow since oracle has no dedicated workflow value
 - Dry-run path fetches manifest (read-only), renders ceremony, shows badge, exits without dispatch/finalizer
 - SpawnOrchestrator enforces max depth 2 and budget caps; child naming uses ${parent}-spawn-${index} pattern
+- Cross-phase integration tests verify hive + spawn + iteration compose correctly in unified pipeline
