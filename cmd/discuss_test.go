@@ -741,6 +741,126 @@ func TestDiscussSurfacesCandidatesDespiteOldColonyResolvedDecisions(t *testing.T
 	}
 }
 
+func TestDetectDecisionConflicts_NoDecisions(t *testing.T) {
+	result := detectDecisionConflicts(nil)
+	if result != nil {
+		t.Fatalf("expected nil for nil input, got %v", result)
+	}
+
+	result = detectDecisionConflicts([]PendingDecision{})
+	if result != nil {
+		t.Fatalf("expected nil for empty input, got %v", result)
+	}
+
+	result = detectDecisionConflicts([]PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use Go"},
+	})
+	if result != nil {
+		t.Fatalf("expected nil for single decision, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_NoConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use Go"},
+		{ID: "pd_2", Resolved: true, Resolution: "add tests"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if result != nil {
+		t.Fatalf("expected nil for compatible decisions, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_DatabaseConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use PostgreSQL for persistence"},
+		{ID: "pd_2", Resolved: true, Resolution: "keep the stack serverless"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 conflict, got %d: %v", len(result), result)
+	}
+	if !strings.Contains(result[0], "database") {
+		t.Fatalf("expected conflict to contain 'database', got %q", result[0])
+	}
+}
+
+func TestDetectDecisionConflicts_ArchitectureConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "build a monolith for now"},
+		{ID: "pd_2", Resolved: true, Resolution: "use microservices from the start"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 conflict, got %d: %v", len(result), result)
+	}
+	if !strings.Contains(result[0], "architecture") {
+		t.Fatalf("expected conflict to contain 'architecture', got %q", result[0])
+	}
+}
+
+func TestDetectDecisionConflicts_FrontendConflict(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use React for the UI"},
+		{ID: "pd_2", Resolved: true, Resolution: "use Vue for the UI"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 conflict, got %d: %v", len(result), result)
+	}
+	if !strings.Contains(result[0], "frontend") {
+		t.Fatalf("expected conflict to contain 'frontend', got %q", result[0])
+	}
+}
+
+func TestDetectDecisionConflicts_MultipleConflicts(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use React for the UI"},
+		{ID: "pd_2", Resolved: true, Resolution: "use Vue for the frontend"},
+		{ID: "pd_3", Resolved: true, Resolution: "build a monolith"},
+		{ID: "pd_4", Resolved: true, Resolution: "use microservices for scaling"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 conflicts, got %d: %v", len(result), result)
+	}
+	hasFrontend := false
+	hasArchitecture := false
+	for _, c := range result {
+		if strings.Contains(c, "frontend") {
+			hasFrontend = true
+		}
+		if strings.Contains(c, "architecture") {
+			hasArchitecture = true
+		}
+	}
+	if !hasFrontend || !hasArchitecture {
+		t.Fatalf("expected both frontend and architecture conflicts, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_UnresolvedIgnored(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use PostgreSQL for persistence"},
+		{ID: "pd_2", Resolved: false, Resolution: "keep the stack serverless"},
+	}
+	result := detectDecisionConflicts(decisions)
+	if result != nil {
+		t.Fatalf("expected nil when only one resolved decision, got %v", result)
+	}
+}
+
+func TestDetectDecisionConflicts_EmptyResolutionIgnored(t *testing.T) {
+	decisions := []PendingDecision{
+		{ID: "pd_1", Resolved: true, Resolution: "use PostgreSQL for persistence"},
+		{ID: "pd_2", Resolved: true, Resolution: ""},
+	}
+	result := detectDecisionConflicts(decisions)
+	if result != nil {
+		t.Fatalf("expected nil when one resolution is empty, got %v", result)
+	}
+}
+
 func TestDiscussSurfacesCandidatesDespiteLegacySameGoalResolvedDecisionWithoutSession(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
