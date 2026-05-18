@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
 status: executing
-last_updated: "2026-05-18T22:44:11.118Z"
-last_activity: 2026-05-18 -- Phase 144 planning complete
+last_updated: "2026-05-18T22:50:10Z"
+last_activity: 2026-05-18 -- 144-01: fix Phase 143 regression tests
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-18)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 143 -- build-plan-ceremony-restore (complete)
+**Current focus:** Phase 144 -- regression-execution-path-cleanup (plan 01 complete)
 
 ## Current Position
 
 Phase: 144
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-18 -- Phase 144 planning complete
+Plan: 01 (complete)
+Status: Plan 01 complete, awaiting next plan
+Last activity: 2026-05-18 -- 144-01: fix Phase 143 regression tests
 
 ## Known Blockers
 
@@ -36,7 +36,8 @@ Last activity: 2026-05-18 -- Phase 144 planning complete
 
 ## Next Actions
 
-1. Plan Phase 144 (Regression + Execution Path Cleanup)
+1. Execute Phase 144 plan 02 (if exists)
+2. Or plan next phase
 2. Execute Phase 144 plan 01
 
 ## Key Decisions (Carried Forward)

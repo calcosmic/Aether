@@ -111,10 +111,10 @@ Plans:
 - CLEAN-05: Codex smoke test: command-guide + skills produce correct behavior without playbook loading
 - CLEAN-06: Cross-platform parity: build ceremony output matches between Claude Code and OpenCode
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 144-01-PLAN.md — Fix YAML anchors, Go test failures, CLI flag audit (CLEAN-03, CLEAN-04)
+- [x] 144-01-PLAN.md — Fix YAML anchors, Go test failures, CLI flag audit (CLEAN-03, CLEAN-04)
 - [ ] 144-02-PLAN.md — M4L regression test, execution path audit, Codex smoke, parity check (CLEAN-01, CLEAN-02, CLEAN-05, CLEAN-06)
 
 **Why last:** Validates all previous phases. The M4L fixture is the proof that the entire pipeline (survey → anchor → grounding → ceremony) works correctly.
