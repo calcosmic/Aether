@@ -30,13 +30,16 @@ import {
 import { runGoJSONCommand } from "./go-command.js";
 import { dispatchWorkers, toWorkerResults, type DispatchOptions } from "./worker-dispatch.js";
 import { detectAvailablePlatforms, formatPlatformUnavailableMessage } from "./platform-dispatcher.js";
-import { createSpawnOrchestrator } from "./spawn-orchestrator.js";
+import { createSpawnOrchestrator, type SpawnOrchestrator } from "./spawn-orchestrator.js";
 import {
   createCeremonyAdapter,
   type CeremonyAdapter,
   type CeremonyWorkflow,
   renderDryRunBadge,
 } from "./ceremony-adapter.js";
+import { ConfidenceLoop, type ConfidenceLoopOptions, type ConfidenceResult } from "./confidence-loop.js";
+import { ConfidenceEvaluator, type EvaluatedConfidence, type ConfidenceInput } from "./confidence-evaluator.js";
+import type { WorkerClaims } from "./claims-parser.js";
 
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
@@ -369,6 +372,7 @@ interface BuildDispatchLike {
   summary?: string;
   task_id?: string;
   skill_section?: string;
+  task_brief?: string;
   [key: string]: unknown;
 }
 
@@ -516,9 +520,147 @@ async function runDryRunDispatchedCommand(
   process.stdout.write(JSON.stringify({ ok: true, dry_run: true, manifest: manifestResult }, null, 2) + "\n");
 }
 
+// ---------------------------------------------------------------------------
+// Iteration ceremony helpers (ITER-06)
+// ---------------------------------------------------------------------------
+
+/** Render an iteration marker between dispatch waves. */
+function renderIterationCeremony(result: ConfidenceResult): void {
+  const parts: string[] = [
+    `Iteration ${result.iterationCount}:`,
+    `confidence ${result.currentConfidence}%`,
+    `(delta ${result.delta >= 0 ? "+" : ""}${result.delta}%,`,
+    `budget ${result.budgetRemaining} workers remaining)`,
+  ];
+  if (result.stopReason) {
+    parts.push(`[${result.stopReason}]`);
+  }
+  emitCeremonyOutput(`\u2500\u2500 ${parts.join(" ")} \u2500\u2500`);
+}
+
+/** Render the final iteration stop reason. */
+function renderIterationComplete(stopReason: string): void {
+  emitCeremonyOutput(`\u2500\u2500 Iteration complete: ${stopReason} \u2500\u2500`);
+}
+
+// ---------------------------------------------------------------------------
+// dispatchBuildWave: single wave dispatch + finalize (extracted for iteration)
+// ---------------------------------------------------------------------------
+
+/** Result of a single dispatch wave. */
+interface WaveResult {
+  /** Worker results from dispatch mapped to manifest dispatches. */
+  mappedResults: unknown[];
+  /** Path to the completion file written for this wave. */
+  completionPath: string;
+  /** The dispatch manifest used for this wave. */
+  buildManifest: Record<string, unknown>;
+  /** Number of workers dispatched in this wave. */
+  workerCount: number;
+  /** Aggregated worker claims for confidence evaluation. */
+  workerClaims: WorkerClaims[];
+}
+
+/**
+ * Dispatch a single build wave: dispatch workers, render ceremony,
+ * write completion file, call finalizer.
+ *
+ * @param bridge - Go bridge options
+ * @param parsed - Parsed host arguments
+ * @param ceremony - Ceremony adapter for rendering
+ * @param buildManifest - The dispatch manifest
+ * @param dispatches - The dispatches for this wave
+ * @param spawnOrchestrator - Spawn budget orchestrator (carries cumulative budget)
+ * @param iterationFeedback - Optional feedback from a previous iteration to inject into task briefs
+ * @returns Wave result with mapped workers, completion path, and claims
+ */
+async function dispatchBuildWave(
+  bridge: GoBridgeOptions,
+  parsed: ParsedHostArgs,
+  ceremony: CeremonyAdapter,
+  buildManifest: Record<string, unknown>,
+  dispatches: BuildDispatchLike[],
+  spawnOrchestrator: SpawnOrchestrator,
+  iterationFeedback?: string,
+): Promise<WaveResult> {
+  const phase = parsed.positional[0] ?? "1";
+
+  // Inject iteration feedback into task briefs if provided
+  if (iterationFeedback) {
+    for (const d of dispatches) {
+      const existingBrief = d.task_brief ?? d.task ?? "";
+      d.task_brief = existingBrief
+        ? `${existingBrief}\n\nPrevious iteration feedback:\n${iterationFeedback}`
+        : `Previous iteration feedback:\n${iterationFeedback}`;
+    }
+  }
+
+  // Skill injection summary (D-07)
+  emitSkillSummary(dispatches);
+
+  // Hive wisdom injection summary
+  emitHiveSummary(dispatches);
+
+  // Dispatch workers
+  const dispatchOpts: DispatchOptions = {
+    goBinaryPath: bridge.goBinaryPath,
+    cwd: bridge.cwd,
+    simulateWorkers: parsed.simulate,
+    spawnOrchestrator,
+  };
+  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
+  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+
+  // Render worker-complete ceremony
+  renderWorkerCeremony(ceremony, "build", mappedResults);
+
+  // Write completion file and call finalizer
+  const completion = {
+    dispatch_manifest: buildManifest,
+    dispatches: mappedResults,
+  };
+  const completionPath = writeCompletionFile(
+    approvedCompletionDirPrefix("build"),
+    "build-completion.json",
+    { result: completion }
+  );
+  _callGoJSONRef(bridge, [
+    "build-finalize", phase,
+    "--completion-file", completionPath,
+  ]);
+
+  // Build worker claims from mapped results for confidence evaluation
+  const workerClaims: WorkerClaims[] = (mappedResults as unknown as Record<string, unknown>[]).map((w) => {
+    const claim: WorkerClaims = {
+      status: (w.status as string) ?? "completed",
+    };
+    const blockers = w.blockers;
+    if (Array.isArray(blockers)) claim.blockers = blockers as string[];
+    const filesCreated = w.files_created;
+    if (Array.isArray(filesCreated)) claim.files_created = filesCreated as string[];
+    const filesModified = w.files_modified;
+    if (Array.isArray(filesModified)) claim.files_modified = filesModified as string[];
+    const testsWritten = w.tests_written;
+    if (Array.isArray(testsWritten)) claim.tests_written = testsWritten as string[];
+    return claim;
+  });
+
+  return {
+    mappedResults,
+    completionPath,
+    buildManifest,
+    workerCount: dispatches.length,
+    workerClaims,
+  };
+}
+
 /**
  * Run the dispatched build pipeline: fetch manifest, dispatch workers,
  * write completion file, call finalizer, render ceremony.
+ *
+ * Now iteration-aware: after each dispatch wave, evaluate confidence.
+ * If confidence is too low and budget/iterations remain, re-dispatch
+ * with failure feedback injected into worker task briefs.
  */
 async function runDispatchedBuildCommand(
   bridge: GoBridgeOptions,
@@ -535,7 +677,7 @@ async function runDispatchedBuildCommand(
   if (!buildManifest) {
     throw new Error("Build --plan-only returned no dispatch_manifest. Check colony state and try again.");
   }
-  const dispatches: BuildDispatchLike[] = buildManifest.dispatches ?? buildResult.dispatches ?? [];
+  let dispatches: BuildDispatchLike[] = buildManifest.dispatches ?? buildResult.dispatches ?? [];
   if (dispatches.length === 0) {
     throw new Error("Build manifest contains no dispatches. Nothing to build.");
   }
@@ -562,14 +704,7 @@ async function runDispatchedBuildCommand(
     }
   }
 
-  // Step 4: Skill injection summary (D-07)
-  emitSkillSummary(dispatches);
-
-  // Step 4b: Hive wisdom injection summary
-  emitHiveSummary(dispatches);
-
-  // Step 5: Dispatch workers with spawn orchestrator
-  // Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
+  // Step 5: Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
   const spawnBudget = (buildManifest as Record<string, unknown>)?.queen_execution_policy != null
     ? ((buildManifest as Record<string, unknown>).queen_execution_policy as Record<string, unknown>)?.spawn_budget != null
       ? (((buildManifest as Record<string, unknown>).queen_execution_policy as Record<string, unknown>).spawn_budget as Record<string, unknown>)?.max_workers as number | undefined ?? 20
@@ -579,42 +714,135 @@ async function runDispatchedBuildCommand(
     goBinaryPath: bridge.goBinaryPath,
     cwd: bridge.cwd,
     totalBudget: spawnBudget,
-    consumedBudget: dispatches.length, // Manifest workers already count against budget
+    consumedBudget: dispatches.length,
     currentDepth: 1,
   });
 
-  const dispatchOpts: DispatchOptions = {
-    goBinaryPath: bridge.goBinaryPath,
-    cwd: bridge.cwd,
-    simulateWorkers: parsed.simulate,
-    spawnOrchestrator,
+  // Step 6: Initialize ConfidenceLoop and ConfidenceEvaluator
+  const loopOpts: ConfidenceLoopOptions = {
+    totalBudget: spawnBudget,
   };
-  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
-  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+  if (parsed.maxIterations) {
+    loopOpts.maxIterations = parseInt(parsed.maxIterations, 10);
+  }
+  if (parsed.targetConfidence) {
+    loopOpts.confidenceTarget = parseInt(parsed.targetConfidence, 10);
+  }
+  const confidenceLoop = new ConfidenceLoop(loopOpts);
+  const confidenceEvaluator = new ConfidenceEvaluator();
 
-  // Step 6: Render worker-complete ceremony
-  renderWorkerCeremony(ceremony, "build", mappedResults);
+  // Step 7: Iteration loop
+  let lastWaveResult: WaveResult | undefined;
+  let iterationCount = 0;
 
-  // Step 7: Write completion file and call finalizer
-  const completion = {
-    dispatch_manifest: buildManifest,
-    dispatches: mappedResults,
-  };
-  const completionPath = writeCompletionFile(
-    approvedCompletionDirPrefix("build"),
-    "build-completion.json",
-    { result: completion }
-  );
-  _callGoJSONRef(bridge, [
-    "build-finalize", phase,
-    "--completion-file", completionPath,
-  ]);
+  while (true) {
+    iterationCount++;
 
-  // Step 8: Render closeout
-  emitCeremonyOutput(ceremony.renderCloseout("build", completionPath));
+    // Re-attach hive wisdom for iterations after the first (dispatches are re-fetched)
+    if (iterationCount > 1) {
+      for (const d of dispatches) {
+        d.hive_section = hiveSection;
+      }
+    }
 
-  // Output result JSON to stdout
-  process.stdout.write(JSON.stringify({ ok: true, completion_file: completionPath }, null, 2) + "\n");
+    // Build iteration feedback from previous iteration's blockers
+    let iterationFeedback: string | undefined;
+    if (lastWaveResult && lastWaveResult.workerClaims.length > 0) {
+      const allBlockers: string[] = [];
+      for (const claim of lastWaveResult.workerClaims) {
+        if (claim.blockers) {
+          for (const b of claim.blockers) allBlockers.push(b);
+        }
+      }
+      if (allBlockers.length > 0) {
+        iterationFeedback = `Blockers from previous iteration:\n${allBlockers.map((b) => `- ${b}`).join("\n")}`;
+      }
+    }
+
+    // Dispatch the wave
+    lastWaveResult = await dispatchBuildWave(
+      bridge,
+      parsed,
+      ceremony,
+      buildManifest as Record<string, unknown>,
+      dispatches,
+      spawnOrchestrator,
+      iterationFeedback,
+    );
+
+    // Evaluate confidence from worker claims
+    const evaluated: EvaluatedConfidence = confidenceEvaluator.evaluate({
+      workerClaims: lastWaveResult.workerClaims,
+    });
+
+    // Feed into confidence loop
+    const loopResult = confidenceLoop.evaluate(
+      evaluated.score,
+      lastWaveResult.workerCount,
+    );
+
+    // Render iteration ceremony marker
+    renderIterationCeremony(loopResult);
+
+    // Check if loop should continue
+    if (!loopResult.shouldContinue) {
+      renderIterationComplete(loopResult.stopReason);
+      break;
+    }
+
+    // Re-fetch manifest for next iteration (Go may adjust dispatches)
+    const reFetchResult = _callGoJSONRef<BuildManifestResult>(bridge, goArgs);
+    const reFetchManifest = reFetchResult.dispatch_manifest;
+    if (!reFetchManifest) {
+      // Manifest re-fetch failed; stop iterating
+      renderIterationComplete("manifest_re_fetch_failed");
+      break;
+    }
+    const newDispatches: BuildDispatchLike[] = reFetchManifest.dispatches ?? reFetchResult.dispatches ?? [];
+    if (newDispatches.length === 0) {
+      renderIterationComplete("no_dispatches");
+      break;
+    }
+
+    // Update dispatches and spawn orchestrator consumed budget for new dispatches
+    dispatches = newDispatches;
+    // Re-create spawn orchestrator with updated budget for the new dispatches
+    // The confidence loop already tracks cumulative budget internally
+  }
+
+  // Step 8: Render closeout with final completion path
+  const finalCompletionPath = lastWaveResult?.completionPath ?? "";
+  emitCeremonyOutput(ceremony.renderCloseout("build", finalCompletionPath));
+
+  // Output result JSON to stdout with iteration summary
+  const loopState = confidenceLoop.getState();
+  const lastResult = lastWaveResult;
+
+  // Determine stop reason from the loop state
+  let stopReason = "unknown";
+  if (loopState.confidenceHistory.length > 0) {
+    // Re-evaluate the stop condition from the last recorded confidence
+    const lastConfidence = loopState.confidenceHistory[loopState.confidenceHistory.length - 1]!;
+    if (lastConfidence >= (loopOpts.confidenceTarget ?? 80)) {
+      stopReason = "confidence_target_met";
+    } else if (loopState.iterationCount >= (loopOpts.maxIterations ?? 3)) {
+      stopReason = "max_iterations_met";
+    } else if (loopOpts.totalBudget && loopOpts.totalBudget > 0 && loopState.budgetRemaining <= 0) {
+      stopReason = "budget_exhausted";
+    } else {
+      stopReason = "diminishing_returns";
+    }
+  }
+
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    completion_file: finalCompletionPath,
+    iterations: {
+      count: loopState.iterationCount,
+      final_confidence: loopState.confidenceHistory[loopState.confidenceHistory.length - 1] ?? 0,
+      stop_reason: stopReason,
+    },
+  }, null, 2) + "\n");
 }
 
 /**
