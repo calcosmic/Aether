@@ -12,6 +12,7 @@ export interface ParsedHostArgs {
   command: string;
   cwd: string;
   simulate: boolean;
+  dryRun: boolean;
   synthetic: boolean;
   noDashboard: boolean;
   skipMiddenCheck: boolean;

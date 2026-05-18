@@ -177,3 +177,16 @@ export function __setCreateCeremonyAdapter(
 export function __restoreCreateCeremonyAdapter(): void {
   _createCeremonyAdapterRef = (opts) => new GoCeremonyAdapter(opts);
 }
+
+// ---------------------------------------------------------------------------
+// DRY RUN badge rendering (D-06)
+// ---------------------------------------------------------------------------
+
+/**
+ * Render a visible DRY RUN badge to stderr.
+ * Per D-06, the badge is shown before and after ceremony output
+ * so the user knows it is a preview and no workers will be dispatched.
+ */
+export function renderDryRunBadge(): void {
+  process.stderr.write("--- DRY RUN: No workers dispatched. Showing ceremony preview only. ---\n");
+}

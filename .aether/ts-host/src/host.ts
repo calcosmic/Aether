@@ -34,6 +34,7 @@ import {
   createCeremonyAdapter,
   type CeremonyAdapter,
   type CeremonyWorkflow,
+  renderDryRunBadge,
 } from "./ceremony-adapter.js";
 
 export { buildHostGoArgs } from "./command-registry.js";
@@ -95,6 +96,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
   let command = "";
   let cwd = process.cwd();
   let simulate = false;
+  let dryRun = false;
   let synthetic = false;
   let noDashboard = false;
   let skipMiddenCheck = false;
@@ -150,6 +152,8 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
       cwd = readValue(arg) ?? cwd;
     } else if (arg === "--simulate") {
       simulate = true;
+    } else if (arg === "--dry-run") {
+      dryRun = true;
     } else if (arg === "--synthetic") {
       synthetic = true;
     } else if (arg === "--no-dashboard") {
@@ -215,6 +219,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
     command,
     cwd,
     simulate,
+    dryRun,
     synthetic,
     noDashboard,
     skipMiddenCheck,
@@ -256,6 +261,7 @@ function printUsage(): void {
       "Options:\n" +
       "  --cwd <path>           Working directory\n" +
       "  --simulate             Run in simulation mode (no real worker spawning)\n" +
+      "  --dry-run              Preview ceremony output without spawning workers\n" +
       "  --synthetic            Forward Go synthetic mode for plan/build/continue\n" +
       "  --no-dashboard         Disable live dashboard, use plain text output\n" +
       "  --skip-midden-check    Skip pre-build midden threshold check\n" +
@@ -408,6 +414,51 @@ function emitSkillSummary(dispatches: CeremonyDispatchLike[]): void {
   if (skillCount > 0) {
     process.stderr.write(`Injecting ${skillCount} skills into worker prompts.\n`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Dry-run ceremony preview (HOST-07, D-06)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the dry-run path for any dispatched command: fetch the manifest,
+ * render ceremony, show DRY RUN badge, exit without dispatching workers.
+ */
+async function runDryRunDispatchedCommand(
+  bridge: GoBridgeOptions,
+  parsed: ParsedHostArgs,
+  definition: typeof HOST_COMMANDS[number],
+): Promise<void> {
+  const ceremony = createCeremonyAdapter(bridge);
+  const goArgs = buildHostGoArgs(parsed)!;
+  const workflow = (definition.ceremonyWorkflow ?? "build") as CeremonyWorkflow;
+
+  // Fetch manifest (read-only)
+  const manifestResult = _callGoJSONRef<Record<string, unknown>>(bridge, goArgs);
+
+  // Extract dispatches from manifest for ceremony rendering
+  const manifestEnvelope = manifestResult;
+  const dispatches = (manifestResult as Record<string, unknown>)?.dispatches as CeremonyDispatchLike[] | undefined ?? [];
+  const manifestObj = (manifestResult as Record<string, unknown>)?.dispatch_manifest
+    ?? (manifestResult as Record<string, unknown>)?.plan_manifest
+    ?? (manifestResult as Record<string, unknown>)?.planning_manifest
+    ?? (manifestResult as Record<string, unknown>)?.continue_manifest;
+
+  if (manifestObj) {
+    const envelope = { ...manifestEnvelope, [`${workflow}_manifest`]: manifestObj };
+    renderManifestCeremony(ceremony, workflow, envelope, dispatches);
+  } else {
+    renderManifestCeremony(ceremony, workflow, manifestEnvelope, dispatches);
+  }
+
+  // DRY RUN badge (D-06)
+  renderDryRunBadge();
+
+  // Skill injection summary
+  emitSkillSummary(dispatches);
+
+  // Output manifest JSON to stdout
+  process.stdout.write(JSON.stringify({ ok: true, dry_run: true, manifest: manifestResult }, null, 2) + "\n");
 }
 
 /**
@@ -649,7 +700,9 @@ async function main(): Promise<void> {
     case "dispatched": {
       const workflow = definition.ceremonyWorkflow ?? "build";
       try {
-        if (workflow === "build") {
+        if (parsed.dryRun) {
+          await runDryRunDispatchedCommand(bridge, parsed, definition);
+        } else if (workflow === "build") {
           await runDispatchedBuildCommand(bridge, parsed, definition);
         } else if (workflow === "plan") {
           await runDispatchedPlanCommand(bridge, parsed);
@@ -686,12 +739,36 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       const result = runGoJSONCommand(bridge, args, _callGoJSONRef);
-      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      if (parsed.dryRun) {
+        renderDryRunBadge();
+        process.stdout.write(JSON.stringify({ ok: true, dry_run: true, manifest: result }, null, 2) + "\n");
+      } else {
+        process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      }
       break;
     }
 
     case "oracle-lifecycle": {
       const topic = positional[0] || "auto";
+
+      if (parsed.dryRun) {
+        // Dry-run: fetch first iteration manifest, render ceremony, show badge
+        const ceremony = createCeremonyAdapter(bridge);
+        const manifestResult = _callGoJSONRef<Record<string, unknown>>(bridge, [
+          "oracle-iterate",
+          "--plan-only",
+          "--topic",
+          topic,
+        ]);
+        const state = (manifestResult as Record<string, unknown>)?.iteration_manifest;
+        const ceremonyEnvelope = state ? { iteration_manifest: state } : manifestResult;
+        emitCeremonyOutput(ceremony.renderSpawnPlan("build" as CeremonyWorkflow, ceremonyEnvelope));
+        emitCeremonyOutput(ceremony.renderWaveStart("build" as CeremonyWorkflow, ceremonyEnvelope, 1));
+        renderDryRunBadge();
+        process.stdout.write(JSON.stringify({ ok: true, dry_run: true, manifest: manifestResult }, null, 2) + "\n");
+        break;
+      }
+
       const oracleOpts: OracleLifecycleOptions = {
         goBinaryPath,
         cwd,
