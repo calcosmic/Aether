@@ -113,7 +113,7 @@ func TestOracleGuideCarriesBroadScopeTimeoutGuard(t *testing.T) {
 }
 
 func TestLifecycleGuidesCarryOrchestratorBoundaryGuidance(t *testing.T) {
-	for _, command := range []string{"plan", "build", "continue", "seal"} {
+	for _, command := range []string{"colonize", "plan", "build", "continue", "seal"} {
 		guide, err := buildCommandGuide(command, "codex")
 		if err != nil {
 			t.Fatalf("buildCommandGuide(%q): %v", command, err)
@@ -154,7 +154,7 @@ func TestLifecycleGuidesSurfaceSpawnBudgetReasons(t *testing.T) {
 func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 	tests := map[string][]string{
 		"colonize": {
-			"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+			"aether host colonize",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -179,7 +179,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 		},
 		"continue": {
 			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-			"aether host continue --verification-depth heavy",
+			"aether host continue --classic-ceremony",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -203,7 +203,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 }
 
 func TestLifecycleGuidesDocumentApprovedTempCompletionContract(t *testing.T) {
-	for _, command := range []string{"plan", "build", "continue", "seal"} {
+	for _, command := range []string{"colonize", "plan", "build", "continue", "seal"} {
 		guide, err := buildCommandGuide(command, "codex")
 		if err != nil {
 			t.Fatalf("buildCommandGuide(%q): %v", command, err)
@@ -236,6 +236,16 @@ func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
 				"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
 			},
 		},
+		"colonize": {
+			required: []string{
+				"aether host colonize",
+				"Parse `result.colonize_manifest`",
+				"AETHER_OUTPUT_MODE=json aether colonize-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+			},
+		},
 		"build": {
 			required: []string{
 				"aether host build <phase>",
@@ -249,12 +259,22 @@ func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
 		"continue": {
 			required: []string{
 				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-				"aether host continue --verification-depth heavy",
+				"aether host continue --classic-ceremony",
 				"Parse `result.continue_manifest`",
 				"continue-finalize",
 			},
 			retired: []string{
 				"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+			},
+		},
+		"seal": {
+			required: []string{
+				"aether host seal",
+				"Parse `result.seal_manifest`",
+				"AETHER_OUTPUT_MODE=json aether seal-finalize",
+			},
+			retired: []string{
+				"AETHER_OUTPUT_MODE=json aether seal --plan-only",
 			},
 		},
 	}
@@ -280,6 +300,9 @@ func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
 
 func TestCodexLifecycleGuidesDoNotDocumentRetiredHostFallbacks(t *testing.T) {
 	forbidden := map[string][]string{
+		"colonize": {
+			"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+		},
 		"plan": {
 			"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
 		},
@@ -288,6 +311,9 @@ func TestCodexLifecycleGuidesDoNotDocumentRetiredHostFallbacks(t *testing.T) {
 		},
 		"continue": {
 			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+		},
+		"seal": {
+			"AETHER_OUTPUT_MODE=json aether seal --plan-only",
 		},
 	}
 
@@ -312,6 +338,10 @@ func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
 	}
 
 	tests := map[string][]string{
+		"colonize": {
+			"aether host colonize",
+			"colonize-finalize",
+		},
 		"plan": {
 			"aether host plan",
 			"--planning-depth",
@@ -325,8 +355,12 @@ func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
 		},
 		"continue": {
 			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-			"aether host continue --verification-depth heavy",
+			"aether host continue --classic-ceremony",
 			"continue-finalize",
+		},
+		"seal": {
+			"aether host seal",
+			"seal-finalize",
 		},
 	}
 
@@ -399,11 +433,12 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	}
 	text := string(content)
 	for _, want := range []string{
-		"AETHER_OUTPUT_MODE=json aether colonize --plan-only",
+		"aether host colonize",
 		"aether host plan --depth <choice> --planning-depth <choice>",
 		"aether host build <phase>",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-		"aether host continue --verification-depth heavy",
+		"aether host continue --classic-ceremony",
+		"aether host seal",
 		"aether spawn-log",
 		"aether spawn-complete",
 		"aether ceremony worker-complete",
@@ -791,4 +826,38 @@ func readCommandGuideYAMLMetadata(t *testing.T, path string) commandGuideYAMLMet
 		t.Fatalf("%s missing codex_orchestration metadata", path)
 	}
 	return meta
+}
+
+// --- Phase 144 Codex smoke tests (CLEAN-05) ---
+
+func TestCommandGuideBuildSmoke(t *testing.T) {
+	guide, err := buildCommandGuide("build", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(build, codex) error: %v", err)
+	}
+	if guide.RunCommand == "" {
+		t.Error("RunCommand should be non-empty")
+	}
+	if len(guide.PreSteps) < 1 {
+		t.Errorf("PreSteps should have at least 1 entry, got %d", len(guide.PreSteps))
+	}
+	if len(guide.PostSteps) < 1 {
+		t.Errorf("PostSteps should have at least 1 entry, got %d", len(guide.PostSteps))
+	}
+}
+
+func TestCommandGuidePlanSmoke(t *testing.T) {
+	guide, err := buildCommandGuide("plan", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(plan, codex) error: %v", err)
+	}
+	if guide.RunCommand == "" {
+		t.Error("RunCommand should be non-empty")
+	}
+	if len(guide.PreSteps) < 1 {
+		t.Errorf("PreSteps should have at least 1 entry, got %d", len(guide.PreSteps))
+	}
+	if len(guide.PostSteps) < 1 {
+		t.Errorf("PostSteps should have at least 1 entry, got %d", len(guide.PostSteps))
+	}
 }

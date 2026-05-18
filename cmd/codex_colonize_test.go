@@ -1943,3 +1943,68 @@ func TestLoadSurveyContext_AnchorsEmptyWhenNoFile(t *testing.T) {
 		t.Errorf("len(SourceAnchors) = %d, want 0", len(ctx.SourceAnchors))
 	}
 }
+
+// --- Phase 144 M4L regression test (CLEAN-01) ---
+
+func TestM4LRegression_VenvProducesGroundedPlan(t *testing.T) {
+	root := createVenvNoiseFixture(t)
+
+	// Step 1: Survey must exclude .venv from output
+	facts, err := surveyWorkspace(root)
+	if err != nil {
+		t.Fatalf("surveyWorkspace error: %v", err)
+	}
+	outputPaths := strings.Join(facts.TopLevelDirs, "\n") + "\n" +
+		strings.Join(facts.ConfigFiles, "\n") + "\n" +
+		strings.Join(facts.Languages, "\n") + "\n" +
+		strings.Join(facts.TestFiles, "\n")
+	for _, forbidden := range []string{".venv", "site-packages", "__pycache__"} {
+		if strings.Contains(outputPaths, forbidden) {
+			t.Errorf("survey output contains forbidden noise path %q", forbidden)
+		}
+	}
+
+	// Step 2: Source anchors must not include .venv paths
+	anchors := extractSourceAnchors(root, 50)
+	for _, anchor := range anchors {
+		if strings.Contains(anchor, ".venv") {
+			t.Errorf("source anchor %q should not contain .venv", anchor)
+		}
+	}
+
+	// Step 3: Grounded tasks should produce zero warnings
+	groundedPhases := []colony.Phase{
+		{
+			ID:   1,
+			Name: "Build API",
+			Tasks: []colony.Task{
+				{Goal: "Edit cmd/main.go to add new endpoint"},
+			},
+		},
+	}
+	warnings := checkPlanGrounding(groundedPhases, anchors)
+	if len(warnings) != 0 {
+		t.Errorf("grounded plan should produce zero warnings, got %d: %v", len(warnings), warnings)
+	}
+
+	// Step 4: Ungrounded tasks should produce warnings when anchors exist
+	ungroundedPhases := []colony.Phase{
+		{
+			ID:   2,
+			Name: "Implementation",
+			Tasks: []colony.Task{
+				{Goal: "Build the feature"},
+			},
+		},
+	}
+	if len(anchors) == 0 {
+		t.Fatal("no source anchors extracted from fixture; test cannot verify ungrounded warnings")
+	}
+	warnings = checkPlanGrounding(ungroundedPhases, anchors)
+	if len(warnings) != 1 {
+		t.Errorf("ungrounded plan should produce exactly 1 warning, got %d: %v", len(warnings), warnings)
+	}
+	if warnings[0].PhaseID != 2 {
+		t.Errorf("warning PhaseID = %d, want 2", warnings[0].PhaseID)
+	}
+}
