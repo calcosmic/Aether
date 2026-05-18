@@ -26,6 +26,11 @@ import type {
   BuildDispatch,
 } from "./types.js";
 import { dispatchSingleWorker, type DispatchOptions, type DispatchResult } from "./worker-dispatch.js";
+import {
+  createCeremonyAdapter,
+  type CeremonyAdapter,
+  type CeremonyWorkflow,
+} from "./ceremony-adapter.js";
 
 // Mutable references for test injection.
 let _callGoJSONRef = callGoJSON;
@@ -64,6 +69,21 @@ export function __restoreDispatchSingleWorker(): void {
   _dispatchSingleWorkerRef = dispatchSingleWorker;
 }
 
+// Mutable reference for ceremony adapter injection (testing).
+let _createCeremonyAdapterRef = createCeremonyAdapter;
+
+/** Test-only: inject a mock createCeremonyAdapter. */
+export function __setCreateCeremonyAdapter(
+  factory: (opts: GoBridgeOptions) => CeremonyAdapter
+): void {
+  _createCeremonyAdapterRef = factory;
+}
+
+/** Test-only: restore the real createCeremonyAdapter. */
+export function __restoreCreateCeremonyAdapter(): void {
+  _createCeremonyAdapterRef = createCeremonyAdapter;
+}
+
 function callGoJSONRef<T>(opts: GoBridgeOptions, args: string[]): T {
   return _callGoJSONRef(opts, args);
 }
@@ -77,6 +97,11 @@ function dispatchSingleWorkerRef(
   dispatch: BuildDispatch
 ): Promise<DispatchResult> {
   return _dispatchSingleWorkerRef(opts, dispatch);
+}
+
+function emitCeremonyOutput(output: string): void {
+  if (output.trim() === "") return;
+  process.stderr.write(output.endsWith("\n") ? output : `${output}\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +170,8 @@ export async function runOracleLifecycle(
   let stopReason = "unknown";
 
   try {
+    const ceremony = _createCeremonyAdapterRef(opts);
+
     // eslint-disable-next-line no-constant-condition
     while (true) {
       // ── Step 1: Get iteration manifest from Go ───────────────────────────
@@ -188,11 +215,20 @@ export async function runOracleLifecycle(
         task: oracleWorker.task,
         status: "pending",
         summary: oracleWorker.brief,
+        task_brief: oracleWorker.brief,
       };
+
+      // Ceremony: render spawn-plan and wave-start before dispatch
+      const ceremonyEnvelope = { iteration_manifest: state };
+      emitCeremonyOutput(ceremony.renderSpawnPlan("build" as CeremonyWorkflow, ceremonyEnvelope));
+      emitCeremonyOutput(ceremony.renderWaveStart("build" as CeremonyWorkflow, ceremonyEnvelope, 1));
 
       const dispatchResult = await dispatchSingleWorkerRef(opts, dispatch);
 
       stepsCompleted.push(`iteration-${state.current_iteration}-dispatch`);
+
+      // Ceremony: render worker-complete after dispatch
+      emitCeremonyOutput(ceremony.renderWorkerComplete("build" as CeremonyWorkflow, dispatchResult));
 
       // ── Step 4: Build completion file ────────────────────────────────────
       const workerResponse = buildOracleWorkerResponse(
@@ -234,6 +270,9 @@ export async function runOracleLifecycle(
       iterationsCompleted = state.current_iteration;
 
       stepsCompleted.push(`iteration-${state.current_iteration}-finalize`);
+
+      // Ceremony: render closeout after finalize
+      emitCeremonyOutput(ceremony.renderCloseout("build" as CeremonyWorkflow, completionPath));
 
       // ── Step 6: Check if we should continue ──────────────────────────────
       if (!finalizeResult.should_continue) {

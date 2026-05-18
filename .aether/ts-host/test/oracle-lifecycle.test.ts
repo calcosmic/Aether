@@ -26,8 +26,11 @@ import {
   __restoreWriteCompletionFile,
   __setDispatchSingleWorker,
   __restoreDispatchSingleWorker,
+  __setCreateCeremonyAdapter,
+  __restoreCreateCeremonyAdapter,
 } from "../src/oracle-lifecycle.js";
 import type { OracleLifecycleOptions } from "../src/oracle-lifecycle.js";
+import type { CeremonyAdapter } from "../src/ceremony-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -96,6 +99,7 @@ describe("oracle-lifecycle", () => {
     __restoreCallGoJSON();
     __restoreWriteCompletionFile();
     __restoreDispatchSingleWorker();
+    __restoreCreateCeremonyAdapter();
   });
 
   it("runs until max iterations reached", async () => {
@@ -409,5 +413,197 @@ describe("oracle-lifecycle", () => {
     assert.equal(result.success, false, "Should fail visibly when dispatch fails");
     assert.match(result.error ?? "", /worker timeout after 1ms/);
     assert.equal(result.stop_reason, "error");
+  });
+
+  // ---------------------------------------------------------------------------
+  // HOST-05: Real dispatch and ceremony rendering tests
+  // ---------------------------------------------------------------------------
+
+  it("dispatches real workers when simulateWorkers is false", async () => {
+    let dispatchOpts: OracleLifecycleOptions | undefined;
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        return makeMockManifest(iterateCallCount, 3, 85) as unknown as T;
+      }
+      if (args[0] === "oracle-iterate-finalize") {
+        finalizeCallCount++;
+        return makeMockFinalize(false, 90) as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile(() => "/tmp/fake-completion.json");
+    __setDispatchSingleWorker(async (opts, _dispatch) => {
+      dispatchOpts = opts as OracleLifecycleOptions;
+      return makeMockDispatchResult("completed");
+    });
+    __setCreateCeremonyAdapter(() => ({
+      renderSpawnPlan: () => "--- Spawn Plan ---",
+      renderWaveStart: () => "--- Wave 1 ---",
+      renderWorkerComplete: () => "--- Worker Complete ---",
+      renderCloseout: () => "--- Closeout ---",
+    }));
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: false,
+    });
+
+    assert.equal(result.success, true, "Should succeed with real dispatch");
+    assert.ok(dispatchOpts, "dispatchSingleWorker should have been called");
+    assert.equal(dispatchOpts!.simulateWorkers, false, "Should pass simulateWorkers=false to dispatch");
+  });
+
+  it("dispatches simulated workers when simulateWorkers is true", async () => {
+    let dispatchOpts: OracleLifecycleOptions | undefined;
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        return makeMockManifest(iterateCallCount, 3, 85) as unknown as T;
+      }
+      if (args[0] === "oracle-iterate-finalize") {
+        finalizeCallCount++;
+        return makeMockFinalize(false, 90) as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile(() => "/tmp/fake-completion.json");
+    __setDispatchSingleWorker(async (opts, _dispatch) => {
+      dispatchOpts = opts as OracleLifecycleOptions;
+      return makeMockDispatchResult("completed");
+    });
+    __setCreateCeremonyAdapter(() => ({
+      renderSpawnPlan: () => "",
+      renderWaveStart: () => "",
+      renderWorkerComplete: () => "",
+      renderCloseout: () => "",
+    }));
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: true,
+    });
+
+    assert.equal(result.success, true, "Should succeed with simulated dispatch");
+    assert.ok(dispatchOpts, "dispatchSingleWorker should have been called");
+    assert.equal(dispatchOpts!.simulateWorkers, true, "Should pass simulateWorkers=true to dispatch");
+  });
+
+  it("stops when oracle-iterate-finalize returns should_continue=false", async () => {
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        return makeMockManifest(iterateCallCount, 10, 85) as unknown as T;
+      }
+      if (args[0] === "oracle-iterate-finalize") {
+        finalizeCallCount++;
+        // Confidence met after 2 iterations
+        return makeMockFinalize(finalizeCallCount < 2, finalizeCallCount === 2 ? 90 : 50) as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile(() => "/tmp/fake-completion.json");
+    __setDispatchSingleWorker(async () => makeMockDispatchResult("completed"));
+    __setCreateCeremonyAdapter(() => ({
+      renderSpawnPlan: () => "",
+      renderWaveStart: () => "",
+      renderWorkerComplete: () => "",
+      renderCloseout: () => "",
+    }));
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: false,
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.stop_reason, "finalize:should_continue=false");
+    assert.equal(result.final_confidence, 90, "Should use Go-computed confidence from finalize");
+    assert.equal(iterateCallCount, 2, "Should run exactly 2 iterations");
+  });
+
+  it("stops at max_iterations as a hard ceiling", async () => {
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        return makeMockManifest(iterateCallCount, 3, 85) as unknown as T;
+      }
+      if (args[0] === "oracle-iterate-finalize") {
+        finalizeCallCount++;
+        // Go keeps saying should_continue=true
+        return makeMockFinalize(true, 50) as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile(() => "/tmp/fake-completion.json");
+    __setDispatchSingleWorker(async () => makeMockDispatchResult("completed"));
+    __setCreateCeremonyAdapter(() => ({
+      renderSpawnPlan: () => "",
+      renderWaveStart: () => "",
+      renderWorkerComplete: () => "",
+      renderCloseout: () => "",
+    }));
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: false,
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.stop_reason, "max_iterations_met");
+    assert.equal(result.iterations_completed, 3, "Should stop at 3 iterations");
+  });
+
+  it("renders ceremony during Oracle iteration (spawn-plan, wave-start, worker-complete, closeout)", async () => {
+    const ceremonyCalls: string[] = [];
+    __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
+      if (args[0] === "oracle-iterate") {
+        iterateCallCount++;
+        return makeMockManifest(iterateCallCount, 3, 85) as unknown as T;
+      }
+      if (args[0] === "oracle-iterate-finalize") {
+        finalizeCallCount++;
+        return makeMockFinalize(false, 90) as unknown as T;
+      }
+      throw new Error(`Unexpected command: ${args[0]}`);
+    });
+
+    __setWriteCompletionFile(() => "/tmp/fake-completion.json");
+    __setDispatchSingleWorker(async () => ({
+      name: "Oracle-01",
+      status: "completed" as const,
+      summary: "Research complete",
+    }));
+    __setCreateCeremonyAdapter(() => ({
+      renderSpawnPlan: () => { ceremonyCalls.push("spawn-plan"); return "[SPAWN PLAN]"; },
+      renderWaveStart: () => { ceremonyCalls.push("wave-start"); return "[WAVE START]"; },
+      renderWorkerComplete: () => { ceremonyCalls.push("worker-complete"); return "[WORKER COMPLETE]"; },
+      renderCloseout: () => { ceremonyCalls.push("closeout"); return "[CLOSEOUT]"; },
+    }));
+
+    const result = await runOracleLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+      topic: "test-topic",
+      simulateWorkers: false,
+    });
+
+    assert.equal(result.success, true);
+    assert.ok(ceremonyCalls.includes("spawn-plan"), "Should call renderSpawnPlan");
+    assert.ok(ceremonyCalls.includes("wave-start"), "Should call renderWaveStart");
+    assert.ok(ceremonyCalls.includes("worker-complete"), "Should call renderWorkerComplete");
+    assert.ok(ceremonyCalls.includes("closeout"), "Should call renderCloseout");
   });
 });
