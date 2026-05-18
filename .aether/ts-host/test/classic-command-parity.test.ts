@@ -86,7 +86,7 @@ describe("classic command parity matrix", () => {
 
   it("matches host-supported command names parsed by the TS host", () => {
     const records = recordsByName();
-    const hostCommands = ["plan", "build", "continue", "oracle", "swarm", "watch"];
+    const hostCommands = ["colonize", "plan", "build", "continue", "seal", "oracle", "swarm", "watch"];
 
     for (const command of hostCommands) {
       const record = records.get(command);
@@ -145,6 +145,18 @@ describe("classic command parity matrix", () => {
         argv: ["node", "host.js", "continue", "--verification-depth=heavy", "--light", "--heavy", "--skip-watchers"],
         want: ["continue", "--plan-only", "--verification-depth", "heavy", "--light", "--heavy", "--skip-watchers"],
       },
+      {
+        argv: ["node", "host.js", "colonize", "--force-resurvey", "--worker-timeout", "5m"],
+        want: ["colonize", "--plan-only", "--force-resurvey", "--worker-timeout", "5m"],
+      },
+      {
+        argv: ["node", "host.js", "continue", "--classic-ceremony"],
+        want: ["continue", "--plan-only", "--classic-ceremony"],
+      },
+      {
+        argv: ["node", "host.js", "seal", "--force"],
+        want: ["seal", "--plan-only", "--force"],
+      },
     ];
 
     for (const testCase of cases) {
@@ -152,9 +164,104 @@ describe("classic command parity matrix", () => {
     }
   });
 
-  it("keeps colonize and seal marked as missing TS host orchestration targets", () => {
+  it("marks colonize and seal as implemented TS host orchestration targets", () => {
     const records = recordsByName();
-    assert.equal(records.get("colonize")?.ts_host_surface, "missing-orchestration-target");
-    assert.equal(records.get("seal")?.ts_host_surface, "missing-orchestration-target");
+    assert.equal(records.get("colonize")?.ts_host_surface, "orchestration-manifest");
+    assert.equal(records.get("seal")?.ts_host_surface, "orchestration-manifest");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ceremony Marker Presence from Parity Matrix (D-02)
+// ---------------------------------------------------------------------------
+
+describe("ceremony marker presence from parity matrix", () => {
+  it("dispatched commands have full ceremony lifecycle in parity matrix", () => {
+    const records = recordsByName();
+
+    // Commands whose wrappers use the 4-stage dispatched ceremony:
+    // spawn-plan, wave-start, worker-complete, closeout
+    const dispatchedWithFullLifecycle = ["colonize", "plan", "build"];
+    for (const command of dispatchedWithFullLifecycle) {
+      const record = records.get(command);
+      assert.ok(record, `matrix should include ${command}`);
+      assert.ok(
+        record.ceremony_steps.includes("spawn-plan"),
+        `${command} should have spawn-plan ceremony step`
+      );
+      assert.ok(
+        record.ceremony_steps.includes("wave-start"),
+        `${command} should have wave-start ceremony step`
+      );
+      assert.ok(
+        record.ceremony_steps.includes("worker-complete"),
+        `${command} should have worker-complete ceremony step`
+      );
+      assert.ok(
+        record.ceremony_steps.includes("closeout"),
+        `${command} should have closeout ceremony step`
+      );
+    }
+
+    // swarm has its own wave structure (spawn-plan, investigation-wave, fix-wave,
+    // verification-wave, closeout) but still has spawn-plan and closeout bookends
+    const swarmRecord = records.get("swarm")!;
+    assert.ok(swarmRecord.ceremony_steps.includes("spawn-plan"), "swarm should have spawn-plan");
+    assert.ok(swarmRecord.ceremony_steps.includes("closeout"), "swarm should have closeout");
+    assert.equal(swarmRecord.ceremony_steps.length, 5, "swarm should have 5 ceremony steps");
+
+    // continue has its own ceremony lifecycle (verification, gates, advance-or-block)
+    const continueRecord = records.get("continue")!;
+    assert.deepEqual(
+      continueRecord.ceremony_steps,
+      ["verification", "gates", "advance-or-block"],
+      "continue should have verification ceremony lifecycle"
+    );
+
+    // seal has its own ceremony lifecycle (final-review, worker-complete, closeout, porter-readiness)
+    const sealRecord = records.get("seal")!;
+    assert.ok(
+      sealRecord.ceremony_steps.includes("final-review"),
+      "seal should have final-review ceremony step"
+    );
+    assert.ok(
+      sealRecord.ceremony_steps.includes("closeout"),
+      "seal should have closeout ceremony step"
+    );
+
+    // oracle has its own ceremony lifecycle (research-scope, iterate, confidence-check, promote-findings)
+    const oracleRecord = records.get("oracle")!;
+    assert.deepEqual(
+      oracleRecord.ceremony_steps,
+      ["research-scope", "iterate", "confidence-check", "promote-findings"],
+      "oracle should have research ceremony lifecycle"
+    );
+  });
+
+  it("commands with spawn-plan ceremony step have closeout too", () => {
+    const matrix = loadMatrix();
+    for (const record of matrix.commands) {
+      if (record.ceremony_steps.includes("spawn-plan")) {
+        assert.ok(
+          record.ceremony_steps.includes("closeout"),
+          `${record.name} has spawn-plan but is missing closeout -- lifecycle gap`
+        );
+      }
+    }
+  });
+
+  it("all 18 commands have non-empty ceremony steps", () => {
+    const matrix = loadMatrix();
+    assert.equal(
+      matrix.commands.length,
+      18,
+      `parity matrix should have 18 commands, found ${matrix.commands.length}`
+    );
+    for (const record of matrix.commands) {
+      assert.ok(
+        record.ceremony_steps.length > 0,
+        `${record.name} should have non-empty ceremony_steps`
+      );
+    }
   });
 });
