@@ -23,6 +23,9 @@ import { join } from "node:path";
 /** Supported platform names. */
 export type Platform = "claude" | "opencode" | "codex";
 
+/** Error classification for platform dispatch failures. */
+export type PlatformErrorClass = "auth" | "missing" | "timeout" | "unknown";
+
 /** Configuration for spawning a single worker. */
 export interface WorkerConfig {
   /** Target platform. */
@@ -91,13 +94,73 @@ export async function detectAvailablePlatforms(): Promise<Platform[]> {
  * tells users how to fetch the Go-owned diagnostic instead of inventing a
  * second auth vocabulary.
  */
-export function formatPlatformUnavailableMessage(context = "worker dispatch"): string {
+export function formatPlatformUnavailableMessage(
+  context = "worker dispatch",
+  providerDiagnostics?: string
+): string {
+  // When Go provides diagnostics, use them as the primary message (D-03).
+  if (providerDiagnostics && providerDiagnostics.trim()) {
+    return providerDiagnostics.trim();
+  }
+  // Generic fallback when no Go diagnostics are available.
   return (
     `Worker dispatch cannot start for ${context}; the TypeScript host did not receive ` +
     "a Go provider_diagnostics value. Detailed provider availability and fallback " +
     "diagnostics are owned by the Go AvailabilityStatus contract; use the Go result " +
     "or run `aether status` to inspect the runtime-owned diagnostic."
   );
+}
+
+/**
+ * Produce a per-platform plain English error message when a platform CLI
+ * is not installed or not available on PATH.
+ *
+ * Per D-03, messages must be plain English -- no error codes, file paths,
+ * or jargon. Go runtime's platform-diagnostic is used behind the scenes,
+ * but the user never sees raw diagnostic output.
+ *
+ * @param platform - The platform that is missing
+ * @returns Plain English error message
+ */
+export function formatPlatformDiagnosticMessage(platform: Platform): string {
+  switch (platform) {
+    case "claude":
+      return "Claude Code is not installed or not available on your PATH. Install it from claude.ai/code and try again.";
+    case "opencode":
+      return "OpenCode is not installed or not available on your PATH. Install it from opencode.ai and try again.";
+    case "codex":
+      return "Codex CLI is not installed or not available on your PATH. Install it from github.com/openai/codex and try again.";
+  }
+}
+
+/**
+ * Classify a platform dispatch error into categories that drive error handling.
+ *
+ * - "auth" errors halt the build immediately (D-01)
+ * - "timeout" and "unknown" errors mark the worker as failed and continue (D-02)
+ * - "missing" errors indicate the CLI is not installed
+ *
+ * @param _platform - The platform name (reserved for platform-specific heuristics)
+ * @param error - The error to classify
+ * @returns Error classification
+ */
+export function classifyPlatformError(
+  _platform: string,
+  error: unknown
+): PlatformErrorClass {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+  if (/auth|\bcredentials\b|\b(log\s*in|logged\s*in)\b|\bpermission\b/.test(message)) {
+    return "auth";
+  }
+  if (/\b(timeout|timed?\s*out|etimedout|abort_err)\b/.test(message)) {
+    return "timeout";
+  }
+  if (/\b(enoent|not found|which)\b/.test(message)) {
+    return "missing";
+  }
+  return "unknown";
 }
 
 /** Test-only: inject a mock detectAvailablePlatforms. */
