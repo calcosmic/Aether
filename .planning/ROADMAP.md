@@ -50,7 +50,7 @@ See `.planning/milestones/` for full archived phase details.
 | 137. Hive Wisdom Injection | v1.21 | 0/3 | Not started | - |
 | 138. Worker-to-Worker Spawning | v1.21 | 4/4 | Complete   | 2026-05-18 |
 | 139. Confidence-Driven Build Iteration | v1.21 | 0/? | Not started | - |
-| 140. Hardening and Validation | v1.21 | 3/3 | Complete   | 2026-05-18 |
+| 140. Hardening and Validation | v1.21 | 3/3 | Complete    | 2026-05-18 |
 
 ## Phase Details
 
