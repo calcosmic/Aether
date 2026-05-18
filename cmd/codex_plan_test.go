@@ -666,6 +666,10 @@ func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
 	if state.Plan.GeneratedAt == nil || state.Plan.Confidence == nil || *state.Plan.Confidence <= 0 {
 		t.Fatalf("plan metadata missing after finalizer: %+v", state.Plan)
 	}
+	planningLoop := result["planning_loop"].(map[string]interface{})
+	if planningLoop["stop_reason"].(string) == "" {
+		t.Fatalf("planning_loop stop reason missing: %+v", planningLoop)
+	}
 
 	for _, rel := range []string{
 		filepath.Join("planning", "SCOUT.md"),
@@ -684,6 +688,17 @@ func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
 	}
 	if !strings.Contains(string(contextData), "aether build 1") {
 		t.Fatalf("CONTEXT.md missing next build guidance:\n%s", string(contextData))
+	}
+	planArtifactData, err := os.ReadFile(filepath.Join(dataDir, "planning", "phase-plan.json"))
+	if err != nil {
+		t.Fatalf("read phase-plan artifact: %v", err)
+	}
+	var planArtifact codexWorkerPlanArtifact
+	if err := json.Unmarshal(planArtifactData, &planArtifact); err != nil {
+		t.Fatalf("parse phase-plan artifact: %v", err)
+	}
+	if planArtifact.PlanningLoop == nil || planArtifact.PlanningLoop.StopReason == "" {
+		t.Fatalf("phase-plan artifact missing planning_loop: %+v", planArtifact)
 	}
 }
 
@@ -801,6 +816,11 @@ func TestPlanningDispatchContractWithTimeoutOverride(t *testing.T) {
 func TestPlanCommandExposesWorkerTimeoutFlag(t *testing.T) {
 	if planCmd.Flags().Lookup("worker-timeout") == nil {
 		t.Fatal("expected plan command to expose --worker-timeout")
+	}
+	for _, flag := range []string{"target", "max-iterations", "accept"} {
+		if planCmd.Flags().Lookup(flag) == nil {
+			t.Fatalf("expected plan command to expose --%s", flag)
+		}
 	}
 }
 
@@ -2235,6 +2255,86 @@ func TestPlanningDepthInManifest(t *testing.T) {
 	}
 }
 
+func TestPlanningLoopOptionsClampAndEvaluateStopReasons(t *testing.T) {
+	opts := codexPlanOptions{TargetConfidence: 1000, MaxIterations: 1000}
+	loop := evaluatePlanningLoop(
+		codexPlanConfidence{Overall: 82},
+		[]string{"gap"},
+		opts,
+		"balanced",
+	)
+	if loop.TargetConfidence != 99 {
+		t.Fatalf("target = %d, want clamped 99", loop.TargetConfidence)
+	}
+	if loop.MaxIterations != 12 {
+		t.Fatalf("max iterations = %d, want clamped 12", loop.MaxIterations)
+	}
+	if loop.StopReason != planningLoopStalled {
+		t.Fatalf("stop reason = %q, want stalled", loop.StopReason)
+	}
+	if loop.Iterations != 3 {
+		t.Fatalf("iterations = %d, want 3 after two stall deltas", loop.Iterations)
+	}
+
+	targetReached := evaluatePlanningLoop(codexPlanConfidence{Overall: 95}, nil, codexPlanOptions{}, "balanced")
+	if targetReached.StopReason != planningLoopTargetReached {
+		t.Fatalf("stop reason = %q, want target reached", targetReached.StopReason)
+	}
+
+	accepted := evaluatePlanningLoop(
+		codexPlanConfidence{Overall: 72},
+		nil,
+		codexPlanOptions{TargetConfidence: 90, Accept: true},
+		"balanced",
+	)
+	if accepted.StopReason != planningLoopAccepted || !accepted.AcceptedBelowTarget {
+		t.Fatalf("accepted loop = %+v, want accepted below target", accepted)
+	}
+}
+
+func TestPlanOnlyManifestIncludesClassicPlanningLoopControls(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-plan-loop\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	goal := "Test classic planning loop controls"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--depth", "deep", "--target", "94", "--max-iterations", "7", "--accept"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan --plan-only returned error: %v", err)
+	}
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	manifest := result["plan_manifest"].(map[string]interface{})
+	loop := manifest["planning_loop"].(map[string]interface{})
+	if int(loop["target_confidence"].(float64)) != 94 {
+		t.Fatalf("target_confidence = %v, want 94", loop["target_confidence"])
+	}
+	if int(loop["max_iterations"].(float64)) != 7 {
+		t.Fatalf("max_iterations = %v, want 7", loop["max_iterations"])
+	}
+	if loop["accept"] != true {
+		t.Fatalf("accept = %v, want true", loop["accept"])
+	}
+	if loop["stop_reason"].(string) != planningLoopPendingStop {
+		t.Fatalf("stop_reason = %q, want pending", loop["stop_reason"])
+	}
+}
+
 func TestPlanningDepthInWrapperContract(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -2364,6 +2464,33 @@ func TestPlanningWorkerBriefIncludesSurveyFindingsAsBuildableGuidance(t *testing
 			t.Fatalf("route-setter planning guidance missing %q:\n%s", want, brief)
 		}
 	}
+}
+
+// --- Source anchors in planning worker brief ---
+
+func TestRenderPlanningWorkerBrief_SourceAnchors(t *testing.T) {
+	root := t.TempDir()
+
+	t.Run("WithAnchors", func(t *testing.T) {
+		survey := codexSurveyContext{
+			SurveyDocs:    []string{"BLUEPRINT.md"},
+			SourceAnchors: []string{"cmd/main.go", "pkg/storage/store.go", "cmd/codex_plan.go"},
+		}
+		brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+		if !strings.Contains(brief, "Source anchors available: 3 repo-owned files from survey") {
+			t.Fatalf("route-setter brief missing source anchor hint:\n%s", brief)
+		}
+	})
+
+	t.Run("WithoutAnchors", func(t *testing.T) {
+		survey := codexSurveyContext{
+			SurveyDocs: []string{"BLUEPRINT.md"},
+		}
+		brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+		if strings.Contains(brief, "Source anchors available") {
+			t.Fatalf("route-setter brief should not mention source anchors when empty:\n%s", brief)
+		}
+	})
 }
 
 // --- Plan finalizer validation rejection tests (Task 4.1) ---

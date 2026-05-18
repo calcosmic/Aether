@@ -79,9 +79,10 @@ type codexPlanConfidence struct {
 }
 
 type codexWorkerPlanArtifact struct {
-	Phases     []codexWorkerPlanPhase `json:"phases"`
-	Confidence codexPlanConfidence    `json:"confidence"`
-	Gaps       []string               `json:"gaps,omitempty"`
+	Phases       []codexWorkerPlanPhase `json:"phases"`
+	Confidence   codexPlanConfidence    `json:"confidence"`
+	Gaps         []string               `json:"gaps,omitempty"`
+	PlanningLoop *codexPlanningLoop     `json:"planning_loop,omitempty"`
 }
 
 type codexWorkerPlanPhase struct {
@@ -122,6 +123,32 @@ type codexPlanOptions struct {
 	PlanningDepth     string
 	VerificationDepth string
 	WorkerTimeout     time.Duration
+	TargetConfidence  int
+	MaxIterations     int
+	Accept            bool
+}
+
+type codexPlanningLoop struct {
+	TargetConfidence    int                       `json:"target_confidence"`
+	MaxIterations       int                       `json:"max_iterations"`
+	StallThreshold      int                       `json:"stall_threshold"`
+	StallLimit          int                       `json:"stall_limit"`
+	Accept              bool                      `json:"accept,omitempty"`
+	Iterations          int                       `json:"iterations"`
+	StopReason          string                    `json:"stop_reason"`
+	FinalConfidence     int                       `json:"final_confidence"`
+	AcceptedBelowTarget bool                      `json:"accepted_below_target,omitempty"`
+	Gaps                []string                  `json:"gaps,omitempty"`
+	History             []codexPlanningLoopSample `json:"history,omitempty"`
+}
+
+type codexPlanningLoopSample struct {
+	Iteration  int      `json:"iteration"`
+	Confidence int      `json:"confidence"`
+	Delta      int      `json:"delta"`
+	StallCount int      `json:"stall_count"`
+	Gaps       []string `json:"gaps,omitempty"`
+	Evidence   string   `json:"evidence,omitempty"`
 }
 
 type codexPlanManifest struct {
@@ -138,6 +165,7 @@ type codexPlanManifest struct {
 	GranularityMax            int                              `json:"granularity_max"`
 	PlanningDepth             string                           `json:"planning_depth"`
 	VerificationDepth         string                           `json:"verification_depth,omitempty"`
+	PlanningLoop              codexPlanningLoop                `json:"planning_loop,omitempty"`
 	Survey                    codexSurveyContext               `json:"survey"`
 	Dispatches                []codexPlanningDispatch          `json:"dispatches"`
 	Snapshots                 map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
@@ -223,6 +251,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			"depth":                      planDepth,
 			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
+			"planning_loop":              resolvePlanningLoopOptions(planDepth, opts),
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
@@ -368,11 +397,12 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	} else if note != "" {
 		unresolvedGaps = limitStrings(uniqueSortedStrings(append(unresolvedGaps, note)), 4)
 	}
-	routeSetterFile, preservedRouteArtifact, err := writeRouteSetterArtifact(root, planningDir, *state.Goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, artifactSnapshots)
+	planningLoop := evaluatePlanningLoop(confidence, unresolvedGaps, opts, planDepth)
+	routeSetterFile, preservedRouteArtifact, err := writeRouteSetterArtifact(root, planningDir, *state.Goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots)
 	if err != nil {
 		return nil, err
 	}
-	planArtifactFile, preservedPlanArtifact, err := writeWorkerPlanArtifact(root, planningDir, confidence, unresolvedGaps, phases, artifactSnapshots, dispatches)
+	planArtifactFile, preservedPlanArtifact, err := writeWorkerPlanArtifact(root, planningDir, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots, dispatches)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +468,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 	state.Events = append(trimmedEvents(state.Events),
 		fmt.Sprintf("%s|planning_scout|plan|Scout summarized surveyed repo context", now.Format(time.RFC3339)),
-		fmt.Sprintf("%s|plan_generated|plan|Generated %d phases with %d%% confidence", now.Format(time.RFC3339), len(phases), confidence.Overall),
+		fmt.Sprintf("%s|plan_generated|plan|Generated %d phases with %d%% confidence; planning loop stopped: %s", now.Format(time.RFC3339), len(phases), confidence.Overall, planningLoop.StopReason),
 	)
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
@@ -490,6 +520,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"granularity_min":            granularityMin(granularity),
 		"granularity_max":            granularityMax(granularity),
 		"confidence":                 confidence,
+		"planning_loop":              planningLoop,
 		"planning_dir":               planningDir,
 		"planning_files":             []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
 		"plan_artifact":              filepath.Base(planArtifactFile),
@@ -578,6 +609,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"depth":                      planDepth,
 			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
+			"planning_loop":              resolvePlanningLoopOptions(planDepth, opts),
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
@@ -631,6 +663,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		GranularityMax:     granularityMax(granularity),
 		PlanningDepth:      planningDepth,
 		VerificationDepth:  verificationDepth,
+		PlanningLoop:       resolvePlanningLoopOptions(planDepth, opts),
 		Survey:             survey,
 		Dispatches:         dispatches,
 		Snapshots:          artifactSnapshots,
@@ -659,6 +692,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"depth":                      planDepth,
 		"planning_depth":             planningDepth,
 		"verification_depth":         verificationDepth,
+		"planning_loop":              manifest.PlanningLoop,
 		"verification_smart_default": verificationSmartDefault,
 		"planning_smart_default":     planningSmartDefault,
 		"planning_phase":             planningPhase,
@@ -675,12 +709,13 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"clarification_warning":      clarificationWarning,
 		"next":                       "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
-			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep>",
+			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep> --target <70-99> --max-iterations <2-12>",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "pending",
 			"runtime_state_only":      true,
 			"planning_depth":          planningDepth,
+			"planning_loop":           manifest.PlanningLoop,
 		},
 	}
 	addBoundaryQuestionResultFields(result, boundary)
@@ -1358,6 +1393,104 @@ func clampInt(value, min, max int) int {
 	return value
 }
 
+const (
+	planningLoopMinTarget        = 70
+	planningLoopMaxTarget        = 99
+	planningLoopMinIterations    = 2
+	planningLoopMaxIterations    = 12
+	planningLoopStallThreshold   = 5
+	planningLoopStallLimit       = 2
+	planningLoopPendingStop      = "pending"
+	planningLoopTargetReached    = "target_reached"
+	planningLoopMaxIterationsHit = "max_iterations"
+	planningLoopStalled          = "stalled"
+	planningLoopAccepted         = "accepted"
+)
+
+func planningLoopPreset(planDepth string) (int, int) {
+	switch strings.ToLower(strings.TrimSpace(planDepth)) {
+	case "fast":
+		return 80, 4
+	case "deep":
+		return 95, 8
+	case "exhaustive":
+		return 99, 12
+	default:
+		return 90, 6
+	}
+}
+
+func resolvePlanningLoopOptions(planDepth string, opts codexPlanOptions) codexPlanningLoop {
+	target, maxIterations := planningLoopPreset(planDepth)
+	if opts.TargetConfidence > 0 {
+		target = clampInt(opts.TargetConfidence, planningLoopMinTarget, planningLoopMaxTarget)
+	}
+	if opts.MaxIterations > 0 {
+		maxIterations = clampInt(opts.MaxIterations, planningLoopMinIterations, planningLoopMaxIterations)
+	}
+	return codexPlanningLoop{
+		TargetConfidence: target,
+		MaxIterations:    maxIterations,
+		StallThreshold:   planningLoopStallThreshold,
+		StallLimit:       planningLoopStallLimit,
+		Accept:           opts.Accept,
+		StopReason:       planningLoopPendingStop,
+	}
+}
+
+func evaluatePlanningLoop(confidence codexPlanConfidence, unresolvedGaps []string, opts codexPlanOptions, planDepth string) codexPlanningLoop {
+	loop := resolvePlanningLoopOptions(planDepth, opts)
+	overall := clampInt(confidence.Overall, 0, 100)
+	gaps := limitStrings(uniqueSortedStrings(unresolvedGaps), 4)
+	loop.FinalConfidence = overall
+	loop.Gaps = gaps
+
+	lastConfidence := 0
+	stallCount := 0
+	for iteration := 1; iteration <= loop.MaxIterations; iteration++ {
+		delta := overall - lastConfidence
+		if iteration > 1 {
+			if delta < loop.StallThreshold {
+				stallCount++
+			} else {
+				stallCount = 0
+			}
+		}
+		loop.History = append(loop.History, codexPlanningLoopSample{
+			Iteration:  iteration,
+			Confidence: overall,
+			Delta:      delta,
+			StallCount: stallCount,
+			Gaps:       gaps,
+			Evidence:   "current planning evidence",
+		})
+		loop.Iterations = iteration
+		lastConfidence = overall
+
+		if opts.Accept {
+			loop.StopReason = planningLoopAccepted
+			loop.AcceptedBelowTarget = overall < loop.TargetConfidence
+			break
+		}
+		if overall >= loop.TargetConfidence {
+			loop.StopReason = planningLoopTargetReached
+			break
+		}
+		if iteration > 1 && stallCount >= loop.StallLimit {
+			loop.StopReason = planningLoopStalled
+			break
+		}
+		if iteration == loop.MaxIterations {
+			loop.StopReason = planningLoopMaxIterationsHit
+			break
+		}
+	}
+	if loop.StopReason == planningLoopPendingStop {
+		loop.StopReason = planningLoopMaxIterationsHit
+	}
+	return loop
+}
+
 func renderScoutPlanningGuidance(report codexScoutReport) string {
 	report = normalizeScoutPlanningReport(report)
 	if !scoutReportHasContent(report) {
@@ -1432,6 +1565,9 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("\n")
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
+	if len(survey.SourceAnchors) > 0 {
+		b.WriteString(fmt.Sprintf("- Source anchors available: %d repo-owned files from survey. Prefer referencing these files in task goals.\n", len(survey.SourceAnchors)))
+	}
 	b.WriteString("- Avoid high-noise paths unless directly relevant: .aether/backups/, .aether/chambers/, .aether/data/build/, .git/, node_modules/, dist/, build/, vendor/.\n")
 	b.WriteString("- Loop guard: read each file at most once, do not reread the same command or wrapper file for confidence, and stop searching when you have enough evidence to produce the requested terminal result.\n")
 	if spec.Caste == "scout" {
@@ -2170,7 +2306,7 @@ func commonHints(survey codexSurveyContext) []string {
 	return limitStrings(uniqueSortedStrings(hints), 5)
 }
 
-func writeRouteSetterArtifact(root, planningDir, goal string, granularity colony.PlanGranularity, survey codexSurveyContext, dispatch codexPlanningDispatch, confidence codexPlanConfidence, unresolvedGaps []string, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot) (string, bool, error) {
+func writeRouteSetterArtifact(root, planningDir, goal string, granularity colony.PlanGranularity, survey codexSurveyContext, dispatch codexPlanningDispatch, confidence codexPlanConfidence, unresolvedGaps []string, phases []colony.Phase, planningLoop codexPlanningLoop, snapshots map[string]codexArtifactSnapshot) (string, bool, error) {
 	path := filepath.Join(planningDir, "ROUTE-SETTER.md")
 	relPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", "ROUTE-SETTER.md"))
 	if shouldPreserveWorkerArtifact(root, relPath, snapshots, claimedArtifactSet(dispatch.Claimed)) {
@@ -2184,6 +2320,13 @@ func writeRouteSetterArtifact(root, planningDir, goal string, granularity colony
 	b.WriteString(fmt.Sprintf("- Goal: %s\n", goal))
 	b.WriteString(fmt.Sprintf("- Granularity: %s (%d-%d phases)\n", granularity, granularityMin(granularity), granularityMax(granularity)))
 	b.WriteString(fmt.Sprintf("- Confidence: %d%% overall\n\n", confidence.Overall))
+	if planningLoop.TargetConfidence > 0 {
+		b.WriteString("## Planning Loop\n")
+		b.WriteString(fmt.Sprintf("- Target confidence: %d%%\n", planningLoop.TargetConfidence))
+		b.WriteString(fmt.Sprintf("- Max iterations: %d\n", planningLoop.MaxIterations))
+		b.WriteString(fmt.Sprintf("- Iterations: %d\n", planningLoop.Iterations))
+		b.WriteString(fmt.Sprintf("- Stop reason: %s\n\n", planningLoop.StopReason))
+	}
 	b.WriteString("## Unresolved Gaps\n")
 	b.WriteString(bulletList(unresolvedGaps, "No planning gaps remain."))
 	b.WriteString("\n\n## Survey Inputs\n")
@@ -2199,7 +2342,7 @@ func writeRouteSetterArtifact(root, planningDir, goal string, granularity colony
 	return path, false, nil
 }
 
-func writeWorkerPlanArtifact(root, planningDir string, confidence codexPlanConfidence, unresolvedGaps []string, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) (string, bool, error) {
+func writeWorkerPlanArtifact(root, planningDir string, confidence codexPlanConfidence, unresolvedGaps []string, phases []colony.Phase, planningLoop codexPlanningLoop, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) (string, bool, error) {
 	path := filepath.Join(planningDir, "phase-plan.json")
 	relPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json"))
 	if shouldPreserveWorkerArtifact(root, relPath, snapshots, claimedPlanningFiles(dispatches)) {
@@ -2207,9 +2350,10 @@ func writeWorkerPlanArtifact(root, planningDir string, confidence codexPlanConfi
 	}
 
 	artifact := codexWorkerPlanArtifact{
-		Confidence: confidence,
-		Gaps:       limitStrings(uniqueSortedStrings(unresolvedGaps), 4),
-		Phases:     make([]codexWorkerPlanPhase, 0, len(phases)),
+		Confidence:   confidence,
+		Gaps:         limitStrings(uniqueSortedStrings(unresolvedGaps), 4),
+		PlanningLoop: &planningLoop,
+		Phases:       make([]codexWorkerPlanPhase, 0, len(phases)),
 	}
 	for _, phase := range phases {
 		entry := codexWorkerPlanPhase{
