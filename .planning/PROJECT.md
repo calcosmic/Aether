@@ -34,33 +34,20 @@ That means:
 
 ## Current State
 
-- **v1.22 Grounded Planning + Ceremony Restore in progress**
-- **Product version: v1.0.39**
+- **v1.22 Grounded Planning + Ceremony Restore shipped**
+- **Product version: v1.0.40**
+- v1.22 shipped: Survey noise filtering, source anchors, grounding gate, decision conflict detection, ceremony restore via PlaybookLoader
 - v1.21 shipped: TS host is production orchestrator with dispatch, ceremony, iteration, spawning, hive wisdom
-- Known bug: survey trusts dependency/cache paths (.venv, __pycache__); plans come out generic
-- Known gap: ceremony playbooks exist but commands no longer load them; YAML/TS/Go all try to be conductor
 - Go = truth (state, gates, finalizers), playbooks = soul, YAML = packaging
 - 465 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
 
-## Current Milestone: v1.22 Grounded Planning + Ceremony Restore
+## Current Milestone: Next — TBD
 
-**Goal:** Make Aether's planning evidence-based and ceremony-rich again — plans grounded in real repo files, not dependency noise; ceremony driven by playbooks, not duplicated across YAML/TS/Go.
+**Goal:** Planning next milestone. Run `/gsd-new-milestone` to define scope.
 
-**Target features:**
-- Survey noise filtering (exclude .venv, caches, site-packages, binary artifacts from architecture inference)
-- Repo-owned source anchors for planning (surfaces real project files, not dependencies)
-- Discuss-decision binding into planning as hard constraints
-- Plan-grounding validation gate (reject generic plans when specific targets exist)
-- Build ceremony restore: wrapper loads build-wave.md, Go manifest-only, native worker spawning
-- Plan ceremony restore: Scout/Route-Setter native flow with grounding gate
-- One execution path per workflow per platform (no dual conductors)
-- Slim YAML to packaging; ceremony lives in playbooks
-- Regression test: M4L fixture with .venv noise must produce grounded plan
+**Previous Milestone: v1.22 Grounded Planning + Ceremony Restore** — Shipped 2026-05-19
 
-**Non-goals:**
-- New runtime features (spawning, iteration, hive — already shipped)
-- Codex ceremony overhaul (Codex uses command-guide + skills, separate lane)
-- Interactive shell or dashboard redesign
+Key accomplishments: Survey noise filtering, source anchors, grounding gate, decision conflict detection, PlaybookLoader ceremony restore. 22/22 requirements, 84 new tests, zero tech debt.
 
 ## Previous Milestone: v1.21 Live Colony
 
@@ -167,6 +154,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.19 TypeScript Host Cutover + Oracle Confidence Recovery -- Phases 124-129 (shipped 2026-05-15)
 - [x] v1.20 Host Contract Hardening and Wrapper Reality Check -- Phases 130-135 (shipped 2026-05-15)
 - [ ] v1.21 Live Colony -- Phases 136+
+- [x] v1.22 Grounded Planning + Ceremony Restore -- Phases 141-144 (shipped 2026-05-19)
 
 ## Requirements
 

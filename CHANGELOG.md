@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.40] - 2026-05-19
+
+### Added
+- Unified 5 divergent skip lists into canonical ScanFilter with 36-entry noise map (Python, Node, Go, Rust, build artifacts, caches)
+- Source anchor extraction from clean survey output (top 50 repo-owned files) wired through to planner context
+- Plan-grounding validation gate with soft warnings when generic plans meet available anchors
+- Decision conflict detection with 9 contradiction pairs and FEEDBACK pheromone emission
+- PlaybookLoader TS module restoring ceremony — loads 5 build + 2 plan playbooks via resolution chain
+- YAML slimmed to packaging-only (orchestration removed from build.yaml and plan.yaml)
+- M4L regression test proving end-to-end survey-to-grounding pipeline
+- Execution path audit test verifying one conductor per workflow per platform
+- Codex command-guide smoke tests (build, plan) verifying output without playbook loading
+- Cross-platform parity tests (8/8 passing)
+- 84 new tests across 4 phases
+
+### Changed
+- Bumped version to 1.0.40
+
 ## [1.0.39] - 2026-05-17
 
 ### Added

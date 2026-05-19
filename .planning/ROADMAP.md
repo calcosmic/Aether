@@ -24,123 +24,31 @@
 - **v1.19 TypeScript Host Cutover + Oracle Confidence Recovery** - Phases 124-129 (shipped 2026-05-15) — [Archive](milestones/v1.19-ROADMAP.md)
 - **v1.20 Host Contract Hardening and Wrapper Reality Check** - Phases 130-135 (shipped 2026-05-15) — [Archive](milestones/v1.20-ROADMAP.md)
 - **v1.21 Live Colony** - Phases 136-140 (shipped 2026-05-18) — [Archive](milestones/v1.21-ROADMAP.md)
-- **v1.22 Grounded Planning + Ceremony Restore** - Phases 141-144 (shipped 2026-05-18)
+- **v1.22 Grounded Planning + Ceremony Restore** - Phases 141-144 (shipped 2026-05-19) — [Archive](milestones/v1.22-ROADMAP.md)
 
 ## Phases
 
-### Phase 141: Survey Noise Filter + Source Anchors
+<details>
+<summary>v1.22 Grounded Planning + Ceremony Restore (Phases 141-144) — SHIPPED 2026-05-19</summary>
 
-**Goal:** Fix the root cause of generic plans — survey trusts dependency/cache paths instead of repo-owned source files.
+- [x] Phase 141: Survey Noise Filter + Source Anchors (2/2 plans)
+- [x] Phase 142: Grounding Gate + Decision Binding (2/2 plans)
+- [x] Phase 143: Build + Plan Ceremony Restore (2/2 plans)
+- [x] Phase 144: Regression + Execution Path Cleanup (2/2 plans)
 
-**Requirements:**
-- GROUND-01: Unify 5 divergent skip lists into one canonical `ScanFilter` in `pkg/codegraph/scan_filter.go`
-- GROUND-02: Extend filter to cover `.venv`, `__pycache__`, `site-packages`, `.pytest_cache`, `.tox`, `.mypy_cache`, `node_modules/.cache`, `.gradle`, `.cargo/registry`
-- GROUND-03: Extract source anchors from cleaned survey output (top 50 non-dependency source files, depth-first)
-- GROUND-04: Write source anchors to survey output so colony-prime and planners can use them
-- GROUND-05: Regression test: M4L fixture with `.venv` noise produces clean survey with zero `.venv` references
+</details>
 
-**Plans:** 2/2 plans complete
+<details>
+<summary>v1.21 Live Colony (Phases 136-140) — SHIPPED 2026-05-18</summary>
 
-Plans:
-- [x] 141-01-PLAN.md — Create canonical ScanFilter, migrate 5 call sites, add regression tests
-- [x] 141-02-PLAN.md — Extract source anchors, wire through survey output to planner context
+- [x] Phase 136: Production dispatch with ceremony (4/4 plans)
+- [x] Phase 137: Worker-to-worker spawning (4/4 plans)
+- [x] Phase 138: Confidence-driven build iteration (4/4 plans)
+- [x] Phase 139: Hive wisdom injection (3/3 plans)
+- [x] Phase 140: Hardening and validation (3/3 plans)
 
-**Why first:** Everything else depends on clean survey data. Grounding, anchors, and ceremony all assume the survey is right. Currently it's wrong.
-
-**Risk:** Low. The skip lists already exist — this unifies and extends them. Zero new dependencies.
-
----
-
-### Phase 142: Grounding Gate + Decision Binding
-
-**Goal:** Make plans specific to the repo and bind discuss decisions into planning as hard constraints.
-
-**Requirements:**
-- GROUND-06: Plan-grounding validation gate — scan plan tasks for concrete file/path references; emit soft warning when anchors exist but plan has zero file refs
-- GROUND-07: Gate is soft (warning, not rejection) — research/architecture phases may legitimately lack file targets
-- GROUND-08: Discuss decision binding — auto-emit REDIRECT pheromones when `HardConstraint: true` decisions are resolved
-- GROUND-09: Colony-prime injects resolved decisions into planner worker context
-- GROUND-10: Decision conflict detection — warn when resolved decisions contradict each other (e.g., "use PostgreSQL" + "keep serverless")
-
-**Why second:** Depends on Phase 141 for clean anchors. The grounding gate is only useful if the survey is trustworthy.
-
-**Risk:** Low-medium. Grounding regex is simple. Decision conflict detection needs design but scope is small.
-
-**Plans:** 2/2 plans complete
-
-Plans:
-- [x] 142-01-PLAN.md — Plan-grounding validation gate + planner brief anchor hint (GROUND-06, GROUND-07)
-- [x] 142-02-PLAN.md — Decision conflict detection with FEEDBACK pheromone emission (GROUND-10)
-
-
----
-
-### Phase 143: Build + Plan Ceremony Restore
-
-**Goal:** Restore playbook-driven ceremony for build and plan workflows — one conductor, not three.
-
-**Requirements:**
-- CEREMONY-01: TS host reads build playbooks (build-prep, build-context, build-wave, build-verify, build-complete) and follows their step sequences
-- CEREMONY-02: TS host reads plan playbooks and follows Scout → Route-Setter flow with grounding gate integration
-- CEREMONY-03: YAML slimmed to packaging only — remove orchestration procedure from `build.yaml` wrapper_additions.orchestration (the 15-step duplicate)
-- CEREMONY-04: One conductor per platform: Claude/OpenCode wrappers + TS host (playbook-driven), Codex (runtime-native command-guide + skills)
-- CEREMONY-05: Go ceremony adapter emits events; TS host renders them following playbook timing
-- CEREMONY-06: Document-injection pattern for playbook consumption (not step-parsing) — same pattern as existing Go `renderBuildPlaybookContext`
-
-**Plans:** 2/2 plans complete
-
-Plans:
-- [x] 143-01-PLAN.md — PlaybookLoader module, plan playbooks, YAML orchestration removal (CEREMONY-01, CEREMONY-02, CEREMONY-03, CEREMONY-06)
-- [x] 143-02-PLAN.md — Host integration, conductor unification, ceremony-coupled test updates (CEREMONY-04, CEREMONY-05)
-
-**Why third:** Ceremony restore is medium complexity and touches all 3 platform surfaces. Requires grounding (Phase 142) to be meaningful — pretty ceremony on bad plans is worse than no ceremony.
-
-**Risk:** Medium-high. 465 TS tests are ceremony-coupled and will break. Phase-by-phase test updates needed.
-
----
-
-### Phase 144: Regression + Execution Path Cleanup
-
-**Goal:** Prove everything works end-to-end. One declared execution path per workflow per platform. Clean up stragglers.
-
-**Requirements:**
-- CLEAN-01: M4L regression test: `.venv` fixture produces grounded plan with concrete file references, zero generic tasks
-- CLEAN-02: Execution path audit: one declared path per workflow (build, plan, continue, colonize, seal) per platform (Claude/OpenCode, Codex)
-- CLEAN-03: Audit ceremony-coupled TS tests — document expected breakage from Phase 143 changes, fix broken tests
-- CLEAN-04: YAML packaging-only verification — no orchestration logic remains in YAML wrapper_additions
-- CLEAN-05: Codex smoke test: command-guide + skills produce correct behavior without playbook loading
-- CLEAN-06: Cross-platform parity: build ceremony output matches between Claude Code and OpenCode
-
-**Plans:** 2/2 plans complete
-
-Plans:
-- [x] 144-01-PLAN.md — Fix YAML anchors, Go test failures, CLI flag audit (CLEAN-03, CLEAN-04)
-- [x] 144-02-PLAN.md — M4L regression test, execution path audit, Codex smoke, parity check (CLEAN-01, CLEAN-02, CLEAN-05, CLEAN-06)
-
-**Why last:** Validates all previous phases. The M4L fixture is the proof that the entire pipeline (survey → anchor → grounding → ceremony) works correctly.
-
-**Risk:** Medium. Test fixes from Phase 143 changes are expected but bounded.
-
-## Phase Dependencies
-
-```
-141 (Noise Filter + Anchors)
-  └── 142 (Grounding Gate + Decisions)
-        └── 143 (Ceremony Restore)
-              └── 144 (Regression + Cleanup)
-```
-
-Strict sequential. Each phase builds on the previous one.
-
-## Success Criteria
-
-- M4L fixture produces a grounded plan with zero `.venv` references
-- Plans reference concrete repo files, not generic descriptions
-- Discuss decisions appear as REDIRECT pheromones in planning context
-- Build ceremony comes from playbooks, not hardcoded TS/Go logic
-- One execution path per workflow per platform — no dual conductors
-- All 2900+ Go tests and 465+ TS tests green
+</details>
 
 ## Next Milestone
 
-_Planning phases 141-144 defined. Run `/gsd-plan-phase 141` to start._
+_Planning next milestone. Run `/gsd-new-milestone` to start._

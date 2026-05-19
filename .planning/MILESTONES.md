@@ -1,5 +1,28 @@
 # Aether Milestones
 
+## v1.22 Grounded Planning + Ceremony Restore (Shipped: 2026-05-19)
+
+**Phases completed:** 4 phases, 8 plans, 22 requirements
+
+**Key accomplishments:**
+
+1. Unified 5 divergent skip lists into canonical ScanFilter with 36-entry noise map — survey now ignores .venv, caches, build artifacts
+2. Source anchors extracted from clean survey (top 50 repo-owned files) wired through to planner context via anchors.json
+3. Plan-grounding validation gate + decision conflict detection with 9 contradiction pairs — plans must reference real files
+4. PlaybookLoader TS module restored ceremony — loads 5 build + 2 plan playbooks, YAML slimmed to packaging only
+5. 84 new tests proving end-to-end pipeline: survey → anchors → grounding → ceremony → regression
+
+**Stats:** 44 commits, 53 files changed, +7,396 / -151 lines, ~4 hours
+
+**Tech Debt:** None. Zero anti-patterns.
+
+**Archives:**
+- [Roadmap](milestones/v1.22-ROADMAP.md)
+- [Requirements](milestones/v1.22-REQUIREMENTS.md)
+- [Audit](milestones/v1.22-MILESTONE-AUDIT.md)
+
+---
+
 ## v1.21 Live Colony (Shipped: 2026-05-18)
 
 **Phases completed:** 5 phases, 18 plans, 25 tasks

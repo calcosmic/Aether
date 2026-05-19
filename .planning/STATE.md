@@ -2,32 +2,32 @@
 gsd_state_version: 1.0
 milestone: v1.22
 milestone_name: Grounded Planning + Ceremony Restore
-status: milestone_complete
-last_updated: "2026-05-18T22:57:15Z"
-last_activity: 2026-05-18 -- 144-02: M4L regression, Codex smoke tests, execution path audit
+status: milestone_archived
+last_updated: "2026-05-19T12:00:00Z"
+last_activity: 2026-05-19 -- v1.22 milestone archived, product v1.0.40 published
 progress:
   total_phases: 4
-  completed_phases: 5
+  completed_phases: 4
   total_plans: 8
   completed_plans: 8
-  percent: 125
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-18)
+See: .planning/PROJECT.md (updated 2026-05-19)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 144 -- regression-execution-path-cleanup (plan 01 complete)
+**Current focus:** Planning next milestone — run `/gsd-new-milestone` to start
 
 ## Current Position
 
-Phase: 144
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-18
+Phase: N/A
+Plan: N/A
+Status: Milestone archived
+Last activity: 2026-05-19
 
 ## Known Blockers
 
@@ -36,9 +36,7 @@ Last activity: 2026-05-18
 
 ## Next Actions
 
-1. Execute Phase 144 plan 02 (if exists)
-2. Or plan next phase
-2. Execute Phase 144 plan 01
+1. Start next milestone with `/gsd-new-milestone`
 
 ## Key Decisions (Carried Forward)
 
@@ -46,35 +44,13 @@ Last activity: 2026-05-18
 - Go remains sole authority for state mutation and finalizers
 - Oracle state uses atomic Go-owned storage with interrupt recovery
 - Simulation is gated behind `--simulate` flag
-- v1.21 roadmap: 5 phases -- production foundation first, then hive, spawning, iteration, hardening
 - worker-dispatch.ts simulateWorkers check already defaults to real dispatch; no source change needed
 - Lifecycle smoke harness (lifecycle.ts) stays simulate-only; production uses dedicated host commands
-- Skill section tests verify existing compactSection behavior without production code changes
-- Auth errors propagate upward from dispatchSingleWorker to halt the build (D-01)
-- Timeout/transient errors mark worker failed and continue remaining workers (D-02)
-- Error classification uses classifyPlatformError (auth/timeout/missing/unknown) from platform-dispatcher
-- Wave-end summaries include per-worker failure names when workers fail (D-02)
-- formatPlatformDiagnosticMessage provides per-platform plain English install messages (D-03)
-- formatPlatformUnavailableMessage accepts optional providerDiagnostics from Go (HOST-08)
 - Build/plan/continue commands use "dispatched" runner type with ceremony rendering and Go finalizers
-- Ceremony renders spawn-plan, wave-start, worker-complete, closeout for all real dispatches (HOST-06)
-- Skill injection summary shows count when dispatches have skill_section (D-07)
-- Plan pipeline dispatches Scout/Route-Setter workers with plan-finalize (HOST-03)
-- Continue pipeline dispatches review workers with continue-finalize (HOST-04)
-- Oracle lifecycle dispatches real workers with ceremony rendering; Go-computed confidence drives termination (HOST-05)
-- --dry-run flag renders ceremony preview without spawning workers; DRY RUN badge visible in stderr (HOST-07, D-06)
-- Oracle ceremony uses "build" CeremonyWorkflow since oracle has no dedicated workflow value
-- Dry-run path fetches manifest (read-only), renders ceremony, shows badge, exits without dispatch/finalizer
-- SpawnOrchestrator enforces max depth 2 and budget caps; child naming uses ${parent}-spawn-${index} pattern
-- Cross-phase integration tests verify hive + spawn + iteration compose correctly in unified pipeline
 - PlaybookLoader resolves candidates: absolute -> root+path -> root+playbooks-dir -> hub-system -> hub-root -> bare (mirrors Go)
-- Hub fallback is a feature -- loadPlaybooksForWorkflow finds playbooks in hub when repo-local absent
-- YAML orchestration blocks removed from build.yaml and plan.yaml wrapper_additions; codex_orchestration preserved (CEREMONY-04)
+- YAML orchestration blocks removed from build.yaml and plan.yaml; codex_orchestration preserved (CEREMONY-04)
 - Playbook context is document-injection, not parsed steps -- host.ts loads playbooks and appends to task_brief (CEREMONY-06)
-- Playbook context re-injected after manifest re-fetch in build iteration loop (bug fix)
 - M4L regression test proves end-to-end survey-to-grounding pipeline composition (Phases 141+142)
-- Execution path audit test programmatically verifies one conductor per workflow per platform
-- Codex command-guide smoke tests verify output without playbook loading
 
 ## Operator Next Steps
 
