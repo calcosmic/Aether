@@ -1012,6 +1012,21 @@ func renderPlanVisual(result map[string]interface{}) string {
 	if confidence, ok := result["confidence"].(map[string]interface{}); ok {
 		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", intValue(confidence["overall"])))
 	}
+	if planningLoop, ok := result["planning_loop"].(codexPlanningLoop); ok && planningLoop.TargetConfidence > 0 {
+		b.WriteString(fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s\n",
+			planningLoop.TargetConfidence,
+			planningLoop.Iterations,
+			planningLoop.MaxIterations,
+			planningLoop.StopReason,
+		))
+	} else if planningLoop, ok := result["planning_loop"].(map[string]interface{}); ok && intValue(planningLoop["target_confidence"]) > 0 {
+		b.WriteString(fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s\n",
+			intValue(planningLoop["target_confidence"]),
+			intValue(planningLoop["iterations"]),
+			intValue(planningLoop["max_iterations"]),
+			stringValue(planningLoop["stop_reason"]),
+		))
+	}
 	phases := phaseSliceValue(result["phases"])
 	b.WriteString("Plan size: ")
 	b.WriteString(fmt.Sprintf("%d phases\n\n", len(phases)))

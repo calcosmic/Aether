@@ -12,6 +12,18 @@ The phase to build is: `$ARGUMENTS`
 
 If `$ARGUMENTS` is empty, show: `Usage: /ant-build <phase_number>`
 
+## Ownership Split
+
+| Concern | Owner |
+|---------|-------|
+| Manifest generation | TS host (`aether host build --dry-run`) |
+| Worker spawning | Wrapper (platform Agent tool) |
+| Ceremony rendering | Wrapper (Go ceremony CLI) |
+| State mutation | Go runtime (`build-finalize`) |
+
+The wrapper is the sole conductor for interactive worker spawning. The TS host
+provides the manifest only. See `.aether/docs/wrapper-host-contract.md`.
+
 ## Colony Context
 
 Before planning the dispatch, ground yourself in runtime truth:
@@ -23,31 +35,33 @@ Before planning the dispatch, ground yourself in runtime truth:
 
 Before spawning workers, present active pheromones as a compact steering block:
 
-- `REDIRECT` first — hard constraints.
-- `FOCUS` second — main attention areas.
-- `FEEDBACK` last — lightweight adjustments.
+- `REDIRECT` first -- hard constraints.
+- `FOCUS` second -- main attention areas.
+- `FEEDBACK` last -- lightweight adjustments.
 - Include strength or remaining-life context.
 - If no active signals, say so plainly.
 
 ## Phase Framing
 
-Frame the requested work as `Phase N of M — Name` with a one-line purpose.
+Frame the requested work as `Phase N of M -- Name` with a one-line purpose.
 
 ## Dispatch Manifest
 
-Run the TS host to fetch the authoritative dispatch manifest:
+Fetch the manifest from the TS host in plan-only mode:
 
 ```
-aether host build $ARGUMENTS
+aether host build --dry-run $ARGUMENTS
 ```
 
-The TS host is the sole entry point to the Go CLI for manifest generation. See `.aether/docs/wrapper-host-contract.md`.
+The TS host calls `aether build <phase> --plan-only` and returns JSON without dispatching workers. The wrapper is responsible for spawning from this manifest.
 
-Parse `result.dispatch_manifest`. Save the JSON envelope to a temporary manifest file outside `.aether/data/`.
+Parse `result.manifest.dispatch_manifest`. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+
+If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output.
 
 ## Guided Boundary Gate
 
-Before spawning workers, inspect `result.orchestrator_boundary_guidance`:
+Before spawning workers, inspect `result.manifest.dispatch_manifest` for `orchestrator_boundary_guidance`:
 
 - If active or `next` is `aether discuss`, stop the build flow and route to `aether discuss`. Request a fresh manifest after resolution. Do not reuse the pre-discuss manifest. Rerun `after_discuss_next` after resolution.
 
@@ -60,6 +74,8 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 ```
 
 ## Worker Spawning
+
+The wrapper spawns workers. The TS host does NOT dispatch workers for the interactive path.
 
 For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 
@@ -116,11 +132,12 @@ flow.
 
 ## Guardrails
 
-- Do NOT run direct `aether build` from this wrapper for manifest generation; use `aether host build`.
+- Do NOT run `aether host build` without `--dry-run` from this wrapper; that triggers the TS host dispatched path which duplicates the wrapper's own worker spawning. Always use `aether host build --dry-run`.
 - Do NOT run `aether build --synthetic` after real agent workers complete.
 - Do NOT describe parallel workers as background agents or say you will be notified later.
 - Do NOT read or write colony state files by hand.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, or pheromone files.
 - Do NOT parse visual output as authoritative state.
+- Do NOT expose raw provider stdout/stderr, tokens, or auth probe output; use the Go availability category and sanitized next action.
 - Do NOT invent worker names, castes, or waves; use `dispatch_manifest`.
 - If docs and runtime disagree, runtime wins.

@@ -2824,12 +2824,13 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		}
 	}
 
+	blockingIssues := uniqueSortedStrings(append(blockers, assessment.BlockingIssues...))
 	return codexContinueGateReport{
 		Phase:          phase.ID,
 		GeneratedAt:    now.Format(time.RFC3339),
 		Checks:         checks,
-		Passed:         len(blockers) == 0,
-		BlockingIssues: uniqueSortedStrings(append(blockers, assessment.BlockingIssues...)),
+		Passed:         len(blockingIssues) == 0,
+		BlockingIssues: blockingIssues,
 	}
 }
 

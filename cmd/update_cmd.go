@@ -167,12 +167,27 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			})
 			return nil
 		}
-		// Sync TS host assets from hub and ensure they are built
-		if tsHostErr := syncTsHostFromHub(hubDir, repoDir); tsHostErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: TS host sync skipped: %v\n", tsHostErr)
-		} else {
-			if tsHostErr := ensureTsHostBuilt(repoDir); tsHostErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: TS host build skipped: %v\n", tsHostErr)
+		preTsHostStaleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, syncResult.details)
+		if preTsHostStaleResult.Classification != staleCritical {
+			if _, err := os.Stat(tsHostHubDir(hubDir)); err == nil {
+				if tsHostErr := syncTsHostFromHub(hubDir, repoDir); tsHostErr != nil {
+					syncResult.errors = append(syncResult.errors, fmt.Sprintf("TS host sync failed: %v", tsHostErr))
+				} else if tsHostErr := ensureTsHostBuilt(repoDir); tsHostErr != nil {
+					syncResult.errors = append(syncResult.errors, fmt.Sprintf("TS host build failed: %v", tsHostErr))
+				}
+			} else if err != nil && !os.IsNotExist(err) {
+				syncResult.errors = append(syncResult.errors, fmt.Sprintf("TS host hub check failed: %v", err))
+			}
+			if len(syncResult.errors) > 0 {
+				outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
+					"hub_version":         hubVersion,
+					"local_version":       resolveVersion(),
+					"force":               force,
+					"details":             syncResult.details,
+					"binary_refresh_mode": binaryMode,
+					"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
+				})
+				return nil
 			}
 		}
 
@@ -572,15 +587,18 @@ func staleResultToMap(r stalePublishResult) map[string]interface{} {
 	}
 }
 
-// syncTsHostFromHub copies TS host assets from the hub to the local repo.
-// Returns an error if the hub has no TS host assets.
+// syncTsHostFromHub copies TS host assets from the hub to the local repo. Older
+// hubs without TS host assets are skipped; partial TS host bundles fail.
 func syncTsHostFromHub(hubDir, repoDir string) error {
-	srcDir := filepath.Join(hubDir, "system", "ts-host")
+	srcDir := tsHostHubDir(hubDir)
 	if _, err := os.Stat(srcDir); os.IsNotExist(err) {
 		return nil // No TS host in hub, skip silently
 	}
+	if err := validateTsHostHubArtifacts(hubDir); err != nil {
+		return err
+	}
 
-	dstDir := filepath.Join(repoDir, ".aether", "ts-host")
+	dstDir := tsHostRepoDir(repoDir)
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dstDir, err)
 	}
@@ -588,38 +606,43 @@ func syncTsHostFromHub(hubDir, repoDir string) error {
 	// Sync dist/
 	srcDist := filepath.Join(srcDir, "dist")
 	dstDist := filepath.Join(dstDir, "dist")
-	if _, err := os.Stat(srcDist); err == nil {
-		res := syncDir(srcDist, dstDist, syncOptions{cleanup: true})
-		if len(res.errors) > 0 {
-			return fmt.Errorf("sync dist/: %s", strings.Join(res.errors, "; "))
-		}
+	res := syncDir(srcDist, dstDist, syncOptions{cleanup: true})
+	if len(res.errors) > 0 {
+		return fmt.Errorf("sync dist/: %s", strings.Join(res.errors, "; "))
 	}
 
 	// Copy package.json
 	srcPkg := filepath.Join(srcDir, "package.json")
 	dstPkg := filepath.Join(dstDir, "package.json")
-	if _, err := os.Stat(srcPkg); err == nil {
-		if err := copyFile(srcPkg, dstPkg); err != nil {
-			return fmt.Errorf("copy package.json: %w", err)
-		}
+	if err := copyFile(srcPkg, dstPkg); err != nil {
+		return fmt.Errorf("copy package.json: %w", err)
 	}
 
-	// Copy package-lock.json if present
+	// Copy package-lock.json.
 	srcLock := filepath.Join(srcDir, "package-lock.json")
 	dstLock := filepath.Join(dstDir, "package-lock.json")
-	if _, err := os.Stat(srcLock); err == nil {
-		if err := copyFile(srcLock, dstLock); err != nil {
-			return fmt.Errorf("copy package-lock.json: %w", err)
-		}
+	if err := copyFile(srcLock, dstLock); err != nil {
+		return fmt.Errorf("copy package-lock.json: %w", err)
 	}
 
-	return nil
+	return validateTsHostRepoArtifacts(repoDir)
 }
 
 // ensureTsHostBuilt checks that TS host dependencies are installed and dist/
 // is built. Runs npm ci and npm run build when needed.
 func ensureTsHostBuilt(repoDir string) error {
-	tsHostDir := filepath.Join(repoDir, ".aether", "ts-host")
+	tsHostDir := tsHostRepoDir(repoDir)
+	if err := requireTsHostFile(tsHostDir, "package.json"); err != nil {
+		return err
+	}
+
+	hasRuntimeDeps, err := tsHostHasRuntimeDependencies(tsHostDir)
+	if err != nil {
+		return err
+	}
+	if !hasRuntimeDeps && fileExists(filepath.Join(tsHostDir, filepath.FromSlash(tsHostEntryRelPath))) {
+		return validateTsHostRepoArtifacts(repoDir)
+	}
 
 	// Check npm availability
 	if _, err := exec.LookPath("npm"); err != nil {
@@ -628,7 +651,8 @@ func ensureTsHostBuilt(repoDir string) error {
 
 	nodeModulesDir := filepath.Join(tsHostDir, "node_modules")
 	if _, err := os.Stat(nodeModulesDir); os.IsNotExist(err) {
-		cmd := exec.Command("npm", "ci", "--prefix", tsHostDir)
+		cmd := exec.Command("npm", "ci")
+		cmd.Dir = tsHostDir
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -636,15 +660,18 @@ func ensureTsHostBuilt(repoDir string) error {
 		}
 	}
 
-	distDir := filepath.Join(tsHostDir, "dist")
-	if _, err := os.Stat(distDir); os.IsNotExist(err) {
-		cmd := exec.Command("npm", "run", "build", "--prefix", tsHostDir)
+	distHostPath := filepath.Join(tsHostDir, filepath.FromSlash(tsHostEntryRelPath))
+	if _, err := os.Stat(distHostPath); os.IsNotExist(err) {
+		cmd := exec.Command("npm", "run", "build")
+		cmd.Dir = tsHostDir
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("npm run build failed: %w", err)
 		}
+	} else if err != nil {
+		return fmt.Errorf("stat TS host dist entry: %w", err)
 	}
 
-	return nil
+	return validateTsHostRepoArtifacts(repoDir)
 }

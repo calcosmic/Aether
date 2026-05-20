@@ -103,11 +103,12 @@ Wrappers MAY add the following on top of runtime output:
 
 ### Task-Tool Execution Bridge
 - Requesting the lifecycle dispatch manifest:
+  - Colonize: `aether host colonize`
   - Plan: `aether host plan --depth <choice> --planning-depth <choice>`
   - Build: `aether host build <phase>`
   - Continue (default): `AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard`
-  - Continue (heavy review): `aether host continue --verification-depth heavy`
-  - Seal: `AETHER_OUTPUT_MODE=json aether seal --plan-only`
+  - Continue (classic/heavy review): `aether host continue --classic-ceremony`
+  - Seal: `aether host seal`
 - Honoring `orchestrator_boundary_guidance` before any lifecycle worker spawn
 - Spawning Claude/OpenCode agents from `result.dispatch_manifest`
 - Recording live visibility with `aether spawn-log` and `aether spawn-complete`
@@ -116,8 +117,9 @@ Wrappers MAY add the following on top of runtime output:
   - Continue: `aether continue-finalize --completion-file <file>`
   - Seal: `aether seal-finalize --completion-file <file>`
 
-`colonize` and `seal` are not TS-host orchestration targets yet. Their wrappers
-use direct Go plan-only/finalizer flows until the host registry supports them.
+`colonize` and `seal` are TS-host orchestration targets. Their wrappers still
+return worker completion packets to Go finalizers; TypeScript only fetches the
+manifest and forwards supported flags.
 
 ### Post-Build Summary
 - What was accomplished in colony terms

@@ -15,7 +15,6 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 
 	wrapperPaths := []string{
 		filepath.Join(repoRoot, ".claude", "commands", "ant", "build.md"),
-		filepath.Join(repoRoot, ".claude", "commands", "ant-build.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "build.md"),
 	}
 
@@ -28,15 +27,15 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"FEEDBACK",
 		"strength or remaining-life context",
 		"## Phase Framing",
-		"Phase N of M — Name",
+		"Phase N of M -- Name",
 		"## Dispatch Manifest",
-		"aether host build",
+		"aether host build --dry-run",
 		"temporary manifest file outside `.aether/data/`",
-		"result.dispatch_manifest",
+		"result.manifest.dispatch_manifest",
 		"## Runtime Spawn Ceremony",
 		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 		"Do not set `run_in_background`",
-		"Do NOT run direct `aether build` from this wrapper for manifest generation; use `aether host build`.",
+		"Do NOT run `aether host build` without `--dry-run` from this wrapper",
 		"Do NOT run `aether build --synthetic` after real",
 		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file",
@@ -44,11 +43,12 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 	}
 
 	inOrder := []string{
+		"## Ownership Split",
 		"## Colony Context",
 		"## Active Signals",
 		"## Phase Framing",
 		"## Dispatch Manifest",
-		"aether host build",
+		"aether host build --dry-run",
 		"## Runtime Spawn Ceremony",
 		"AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file",
@@ -74,6 +74,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 			"\nAETHER_OUTPUT_MODE=visual aether build $ARGUMENTS\n",
 			"\nAETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only\n",
 			"Do NOT run `aether build` without `--plan-only` from this wrapper.",
+			"Do NOT run direct `aether build` from this wrapper for manifest generation",
 		} {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s still contains old pass-through contract %q", wrapperPath, forbidden)

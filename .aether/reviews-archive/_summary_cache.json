@@ -1,11 +1,11 @@
 {
-  "text": "## Prior Reviews\n\n- Security (2 open):  -- , INFO -- \n- Quality (1 open): INFO -- \n- Testing (4 open):  -- ,  --  +2 more\n- History (1 open):  -- \n",
+  "text": "## Prior Reviews\n\n- Resilience (17 open): MEDIUM -- .aether/ts-host/src/go-bridge.ts:136 callGoJSON returns parsed.result as T without verifying r..., MEDIUM -- .aether/ts-host/src/worker-dispatch.ts:315 claims.status is cast as TerminalWorkerStatus without val... +15 more\n- Testing (13 open):  -- ,  --  +11 more\n- Bugs (4 open)\n- History (1 open):  -- \n",
   "domain_counts": {
+    "bugs": 4,
     "history": 1,
-    "quality": 1,
-    "security": 2,
-    "testing": 4
+    "resilience": 17,
+    "testing": 13
   },
-  "total_open": 8,
-  "cache_write_at": "2026-05-17T19:43:40Z"
+  "total_open": 35,
+  "cache_write_at": "2026-05-20T17:39:53Z"
 }

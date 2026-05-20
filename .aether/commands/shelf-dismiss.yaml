@@ -1,5 +1,5 @@
 name: ant-shelf-dismiss
-description: "Dismiss a shelf backlog item by ID"
+description: "🗑️ Dismiss a shelf backlog item by ID"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether shelf-dismiss $ARGUMENTS"

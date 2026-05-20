@@ -20,16 +20,18 @@ func scanCeremonyIntegrity(fc *fileChecker) []HealthIssue {
 	return issues
 }
 
-// stateChangingCommands lists commands that should have stage marker
-// ceremony in their wrapper markdown.
+// stateChangingCommands lists commands that should reference runtime
+// ceremony commands in their wrapper markdown.
 var stateChangingCommands = []string{"build", "continue", "init", "seal", "plan"}
 
-// stageMarkerPattern matches stage markers in the form "── ... ──".
-var stageMarkerPattern = regexp.MustCompile(`──.*──`)
+// ceremonyRefPattern matches runtime ceremony command references in wrappers.
+// Wrappers delegate ceremony rendering to the Go runtime via subcommands
+// like "aether ceremony spawn-plan", "aether ceremony wave-start", etc.
+var ceremonyRefPattern = regexp.MustCompile(`aether ceremony`)
 
-// checkStageMarkers verifies that state-changing command wrappers contain
-// stage marker references, and that YAML source files exist for each
-// state-changing command.
+// checkStageMarkers verifies that state-changing command wrappers reference
+// the runtime ceremony commands (not literal stage markers), and that YAML
+// source files exist for each state-changing command.
 func checkStageMarkers(fc *fileChecker) []HealthIssue {
 	var issues []HealthIssue
 
@@ -46,9 +48,9 @@ func checkStageMarkers(fc *fileChecker) []HealthIssue {
 			continue
 		}
 
-		if !stageMarkerPattern.Match(content) {
+		if !ceremonyRefPattern.Match(content) {
 			issues = append(issues, issueWarning("ceremony", cmd,
-				fmt.Sprintf("Wrapper for '%s' has no stage markers (state-changing command should include ceremony)", cmd)))
+				fmt.Sprintf("Wrapper for '%s' has no runtime ceremony references (state-changing command should reference 'aether ceremony')", cmd)))
 		}
 
 		// Verify YAML source exists
@@ -106,7 +108,9 @@ func checkContextClearGuidance(fc *fileChecker) []HealthIssue {
 // emojiPattern matches Unicode emoji characters commonly used in command
 // descriptions and wrapper markdown. Covers emoji in the ranges used by
 // commandEmojiMap and casteEmojiMap, including the variation selector U+FE0F.
-var emojiPattern = regexp.MustCompile(`[\x{1F300}-\x{1FAFF}]\x{FE0F}?`)
+// Ranges: U+2600-U+27BF (misc symbols, dingbats), U+2B00-U+2BFF (arrows),
+// U+1F300-U+1FAFF (full emoji range).
+var emojiPattern = regexp.MustCompile(`[\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{1F300}-\x{1FAFF}]\x{FE0F}?`)
 
 // extractEmojisFromMarkdown returns unique emoji characters found in the
 // given markdown content.

@@ -1,5 +1,5 @@
 name: ant-shelf-add
-description: "Add a note to the Aether shelf backlog"
+description: "📝 Add a note to the Aether shelf backlog"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether shelf-add $ARGUMENTS"

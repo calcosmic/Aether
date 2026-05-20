@@ -1,48 +1,60 @@
 {
   "entries": [
     {
-      "id": "bug-2-001",
-      "phase": 2,
-      "phase_name": "Honest Plan Orchestration Across Go and TypeScript",
+      "id": "bug-3-001",
+      "phase": 3,
       "agent": "tracker",
-      "agent_name": "Debug-72-r4",
-      "generated_at": "2026-05-16T20:48:23Z",
+      "agent_name": "Trace-70-r4",
+      "generated_at": "2026-05-20T13:41:42Z",
       "status": "open",
-      "severity": "HIGH",
-      "description": ".aether/ts-host/src/lifecycle.ts maps plan-only dispatches into status=completed and writes a top-level synthetic phase_plan before calling plan-finalize; no real planning dispatcher supplies those results."
+      "severity": "WARNING",
+      "file": "cmd/medic_ceremony.go",
+      "line": 28,
+      "category": "ceremony-check-logic",
+      "description": "stageMarkerPattern regex (──.*──) looks for literal stage markers in wrapper .md files, but wrappers delegate ceremony rendering to the Go runtime (aether ceremony spawn-plan/wave-start/worker-complete/closeout). Stage markers have never existed in the wrapper markdown -- they are runtime-rendered output. The check produces 5 false-positive warnings for build, continue, init, seal, and plan.",
+      "suggestion": "Either remove checkStageMarkers from scanCeremonyIntegrity (wrappers are not supposed to contain stage markers), or change it to verify that wrappers reference the runtime ceremony commands (spawn-plan, wave-start, worker-complete, closeout) instead of looking for literal ── markers."
     },
     {
-      "id": "bug-2-002",
-      "phase": 2,
-      "phase_name": "Honest Plan Orchestration Across Go and TypeScript",
+      "id": "bug-3-002",
+      "phase": 3,
       "agent": "tracker",
-      "agent_name": "Debug-72-r4",
-      "generated_at": "2026-05-16T20:48:23Z",
+      "agent_name": "Trace-70-r4",
+      "generated_at": "2026-05-20T13:41:42Z",
       "status": "open",
-      "severity": "HIGH",
-      "description": "cmd/codex_plan_finalize.go returns completion.PhasePlan before checking route-setter-owned phase plans or claimed fresh artifacts, then labels the output external-task/external planning workers."
+      "severity": "WARNING",
+      "file": "cmd/medic_ceremony.go",
+      "line": 109,
+      "category": "emoji-regex-range",
+      "description": "emojiPattern regex [\\x{1F300}-\\x{1FAFF}] misses emojis outside that Unicode range. Six command emojis fall outside this range: entomb (U+26B0), insert-phase (U+2795), quick (U+26A1), run (U+26A1), verify-castes (U+2713), shelf-promote (U+2B06). These wrappers have emojis in their descriptions but the medic reports them as missing.",
+      "suggestion": "Extend the emojiPattern regex to cover Miscellaneous Symbols (U+2600-U+26FF), Dingbats (U+2700-U+27BF), and Miscellaneous Symbols and Arrows (U+2B00-U+2BFF) ranges. Or use a more comprehensive Unicode emoji property match."
     },
     {
-      "id": "bug-2-003",
-      "phase": 2,
-      "phase_name": "Honest Plan Orchestration Across Go and TypeScript",
+      "id": "bug-3-003",
+      "phase": 3,
       "agent": "tracker",
-      "agent_name": "Debug-72-r4",
-      "generated_at": "2026-05-16T20:48:23Z",
+      "agent_name": "Trace-70-r4",
+      "generated_at": "2026-05-20T13:41:42Z",
       "status": "open",
-      "severity": "MEDIUM",
-      "description": "buildWorkerPlanPhases skips empty task goals but still appends phases, while runCodexPlanFinalize only checks len(phases)\u003e0, so a phase_plan with phases but no tasks can be persisted."
+      "severity": "INFO",
+      "file": ".aether/commands/queen-compose.yaml",
+      "line": 2,
+      "category": "missing-emoji-description",
+      "description": "9 YAML source files (and their generated wrappers) lack the expected emoji in their description field: queen-compose, reference-index, reference-list, reference-match, shelf-add, shelf-dismiss, shelf-list, shelf-promote, shelf. The runtime commandEmojiMap defines emojis for all of these commands.",
+      "suggestion": "Add the matching commandEmojiMap emoji to the description field in each YAML source file, then regenerate the Claude and OpenCode wrappers."
     },
     {
-      "id": "bug-2-004",
-      "phase": 2,
-      "phase_name": "Honest Plan Orchestration Across Go and TypeScript",
+      "id": "bug-3-004",
+      "phase": 3,
       "agent": "tracker",
-      "agent_name": "Debug-72-r4",
-      "generated_at": "2026-05-16T20:48:23Z",
+      "agent_name": "Trace-70-r4",
+      "generated_at": "2026-05-20T13:41:42Z",
       "status": "open",
-      "severity": "MEDIUM",
-      "description": "lifecycle-honesty.test.ts covers simulation opt-in and platform availability, while boundary tests cover tmpdir writes; neither asserts that runLifecycle avoids completed planning claims."
+      "severity": "INFO",
+      "file": "cmd/codex_visuals.go",
+      "line": 116,
+      "category": "documentation",
+      "description": "commandEmojiMap and casteEmojiMap are the ground truth for ceremony emojis. The medic check correctly uses these maps to verify wrapper consistency. The data is authoritative and correctly maintained.",
+      "suggestion": "No change needed. This is reference evidence for the investigation."
     }
   ],
   "summary": {
@@ -50,10 +62,10 @@
     "open": 4,
     "resolved": 0,
     "by_severity": {
-      "high": 2,
-      "medium": 2,
+      "high": 0,
+      "medium": 0,
       "low": 0,
-      "info": 0
+      "info": 2
     }
   }
 }

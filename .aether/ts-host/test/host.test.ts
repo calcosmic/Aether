@@ -27,7 +27,7 @@ import {
 } from "../src/host.js";
 
 import type { DispatchResult } from "../src/worker-dispatch.js";
-import type { Platform } from "../src/platform-dispatcher.js";
+import type { BuildDispatch } from "../src/types.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
 import {
   __setCreateCeremonyAdapter,
@@ -66,7 +66,7 @@ describe("host integration", () => {
       "--planning-depth", "standard",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -83,7 +83,7 @@ describe("host integration", () => {
       "--planning-depth=standard",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -100,7 +100,7 @@ describe("host integration", () => {
       "--worker-timeout", "5m",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -118,7 +118,7 @@ describe("host integration", () => {
       "--accept",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -135,7 +135,7 @@ describe("host integration", () => {
       "--synthetic",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -151,7 +151,7 @@ describe("host integration", () => {
       "--force",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "plan", "--plan-only",
@@ -167,7 +167,7 @@ describe("host integration", () => {
       "--light",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "build", "1", "--plan-only",
@@ -182,7 +182,7 @@ describe("host integration", () => {
       "--worker-timeout", "15m",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "build", "2", "--plan-only",
@@ -198,7 +198,7 @@ describe("host integration", () => {
       "--verification-depth", "heavy",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "build", "3", "--plan-only",
@@ -219,7 +219,7 @@ describe("host integration", () => {
       "--verbose",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "build", "5", "--plan-only",
@@ -250,7 +250,7 @@ describe("host integration", () => {
       "--worker-timeout", "5m",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "colonize", "--plan-only",
@@ -266,7 +266,7 @@ describe("host integration", () => {
       "--verification-depth", "heavy",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -281,7 +281,7 @@ describe("host integration", () => {
       "--verification-depth=heavy",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -297,7 +297,7 @@ describe("host integration", () => {
       "--heavy",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -313,7 +313,7 @@ describe("host integration", () => {
       "--skip-watchers",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -329,7 +329,7 @@ describe("host integration", () => {
       "--worker-timeout", "10m",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -348,7 +348,7 @@ describe("host integration", () => {
       "--no-learn",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -366,7 +366,7 @@ describe("host integration", () => {
       "--classic-ceremony",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "continue", "--plan-only",
@@ -381,7 +381,7 @@ describe("host integration", () => {
       "--force",
     ]);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.deepStrictEqual(args, [
       "seal", "--plan-only",
@@ -406,7 +406,7 @@ describe("host integration", () => {
     });
 
     const parsed = parseArgs(["node", "host.js", "plan"]);
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     // Simulate what main() would do
     const result = { ok: true };
@@ -501,7 +501,7 @@ describe("dispatched build runner", () => {
 
     // Mock detectAvailablePlatforms
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as Platform,
+      "claude" as const,
     ]);
   });
 
@@ -518,7 +518,7 @@ describe("dispatched build runner", () => {
 
   it("build dispatched runner calls Go manifest with build --plan-only", () => {
     const parsed = parseArgs(["node", "host.js", "build", "1"]);
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.equal(args[0], "build");
     assert.equal(args[1], "1");
@@ -529,7 +529,7 @@ describe("dispatched build runner", () => {
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
     assert.equal(parsed.simulate, true, "--simulate should set parsed.simulate to true");
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
     assert.ok(args.includes("--synthetic"), "--simulate should forward as --synthetic to Go");
   });
 
@@ -638,7 +638,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
     const allCapturedDispatches: unknown[][] = [];
     __setDispatchWorkers(async (_opts, dispatches) => {
       allCapturedDispatches.push(dispatches);
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "completed",
         summary: "Done",
@@ -650,7 +650,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     // Use --max-iterations 1 to ensure single iteration (confidence high from test_results)
@@ -711,7 +711,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
 
     __setDispatchWorkers(async (_opts, dispatches) => {
       capturedDispatches = dispatches;
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "completed",
         summary: "Done",
@@ -720,7 +720,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "plan", "--simulate"]);
@@ -784,7 +784,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
     const originalStdoutWrite = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stdoutOutput += chunk;
-      return originalStdoutWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStdoutWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stdout.write;
 
     try {
@@ -841,7 +841,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
     const originalStdoutWrite = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stdoutOutput += chunk;
-      return originalStdoutWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStdoutWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stdout.write;
 
     try {

@@ -36,7 +36,7 @@ import {
 
 import type { CeremonyAdapter, CeremonyWorkflow } from "../src/ceremony-adapter.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
-import type { Platform } from "../src/platform-dispatcher.js";
+import type { BuildDispatch } from "../src/types.js";
 
 // ---------------------------------------------------------------------------
 // Shared mock helpers
@@ -158,11 +158,11 @@ function setupMocks(harness: TestHarness): () => void {
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
     if (typeof chunk === "string") harness.stderrOutput += chunk;
-    return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+    return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
   }) as typeof process.stderr.write;
 
   __setDetectAvailablePlatforms(async () => [
-    { name: "claude", cliCommand: "claude" } as unknown as Platform,
+    "claude" as const,
   ]);
 
   return () => {
@@ -464,7 +464,7 @@ describe("E2E: full iteration lifecycle", () => {
     __setDispatchWorkers(async (_opts, dispatches) => {
       harness.dispatchCallCount++;
       harness.capturedAllDispatches.push(dispatches);
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "failed" as const,
         summary: "Failed",
@@ -886,7 +886,7 @@ describe("E2E: edge cases", () => {
     __setDispatchWorkers(async (_opts, dispatches) => {
       harness.dispatchCallCount++;
       harness.capturedAllDispatches.push(dispatches);
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "failed" as const,
         summary: "Failed",

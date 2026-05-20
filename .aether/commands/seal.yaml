@@ -2,7 +2,7 @@ name: ant-seal
 description: "🏺 Seal the colony with Crowned Anthill milestone"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS"
+  command: "aether host seal $ARGUMENTS"
 codex_orchestration:
   category: "semi-intelligent"
   skill: "aether-colony-build-cycle"
@@ -12,7 +12,7 @@ wrapper_contract:
   manifest: "result.seal_manifest"
   finalizer: "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>"
   instructions: |
-    1. Run `AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+    1. Run `aether host seal $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     2. If the runtime returns blockers, surface them and stop.
     3. Parse `result.seal_manifest`.
     4. Before rendering spawn ceremonies or spawning final-review workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the seal flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
@@ -30,7 +30,7 @@ wrapper_contract:
     16. Follow the runtime's Porter readiness output from visual mode; do not deliver unless the user selects delivery actions.
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
-  - "Do not run `aether seal` without `--plan-only` from Claude/OpenCode orchestration unless the user explicitly asks for raw/no-orchestration."
+  - "Do not bypass `aether host seal` from Claude/OpenCode orchestration unless the user explicitly asks for raw/no-orchestration."
   - "Do not run Porter delivery commands unless the user explicitly chooses them after seal-finalize."
   - "Do not describe platform reviewers as background agents or replace the live worker stack with a markdown table."
   - "Do not drop structured reviewer findings; seal-finalize persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied."

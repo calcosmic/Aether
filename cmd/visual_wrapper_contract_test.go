@@ -38,13 +38,13 @@ func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	// Workflows that still use full inline ceremony in wrappers
-	legacyWorkflows := []string{"colonize", "seal", "swarm"}
-	// Workflows that delegate manifest fetch to TS host (plan/build/continue)
-	hostWorkflows := []string{"build", "plan", "continue"}
+	// Workflows that render full worker ceremony in wrappers
+	workerTheatreWorkflows := []string{"colonize", "seal", "swarm"}
+	// Workflows that delegate manifest fetch to TS host
+	hostWorkflows := []string{"colonize", "build", "plan", "continue", "seal"}
 
 	for _, platformDir := range []string{".claude/commands/ant", ".opencode/commands/ant"} {
-		for _, workflow := range legacyWorkflows {
+		for _, workflow := range workerTheatreWorkflows {
 			wrapperPath := filepath.Join(repoRoot, platformDir, workflow+".md")
 			content, err := os.ReadFile(wrapperPath)
 			if err != nil {
@@ -87,13 +87,13 @@ func TestWrapperOrchestratedCommandsPreserveLiveWorkerCeremony(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	// Legacy commands with full inline ceremony
-	legacyCommands := []string{"colonize", "seal", "swarm"}
-	// TS host commands with thinner wrappers
-	hostCommands := []string{"build", "plan", "continue"}
+	// Commands with full inline worker ceremony
+	workerTheatreCommands := []string{"colonize", "seal", "swarm"}
+	// TS host commands with host-backed manifest generation
+	hostCommands := []string{"colonize", "build", "plan", "continue", "seal"}
 
 	for _, platformDir := range []string{".claude/commands/ant", ".opencode/commands/ant"} {
-		for _, command := range legacyCommands {
+		for _, command := range workerTheatreCommands {
 			wrapperPath := filepath.Join(repoRoot, platformDir, command+".md")
 			content, err := os.ReadFile(wrapperPath)
 			if err != nil {

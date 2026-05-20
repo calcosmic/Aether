@@ -112,3 +112,14 @@ None - no external service configuration required.
 ---
 *Phase: 143-build-plan-ceremony-restore*
 *Completed: 2026-05-18*
+
+## Self-Check: PASSED
+
+- SUMMARY.md created at `.planning/phases/143-build-plan-ceremony-restore/143-02-SUMMARY.md`
+- Task 1 commit `bf9b069b` exists in git log
+- Task 2 commit `697560d5` exists in git log
+- Docs commit `d72c2fe9` exists in git log
+- host.ts modified with playbook imports and injection
+- host.test.ts modified with 4 new playbook injection tests
+- No accidental file deletions in any commit
+- 489 TS tests pass (baseline 485 + 4 new), 2 pre-existing failures

@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/reference-index.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-reference-index
-description: "Build the global reference library index"
+description: "📇 Build the global reference library index"
 ---
 
 Use the Go `aether` CLI as the source of truth.

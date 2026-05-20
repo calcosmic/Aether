@@ -132,6 +132,15 @@ func TestInstallUsesEmbeddedAssetsWithoutPackageDir(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(homeDir, ".aether", "system", "ts", "node_modules")); err == nil {
 		t.Fatal("embedded install assets must not include .aether/ts/node_modules")
 	}
+	for _, rel := range []string{"dist/host.js", "package.json", "package-lock.json"} {
+		path := filepath.Join(homeDir, ".aether", "system", "ts-host", rel)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Fatalf("expected embedded TS host artifact %s to exist after install", path)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".aether", "system", "ts-host", "node_modules")); err == nil {
+		t.Fatal("embedded install assets must not include .aether/ts-host/node_modules")
+	}
 	if nodePath, err := exec.LookPath("node"); err == nil {
 		hubNarratorRuntime := filepath.Join(homeDir, ".aether", "system", "ts", "dist", "narrator.js")
 		cmd := exec.Command(nodePath, hubNarratorRuntime)

@@ -2,7 +2,7 @@
 
 Saved: 2026-04-25
 
-Status: implemented in the 2026-04-25 skill catalog curation work. The final shipped catalog is 83 skills: 52 colony skills and 31 domain skills.
+Status: implemented in the 2026-04-25 skill catalog curation work. The shipped catalog is currently 86 skills: 55 colony skills and 31 domain skills.
 
 ## Summary
 

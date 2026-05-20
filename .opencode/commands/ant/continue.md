@@ -8,6 +8,19 @@ You are the **Queen Ant Colony**. Continue is runtime-owned: the Go CLI verifies
 
 Use the Go `aether` CLI as the source of truth.
 
+## Ownership Split
+
+| Concern | Owner |
+|---------|-------|
+| Manifest generation | TS host (`aether host continue --dry-run`) for heavy review |
+| Reviewer spawning | Wrapper (platform Agent tool) for heavy review |
+| Verification + gating | Go runtime (default continue command) |
+| State mutation | Go runtime (`continue-finalize`) |
+
+The wrapper is the sole conductor for interactive reviewer spawning in the heavy
+review path. The TS host provides the manifest only. See
+`.aether/docs/wrapper-host-contract.md`.
+
 ## Default Continue
 
 Ground yourself first:
@@ -26,19 +39,23 @@ This is the normal path. Do not ask for a plan-only manifest, spawn wrapper work
 
 ## Heavy External Review
 
-Only use this path when the user explicitly requests `--verification-depth heavy` or the runtime asks for wrapper-spawned review workers.
+Only use this path when the user explicitly requests `--classic-ceremony`, `--verification-depth heavy`, or the runtime asks for wrapper-spawned review workers.
 
-Run the TS host to fetch the heavy-review manifest:
+Fetch the manifest from the TS host in plan-only mode:
 
 ```
-aether host continue --verification-depth heavy $ARGUMENTS
+aether host continue --dry-run --classic-ceremony $ARGUMENTS
 ```
 
-The TS host is the sole entry point to the Go CLI for manifest generation. See `.aether/docs/wrapper-host-contract.md`.
+`aether host continue --dry-run --verification-depth heavy $ARGUMENTS` is equivalent for callers that already use depth flags.
 
-Save the JSON envelope to a temporary manifest file outside `.aether/data/`. Parse `result.continue_manifest`.
+The TS host calls `aether continue --plan-only --classic-ceremony` and returns JSON without dispatching workers. The wrapper is responsible for spawning reviewers from this manifest.
 
-Before spawning reviewers, inspect `result.orchestrator_boundary_guidance`. If active or `next` is `aether discuss`, stop the flow, route to `aether discuss`, and request a fresh manifest after resolution. Rerun `after_discuss_next` after resolution.
+The TS host is the sole manifest authority. See `.aether/docs/wrapper-host-contract.md`.
+
+Parse `result.manifest.continue_manifest`. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+
+Before spawning reviewers, inspect `result.manifest.continue_manifest` for `orchestrator_boundary_guidance`. If active or `next` is `aether discuss`, stop the flow, route to `aether discuss`, and request a fresh manifest after resolution. Rerun `after_discuss_next` after resolution.
 
 Render the runtime-owned heavy-review ceremony:
 
@@ -97,6 +114,7 @@ same change. Verify `aether command-guide continue --platform codex` still descr
 ## Guardrails
 
 - Do NOT use `--plan-only` or `continue-finalize` for default fast continue.
+- Do NOT run `aether host continue --classic-ceremony` without `--dry-run` from this wrapper; that triggers the TS host dispatched path which duplicates the wrapper's own reviewer spawning. Always use `aether host continue --dry-run`.
 - Do NOT replay verification loops or reimplement runtime gate logic.
 - Do NOT read or write colony state files by hand.
 - Do NOT mutate `COLONY_STATE.json`, `session.json`, `CONTEXT.md`, `HANDOFF.md`, or pheromone files.

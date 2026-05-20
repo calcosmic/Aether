@@ -1,33 +1,37 @@
 # CROWNED-ANTHILL
 
-- Goal: Worker Result Collection and Orchestrator Boundary Hygiene
-- Sealed at: 2026-05-17T20:06:45Z
-- Completed phases: 5
-- Final phase: 5
+- Goal: Fix TS host typecheck, resolve double-dispatch, restore ceremony surfaces, and clean documentation drift
+- Sealed at: 2026-05-20T17:51:24Z
+- Completed phases: 7
+- Final phase: 7
 
 ## Final Review Evidence
 - Passed: true
-- Workers reviewed: 3
-- Structured findings captured: 5
-- Ledger writes: security=1 quality=2 testing=2
-- Reusable lessons promoted to QUEEN.md: 3
+- Workers reviewed: 2
+- Structured findings captured: 15
+- Ledger writes: quality=5 testing=10
+- Reusable lessons promoted to QUEEN.md: 4
 
 ## Post-Seal Review Backlog
-- [gatekeeper/] sec-3-001:
-- [gatekeeper/INFO] sec-4-001:
-- [auditor/INFO] qlt-4-001:
-- [watcher/] tst-1-001:
-- [watcher/] tst-2-001:
-- [watcher/] tst-3-001:
-- [watcher/INFO] tst-4-001:
-- [archaeologist/] hst-2-001:
+- [auditor/INFO] qlt-7-015: Codex command-guide output now uses dry-run TS host manifest commands and nested manifest paths for build and heavy continue.
+- [auditor/INFO] qlt-7-016: Preserve exact command-guide tests for both required current strings and explicitly retired stale strings.
+- [auditor/INFO] qlt-7-017: Proceed with seal from the quality audit perspective.
+- [auditor/MEDIUM] qlt-7-018: Large workspace diff means this rerun focused on the prior command-guide blocker and stated seal-blocker fixes.
+- [auditor/INFO] qlt-7-019: Command-guide drift can survive broad tests unless tests assert both required and retired orchestration strings.
+- [chaos/MEDIUM] res-1-001: callGoJSON returns parsed.result as T without verifying result is non-null. When Go serializes a nil interface{} to JSON null, parsed.result will be null at runtime but the GoOutput<T> type declares result as optional (T | undefined), not (T | null). With exactOptionalPropertyTypes and strictNullChecks enabled, null would fail type checking but the unsafe cast bypasses this. If a Go command returns ok:true with a nil result, the caller receives null instead of a meaningful T, causing downstream TypeError when accessing properties. (.aether/ts-host/src/go-bridge.ts:136)
+- [chaos/MEDIUM] res-1-002: claims.status is cast as TerminalWorkerStatus without validation. If a real worker returns a status string not in the TerminalWorkerStatus union (e.g. running, pending, cancelled), the unsafe cast silently passes it through. The Go finalizer accepts only specific terminal statuses and would reject the build. The claims parser validates that status is a non-empty string but does not validate it is a recognized terminal value. (.aether/ts-host/src/worker-dispatch.ts:315)
+- [chaos/LOW] res-1-003: Non-null assertion on waveMap.get(waveNum) in dispatchWaves. The code iterates over keys from the same map, so the get should always succeed. However, if the map were modified concurrently (e.g. by a spawned child wave modifying shared state), this could throw TypeError. Currently single-threaded so no real risk. (.aether/ts-host/src/wave-orchestrator.ts:320)
+- [chaos/LOW] res-1-004: Non-null assertion on child.stdout. The spawn call at line 122 uses stdio:["ignore","pipe","pipe"], so stdout should always be a Readable stream. However, if the spawn fails silently or stdio is misconfigured, child.stdout could be null. The ! assertion bypasses this check. (.aether/ts-host/src/event-bridge.ts:137)
+- [chaos/LOW] res-1-005: Non-null assertion waves[key]!.push(dispatch). The preceding if (!waves[key]) initializes it, so this is safe. The assertion is redundant but harmless. (.aether/ts-host/src/swarm-display.ts:223)
 
 ## Phase Summary
-- Phase 1: Failure Contract Reproduction [completed]
-- Phase 2: Current Colony Boundary Isolation [completed]
-- Phase 3: Worker Result Collection Reliability [completed]
-- Phase 4: Spawn Economy And Recovery Hygiene [completed]
-- Phase 5: Full Lifecycle Verification And Delivery Readiness [completed]
+- Phase 1: Fix TS Host Typecheck Failures [completed]
+- Phase 2: Resolve Double-Dispatch Ownership [completed]
+- Phase 3: Restore Ceremony Surfaces [completed]
+- Phase 4: Replace Unsafe TS Index Signatures [completed]
+- Phase 5: Fix Documentation Version and Count Drift [completed]
+- Phase 6: Enhance Source-Check Semantic Validation [completed]
+- Phase 7: Full Release Readiness Verification [completed]
 
 ## Colony Statistics
 | Metric | Count |
@@ -40,7 +44,8 @@
 | Flags resolved | 28 |
 
 ## Shelf Candidates
-10 shelf candidate(s) detected:
+11 shelf candidate(s) detected:
+- [user-note] What should the first generated plan optimize for? Options: balanced milestone plan | smallest useful slice | surface risky dependencies first (auto-detected)
 - [user-note] test (auto-detected)
 - [user-note] Build plan-only created hard Orchestrator boundary question pd_1778424856613270000 for Phase 2, but AETHER_OUTPUT_MODE=visual aether discuss reported 0 questions and only stale resolved clarifications. Parent reused the active prior boundary answer 'phase tasks only' to avoid blocking orchestration. (auto-detected)
 - [user-note] Running AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard spawned Probe Excavat-92, which heartbeated until worker timeout after 5m0s. Runtime blocked advancement despite full tests, vet, build, and focused coverage passing inside the worker log. This reproduces the review-worker timeout/result collection issue. (auto-detected)

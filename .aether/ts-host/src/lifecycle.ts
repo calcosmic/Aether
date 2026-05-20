@@ -1,7 +1,7 @@
 /**
- * Full lifecycle orchestrator for the TypeScript orchestration host.
+ * Experimental lifecycle smoke harness for the TypeScript orchestration host.
  *
- * Drives the plan -> build 1 -> continue lifecycle by:
+ * Drives the plan -> build 1 -> continue lifecycle in explicit simulation mode by:
  * 1. Calling Go --plan-only commands to obtain JSON manifests
  * 2. Building completion files with worker results
  * 3. Calling Go finalizer commands to commit state changes
@@ -9,6 +9,10 @@
  *
  * Contract: The TS host never writes to .aether/data/ directly. All state
  * mutations go through Go finalizer commands.
+ *
+ * This is not production orchestration. Real colony work should use the
+ * dedicated plan/build/continue host commands so every worker result comes from
+ * the active wrapper layer.
  *
  * Satisfies HOST-04 (finalizers called) and HOST-07 (end-to-end lifecycle).
  */
@@ -22,10 +26,12 @@ import { approvedCompletionDirPrefix, callGoJSON, writeCompletionFile } from "./
 import type {
   BuildManifest,
   BuildDispatch,
-  WorkerResult,
   PlanCompletion,
-  ContinueCompletion,
   PlanningDispatch,
+  PlanManifest,
+  WorkerPlanArtifact,
+  ContinueCompletion,
+  ContinueExternalDispatch,
 } from "./types.js";
 import {
   dispatchWorkers,
@@ -114,55 +120,17 @@ export interface LifecycleResult {
 }
 
 /** Plan manifest shape from Go plan --plan-only output. */
-interface PlanManifestResult {
-  plan_manifest?: Record<string, unknown>;
-  planning_manifest?: Record<string, unknown>;
-  dispatches?: PlanningDispatchResult[];
-  [key: string]: unknown;
-}
-
-/** Planning dispatch from Go plan --plan-only output. */
-interface PlanningDispatchResult {
-  name?: string;
-  caste?: string;
-  stage?: string;
-  task?: string;
-  task_id?: string;
-  wave?: number;
-  execution_wave?: number;
-  [key: string]: unknown;
-}
+type PlanManifestResult = PlanCompletion;
 
 /** Build manifest result from Go build --plan-only output. */
 interface BuildManifestResult {
   dispatch_manifest?: BuildManifest;
   dispatches?: BuildDispatch[];
-  dispatch_count?: number;
   provider_diagnostics?: string;
-  [key: string]: unknown;
 }
 
 /** Continue manifest result from Go continue --plan-only output. */
-interface ContinueManifestResult {
-  continue_manifest?: Record<string, unknown>;
-  dispatches?: ContinueDispatchResult[];
-  phase?: number;
-  [key: string]: unknown;
-}
-
-/** Continue dispatch from Go continue --plan-only output. */
-interface ContinueDispatchResult {
-  name?: string;
-  caste?: string;
-  stage?: string;
-  task?: string;
-  task_id?: string;
-  wave?: number;
-  execution_wave?: number;
-  status?: string;
-  summary?: string;
-  [key: string]: unknown;
-}
+type ContinueManifestResult = ContinueCompletion;
 
 interface CeremonyDispatchLike {
   execution_wave?: number;
@@ -261,6 +229,15 @@ function formatLifecycleProviderUnavailableMessage(
 export async function runLifecycle(
   opts: LifecycleOptions
 ): Promise<LifecycleResult> {
+  if (opts.simulateWorkers !== true) {
+    return {
+      success: false,
+      steps_completed: [],
+      error:
+        "Lifecycle host is experimental and simulate-only; pass simulateWorkers=true for the smoke harness or run aether plan/build/continue for real orchestration.",
+    };
+  }
+
   const stepsCompleted: string[] = [];
   const targetPhase = opts.phase ?? 1;
   let oracleResult: OracleLifecycleResult | undefined;
@@ -303,7 +280,8 @@ export async function runLifecycle(
 
     // Extract the plan manifest from the result. Go plan --plan-only outputs
     // plan_manifest as the primary manifest field.
-    const planManifest = planResult.plan_manifest ?? planResult.planning_manifest;
+    const planManifest: PlanManifest | undefined =
+      planResult.plan_manifest ?? planResult.planning_manifest;
     if (!planManifest) {
       throw new Error("Plan --plan-only returned no plan_manifest");
     }
@@ -327,8 +305,8 @@ export async function runLifecycle(
     // The Go plan-finalizer requires a phase_plan (codexWorkerPlanArtifact)
     // with at least one phase containing tasks. The TS host labels this as
     // synthesis instead of presenting it as worker evidence.
-    const goal = typeof planManifest["goal"] === "string"
-      ? planManifest["goal"] as string
+    const goal = typeof planManifest.goal === "string"
+      ? planManifest.goal
       : "colony goal";
     const phasePlan = {
       phases: [
@@ -346,8 +324,15 @@ export async function runLifecycle(
           success_criteria: ["Feature implemented", "Tests passing"],
         },
       ],
-      confidence: { coverage: 50, complexity: 50, dependencies: 50, effort: 50, overall: 50 },
-    };
+      confidence: {
+        knowledge: 50,
+        requirements: 50,
+        risks: 50,
+        dependencies: 50,
+        effort: 50,
+        overall: 50,
+      },
+    } satisfies WorkerPlanArtifact;
 
     const planCompletion: PlanCompletion = {
       plan_manifest: planManifest,
@@ -405,8 +390,10 @@ export async function runLifecycle(
     const availablePlatforms = await detectAvailablePlatforms();
     const hasPlatforms = availablePlatforms.length > 0;
 
-    // Default to real dispatch. Simulation requires explicit --simulate opt-in.
-    const simulateWorkers = opts.simulateWorkers ?? false;
+    // Lifecycle is guarded to explicit simulation at entry. Keep the local
+    // variable so the build path can share the same option shape as worker
+    // dispatch without pretending this is production orchestration.
+    const simulateWorkers = true;
 
     if (!hasPlatforms && !simulateWorkers) {
       throw new Error(
@@ -541,23 +528,14 @@ export async function runLifecycle(
       continueDispatches
     );
 
-    // Build continue dispatch results: mark all as completed for the prototype.
-    // In production, these would be review worker results (watcher, auditor, etc.)
-    const continueResults = continueDispatches.map(
-      (d): ContinueDispatchResult => {
-        const result: ContinueDispatchResult = {
-          name: d.name ?? "unknown",
-          status: "completed",
-          summary: `Continue dispatch completed by TS host (${d.name ?? "unknown"})`,
-        };
-        if (d.caste !== undefined) result.caste = d.caste;
-        if (d.stage !== undefined) result.stage = d.stage;
-        if (d.task !== undefined) result.task = d.task;
-        if (d.task_id !== undefined) result.task_id = d.task_id;
-        if (d.wave !== undefined) result.wave = d.wave;
-        if (d.execution_wave !== undefined) result.execution_wave = d.execution_wave;
-        return result;
-      }
+    // Build continue dispatch results for the simulation harness only.
+    // Production continue reviews must use the dedicated continue host path.
+    const continueResults: ContinueExternalDispatch[] = continueDispatches.map(
+      (d): ContinueExternalDispatch => ({
+        ...d,
+        status: "completed",
+        summary: `Continue dispatch completed by TS host (${d.name})`,
+      })
     );
     renderWorkerCeremony(ceremony, "continue", continueResults);
 

@@ -1,0 +1,53 @@
+export type HostCommandRunner = "go-json" | "dispatched" | "oracle-lifecycle" | "lifecycle" | "watch-display" | "swarm-display";
+export type HostCommandCategory = "orchestrated" | "display" | "lifecycle";
+export interface ParsedHostArgs {
+    command: string;
+    cwd: string;
+    simulate: boolean;
+    dryRun: boolean;
+    synthetic: boolean;
+    noDashboard: boolean;
+    skipMiddenCheck: boolean;
+    skipWatchers: boolean;
+    refresh: boolean;
+    force: boolean;
+    forceResurvey: boolean;
+    tasks: string[];
+    depth: string | undefined;
+    planningDepth: string | undefined;
+    verificationDepth: string | undefined;
+    targetConfidence: string | undefined;
+    maxIterations: string | undefined;
+    accept: boolean;
+    verificationTimeout: string | undefined;
+    light: boolean;
+    heavy: boolean;
+    workerTimeout: string | undefined;
+    circuitBreakerThreshold: string | undefined;
+    noSuggest: boolean;
+    verbose: boolean;
+    reconcileTasks: string[];
+    noLearn: boolean;
+    classicCeremony: boolean;
+    help: boolean;
+    positional: string[];
+    unknownFlags: string[];
+}
+export interface HostCommandDefinition {
+    command: string;
+    usage: string;
+    description: string;
+    category: HostCommandCategory;
+    runner: HostCommandRunner;
+    goPlanCommand?: string;
+    finalizerCommand?: string;
+    ceremonyWorkflow?: string;
+    supportsDashboard: boolean;
+    literalPassthrough: boolean;
+    buildGoArgs?: (parsed: ParsedHostArgs) => string[];
+}
+export declare const HOST_COMMANDS: readonly HostCommandDefinition[];
+export declare const HOST_COMMAND_NAMES: string[];
+export declare function listHostCommandDefinitions(): readonly HostCommandDefinition[];
+export declare function getHostCommandDefinition(command: string): HostCommandDefinition | undefined;
+export declare function buildHostGoArgs(parsed: ParsedHostArgs): string[] | undefined;

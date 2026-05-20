@@ -41,6 +41,15 @@ import { ConfidenceLoop, type ConfidenceLoopOptions, type ConfidenceResult } fro
 import { ConfidenceEvaluator, type EvaluatedConfidence, type ConfidenceInput } from "./confidence-evaluator.js";
 import type { WorkerClaims } from "./claims-parser.js";
 import { loadPlaybooksForWorkflow, renderPlaybookContext } from "./playbook-loader.js";
+import type {
+  BuildDispatch,
+  BuildManifest,
+  ContinueCompletion,
+  ContinueExternalDispatch,
+  PlanCompletion,
+  PlanningDispatch,
+  WorkerResult,
+} from "./types.js";
 
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
@@ -307,7 +316,9 @@ interface CeremonyDispatchLike {
   execution_wave?: number;
   wave?: number;
   skill_section?: string;
-  [key: string]: unknown;
+  hive_section?: string;
+  task?: string;
+  task_brief?: string;
 }
 
 function emitCeremonyOutput(output: string): void {
@@ -353,64 +364,66 @@ function renderWorkerCeremony(
 // ---------------------------------------------------------------------------
 
 interface BuildManifestResult {
-  dispatch_manifest?: {
-    dispatches?: BuildDispatchLike[];
-    [key: string]: unknown;
-  };
-  dispatches?: BuildDispatchLike[];
+  dispatch_manifest?: BuildManifest;
+  dispatches?: BuildDispatch[];
   provider_diagnostics?: string;
-  [key: string]: unknown;
 }
 
-interface BuildDispatchLike {
-  stage?: string;
-  wave?: number;
-  execution_wave?: number;
-  caste?: string;
-  name?: string;
-  task?: string;
-  status?: string;
-  summary?: string;
-  task_id?: string;
-  skill_section?: string;
+type HostInjectedDispatchFields = {
+  hive_section?: string;
   task_brief?: string;
-  [key: string]: unknown;
-}
+};
 
-interface PlanManifestResult {
-  plan_manifest?: Record<string, unknown>;
-  planning_manifest?: Record<string, unknown>;
-  dispatches?: PlanDispatchLike[];
-  [key: string]: unknown;
-}
+type BuildDispatchLike = BuildDispatch;
 
-interface PlanDispatchLike {
-  name?: string;
-  caste?: string;
-  stage?: string;
-  task?: string;
-  task_id?: string;
-  wave?: number;
-  execution_wave?: number;
-  [key: string]: unknown;
-}
+type PlanManifestResult = PlanCompletion;
 
-interface ContinueManifestResult {
-  continue_manifest?: Record<string, unknown>;
-  dispatches?: ContinueDispatchLike[];
-  phase?: number;
-  [key: string]: unknown;
-}
+type PlanDispatchLike = PlanningDispatch & HostInjectedDispatchFields;
 
-interface ContinueDispatchLike {
-  name?: string;
-  caste?: string;
-  stage?: string;
-  task?: string;
-  task_id?: string;
-  wave?: number;
-  execution_wave?: number;
-  [key: string]: unknown;
+type ContinueManifestResult = ContinueCompletion;
+
+type ContinueDispatchLike = ContinueExternalDispatch & HostInjectedDispatchFields;
+
+function toWorkerDispatches(
+  dispatches: Array<PlanDispatchLike | ContinueDispatchLike>
+): BuildDispatch[] {
+  return dispatches.map((dispatch): BuildDispatch => {
+    const workerDispatch: BuildDispatch = {
+      stage: dispatch.stage ?? "dispatch",
+      caste: dispatch.caste,
+      name: dispatch.name,
+      task: dispatch.task,
+      status: dispatch.status,
+    };
+    if (dispatch.wave !== undefined) workerDispatch.wave = dispatch.wave;
+    if (dispatch.execution_wave !== undefined) {
+      workerDispatch.execution_wave = dispatch.execution_wave;
+    }
+    if (dispatch.task_id !== undefined) workerDispatch.task_id = dispatch.task_id;
+    if (dispatch.summary !== undefined) workerDispatch.summary = dispatch.summary;
+    if (dispatch.blockers !== undefined) workerDispatch.blockers = dispatch.blockers;
+    if (dispatch.duration !== undefined) workerDispatch.duration = dispatch.duration;
+    if (dispatch.skill_section !== undefined) {
+      workerDispatch.skill_section = dispatch.skill_section;
+    }
+    if (dispatch.task_brief !== undefined) workerDispatch.task_brief = dispatch.task_brief;
+    if (dispatch.hive_section !== undefined) {
+      workerDispatch.hive_section = dispatch.hive_section;
+    }
+    if (dispatch.matched_skills !== undefined) {
+      workerDispatch.matched_skills = dispatch.matched_skills;
+    }
+    if (dispatch.skill_count !== undefined) {
+      workerDispatch.skill_count = dispatch.skill_count;
+    }
+    if (dispatch.colony_skill_count !== undefined) {
+      workerDispatch.colony_skill_count = dispatch.colony_skill_count;
+    }
+    if (dispatch.domain_skill_count !== undefined) {
+      workerDispatch.domain_skill_count = dispatch.domain_skill_count;
+    }
+    return workerDispatch;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -560,11 +573,11 @@ function renderIterationComplete(stopReason: string): void {
 /** Result of a single dispatch wave. */
 interface WaveResult {
   /** Worker results from dispatch mapped to manifest dispatches. */
-  mappedResults: unknown[];
+  mappedResults: WorkerResult[];
   /** Path to the completion file written for this wave. */
   completionPath: string;
   /** The dispatch manifest used for this wave. */
-  buildManifest: Record<string, unknown>;
+  buildManifest: BuildManifest;
   /** Number of workers dispatched in this wave. */
   workerCount: number;
   /** Aggregated worker claims for confidence evaluation. */
@@ -588,7 +601,7 @@ async function dispatchBuildWave(
   bridge: GoBridgeOptions,
   parsed: ParsedHostArgs,
   ceremony: CeremonyAdapter,
-  buildManifest: Record<string, unknown>,
+  buildManifest: BuildManifest,
   dispatches: BuildDispatchLike[],
   spawnOrchestrator: SpawnOrchestrator,
   iterationFeedback?: string,
@@ -618,8 +631,8 @@ async function dispatchBuildWave(
     simulateWorkers: parsed.simulate,
     spawnOrchestrator,
   };
-  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
-  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches);
+  const mappedResults = toWorkerResults(dispatches, workerResults);
 
   // Render worker-complete ceremony
   renderWorkerCeremony(ceremony, "build", mappedResults);
@@ -731,11 +744,8 @@ async function runDispatchedBuildCommand(
   }
 
   // Step 5: Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
-  const spawnBudget = (buildManifest as Record<string, unknown>)?.queen_execution_policy != null
-    ? ((buildManifest as Record<string, unknown>).queen_execution_policy as Record<string, unknown>)?.spawn_budget != null
-      ? (((buildManifest as Record<string, unknown>).queen_execution_policy as Record<string, unknown>).spawn_budget as Record<string, unknown>)?.max_workers as number | undefined ?? 20
-      : 20
-    : 20;
+  const spawnBudget =
+    buildManifest.queen_execution_policy?.spawn_budget?.max_workers ?? 20;
   const spawnOrchestrator = createSpawnOrchestrator({
     goBinaryPath: bridge.goBinaryPath,
     cwd: bridge.cwd,
@@ -790,7 +800,7 @@ async function runDispatchedBuildCommand(
       bridge,
       parsed,
       ceremony,
-      buildManifest as Record<string, unknown>,
+      buildManifest,
       dispatches,
       spawnOrchestrator,
       iterationFeedback,
@@ -938,8 +948,9 @@ async function runDispatchedPlanCommand(
     cwd: bridge.cwd,
     simulateWorkers: parsed.simulate,
   };
-  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
-  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+  const buildDispatches = toWorkerDispatches(dispatches);
+  const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);
+  const mappedResults = toWorkerResults(buildDispatches, workerResults);
 
   // Step 5: Render worker-complete ceremony
   renderWorkerCeremony(ceremony, "plan", mappedResults);
@@ -1015,8 +1026,9 @@ async function runDispatchedContinueCommand(
     cwd: bridge.cwd,
     simulateWorkers: parsed.simulate,
   };
-  const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches as any[]);
-  const mappedResults = toWorkerResults(dispatches as any[], workerResults);
+  const buildDispatches = toWorkerDispatches(dispatches);
+  const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);
+  const mappedResults = toWorkerResults(buildDispatches, workerResults);
 
   // Step 5: Render worker-complete ceremony
   renderWorkerCeremony(ceremony, "continue", mappedResults);

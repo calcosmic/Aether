@@ -306,7 +306,7 @@ aether data-clean        # Clean test artifacts
 
 ## Agent Reference
 
-All 25 agents are defined in `.codex/agents/*.toml`:
+All 27 agents are defined in `.codex/agents/*.toml`:
 
 | Tier | Agent | TOML File | Role |
 |------|-------|-----------|------|
@@ -385,8 +385,8 @@ for f in .codex/agents/*.toml; do
   # Basic syntax check -- TOML is simple enough for grep validation
 done
 
-# Verify all 25 agents exist
-ls .codex/agents/*.toml | wc -l  # Should be 25
+# Verify all 27 agents exist
+ls .codex/agents/*.toml | wc -l  # Should be 27
 ```
 
 ### Publishing Changes
@@ -431,7 +431,7 @@ Runtime note:
 | System prompt file | `CLAUDE.md` | `.opencode/OPENCODE.md` | `AGENTS.md` |
 | Agent format | Markdown `.md` | Markdown `.md` | TOML `.toml` |
 | Agent location | `.claude/agents/ant/` | `.opencode/agents/` | `.codex/agents/` |
-| Slash commands | Yes (50 commands) | Yes (50 commands) | **No** -- use `aether` CLI |
+| Slash commands | Yes (60 commands) | Yes (60 commands) | **No** -- use `aether` CLI |
 | Command location | `.claude/commands/ant/` | `.opencode/commands/ant/` | N/A |
 | Agent metadata | In markdown header | In markdown header | TOML keys |
 | Hub sync path | global Claude home + hub | global OpenCode home + hub | global Codex home + hub |
@@ -463,4 +463,4 @@ Runtime note:
 
 ---
 
-*Updated for Aether v1.0.27 -- 2026-05-03*
+*Updated for Aether v1.0.41 -- 2026-05-20*

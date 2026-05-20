@@ -20,7 +20,7 @@ The open question: should wrappers become thin pass-throughs (just call `aether 
 **Wrappers are host-assisted orchestrators.**
 
 - Wrappers call `aether host` for **host-backed manifest generation**
-  (`plan`, `build`, and heavy-review `continue`)
+  (`colonize`, `plan`, `build`, heavy/classic `continue`, and `seal`)
 - Wrappers handle **colony ceremony**: worker spawning, wave management, closeout rendering
 - Wrappers do **not** duplicate verification, gating, or state mutation logic owned by the Go runtime
 - The TS host is the **sole entry point** between wrappers and Go CLI for
@@ -30,16 +30,14 @@ The open question: should wrappers become thin pass-throughs (just call `aether 
 
 | Layer | May | Must Not |
 |-------|-----|----------|
-| **Wrappers** | Call `aether host` for host-backed flows, call Go plan-only/finalizer commands for flows not yet on the host spine, spawn workers, render ceremony, add colony framing/narration | Duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output, document future host targets as implemented |
+| **Wrappers** | Call `aether host` for host-backed flows, spawn workers, render ceremony, add colony framing/narration | Duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output, document unimplemented future host targets as implemented |
 | **TS Host** | Parse flags, call Go CLI via JSON, render dashboards, manage event streams | Write to `.aether/data/` directly, duplicate Go-owned logic, invent provider/auth diagnostics |
 | **Go CLI** | Own all state mutations, verification, gating, finalizers, canonical artifact writes, provider availability preflight diagnostics | Spawn platform agents (Claude/OpenCode/Codex workers) |
 
-Current wrapper host-backed manifest surfaces are `plan`, `build`, and
-heavy-review `continue`. The TS host also exposes `oracle`, `watch`, and `swarm`
-display/lifecycle surfaces, but canonical swarm wrappers still use the Go
-plan-only/finalizer path. `colonize` and `seal` also remain direct Go
-plan-only/finalizer wrapper flows until `aether host colonize` and
-`aether host seal` are implemented in the TS host registry and Go host command.
+Current wrapper host-backed manifest surfaces are `colonize`, `plan`, `build`,
+heavy/classic `continue`, and `seal`. The TS host also exposes `oracle`,
+`watch`, and `swarm` display/lifecycle surfaces, but canonical swarm wrappers
+still use the Go plan-only/finalizer path.
 
 ## Provider/Auth Boundary
 
@@ -58,14 +56,13 @@ wording; do not reinterpret them as missing provider availability preflight.
 
 2. **The host is reliable for its implemented spine.** The supported host
    commands work end-to-end with correct flags. Direct Go plan-only/finalizer
-   calls remain intentional for wrapper flows that are not yet host targets.
+   calls remain intentional only for flows that are not host manifest targets.
 
 3. **Verification stays in Go.** Wrappers do not reimplement gate logic — they call `aether *-finalize` and let the runtime decide advancement.
 
 4. **Single entry point where implemented.** Wrappers call `aether host` for
-   host-backed manifest generation and clearly document exceptions for future
-   targets. Do not claim `aether host colonize` or `aether host seal` until they
-   exist.
+   host-backed manifest generation and clearly document exceptions for any
+   future targets.
 
 ## Migration Notes
 

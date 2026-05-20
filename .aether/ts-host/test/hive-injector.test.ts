@@ -51,7 +51,7 @@ function captureStderr(): { lines: string[]; restore: () => void } {
   const originalMethod = process.stderr.write;
   process.stderr.write = ((chunk: unknown, _encoding?: unknown, _cb?: unknown) => {
     if (typeof chunk === "string") lines.push(chunk);
-    return original(chunk as string | Uint8Array, _encoding as BufferEncoding, _cb as (err?: Error) => void);
+    return original(chunk as string | Uint8Array, _encoding as BufferEncoding, _cb as ((err?: Error | null) => void));
   }) as typeof process.stderr.write;
   return {
     lines,

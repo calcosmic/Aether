@@ -3,7 +3,8 @@
 ## Purpose
 
 This handoff captures the final local smoke and residual-risk expectations before
-sealing the Provider Auth Clarity and Release Hardening colony.
+sealing the current TypeScript-host, command-parity, and release-readiness
+cleanup work.
 
 For beginners: this is the final checklist before saying the framework is ready
 to ship. It proves the engine still builds, the release path still works, and
@@ -106,12 +107,19 @@ accepted.
   is not claimed by this handoff.
 - Live third-party provider credentials are intentionally excluded from normal
   CI. Manual live-provider validation remains optional and should not replace
-  deterministic fake-provider coverage.
+  deterministic fake-provider coverage. When live validation is in scope, use
+  `.aether/docs/manual-provider-smoke-checklist.md`.
 
 ## Publish Handoff
 
-Actual publish is not implied by seal readiness. Before publishing, maintainers
-still need:
+Actual public release is not implied by seal readiness.
+
+For dummies: `aether publish --channel stable --binary-dest "$HOME/.local/bin"`
+updates the local machine so other repos can test the current checkout. A public
+release is the extra GitHub/npm step that makes the same version installable by
+everyone else.
+
+Before publishing publicly, maintainers still need:
 
 - an intentionally curated working tree with no unrelated edits or generated
   verification artifacts;

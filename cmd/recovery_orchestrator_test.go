@@ -614,8 +614,9 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 
 	// Create completion with one failed (timeout) dispatch
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
@@ -699,8 +700,9 @@ func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
 	// Blocked dispatch needs at least one completed worker to pass provenance validation.
 	// Provenance (SAFE-01, SAFE-02) rejects builds where no worker completed with file modifications.
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
@@ -764,8 +766,9 @@ func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
 	createTestColonyState(t, dataDir, state)
 
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 		},
@@ -821,8 +824,9 @@ func TestBuildFinalize_BudgetPersisted(t *testing.T) {
 
 	// Need at least one completed worker with files to pass provenance validation.
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
@@ -884,8 +888,9 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 	createTestColonyState(t, dataDir, state)
 
 	manifest := codexBuildManifest{
-		Phase:    1,
-		PlanOnly: true,
+		Phase:       1,
+		PlanOnly:    true,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 		Dispatches: []codexBuildDispatch{
 			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature 1", Status: "pending", Wave: 1},
 			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},

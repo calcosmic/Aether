@@ -1,30 +1,21 @@
 {
   "entries": [
     {
-      "id": "sec-3-001",
-      "phase": 3,
-      "phase_name": "Worker Result Collection Reliability",
+      "id": "sec-8-001",
+      "phase": 8,
+      "phase_name": "End To End Fresh Repo Release Smoke And Ship Decision",
       "agent": "gatekeeper",
-      "generated_at": "2026-05-17T19:20:02Z",
-      "status": "open",
-      "severity": "",
-      "description": ""
-    },
-    {
-      "id": "sec-4-001",
-      "phase": 4,
-      "phase_name": "Spawn Economy And Recovery Hygiene",
-      "agent": "gatekeeper",
-      "agent_name": "Guard-79-r4",
-      "generated_at": "2026-05-17T19:42:37Z",
+      "agent_name": "Gate-15",
+      "generated_at": "2026-05-17T22:58:21Z",
       "status": "open",
       "severity": "INFO",
-      "description": ""
+      "category": "recommendation",
+      "description": "Before public release, commit the current work and rerun aether porter check plus aether porter check --full-release."
     }
   ],
   "summary": {
-    "total": 2,
-    "open": 2,
+    "total": 1,
+    "open": 1,
     "resolved": 0,
     "by_severity": {
       "high": 0,

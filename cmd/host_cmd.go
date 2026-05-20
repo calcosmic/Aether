@@ -14,7 +14,7 @@ import (
 var hostCmd = &cobra.Command{
 	Use:   "host",
 	Short: "Run the TypeScript orchestration host",
-	Long:  "Delegate to the TypeScript host for plan, build, continue, lifecycle, oracle, watch, and swarm workflows.",
+	Long:  "Delegate to the TypeScript host for colonize, plan, build, continue, seal, lifecycle, oracle, watch, and swarm workflows.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("a subcommand is required. Run 'aether host --help' for usage")
 	},
@@ -25,6 +25,14 @@ func init() {
 
 	// All host subcommands disable cobra flag parsing so flags are forwarded
 	// raw to the TS host, which is the authoritative parser.
+
+	// colonize
+	hostCmd.AddCommand(&cobra.Command{
+		Use:                "colonize",
+		Short:              "Run colonize workflow via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("colonize", true),
+	})
 
 	// lifecycle
 	hostCmd.AddCommand(&cobra.Command{
@@ -56,6 +64,14 @@ func init() {
 		Short:              "Run continue workflow via TS host",
 		DisableFlagParsing: true,
 		RunE:               makeHostSubcommand("continue", true),
+	})
+
+	// seal
+	hostCmd.AddCommand(&cobra.Command{
+		Use:                "seal",
+		Short:              "Run seal workflow via TS host",
+		DisableFlagParsing: true,
+		RunE:               makeHostSubcommand("seal", true),
 	})
 
 	// oracle

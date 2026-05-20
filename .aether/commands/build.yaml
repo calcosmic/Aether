@@ -2,8 +2,13 @@ name: ant-build
 description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "aether host build $ARGUMENTS"
+  manifest_command: "aether host build --dry-run $ARGUMENTS"
+  finalizer_command: "aether build-finalize $ARGUMENTS --completion-file <completion_file>"
   contract: ".aether/docs/wrapper-host-contract.md"
+ownership:
+  manifest_authority: "TS host (aether host build --dry-run returns plan-only JSON without dispatching workers)"
+  worker_conductor: "Wrapper (spawns workers via platform Agent tool, manages ceremony)"
+  state_mutator: "Go runtime (build-finalize commits results)"
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
@@ -16,7 +21,13 @@ wrapper_additions:
     2. Surface active pheromones as a compact steering block with REDIRECT first, then FOCUS, then FEEDBACK.
     3. Include strength or remaining-life context so the user understands why each signal matters right now.
     4. Frame the requested work as `Phase N of M — Name` with a one-line purpose.
-    5. Immediately before requesting the manifest, say: `Asking the runtime for the dispatch manifest...`
+  manifest_fetch: |
+    Fetch the dispatch manifest from the TS host in plan-only mode:
+    1. Run `aether host build --dry-run $ARGUMENTS`.
+    2. The TS host calls `aether build <phase> --plan-only` and returns JSON without dispatching workers.
+    3. Parse `result.manifest.dispatch_manifest` for the dispatch plan.
+    4. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+    5. If provider dispatch is unavailable, surface only the Go-owned structured availability message.
   post_build: |
     Close with a short colony-language synthesis:
     1. Run the visual closeout command first; use its next-step line as the source of truth.
@@ -24,14 +35,16 @@ wrapper_additions:
     3. Note only the most relevant signal or risk.
     4. Route first to `/ant-continue`, keeping `aether continue` as the runtime source of truth beneath the wrapper.
 guardrails:
-  - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
-  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."
+  - "The TS host is the sole manifest authority; always use `aether host build --dry-run` to fetch the plan, never `aether host build` alone (which dispatches workers via the TS host path, causing double-dispatch)."
+  - "The wrapper is the sole conductor for interactive worker spawning; spawn workers via platform Agent tool from the manifest, not from the TS host."
+  - "Respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
+  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest."
   - "Use visible live Task/subagent panels for build ceremony. Run aether spawn-log before each dispatch and aether spawn-complete after. Call build-finalize only after all terminal worker results are collected."
   - "Do NOT read or write colony state files by hand."
   - "Do NOT mutate COLONY_STATE.json, session.json, or pheromone files."
   - "Do NOT parse visual output as authoritative state."
   - "Do NOT expose raw provider stdout/stderr, tokens, or auth probe output; use the Go availability category and sanitized next action."
-  - "Do NOT run direct `aether build` from Claude/OpenCode wrapper orchestration for manifest generation; use `aether host build`."
+  - "Do NOT run `aether host build` without `--dry-run` from the wrapper; that triggers the TS host dispatched path which duplicates the wrapper's own worker spawning."
   - "Do NOT run `aether build --synthetic` after real wrapper Task agents complete."
   - "Do NOT describe parallel workers as background agents or say you will be notified later; keep the live worker stack visible until terminal results return."
   - "Do NOT add extra option menus or recovery advice unless the runtime explicitly asks."

@@ -137,6 +137,10 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := validateFinalizerManifestRoot("continue_manifest", plan.Root, root); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, err
 	}
+	now := time.Now().UTC()
+	if err := validateFinalizerManifestFreshness("continue_manifest", plan.GeneratedAt, now); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, err
+	}
 
 	state, phase, manifest, err := validateExternalContinueState(plan)
 	if err != nil {
@@ -146,7 +150,6 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		return nil, state, phase, nil, nil, false, fmt.Errorf("%s", summary)
 	}
 
-	now := time.Now().UTC()
 	runHandle, err := beginRuntimeSpawnRun("continue", now)
 	if err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to initialize continue run: %w", err)

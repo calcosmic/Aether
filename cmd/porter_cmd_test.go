@@ -320,6 +320,7 @@ func TestPorterQuickAndFullReleaseScopesAreDistinct(t *testing.T) {
 		"Go binary build",
 		"GoReleaser config",
 		"GoReleaser snapshot",
+		"TS host release artifacts",
 		"TS host typecheck",
 		"TS host tests",
 		"TS host build",

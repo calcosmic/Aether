@@ -16,11 +16,27 @@ import { parseArgs } from "../src/host.js";
 
 describe("parseArgs", () => {
   it("parses plan with depth and planning-depth", () => {
-    const result = parseArgs(["node", "host.js", "plan", "--depth", "balanced", "--planning-depth", "standard"]);
+    const result = parseArgs([
+      "node",
+      "host.js",
+      "plan",
+      "--depth",
+      "balanced",
+      "--planning-depth",
+      "standard",
+      "--target",
+      "95",
+      "--max-iterations",
+      "8",
+      "--accept",
+    ]);
 
     assert.equal(result.command, "plan");
     assert.equal(result.depth, "balanced");
     assert.equal(result.planningDepth, "standard");
+    assert.equal(result.targetConfidence, "95");
+    assert.equal(result.maxIterations, "8");
+    assert.equal(result.accept, true);
     assert.equal(result.cwd, process.cwd());
     assert.equal(result.help, false);
   });
@@ -57,6 +73,14 @@ describe("parseArgs", () => {
     assert.equal(result.refresh, true);
     assert.equal(result.force, true);
     assert.equal(result.synthetic, true);
+  });
+
+  it("parses colonize force-resurvey", () => {
+    const result = parseArgs(["node", "host.js", "colonize", "--force-resurvey", "--worker-timeout=5m"]);
+
+    assert.equal(result.command, "colonize");
+    assert.equal(result.forceResurvey, true);
+    assert.equal(result.workerTimeout, "5m");
   });
 
   it("parses continue with verification-depth and light", () => {
@@ -180,6 +204,20 @@ describe("parseArgs", () => {
     assert.deepStrictEqual(result.reconcileTasks, ["5.1", "5.2"]);
     assert.equal(result.verificationTimeout, "30m");
     assert.equal(result.noLearn, true);
+  });
+
+  it("parses continue classic ceremony mode", () => {
+    const result = parseArgs(["node", "host.js", "continue", "--classic-ceremony"]);
+
+    assert.equal(result.command, "continue");
+    assert.equal(result.classicCeremony, true);
+  });
+
+  it("parses seal force", () => {
+    const result = parseArgs(["node", "host.js", "seal", "--force"]);
+
+    assert.equal(result.command, "seal");
+    assert.equal(result.force, true);
   });
 
   it("records unknown flags instead of positionalizing them", () => {

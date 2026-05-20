@@ -216,7 +216,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"AETHER_OUTPUT_MODE=visual aether status",
 				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 				"aether host continue",
-				"result.continue_manifest",
+				"result.manifest.continue_manifest",
 				"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 			},
 			forbidden: []string{
@@ -253,7 +253,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".claude/commands/ant/colonize.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS",
+				"aether host colonize $ARGUMENTS",
 				"AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file",
 				"colonize_manifest",
 			},
@@ -283,7 +283,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".claude/commands/ant/seal.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS",
+				"aether host seal $ARGUMENTS",
 				"result.seal_manifest",
 				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",
@@ -522,7 +522,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 				"AETHER_OUTPUT_MODE=visual aether status",
 				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 				"aether host continue",
-				"result.continue_manifest",
+				"result.manifest.continue_manifest",
 				"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 			},
 			forbidden: []string{
@@ -558,7 +558,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".opencode/commands/ant/colonize.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS",
+				"aether host colonize $ARGUMENTS",
 				"AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file",
 				"colonize_manifest",
 			},
@@ -571,7 +571,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			path: ".opencode/commands/ant/seal.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS",
+				"aether host seal $ARGUMENTS",
 				"result.seal_manifest",
 				"AETHER_OUTPUT_MODE=json aether spawn-log",
 				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",

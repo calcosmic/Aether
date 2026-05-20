@@ -541,6 +541,7 @@
     "name": "continue",
     "short_description": "Verify the active build packet, close dispatched workers, and advance honestly",
     "flags": [
+      "classic-ceremony",
       "heavy",
       "light",
       "no-learn",
@@ -2032,12 +2033,15 @@
     "name": "plan",
     "short_description": "Generate or review a survey-aware phase plan for the current colony goal",
     "flags": [
+      "accept",
       "depth",
       "force",
+      "max-iterations",
       "plan-only",
       "planning-depth",
       "refresh",
       "synthetic",
+      "target",
       "verification-depth",
       "worker-timeout"
     ],
@@ -3883,6 +3887,14 @@
     "output_mode": "unknown"
   },
   {
+    "name": "colonize",
+    "short_description": "Run colonize workflow via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "continue",
     "short_description": "Run continue workflow via TS host",
     "flags": [],
@@ -3909,6 +3921,14 @@
   {
     "name": "plan",
     "short_description": "Run plan workflow via TS host",
+    "flags": [],
+    "parent_command": "host",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "seal",
+    "short_description": "Run seal workflow via TS host",
     "flags": [],
     "parent_command": "host",
     "has_subcommands": false,

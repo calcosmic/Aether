@@ -40,6 +40,7 @@ func TestE2EPublishVersionAgreement(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(aetherDir, "workers.md"), []byte("# Workers\n"), 0644); err != nil {
 		t.Fatalf("failed to write workers.md: %v", err)
 	}
+	writeBuiltTsHostFixture(t, packageDir)
 
 	// Pre-seed hub with stale version 1.0.19
 	hubDir := filepath.Join(homeDir, ".aether")

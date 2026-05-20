@@ -18,7 +18,6 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	wrapperPaths := []string{
 		filepath.Join(repoRoot, ".claude", "commands", "ant", "continue.md"),
-		filepath.Join(repoRoot, ".claude", "commands", "ant-continue.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "continue.md"),
 	}
 
@@ -26,10 +25,11 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		"Use the Go `aether` CLI as the source of truth.",
 		"AETHER_OUTPUT_MODE=visual aether status",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
-		"aether host continue --verification-depth heavy $ARGUMENTS",
-		"The TS host is the sole entry point to the Go CLI for manifest generation.",
+		"aether host continue --dry-run --classic-ceremony $ARGUMENTS",
+		"aether host continue --dry-run --verification-depth heavy $ARGUMENTS",
+		"The wrapper is the sole conductor for interactive reviewer spawning",
 		"temporary manifest file outside `.aether/data/`",
-		"result.continue_manifest",
+		"result.manifest.continue_manifest",
 		"Do not set `run_in_background`",
 		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file",
@@ -42,7 +42,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		"## Default Continue",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
 		"## Heavy External Review",
-		"aether host continue --verification-depth heavy $ARGUMENTS",
+		"aether host continue --dry-run --classic-ceremony $ARGUMENTS",
 		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
 		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file",
 		"## After Continue",
@@ -66,6 +66,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		for _, forbidden := range []string{
 			"AETHER_OUTPUT_MODE=visual aether continue $ARGUMENTS",
 			"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy $ARGUMENTS",
+			"The TS host is the sole entry point to the Go CLI for manifest generation.",
 		} {
 			if strings.Contains(text, forbidden) {
 				t.Errorf("%s should not contain stale direct continue command %q", wrapperPath, forbidden)

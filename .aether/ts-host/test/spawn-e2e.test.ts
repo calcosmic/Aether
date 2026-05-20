@@ -59,7 +59,7 @@ async function captureStderrAsync<T>(fn: () => Promise<T>): Promise<{ result: T;
     if (typeof chunk === "string") {
       chunks.push(chunk);
     }
-    return originalWrite(chunk, ...args as [string, ...unknown[]]);
+    return originalWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
   }) as typeof process.stderr.write;
 
   try {
@@ -405,10 +405,12 @@ describe("spawn tree parent references (SPAWN-05)", () => {
 
     __setDispatchSingleWorker(
       async (_opts, dispatch): Promise<DispatchResult> => {
+        const parentField = (dispatch as unknown as Record<string, unknown>).parent;
+        const depthField = (dispatch as unknown as Record<string, unknown>).depth;
         dispatchedWorkers.push({
           name: dispatch.name,
-          parent: (dispatch as unknown as Record<string, unknown>).parent as string | undefined,
-          depth: (dispatch as unknown as Record<string, unknown>).depth as number | undefined,
+          ...(parentField != null ? { parent: parentField as string } : {}),
+          ...(depthField != null ? { depth: depthField as number } : {}),
         });
 
         if (dispatch.name === "Builder-01") {
@@ -457,10 +459,12 @@ describe("spawn tree parent references (SPAWN-05)", () => {
 
     __setDispatchSingleWorker(
       async (_opts, dispatch): Promise<DispatchResult> => {
+        const parentField = (dispatch as unknown as Record<string, unknown>).parent;
+        const depthField = (dispatch as unknown as Record<string, unknown>).depth;
         dispatchedWorkers.push({
           name: dispatch.name,
-          parent: (dispatch as unknown as Record<string, unknown>).parent as string | undefined,
-          depth: (dispatch as unknown as Record<string, unknown>).depth as number | undefined,
+          ...(parentField != null ? { parent: parentField as string } : {}),
+          ...(depthField != null ? { depth: depthField as number } : {}),
         });
         return { name: dispatch.name, status: "completed", summary: "Done" };
       }

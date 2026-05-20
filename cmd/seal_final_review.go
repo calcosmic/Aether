@@ -393,6 +393,9 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if err := validateFinalizerManifestRoot("seal_manifest", manifest.Root, root); err != nil {
 		return err
 	}
+	if err := validateFinalizerManifestFreshness("seal_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
+		return err
+	}
 
 	state, err := validateSealReady(manifest.Force)
 	if err != nil {

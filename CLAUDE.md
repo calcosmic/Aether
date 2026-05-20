@@ -1,7 +1,7 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.40
-> **Last Updated:** 2026-05-19
+> **Current Version:** v1.0.41
+> **Last Updated:** 2026-05-20
 
 ---
 
@@ -9,12 +9,12 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.40 |
-| Slash commands | 56 (Claude) + 56 (OpenCode); Codex uses native CLI + 27 TOML agents |
+| Version | v1.0.41 |
+| Slash commands | 60 (Claude) + 60 (OpenCode); Codex uses native CLI + 27 TOML agents |
 | Agent definitions | 27 |
 | Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
-| Tests | 2900+ passing |
+| Tests | 5000+ passing |
 | Architecture doc | `RUNTIME UPDATE ARCHITECTURE.md` |
 
 ## Platform Policy
@@ -114,7 +114,7 @@ manual depth flags for advanced overrides.
 │                                                                  │
 │   .aether/             ← Source companion files for hub publish │
 │   ├── commands/*.yaml   Slash command source definitions        │
-│   ├── skills/           colony/ (52) + domain/ (31)           │
+│   ├── skills/           colony/ (55) + domain/ (31)           │
 │   ├── docs/             Distributed documentation              │
 │   ├── templates/        Colony state, pheromones, etc.          │
 │   ├── utils/            Runtime helper docs and transforms      │
@@ -261,7 +261,7 @@ Runtime note:
 ├── utils/               # Runtime utilities
 │   ├── oracle/oracle.md # Oracle loop instructions (loaded by /ant-oracle)
 │   └── queen-to-md.xsl  # XSL transform for queen wisdom export
-├── skills/              # colony/ (52) + domain/ (31) skill definitions
+├── skills/              # colony/ (55) + domain/ (31) skill definitions
 ├── templates/           # 12 templates (colony-state, pheromones, etc.)
 ├── docs/                # Distributed documentation
 ├── exchange/            # XML exchange modules (pheromone-xml, wisdom-xml)
@@ -283,7 +283,7 @@ Runtime note:
 
 ```
 .claude/
-├── commands/ant/        # 50 slash commands
+├── commands/ant/        # 60 slash commands
 │   ├── init.md          # Colony initialization
 │   ├── discuss.md       # Clarify intent before planning
 │   ├── plan.md          # Phase planning
@@ -292,7 +292,7 @@ Runtime note:
 │   ├── continue.md      # Continue orchestrator (loads split playbooks)
 │   ├── profile.md       # Inspect or refresh the behavioral profile
 │   └── ...
-├── agents/ant/          # 25 agent definitions
+├── agents/ant/          # 27 agent definitions
 │   ├── aether-builder.md
 │   ├── aether-watcher.md
 │   ├── aether-scout.md
@@ -307,7 +307,7 @@ Runtime note:
 
 ```
 .codex/
-├── agents/              # 25 agent definitions (TOML format)
+├── agents/              # 27 agent definitions (TOML format)
 │   ├── aether-builder.toml
 │   ├── aether-watcher.toml
 │   ├── aether-scout.toml
@@ -879,4 +879,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.40 — 2026-05-19*
+*Updated for Aether v1.0.41 — 2026-05-20*

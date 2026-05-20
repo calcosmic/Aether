@@ -25,6 +25,9 @@ Direct `aether plan` may still run Go-owned local planning, but host/wrapper orc
 | --depth | string | no | "" | Planning depth: fast, balanced, deep, or exhaustive |
 | --planning-depth | string | no | "" | Task decomposition depth: light, standard, or deep |
 | --verification-depth | string | no | "" | Verification depth: light, standard, or heavy |
+| --target | int | no | depth preset | Planning confidence target, clamped to 70-99 |
+| --max-iterations | int | no | depth preset | Planning loop budget, clamped to 2-12 |
+| --accept | bool | no | false | Accept the current best plan even if confidence remains below target |
 | --synthetic | bool | no | false | Use local synthesis behavior instead of external worker completion |
 | --worker-timeout | duration | no | 0 | Include a per-worker timeout in planning dispatch contracts |
 
@@ -49,6 +52,11 @@ All paths return a JSON envelope through `outputWorkflow`.
 | New `--plan-only` / `host plan` | `plan_only: true`, `existing_plan: false`, `dispatch_mode: "plan-only"` or `"agent-delegate"`, `requires_finalizer: true`, `dispatches`, `plan_manifest`, and `planning_manifest` |
 | Existing plan without refresh | `plan_only: true`, `existing_plan: true`, `requires_finalizer: false`, existing `phases`, `count`, and `next` build command |
 | `plan-finalize` | Final `phases`, `confidence`, planning artifact paths, terminal `dispatches`, `dispatch_mode: "external-task"`, and next build command |
+
+Both manifest and finalizer outputs include `planning_loop` with
+`target_confidence`, `max_iterations`, `iterations`, `stop_reason`, and final
+confidence evidence. Stop reasons are `target_reached`, `stalled`,
+`max_iterations`, or `accepted`.
 
 ### Files Created/Modified
 
@@ -96,6 +104,8 @@ Only terminal worker evidence, such as completed or failed worker result JSON, m
 - the manifest root, goal, colony mode, granularity, freshness, and workspace still match
 - Scout and Route-Setter results are terminal and complete
 - the Route-Setter phase plan is valid and not stale pre-existing evidence
+- planning-loop stop evidence is computed by the Go finalizer from the accepted
+  confidence and manifest loop controls
 
 After validation, the finalizer writes canonical planning artifacts, updates `.aether/data/COLONY_STATE.json`, records spawn/run metadata, emits completion ceremony, and updates session summary.
 

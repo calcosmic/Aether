@@ -65,6 +65,9 @@ var planCmd = &cobra.Command{
 		depth, _ := cmd.Flags().GetString("depth")
 		planningDepth, _ := cmd.Flags().GetString("planning-depth")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
+		targetConfidence, _ := cmd.Flags().GetInt("target")
+		maxIterations, _ := cmd.Flags().GetInt("max-iterations")
+		acceptBelowTarget, _ := cmd.Flags().GetBool("accept")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -78,6 +81,9 @@ var planCmd = &cobra.Command{
 			PlanningDepth:     planningDepth,
 			VerificationDepth: verificationDepth,
 			WorkerTimeout:     workerTimeout,
+			TargetConfidence:  targetConfidence,
+			MaxIterations:     maxIterations,
+			Accept:            acceptBelowTarget,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -183,6 +189,14 @@ var continueCmd = &cobra.Command{
 		heavyFlag, _ := cmd.Flags().GetBool("heavy")
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
+		classicCeremony, _ := cmd.Flags().GetBool("classic-ceremony")
+		if classicCeremony {
+			planOnly = true
+			heavyFlag = true
+			if strings.TrimSpace(verificationDepth) == "" {
+				verificationDepth = string(colony.VerificationDepthHeavy)
+			}
+		}
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexContinuePlanOnly(skillWorkspaceRoot(), codexContinueOptions{
 				ReconcileTaskIDs:    normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")),
@@ -1077,10 +1091,13 @@ func init() {
 	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")
 	planCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
+	planCmd.Flags().Int("target", 0, "Planning confidence target 70-99 (default from depth preset)")
+	planCmd.Flags().Int("max-iterations", 0, "Planning iteration budget 2-12 (default from depth preset)")
+	planCmd.Flags().Bool("accept", false, "Accept the current best plan even if confidence is below target")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
-	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results (use - for stdin)")
-	colonizeFinalizeCmd.Flags().String("completion-file", "", "JSON file containing colonize_manifest and external surveyor worker results (use - for stdin)")
+	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results")
+	colonizeFinalizeCmd.Flags().String("completion-file", "", "JSON file containing colonize_manifest and external surveyor worker results")
 	buildCmd.Flags().StringArray("task", nil, "Redispatch only the specified task ID (repeatable or comma-separated)")
 	buildCmd.Flags().Bool("force", false, "Force redispatch of the current active phase after an interrupted build")
 	buildCmd.Flags().Bool("plan-only", false, "Print the build dispatch manifest without mutating colony state or spawning workers")
@@ -1092,7 +1109,7 @@ func init() {
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
-	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results (use - for stdin)")
+	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
@@ -1103,14 +1120,15 @@ func init() {
 	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
 	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
-	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results (use - for stdin)")
+	continueCmd.Flags().Bool("classic-ceremony", false, "Emit the heavy continue review manifest for wrapper-spawned classic ceremony reviewers")
+	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results")
 	continueFinalizeCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
 	continueFinalizeCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
 	sealCmd.Flags().Bool("force", false, "Force seal even with active blockers")
 	sealCmd.Flags().Bool("plan-only", false, "Print the final seal review manifest without mutating colony state or spawning workers")
-	sealFinalizeCmd.Flags().String("completion-file", "", "JSON file containing seal_manifest and external review worker results (use - for stdin)")
+	sealFinalizeCmd.Flags().String("completion-file", "", "JSON file containing seal_manifest and external review worker results")
 	preferencesCmd.Flags().Bool("list", false, "List stored preferences")
 
 	rootCmd.AddCommand(layEggsCmd)

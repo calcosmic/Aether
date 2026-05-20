@@ -1,7 +1,7 @@
 <!-- Generated from .aether/commands/shelf-promote.yaml - DO NOT EDIT DIRECTLY -->
 ---
 name: ant-shelf-promote
-description: "Promote a shelf item into a colony goal or todo"
+description: "⬆️ Promote a shelf item into a colony goal or todo"
 ---
 
 Use the Go `aether` CLI as the source of truth.

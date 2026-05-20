@@ -11,6 +11,23 @@ This runbook is the authoritative workflow for publishing Aether changes and ver
 - `aether update --download-binary` downloads a published release binary. Use it when you need the released runtime, not an unreleased local source change.
 - `.aether/version.json` is the source-checkout release version file. `npm/package.json` must use the exact same version.
 
+## Local Publish vs Public Release
+
+For dummies: local publish is updating your own machine's Aether cupboard.
+Public release is shipping a version other people can install from GitHub or
+npm.
+
+`aether publish --channel stable --binary-dest "$HOME/.local/bin"` refreshes
+the local stable hub, platform home files, and local binary from the source
+checkout. Other repos on the same machine can then consume those companion files
+with `aether update --force`.
+
+A public release additionally requires the version files to match, the release
+commit to be pushed, a `vX.Y.Z` tag to drive the GitHub release workflow,
+published release assets, and npm `latest` pointing at the same version.
+Downstream `aether update --download-binary` can only fetch a runtime binary
+after that public release exists.
+
 ## Channel Policy
 
 - Stable/public runtime: `aether` + `~/.aether/`
@@ -283,7 +300,7 @@ Companion file completeness checks verify expected counts:
 - 27 OpenCode agents
 - 27 Codex agents
 - 86 hub shipped skills
-- 4 Codex skill shims
+- 5 Codex skill shims
 
 ## Release Gate
 
@@ -405,7 +422,7 @@ Expected counts:
 - OpenCode agents: `27`
 - Codex agents: `27`
 - Hub shipped skills: `86`
-- Codex skill shims: `4`
+- Codex skill shims: `5`
 
 Release metadata should also agree:
 - `.aether/version.json` version equals `npm/package.json` version

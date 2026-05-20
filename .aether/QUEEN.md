@@ -298,6 +298,18 @@ High-confidence behavioral patterns that have been validated through repeated co
 - Do not default unknown hosts to Codex
 
 ## Wisdom
+- For async event tests, wait on observed conditions and clean up subprocesses in finally blocks instead of relying on fixed sleeps. (seal review phase 7, 2026-05-20)
+- For orchestration commands with dispatching behavior, tests should assert the exact safe command and explicitly reject stale unsafe commands. (seal review phase 7, 2026-05-20)
+- Gate pass booleans should be derived from the final blocking issue set, not from an earlier partial blocker list. (seal review phase 7, 2026-05-20)
+- Seal evidence should identify the authoritative ledger source before claiming blocker counts. (seal review phase 7, 2026-05-20)
+- A phase must not advance to completed when gate artifacts contain blocking_issues or task outcomes still say needs_redispatch. (seal review phase 7, 2026-05-20)
+- Open HIGH quality ledger entries must be explicitly resolved or superseded before release closure. (seal review phase 7, 2026-05-20)
+- Seal should require regenerated, internally consistent phase artifacts, not only green ad hoc reruns. (seal review phase 7, 2026-05-20)
+- Stream tests should wait on explicit readiness/events instead of fixed sleeps. (seal review phase 7, 2026-05-20)
+- Tests that validate subprocess streaming should wait on observable conditions, not short fixed sleeps, especially in full-suite runs. (seal review phase 7, 2026-05-20)
+- A passing build matrix should be recorded separately from delivery readiness so a dirty tree cannot be mistaken for a shippable release. (seal review phase 8, 2026-05-17)
+- Fresh-repo smoke tests must exercise installed hub artifacts, not only source-checkout commands. (seal review phase 8, 2026-05-17)
+- Treat local colony seal as an archive decision; treat public publish as a separate clean-tree porter decision. (seal review phase 8, 2026-05-17)
 - Focused routing tests are needed when Queen relevance logic uses keyword matching. (seal review phase 5, 2026-05-17)
 - Seal review should separate security blockers from delivery-readiness caveats so porter can own publish readiness. (seal review phase 5, 2026-05-17)
 - When a colony creates a new core source file, seal evidence should mention its git tracking status before delivery. (seal review phase 5, 2026-05-17)

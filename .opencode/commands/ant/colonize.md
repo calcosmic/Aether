@@ -13,7 +13,7 @@ Use the Go `aether` CLI as the source of truth. The runtime owns final survey ar
 Ask the runtime for the authoritative survey manifest:
 
 ```
-AETHER_OUTPUT_MODE=json aether colonize --plan-only $ARGUMENTS
+aether host colonize $ARGUMENTS
 ```
 
 Parse `result.colonize_manifest`. This manifest is the only source for worker names, castes, task IDs, agent names, briefs, output paths, skill sections, and finalizer contract.
@@ -117,7 +117,7 @@ If you change colonize manifest handling, worker spawning, finalization, or clos
 
 ## Guardrails
 
-- Do NOT run `aether colonize` without `--plan-only` from this wrapper unless the user explicitly asks for raw/no-orchestration.
+- Do NOT bypass `aether host colonize` from this wrapper unless the user explicitly asks for raw/no-orchestration.
 - Do NOT hand-edit `.aether/data/`, `COLONY_STATE.json`, `session.json`, or pheromone files.
 - Do NOT copy command wrappers into target repos; Aether commands are published globally.
 - Do NOT invent worker names, castes, task IDs, or outputs; use `colonize_manifest`.

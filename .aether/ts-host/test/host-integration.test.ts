@@ -34,7 +34,7 @@ import {
 } from "../src/host.js";
 
 import type { DispatchResult } from "../src/worker-dispatch.js";
-import type { Platform } from "../src/platform-dispatcher.js";
+import type { BuildDispatch } from "../src/types.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
 import {
   __setCallGoJSON as __setGoBridgeCallGoJSON,
@@ -193,9 +193,7 @@ describe("dispatched plan and continue runners", () => {
     });
 
     // Mock detectAvailablePlatforms
-    __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as Platform,
-    ]);
+    __setDetectAvailablePlatforms(async () => ["claude"]);
   });
 
   afterEach(() => {
@@ -218,7 +216,7 @@ describe("dispatched plan and continue runners", () => {
 
   it("plan dispatched runner calls Go manifest with plan --plan-only", () => {
     const parsed = parseArgs(["node", "host.js", "plan"]);
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.equal(args[0], "plan");
     assert.ok(args.includes("--plan-only"), "Should include --plan-only");
@@ -236,7 +234,7 @@ describe("dispatched plan and continue runners", () => {
 
   it("continue dispatched runner calls Go manifest with continue --plan-only", () => {
     const parsed = parseArgs(["node", "host.js", "continue"]);
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
 
     assert.equal(args[0], "continue");
     assert.ok(args.includes("--plan-only"), "Should include --plan-only");
@@ -291,7 +289,7 @@ describe("dry-run ceremony preview", () => {
     const originalStderrWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stderr.write;
 
     // Mock callGoJSON to return manifests
@@ -348,9 +346,7 @@ describe("dry-run ceremony preview", () => {
     });
 
     // Mock detectAvailablePlatforms
-    __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as Platform,
-    ]);
+    __setDetectAvailablePlatforms(async () => ["claude"]);
   });
 
   afterEach(() => {
@@ -363,7 +359,7 @@ describe("dry-run ceremony preview", () => {
     assert.equal(parsed.simulate, false, "--dry-run should not set simulate");
 
     // Verify dry-run calls Go for manifest
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
     assert.equal(args[0], "build");
     assert.ok(args.includes("--plan-only"));
   });
@@ -372,7 +368,7 @@ describe("dry-run ceremony preview", () => {
     const parsed = parseArgs(["node", "host.js", "plan", "--dry-run"]);
     assert.equal(parsed.dryRun, true);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
     assert.equal(args[0], "plan");
     assert.ok(args.includes("--plan-only"));
   });
@@ -381,7 +377,7 @@ describe("dry-run ceremony preview", () => {
     const parsed = parseArgs(["node", "host.js", "continue", "--dry-run"]);
     assert.equal(parsed.dryRun, true);
 
-    const args = buildHostGoArgs(parsed);
+    const args = buildHostGoArgs(parsed)!;
     assert.equal(args[0], "continue");
     assert.ok(args.includes("--plan-only"));
   });
@@ -439,7 +435,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
     const originalStderrWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stderr.write;
   });
 
@@ -527,7 +523,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
 
     __setDispatchWorkers(async (_opts, dispatches) => {
       capturedDispatches = dispatches;
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "completed",
         summary: "Done",
@@ -535,9 +531,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
       }));
     });
 
-    __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as Platform,
-    ]);
+    __setDetectAvailablePlatforms(async () => ["claude"]);
   }
 
   function mockHiveReadFailure() {
@@ -579,7 +573,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
 
     __setDispatchWorkers(async (_opts, dispatches) => {
       capturedDispatches = dispatches;
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "completed",
         summary: "Done",
@@ -587,9 +581,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
       }));
     });
 
-    __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as Platform,
-    ]);
+    __setDetectAvailablePlatforms(async () => ["claude"]);
   }
 
   it("build runner calls hive-read before dispatch and attaches hive_section to dispatches (HIVE-04)", async () => {
@@ -746,7 +738,7 @@ describe("cross-colony wisdom benefit (HIVE-05)", () => {
     const originalStderrWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stderr.write;
 
     // Mock: colony A promoted wisdom (source_repo = "colony-a")
@@ -803,7 +795,7 @@ describe("cross-colony wisdom benefit (HIVE-05)", () => {
 
     __setDispatchWorkers(async (_opts, dispatches) => {
       capturedDispatches = dispatches;
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "completed",
         summary: "Done",
@@ -811,9 +803,7 @@ describe("cross-colony wisdom benefit (HIVE-05)", () => {
       }));
     });
 
-    __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as Platform,
-    ]);
+    __setDetectAvailablePlatforms(async () => ["claude"]);
   });
 
   afterEach(() => {
@@ -928,7 +918,7 @@ describe("spawn orchestrator initialization (SPAWN-03, SPAWN-05)", () => {
 
     __setDispatchWorkers(async (opts, dispatches) => {
       capturedDispatchOpts = opts;
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name as string,
         status: "completed" as const,
         summary: "Done",
@@ -937,7 +927,7 @@ describe("spawn orchestrator initialization (SPAWN-03, SPAWN-05)", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
   });
 
@@ -1090,7 +1080,7 @@ describe("build iteration loop", () => {
     const originalStderrWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stderr.write;
   });
 
@@ -1130,7 +1120,7 @@ describe("build iteration loop", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -1169,11 +1159,11 @@ describe("build iteration loop", () => {
       dispatchNum++;
       dispatchCallCount++;
       capturedAllDispatches.push(dispatches);
-      return workerResults(dispatchNum - 1);
+      return workerResults(dispatchNum - 1) as DispatchResult[];
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -1200,11 +1190,11 @@ describe("build iteration loop", () => {
     __setDispatchWorkers(async (_opts, dispatches) => {
       dispatchCallCount++;
       capturedAllDispatches.push(dispatches);
-      return workerResults();
+      return workerResults() as DispatchResult[];
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -1231,11 +1221,11 @@ describe("build iteration loop", () => {
     __setDispatchWorkers(async (_opts, dispatches) => {
       dispatchCallCount++;
       capturedAllDispatches.push(dispatches);
-      return workerResults();
+      return workerResults() as DispatchResult[];
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate", "--max-iterations", "2"]);
@@ -1293,7 +1283,7 @@ describe("build iteration loop", () => {
     __setDispatchWorkers(async (_opts, dispatches) => {
       dispatchCallCount++;
       capturedAllDispatches.push(dispatches);
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "failed",
         summary: "Failed",
@@ -1303,7 +1293,7 @@ describe("build iteration loop", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -1343,7 +1333,7 @@ describe("feedback injection", () => {
     const originalStderrWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stderr.write;
   });
 
@@ -1409,7 +1399,7 @@ describe("feedback injection", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -1455,7 +1445,7 @@ describe("ceremony output", () => {
     const originalStderrWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stderr.write;
   });
 
@@ -1509,7 +1499,7 @@ describe("ceremony output", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -1561,7 +1551,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     const originalStderrWrite = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
       if (typeof chunk === "string") stderrOutput += chunk;
-      return originalStderrWrite(chunk, ...args as [string, ...unknown[]]);
+      return originalStderrWrite(chunk as string | Uint8Array, ...args as [BufferEncoding]);
     }) as typeof process.stderr.write;
   });
 
@@ -1660,7 +1650,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
@@ -1776,7 +1766,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     __setDispatchWorkers(async (_opts, dispatches) => {
       dispatchCallCount++;
       capturedAllDispatches.push(dispatches);
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "completed",
         summary: "Done",
@@ -1787,7 +1777,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
@@ -1877,7 +1867,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
 
       if (dispatchNum === 1) {
         // First iteration: fail with blockers -> triggers second iteration
-        return dispatches.map((d: Record<string, unknown>) => ({
+        return dispatches.map((d: BuildDispatch) => ({
           name: d.name,
           status: "failed",
           summary: "Failed",
@@ -1886,7 +1876,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
         }));
       }
       // Second iteration: succeed with test results -> high confidence, stop
-      return dispatches.map((d: Record<string, unknown>) => ({
+      return dispatches.map((d: BuildDispatch) => ({
         name: d.name,
         status: "completed",
         summary: "Done",
@@ -1897,7 +1887,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     });
 
     __setDetectAvailablePlatforms(async () => [
-      { name: "claude", cliCommand: "claude" } as unknown as Platform,
+      "claude" as const,
     ]);
 
     const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);

@@ -553,6 +553,9 @@ func loadExternalSwarmCompletion(path string) (externalSwarmCompletion, error) {
 	if path == "" {
 		return externalSwarmCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return externalSwarmCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {
@@ -638,6 +641,9 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	}
 	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
 		return nil, fmt.Errorf("swarm_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
+	}
+	if err := validateFinalizerManifestFreshness("swarm_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
+		return nil, err
 	}
 
 	state, _ := loadColonyState()

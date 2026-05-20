@@ -14,16 +14,21 @@ function parsed(overrides: Partial<ParsedHostArgs>): ParsedHostArgs {
     command: "",
     cwd: "/repo",
     simulate: false,
+    dryRun: false,
     synthetic: false,
     noDashboard: false,
     skipMiddenCheck: false,
     skipWatchers: false,
     refresh: false,
     force: false,
+    forceResurvey: false,
     tasks: [],
     depth: undefined,
     planningDepth: undefined,
     verificationDepth: undefined,
+    targetConfidence: undefined,
+    maxIterations: undefined,
+    accept: false,
     verificationTimeout: undefined,
     light: false,
     heavy: false,
@@ -33,6 +38,7 @@ function parsed(overrides: Partial<ParsedHostArgs>): ParsedHostArgs {
     verbose: false,
     reconcileTasks: [],
     noLearn: false,
+    classicCeremony: false,
     help: false,
     positional: [],
     unknownFlags: [],
@@ -43,9 +49,11 @@ function parsed(overrides: Partial<ParsedHostArgs>): ParsedHostArgs {
 describe("command registry", () => {
   it("lists the current host-supported commands in one place", () => {
     assert.deepEqual(HOST_COMMAND_NAMES, [
+      "colonize",
       "plan",
       "build",
       "continue",
+      "seal",
       "oracle",
       "lifecycle",
       "watch",
@@ -74,6 +82,10 @@ describe("command registry", () => {
       "--depth",
       "fast",
     ]);
+    assert.deepEqual(
+      buildHostGoArgs(parsed({ command: "plan", targetConfidence: "95", maxIterations: "8", accept: true })),
+      ["plan", "--plan-only", "--target", "95", "--max-iterations", "8", "--accept"]
+    );
     assert.deepEqual(buildHostGoArgs(parsed({ command: "build", positional: ["2"], tasks: ["5.1", "5.2"], heavy: true, force: true })), [
       "build",
       "2",
@@ -85,6 +97,13 @@ describe("command registry", () => {
       "--force",
       "--heavy",
     ]);
+    assert.deepEqual(buildHostGoArgs(parsed({ command: "colonize", forceResurvey: true, workerTimeout: "5m" })), [
+      "colonize",
+      "--plan-only",
+      "--force-resurvey",
+      "--worker-timeout",
+      "5m",
+    ]);
     assert.deepEqual(buildHostGoArgs(parsed({ command: "continue", skipWatchers: true, reconcileTasks: ["5.1"] })), [
       "continue",
       "--plan-only",
@@ -92,6 +111,12 @@ describe("command registry", () => {
       "5.1",
       "--skip-watchers",
     ]);
+    assert.deepEqual(buildHostGoArgs(parsed({ command: "continue", classicCeremony: true })), [
+      "continue",
+      "--plan-only",
+      "--classic-ceremony",
+    ]);
+    assert.deepEqual(buildHostGoArgs(parsed({ command: "seal", force: true })), ["seal", "--plan-only", "--force"]);
   });
 
   it("rejects unsupported flags before direct manifest arg construction", () => {

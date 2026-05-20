@@ -8,20 +8,20 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-17T20:06:45Z |
-| **Current Phase** | 5 |
-| **Phase Name** | Full Lifecycle Verification And Delivery Readiness |
+| **Last Updated** | 2026-05-20T17:51:24Z |
+| **Current Phase** | 7 |
+| **Phase Name** | Full Release Readiness Verification |
 | **Phase Status** | completed |
 | **Milestone** | Crowned Anthill |
 | **Colony Status** | COMPLETED |
-| **Colony Mode** | orchestrator |
+| **Colony Mode** | colony |
 | **Safe to Clear?** | YES — Colony complete |
 
 ---
 
 ## Current Goal
 
-Worker Result Collection and Orchestrator Boundary Hygiene
+Fix TS host typecheck, resolve double-dispatch, restore ceremony surfaces, and clean documentation drift
 
 ---
 
@@ -72,12 +72,11 @@ Colony sealed
 
 ---
 
-## Tasks For Phase 5 — Full Lifecycle Verification And Delivery Readiness
+## Tasks For Phase 7 — Full Release Readiness Verification
 
-- [x] Run full Go and race suites after lifecycle fixes
-- [x] Run TS host typecheck/build/test after command-guide or manifest changes
-- [x] Smoke a fresh Orchestrator colony through discuss, plan, build, continue, seal with current-boundary and result-collection evidence
-- [x] Seal and run porter check with delivery caveats resolved
+- [x] Run full test suite: npm run typecheck, npm test, go test ./... -race, go vet ./...
+- [x] Run aether integrity to validate full release pipeline chain
+- [x] Verify documentation consistency: version strings, counts, and ceremony surfaces all correct
 
 ---
 
@@ -91,18 +90,18 @@ Colony sealed
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-17T20:02:18Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
-- 2026-05-17T20:02:18Z|watcher_verification|continue|watcher skipped; relying on verification commands
-- 2026-05-17T20:02:18Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
-- 2026-05-17T20:02:18Z|signal_housekeeping|continue|Signal housekeeping completed: 9 active -> 9 active
-- 2026-05-17T20:06:45Z|sealed|seal|Colony sealed at Crowned Anthill
+- 2026-05-20T17:07:25Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
+- 2026-05-20T17:07:25Z|watcher_verification|continue|watcher skipped; relying on verification commands
+- 2026-05-20T17:07:25Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
+- 2026-05-20T17:07:25Z|signal_housekeeping|continue|Signal housekeeping completed: 9 active -> 9 active
+- 2026-05-20T17:51:24Z|sealed|seal|Colony sealed at Crowned Anthill
 
 ---
 
 ## Next Steps
 
 1. Run `aether entomb`
-2. Run `aether phase --number 5` to inspect the tracked phase details
+2. Run `aether phase --number 7` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---

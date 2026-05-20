@@ -95,6 +95,7 @@ func runPorterCheck(cmd *cobra.Command, args []string) error {
 			checks = append(checks,
 				checkReleaseVersionAgreementAt(resolveAetherRootPath(), hubDir, resolveVersion()),
 				checkSourceSurfaceAlignmentAt(resolveAetherRootPath()),
+				checkTsHostReleaseArtifactsAt(resolveAetherRootPath()),
 			)
 			checks = append(checks, buildFullReleaseCommandChecks(resolveAetherRootPath(), false)...)
 		}
@@ -173,6 +174,7 @@ func buildPorterChecksForContextWithScope(ctx porterContext, channel string, ski
 			checks = append(checks,
 				checkReleaseVersionAgreementAt(resolveAetherRootPath(), hubDir, binaryVersion),
 				checkSourceSurfaceAlignmentAt(resolveAetherRootPath()),
+				checkTsHostReleaseArtifactsAt(resolveAetherRootPath()),
 			)
 			checks = append(checks, buildFullReleaseCommandChecks(resolveAetherRootPath(), skipTests)...)
 		}
@@ -360,6 +362,25 @@ func checkSourceSurfaceAlignmentAt(root string) integrityCheck {
 		Message:         fmt.Sprintf("source-check found %d issue(s)", len(result.Issues)),
 		RecoveryCommand: "Run aether source-check --json and fix reported source surface drift",
 		Details:         map[string]interface{}{"issue_count": len(result.Issues)},
+	}
+}
+
+func checkTsHostReleaseArtifactsAt(root string) integrityCheck {
+	if err := validateTsHostSourceArtifacts(root); err != nil {
+		return integrityCheck{
+			Name:            "TS host release artifacts",
+			Status:          "fail",
+			Message:         err.Error(),
+			RecoveryCommand: "Run npm --prefix .aether/ts-host ci && npm --prefix .aether/ts-host run build, then rerun aether publish",
+		}
+	}
+	return integrityCheck{
+		Name:    "TS host release artifacts",
+		Status:  "pass",
+		Message: "Built TS host entrypoint and package metadata are present",
+		Details: map[string]interface{}{
+			"entrypoint": filepath.Join(tsHostSourceRelDir, filepath.FromSlash(tsHostEntryRelPath)),
+		},
 	}
 }
 

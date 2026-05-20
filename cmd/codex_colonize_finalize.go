@@ -53,6 +53,9 @@ func loadExternalColonizeCompletion(path string) (codexExternalColonizeCompletio
 	if path == "" {
 		return codexExternalColonizeCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return codexExternalColonizeCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {

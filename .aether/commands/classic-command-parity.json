@@ -40,7 +40,7 @@
       "name": "colonize",
       "category": "full-orchestration",
       "runtime_command": "aether colonize --plan-only",
-      "ts_host_surface": "missing-orchestration-target",
+      "ts_host_surface": "orchestration-manifest",
       "state_mutation_owner": "go-finalizer",
       "mutates_aether_data": true,
       "ts_write_policy": "never-write-aether-data",
@@ -50,7 +50,7 @@
       "wrapper_coverage": {"yaml": true, "claude": true, "opencode": true},
       "raw_bypass": true,
       "classic_behavior": "Survey territory with visible specialist workers.",
-      "restore_target": "Move manifest generation behind aether host colonize in a later phase."
+      "restore_target": "TS host fetches the survey manifest; Go finalizer writes canonical territory survey state."
     },
     {
       "name": "plan",
@@ -98,13 +98,13 @@
       "wrapper_coverage": {"yaml": true, "claude": true, "opencode": true},
       "raw_bypass": true,
       "classic_behavior": "Verify, extract learnings, run gates, and advance the colony.",
-      "restore_target": "Default remains Go-owned; heavy review may use TS-hosted manifests."
+      "restore_target": "Default remains Go-owned; --classic-ceremony/heavy review uses TS-hosted manifests with real reviewer results."
     },
     {
       "name": "seal",
       "category": "semi-intelligent",
       "runtime_command": "aether seal --plan-only",
-      "ts_host_surface": "missing-orchestration-target",
+      "ts_host_surface": "orchestration-manifest",
       "state_mutation_owner": "go-finalizer",
       "mutates_aether_data": true,
       "ts_write_policy": "never-write-aether-data",
@@ -114,7 +114,7 @@
       "wrapper_coverage": {"yaml": true, "claude": true, "opencode": true},
       "raw_bypass": true,
       "classic_behavior": "Run final reviewers and crown the colony only after runtime checks pass.",
-      "restore_target": "Move manifest generation behind aether host seal in a later phase."
+      "restore_target": "TS host fetches the final-review manifest; Go finalizer writes canonical seal artifacts."
     },
     {
       "name": "oracle",

@@ -4,7 +4,7 @@
  * Tests verify:
  * - All 31 v1.21 requirement IDs have at least one test file covering them
  * - Each referenced test file exists on disk
- * - REQUIREMENTS.md contains all 31 requirement entries
+ * - v1.21 requirements archive contains all 31 requirement entries
  * - No requirement ID is missing from the coverage map
  */
 
@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const testDir = __dirname;
 const repoRoot = join(testDir, "..", "..", "..");
-const requirementsPath = join(repoRoot, ".planning", "REQUIREMENTS.md");
+const requirementsPath = join(repoRoot, ".planning", "milestones", "v1.21-REQUIREMENTS.md");
 
 /**
  * Coverage map: each v1.21 requirement ID mapped to the test file(s)
@@ -124,26 +124,26 @@ describe("milestone audit: v1.21 requirement coverage", () => {
     );
   });
 
-  it("REQUIREMENTS.md contains all 31 requirement IDs", () => {
+  it("v1.21 requirements archive contains all 31 requirement IDs", () => {
     assert.ok(
       existsSync(requirementsPath),
-      `REQUIREMENTS.md should exist at ${requirementsPath}`,
+      `v1.21 requirements archive should exist at ${requirementsPath}`,
     );
 
     const content = readFileSync(requirementsPath, "utf-8");
     const matches = content.matchAll(REQUIREMENT_ID_PATTERN);
     const idsFound = new Set<string>();
     for (const match of matches) {
-      idsFound.add(match[1]);
+      idsFound.add(match[1]!);
     }
 
     assert.strictEqual(
       idsFound.size,
       EXPECTED_TOTAL_REQUIREMENTS,
-      `REQUIREMENTS.md should contain exactly ${EXPECTED_TOTAL_REQUIREMENTS} unique requirement IDs, found ${idsFound.size}`,
+      `v1.21 requirements archive should contain exactly ${EXPECTED_TOTAL_REQUIREMENTS} unique requirement IDs, found ${idsFound.size}`,
     );
 
-    // Verify every ID in the coverage map appears in REQUIREMENTS.md
+    // Verify every ID in the coverage map appears in the v1.21 requirements archive.
     const missingFromRequirements: string[] = [];
     for (const entry of REQUIREMENT_COVERAGE_MAP) {
       if (!idsFound.has(entry.id)) {
@@ -154,7 +154,7 @@ describe("milestone audit: v1.21 requirement coverage", () => {
     assert.deepStrictEqual(
       missingFromRequirements,
       [],
-      "All coverage map IDs should appear in REQUIREMENTS.md",
+      "All coverage map IDs should appear in the v1.21 requirements archive",
     );
   });
 
@@ -163,7 +163,7 @@ describe("milestone audit: v1.21 requirement coverage", () => {
     const matches = content.matchAll(REQUIREMENT_ID_PATTERN);
     const idsFound = new Set<string>();
     for (const match of matches) {
-      idsFound.add(match[1]);
+      idsFound.add(match[1]!);
     }
 
     const coverageIds = new Set(REQUIREMENT_COVERAGE_MAP.map((e) => e.id));
@@ -177,7 +177,7 @@ describe("milestone audit: v1.21 requirement coverage", () => {
     assert.deepStrictEqual(
       missingFromCoverage,
       [],
-      `All ${idsFound.size} requirement IDs in REQUIREMENTS.md should appear in the coverage map`,
+      `All ${idsFound.size} requirement IDs in the v1.21 requirements archive should appear in the coverage map`,
     );
   });
 });

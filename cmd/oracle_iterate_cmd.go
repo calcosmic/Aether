@@ -268,6 +268,9 @@ func loadExternalOracleIterationCompletion(path string) (oracleIterationCompleti
 	if path == "" {
 		return oracleIterationCompletion{}, fmt.Errorf("flag --completion-file is required")
 	}
+	if err := validateFinalizerCompletionFilePath(path); err != nil {
+		return oracleIterationCompletion{}, err
+	}
 	var data []byte
 	var err error
 	if path == "-" {

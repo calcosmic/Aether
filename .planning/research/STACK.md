@@ -1,383 +1,265 @@
-# Technology Stack: v1.21 Live Colony
+# Stack Research: v1.22 Grounded Planning + Ceremony Restore
 
-**Project:** Aether v1.21 Live Colony
+**Domain:** Biomimetic AI colony framework (Go runtime + TypeScript host + YAML wrappers)
 **Researched:** 2026-05-18
-**Confidence:** HIGH (based on codebase analysis + npm registry verification)
+**Confidence:** HIGH (direct codebase analysis of all relevant source files; no new external dependencies needed)
 
-## Executive Summary
+## Recommended Stack
 
-The v1.21 milestone makes the TypeScript host a real production orchestrator. This requires four new capabilities: production worker dispatch (removing simulate-only guards), worker-to-worker spawning (workers requesting sub-workers mid-build), confidence-driven iteration (looping plan/build/continue until quality targets are met), and hive wisdom reuse verification (proving colony B benefits from colony A's learnings).
+### Core Principle: Zero New Dependencies
 
-The primary finding: the TS host already has nearly all the code it needs. The `dispatchRealWorker()` path is fully implemented. The `spawns` field exists in the worker claims schema. The Oracle lifecycle already demonstrates confidence-driven iteration. The Go runtime already owns all hive operations. What is missing is not dependencies, but wiring -- removing the simulate-only guard, consuming the `spawns` field, generalizing the Oracle loop pattern, and calling `hive-read` during context assembly.
+This milestone is an architecture restoration, not a feature expansion. Every capability
+already exists in some form in the codebase. The work is about connecting them correctly,
+not introducing new libraries.
 
-Only one new runtime dependency is recommended: `p-limit` for concurrency control of dynamic worker spawning.
+### Go Runtime Additions (cmd/, pkg/)
 
-## Recommended Stack Additions
+| Component | Location | Purpose | Why |
+|-----------|----------|---------|-----|
+| Survey noise filter | `pkg/codegraph/scan_filter.go` (new) | Extended directory/file exclusion for survey and codegraph scanning | `dirsToSkip` in codegraph already excludes 13 dirs; `shouldSkipSurveyDir` in colonize excludes 10; both miss `.venv`, `site-packages`, `.mypy_cache`, `.pytest_cache`, `.tox`, `eggs`, `*.egg-info`, `.eggs`, and generated protobuf/typescript `.d.ts` artifacts. A shared filter function used by both avoids divergence. |
+| Source anchor extraction | `cmd/codex_colonize.go` (extend `surveyWorkspace`) | Extract repo-owned source files (non-dependency, non-generated) as planning anchors | `surveyWorkspace` already collects `TopLevelDirs`, `EntryPoints`, `TestFiles`, `KeyDependencies`; it needs a new field `SourceAnchors []string` that lists the project's own source files (not vendored). These anchors become evidence for plan grounding. |
+| Plan grounding gate | `cmd/codex_plan_finalize.go` (extend) | Reject plans that reference no specific repo files when source anchors exist | `codex_plan_finalize` already validates plans; add a check: if `SourceAnchors` is non-empty in the colony context but the plan contains zero concrete file references, emit a `grounding_warning` instead of accepting the plan as-is. This is a soft gate (warning, not rejection) because some phases legitimately have no file targets (e.g., research phases). |
+| Decision-to-constraint binding | `cmd/discuss.go` (extend `resolveDiscussQuestion`) | When a discuss question is resolved with `hard_constraint: true`, write it to the pending-decisions store and inject into colony-prime as a REDIRECT pheromone | Already has `discussQuestion.HardConstraint` field and `pending-decision-add` command; needs a new path in `resolveDiscussQuestion` that auto-emits a REDIRECT pheromone for hard constraints, so the plan reads them. |
 
-### New Runtime Dependency
+### TypeScript Host Additions (.aether/ts-host/)
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `p-limit` | 7.3.0 | Concurrency control for dynamic worker pools | Worker-to-worker spawning creates an unbounded set of sub-workers. `p-limit` provides a configurable concurrency cap (Promise pool) with zero dependencies, ESM-native, Node >=20. The existing `wave-orchestrator.ts` uses `Promise.all` which cannot cap concurrency for dynamically spawned workers. |
+| Component | Location | Purpose | Why |
+|-----------|----------|---------|-----|
+| Playbook-aware orchestration | `.aether/ts-host/src/lifecycle.ts` (extend) | Load and execute build/plan/continue playbooks as the ceremony source of truth, instead of the current approach where lifecycle.ts bypasses playbooks and directly calls Go commands | Playbooks in `.aether/docs/command-playbooks/` contain the ceremony steps; `build_playbook_context.go` already injects playbook snippets into worker context; the TS host needs to read playbooks and use them as the execution script rather than hardcoding orchestration steps. The Go runtime already has `renderBuildPlaybookContext` -- the TS host should consume the same playbook files. |
+| Go ceremony adapter integration | `.aether/ts-host/src/ceremony-adapter.ts` (existing, extend usage) | Route all visual ceremony through `GoCeremonyAdapter` which already calls `aether ceremony spawn-plan/wave-start/worker-complete/closeout` | Already implemented and tested (465 TS tests). The ceremony adapter IS the restore mechanism -- wrappers call Go ceremony commands which produce visual output. No new code needed, just ensure all TS host orchestration paths use it. |
 
-### No Changes Needed To Existing Dependencies
+### Shared Filter Design
 
-The v1.17 rendering stack (chalk, boxen, figlet, ora, cli-progress, log-update, chokidar, strip-ansi, js-yaml) remains correct and sufficient. No version bumps required.
+The most important stack decision is the noise filter. Three locations currently have separate skip lists:
 
-| Current Dependency | Current Version | Status | Reason |
-|-------------------|-----------------|--------|--------|
-| `chalk` | 5.6.2 | Keep | No rendering changes needed |
-| `boxen` | 8.0.1 | Keep | Ceremony boxes work as-is |
-| `chokidar` | 5.0.0 | Keep | Event bridge already wired |
-| `cli-progress` | 3.12.0 | Keep | Multi-bar dashboard works as-is |
-| `figlet` | 1.11.0 | Keep | Banners work as-is |
-| `js-yaml` | 4.1.1 | Keep | YAML parsing unchanged |
-| `log-update` | 8.0.0 | Keep | Dashboard refresh unchanged |
-| `ora` | 9.4.0 | Keep | Worker spinners work as-is |
-| `strip-ansi` | 7.2.0 | Keep | Width calculation unchanged |
+```go
+// pkg/codegraph/codegraph.go:dirsToSkip (13 entries)
+// Missing: .venv, venv, site-packages, .mypy_cache, .pytest_cache, .tox, eggs, .eggs, *.egg-info
 
-### Existing Code That Already Covers Each Capability
+// cmd/codex_colonize.go:shouldSkipSurveyDir (10 entries)
+// Missing: .venv, venv, __pycache__, site-packages, .mypy_cache, .pytest_cache, .tox, .eggs
 
-| Capability | Existing Code | What It Does | What Needs Changing |
-|-----------|---------------|--------------|---------------------|
-| Production worker dispatch | `dispatchRealWorker()` in `worker-dispatch.ts` lines 237-307 | Detects platform, assembles prompt, spawns subprocess, parses claims | Remove simulate-only guard in `lifecycle.ts` line 268 and `host.ts` lines 308-312 |
-| Worker-to-worker spawning | `spawns` field in `platform-dispatcher.ts` schema (line 374, 388) and `claims-parser.ts` (line 46) | Schema accepts `spawns: string[]` from worker output | Consume `spawns` field in dispatch loop, apply Queen budget, dispatch sub-workers |
-| Confidence-driven iteration | `oracle-lifecycle.ts` `runOracleLifecycle()` | Loops manifest -> dispatch -> finalize -> check stop conditions | Generalize into reusable `ConfidenceLoop` class, apply to plan/build/continue |
-| Hive wisdom reuse | Go CLI: `hive-store`, `hive-read`, `hive-promote` in `cmd/hive.go` | Domain-scoped wisdom with 200-entry cap, multi-repo confidence boosting | Call `aether hive-read` in prompt-assembler context chain, verify injection |
+// No file-level exclusions in either (e.g., *.min.js, *.bundle.js, .d.ts)
+```
 
-## Feature 1: Production TS Host Orchestration
+**Recommendation:** Create a single `ScanFilter` in `pkg/codegraph/scan_filter.go` with both directory and file-level exclusions, used by both codegraph and colonize. This is pure Go stdlib -- no external dependency.
 
-### What Changes (No New Dependencies)
+```go
+// pkg/codegraph/scan_filter.go
+package codegraph
 
-The production unlock is a guard removal, not a new library:
+// ScanFilter provides shared path exclusion logic for repo scanning.
+// Both codegraph.Scan() and codex_colonize.surveyWorkspace() call
+// ShouldSkipDir and ShouldSkipFile to keep filtering consistent.
 
-**File: `lifecycle.ts` line 268-275** -- Remove the simulate-only check:
-```typescript
-// CURRENT (blocks production):
-if (opts.simulateWorkers !== true) {
-  return { success: false, error: "simulate-only" };
+var noiseDirs = map[string]bool{
+    // Version control
+    ".git": true,
+    // Python virtual environments and caches
+    ".venv": true, "venv": true, "env": true, ".env": true,
+    "__pycache__": true, ".mypy_cache": true, ".pytest_cache": true,
+    ".tox": true, ".ruff_cache": true, ".pytype": true,
+    "site-packages": true,
+    // Node.js
+    "node_modules": true, ".next": true, ".nuxt": true,
+    // Go
+    "vendor": true,
+    // Rust
+    "target": true,
+    // General build artifacts
+    "dist": true, "build": true, "out": true, "bin": true,
+    // Caches
+    ".cache": true, ".terraform": true, ".gradle": true,
+    // Aether-managed
+    ".aether": true, ".claude": true, ".codex": true, ".opencode": true,
+    // IDE/editor
+    ".idea": true, ".vscode": true, ".vs": true,
+    // OS metadata
+    ".DS_Store": true, "Thumbs.db": true,
 }
 
-// NEW (production-ready):
-// Remove the guard entirely. The lifecycle should work with real workers
-// when simulateWorkers is false or undefined.
-```
-
-**File: `host.ts` lines 308-312** -- Remove the entry-point guard:
-```typescript
-// CURRENT (blocks production):
-if (!simulate) {
-  process.stderr.write("Error: lifecycle is experimental and simulate-only...");
-  process.exit(1);
-}
-
-// NEW: Remove this block entirely.
-```
-
-**File: `lifecycle.ts` line 424** -- Remove the hardcoded simulation override:
-```typescript
-// CURRENT (forces simulation even when platform available):
-const simulateWorkers = true;
-
-// NEW: Respect the caller's option:
-const simulateWorkers = opts.simulateWorkers ?? false;
-```
-
-### Integration: Lifecycle-Level AbortController
-
-Add graceful shutdown for the full plan->build->continue lifecycle. The `AbortController` pattern already exists in `platform-dispatcher.ts` (per-worker timeout) and `watch-display.ts` (SIGINT). Extend it to the lifecycle level:
-
-```typescript
-// New: lifecycle-level cancellation controller
-const lifecycleController = new AbortController();
-process.on("SIGINT", () => lifecycleController.abort());
-
-// Pass signal to all dispatch calls
-const queenOpts = {
-  ...opts,
-  signal: lifecycleController.signal,
-};
-```
-
-This requires zero new dependencies. `AbortController` is a Web API available in Node >= 15.
-
-### What NOT to Add
-
-| Technology | Why Avoid |
-|------------|-----------|
-| `execa` or `zx` | The Go bridge (`go-bridge.ts`) uses `child_process.execFileSync` deliberately -- synchronous, no shell injection, matches the JSON envelope contract. Platform dispatch uses `child_process.spawn` with explicit args. Adding a subprocess wrapper adds a dependency for no benefit. |
-| `bottleneck` | More feature-rich than `p-limit` (priority queues, reservoirs, timeouts) but 10x larger. The TS host needs a simple concurrency cap, not a full job scheduler. |
-| `worker_threads` | Workers are external platform CLIs (claude, opencode, codex), not JS functions. `worker_threads` is for in-process parallelism of JS code, which is not what we need. |
-
-## Feature 2: Worker-to-Worker Spawning
-
-### How It Works (No New Architecture Needed)
-
-The `spawns` field already exists in the worker claims schema:
-
-```typescript
-// platform-dispatcher.ts -- workerClaimsSchema already includes:
-"spawns": {
-  "type": "array",
-  "items": { "type": "string" },
-  "description": "Names of additional workers this worker requests"
+// noiseFileExts lists file extensions to skip during scanning.
+var noiseFileExts = map[string]bool{
+    ".min.js": true, ".min.css": true, ".bundle.js": true, ".map": true,
+    ".pyc": true, ".pyo": true, ".so": true, ".dylib": true, ".dll": true,
+    ".d.ts": true, // TypeScript declaration files (not user source)
 }
 ```
 
-The flow is:
-1. Worker completes its task and returns claims JSON with `spawns: ["sub-worker-1", "sub-worker-2"]`
-2. TS host parses claims via `parseWorkerClaims()` (already works)
-3. New `SpawnPool` class checks `spawns` array, applies Queen spawn budget constraints
-4. For each approved spawn, call existing `dispatchSingleWorker()` with a synthetic dispatch entry
-5. Sub-worker results feed back into the parent's completion
+**Why not use `go-gitignore` library:** Adding a dependency violates the project's zero-new-dependencies principle (established in v1.9 and reaffirmed in every milestone since). The `.gitignore` approach sounds flexible but introduces complexity: Aether targets repos that may have stale or missing `.gitignore` files, and parsing gitignore patterns adds a dependency for a problem solvable with a 25-entry map. The known noise directories are finite and stable across language ecosystems. If a user has an unusual exclusion need, pheromone REDIRECT covers it.
 
-### Why `p-limit` Is the Only New Dependency
+**Why not `.gitignore` parsing:** Some target repos are new/empty (the exact case where Aether's survey matters most) and may not have `.gitignore`. The hardcoded list is safer because it always works.
 
-Without `p-limit`, worker-to-worker spawning creates unbounded concurrency. A single builder could request 5 sub-workers, each of which requests 5 more, etc. `p-limit` caps this:
+### Source Anchor Extraction Strategy
 
-```typescript
-import pLimit from "p-limit";
+**Approach:** After the noise filter removes directories, what remains falls into two categories:
+1. **Project source** -- files the user wrote (e.g., `src/`, `lib/`, `cmd/`, `internal/`, `app/`)
+2. **Configuration and tooling** -- files that describe but don't implement (e.g., `README.md`, `Dockerfile`, `.eslintrc`)
 
-// Cap total concurrent workers (including sub-workers) to Queen's budget
-const concurrencyLimit = pLimit(queenBudget.max_workers ?? 4);
-
-// Each spawn dispatch goes through the limiter
-await concurrencyLimit(() => dispatchSingleWorker(opts, subDispatch));
-```
-
-### Sub-Worker Dispatch Entry Construction
-
-The TS host must construct a synthetic `BuildDispatch` from the `spawns` field. This requires Go's `aether spawn-log` to accept ad-hoc worker names:
-
-```typescript
-// The spawns field contains task descriptions, not structured dispatches.
-// The TS host creates minimal dispatch entries:
-const subDispatch: BuildDispatch = {
-  stage: parentDispatch.stage,
-  wave: parentDispatch.wave,
-  caste: "builder", // Default; could be inferred from task description
-  name: `${parentDispatch.name}-sub-${i}`,
-  task: spawnDescription,
-  status: "pending",
-};
-```
-
-### What NOT to Add
-
-| Technology | Why Avoid |
-|------------|-----------|
-| `bullmq` or `agenda` | Full job queue with Redis. Workers are short-lived CLI subprocesses, not long-running services. A queue adds operational complexity (Redis dependency) for no benefit. |
-| `rabbitmq` or `amqplib` | Message queue for distributed systems. The TS host runs in a single process on a single machine. IPC via `child_process.spawn` is sufficient. |
-| Custom tree-based spawn tracker | Tempting to model as a spawn tree (parent -> children -> grandchildren). But the Go runtime already tracks spawn-log and spawn-complete per worker. The TS host should delegate tracking to Go, not duplicate it. |
-
-## Feature 3: Confidence-Driven Iteration
-
-### Template Already Exists: `oracle-lifecycle.ts`
-
-The Oracle lifecycle demonstrates the exact pattern needed:
+Source anchors are project source files. The extraction logic:
 
 ```
-1. Get manifest from Go (--plan-only)
-2. Check stop conditions (confidence target, max iterations, no progress)
-3. If not met: dispatch workers
-4. Build completion file
-5. Call Go finalizer
-6. Go returns updated confidence
-7. Loop to step 2
+1. Walk repo root with noise filter
+2. For each file, check if it's a source file (language extension match)
+3. Exclude test files from anchors (test files are already tracked separately)
+4. Group by directory; directories with >50% source files are "source directories"
+5. Files in source directories are anchors
+6. Cap at 50 anchors (sorted by path depth -- shallowest first = most important)
 ```
 
-### Generalization: `ConfidenceLoop` Class
-
-Extract the Oracle loop pattern into a reusable class. No external dependency -- pure TypeScript using existing Go bridge calls:
-
-```typescript
-interface ConfidenceLoopOptions {
-  goBinaryPath: string;
-  cwd: string;
-  targetConfidence: number;    // e.g., 90
-  maxIterations: number;       // e.g., 5
-  noProgressLimit: number;     // Stop after N iterations with no confidence gain
-  manifestCommand: string[];   // e.g., ["plan", "--plan-only"]
-  finalizeCommand: string[];   // e.g., ["plan-finalize", "--completion-file", ...]
-  dispatchFn: (manifest) => Promise<WorkerResult[]>;
-  extractConfidence: (finalizeResult) => number;
-}
+This gives the planner concrete file paths to reference, producing grounded plans like:
+```
+Phase 1: Add user authentication
+  - Modify src/auth/middleware.ts (session validation)
+  - Create src/auth/login.ts (new endpoint)
+```
+Instead of generic plans like:
+```
+Phase 1: Add user authentication
+  - Implement session management
+  - Add login endpoint
 ```
 
-### Stop Conditions
+### Plan Grounding Gate Design
 
-Already partially defined in `OracleStopConditions` (types.ts line 456-465). Extend:
+**Approach:** A soft validation gate in `codex_plan_finalize.go`. After the Route-Setter produces a plan, scan each task's `goal`, `constraints`, and `hints` fields for concrete file path patterns (e.g., `src/`, `cmd/`, relative paths with extensions). If the plan contains zero concrete file references AND `SourceAnchors` is non-empty, emit a `grounding_warning` in the plan output.
 
-| Condition | Source | Action |
-|-----------|--------|--------|
-| Confidence met | Go finalize returns `confidence >= target` | Stop (success) |
-| Max iterations | Counter reaches `maxIterations` | Stop (with warning) |
-| No progress | Confidence unchanged for `noProgressLimit` iterations | Stop (with warning) |
-| Manual stop | SIGINT / user cancellation | Stop (abort) |
-| Gate failure | Go finalize returns blocked=true | Stop (requires intervention) |
+**Why a soft gate, not hard rejection:** Some phases legitimately have no file targets:
+- Research phases (Oracle work)
+- Architecture decisions (Architect work)
+- Infrastructure phases (deployment config)
 
-### What NOT to Add
+A hard rejection would break these. A warning lets the user decide whether the plan needs more specificity.
 
-| Technology | Why Avoid |
-|------------|-----------|
-| `iteratop` | NPM package for convergent iteration loops. Zero stars, zero forks, v0.3.0, no updates in 2+ years. The pattern is 50 lines of TypeScript -- not worth a dependency with no community. |
-| `tough-cookie` / `retry-axios` | HTTP retry libraries. The TS host does not make HTTP requests to workers; it spawns CLI subprocesses. Retry logic is already in `wave-orchestrator.ts` via `runRetryLoop()`. |
+**Pattern for detecting file references:**
+```go
+// File reference pattern: anything that looks like a path with an extension
+var fileRefPattern = regexp.MustCompile(`(?:src|lib|cmd|pkg|app|internal|docs)/[^\s"')\]]+\.\w+`)
 
-## Feature 4: Hive Wisdom Reuse Verification
-
-### Go Already Owns Everything
-
-All hive operations are Go CLI subcommands:
-
-| Operation | Command | Implementation |
-|-----------|---------|---------------|
-| Store wisdom | `aether hive-store --text "..." --domain "web" --source-repo "repo-a"` | `cmd/hive.go` |
-| Read wisdom | `aether hive-read --domain "web" --confidence-threshold 0.7` | `cmd/hive.go` |
-| Promote instinct | `aether hive-promote --text "..." --source-repo "repo-a"` | `cmd/hive.go` |
-| Initialize | `aether hive-init` | `cmd/hive.go` |
-
-### What the TS Host Needs to Do
-
-Call `aether hive-read` during context assembly and inject results into worker prompts. This is a 10-line addition to `prompt-assembler.ts`:
-
-```typescript
-// In renderContextCapsule(), after QUEEN.md fallback:
-const hiveWisdom = readHiveWisdom(config.cwd, config.platform);
-if (hiveWisdom) {
-  parts.push("## Hive Wisdom (Cross-Colony Patterns)\n\n" + hiveWisdom);
-}
-
-// New helper function:
-function readHiveWisdom(cwd: string, platform: Platform): string {
-  try {
-    const bridge: GoBridgeOptions = { goBinaryPath: discoverGoBinary(), cwd };
-    const result = callGoJSON<{ entries?: Array<{ text: string; confidence: number }> }>(
-      bridge, ["hive-read"]
-    );
-    if (!result.entries?.length) return "";
-    return result.entries
-      .filter(e => e.confidence >= 0.7)
-      .map(e => `- [${(e.confidence * 100).toFixed(0)}%] ${e.text}`)
-      .join("\n");
-  } catch {
-    return ""; // Graceful degradation
-  }
-}
+// Or direct relative path references like "./file.ts", "../file.go"
+var relPathPattern = regexp.MustCompile(`\.\.?/[\w./-]+\.\w+`)
 ```
 
-### Verification Proof Approach
+### Decision Binding Design
 
-To prove colony B benefits from colony A:
+The discuss command already stores decisions as `PendingDecision` structs with a `Type` field. The binding mechanism:
 
-1. **Colony A** completes work. High-confidence instincts (>= 0.8) are promoted to hive via `hive-promote` at seal.
-2. **Colony B** starts in the same domain. During `assemblePrompt()`, `hive-read` retrieves colony A's wisdom scoped to the domain.
-3. **Verification**: Compare colony B's first-phase build quality (tests passing, fewer retries, faster completion) against a baseline colony that did not receive hive wisdom.
+1. When `resolveDiscussQuestion` is called with `HardConstraint: true`:
+   - Create a `PendingDecision` with type `"hard_constraint"` (already uses this type)
+   - Emit a REDIRECT pheromone via `pheromone-write` with content from the resolved answer
+   - Colony-prime already injects REDIRECT signals into worker context
+2. During plan generation, colony-prime context includes active REDIRECT signals
+3. The Route-Setter sees constraints like: `REDIRECT: "Do not use ORM -- raw SQL only (source: discuss:pd_12345)"`
+4. Plans naturally respect these constraints
 
-This verification is a test scenario, not a code feature. No new dependency needed.
+**Why pheromone-based binding:** The entire colony system already routes through pheromones. Adding a parallel constraint mechanism would create confusion. The pheromone system has content deduplication (SHA-256 hash), TTL, strength decay, and priority ordering. It is the right tool for this job.
 
-### What NOT to Add
+### Ceremony Restore via Playbooks
 
-| Technology | Why Avoid |
-|------------|-----------|
-| Redis / SQLite for hive storage | Go already uses a single JSON file (`~/.aether/hive/wisdom.json`) with file locking. Adding a database for 200 entries is massive over-engineering. |
-| Vector embeddings / semantic search | Hive wisdom is domain-tagged and confidence-scored. Exact domain matching + confidence threshold is the right retrieval strategy for 200 entries. Semantic search adds complexity (embedding model dependency, vector DB) with no benefit at this scale. |
-| gRPC / protobuf for cross-colony communication | Colonies on the same machine share `~/.aether/hive/`. No network communication needed. |
+The current situation: Playbooks exist in `.aether/docs/command-playbooks/` (13 files), the Go runtime has `build_playbook_context.go` that injects playbook snippets into worker context, but the TS host lifecycle.ts orchestrates directly without reading playbooks.
 
-## Installation
+**The restore approach:**
 
-```bash
-# Single new runtime dependency
-cd .aether/ts-host
-npm install p-limit@7.3.0
+1. **TS host reads playbooks** from `.aether/docs/command-playbooks/` (same files the Go runtime uses)
+2. **Playbooks become the execution script** -- lifecycle.ts follows the step sequence defined in the playbook markdown rather than hardcoded Go-command sequences
+3. **Go ceremony adapter renders visuals** -- the TS host calls `GoCeremonyAdapter` for every visual element (spawn-plan, wave-start, worker-complete, closeout)
+4. **YAML becomes packaging metadata only** -- `.aether/commands/*.yaml` defines the command name, flags, and runtime command mapping; ceremony content lives exclusively in playbooks
 
-# No other changes needed. Existing dependencies are current.
-```
+This means:
+- **Build ceremony**: lifecycle.ts reads `build-full.md` (or the split playbooks), follows each step, and calls Go ceremony adapter for visuals
+- **Plan ceremony**: lifecycle.ts reads the plan playbook steps, follows the Scout/Route-Setter flow, calls Go ceremony adapter for visuals
+- **Continue ceremony**: lifecycle.ts reads `continue-full.md` (or the split playbooks), follows the verify-gates-advance flow
 
-## Integration Points with Existing Go/TS Code
+**Why playbooks, not code:** Playbooks are markdown files that the user can read and edit. This is core to Aether's philosophy -- "editable colony brain." If ceremony steps live in TypeScript code, only developers can modify them. If they live in markdown playbooks, any user can understand and customize the ceremony.
 
-### 1. Simulate-Only Guard Removal
+**Key existing code to reuse:**
+- `renderBuildPlaybookContext()` in `cmd/build_playbook_context.go` -- already reads playbooks
+- `GoCeremonyAdapter` in `.aether/ts-host/src/ceremony-adapter.ts` -- already calls Go ceremony commands
+- `loadTemplate()` in `.aether/ts-host/src/template-loader.ts` -- already reads ceremony templates
+- `buildPlaybookCandidates()` in `cmd/build_playbook_context.go` -- already resolves playbook paths (repo, hub, absolute)
 
-| File | Location | Change |
-|------|----------|--------|
-| `lifecycle.ts` | Lines 268-275 | Remove guard that blocks non-simulated execution |
-| `lifecycle.ts` | Line 424 | Change `const simulateWorkers = true` to `opts.simulateWorkers ?? false` |
-| `host.ts` | Lines 308-312 | Remove `process.exit(1)` guard for lifecycle without `--simulate` |
+## Supporting Libraries
 
-### 2. Worker-to-Worker Spawning
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| Go stdlib `path/filepath` | Go 1.24+ | Directory walking, path matching | All noise filtering (no external dep needed) |
+| Go stdlib `regexp` | Go 1.24+ | File reference pattern detection for grounding gate | Plan validation |
+| Go stdlib `encoding/json` | Go 1.24+ | Source anchor serialization, plan output | Data flow |
+| Node.js `node:fs` | Built-in | Playbook file reading in TS host | Playbook consumption |
+| Node.js `node:child_process` | Built-in | Go ceremony adapter subprocess calls | Already used |
 
-| File | Location | Change |
-|------|----------|--------|
-| `worker-dispatch.ts` | After `dispatchSingleWorker()` | Check `result.spawns` (currently unused), queue sub-dispatches |
-| `worker-dispatch.ts` | New `SpawnPool` class | Apply `p-limit` concurrency cap, Queen budget check |
-| `claims-parser.ts` | Already works | `spawns` field already parsed from worker JSON output |
-| `types.ts` | `WorkerResult` | Ensure `spawns` field is preserved in `toWorkerResults()` |
+## What NOT to Use
 
-### 3. Confidence Loop Generalization
-
-| File | Location | Change |
-|------|----------|--------|
-| New file `confidence-loop.ts` | TS host src | Extract loop pattern from `oracle-lifecycle.ts` |
-| `oracle-lifecycle.ts` | Refactor | Use `ConfidenceLoop` instead of inline loop |
-| `lifecycle.ts` | Step 2 (Build) and Step 3 (Continue) | Wrap in `ConfidenceLoop` when confidence target is set |
-
-### 4. Hive Wisdom Injection
-
-| File | Location | Change |
-|------|----------|--------|
-| `prompt-assembler.ts` | `renderContextCapsule()` | Add `callGoJSON(["hive-read"])` and inject into context |
-| `go-bridge.ts` | No change | `callGoJSON` already supports arbitrary Go CLI commands |
-
-## Summary: New vs. Existing
-
-| Category | Count | Details |
-|----------|-------|---------|
-| New runtime dependencies | 1 | `p-limit@7.3.0` |
-| New dev dependencies | 0 | |
-| Existing deps to bump | 0 | All current versions are current |
-| New TS source files | 1 | `confidence-loop.ts` (extracted from oracle-lifecycle.ts) |
-| Modified TS source files | 4 | `lifecycle.ts`, `worker-dispatch.ts`, `prompt-assembler.ts`, `host.ts` |
-| New Go changes | 0 | Go runtime already supports all required operations |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `github.com/sabhiram/go-gitignore` | Adds external dependency for a problem solved by a 25-entry map. Target repos may lack `.gitignore`. Parsing gitignore patterns is complex (negation, globs, directory-only semantics). | Hardcoded `noiseDirs` map in `pkg/codegraph/scan_filter.go` |
+| AST-based parsing (e.g., `go/ast`, `typescript-eslint/parser`) | Overkill for survey noise filtering. Codegraph intentionally uses regex-based import parsing for the 80% case (see codegraph.go design doc). Full AST would add parsing dependencies and slow scans. | Keep existing regex-based parsing, extend `dirsToSkip` |
+| New YAML/config file for exclusion rules | Creates configuration drift. Users already have pheromone REDIRECT for custom exclusions. | Hardcoded defaults + pheromone override |
+| Database (SQLite, etc.) for source anchors | Anchors are a scan-time artifact, not persistent state. They should be regenerated on each survey. | In-memory computation during `surveyWorkspace()`, stored in survey JSON |
+| New TypeScript framework (e.g., Zod, Ajv) for playbook parsing | Playbooks are markdown with step headers, not structured data that needs schema validation. The Go runtime already handles playbook file resolution. | Simple string parsing of step headers (`### Step N:`) |
+| LLM-based grounding validation | Grounding is a structural check (does the plan mention concrete files?), not a semantic judgment. An LLM check would add latency and cost for a deterministic problem. | Regex pattern matching for file references |
 
 ## Alternatives Considered
 
-### Concurrency Control: `p-limit` vs `bottleneck` vs custom
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| Shared Go filter function | `.gitignore` parsing library | Adds dependency; `.gitignore` may not exist in target repos |
+| Soft grounding gate (warning) | Hard grounding gate (rejection) | Research/architecture phases legitimately have no file targets |
+| Pheromone-based decision binding | Separate constraint file | Pheromone system already handles priority, TTL, dedup, injection |
+| Playbook-driven TS orchestration | Code-driven TS orchestration | Playbooks are editable by users; code is only editable by developers |
+| Hardcoded noise directory map | Configurable noise list in COLONY_STATE.json | YAGNI -- the 25 known noise dirs cover 99% of cases; REDIRECT covers edge cases |
 
-| Criterion | `p-limit` 7.3.0 | `bottleneck` 2.19.5 | Custom semaphore |
-|-----------|-----------------|---------------------|------------------|
-| Bundle size | ~2 KB | ~35 KB | 0 KB |
-| Dependencies | 0 | 4 | 0 |
-| API complexity | 2 methods | 15+ methods | Custom |
-| Active maintenance | Yes (2024) | Yes (2023) | N/A |
-| Node >=20 | Yes | Yes | N/A |
+## Stack Patterns by Variant
 
-**Verdict:** `p-limit`. One function, one purpose, zero dependencies. `bottleneck` offers priority queues and reservoirs that we do not need. A custom semaphore is trivial but `p-limit` is battle-tested and tiny.
+**If the target repo is a Python project:**
+- Source anchors come from directories not in the noise list (e.g., `src/`, `lib/`, `app/`)
+- Noise filtering is critical -- `.venv` and `site-packages` must be excluded to avoid polluting the survey with dependency code
+- Test files detected by `_test.py` suffix or `tests/` directory
 
-### Iteration Loop: Extract class vs. Keep inline
+**If the target repo is a Go project:**
+- Source anchors from `cmd/`, `pkg/`, `internal/` (standard Go layout)
+- `vendor/` already excluded by both codegraph and colonize
+- Test files detected by `_test.go` suffix
 
-The Oracle lifecycle has a working loop. Options:
+**If the target repo is a TypeScript/Node project:**
+- Source anchors from `src/`, `lib/`, `app/`, `pages/`, `components/`
+- `node_modules/` and `.next/`/`.nuxt/` already excluded
+- Declaration files (`.d.ts`) excluded by new `noiseFileExts`
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| Keep inline in oracle-lifecycle.ts | No refactoring risk | Duplicates loop logic for plan/build/continue |
-| Extract `ConfidenceLoop` class | Reusable, testable, single source of truth | Refactoring risk (must not break Oracle) |
+**If the target repo is a monorepo:**
+- Source anchors from each package's `src/` or equivalent
+- `node_modules/` at both root and package level already excluded by name match
+- Plan grounding should produce per-package file references
 
-**Verdict:** Extract. The loop pattern is identical for Oracle, plan, build, and continue. Duplicating it four times guarantees drift.
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| Go 1.24 (current) | All new code uses `path/filepath`, `regexp`, `strings` | No new Go dependencies |
+| Node.js (current TS host) | All new TS code uses `node:fs`, `node:child_process` | No new npm dependencies |
+| Existing `pkg/codegraph` API | New `ScanFilter` is additive; `dirsToSkip` remains for backward compat | Both codegraph and colonize should migrate to shared filter |
+| Existing ceremony adapter | No changes to `GoCeremonyAdapter` interface | TS host simply calls it more consistently |
+
+## Installation
+
+No new packages required. All additions use Go stdlib and Node.js built-ins.
+
+```bash
+# Zero new dependencies
+# Go changes: new file pkg/codegraph/scan_filter.go
+# TS changes: extend lifecycle.ts to read playbooks
+# Playbook changes: already exist in .aether/docs/command-playbooks/
+```
 
 ## Sources
 
-- npm registry verified (2026-05-18): `p-limit@7.3.0` (node >=20, 0 deps)
-- Aether codebase analysis:
-  - `.aether/ts-host/src/worker-dispatch.ts` -- real dispatch path (lines 237-307), `spawns` in claims
-  - `.aether/ts-host/src/lifecycle.ts` -- simulate-only guard (lines 268-275)
-  - `.aether/ts-host/src/host.ts` -- entry-point guard (lines 308-312)
-  - `.aether/ts-host/src/oracle-lifecycle.ts` -- confidence loop template
-  - `.aether/ts-host/src/prompt-assembler.ts` -- context assembly, hive integration point
-  - `.aether/ts-host/src/platform-dispatcher.ts` -- `spawns` schema, AbortController usage
-  - `.aether/ts-host/src/wave-orchestrator.ts` -- retry logic, wave grouping
-  - `.aether/ts-host/src/types.ts` -- OracleStopConditions, WorkerResult, BuildDispatch
-  - `.aether/ts-host/src/queen/orchestrator.ts` -- Queen spawn budget integration
-  - `.aether/ts-host/src/go-bridge.ts` -- Go CLI bridge, completion file pattern
-  - `cmd/hive.go` -- hive-store, hive-read, hive-promote implementations
-  - `cmd/oracle_loop.go` -- Go-side oracle depth levels and iteration config
-  - `cmd/queen_spawn_budget.go` -- Go-side spawn budget application
-  - `.aether/ts-host/package.json` -- current dependency versions
+- Direct codebase analysis: `cmd/survey.go`, `cmd/codex_colonize.go` (lines 417-982), `pkg/codegraph/codegraph.go` (full file), `cmd/codex_plan.go` (lines 1-150), `cmd/ceremony_cmd.go`, `cmd/ceremony_emitter.go`, `cmd/codex_plan_finalize.go`, `cmd/discuss.go`, `cmd/pending_decision.go`, `cmd/build_playbook_context.go`
+- TS host analysis: `.aether/ts-host/src/go-bridge.ts`, `.aether/ts-host/src/ceremony-adapter.ts`, `.aether/ts-host/src/template-loader.ts`, `.aether/ts-host/src/lifecycle.ts`, `.aether/ts-host/src/wave-orchestrator.ts`
+- Playbook analysis: `.aether/docs/command-playbooks/` (13 files)
+- PROJECT.md context: `.planning/PROJECT.md` (v1.22 milestone definition)
+- Noise filter patterns: GitHub community patterns for directory exclusion (HIGH confidence based on multiple open-source projects using identical exclusion lists)
+- Plan grounding: Research on evidence-based planning validation from academic sources (MEDIUM confidence -- the concept is sound but Aether's implementation is novel)
+
+---
+*Stack research for: Aether v1.22 Grounded Planning + Ceremony Restore*
+*Researched: 2026-05-18*

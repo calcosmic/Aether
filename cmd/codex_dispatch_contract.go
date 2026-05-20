@@ -116,7 +116,7 @@ func planningDispatchContractWithTimeout(workerTimeout time.Duration) map[string
 		DeadlinePolicy:         "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.",
 		DependencyBehavior:     "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.",
 		FallbackBehavior:       "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first.",
-		FallbackVisibility:     []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source"},
+		FallbackVisibility:     []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source", "planning_loop"},
 		CoordinationPath:       dataContractPath("spawn-tree.txt"),
 		ResultArtifactPaths:    []string{finalizerCompletionTempPattern},
 		ResultCollectionPolicy: "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid.",

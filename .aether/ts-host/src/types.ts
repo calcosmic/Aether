@@ -82,8 +82,11 @@ export interface WaveExecutionPlan {
 export interface BuildExecutionPlan {
   execution_wave: number;
   stage: string;
-  // Additional fields from Go struct
-  [key: string]: unknown;
+  wave?: number;
+  strategy: string;
+  worker_count: number;
+  castes?: string[];
+  reason?: string;
 }
 
 export interface BuildDispatch {
@@ -187,11 +190,10 @@ export interface WorkerHandoff {
   open_decisions?: string[];
   assumptions?: string[];
   next_worker_instructions?: string[];
-  things_not_to_repeat?: string[];
+  do_not_repeat?: string[];
   freshness?: string;
   /** Results from spawned child workers (SPAWN-04). */
   child_results?: ChildResult[];
-  [key: string]: unknown;
 }
 
 /**
@@ -233,8 +235,20 @@ export interface SpawnedWorker {
   handoff?: WorkerHandoff;
 }
 
+export interface BuildTaskClaim {
+  task_id: string;
+  files_created?: string[];
+  files_modified?: string[];
+  tests_written?: string[];
+}
+
 export interface BuildClaims {
-  [key: string]: unknown;
+  files_created: string[];
+  files_modified: string[];
+  tests_written?: string[];
+  task_claims?: BuildTaskClaim[];
+  build_phase: number;
+  timestamp: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,19 +263,63 @@ export interface PlanCompletion {
   results?: PlanningDispatch[];
   workers?: PlanningDispatch[];
   scout_report?: ScoutReport;
+  phase_plan?: WorkerPlanArtifact;
   synthesis?: PlanSynthesis;
 }
 
 export interface PlanManifest {
-  [key: string]: unknown;
+  goal?: string;
+  root?: string;
+  generated_at?: string;
+  colony_mode?: string;
+  refresh?: boolean;
+  existing_plan?: boolean;
+  existing_phase_count?: number;
+  depth?: string;
+  granularity?: string;
+  granularity_min?: number;
+  granularity_max?: number;
+  planning_depth?: string;
+  verification_depth?: string;
+  planning_loop?: PlanningLoop;
+  survey?: SurveyContext;
+  dispatches?: PlanningDispatch[];
+  snapshots?: Record<string, ArtifactSnapshot>;
+  dispatch_mode?: string;
+  dispatch_contract?: DispatchContract;
+  finalize_surface?: string;
+  requires_finalizer?: boolean;
+  boundary_questions?: DiscussQuestion[];
+  boundary_question_count?: number;
+  boundary_questions_created?: number;
+  boundary_questions_existing?: number;
+  orchestrator_boundary_guidance?: OrchestratorBoundaryGuidance;
 }
 
 export interface PlanningDispatch {
-  name?: string;
-  status?: string;
+  stage?: string;
+  wave?: number;
+  execution_wave?: number;
+  caste: string;
+  agent_name?: string;
+  name: string;
+  task: string;
+  task_id?: string;
+  outputs: string[];
+  status: string;
   summary?: string;
+  blockers?: string[];
+  duration?: number;
+  brief?: string;
+  files_created?: string[];
+  files_modified?: string[];
+  scout_report?: ScoutReport;
   phase_plan?: WorkerPlanArtifact;
-  [key: string]: unknown;
+  skill_section?: string;
+  skill_count?: number;
+  colony_skill_count?: number;
+  domain_skill_count?: number;
+  matched_skills?: string[];
 }
 
 export interface PlanSynthesis {
@@ -271,11 +329,91 @@ export interface PlanSynthesis {
 }
 
 export interface ScoutReport {
-  [key: string]: unknown;
+  findings: ScoutFinding[];
+  gaps: string[];
+  confidence: number;
+  study_files: string[];
 }
 
 export interface WorkerPlanArtifact {
-  [key: string]: unknown;
+  phases: WorkerPlanPhase[];
+  confidence: PlanConfidence;
+  gaps?: string[];
+  planning_loop?: PlanningLoop;
+}
+
+export interface ScoutFinding {
+  area: string;
+  discovery: string;
+  source: string;
+}
+
+export interface PlanConfidence {
+  knowledge?: number;
+  requirements?: number;
+  risks?: number;
+  dependencies?: number;
+  effort?: number;
+  overall?: number;
+}
+
+export interface WorkerPlanPhase {
+  name: string;
+  description: string;
+  tasks: WorkerPlanTask[];
+  success_criteria?: string[];
+}
+
+export interface WorkerPlanTask {
+  goal: string;
+  constraints?: string[];
+  hints?: string[];
+  success_criteria?: string[];
+  depends_on?: string[];
+}
+
+export interface PlanningLoop {
+  target_confidence: number;
+  max_iterations: number;
+  stall_threshold: number;
+  stall_limit: number;
+  accept?: boolean;
+  iterations: number;
+  stop_reason: string;
+  final_confidence: number;
+  accepted_below_target?: boolean;
+  gaps?: string[];
+  history?: PlanningLoopSample[];
+}
+
+export interface PlanningLoopSample {
+  iteration: number;
+  confidence: number;
+  delta: number;
+  stall_count: number;
+  gaps?: string[];
+  evidence?: string;
+}
+
+export interface SurveyContext {
+  SurveyDir?: string;
+  SurveyDocs?: string[];
+  Languages?: string[];
+  Frameworks?: string[];
+  Directories?: string[];
+  EntryPoints?: string[];
+  Dependencies?: string[];
+  TestFiles?: string[];
+  Issues?: string[];
+  SecurityPatterns?: string[];
+  SourceAnchors?: string[];
+}
+
+export interface ArtifactSnapshot {
+  Existed?: boolean;
+  ModTime?: string;
+  Size?: number;
+  ContentHash?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,14 +429,148 @@ export interface ContinueCompletion {
 }
 
 export interface ContinuePlanManifest {
-  [key: string]: unknown;
+  phase: number;
+  phase_name: string;
+  root: string;
+  generated_at: string;
+  colony_mode?: string;
+  build_manifest?: string;
+  verification: ContinueVerificationReport;
+  assessment: ContinueAssessment;
+  reconcile_task_ids?: string[];
+  worker_timeout_seconds?: number;
+  verification_timeout_seconds?: number;
+  skip_watchers?: boolean;
+  dispatches: ContinueExternalDispatch[];
+  dispatch_mode: string;
+  finalize_surface: string;
+  requires_finalizer: boolean;
+  review_depth?: string;
+  boundary_questions?: DiscussQuestion[];
+  boundary_question_count?: number;
+  boundary_questions_created?: number;
+  boundary_questions_existing?: number;
+  orchestrator_boundary_guidance?: OrchestratorBoundaryGuidance;
 }
 
 export interface ContinueExternalDispatch {
-  name?: string;
-  status?: string;
+  stage: string;
+  wave: number;
+  execution_wave?: number;
+  caste: string;
+  agent_name?: string;
+  name: string;
+  task: string;
+  task_id: string;
+  timeout_seconds?: number;
+  status: string;
   summary?: string;
-  [key: string]: unknown;
+  blockers?: string[];
+  duration?: number;
+  report?: string;
+  findings?: ReviewFinding[];
+  issues?: ReviewFinding[];
+  recommendations?: string[];
+  weak_spots?: string[];
+  edge_cases_discovered?: string[];
+  reusable_lessons?: string[];
+  brief?: string;
+  skill_section?: string;
+  skill_count?: number;
+  colony_skill_count?: number;
+  domain_skill_count?: number;
+  matched_skills?: string[];
+  handoff?: WorkerHandoff;
+}
+
+export interface VerificationStep {
+  name: string;
+  command?: string;
+  passed: boolean;
+  skipped?: boolean;
+  timed_out?: boolean;
+  timeout_seconds?: number;
+  exit_code?: number;
+  error_class?: "product" | "environment" | "timeout" | "skipped";
+  summary: string;
+  output?: string;
+}
+
+export interface ClaimVerification {
+  present: boolean;
+  passed: boolean;
+  skipped?: boolean;
+  summary: string;
+  checked: number;
+  mismatches?: string[];
+}
+
+export interface WatcherVerification {
+  present: boolean;
+  passed: boolean;
+  status?: string;
+  worker?: string;
+  summary?: string;
+}
+
+export interface ContinueVerificationReport {
+  phase: number;
+  generated_at: string;
+  verification_timeout_seconds?: number;
+  steps: VerificationStep[];
+  claims: ClaimVerification;
+  watcher: WatcherVerification;
+  checks_passed: boolean;
+  passed: boolean;
+  blocking_issues?: string[];
+}
+
+export interface ContinueTaskAssessment {
+  task_id: string;
+  goal: string;
+  outcome: string;
+  summary: string;
+  verified?: boolean;
+  reconciled?: boolean;
+  dispatch_statuses?: string[];
+  recovery_action?: string;
+}
+
+export interface ContinueRecoveryPlan {
+  reverify_command?: string;
+  reconcile_tasks?: string[];
+  reconcile_command?: string;
+  redispatch_tasks?: string[];
+  redispatch_command?: string;
+  skip_command?: string;
+}
+
+export interface ContinueAssessment {
+  phase: number;
+  generated_at: string;
+  tasks: ContinueTaskAssessment[];
+  verification_passed: boolean;
+  positive_evidence: boolean;
+  partial_success?: boolean;
+  operational_issues?: string[];
+  reconciled_tasks?: string[];
+  redispatch_tasks?: string[];
+  blocking_issues?: string[];
+  passed: boolean;
+  summary: string;
+  recovery?: ContinueRecoveryPlan;
+}
+
+export interface ReviewFinding {
+  domain?: string;
+  severity?: string;
+  file?: string;
+  line?: number;
+  category?: string;
+  title?: string;
+  description?: string;
+  suggestion?: string;
+  blocking?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -306,17 +578,29 @@ export interface ContinueExternalDispatch {
 // ---------------------------------------------------------------------------
 
 export interface WorkflowProfileContract {
-  [key: string]: unknown;
+  review_depth?: string;
 }
 
 export interface DispatchContract {
+  execution_model?: string;
+  wave_count?: number;
+  worker_count?: number;
+  shared_timeout_seconds?: number;
+  worker_timeout_seconds?: number;
+  deadline_policy?: string;
+  dependency_behavior?: string;
+  fallback_behavior?: string;
+  fallback_visibility?: string[];
+  coordination_path?: string;
+  artifact_paths?: string[];
   result_artifact_paths?: string[];
   result_collection_policy?: string;
-  [key: string]: unknown;
+  execution_plan?: BuildExecutionPlan[];
 }
 
 export interface QueenWorkflowRecommendation {
-  [key: string]: unknown;
+  review_depth?: string;
+  reason?: string;
 }
 
 /**
@@ -351,15 +635,38 @@ export interface QueenExecutionPolicy {
   verification_depth?: string;
   review_depth?: string;
   spawn_budget?: QueenSpawnBudget;
-  [key: string]: unknown;
 }
 
 export interface DiscussQuestion {
-  [key: string]: unknown;
+  id?: string;
+  category: string;
+  question: string;
+  options: string[];
+  reasoning: string;
+  hard_constraint?: boolean;
+  status?: string;
+  source?: string;
 }
 
 export interface OrchestratorBoundaryGuidance {
-  [key: string]: unknown;
+  active: boolean;
+  workflow?: string;
+  colony_mode?: string;
+  pending_count?: number;
+  next?: string;
+  after_discuss_next?: string;
+  summary?: string;
+  question_ids?: string[];
+  question_sources?: string[];
+  question_summaries?: OrchestratorBoundaryQuestionSummary[];
+}
+
+export interface OrchestratorBoundaryQuestionSummary {
+  id: string;
+  source: string;
+  question: string;
+  options?: string[];
+  hard_constraint?: boolean;
 }
 
 /**

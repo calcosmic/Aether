@@ -1,6 +1,6 @@
 # Classic Command Parity Release Summary
 
-Updated: 2026-05-16
+Updated: 2026-05-18
 
 Use this summary when preparing seal/final review notes for the Classic Command
 Parity Matrix and TypeScript Host Command Spine milestone.
@@ -19,7 +19,10 @@ actions.
 
 - Plan/build worker orchestration goes through `aether host plan` and
   `aether host build`.
-- Heavy external continue review goes through `aether host continue`.
+- Heavy external continue review goes through
+  `aether host continue --classic-ceremony`.
+- Colonize and seal now have TypeScript-host orchestration manifest surfaces
+  while Go-owned finalizers remain the state authority.
 - Classic visible ceremony is preserved through Go `aether ceremony ...`
   commands.
 - Read-only dashboards (`status`, `watch`, `history`, `phase`, and
@@ -39,8 +42,9 @@ actions.
 
 - Default `aether continue` remains Go-owned and should not become TS-host
   plan-only orchestration.
-- `colonize` and `seal` are documented as future TS host orchestration targets,
-  not implemented `aether host` commands.
+- `colonize` and `seal` are host-backed for orchestration and ceremony, but Go
+  still owns survey persistence, seal review, finalization, and release-state
+  writes.
 - The parity matrix is a tested contract artifact, not runtime authority.
 
 ## Release Gate

@@ -1,10 +1,9 @@
 /**
- * Lifecycle honesty tests — verify simulation is opt-in only.
+ * Lifecycle honesty tests — verify lifecycle is a simulate-only smoke harness.
  *
  * Tests verify:
- * - Default behavior is real execution (simulateWorkers=false)
+ * - Default behavior rejects production-style execution
  * - Simulation only happens with explicit simulateWorkers=true
- * - Missing platforms without --simulate produces an error
  * - Placeholder file creation is gated behind --simulate
  */
 
@@ -97,51 +96,11 @@ describe("lifecycle honesty", { concurrency: false }, () => {
     throw new Error(`Unexpected: ${args[0]}`);
   };
 
-  it("errors when no platforms available and simulateWorkers is false", async () => {
+  it("rejects simulateWorkers=false before any production-style lifecycle work", async () => {
     __setDetectAvailablePlatforms(async () => []);
-    __setCallGoJSON(mockGoJSON);
-
-    const result = await runLifecycle({
-      goBinaryPath: "/usr/bin/true",
-      cwd: "/tmp",
-      simulateWorkers: false,
-    });
-
-    assert.equal(result.success, false);
-    assert.ok(result.error?.includes("Worker dispatch cannot start"), `Expected platform error but got: ${result.error}`);
-    assert.ok(result.error?.includes("Go AvailabilityStatus contract"), `Expected Go diagnostic delegation but got: ${result.error}`);
-  });
-
-  it("errors when no platforms available and simulateWorkers is undefined", async () => {
-    __setDetectAvailablePlatforms(async () => []);
-    __setCallGoJSON(mockGoJSON);
-
-    const result = await runLifecycle({
-      goBinaryPath: "/usr/bin/true",
-      cwd: "/tmp",
-    });
-
-    assert.equal(result.success, false);
-    assert.ok(result.error?.includes("Worker dispatch cannot start"), `Expected platform error but got: ${result.error}`);
-    assert.ok(result.error?.includes("provider_diagnostics"), `Expected Go diagnostic field guidance but got: ${result.error}`);
-  });
-
-  it("uses Go provider diagnostics from the build result when platform preflight fails", async () => {
-    __setDetectAvailablePlatforms(async () => []);
+    let goCalled = false;
     __setCallGoJSON(<T>(opts: unknown, args: string[]): T => {
-      if (args[0] === "build") {
-        return {
-          ok: true,
-          provider_diagnostics: "GO-OWNED: codex provider runtime-owned detail. Next: sign in with codex.",
-          dispatch_manifest: {
-            phase: 1,
-            provider_diagnostics: "GO-OWNED: manifest diagnostic should be secondary.",
-            dispatches: [
-              { name: "Builder-01", caste: "builder", task: "Build task 1", wave: 1 },
-            ],
-          },
-        } as unknown as T;
-      }
+      goCalled = true;
       return mockGoJSON<T>(opts, args);
     });
 
@@ -152,18 +111,27 @@ describe("lifecycle honesty", { concurrency: false }, () => {
     });
 
     assert.equal(result.success, false);
-    assert.ok(
-      result.error?.includes("GO-OWNED: codex provider runtime-owned detail"),
-      `Expected Go-owned diagnostic, got: ${result.error}`
-    );
-    assert.ok(
-      !result.error?.includes("No platform CLI available"),
-      `TS host should not invent provider diagnostics: ${result.error}`
-    );
-    assert.ok(
-      !result.error?.includes("Install or authenticate"),
-      `TS host should not invent provider next actions: ${result.error}`
-    );
+    assert.ok(result.error?.includes("simulate-only"), `Expected simulate-only error but got: ${result.error}`);
+    assert.equal(goCalled, false, "Lifecycle rejection should not request Go manifests");
+  });
+
+  it("rejects simulateWorkers undefined before any production-style lifecycle work", async () => {
+    __setDetectAvailablePlatforms(async () => []);
+    let platformProbeCalled = false;
+    __setDetectAvailablePlatforms(async () => {
+      platformProbeCalled = true;
+      return ["claude"];
+    });
+    __setCallGoJSON(mockGoJSON);
+
+    const result = await runLifecycle({
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
+    });
+
+    assert.equal(result.success, false);
+    assert.ok(result.error?.includes("simulate-only"), `Expected simulate-only error but got: ${result.error}`);
+    assert.equal(platformProbeCalled, false, "Lifecycle rejection should not probe provider CLIs");
   });
 
   it("succeeds with simulateWorkers=true even when no platforms available", async () => {
@@ -179,7 +147,7 @@ describe("lifecycle honesty", { concurrency: false }, () => {
     assert.equal(result.success, true, `Expected success but got error: ${result.error ?? "unknown"}`);
   });
 
-  it("defaults to real execution when platforms are available", async () => {
+  it("rejects lifecycle without explicit simulation even when platforms are available", async () => {
     __setDetectAvailablePlatforms(async () => ["claude"]);
     let buildCalled = false;
     __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
@@ -189,14 +157,14 @@ describe("lifecycle honesty", { concurrency: false }, () => {
       return mockGoJSON<T>(_opts, args);
     });
 
-    // Should reach the build step (proving real execution was attempted)
     const result = await runLifecycle({
       goBinaryPath: "/usr/bin/true",
       cwd: "/tmp",
     });
 
-    assert.equal(buildCalled, true, "Build step should have been reached");
-    assert.equal(result.success, true, "Should succeed with platforms available");
+    assert.equal(buildCalled, false, "Build step should not be reached");
+    assert.equal(result.success, false);
+    assert.ok(result.error?.includes("simulate-only"), `Expected simulate-only error but got: ${result.error}`);
   });
 
   it("does not send completed plan dispatches to plan-finalize without real worker results", async () => {

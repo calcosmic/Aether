@@ -427,7 +427,7 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
       if (typeof chunk === "string") {
         capturedStderr.push(chunk);
       }
-      return originalWrite(chunk);
+      return originalWrite(chunk as string | Uint8Array);
     }) as typeof process.stderr.write;
 
     try {
@@ -468,7 +468,7 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
       if (typeof chunk === "string") {
         capturedStderr.push(chunk);
       }
-      return originalWrite(chunk);
+      return originalWrite(chunk as string | Uint8Array);
     }) as typeof process.stderr.write;
 
     try {

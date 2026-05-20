@@ -23,7 +23,7 @@ Otherwise use the hosted review flow below.
 Run:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether seal --plan-only $ARGUMENTS
+aether host seal $ARGUMENTS
 ```
 
 Parse `result.seal_manifest`. If the runtime returns blockers or recovery guidance, surface that output and stop. Do not fabricate review results.
@@ -164,7 +164,7 @@ Run selected delivery actions sequentially and stop on first failure.
 
 - Do NOT write colony state files, session files, review reports, pheromone files, or archive files by hand.
 - Do NOT parse visual output as truth; use JSON output for programmatic data.
-- Do NOT run `aether seal` without `--plan-only` from this wrapper unless the user explicitly asks for raw/no-orchestration.
+- Do NOT bypass `aether host seal` from this wrapper unless the user explicitly asks for raw/no-orchestration.
 - Do NOT run Porter delivery commands unless the user explicitly chooses them after `seal-finalize`.
 - Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
 - Do NOT drop structured reviewer findings; `seal-finalize` persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied.

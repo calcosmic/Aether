@@ -23,8 +23,11 @@ func finalizerCompletionContractStep(workflow string) string {
 
 func validateFinalizerCompletionFilePath(path string) error {
 	path = strings.TrimSpace(path)
-	if path == "" || path == "-" {
+	if path == "" {
 		return nil
+	}
+	if path == "-" {
+		return fmt.Errorf("completion file cannot be read from stdin; write an approved temp result artifact path such as %s", finalizerCompletionTempPattern)
 	}
 	normalized := filepath.ToSlash(filepath.Clean(strings.ReplaceAll(path, "\\", "/")))
 	if normalized == ".aether/data" || strings.HasPrefix(normalized, ".aether/data/") || strings.Contains(normalized, "/.aether/data/") {
@@ -36,7 +39,7 @@ func validateFinalizerCompletionFilePath(path string) error {
 func validateFinalizerManifestFreshness(label, generatedAt string, now time.Time) error {
 	generatedAt = strings.TrimSpace(generatedAt)
 	if generatedAt == "" {
-		return nil
+		return fmt.Errorf("%s generated_at is required for freshness validation; rerun the plan-only command for a fresh manifest", label)
 	}
 	generated, err := time.Parse(time.RFC3339, generatedAt)
 	if err != nil {

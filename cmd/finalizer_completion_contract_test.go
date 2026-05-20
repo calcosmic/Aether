@@ -163,6 +163,9 @@ func TestLifecycleFinalizerLoadersRejectAetherDataCompletionFiles(t *testing.T) 
 		{name: "plan", load: func(path string) error { _, err := loadExternalPlanCompletion(path); return err }},
 		{name: "build", load: func(path string) error { _, err := loadExternalBuildCompletion(path); return err }},
 		{name: "continue", load: func(path string) error { _, err := loadExternalContinueCompletion(path); return err }},
+		{name: "colonize", load: func(path string) error { _, err := loadExternalColonizeCompletion(path); return err }},
+		{name: "oracle", load: func(path string) error { _, err := loadExternalOracleIterationCompletion(path); return err }},
+		{name: "swarm", load: func(path string) error { _, err := loadExternalSwarmCompletion(path); return err }},
 		{name: "seal", load: func(path string) error { _, err := loadExternalSealCompletion(path); return err }},
 	}
 
@@ -179,6 +182,33 @@ func TestLifecycleFinalizerLoadersRejectAetherDataCompletionFiles(t *testing.T) 
 	}
 }
 
+func TestLifecycleFinalizerLoadersRejectStdinCompletionFiles(t *testing.T) {
+	loaders := []struct {
+		name string
+		load func(string) error
+	}{
+		{name: "plan", load: func(path string) error { _, err := loadExternalPlanCompletion(path); return err }},
+		{name: "build", load: func(path string) error { _, err := loadExternalBuildCompletion(path); return err }},
+		{name: "continue", load: func(path string) error { _, err := loadExternalContinueCompletion(path); return err }},
+		{name: "colonize", load: func(path string) error { _, err := loadExternalColonizeCompletion(path); return err }},
+		{name: "oracle", load: func(path string) error { _, err := loadExternalOracleIterationCompletion(path); return err }},
+		{name: "swarm", load: func(path string) error { _, err := loadExternalSwarmCompletion(path); return err }},
+		{name: "seal", load: func(path string) error { _, err := loadExternalSealCompletion(path); return err }},
+	}
+
+	for _, tc := range loaders {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.load("-")
+			if err == nil {
+				t.Fatal("expected stdin completion file to be rejected")
+			}
+			if !strings.Contains(err.Error(), "cannot be read from stdin") || !strings.Contains(err.Error(), "approved temp") {
+				t.Fatalf("expected approved temp path guidance, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestFinalizerManifestFreshnessRejectsStaleAndFutureManifests(t *testing.T) {
 	now := time.Date(2026, 5, 17, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
@@ -186,6 +216,7 @@ func TestFinalizerManifestFreshnessRejectsStaleAndFutureManifests(t *testing.T) 
 		generatedAt string
 		want        string
 	}{
+		{name: "missing", generatedAt: "", want: "generated_at is required"},
 		{name: "stale", generatedAt: now.Add(-25 * time.Hour).Format(time.RFC3339), want: "stale dispatch_manifest"},
 		{name: "future", generatedAt: now.Add(10 * time.Minute).Format(time.RFC3339), want: "too far in the future"},
 		{name: "invalid", generatedAt: "not-a-time", want: "not RFC3339"},

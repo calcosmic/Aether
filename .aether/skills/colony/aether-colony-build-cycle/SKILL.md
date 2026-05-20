@@ -115,7 +115,7 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-
 1. Run:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether colonize --plan-only <args>
+aether host colonize <args>
 ```
 
 2. Save the full JSON envelope to a temporary manifest file outside
@@ -153,12 +153,12 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 3. Run the TS host manifest command:
 
 ```bash
-aether host build <phase>
+aether host build --dry-run <phase>
 ```
 
 4. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
-5. Parse `result.dispatch_manifest`.
+5. Parse `result.manifest.dispatch_manifest`.
 6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
    build workers.
 7. Render the user-facing spawn ceremony:
@@ -200,16 +200,16 @@ Default path:
 AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard <args>
 ```
 
-Use external review orchestration only when the user explicitly requested heavy
-review or the runtime asks for wrapper-spawned review workers. In that case,
-request the runtime manifest:
+Use external review orchestration only when the user explicitly requested
+`--classic-ceremony`, heavy review, or the runtime asks for wrapper-spawned
+review workers. In that case, request the runtime manifest:
 
 ```bash
-aether host continue --verification-depth heavy <args>
+aether host continue --dry-run --classic-ceremony <args>
 ```
 
 Save the JSON manifest envelope to a temporary file, parse
-`result.continue_manifest`, apply the Guided Boundary Gate before rendering
+`result.manifest.continue_manifest`, apply the Guided Boundary Gate before rendering
 spawn ceremonies or spawning reviewers, and spawn only the planned reviewers as
 visible live Task/subagent panels with caste-labelled descriptions. Use
 `aether ceremony spawn-plan`, `aether ceremony wave-start`, and
@@ -269,7 +269,7 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow swarm --completion
 2. Run:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether seal --plan-only <args>
+aether host seal <args>
 ```
 
 3. If the runtime returns blockers or recovery guidance, surface that and stop.

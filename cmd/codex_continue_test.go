@@ -2151,6 +2151,31 @@ func TestContinueBlocksWhenManifestTaskSetDiffersFromColonyState(t *testing.T) {
 	}
 }
 
+func TestContinueGatesFailWhenAssessmentHasBlockingIssues(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	_ = setupBuildFlowTest(t)
+
+	phase := colony.Phase{ID: 1, Name: "Gate consistency"}
+	manifest := codexContinueManifest{Present: true}
+	verification := codexContinueVerificationReport{ChecksPassed: true}
+	const issue = "verification passed but task evidence still needs redispatch"
+	assessment := codexContinueAssessment{
+		PositiveEvidence: true,
+		Passed:           false,
+		BlockingIssues:   []string{issue},
+	}
+
+	gates := runCodexContinueGates(phase, manifest, verification, assessment, time.Now().UTC(), nil)
+	if gates.Passed {
+		t.Fatalf("gates passed with assessment blocking issues: %+v", gates)
+	}
+	if !containsString(gates.BlockingIssues, issue) {
+		t.Fatalf("blocking issues = %v, want %q", gates.BlockingIssues, issue)
+	}
+}
+
 func TestContinueBlocksWhenBuilderClaimsMismatch(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -3249,6 +3274,9 @@ func TestContinueCommandExposesWorkerTimeoutFlag(t *testing.T) {
 func TestContinueCommandExposesVerificationTimeoutFlag(t *testing.T) {
 	if continueCmd.Flags().Lookup("verification-timeout") == nil {
 		t.Fatal("expected continue command to expose --verification-timeout")
+	}
+	if continueCmd.Flags().Lookup("classic-ceremony") == nil {
+		t.Fatal("expected continue command to expose --classic-ceremony")
 	}
 	if continueFinalizeCmd.Flags().Lookup("verification-timeout") == nil {
 		t.Fatal("expected continue-finalize command to expose --verification-timeout")

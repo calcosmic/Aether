@@ -1,28 +1,33 @@
 # Codex Ant Workflow Gap Map
 
-Updated: 2026-05-12
+Updated: 2026-05-18
 
-This is the compact source-of-truth gap map for Phase 1 contract work. It
-compares the documented ant workflow for Codex with the current Go command
-behavior for `plan`, `build`, and `continue`.
+This is the compact source-of-truth gap map for Codex lifecycle orchestration
+after the TypeScript host command spine, wrapper-contract, ceremony, and release
+hardening work.
 
-For dummies: the docs say Codex should ask the runtime for a worker recipe,
-show the recipe, run the listed helpers, then hand the results back to the
-runtime. This map lists where the runtime, docs, and safety rules still do not
-line up.
+For dummies: Codex should ask Go for a recipe, show the ceremony, run only the
+workers in that recipe, then hand the results back to Go. Go is still the engine
+that writes state and decides whether the phase really advanced.
 
 ## Sources Compared
 
-- Runtime guidance: `aether command-guide plan|build|continue --platform codex`.
+- Runtime guidance:
+  `aether command-guide plan|build|continue|colonize|seal --platform codex`.
 - Wrapper source specs: `.aether/commands/plan.yaml`,
-  `.aether/commands/build.yaml`, `.aether/commands/continue.yaml`.
-- Codex lifecycle skill: `.aether/skills/colony/aether-colony-build-cycle/SKILL.md`.
-- Runtime code: `cmd/codex_plan.go`, `cmd/codex_build.go`,
-  `cmd/codex_continue.go`, `cmd/codex_continue_plan.go`,
-  `cmd/codex_*_finalize.go`, `cmd/codex_workflow_cmds.go`,
-  `cmd/command_guide.go`.
-- Existing contract docs: `cmd/contracts/plan.md`, `cmd/contracts/build.md`,
-  `cmd/contracts/continue.md`, `.aether/docs/wrapper-runtime-ux-contract.md`,
+  `.aether/commands/build.yaml`, `.aether/commands/continue.yaml`,
+  `.aether/commands/colonize.yaml`, and `.aether/commands/seal.yaml`.
+- Codex lifecycle skill:
+  `.aether/skills/colony/aether-colony-build-cycle/SKILL.md`.
+- TypeScript host source: `.aether/ts-host/src/host.ts`,
+  `.aether/ts-host/src/command-registry.ts`, and
+  `.aether/ts-host/src/lifecycle.ts`.
+- Runtime code: `cmd/host_cmd.go`, `cmd/command_guide.go`,
+  `cmd/codex_*_finalize.go`, `cmd/finalizer_completion_contract.go`, and
+  `cmd/codex_workflow_cmds.go`.
+- Contract docs: `cmd/contracts/plan.md`, `cmd/contracts/build.md`,
+  `cmd/contracts/continue.md`, `.aether/docs/host-command-reference.md`,
+  `.aether/docs/wrapper-runtime-ux-contract.md`, and
   `.aether/docs/source-of-truth-map.md`.
 
 ## Guardrails
@@ -40,84 +45,60 @@ line up.
 - Generated context may surface only sanitized provider, cause, and next action.
   Do not include raw provider stdout/stderr, tokens, or auth probe output.
 - `.opencode/package.json` and `.opencode/package-lock.json` are ignored local
-  OpenCode install artifacts when present. Do not call them release-surface
-  package files unless that scope changes; tracked TS-host package files live
+  OpenCode install artifacts when present. Tracked TS-host package files live
   under `.aether/ts-host/`.
 
 ## Command Map
 
 | Command | Documented Codex ant workflow | Current runtime behavior | Gap |
 |---|---|---|---|
-| `plan` | Codex selects depth, runs status, requests `aether host plan --depth <choice> --planning-depth <choice>`, saves the JSON envelope to temp storage, checks `orchestrator_boundary_guidance`, renders ceremonies, spawns Scout and Route-Setter through the platform host, then calls `plan-finalize`. | The host-orchestrated shape and spawn tracking are documented across `command-guide`, YAML, and the Codex skill: all three now require `spawn-log`, `spawn-complete`, visible workers, `worker-complete`, and `plan-finalize`. The default `aether plan` still performs runtime planning/fallback and writes state directly, which is the raw/runtime path. The TS host delegates to `aether plan --plan-only`; that underlying Go path no longer persists `VerificationDepth` before `plan-finalize`, and `plan-finalize` rejects stale manifests by `generated_at`. The existing-plan branch can return no host-worker manifest even though Codex guidance expects `plan_manifest` or `planning_manifest`. | **P1:** define the existing-plan plan-only manifest contract. |
-| `build` | Codex requests `aether host build <phase>`, checks boundary guidance, renders spawn and wave ceremonies, spawns manifest workers through the platform host, records spawn log/completion, then calls `build-finalize`. | `command-guide`, YAML, and the Codex skill agree. `build-finalize` validates manifest provenance, rejects unsafe worker claim paths, and commits build state. The default `aether build` still runs the internal runtime build path for raw/direct use. The TS host delegates to `aether build <phase> --plan-only`; that underlying Go path no longer persists prior-phase task reconciliation before `build-finalize`. | No P0 gap in the phase-6 scope. |
-| `continue` | Default Codex path is runtime-owned: `aether continue --skip-watchers --verification-depth standard`. Host-spawned reviewers are only for explicit heavy external review, using `aether host continue --verification-depth heavy`, ceremonies, reviewer results, and `continue-finalize`. | Default continue behavior is aligned: runtime verifies, gates, handles signal housekeeping, and advances or blocks. The host-backed plan-only path creates an external-review manifest and exposes queen decisions without writing `queen-state-N.json`; `continue-finalize` owns queen-state, review, gate, and advancement writes. Heavy-review spawn tracking is aligned across YAML, command-guide, and the Codex skill. | No P0 gap in the phase-6 scope. |
+| `plan` | Codex selects planning depth, requests `aether host plan`, saves the JSON envelope outside `.aether/data`, renders ceremony, runs Scout and Route-Setter through the platform host, records worker completion, then calls `plan-finalize`. | `command-guide`, YAML, the Codex skill, TS host, and Go finalizer now describe the same host-backed shape. `plan-finalize` validates manifest provenance/freshness and owns plan persistence. Raw `aether plan` remains the direct Go path. | **P1:** define the existing-plan host response as an explicit no-worker/no-finalizer contract or a manifest contract. |
+| `build` | Codex requests `aether host build <phase>`, checks boundary guidance, renders spawn/wave ceremony, runs only the manifest workers, records worker completion, then calls `build-finalize`. | Aligned across command-guide, YAML, Codex skill, TS host, and Go. `build-finalize` validates manifest provenance/freshness, rejects unsafe worker claim paths, reconciles completed-vs-timeout worker results, and commits build state. Raw `aether build` remains available for direct runtime use. | No known P0 gap. |
+| `continue` | Default Codex path uses Go-owned `aether continue --skip-watchers --verification-depth standard`. Heavy external review is explicit with `aether host continue --classic-ceremony`, worker ceremony, reviewer results, and `continue-finalize`. | Default continue stays Go-owned. The host-backed heavy-review path exposes queen decisions and reviewer dispatches without writing queen-state before `continue-finalize`, and the finalizer owns review, gate, and advancement writes. | No known P0 gap. |
+| `colonize` | Codex requests `aether host colonize`, renders survey worker ceremony, runs the survey manifest, then calls `colonize-finalize`. | TS host delegates to `aether colonize --plan-only`; Go owns survey persistence through `colonize-finalize`. The command reference and wrapper sources now treat colonize as host-backed rather than future work. | No known P0 gap. |
+| `seal` | Codex requests `aether host seal`, renders final-review ceremony, runs the final review manifest, then calls `seal-finalize`. | TS host delegates to `aether seal --plan-only`; Go owns seal review persistence, release evidence, and final state transition through `seal-finalize`. The command reference and wrapper sources now treat seal as host-backed rather than future work. | No known P0 gap. |
 
 ## Cross-Cutting Status
 
-- `orchestrator_boundary_guidance` is consistently documented in the command
-  specs, source-of-truth docs, Codex skill, and command-guide tests.
-- `cmd/command_guide_test.go` enforces YAML metadata and drift-guard anchors,
-  but it does not enforce behavioral invariants such as "plan-only writes no
-  state" or "worker claim paths are safe".
-- `cmd/contracts/*.md` are stale in two ways: they state that plan-only is
-  non-mutating while runtime plan-only paths still write state, and they use
-  older state labels such as `BUILDING` instead of the current runtime states
-  `EXECUTING`, `BUILT`, and `COMPLETED`.
-- Temporary manifest/completion file placement is documented as outside
-  `.aether/data`, but the finalizer and ceremony file flags currently accept
-  arbitrary readable paths.
-- Build worker claim paths are now hardened: build-finalize rejects absolute
-  paths, repository escape paths, missing paths, ambiguous basename claims,
-  symlinks, and `.aether/data` claims before persisting claims or handoffs.
-- Finalizer packets do not consistently carry or validate freshness metadata
-  such as state fingerprints, session ids, generated-at checks, or plan hashes.
-  This is most visible in `plan-finalize`, where stale planning output can
-  overwrite a newer plan.
-- Spawn tracking is aligned for `plan`, `build`, and heavy `continue` across
-  YAML, command-guide, and the Codex skill. Finalizers can still backfill
-  spawn-tree records, so host-side spawn tracking remains a regression-test
-  surface rather than a runtime-only guarantee.
-- Orchestrator boundary questions can write `pending-decisions.json` during
-  plan-only paths for `plan`, `build`, and heavy `continue`; count this as part
-  of the plan-only mutation boundary until either moved or explicitly
-  documented.
-- Existing shell execution in this area is fixed command execution or
-  verification command execution resolved from project docs/config. This phase
-  did not add shell execution from manifest, worker, or user strings.
-- Provider availability guidance now belongs to the Go-owned diagnostic
-  contract. Wrapper and Codex generated-context wording should distinguish
-  preflight failures from launched-worker provider/API/auth payloads that fail
-  worker-claims parsing.
+- Host-backed lifecycle coverage now includes `colonize`, `plan`, `build`,
+  heavy `continue`, and `seal`.
+- Runtime ceremony is restored for manifest spawn plans, worker wave theatre,
+  worker completion lines, and closeout summaries.
+- Finalizers reject completion files under `.aether/data` and reject stdin
+  completion input. The documented pattern is a temp run directory such as
+  `${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json`.
+- Plan/build finalizers validate manifest freshness with `generated_at`; plan
+  finalization also rejects stale claimed planning artifacts.
+- Build worker claim validation rejects absolute paths, repository escapes,
+  missing paths, ambiguous basename claims, symlinks, and `.aether/data` claims.
+- Spawn tracking is aligned for host-backed lifecycle commands across YAML,
+  command-guide, Codex skill, TS host, and Go tests.
+- Orchestrator boundary questions remain an explicit orchestration side effect:
+  questions can be created before finalization, but finalizers still own
+  lifecycle state writes.
+- Provider/auth wording now distinguishes preflight availability failures from
+  launched-worker provider/API/auth diagnostics.
 
 ## Dependency-Ordered Next Slices
 
-1. Add failing tests for wrapper-safety invariants: stale finalizer packets must
-   be rejected; plan/build/continue plan-only paths must not mutate
-   `.aether/data` state; and build-finalize must reject unsafe worker claim
-   paths.
-2. Add stale-packet protection to `plan-finalize`, using a state fingerprint,
-   generation timestamp, session id, plan hash, or equivalent runtime-owned
-   freshness guard.
-3. Move plan-only state mutations into finalizers or rename/document the
-   specific runtime side effect. Prefer moving them so the wrapper contract
-   stays simple.
-4. Define and test the existing-plan plan-only contract so Codex either receives
-   a manifest/finalizer packet or gets a runtime-owned no-op response that does
-   not imply host workers are needed.
-5. Update `cmd/contracts/plan.md`, `cmd/contracts/build.md`, and
-   `cmd/contracts/continue.md` after behavior is corrected, not before.
-6. Let the next observable-output slice focus on user-facing ceremony and
-   dispatch contract wording without changing these safety boundaries. Preserve
-   the phase-6 worker-activity tests that keep YAML, command-guide, and skill
-   guidance aligned.
-7. Add post-launch provider/API/auth classification before worker-claims parsing
-   so valid availability preflight does not hide later provider rejection behind
-   generic parse errors.
+1. Define and test the existing-plan host response contract so Codex does not
+   imply workers are needed when Go is simply returning an already accepted
+   plan.
+2. Add optional stronger finalizer provenance, such as state fingerprint,
+   session id, or plan hash, on top of the current `generated_at` freshness
+   checks.
+3. Consider tightening completion-file validation from "outside `.aether/data`"
+   to an explicit temp-run prefix once every wrapper uses the documented temp
+   path.
+4. Keep provider/auth launched-worker redaction tests in the release gate as
+   new platforms or provider adapters are added.
+5. Keep the parity matrix, command-guide, YAML wrappers, Codex skill, and
+   TypeScript host command registry updated in the same change whenever a
+   lifecycle command changes.
 
-## Forge-55 Handoff
+## Handoff
 
-Forge-55 should treat this document as the phase gap map. Avoid changing the
-observable-output contract until the P0 wrapper-safety gaps are either fixed or
-explicitly accepted by the Queen. If Forge-55 owns command output, preserve the
-current `command-guide`/YAML alignment and do not weaken the finalizer-owned
-state boundary.
+Treat this file as a current orientation map, not as runtime authority. Runtime
+behavior is authoritative in Go finalizers and the TS host registry; this map is
+here to keep the next milestone focused on remaining contract edges instead of
+reopening already-hardened P0 work.

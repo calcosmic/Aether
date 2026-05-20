@@ -170,7 +170,8 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether plan-finalize",
 		},
 		"build": {
-			"aether host build <phase>",
+			"aether host build --dry-run <phase>",
+			"Parse `result.manifest.dispatch_manifest`",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -179,7 +180,8 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 		},
 		"continue": {
 			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-			"aether host continue --classic-ceremony",
+			"aether host continue --dry-run --classic-ceremony",
+			"Parse `result.manifest.continue_manifest`",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -248,23 +250,27 @@ func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
 		},
 		"build": {
 			required: []string{
-				"aether host build <phase>",
-				"Parse `result.dispatch_manifest`",
+				"aether host build --dry-run <phase>",
+				"Parse `result.manifest.dispatch_manifest`",
 				"AETHER_OUTPUT_MODE=json aether build-finalize",
 			},
 			retired: []string{
 				"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
+				"aether host build <phase>",
+				"Parse `result.dispatch_manifest`",
 			},
 		},
 		"continue": {
 			required: []string{
 				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-				"aether host continue --classic-ceremony",
-				"Parse `result.continue_manifest`",
+				"aether host continue --dry-run --classic-ceremony",
+				"Parse `result.manifest.continue_manifest`",
 				"continue-finalize",
 			},
 			retired: []string{
 				"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
+				"aether host continue --classic-ceremony",
+				"Parse `result.continue_manifest`",
 			},
 		},
 		"seal": {
@@ -349,13 +355,12 @@ func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
 			"plan-finalize",
 		},
 		"build": {
-			"aether host build",
-			"TS host is the sole entry point",
+			"aether host build --dry-run",
 			"build-finalize",
 		},
 		"continue": {
 			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-			"aether host continue --classic-ceremony",
+			"aether host continue --dry-run --classic-ceremony",
 			"continue-finalize",
 		},
 		"seal": {
@@ -435,9 +440,9 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	for _, want := range []string{
 		"aether host colonize",
 		"aether host plan --depth <choice> --planning-depth <choice>",
-		"aether host build <phase>",
+		"aether host build --dry-run <phase>",
 		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
-		"aether host continue --classic-ceremony",
+		"aether host continue --dry-run --classic-ceremony",
 		"aether host seal",
 		"aether spawn-log",
 		"aether spawn-complete",
@@ -871,7 +876,7 @@ func TestCommandGuidePlanSmoke(t *testing.T) {
 type executionPathTest struct {
 	name          string
 	yamlFile      string
-	wantHostCmd   string // runtime.command should contain this
+	wantHostCmd   string // runtime.command (or manifest_command/default_command) should contain this
 	orchestration string // orchestration block should contain this (empty = no orchestration block expected)
 }
 
@@ -919,20 +924,33 @@ func TestExecutionPathAudit_OneConductorPerWorkflow(t *testing.T) {
 			}
 			yamlText := string(content)
 
-			// Assert runtime.command field contains the expected host command
+			// Assert runtime.command (or manifest_command/default_command) field
+			// contains the expected host command. The YAML schema evolved: some
+			// commands use runtime.command, others use runtime.manifest_command +
+			// runtime.default_command (the single-conductor pattern).
 			var meta struct {
 				Runtime struct {
-					Command string `yaml:"command"`
+					Command         string `yaml:"command"`
+					ManifestCommand string `yaml:"manifest_command"`
+					DefaultCommand  string `yaml:"default_command"`
 				} `yaml:"runtime"`
 			}
 			if err := yaml.Unmarshal(content, &meta); err != nil {
 				t.Fatalf("parse %s: %v", yamlPath, err)
 			}
-			if meta.Runtime.Command == "" {
-				t.Errorf("%s: runtime.command is empty", tc.name)
+
+			// Collect all runtime command references
+			runtimeCmds := []string{meta.Runtime.Command, meta.Runtime.ManifestCommand, meta.Runtime.DefaultCommand}
+			found := false
+			for _, cmd := range runtimeCmds {
+				if cmd != "" && strings.Contains(cmd, tc.wantHostCmd) {
+					found = true
+					break
+				}
 			}
-			if !strings.Contains(meta.Runtime.Command, tc.wantHostCmd) {
-				t.Errorf("%s: runtime.command = %q, want to contain %q", tc.name, meta.Runtime.Command, tc.wantHostCmd)
+			if !found {
+				t.Errorf("%s: no runtime command field contains %q (got command=%q manifest_command=%q default_command=%q)",
+					tc.name, tc.wantHostCmd, meta.Runtime.Command, meta.Runtime.ManifestCommand, meta.Runtime.DefaultCommand)
 			}
 
 			// For colonize: verify orchestration block references the host command
@@ -944,7 +962,7 @@ func TestExecutionPathAudit_OneConductorPerWorkflow(t *testing.T) {
 
 			// For continue: verify both default and heavy-review paths
 			if tc.name == "continue" {
-				if !strings.Contains(yamlText, "aether host continue --classic-ceremony") {
+				if !strings.Contains(yamlText, "aether host continue --dry-run --classic-ceremony") {
 					t.Errorf("%s: YAML missing heavy-review path reference", tc.name)
 				}
 			}

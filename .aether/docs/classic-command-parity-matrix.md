@@ -33,11 +33,11 @@ Runtime authority remains in:
 |---|---|---|---|---|---|---|
 | `init` | full orchestration | none | Go runtime | none | YAML, Claude, OpenCode | Host not needed; wrapper/Codex intake stays rich. |
 | `discuss` | semi-intelligent | none | Go runtime | none | YAML, Claude, OpenCode | Host not needed; clarification state stays Go-owned. |
-| `colonize` | full orchestration | missing orchestration target | Go finalizer | `colonize-finalize` | YAML, Claude, OpenCode | Future host target; current wrappers use Go plan-only. |
-| `plan` | full orchestration | orchestration manifest | Go finalizer | `plan-finalize` | YAML, Claude, OpenCode | Host-backed. |
+| `colonize` | full orchestration | orchestration manifest | Go finalizer | `colonize-finalize` | YAML, Claude, OpenCode | Host-backed surveyor manifest; Go finalizer writes survey state. |
+| `plan` | full orchestration | orchestration manifest | Go finalizer | `plan-finalize` | YAML, Claude, OpenCode | Host-backed with classic confidence target, max iteration, accept, and stop-reason evidence. |
 | `build` | full orchestration | orchestration manifest | Go finalizer | `build-finalize` | YAML, Claude, OpenCode | Host-backed. |
-| `continue` | semi-intelligent | heavy-review manifest | Go runtime or Go finalizer | heavy only: `continue-finalize` | YAML, Claude, OpenCode | Default is Go-owned; heavy review is host-backed. |
-| `seal` | semi-intelligent | missing orchestration target | Go finalizer | `seal-finalize` | YAML, Claude, OpenCode | Future host target; current wrappers use Go plan-only. |
+| `continue` | semi-intelligent | heavy-review manifest | Go runtime or Go finalizer | heavy only: `continue-finalize` | YAML, Claude, OpenCode | Default is Go-owned; `--classic-ceremony`/heavy review is host-backed. |
+| `seal` | semi-intelligent | orchestration manifest | Go finalizer | `seal-finalize` | YAML, Claude, OpenCode | Host-backed final-review manifest; Go finalizer seals. |
 | `oracle` | full orchestration | lifecycle loop | Go runtime or Go finalizer | iteration finalizer when used | YAML, Claude, OpenCode | Host owns loop conduct, Go owns state. |
 | `swarm` | full orchestration + dashboard | display and plan | Go finalizer for problem runs; Go runtime for `--watch` | `swarm-finalize` for problem runs only | YAML, Claude, OpenCode | Problem-bearing swarm runs use worker theatre; `swarm --watch` is a dashboard. |
 | `watch` | literal/display | display | Go runtime | none | YAML, Claude, OpenCode | Host can display; Go owns data. |
@@ -60,6 +60,8 @@ The host spine is deliberately small:
    consumes those manifests.
 4. Surface sanitized provider/auth diagnostics from Go-owned checks.
 5. Preserve completion packet contracts for Go finalizers.
+6. Forward classic planning-loop controls (`--target`, `--max-iterations`, and
+   `--accept`) while Go computes the canonical `planning_loop.stop_reason`.
 
 It must not:
 
@@ -67,8 +69,8 @@ It must not:
 - parse visual output as state;
 - duplicate Go verification, gates, finalizers, provider diagnostics, or
   ceremony templates;
-- claim `aether host colonize` or `aether host seal` until those host surfaces
-  are actually implemented.
+- write survey, review, or seal artifacts directly; those remain Go finalizer
+  responsibilities even when the TS host fetches the manifest.
 
 ## Ceremony Routing
 
@@ -94,7 +96,7 @@ Focused parity checks:
 ```bash
 go test ./cmd -run 'TestCodexHostBackedGuidesUseTypeScriptHostSpine|TestWrapperSourcesUseTypeScriptHostManifestSpine|TestClassicCommandParityMatrix' -count=1
 npm --prefix .aether/ts-host run typecheck
-npm --prefix .aether/ts-host test
+cd .aether/ts-host && npx tsx --test test/command-registry.test.ts test/host-integration.test.ts test/host-flags.test.ts test/classic-command-parity.test.ts
 ```
 
 Release checks still need the broader smoke listed in

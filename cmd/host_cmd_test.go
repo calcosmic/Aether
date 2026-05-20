@@ -34,7 +34,7 @@ func TestHostSubcommands(t *testing.T) {
 		t.Fatal("host command not found")
 	}
 
-	want := []string{"lifecycle", "plan", "build", "continue", "oracle", "watch", "swarm"}
+	want := []string{"lifecycle", "colonize", "plan", "build", "continue", "seal", "oracle", "watch", "swarm"}
 	for _, w := range want {
 		found := false
 		for _, sub := range hostCmdFound.Commands() {
@@ -89,6 +89,11 @@ func TestHostPlanAndContinueForwardRawFlags(t *testing.T) {
 		want []string
 	}{
 		{
+			name: "colonize",
+			args: []string{"host", "colonize", "--force-resurvey", "--worker-timeout", "5m"},
+			want: []string{resolvedHostPath, "colonize", "--force-resurvey", "--worker-timeout", "5m"},
+		},
+		{
 			name: "plan",
 			args: []string{"host", "plan", "--depth", "balanced", "--planning-depth", "deep", "--refresh"},
 			want: []string{resolvedHostPath, "plan", "--depth", "balanced", "--planning-depth", "deep", "--refresh"},
@@ -100,8 +105,13 @@ func TestHostPlanAndContinueForwardRawFlags(t *testing.T) {
 		},
 		{
 			name: "continue",
-			args: []string{"host", "continue", "--verification-depth", "heavy", "$ARGUMENTS"},
-			want: []string{resolvedHostPath, "continue", "--verification-depth", "heavy", "$ARGUMENTS"},
+			args: []string{"host", "continue", "--classic-ceremony", "$ARGUMENTS"},
+			want: []string{resolvedHostPath, "continue", "--classic-ceremony", "$ARGUMENTS"},
+		},
+		{
+			name: "seal",
+			args: []string{"host", "seal", "--force"},
+			want: []string{resolvedHostPath, "seal", "--force"},
 		},
 		{
 			name: "oracle",

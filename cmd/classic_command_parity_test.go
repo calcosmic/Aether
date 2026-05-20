@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -258,7 +257,7 @@ func TestClassicCommandParityMatrixKeepsTSHostAsConductorNotAuthority(t *testing
 	matrix := loadClassicCommandParityMatrix(t)
 	records := classicCommandParityRecordsByName(t, matrix)
 
-	hostCommands := []string{"plan", "build", "continue", "oracle", "swarm", "watch"}
+	hostCommands := []string{"colonize", "plan", "build", "continue", "seal", "oracle", "swarm", "watch"}
 	for _, command := range hostCommands {
 		record := records[command]
 		if record.TSHostSurface == "none" {
@@ -280,15 +279,15 @@ func TestClassicCommandParityMatrixKeepsTSHostAsConductorNotAuthority(t *testing
 	}
 }
 
-func TestClassicCommandParityMatrixNamesKnownFutureHostGaps(t *testing.T) {
+func TestClassicCommandParityMatrixMarksLifecycleHostSpineComplete(t *testing.T) {
 	records := classicCommandParityRecordsByName(t, loadClassicCommandParityMatrix(t))
 	for _, command := range []string{"colonize", "seal"} {
 		record := records[command]
-		if record.TSHostSurface != "missing-orchestration-target" {
-			t.Errorf("%s ts_host_surface = %q, want missing-orchestration-target", command, record.TSHostSurface)
+		if record.TSHostSurface != "orchestration-manifest" {
+			t.Errorf("%s ts_host_surface = %q, want orchestration-manifest", command, record.TSHostSurface)
 		}
-		if !strings.Contains(record.RestoreTarget, fmt.Sprintf("aether host %s", command)) {
-			t.Errorf("%s restore_target should name future host command, got %q", command, record.RestoreTarget)
+		if strings.Contains(record.RestoreTarget, "later phase") {
+			t.Errorf("%s restore_target should no longer describe a future host gap, got %q", command, record.RestoreTarget)
 		}
 	}
 }
