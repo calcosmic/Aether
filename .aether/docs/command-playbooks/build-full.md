@@ -239,7 +239,7 @@ Parse the JSON result (`.result.blockers`):
 
 ### Step 2: Update State
 
-Read then update `.aether/data/COLONY_STATE.json`:
+Update `.aether/data/COLONY_STATE.json` using `aether state-mutate` (atomic, locked, validated):
 - Set `state` to `"EXECUTING"`
 - Set `current_phase` to the phase number
 - Set the phase's `status` to `"in_progress"` in `plan.phases[N]`
@@ -248,7 +248,14 @@ Read then update `.aether/data/COLONY_STATE.json`:
 
 If `events` exceeds 100 entries, keep only the last 100.
 
-Write COLONY_STATE.json.
+Run using the Bash tool with description "Updating colony state for build...":
+```bash
+aether state-mutate \
+  --argjson phase "$PHASE_NUMBER" \
+  --arg phase_name "$PHASE_NAME" \
+  --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '.state = "EXECUTING" | .current_phase = $phase | .plan.phases |= map(if .id == $phase then .status = "in_progress" else . end) | .build_started_at = $timestamp | .events = ((.events[-99:]) + [$timestamp + "|phase_started|build|Phase " + ($phase|tostring) + ": " + $phase_name + " started"])'
+```
 
 Validate the state file:
 Run using the Bash tool with description "Validating colony state...":
@@ -397,10 +404,10 @@ suggest_result=$(aether suggest-approve --dry-run 2>/dev/null)
 suggest_deprecated=$(echo "$suggest_result" | jq -r '.result.deprecated // false')
 
 if [[ "$suggest_deprecated" == "true" ]]; then
-    # Command is deprecated — skip silently, continue to Step 4.3
+    # Command is deprecated — skip without error, continue to Step 4.3
     :
 elif [[ -z "$suggest_result" ]]; then
-    # Command failed entirely — skip silently
+    # Command failed entirely — skip without error
     :
 else
     # Legacy path: parse suggestion_count (for older aether versions)
@@ -414,8 +421,8 @@ fi
 **Non-blocking**: This step never stops the build.
 
 **Error handling**:
-- If suggest-approve returns error: Skip silently, continue
-- If suggest-approve returns deprecated: Skip silently, continue
+- If suggest-approve returns error: Skip without error, continue
+- If suggest-approve returns deprecated: Skip without error, continue
 - Never let suggestion failures block the build
 
 2. **If existing code modification detected — spawn Archaeologist Scout:**
