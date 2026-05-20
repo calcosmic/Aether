@@ -103,8 +103,7 @@ Update COLONY_STATE.json:
    if [[ -n "$current_phase_learnings" ]]; then
      echo "$current_phase_learnings" | jq -r '.learnings[]?.claim // empty' 2>/dev/null | while read -r claim; do
        if [[ -n "$claim" ]]; then
-         aether memory-capture --type "learning" --source-type success_pattern --evidence-type multi_phase --content "$claim" 2>/dev/null || true
-       fi
+         aether memory-capture --type "learning" --source-type success_pattern --evidence-type multi_phase --content "$claim"       fi
      done
      echo "Recorded observations for threshold tracking"
    else
@@ -131,7 +130,7 @@ Update COLONY_STATE.json:
      --confidence <0.7-0.9 based on evidence strength> \
      --domain "<testing|architecture|code-style|debugging|workflow>" \
      --source "phase-{id}" \
-     --evidence "<specific observation>" 2>/dev/null || true
+     --evidence "<specific observation>"
    ```
 
    Confidence guidelines:
@@ -163,7 +162,7 @@ Update COLONY_STATE.json:
      --confidence 0.8 \
      --domain "<testing|architecture|debugging>" \
      --source "midden-phase-{id}" \
-     --evidence "<failure message and recurrence count>" 2>/dev/null || true
+     --evidence "<failure message and recurrence count>"
    ```
 
    Error pattern confidence is 0.8 (higher than success patterns) because recurring failures are strong negative signals.
@@ -181,7 +180,7 @@ Update COLONY_STATE.json:
      --confidence 0.7 \  # Base value; increase if observation_count > 1 per formula
      --domain "<testing|architecture|code-style|workflow>" \
      --source "success-phase-{id}" \
-     --evidence "<what succeeded and why>" 2>/dev/null || true
+     --evidence "<what succeeded and why>"
    ```
 
    Success pattern confidence is 0.7 (base; calibrate with observation count if available). Only create success instincts for genuinely noteworthy approaches, not routine completions.
@@ -417,7 +416,7 @@ if [[ -f "$export_file" ]]; then
       echo "Pheromone merge-back: $new_count new, $conflicts conflicts resolved, $skipped skipped (from merged branch)"
     fi
     # Clean up export file after successful merge
-    rm -f "$export_file" 2>/dev/null || true
+    rm -f "$export_file"
   else
     echo "Pheromone merge-back: failed (non-blocking)"
   fi
@@ -500,8 +499,7 @@ aether pheromone-write --type FEEDBACK --content "$phase_feedback" \
   --strength 0.6 \
   --source "worker:continue" \
   --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
-  --ttl "30d" 2>/dev/null || true
-```
+  --ttl "30d"```
 
 The strength is 0.6 (auto-emitted = lower than user-emitted 0.7). Source is "worker:continue" to distinguish from user-emitted feedback. TTL is 30d so it survives phase transitions and can guide subsequent work.
 
@@ -537,8 +535,7 @@ if [[ -n "$decisions" ]]; then
         --strength 0.6 \
         --source "auto:decision" \
         --reason "Auto-emitted from phase decision during continue" \
-        --ttl "30d" 2>/dev/null || true
-      emit_count=$((emit_count + 1))
+        --ttl "30d"      emit_count=$((emit_count + 1))
     fi
   done <<< "$decisions"
 fi
@@ -583,16 +580,14 @@ if [[ "$midden_count" -gt 0 ]]; then
         --strength 0.7 \
         --source "auto:error" \
         --reason "Auto-emitted: midden error pattern recurred 3+ times" \
-        --ttl "30d" 2>/dev/null || true
-      emit_count=$((emit_count + 1))
+        --ttl "30d"      emit_count=$((emit_count + 1))
 
       # Capture as resolution candidate for promotion tracking
       aether memory-capture \
         --type "resolution" \
         --source-type error_resolution \
         --evidence-type multi_phase \
-        --content "Recurring error pattern: $category ($count occurrences)" 2>/dev/null || true
-    fi
+        --content "Recurring error pattern: $category ($count occurrences)"    fi
   done
 fi
 ```
@@ -639,8 +634,7 @@ for encoded in $recurring_criteria; do
       --strength 0.6 \
       --source "auto:success" \
       --reason "Auto-emitted: success criteria pattern recurred across $count phases" \
-      --ttl "30d" 2>/dev/null || true
-  fi
+      --ttl "30d"  fi
 done
 ```
 

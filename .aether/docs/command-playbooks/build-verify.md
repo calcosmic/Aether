@@ -362,12 +362,12 @@ cat >> .aether/midden/build-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-aether midden-write --category "resilience" --message "Chaos finding: ${finding.title} (${finding.severity})" --source "chaos" 2>/dev/null || true
+aether midden-write --category "resilience" --message "Chaos finding: ${finding.title} (${finding.severity})" --source "chaos"
 
 # Capture resilience failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Resilience issue found: ${finding.title} (${finding.severity})" 2>/dev/null || true
+  --content "Resilience issue found: ${finding.title} (${finding.severity})"
 ```
 
 Log chaos ant completion:
@@ -381,8 +381,7 @@ Run using the Bash tool with description "Capturing chaos resilience success..."
 ```bash
 aether memory-capture \
   --type "success" \
-  --content "Chaos resilience strong: ${summary}" 2>/dev/null || true
-```
+  --content "Chaos resilience strong: ${summary}"```
 
 This records the resilience success in learning-observations.json via the existing memory pipeline (observe + pheromone + auto-promotion + rolling-summary).
 
@@ -415,13 +414,11 @@ cat >> .aether/midden/test-failures.md << EOF
 EOF
 
 # Write to structured midden for threshold detection (MID-01)
-aether midden-write --category "verification" --message "Watcher verification failed: ${issue_title}" --source "watcher" 2>/dev/null || true
-
+aether midden-write --category "verification" --message "Watcher verification failed: ${issue_title}" --source "watcher"
 # Capture verification failure in memory pipeline (observe + pheromone + auto-promotion)
 aether memory-capture \
   --type "failure" \
-  --content "Verification failed: ${issue_title} - ${issue_description}" 2>/dev/null || true
-```
+  --content "Verification failed: ${issue_title} - ${issue_description}"```
 
 This ensures verification failures are persisted as blockers that survive context resets. Chaos Ant findings are flagged in Step 5.7.
 

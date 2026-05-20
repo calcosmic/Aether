@@ -1173,8 +1173,7 @@ aether pheromone-write --type FEEDBACK --content "$phase_feedback" \
   --strength 0.6 \
   --source "worker:continue" \
   --reason "Auto-emitted on phase advance: captures what worked and what was learned" \
-  --ttl "30d" 2>/dev/null || true
-```
+  --ttl "30d"```
 
 The strength is 0.6 (auto-emitted = lower than user-emitted 0.7). Source is "worker:continue" to distinguish from user-emitted feedback. TTL is 30d so it survives phase transitions and can guide subsequent work.
 
@@ -1210,8 +1209,7 @@ if [[ -n "$decisions" ]]; then
         --strength 0.6 \
         --source "auto:decision" \
         --reason "Auto-emitted from phase decision during continue" \
-        --ttl "30d" 2>/dev/null || true
-      emit_count=$((emit_count + 1))
+        --ttl "30d"      emit_count=$((emit_count + 1))
     fi
   done <<< "$decisions"
 fi
@@ -1256,16 +1254,14 @@ if [[ "$midden_count" -gt 0 ]]; then
         --strength 0.7 \
         --source "auto:error" \
         --reason "Auto-emitted: midden error pattern recurred 3+ times" \
-        --ttl "30d" 2>/dev/null || true
-      emit_count=$((emit_count + 1))
+        --ttl "30d"      emit_count=$((emit_count + 1))
 
       # Capture as resolution candidate for promotion tracking
       aether memory-capture \
         --type "resolution" \
         --source-type error_resolution \
         --evidence-type multi_phase \
-        --content "Recurring error pattern: $category ($count occurrences)" 2>/dev/null || true
-    fi
+        --content "Recurring error pattern: $category ($count occurrences)"    fi
   done
 fi
 ```
@@ -1312,8 +1308,7 @@ for encoded in $recurring_criteria; do
       --strength 0.6 \
       --source "auto:success" \
       --reason "Auto-emitted: success criteria pattern recurred across $count phases" \
-      --ttl "30d" 2>/dev/null || true
-  fi
+      --ttl "30d"  fi
 done
 ```
 
@@ -1736,10 +1731,8 @@ Prune stale backups and temp files. This runs automatically — failures never a
 
 Run using the Bash tool with description "Pruning stale backups...":
 ```bash
-aether backup-prune-global 2>/dev/null || true
-```
+aether backup-prune-global```
 
 Run using the Bash tool with description "Cleaning temp files...":
 ```bash
-aether temp-clean 2>/dev/null || true
-```
+aether temp-clean```

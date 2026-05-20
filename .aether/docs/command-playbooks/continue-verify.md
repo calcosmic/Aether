@@ -81,7 +81,7 @@ If `state != "EXECUTING"`:
 
 Run using the Bash tool with description "Checking survey context...":
 ```bash
-survey_check=$(aether survey-verify 2>/dev/null || true)
+survey_check=$(aether survey-verify)
 survey_docs=$(ls -1 .aether/data/survey/*.md 2>/dev/null | wc -l | tr -d ' ')
 survey_latest=$(ls -t .aether/data/survey/*.md 2>/dev/null | head -1)
 if [[ -n "$survey_latest" ]]; then
