@@ -18,8 +18,11 @@ import {
   createPlatformDispatcher,
   buildArgs,
   formatPlatformUnavailableMessage,
+  formatWorkerPlatformSelectionMessage,
   formatPlatformDiagnosticMessage,
   classifyPlatformError,
+  preflightWorkerPlatform,
+  selectWorkerPlatform,
   type Platform,
   type WorkerConfig,
 } from "../src/platform-dispatcher.js";
@@ -32,6 +35,118 @@ const REPO_ROOT = "/Users/callumcowie/repos/Aether";
 // ---------------------------------------------------------------------------
 
 describe("platform-dispatcher", () => {
+  it("selectWorkerPlatform prefers the active Codex platform over Claude", () => {
+    const selected = selectWorkerPlatform(["claude", "opencode", "codex"], {
+      AETHER_ACTIVE_PLATFORM: "codex",
+    });
+    assert.equal(selected, "codex");
+  });
+
+  it("selectWorkerPlatform honors AETHER_WORKER_PLATFORM as a hard override", () => {
+    const selected = selectWorkerPlatform(["codex", "claude", "opencode"], {
+      AETHER_ACTIVE_PLATFORM: "codex",
+      AETHER_WORKER_PLATFORM: "opencode",
+    });
+    assert.equal(selected, "opencode");
+  });
+
+  it("selectWorkerPlatform reports unsupported or unavailable overrides", () => {
+    assert.equal(
+      selectWorkerPlatform(["codex", "claude"], { AETHER_WORKER_PLATFORM: "banana" }),
+      undefined
+    );
+    assert.match(
+      formatWorkerPlatformSelectionMessage(["codex", "claude"], { AETHER_WORKER_PLATFORM: "banana" }),
+      /Unsupported AETHER_WORKER_PLATFORM/
+    );
+
+    assert.equal(
+      selectWorkerPlatform(["codex"], { AETHER_WORKER_PLATFORM: "claude" }),
+      undefined
+    );
+    assert.match(
+      formatWorkerPlatformSelectionMessage(["codex"], { AETHER_WORKER_PLATFORM: "claude" }),
+      /not available/
+    );
+  });
+
+  it("preflightWorkerPlatform fails fast for unsupported Codex model config", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "aether-codex-preflight-"));
+    const secret = "sk-proj-ts-preflight-secret";
+    const codexPath = join(tempDir, "codex");
+    writeFileSync(
+      codexPath,
+      `#!/bin/sh
+case "$*" in
+  *"exec"*)
+    echo "The 'o4-mini' model is not supported when using Codex with a ChatGPT account. ${secret}" >&2
+    exit 2
+    ;;
+esac
+exit 0
+`,
+      { mode: 0o755 }
+    );
+    const previous = process.env["AETHER_CODEX_PATH"];
+    process.env["AETHER_CODEX_PATH"] = codexPath;
+    try {
+      await assert.rejects(
+        () => preflightWorkerPlatform("codex", tempDir),
+        (err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          assert.match(message, /provider\/model preflight failed/);
+          assert.match(message, /o4-mini/);
+          assert.match(message, /not supported/);
+          assert.ok(!message.includes(secret), `preflight leaked secret: ${message}`);
+          return true;
+        }
+      );
+    } finally {
+      if (previous === undefined) delete process.env["AETHER_CODEX_PATH"];
+      else process.env["AETHER_CODEX_PATH"] = previous;
+    }
+  });
+
+  it("preflightWorkerPlatform fails fast for Claude Code and OpenCode provider config", async () => {
+    for (const platform of ["claude", "opencode"] as Platform[]) {
+      const tempDir = mkdtempSync(join(tmpdir(), `aether-${platform}-preflight-`));
+      const secret = `sk-proj-ts-${platform}-preflight-secret`;
+      const binaryPath = join(tempDir, platform);
+      writeFileSync(
+        binaryPath,
+        `#!/bin/sh
+case "$*" in
+  *"Return exactly OK."*)
+    echo "${platform} configured model is not supported. ${secret}" >&2
+    exit 2
+    ;;
+esac
+exit 0
+`,
+        { mode: 0o755 }
+      );
+      const pathKey = providerPathEnv(platform);
+      const previous = process.env[pathKey];
+      process.env[pathKey] = binaryPath;
+      try {
+        await assert.rejects(
+          () => preflightWorkerPlatform(platform, tempDir),
+          (err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            assert.match(message, /provider\/model preflight failed/);
+            assert.match(message, /not supported/);
+            assert.ok(!message.includes(secret), `preflight leaked secret: ${message}`);
+            if (platform === "claude") assert.match(message, /Claude Code/);
+            if (platform === "opencode") assert.match(message, /OpenCode/);
+            return true;
+          }
+        );
+      } finally {
+        restoreEnv(pathKey, previous);
+      }
+    }
+  });
+
   it("detectAvailablePlatforms returns an array of strings", async () => {
     const platforms = await detectAvailablePlatforms();
     assert.ok(Array.isArray(platforms), "Should return an array");

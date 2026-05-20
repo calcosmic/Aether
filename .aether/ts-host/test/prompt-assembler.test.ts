@@ -35,6 +35,50 @@ describe("prompt-assembler", () => {
     );
   });
 
+  it("loadAgentDefinition falls back to hub Claude agents when repo-local agents are absent", () => {
+    const root = mkdtempSync(join(tmpdir(), "aether-prompt-consumer-"));
+    const home = mkdtempSync(join(tmpdir(), "aether-prompt-home-"));
+    const hub = join(home, ".aether");
+    const agentDir = join(hub, "system", "agents-claude");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      join(agentDir, "aether-builder.md"),
+      "# Hub Claude Builder\n\nPublished from the Aether hub.",
+      "utf-8"
+    );
+
+    const originalHub = process.env["AETHER_HUB_DIR"];
+    process.env["AETHER_HUB_DIR"] = hub;
+    try {
+      const content = loadAgentDefinition(root, "claude", "aether-builder", home);
+      assert.match(content, /Hub Claude Builder/);
+    } finally {
+      restoreEnv("AETHER_HUB_DIR", originalHub);
+    }
+  });
+
+  it("loadAgentDefinition falls back to hub Codex agents when repo-local agents are absent", () => {
+    const root = mkdtempSync(join(tmpdir(), "aether-prompt-consumer-"));
+    const home = mkdtempSync(join(tmpdir(), "aether-prompt-home-"));
+    const hub = join(home, ".aether");
+    const agentDir = join(hub, "system", "codex");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      join(agentDir, "aether-builder.toml"),
+      'name = "aether-builder"\ndescription = "Hub Codex Builder"\n',
+      "utf-8"
+    );
+
+    const originalHub = process.env["AETHER_HUB_DIR"];
+    process.env["AETHER_HUB_DIR"] = hub;
+    try {
+      const content = loadAgentDefinition(root, "codex", "aether-builder", home);
+      assert.match(content, /Hub Codex Builder/);
+    } finally {
+      restoreEnv("AETHER_HUB_DIR", originalHub);
+    }
+  });
+
   it("assemblePrompt includes agent definition and task brief", () => {
     const prompt = assemblePrompt({
       cwd: REPO_ROOT,
@@ -356,3 +400,11 @@ describe("prompt-assembler", () => {
     );
   });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}

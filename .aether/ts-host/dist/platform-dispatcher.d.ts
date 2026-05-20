@@ -44,6 +44,22 @@ export interface SpawnResult {
 }
 export declare function detectAvailablePlatforms(): Promise<Platform[]>;
 /**
+ * Select the worker platform for this host run.
+ *
+ * AETHER_WORKER_PLATFORM is a hard override. Otherwise, prefer the active host
+ * platform when known, then fall back to the runtime's canonical provider
+ * order. This keeps Codex-invoked host runs on Codex instead of drifting to
+ * Claude just because Claude is also installed.
+ */
+export declare function selectWorkerPlatform(available: readonly Platform[], env?: NodeJS.ProcessEnv): Platform | undefined;
+export declare function formatWorkerPlatformSelectionMessage(available: readonly Platform[], env?: NodeJS.ProcessEnv): string;
+/**
+ * Run a tiny worker-provider check before dispatching expensive workers.
+ * This catches account/model/provider configuration failures before the host
+ * creates worker completion state or spawns expensive worker waves.
+ */
+export declare function preflightWorkerPlatform(platform: Platform, cwd?: string): Promise<void>;
+/**
  * Return the TS-host-facing unavailable-provider message.
  *
  * Detailed provider classification is owned by Go's AvailabilityStatus

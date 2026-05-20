@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+const canonicalWorkerPlatformOrder = ["codex", "claude", "opencode"];
 // ---------------------------------------------------------------------------
 // Platform detection
 // ---------------------------------------------------------------------------
@@ -37,6 +38,97 @@ async function _realDetectAvailablePlatforms() {
 }
 export async function detectAvailablePlatforms() {
     return _detectAvailablePlatformsRef();
+}
+/**
+ * Select the worker platform for this host run.
+ *
+ * AETHER_WORKER_PLATFORM is a hard override. Otherwise, prefer the active host
+ * platform when known, then fall back to the runtime's canonical provider
+ * order. This keeps Codex-invoked host runs on Codex instead of drifting to
+ * Claude just because Claude is also installed.
+ */
+export function selectWorkerPlatform(available, env = process.env) {
+    const override = normalizePlatform(env["AETHER_WORKER_PLATFORM"]);
+    if (env["AETHER_WORKER_PLATFORM"]?.trim()) {
+        if (!override)
+            return undefined;
+        return available.includes(override) ? override : undefined;
+    }
+    const active = normalizePlatform(env["AETHER_ACTIVE_PLATFORM"]) ??
+        detectActivePlatformFromEnv(env);
+    const preferred = uniquePlatforms([
+        ...(active ? [active] : []),
+        ...canonicalWorkerPlatformOrder,
+    ]);
+    for (const platform of preferred) {
+        if (available.includes(platform)) {
+            return platform;
+        }
+    }
+    return undefined;
+}
+export function formatWorkerPlatformSelectionMessage(available, env = process.env) {
+    const rawOverride = env["AETHER_WORKER_PLATFORM"]?.trim();
+    if (rawOverride) {
+        const normalized = normalizePlatform(rawOverride);
+        if (!normalized) {
+            return `Unsupported AETHER_WORKER_PLATFORM "${rawOverride}". Set it to codex, claude, or opencode.`;
+        }
+        return `AETHER_WORKER_PLATFORM is set to ${normalized}, but that provider is not available. Available providers: ${available.join(", ") || "none"}.`;
+    }
+    return `No selectable worker platform is available. Available providers: ${available.join(", ") || "none"}.`;
+}
+/**
+ * Run a tiny worker-provider check before dispatching expensive workers.
+ * This catches account/model/provider configuration failures before the host
+ * creates worker completion state or spawns expensive worker waves.
+ */
+export async function preflightWorkerPlatform(platform, cwd = process.cwd()) {
+    const binary = resolveBinaryName(platform);
+    const args = preflightArgs(platform);
+    const result = await runPreflight(binary, args, cwd, "", 20_000);
+    if (result.exitCode !== 0) {
+        const diagnostic = sanitizeDiagnostic(`${result.stdout}\n${result.stderr}`);
+        throw new Error(`${providerDisplayName(platform)} provider/model preflight failed before worker dispatch: ${diagnostic || `${platform} exited with status ${result.exitCode ?? "unknown"}`}`);
+    }
+}
+function preflightArgs(platform) {
+    switch (platform) {
+        case "claude":
+            return [
+                "-p",
+                "--output-format", "json",
+                "--permission-mode", "bypassPermissions",
+                "Return exactly OK.",
+            ];
+        case "opencode":
+            return [
+                "run",
+                "--agent", process.env["AETHER_OPENCODE_PRIMARY_AGENT"]?.trim() || "build",
+                "--format", "json",
+                "Return exactly OK.",
+            ];
+        case "codex":
+            return [
+                "--sandbox", "workspace-write",
+                "--ask-for-approval", "never",
+                "exec",
+                "--json",
+                "--ephemeral",
+                "--skip-git-repo-check",
+                "Return exactly OK.",
+            ];
+    }
+}
+function providerDisplayName(platform) {
+    switch (platform) {
+        case "claude":
+            return "Claude Code";
+        case "opencode":
+            return "OpenCode";
+        case "codex":
+            return "Codex";
+    }
 }
 /**
  * Return the TS-host-facing unavailable-provider message.
@@ -246,6 +338,59 @@ function resolveBinaryName(platform) {
             return process.env["AETHER_CODEX_PATH"]?.trim() || "codex";
     }
 }
+function normalizePlatform(raw) {
+    switch ((raw ?? "").trim().toLowerCase()) {
+        case "codex":
+        case "codex-cli":
+            return "codex";
+        case "claude":
+        case "claude-code":
+            return "claude";
+        case "opencode":
+        case "open-code":
+            return "opencode";
+        default:
+            return undefined;
+    }
+}
+function detectActivePlatformFromEnv(env) {
+    if (hasAnyEnv(env, ["CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI"])) {
+        return "codex";
+    }
+    if (hasEnvPrefix(env, "CLAUDE_CODE_") ||
+        hasAnyEnv(env, ["CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR", "CLAUDE_CODE_SIMPLE"])) {
+        return "claude";
+    }
+    if (hasEnvPrefix(env, "OPENCODE_")) {
+        return "opencode";
+    }
+    return undefined;
+}
+function hasAnyEnv(env, keys) {
+    return keys.some((key) => {
+        const value = env[key];
+        return typeof value === "string" && value.trim() !== "" && value !== "0";
+    });
+}
+function hasEnvPrefix(env, prefix) {
+    for (const [key, value] of Object.entries(env)) {
+        if (key.startsWith(prefix) && typeof value === "string" && value.trim() !== "" && value !== "0") {
+            return true;
+        }
+    }
+    return false;
+}
+function uniquePlatforms(platforms) {
+    const seen = new Set();
+    const out = [];
+    for (const platform of platforms) {
+        if (!seen.has(platform)) {
+            seen.add(platform);
+            out.push(platform);
+        }
+    }
+    return out;
+}
 /**
  * Build CLI arguments per platform.
  * @internal — exported for testing only
@@ -308,6 +453,50 @@ async function runProbe(binary, args) {
             reject(new Error(`probe exited with status ${exitCode ?? "unknown"}`));
         });
     });
+}
+async function runPreflight(binary, args, cwd, stdin, timeoutMs) {
+    const start = Date.now();
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
+    return new Promise((resolve) => {
+        const stdout = [];
+        const stderr = [];
+        const child = spawn(binary, args, {
+            cwd,
+            signal: abortController.signal,
+            env: { ...process.env },
+        });
+        child.stdout?.on("data", (chunk) => stdout.push(chunk));
+        child.stderr?.on("data", (chunk) => stderr.push(chunk));
+        child.on("error", (err) => {
+            clearTimeout(timeoutId);
+            resolve({
+                exitCode: null,
+                stdout: Buffer.concat(stdout).toString("utf-8"),
+                stderr: `${Buffer.concat(stderr).toString("utf-8")}\n${err.message}`,
+                duration: Date.now() - start,
+            });
+        });
+        child.on("close", (exitCode) => {
+            clearTimeout(timeoutId);
+            resolve({
+                exitCode,
+                stdout: Buffer.concat(stdout).toString("utf-8"),
+                stderr: Buffer.concat(stderr).toString("utf-8"),
+                duration: Date.now() - start,
+            });
+        });
+        child.stdin?.end(stdin);
+    });
+}
+function sanitizeDiagnostic(raw) {
+    let text = raw.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]");
+    text = text.replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[redacted]");
+    text = text.replace(/\s+/g, " ").trim();
+    if (text.length > 400) {
+        text = `${text.slice(0, 397)}...`;
+    }
+    return text;
 }
 /** Count OpenCode credential entries from auth list output. */
 function countOpenCodeCredentials(output) {

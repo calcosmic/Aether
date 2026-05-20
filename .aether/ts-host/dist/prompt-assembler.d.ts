@@ -51,7 +51,7 @@ export interface PromptAssemblyConfig {
  * @returns Raw file content as string
  * @throws Error if the agent definition file is not found
  */
-export declare function loadAgentDefinition(cwd: string, platform: Platform, agentName: string): string;
+export declare function loadAgentDefinition(cwd: string, platform: Platform, agentName: string, homeDir?: string): string;
 /**
  * Assemble a complete worker prompt from agent definition, context, and task.
  *

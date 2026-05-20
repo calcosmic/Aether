@@ -69,26 +69,24 @@ export interface PromptAssemblyConfig {
 export function loadAgentDefinition(
   cwd: string,
   platform: Platform,
-  agentName: string
+  agentName: string,
+  homeDir?: string
 ): string {
-  let filePath: string;
-  switch (platform) {
-    case "claude":
-      filePath = join(cwd, ".claude", "agents", "ant", `${agentName}.md`);
-      break;
-    case "opencode":
-      filePath = join(cwd, ".opencode", "agents", `${agentName}.md`);
-      break;
-    case "codex":
-      filePath = join(cwd, ".codex", "agents", `${agentName}.toml`);
-      break;
+  const candidates = agentDefinitionCandidatePaths(cwd, platform, agentName, homeDir);
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) {
+      continue;
+    }
+    try {
+      return readFileSync(filePath, "utf-8");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Agent definition could not be read: ${agentName} at ${filePath}: ${msg}`);
+    }
   }
-
-  try {
-    return readFileSync(filePath, "utf-8");
-  } catch {
-    throw new Error(`Agent definition not found: ${agentName} at ${filePath}`);
-  }
+  throw new Error(
+    `Agent definition not found: ${agentName}; searched: ${candidates.join(", ")}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +110,7 @@ export function loadAgentDefinition(
  * @returns Fully assembled prompt string
  */
 export function assemblePrompt(config: PromptAssemblyConfig): string {
-  const agentDef = loadAgentDefinition(config.cwd, config.platform, config.agentName);
+  const agentDef = loadAgentDefinition(config.cwd, config.platform, config.agentName, config.homeDir);
 
   const contextCapsule = firstNonEmpty(config.contextCapsule, renderContextCapsule(config));
   const handoffSection = compactSection(config.handoffSection);
@@ -133,6 +131,92 @@ export function assemblePrompt(config: PromptAssemblyConfig): string {
   parts.push(responseContract);
 
   return parts.join("\n\n");
+}
+
+function agentDefinitionCandidatePaths(
+  cwd: string,
+  platform: Platform,
+  agentName: string,
+  homeDir?: string
+): string[] {
+  const base = normalizeAgentBase(agentName);
+  const local = localAgentDefinitionPath(cwd, platform, base);
+  if (isAetherSourceRoot(cwd)) {
+    return [local];
+  }
+
+  const home = homeDir ?? homedir();
+  return compactStrings([
+    globalAgentDefinitionPath(home, platform, base),
+    hubAgentDefinitionPath(home, platform, base),
+    local,
+  ]);
+}
+
+function normalizeAgentBase(agentName: string): string {
+  return agentName.trim().replace(/\.(md|toml)$/i, "");
+}
+
+function localAgentDefinitionPath(cwd: string, platform: Platform, base: string): string {
+  switch (platform) {
+    case "claude":
+      return join(cwd, ".claude", "agents", "ant", `${base}.md`);
+    case "opencode":
+      return join(cwd, ".opencode", "agents", `${base}.md`);
+    case "codex":
+      return join(cwd, ".codex", "agents", `${base}.toml`);
+  }
+}
+
+function globalAgentDefinitionPath(home: string, platform: Platform, base: string): string {
+  if (!home.trim()) return "";
+  switch (platform) {
+    case "claude":
+      return join(home, ".claude", "agents", "ant", `${base}.md`);
+    case "opencode":
+      return join(home, ".config", "opencode", "agents", `${base}.md`);
+    case "codex":
+      return join(home, ".codex", "agents", `${base}.toml`);
+  }
+}
+
+function hubAgentDefinitionPath(home: string, platform: Platform, base: string): string {
+  const hub = resolveHubDir(home);
+  if (!hub) return "";
+  switch (platform) {
+    case "claude":
+      return join(hub, "system", "agents-claude", `${base}.md`);
+    case "opencode":
+      return join(hub, "system", "agents", `${base}.md`);
+    case "codex":
+      return join(hub, "system", "codex", `${base}.toml`);
+  }
+}
+
+function resolveHubDir(home: string): string {
+  const explicit = process.env["AETHER_HUB_DIR"]?.trim();
+  if (explicit) return explicit;
+  if (!home.trim()) return "";
+  const hubName = process.env["AETHER_CHANNEL"]?.trim().toLowerCase() === "dev"
+    ? ".aether-dev"
+    : ".aether";
+  return join(home, hubName);
+}
+
+function isAetherSourceRoot(cwd: string): boolean {
+  try {
+    const goMod = readFileSync(join(cwd, "go.mod"), "utf-8");
+    return (
+      goMod.includes("module github.com/calcosmic/Aether") &&
+      existsSync(join(cwd, "cmd", "aether", "main.go"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function compactStrings(values: readonly string[]): string[] {
+  return values.filter((value) => value.trim() !== "");
 }
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,7 @@ import { callGoJSON, discoverGoBinary, writeCompletionFile, approvedCompletionDi
 import { buildHostGoArgs, getHostCommandDefinition, listHostCommandDefinitions, } from "./command-registry.js";
 import { runGoJSONCommand } from "./go-command.js";
 import { dispatchWorkers, toWorkerResults } from "./worker-dispatch.js";
-import { detectAvailablePlatforms, formatPlatformUnavailableMessage } from "./platform-dispatcher.js";
+import { detectAvailablePlatforms, formatPlatformUnavailableMessage, formatWorkerPlatformSelectionMessage, preflightWorkerPlatform, selectWorkerPlatform, } from "./platform-dispatcher.js";
 import { createSpawnOrchestrator } from "./spawn-orchestrator.js";
 import { createCeremonyAdapter, renderDryRunBadge, } from "./ceremony-adapter.js";
 import { ConfidenceLoop } from "./confidence-loop.js";
@@ -41,6 +41,7 @@ export function __restoreCallGoJSON() {
 // Mutable references for dispatch worker injection (testing).
 let _dispatchWorkersRef = dispatchWorkers;
 let _detectAvailablePlatformsRef = detectAvailablePlatforms;
+let _preflightWorkerPlatformRef = preflightWorkerPlatform;
 /** Test-only: inject a mock dispatchWorkers. */
 export function __setDispatchWorkers(fn) {
     _dispatchWorkersRef = fn;
@@ -57,11 +58,20 @@ export function __setDetectAvailablePlatforms(fn) {
 export function __restoreDetectAvailablePlatforms() {
     _detectAvailablePlatformsRef = detectAvailablePlatforms;
 }
+/** Test-only: inject a mock worker provider preflight. */
+export function __setPreflightWorkerPlatform(fn) {
+    _preflightWorkerPlatformRef = fn;
+}
+/** Test-only: restore the real worker provider preflight. */
+export function __restorePreflightWorkerPlatform() {
+    _preflightWorkerPlatformRef = preflightWorkerPlatform;
+}
 /** Restore all test mocks at once. */
 export function __restoreAllMocks() {
     __restoreCallGoJSON();
     __restoreDispatchWorkers();
     __restoreDetectAvailablePlatforms();
+    __restorePreflightWorkerPlatform();
 }
 // Test-only: exported runner functions for integration testing.
 export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand };
@@ -409,6 +419,19 @@ async function prepareHiveSection(bridge) {
         return "";
     }
 }
+async function preflightHostWorkerDispatch(available, cwd, context) {
+    const selected = selectWorkerPlatform(available);
+    if (!selected) {
+        throw new Error(formatWorkerPlatformSelectionMessage(available));
+    }
+    try {
+        await _preflightWorkerPlatformRef(selected, cwd);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`${context} cannot start: ${message}`);
+    }
+}
 // ---------------------------------------------------------------------------
 // Dry-run ceremony preview (HOST-07, D-06)
 // ---------------------------------------------------------------------------
@@ -603,10 +626,7 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
             d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + buildPlaybookContext;
         }
     }
-    // Step 2: Render spawn-plan and wave-start ceremony
-    const ceremonyEnvelope = { dispatch_manifest: buildManifest };
-    renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
-    // Step 3: Check available platforms (unless simulating)
+    // Step 2: Check available platforms (unless simulating)
     if (!parsed.simulate) {
         const available = await _detectAvailablePlatformsRef();
         if (available.length === 0) {
@@ -616,7 +636,11 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
                 : formatPlatformUnavailableMessage(`build phase ${phase}`);
             throw new Error(msg);
         }
+        await preflightHostWorkerDispatch(available, bridge.cwd, `Build phase ${phase}`);
     }
+    // Step 3: Render spawn-plan and wave-start ceremony
+    const ceremonyEnvelope = { dispatch_manifest: buildManifest };
+    renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
     // Step 5: Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
     const spawnBudget = buildManifest.queen_execution_policy?.spawn_budget?.max_workers ?? 20;
     const spawnOrchestrator = createSpawnOrchestrator({
@@ -767,16 +791,17 @@ async function runDispatchedPlanCommand(bridge, parsed) {
             d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + planPlaybookContext;
         }
     }
-    // Step 2: Render spawn-plan and wave-start ceremony
-    const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
-    renderManifestCeremony(ceremony, "plan", ceremonyEnvelope, dispatches);
-    // Step 3: Check platforms (unless simulating)
+    // Step 2: Check platforms (unless simulating)
     if (!parsed.simulate) {
         const available = await _detectAvailablePlatformsRef();
         if (available.length === 0) {
             throw new Error(formatPlatformUnavailableMessage("plan"));
         }
+        await preflightHostWorkerDispatch(available, bridge.cwd, "Plan");
     }
+    // Step 3: Render spawn-plan and wave-start ceremony
+    const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
+    renderManifestCeremony(ceremony, "plan", ceremonyEnvelope, dispatches);
     // Step 3b: Hive wisdom injection summary
     emitHiveSummary(dispatches);
     // Step 4: Dispatch planning workers
@@ -827,16 +852,17 @@ async function runDispatchedContinueCommand(bridge, parsed) {
     for (const d of dispatches) {
         d.hive_section = hiveSection;
     }
-    // Step 2: Render spawn-plan and wave-start ceremony
-    const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
-    renderManifestCeremony(ceremony, "continue", ceremonyEnvelope, dispatches);
-    // Step 3: Check platforms (unless simulating)
+    // Step 2: Check platforms (unless simulating)
     if (!parsed.simulate) {
         const available = await _detectAvailablePlatformsRef();
         if (available.length === 0) {
             throw new Error(formatPlatformUnavailableMessage("continue"));
         }
+        await preflightHostWorkerDispatch(available, bridge.cwd, "Continue");
     }
+    // Step 3: Render spawn-plan and wave-start ceremony
+    const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
+    renderManifestCeremony(ceremony, "continue", ceremonyEnvelope, dispatches);
     // Step 3b: Hive wisdom injection summary
     emitHiveSummary(dispatches);
     // Step 4: Dispatch review workers

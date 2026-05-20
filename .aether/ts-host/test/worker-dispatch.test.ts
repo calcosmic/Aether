@@ -12,6 +12,9 @@
 
 import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { BuildDispatch } from "../src/types.js";
 import {
@@ -497,6 +500,60 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
       `Should log "Simulating" when simulateWorkers=true, captured stderr: ${capturedStderr.join("\\n")}`
     );
   });
+
+  it("uses active Codex platform even when Claude is also available", async () => {
+    const root = mkdtempSync(join(tmpdir(), "aether-worker-root-"));
+    const home = mkdtempSync(join(tmpdir(), "aether-worker-home-"));
+    const hub = join(home, ".aether");
+    const codexAgentDir = join(hub, "system", "codex");
+    mkdirSync(codexAgentDir, { recursive: true });
+    writeFileSync(
+      join(codexAgentDir, "aether-builder.toml"),
+      'name = "aether-builder"\ndescription = "Hub Codex Builder"\n',
+      "utf-8"
+    );
+
+    const fakeDir = mkdtempSync(join(tmpdir(), "aether-worker-provider-"));
+    const marker = join(fakeDir, "codex.invoked");
+    const fakeCodex = join(fakeDir, "codex");
+    writeFileSync(
+      fakeCodex,
+      `#!/bin/sh\nprintf invoked > ${JSON.stringify(marker)}\nprintf '{"status":"completed","summary":"codex selected"}\\n'\n`,
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    const originalActive = process.env["AETHER_ACTIVE_PLATFORM"];
+    const originalHub = process.env["AETHER_HUB_DIR"];
+    const originalCodexPath = process.env["AETHER_CODEX_PATH"];
+    process.env["AETHER_ACTIVE_PLATFORM"] = "codex";
+    process.env["AETHER_HUB_DIR"] = hub;
+    process.env["AETHER_CODEX_PATH"] = fakeCodex;
+    __setDetectAvailablePlatforms(async () => ["claude", "codex"]);
+    __setCallGoJSON(<T>(): T => ({ recorded: true, completed: true } as unknown as T));
+
+    try {
+      const result = await dispatchSingleWorker(
+        {
+          goBinaryPath: "/usr/bin/true",
+          cwd: root,
+        },
+        {
+          ...mockDispatch,
+          context_capsule: "## Colony State\n\nUse active platform.",
+        }
+      );
+
+      assert.equal(result.status, "completed");
+      assert.equal(result.detectedPlatform, "codex");
+      assert.ok(existsSync(marker), "Codex fake provider should have been invoked");
+    } finally {
+      restoreEnv("AETHER_ACTIVE_PLATFORM", originalActive);
+      restoreEnv("AETHER_HUB_DIR", originalHub);
+      restoreEnv("AETHER_CODEX_PATH", originalCodexPath);
+      __restoreDetectAvailablePlatforms();
+      __restoreCallGoJSON();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -679,3 +736,11 @@ describe("worker-dispatch: wave summary", { concurrency: false }, () => {
     );
   });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}

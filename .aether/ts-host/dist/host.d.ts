@@ -21,7 +21,7 @@ import { callGoJSON } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { HOST_COMMANDS, type ParsedHostArgs } from "./command-registry.js";
 import { dispatchWorkers } from "./worker-dispatch.js";
-import { detectAvailablePlatforms } from "./platform-dispatcher.js";
+import { detectAvailablePlatforms, preflightWorkerPlatform } from "./platform-dispatcher.js";
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
 /** Test-only: inject a mock callGoJSON. */
@@ -36,6 +36,10 @@ export declare function __restoreDispatchWorkers(): void;
 export declare function __setDetectAvailablePlatforms(fn: typeof detectAvailablePlatforms): void;
 /** Test-only: restore the real detectAvailablePlatforms. */
 export declare function __restoreDetectAvailablePlatforms(): void;
+/** Test-only: inject a mock worker provider preflight. */
+export declare function __setPreflightWorkerPlatform(fn: typeof preflightWorkerPlatform): void;
+/** Test-only: restore the real worker provider preflight. */
+export declare function __restorePreflightWorkerPlatform(): void;
 /** Restore all test mocks at once. */
 export declare function __restoreAllMocks(): void;
 export { runDispatchedBuildCommand, runDispatchedPlanCommand, runDispatchedContinueCommand, runDryRunDispatchedCommand };

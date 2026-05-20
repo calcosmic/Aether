@@ -26,6 +26,8 @@ import {
   __restoreDispatchWorkers,
   __setDetectAvailablePlatforms,
   __restoreDetectAvailablePlatforms,
+  __setPreflightWorkerPlatform,
+  __restorePreflightWorkerPlatform,
   __restoreAllMocks,
   runDispatchedBuildCommand,
   runDispatchedPlanCommand,
@@ -257,6 +259,26 @@ describe("dispatched plan and continue runners", () => {
   it("continue dispatched runner passes simulateWorkers when --simulate is set", () => {
     const parsed = parseArgs(["node", "host.js", "continue", "--simulate"]);
     assert.equal(parsed.simulate, true, "--simulate should set parsed.simulate");
+  });
+
+  it("plan preflight fails before worker dispatch when Codex model is unsupported", async () => {
+    let dispatchCalled = false;
+    __setDetectAvailablePlatforms(async () => ["codex"]);
+    __setPreflightWorkerPlatform(async () => {
+      throw new Error("Codex provider/model preflight failed before worker dispatch: The 'o4-mini' model is not supported");
+    });
+    __setDispatchWorkers(async () => {
+      dispatchCalled = true;
+      return fakeDispatchResults();
+    });
+
+    const parsed = parseArgs(["node", "host.js", "plan"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    await assert.rejects(
+      () => runDispatchedPlanCommand(bridge, parsed),
+      /provider\/model preflight failed/
+    );
+    assert.equal(dispatchCalled, false, "dispatchWorkers must not run after preflight failure");
   });
 
   it("colonize and seal still use go-json runner", async () => {

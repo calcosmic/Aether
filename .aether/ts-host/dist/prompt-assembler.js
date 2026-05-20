@@ -27,25 +27,21 @@ import { join } from "node:path";
  * @returns Raw file content as string
  * @throws Error if the agent definition file is not found
  */
-export function loadAgentDefinition(cwd, platform, agentName) {
-    let filePath;
-    switch (platform) {
-        case "claude":
-            filePath = join(cwd, ".claude", "agents", "ant", `${agentName}.md`);
-            break;
-        case "opencode":
-            filePath = join(cwd, ".opencode", "agents", `${agentName}.md`);
-            break;
-        case "codex":
-            filePath = join(cwd, ".codex", "agents", `${agentName}.toml`);
-            break;
+export function loadAgentDefinition(cwd, platform, agentName, homeDir) {
+    const candidates = agentDefinitionCandidatePaths(cwd, platform, agentName, homeDir);
+    for (const filePath of candidates) {
+        if (!existsSync(filePath)) {
+            continue;
+        }
+        try {
+            return readFileSync(filePath, "utf-8");
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new Error(`Agent definition could not be read: ${agentName} at ${filePath}: ${msg}`);
+        }
     }
-    try {
-        return readFileSync(filePath, "utf-8");
-    }
-    catch {
-        throw new Error(`Agent definition not found: ${agentName} at ${filePath}`);
-    }
+    throw new Error(`Agent definition not found: ${agentName}; searched: ${candidates.join(", ")}`);
 }
 // ---------------------------------------------------------------------------
 // Prompt assembly
@@ -67,7 +63,7 @@ export function loadAgentDefinition(cwd, platform, agentName) {
  * @returns Fully assembled prompt string
  */
 export function assemblePrompt(config) {
-    const agentDef = loadAgentDefinition(config.cwd, config.platform, config.agentName);
+    const agentDef = loadAgentDefinition(config.cwd, config.platform, config.agentName, config.homeDir);
     const contextCapsule = firstNonEmpty(config.contextCapsule, renderContextCapsule(config));
     const handoffSection = compactSection(config.handoffSection);
     const skillSection = compactSection(config.skillSection);
@@ -90,6 +86,81 @@ export function assemblePrompt(config) {
     parts.push(taskBrief);
     parts.push(responseContract);
     return parts.join("\n\n");
+}
+function agentDefinitionCandidatePaths(cwd, platform, agentName, homeDir) {
+    const base = normalizeAgentBase(agentName);
+    const local = localAgentDefinitionPath(cwd, platform, base);
+    if (isAetherSourceRoot(cwd)) {
+        return [local];
+    }
+    const home = homeDir ?? homedir();
+    return compactStrings([
+        globalAgentDefinitionPath(home, platform, base),
+        hubAgentDefinitionPath(home, platform, base),
+        local,
+    ]);
+}
+function normalizeAgentBase(agentName) {
+    return agentName.trim().replace(/\.(md|toml)$/i, "");
+}
+function localAgentDefinitionPath(cwd, platform, base) {
+    switch (platform) {
+        case "claude":
+            return join(cwd, ".claude", "agents", "ant", `${base}.md`);
+        case "opencode":
+            return join(cwd, ".opencode", "agents", `${base}.md`);
+        case "codex":
+            return join(cwd, ".codex", "agents", `${base}.toml`);
+    }
+}
+function globalAgentDefinitionPath(home, platform, base) {
+    if (!home.trim())
+        return "";
+    switch (platform) {
+        case "claude":
+            return join(home, ".claude", "agents", "ant", `${base}.md`);
+        case "opencode":
+            return join(home, ".config", "opencode", "agents", `${base}.md`);
+        case "codex":
+            return join(home, ".codex", "agents", `${base}.toml`);
+    }
+}
+function hubAgentDefinitionPath(home, platform, base) {
+    const hub = resolveHubDir(home);
+    if (!hub)
+        return "";
+    switch (platform) {
+        case "claude":
+            return join(hub, "system", "agents-claude", `${base}.md`);
+        case "opencode":
+            return join(hub, "system", "agents", `${base}.md`);
+        case "codex":
+            return join(hub, "system", "codex", `${base}.toml`);
+    }
+}
+function resolveHubDir(home) {
+    const explicit = process.env["AETHER_HUB_DIR"]?.trim();
+    if (explicit)
+        return explicit;
+    if (!home.trim())
+        return "";
+    const hubName = process.env["AETHER_CHANNEL"]?.trim().toLowerCase() === "dev"
+        ? ".aether-dev"
+        : ".aether";
+    return join(home, hubName);
+}
+function isAetherSourceRoot(cwd) {
+    try {
+        const goMod = readFileSync(join(cwd, "go.mod"), "utf-8");
+        return (goMod.includes("module github.com/calcosmic/Aether") &&
+            existsSync(join(cwd, "cmd", "aether", "main.go")));
+    }
+    catch {
+        return false;
+    }
+}
+function compactStrings(values) {
+    return values.filter((value) => value.trim() !== "");
 }
 // ---------------------------------------------------------------------------
 // Section renderers

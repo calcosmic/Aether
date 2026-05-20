@@ -20,10 +20,11 @@ import {
   createPlatformDispatcher,
   detectAvailablePlatforms,
   formatPlatformUnavailableMessage,
+  formatWorkerPlatformSelectionMessage,
   classifyPlatformError,
+  selectWorkerPlatform,
   spawnWorker,
   type Platform,
-  type PlatformErrorClass,
   type WorkerConfig,
 } from "./platform-dispatcher.js";
 import {
@@ -249,7 +250,7 @@ export async function dispatchSingleWorker(
 /**
  * Dispatch a real worker via platform CLI subprocess.
  *
- * 1. Detect available platform (default "claude")
+ * 1. Select the active/overridden platform
  * 2. Assemble prompt from agent definition + task brief + response contract
  * 3. Spawn subprocess via platform-dispatcher
  * 4. Parse claims JSON from stdout
@@ -263,11 +264,10 @@ async function dispatchRealWorker(
   opts: DispatchOptions,
   dispatch: BuildDispatch
 ): Promise<DispatchResult> {
-  // Detect platform: prefer "claude" if available, else first available.
-  let platform: Platform = "claude";
   const available = await detectAvailablePlatforms();
-  if (available.length > 0 && !available.includes("claude")) {
-    platform = available[0]!;
+  const platform = selectWorkerPlatform(available);
+  if (!platform) {
+    throw new Error(formatWorkerPlatformSelectionMessage(available));
   }
 
   const agentName = getAgentNameForCaste(dispatch.caste);
