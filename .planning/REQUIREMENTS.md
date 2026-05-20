@@ -9,11 +9,11 @@ Requirements for v1.23 Daily Driver Reliability milestone. Each maps to roadmap 
 
 ### Silent Pipeline (PIPE)
 
-- [ ] **PIPE-01**: All playbook CLI invocations produce honest errors -- no `2>/dev/null || true` suppression on data-persistence calls (learning, midden, pheromone, memory, spawn tracking)
-- [ ] **PIPE-02**: All state writes use `state-mutate` with targeted jq -- no raw "Write COLONY_STATE.json" from LLM context
-- [ ] **PIPE-03**: Pending decisions are scoped by session across all readers -- not just discuss.go
-- [ ] **PIPE-04**: Session cleanup on `/ant-init` clears stale session.json from prior colonies
-- [ ] **PIPE-05**: Event array cap enforced at the storage layer, not dependent on every caller
+- [x] **PIPE-01**: All playbook CLI invocations produce honest errors -- no `2>/dev/null || true` suppression on data-persistence calls (learning, midden, pheromone, memory, spawn tracking)
+- [x] **PIPE-02**: All state writes use `state-mutate` with targeted jq -- no raw "Write COLONY_STATE.json" from LLM context
+- [x] **PIPE-03**: Pending decisions are scoped by session across all readers -- not just discuss.go
+- [x] **PIPE-04**: Session cleanup on `/ant-init` clears stale session.json from prior colonies
+- [x] **PIPE-05**: Event array cap enforced at the storage layer, not dependent on every caller
 
 ### Command Classification (CATALOG)
 
@@ -98,11 +98,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PIPE-01 | Phase 145 | Pending |
-| PIPE-02 | Phase 145 | Pending |
-| PIPE-03 | Phase 145 | Pending |
-| PIPE-04 | Phase 145 | Pending |
-| PIPE-05 | Phase 145 | Pending |
+| PIPE-01 | Phase 145 | Complete |
+| PIPE-02 | Phase 145 | Complete |
+| PIPE-03 | Phase 145 | Complete |
+| PIPE-04 | Phase 145 | Complete |
+| PIPE-05 | Phase 145 | Complete |
 | CATALOG-01 | Phase 146 | Pending |
 | CATALOG-02 | Phase 146 | Pending |
 | CATALOG-03 | Phase 146 | Pending |
