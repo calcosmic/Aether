@@ -1,42 +1,42 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.22
-milestone_name: Grounded Planning + Ceremony Restore
-status: milestone_archived
-last_updated: "2026-05-19T12:00:00Z"
-last_activity: 2026-05-19 -- v1.22 milestone archived, product v1.0.40 published
+milestone: v1.23
+milestone_name: Daily Driver Reliability
+status: planning
+last_updated: "2026-05-20T00:00:00Z"
+last_activity: 2026-05-20 -- Milestone v1.23 started
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-19)
+See: .planning/PROJECT.md (updated 2026-05-20)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Planning next milestone — run `/gsd-new-milestone` to start
+**Current focus:** v1.23 Daily Driver Reliability
 
 ## Current Position
 
-Phase: N/A
-Plan: N/A
-Status: Milestone archived
-Last activity: 2026-05-19
+Phase: Not started (defining requirements)
+Plan: -
+Status: Defining requirements
+Last activity: 2026-05-20 -- Milestone v1.23 started
 
 ## Known Blockers
 
-- Go `spawn-log`/`spawn-complete` may need minor adjustments to accept children not in the original manifest
-- Confidence metric definition for builds is unclear -- multiple gate results need aggregation into a single score
+(None)
 
 ## Next Actions
 
-1. Start next milestone with `/gsd-new-milestone`
+1. Define requirements for v1.23
+2. Create roadmap with phase breakdown
 
 ## Key Decisions (Carried Forward)
 
@@ -54,4 +54,4 @@ Last activity: 2026-05-19
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Define requirements and create roadmap

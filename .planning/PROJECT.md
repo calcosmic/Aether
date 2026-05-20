@@ -34,36 +34,63 @@ That means:
 
 ## Current State
 
-- **v1.22 Grounded Planning + Ceremony Restore shipped**
-- **Product version: v1.0.40**
-- v1.22 shipped: Survey noise filtering, source anchors, grounding gate, decision conflict detection, ceremony restore via PlaybookLoader
-- v1.21 shipped: TS host is production orchestrator with dispatch, ceremony, iteration, spawning, hive wisdom
+- **v1.23 Daily Driver Reliability — in progress**
+- **Product version: v1.0.41**
+- v1.22 shipped: Survey noise filtering, source anchors, grounding gate, decision conflict detection, ceremony restore
+- Focus: prove every command works, streamline Queen orchestration, demonstrate end-to-end in downstream repo
 - Go = truth (state, gates, finalizers), playbooks = soul, YAML = packaging
 - 465 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
 
-## Current Milestone: Next — TBD
+## Current Milestone: v1.23 Daily Driver Reliability
 
-**Goal:** Planning next milestone. Run `/gsd-new-milestone` to define scope.
+**Goal:** Restore Aether as a reliable daily-driver system for developing other repos — prove every command works, streamline Queen orchestration, and demonstrate end-to-end in a downstream repo.
+
+**Target features:**
+1. Command reliability matrix (audit-catalog + historical tags v1.10-v1.21 + v5.4.0)
+2. Command classification (public lifecycle, public utility, internal, alias, deprecated)
+3. Smoke/fixture/e2e tests for every command
+4. Flagship workflow restore (colonize, plan, oracle/RALF, build, continue, run, swarm, seal, entomb)
+5. Queen execution policy restore (direct, single-worker, focused-review, full-colony)
+6. Remove unnecessary agent spawning from deterministic commands
+7. Fix stale decision/session leakage between colonies
+8. Fix worker artifact/result collection (completed work not lost)
+9. End-to-end proof in a separate downstream repo
+
+**Hard constraints:**
+- No new features until existing command surface is reliable
+- No docs-only papering — must have executable evidence
+- Every public command needs test proof
+- Prefer deterministic runtime checks over agent spawning
 
 **Previous Milestone: v1.22 Grounded Planning + Ceremony Restore** — Shipped 2026-05-19
 
 Key accomplishments: Survey noise filtering, source anchors, grounding gate, decision conflict detection, PlaybookLoader ceremony restore. 22/22 requirements, 84 new tests, zero tech debt.
 
-## Previous Milestone: v1.21 Live Colony
+## Previous Milestone: v1.22 Grounded Planning + Ceremony Restore
 
-**Shipped:** 2026-05-18
-**Phases:** 5 (136-140) | **Plans:** 18
+**Shipped:** 2026-05-19
+**Phases:** 4 (141-144) | **Plans:** 8
 
 **Key accomplishments:**
-- Production TS host dispatch with ceremony (caste visuals, stage markers, skill sections)
-- Worker-to-worker spawning with budget enforcement and depth limits
-- Confidence-driven build iteration (3x loop with diminishing returns detection)
-- Cross-colony hive wisdom injection into worker prompts
-- Full validation: 465 TS tests, 18 Go packages, wrapper alignment verified
+- Unified 5 divergent skip lists into canonical ScanFilter with 36-entry noise map
+- Source anchors extracted from clean survey, wired through to planner context
+- Plan-grounding validation gate + decision conflict detection with 9 contradiction pairs
+- PlaybookLoader TS module restored ceremony (loads 5 build + 2 plan playbooks)
+- 84 new tests proving end-to-end pipeline: survey → anchors → grounding → ceremony → regression
 
-**Known deferred items at close:** 3 verification gaps (Phase 101 old milestone, Phase 139 human testing, Phase 140 fixed in close)
+**Stats:** 44 commits, 53 files changed, +7,396 / -151 lines
+
+Full details: `.planning/milestones/v1.22-ROADMAP.md`
+
+<details>
+<summary>v1.21 Live Colony Summary</summary>
+
+**Shipped:** 2026-05-18 | **Phases:** 5 (136-140) | **Plans:** 18
+
+Key accomplishments: Production TS host dispatch with ceremony, worker-to-worker spawning with budget enforcement, confidence-driven build iteration, cross-colony hive wisdom injection, 465 TS tests.
 
 Full details: `.planning/milestones/v1.21-ROADMAP.md`
+</details>
 
 <details>
 <summary>v1.18 Hybrid Runtime Parity & Release Gate Summary</summary>
@@ -155,6 +182,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.20 Host Contract Hardening and Wrapper Reality Check -- Phases 130-135 (shipped 2026-05-15)
 - [ ] v1.21 Live Colony -- Phases 136+
 - [x] v1.22 Grounded Planning + Ceremony Restore -- Phases 141-144 (shipped 2026-05-19)
+- [ ] v1.23 Daily Driver Reliability -- Phases 145+
 
 ## Requirements
 
@@ -203,22 +231,24 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 ### Active
 
-- [ ] TSHOST-01: TS host dispatches real platform workers (not simulated) with parallel wave execution
-- [ ] TSHOST-02: TS host handles error recovery, retry logic, and timeout management
-- [ ] TSHOST-03: Event bridge streams Go ceremony events to TS/wrapper consumers
-- [ ] CEREMONY-01: Ceremony restored to command wrappers as editable markdown (banners, art, spawn notifications, seal rituals)
-- [ ] CEREMONY-02: Shared ceremony config in YAML (caste emoji/color/label maps, naming conventions)
-- [ ] CEREMONY-03: Go ceremony rendering code replaced by event emission (Go emits, wrappers render)
-- [ ] ORCHESTRA-01: Queen selects workflow patterns (SPBV, Investigate-Fix, Refactor, Compliance, Documentation Sprint) based on phase type
-- [ ] ORCHESTRA-02: Builder-Probe Lock restored — builders return code_written, only Probe upgrades to completed
-- [ ] ORCHESTRA-03: Tiered escalation chain (worker retry → parent reassignment → Queen reassignment → user escalation)
-- [ ] ORCHESTRA-04: Intra-build midden threshold checks with auto-REDIRECT pheromone emission
-- [ ] ORACLE-01: Phase-aware prompt directives (survey/investigate/synthesize/verify) injected into Oracle worker briefs
-- [ ] ORACLE-02: Diminishing returns detection with novelty delta tracking and forced phase advancement
-- [ ] ORACLE-03: Template-specific synthesis sections (tech-eval, architecture-review, bug-investigation, best-practices)
-- [ ] SWARM-01: Live terminal dashboard with animated spinners, per-ant progress bars, and tool usage counters
-- [ ] SWARM-02: Chamber activity map showing which project areas have active workers
-- [ ] PARITY-01: Golden workflow tests comparing output and behavior against v5.4 Classic baseline
+- [ ] CATALOG-01: Build command reliability matrix from audit-catalog, current docs, and historical tags (v1.10-v1.21, v5.4.0)
+- [ ] CATALOG-02: Classify every command as public lifecycle, public utility, internal runtime, alias, or deprecated
+- [ ] TEST-01: Every public command has at least one smoke/fixture/e2e test with executable evidence
+- [ ] TEST-02: Test matrix documents which commands are covered and how
+- [ ] WORKFLOW-01: Colonize workflow restored and verified end-to-end
+- [ ] WORKFLOW-02: Iterative plan workflow restored and verified end-to-end
+- [ ] WORKFLOW-03: Iterative oracle/RALF workflow restored and verified end-to-end
+- [ ] WORKFLOW-04: Build workflow restored and verified end-to-end
+- [ ] WORKFLOW-05: Continue workflow restored and verified end-to-end
+- [ ] WORKFLOW-06: Run (autopilot) workflow restored and verified end-to-end
+- [ ] WORKFLOW-07: Swarm workflow restored and verified end-to-end
+- [ ] WORKFLOW-08: Seal workflow restored and verified end-to-end
+- [ ] WORKFLOW-09: Entomb workflow restored and verified end-to-end
+- [ ] QUEEN-01: Queen execution policy restored with 4 modes: direct, single-worker, focused-review, full-colony
+- [ ] QUEEN-02: Deterministic commands and small lifecycle steps do not spawn unnecessary agents
+- [ ] RUNTIME-01: Stale decision/session leakage between colonies eliminated
+- [ ] RUNTIME-02: Worker artifact/result collection preserves completed work (no silent loss)
+- [ ] PROOF-01: End-to-end smoke test in a separate downstream repo proves Aether works without modifying itself during the run
 
 ### Out of Scope
 
@@ -287,7 +317,7 @@ This document evolves at phase transitions and milestone boundaries.
 - Curation ant pipeline (8-ant orchestrated pipeline)
 - Consolidation pipeline (phase-end knowledge compression)
 
-*Last updated: 2026-04-30 after v1.11 Aether Unification milestone shipped*
+*Last updated: 2026-05-20 after v1.23 milestone started*
 
 ## Current Milestone: v1.12 Safe Colony
 
