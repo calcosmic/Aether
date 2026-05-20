@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.23
 milestone_name: Daily Driver Reliability
-status: planning
+status: ready-to-plan
 last_updated: "2026-05-20T00:00:00Z"
-last_activity: 2026-05-20 -- Milestone v1.23 started
+last_activity: 2026-05-20 -- Roadmap created, 7 phases defined
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,38 +20,60 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-20)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** v1.23 Daily Driver Reliability
+**Current focus:** v1.23 Daily Driver Reliability -- Phase 145: Silent Pipeline Fix
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: -
-Status: Defining requirements
-Last activity: 2026-05-20 -- Milestone v1.23 started
+Phase: 1 of 7 (Silent Pipeline Fix)
+Plan: - (not yet planned)
+Status: Ready to plan
+Last activity: 2026-05-20 -- Roadmap created with 7 phases, 30 requirements mapped
 
-## Known Blockers
+Progress: [          ] 0%
 
-(None)
+## Performance Metrics
 
-## Next Actions
+**Velocity:**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: 0 hours
 
-1. Define requirements for v1.23
-2. Create roadmap with phase breakdown
+**By Phase:**
 
-## Key Decisions (Carried Forward)
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 145. Silent Pipeline Fix | 0/? | - | - |
+| 146. Command Classification | 0/? | - | - |
+| 147. Critical Test Coverage | 0/? | - | - |
+| 148. Learning and Workflow Restoration | 0/? | - | - |
+| 149. Queen Execution Policy | 0/? | - | - |
+| 150. Runtime Safety | 0/? | - | - |
+| 151. End-to-End Proof | 0/? | - | - |
 
-- Wrappers are "host-assisted orchestrators"; they call `aether host` for manifests
-- Go remains sole authority for state mutation and finalizers
-- Oracle state uses atomic Go-owned storage with interrupt recovery
-- Simulation is gated behind `--simulate` flag
-- worker-dispatch.ts simulateWorkers check already defaults to real dispatch; no source change needed
-- Lifecycle smoke harness (lifecycle.ts) stays simulate-only; production uses dedicated host commands
-- Build/plan/continue commands use "dispatched" runner type with ceremony rendering and Go finalizers
-- PlaybookLoader resolves candidates: absolute -> root+path -> root+playbooks-dir -> hub-system -> hub-root -> bare (mirrors Go)
-- YAML orchestration blocks removed from build.yaml and plan.yaml; codex_orchestration preserved (CEREMONY-04)
-- Playbook context is document-injection, not parsed steps -- host.ts loads playbooks and appends to task_brief (CEREMONY-06)
-- M4L regression test proves end-to-end survey-to-grounding pipeline composition (Phases 141+142)
+*Updated after each plan completion*
 
-## Operator Next Steps
+## Accumulated Context
 
-- Define requirements and create roadmap
+### Decisions
+
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- Research recommends 7-phase "fix foundation first" structure: silent pipeline fix before everything else
+- Phase numbering continues from v1.22 (last phase 144), starting at 145
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+- Phase 148 (Learning Extraction): Research could not confirm if hypothesis lifecycle exists in Go runtime -- needs source inspection during planning
+- Phase 150 (Worker Artifact Recovery): build-reconcile command does not exist yet and needs design
+- Phase 149 (Execution Policy): Need to decide whether to update CLAUDE.md to match Go (recommended) or change Go to match docs
+
+## Session Continuity
+
+Last session: 2026-05-20
+Stopped at: Roadmap created, ready to plan Phase 145
+Resume file: None
