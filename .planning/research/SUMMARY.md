@@ -1,171 +1,229 @@
 # Project Research Summary
 
-**Project:** Aether v1.21 Live Colony
-**Domain:** CLI colony framework -- hybrid Go runtime + TypeScript orchestration host
-**Researched:** 2026-05-18
+**Project:** Aether v1.23 Daily Driver Reliability
+**Domain:** CLI colony framework -- reliability restoration of flagship workflows after shell-to-Go migration
+**Researched:** 2026-05-20
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The v1.21 milestone converts Aether's TypeScript host from a simulation-only smoke harness into the production control plane for multi-agent colony orchestration. The four target capabilities are: real worker dispatch (removing the simulate-only guard in `lifecycle.ts`), worker-to-worker spawning (workers requesting sub-workers mid-build), confidence-driven iteration (looping plan/build/continue until quality targets are met), and hive wisdom reuse verification (proving colony B benefits from colony A's learnings). The critical finding across all four research files is that nearly all the code already exists. The `dispatchRealWorker()` path is fully implemented. The `spawns` field exists in the worker claims schema. The Oracle lifecycle already demonstrates the confidence-driven iteration pattern. The Go runtime already owns all hive operations. What is missing is not new dependencies or architecture, but wiring -- removing guards, consuming existing fields, generalizing existing patterns, and calling existing Go commands.
+Aether v1.23 is a reliability restoration milestone, not a feature build. The Go runtime migration (v1.0-v1.5) and manifest-protocol cutover (v1.16-v1.18) were architecturally correct decisions -- Go owns state mutations, manifest protocol provides clean boundary enforcement, and ceremony rendering is deterministic. But the migration lost 3,786 lines of behavioral specification from the Classic v5.4.0 playbooks, leaving the system with 70 untested source files (35% of cmd/), 12 HIGH-severity gaps where failures silently drop user data, and a documentation-to-runtime contract that disagrees on execution modes, watcher behavior, and spawning rules.
 
-The work is primarily integration, not greenfield development. Only one new runtime dependency is recommended (`p-limit` for concurrency control), and only three new TS source files are needed (`hive-injector.ts`, `worker-spawner.ts`, `build-coordinator.ts`). Zero new Go-side development is required -- all Go commands (`hive-read`, `spawn-log`, `spawn-complete`, `build-finalize`) already exist and return structured JSON. The highest-risk change is removing the simulation guard in `lifecycle.ts` line 268, which blocks all production dispatch. The most dangerous pitfall is worker-to-worker spawning creating unbounded fan-out if not budget-capped at the orchestrator level.
+The highest-impact work falls into two camps. First, fix the silent failure pipeline: 80+ playbook instructions use `2>/dev/null || true` which makes the learning pipeline, failure tracking, and pheromone system completely hollow -- they appear to work but silently discard all output. Second, close the test coverage gap on 12 source files that handle colony intelligence (eventbus, queen, instinct, hive, spawn), where untested failures cause data loss or state corruption. Everything else -- spawning optimization, ceremony restoration, workflow parity -- is downstream of these two foundations.
+
+The key risk is that "everything looks fine but nothing is actually being recorded." A user can run builds, continues, and full colony lifecycles with no visible errors, while learnings are never extracted, failures are never tracked, pheromone signals are never written, and worker artifacts are silently dropped on interrupt. The mitigation is straightforward: remove error suppression, add smoke tests for data-persistence paths, and reconcile the documented execution policy with what the Go runtime actually implements.
 
 ## Key Findings
 
-### Recommended Stack
+### Command Surface and Test Coverage
 
-The existing stack is sufficient. Only one new dependency is recommended.
+**Summary from STACK.md -- the test gap is the reliability gap.**
 
-**Core technologies (existing, unchanged):**
-- Go 1.24 + Cobra CLI: authoritative runtime, state mutations, finalizers, verification
-- TypeScript (Node >=20): orchestration control plane, platform dispatch, ceremony rendering
-- chalk/boxen/figlet/ora/cli-progress/log-update: rendering stack (v1.17, no bumps needed)
+Aether has 389 Cobra-registered commands, 60 YAML wrappers per platform, and 5,075 passing tests. The surface is large but the coverage is not uniform: 70 Go source files (35% of cmd/) have no dedicated test file. These are not edge cases -- they include the event bus (6 commands, backbone of wisdom pipeline), queen system (8 commands, central colony intelligence), instinct management (5+ commands, learning pipeline), midden failure tracking (10 commands, entire subsystem untested), hive cross-colony wisdom (6 commands), and spawn tracking (10 commands, worker lifecycle).
 
-**New addition:**
-- `p-limit@7.3.0`: concurrency cap for dynamic worker spawning -- 2KB, zero dependencies, ESM-native. Without it, worker-to-worker spawning creates unbounded fan-out. Rejected `bottleneck` (10x larger, unnecessary features) and custom semaphores (reinventing the wheel).
+**Core gap:**
+- 12 HIGH-severity untested files covering ~67 commands where failure causes data loss or silent corruption
+- 9 public utility commands with no test file (preferences, pause-colony, resume-colony, data-clean)
+- 5 lifecycle wrappers delegate through TypeScript host but lack end-to-end tests through that path
+- 5 pure-wrapper commands (chaos, dream, archaeology, interpret, organize) have no runtime backing -- low priority, exclude from test targets
 
-**Explicitly NOT adding:**
-- `execa`/`zx`: Go bridge deliberately uses `child_process` for safety and JSON envelope control
-- `bullmq`/`rabbitmq`: workers are short-lived CLI subprocesses, not long-running services
-- Redis/SQLite for hive storage: 200-entry JSON file with file locking is sufficient
-- Vector embeddings for hive search: domain tags + confidence threshold is correct for this scale
+### Behavioral Baselines and Regressions
 
-### Expected Features
+**Summary from FEATURES.md -- what "good" looked like and what got lost.**
 
-**Must have (table stakes):**
-- Real worker dispatch via platform CLIs (Claude, OpenCode, Codex) -- framework that only simulates is a prototype
-- Wave-grouped parallel dispatch with dependency ordering -- multi-worker orchestration without wave ordering breaks causality
-- Completion file to Go finalizer flow -- state mutation must go through Go for atomicity
-- Worker lifecycle events (spawn-log, spawn-complete) -- orchestration without observability is a black box
-- Graceful degradation on platform unavailability -- framework should not crash when a platform CLI is missing
+The Classic v5.4.0 era was the behavioral high-water mark. It had rich ceremony at every step, playbook-driven execution (5-stage build, 4-stage continue), first-class learning with hypothesis/validated/disproven lifecycle, a 7-question Oracle wizard, 15-step seal ceremony with Sage analytics and Chronicler audit, and 4-scout swarm with cross-comparison ranking.
 
-**Should have (competitive differentiators):**
-- Worker-to-worker spawning (budget-capped) -- hierarchical delegation is standard in LangGraph/CrewAI but Aether enforces an orchestrator-level budget cap, which is unique
-- Confidence-driven build iteration -- Evaluator-Optimizer pattern from Anthropic's research; most frameworks run workers once
-- Hive wisdom reuse proof -- cross-colony knowledge transfer is rare; Aether's Hive Brain already has domain tags, confidence scores, and multi-repo boosting
-- Ceremony-preserving production dispatch -- real workers produce the same rich ceremony output as simulation
+The Go migration kept the right architecture but lost behavioral fidelity. The most critical regression: the learning extraction lifecycle in `/ant-continue`. Classic continue extracted learnings as hypotheses, tracked evidence against them, promoted only validated knowledge to instincts, and piped through the full memory pipeline. The current Go runtime's default path (fast, Go-only) is correct for daily use, but it needs verification that the hypothesis lifecycle still exists in any depth mode. If it does not, this is the single highest-priority behavioral regression -- without learning extraction, the colony accumulates zero wisdom across phases.
 
-**Defer to v2+:**
-- Multi-level spawn trees (grandchildren, great-grandchildren) -- one level is sufficient; deeper trees need deadlock detection
-- Cross-colony ledger sharing -- explicitly a non-goal in PROJECT.md
-- Learned confidence thresholds -- requires multiple colonies' worth of data
-- User-defined spawn policies -- YAGNI until one-level spawning is proven
+**What to restore (ranked by user impact):**
+1. Learning extraction with hypothesis lifecycle -- verify in Go runtime, restore if missing
+2. Worker context quality -- verify workers receive pheromones, skills, survey data, colony goal
+3. Oracle promote-to-colony pipeline -- verify end-to-end: oracle > instincts > learnings > QUEEN.md > hive
+4. Autopilot pause conditions -- verify all 10 Classic conditions implemented in Go `aether run`
+5. Swarm 4-scout cross-comparison and 3-attempt architectural escalation -- verify parity
+6. Seal ceremony (Sage analytics, Chronicler audit, wisdom approval) -- restore as optional ceremony
 
-### Architecture Approach
+**What NOT to revert:** Go-owned state mutation (Frankenstein state proved LLMs cannot safely reconstruct JSON), manifest protocol for worker dispatch, Go ceremony rendering, golden workflow tests, loop safety, depth controls.
 
-The hybrid Go/TS architecture is already established and well-documented. Three new modules integrate at the existing boundary. No architectural reorganization is needed.
+### Architecture Gaps: Execution Policy and Spawning
 
-**New components:**
-1. `hive-injector.ts` -- calls `aether hive-read`, formats wisdom for prompt injection into `prompt-assembler.ts` context capsule. Read-only on the hub. Purely additive; workers without hive wisdom work identically. (~40-60 lines)
-2. `worker-spawner.ts` -- validates spawn requests against Queen spawn budget, dispatches child workers via existing `platform-dispatcher.ts`, records results via Go `spawn-log`/`spawn-complete`. Attaches child results to parent's handoff. (~100-150 lines)
-3. `build-coordinator.ts` -- confidence-driven plan/build iteration loop, modeled on the proven Oracle lifecycle pattern (`oracle-lifecycle.ts`). Loops `build --plan-only` -> dispatch -> finalize -> evaluate confidence. Hard cap at 3 iterations default. (~80-120 lines)
+**Summary from ARCHITECTURE.md -- the documentation and runtime disagree.**
 
-**Key patterns to follow:**
-- **Manifest-Only-Then-Finalize**: every workflow calls Go `--plan-only` for manifest, dispatches workers, writes completion to tmpdir, calls Go finalizer. This is the core boundary contract.
-- **Budget-Capped Spawn Tree**: Queen spawn budget caps total workers including child spawns. No exceptions.
-- **Graceful Degradation**: if `hive-read` fails, proceed without hive wisdom. Log warning, never block.
+The Queen orchestration system has two partially decoupled layers that have drifted apart. CLAUDE.md describes three execution modes (fast / standard / final-review) with specific watcher and specialist behavior. The Go runtime uses `VerificationDepth` (light / standard / heavy) with different rules. The mismatch is not cosmetic: CLAUDE.md says fast and standard modes skip watcher subprocess, but the Go code requires watcher at all depths for continue flow. Either the documentation was aspirational or the implementation chose a different path. Either way, users following the documentation will have wrong expectations about what each mode does.
+
+The spawning system (caste relevance scoring in `cmd/caste_relevance.go`) is sound in isolation but conflicts with playbook instructions in 9 identified ways. Playbooks spawn Auditor as mandatory for all continues; Go says only at heavy depth. Playbooks list Chaos in every spawn plan; Go only dispatches at full depth. Playbooks spawn Oracle and Architect for deep builds; Go's caste allowlist does not even permit them in build flow. These mismatches mean the playbooks sometimes spawn agents that the runtime would reject, or skip agents that the runtime would require.
+
+**Key components:**
+1. Caste relevance scoring -- keyword-based matching against phase descriptions, with base scores, threshold checks, and suppression rules. This is correct and well-tested.
+2. Queen decision layer (gate resolution) -- classifies gate failures as hard_block / soft_block / advisory, with auto-resolve budgets and circuit breakers. This is sound.
+3. Playbook-Go contract -- this is where the reliability problems live. Playbooks need to match Go behavior, not contradict it.
 
 ### Critical Pitfalls
 
-1. **Simulation guard silently blocks production dispatch** -- `lifecycle.ts` lines 268-275 and line 424 both contain guards that prevent non-simulated execution. Remove both in Phase 1. Add a `--simulate` opt-in flag for testing. Audit all `simulateWorkers` references.
-2. **Worker claims parsing fails on real platform output** -- real platform output contains markdown wrappers, thinking traces, and API errors mixed with claims JSON. Add pre-parse classification for auth failures, rate limits, and timeouts before attempting JSON extraction. Write diagnostic artifacts to tmpdir.
-3. **Worker-to-worker spawning creates unbound fan-out** -- without a hard cap, 1 worker becomes 2 becomes 4 becomes 8. Enforce max spawn depth of 2 (no grandchildren). Route all spawn requests through Go manifest for budget enforcement. Sub-workers count against the same Queen budget as manifest workers.
-4. **Confidence iteration loop never converges** -- hard cap at 3 iterations default. Track confidence delta between iterations; stop early if delta is below 5% for two consecutive iterations. Cumulative budget across iterations (not per-iteration). Confidence must come from Go finalizer metrics, not worker self-reports.
-5. **Hive wisdom injects stale or irrelevant advice** -- expand domain tags to include technology stack, not just broad categories. Apply relevance discount for partial domain matches. First-time colonies without hive wisdom must work identically to colonies with it.
+**Summary from PITFALLS-RELIABILITY.md -- six failure modes that silently lose user work.**
+
+1. **Frankenstein state corruption** -- LLM reconstructs full COLONY_STATE.json from stale context, mixing data from prior colonies. Prevention: every state write must use `state-mutate` with targeted jq. Audit all playbooks for raw "Write COLONY_STATE.json" instructions.
+
+2. **Silent failure pipeline** -- 80+ playbook instructions append `2>/dev/null || true`, making the learning pipeline, midden, pheromone system, and memory capture all fail silently. Workers report success while critical side-effects never happen. This is the most insidious pitfall because nothing appears broken.
+
+3. **Worker artifact loss on interrupt** -- Build workers complete work but if the build is interrupted before finalization, the completion JSON is never written. Completed code exists on disk but is not recorded in colony state. No recovery path exists beyond `--force` redispatch.
+
+4. **Pending decisions leaking across colonies** -- `pending-decisions.json` is scoped by session_id but only `discuss` filters by scope. Flag commands and plan commands read all decisions including stale ones from prior colonies, incorporating irrelevant constraints into new plans.
+
+5. **Worktree branch orphaning** -- Build waves spawn workers into git worktrees, but merge-back only runs during `continue-advance`, not `build-complete` or on interrupt. Valuable code accumulates on invisible branches (13 orphaned branches documented with real production code).
+
+6. **Provider API errors misreported as parse errors** -- When a worker process gets an auth failure or rate limit from the provider, the finalizer reports "parse worker output: no JSON found" instead of "provider auth failure." Users waste time debugging their worker config instead of fixing API credentials.
 
 ## Implications for Roadmap
 
-Based on the combined research, the recommended phase structure is:
+Based on the combined research, this milestone needs a "fix the foundation first" structure. The work that makes everything else reliable must come before the work that makes everything else better.
 
-### Phase 1: Production Foundation + Hive Wisdom
-**Rationale:** Production dispatch is the prerequisite for everything else. Hive wisdom reuse has the fewest dependencies and can ship alongside the foundation work, proving both the core transition and the simplest new capability. The features are independent enough to parallelize within a single phase.
-**Delivers:** Real worker dispatch end-to-end (plan -> build real -> continue real lifecycle). Hive wisdom injection into worker context.
-**Addresses:** Table stakes (real dispatch, lifecycle events, graceful degradation). Hive wisdom reuse proof.
-**Avoids:** Simulation guard blockage (Pitfall 1), claims parsing failures (Pitfall 2), completion file leaks (Pitfall 8), platform arg drift (Pitfall 9), recovery actions not executed (Pitfall 10).
-**Key changes:** Remove simulation guards in `lifecycle.ts` (lines 268-275, 424) and `host.ts` (lines 308-312). Add pre-parse error classification in `claims-parser.ts`. Create `hive-injector.ts` (~40-60 lines). Modify `prompt-assembler.ts` to include hive wisdom section. Add lifecycle-level AbortController for graceful shutdown. Install `p-limit@7.3.0`.
+### Phase 1: Silent Pipeline Fix
 
-### Phase 2: Worker-to-Worker Spawning
-**Rationale:** Once production dispatch is proven, adding dynamic spawn requests is a bounded extension. The `spawns` field already exists in the claims schema; the TS host just needs to act on it with budget enforcement.
-**Delivers:** Workers can request additional workers mid-build. Child workers are dispatched via the same platform path, recorded via Go spawn-log/spawn-complete, and results attached to parent handoff.
-**Addresses:** Worker-to-worker spawning (differentiator). Budget-capped spawn tree pattern.
-**Avoids:** Unbound fan-out (Pitfall 3), finalizer rejecting unknown workers (Pitfall 6), parallel file conflicts (Pitfall 7).
-**Key changes:** Create `worker-spawner.ts` (~100-150 lines). Modify `worker-dispatch.ts` to check `claims.spawns` post-dispatch. Add `child_results` to `DispatchResult` type. Implement `p-limit` concurrency cap.
+**Rationale:** This is the single highest-impact fix. Currently, 80+ `|| true` patterns make the learning pipeline, failure tracking, pheromone system, and memory capture all silently non-functional. Fixing these unlocks the entire behavioral correctness chain -- without them, nothing downstream (learning extraction, colony wisdom, pheromone signals) can be verified because the underlying writes are being suppressed.
 
-### Phase 3: Confidence-Driven Build Iteration
-**Rationale:** This is the payoff feature. It requires real dispatch (Phase 1) to be meaningful and benefits from worker-to-worker spawning (Phase 2) for complex builds. The Oracle lifecycle already proves the pattern.
-**Delivers:** Build loop iterates until quality gates pass. If first attempt fails verification, re-dispatch with specific feedback. Hard cap prevents runaway iteration.
-**Addresses:** Confidence-driven iteration (differentiator). Self-correcting builds.
-**Avoids:** Loop never converging (Pitfall 4), confidence target too high (Pitfall 12), re-dispatching completed phases (Anti-Pattern 5).
-**Key changes:** Create `build-coordinator.ts` (~80-120 lines). Wire into `host.ts` when `--target` flag is present. Implement diminishing returns detection and cumulative cross-iteration budget.
+**Delivers:** All playbook CLI calls produce honest errors instead of silent drops. Midden, pheromone-write, memory-capture, and pheromone-write calls propagate failures properly.
 
-### Phase 4: Hardening and Validation
-**Rationale:** After the three feature phases, a dedicated hardening phase ensures production readiness. This includes end-to-end integration tests, golden parity tests, and addressing the moderate/minor pitfalls that accumulate during development.
-**Delivers:** Full end-to-end test coverage. Golden ceremony parity tests. Platform version detection. Temp file cleanup. Production readiness gate.
-**Addresses:** Remaining pitfalls (prompt size limits, concurrent hive writes, platform version detection). Production confidence.
-**Avoids:** Shipping placeholder code, shipping without ceremony parity, regression risks.
+**Addresses:** Pitfall 2 (silent failure pipeline), unblocks verification of all learning/memory features from FEATURES.md
+
+**Avoids:** The "looks done but isn't" trap where builds appear to complete successfully while no data is persisted
+
+**Also includes:**
+- State-mutate migration: audit all playbooks for raw COLONY_STATE.json writes, replace with state-mutate calls (Pitfall 1)
+- Pending decision scoping: ensure all readers filter by session scope, not just discuss.go (Pitfall 4)
+- Session cleanup on init: clear stale session.json from prior colonies (Pitfall 7)
+- Event array cap enforcement: move the 100-entry cap into state-mutate or add to build path (Pitfall 10)
+
+### Phase 2: Critical Test Coverage
+
+**Rationale:** Once the pipeline is honest, we need tests to keep it honest. The 12 HIGH-severity untested files handle data-persistence paths that can silently corrupt or lose data. Without tests, these paths regress silently. The STACK.md research identified these files and ranked them by data-loss risk.
+
+**Delivers:** Test files for the 12 most critical untested source files (~67 commands). Estimated 60-100 new test functions.
+
+**Addresses:** STACK.md Phase 2 recommendation, unblocks safe refactoring of spawning and learning paths
+
+**Priority order within this phase (data-loss risk):**
+1. eventbus.go -- wisdom pipeline backbone
+2. queen.go -- colony intelligence core
+3. instinct.go -- learning pipeline
+4. midden_cmds.go -- entire failure tracking subsystem
+5. hive.go + hive_search.go -- cross-colony wisdom
+6. spawn.go + spawn_runs.go + spawn_track.go -- worker lifecycle
+7. autopilot.go -- colony autopilot
+8. flag_cmds.go, council.go, shelf_cmd.go -- secondary data paths
+
+**Avoids:** Starting behavioral restoration work (Phase 3+) on untested code
+
+### Phase 3: Learning Extraction Verification and Restoration
+
+**Rationale:** With an honest pipeline and test coverage in place, we can now verify the most critical behavioral regression: the learning extraction lifecycle. Classic continue extracted learnings as hypotheses, tracked evidence, promoted validated knowledge. The current Go runtime needs verification that this lifecycle still exists at any depth. If not, it must be restored -- this is the core value proposition of the colony system (learning across phases).
+
+**Delivers:** Verified (or restored) hypothesis/validated/disproven learning lifecycle in continue. Verified worker context injection quality (pheromones, skills, survey data, colony goal, phase description). Verified Oracle promote-to-colony pipeline end-to-end.
+
+**Addresses:** FEATURES.md restoration targets 1-3 (learning extraction, worker context quality, oracle pipeline)
+
+**Uses:** Test coverage from Phase 2 to prevent regressions
+
+### Phase 4: Worker Artifact Recovery and Worktree Safety
+
+**Rationale:** Worker artifact loss on interrupt (Pitfall 3) and worktree branch orphaning (Pitfall 5) cause real user work to silently disappear. These are harder to fix because they require new commands (build-reconcile) and behavioral changes (merge-back on build-complete), but they directly prevent data loss.
+
+**Delivers:** `build-reconcile` command for post-interrupt recovery. Worktree merge-back moved to build-complete. Pre-build check for orphaned worktree branches. Status command reports unreconciled worker changes.
+
+**Addresses:** Pitfall 3 (artifact loss), Pitfall 5 (worktree orphaning), Pitfall 8 (completion file race conditions)
+
+**Also includes:** Provider error classification before JSON parsing (Pitfall 6)
+
+### Phase 5: Execution Policy Alignment
+
+**Rationale:** The CLAUDE.md-to-runtime mapping gap (3 documented execution modes vs 3 Go VerificationDepth values) and the 9 playbook-Go spawning mismatches are real but less urgent than data loss. Fix them after the foundation is solid. The recommendation from ARCHITECTURE.md is to update CLAUDE.md to match Go behavior (safer than changing Go to match aspirational docs) and update playbooks to match Go scoring.
+
+**Delivers:** CLAUDE.md execution mode documentation aligned with Go runtime. Playbook spawning instructions match Go caste relevance system. Ambassador and Measurer gated on phase mode, not keyword match. Sequential continue gates parallelized where possible.
+
+**Addresses:** ARCHITECTURE.md recommendations R1-R5
+
+### Phase 6: Workflow Parity and Ceremony Restoration
+
+**Rationale:** The remaining behavioral regressions (Oracle wizard richness, seal ceremony, swarm ceremony, autopilot pause conditions) are quality-of-life improvements that make Aether feel like the polished tool it was at v5.4.0. They should come last because they depend on the learning pipeline working correctly (Phase 3) and the spawning system being predictable (Phase 5).
+
+**Delivers:** Verified autopilot pause conditions (all 10 from Classic). Verified swarm 4-scout cross-comparison and rollback. Optional Sage analytics and Chronicler audit at seal. Oracle research brief formulation step.
+
+**Addresses:** FEATURES.md restoration targets 4-6 (Sage analytics, swarm verification, autopilot conditions)
+
+### Phase 7: Public Utility Test Gaps and E2E Coverage
+
+**Rationale:** After core reliability is established, address the 9 untested public utility commands (preferences, pause-colony, resume-colony, data-clean, insert-phase, quick, verify-castes, bump-version, maturity) and add end-to-end tests through the TypeScript host for the 5 lifecycle commands.
+
+**Delivers:** Test files for 9 public utility commands. E2E tests through TS host for build, continue, seal, plan, colonize.
+
+**Addresses:** STACK.md Phase 3-4 recommendations
 
 ### Phase Ordering Rationale
 
-- Phase 1 unlocks everything: the simulation guard is the single biggest blocker. Removing it and proving real dispatch works is the foundation.
-- Hive wisdom is bundled with Phase 1 because it is independent, low-risk, and proves the TS host can call Go commands and inject results into prompts -- a pattern used by all subsequent phases.
-- Phase 2 (spawning) depends on Phase 1 being stable because it extends the dispatch path. Trying to add spawning before proving basic dispatch would make failures harder to diagnose.
-- Phase 3 (confidence iteration) is deliberately last among features because it is the most complex integration (loop over build, evaluate, re-dispatch) and benefits from both real dispatch and spawning being proven.
-- Phase 4 (hardening) is separate because hardening concerns (temp cleanup, platform version detection, prompt size checks) cut across all feature phases and are best addressed holistically.
+- Phases 1-2 must come first because they establish honest error handling and test coverage -- without these, every subsequent phase is built on a hollow foundation where failures are hidden
+- Phase 3 is next because learning extraction is the single most valuable behavioral feature and depends on the pipeline being honest (Phase 1) and tested (Phase 2)
+- Phase 4 addresses data loss on interrupt, which is the remaining critical user-impact issue
+- Phase 5 fixes the documentation-runtime contract, which matters for correctness but is lower urgency than data loss
+- Phase 6 restores ceremony quality-of-life after the system is reliable
+- Phase 7 closes remaining test gaps once the architecture is stable
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1:** Moderate -- claims parser error classification needs investigation into what real platform error payloads look like (auth failures, rate limits). The known-issues doc has one documented instance. Need to inventory error patterns across all three platforms.
-- **Phase 2:** Low-Medium -- Go's `spawn-log`/`spawn-complete` need to be verified for mid-build child worker entries. The Go spawn tree may need minor adjustments to accept children not in the original manifest.
-- **Phase 3:** Medium -- the definition of "confidence" for builds is unclear. Oracle uses a single confidence number. Builds have multiple gate results (test pass rate, coverage, quality score). Need to define the confidence aggregation function.
+- **Phase 3 (Learning Extraction):** Need to trace the Go runtime's continue path to determine if the hypothesis lifecycle exists in any form. This requires reading `cmd/codex_continue.go` and related learning pipeline code. If the lifecycle is entirely missing, restoration is a larger effort than verification.
+- **Phase 4 (Worker Artifact Recovery):** The `build-reconcile` command does not exist and needs design research -- what heuristics to use for detecting unrecorded worker changes from filesystem state, how to create a synthetic build packet, and what the UX should be.
+- **Phase 5 (Execution Policy):** Need to decide whether to update CLAUDE.md to match Go (recommended, safer) or implement the CLAUDE.md intent in Go (watcher skip for light/standard). The former is a documentation change; the latter is a behavioral change that needs design and testing.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 4:** Well-understood hardening concerns. Standard test/validate/ship pattern.
+- **Phase 1 (Silent Pipeline Fix):** Well-understood -- grep for patterns, remove suppression, add fallback handling. No design ambiguity.
+- **Phase 2 (Test Coverage):** Standard Go testing against existing source files. Test patterns established in existing 2,591 cmd/ test functions.
+- **Phase 6 (Workflow Parity):** Classic v5.4.0 source is available at git tag for comparison. The "what to restore" list is specific.
+- **Phase 7 (Public Utility Tests):** Standard Go testing against existing source files.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Only one new dependency (`p-limit`). All existing deps verified current. Based on npm registry and package.json analysis. |
-| Features | HIGH | All four capabilities grounded in existing code. Worker dispatch pipeline complete. Oracle lifecycle proves iteration pattern. Hive commands exist. `spawns` field in schema. |
-| Architecture | HIGH | Three new modules follow established patterns. Boundary contract preserved by all new code. All Go commands already exist. Based on direct source analysis of 15+ TS modules and 5+ Go files. |
-| Pitfalls | HIGH | 13 pitfalls grounded in direct code inspection with specific line numbers. Prevention strategies are concrete and testable. Based on known issues documentation and codebase analysis. |
+| Command Surface (STACK) | HIGH | Direct `audit-catalog --json` output, file system scans, live `go test` runs |
+| Behavioral Baselines (FEATURES) | HIGH | Direct git tag inspection of v5.4.0 source, milestone audit trail |
+| Architecture (ARCHITECTURE) | HIGH | Direct Go source code inspection of caste_relevance.go, codex_continue.go, queen_decision.go |
+| Pitfalls (PITFALLS) | HIGH | Root causes confirmed against source code and incident records; many have memory entries |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Confidence metric definition for builds (Phase 3):** Oracle uses a single confidence number from Go. Build finalizer returns gate results (pass/fail per gate). The aggregation function from multiple gates to a single "build confidence" needs definition during Phase 3 planning. If Go does not return usable confidence metrics, fallback to simple heuristic (all gates passed = confidence met).
-
-- **Real platform error payload inventory (Phase 1):** Claims parser error classification needs to know what auth failures, rate limits, and timeout payloads look like across Claude Code, OpenCode, and Codex. One known instance documented. Need to test or research error formats.
-
-- **Go spawn-tree compatibility for child workers (Phase 2):** Go's `spawn-log`/`spawn-complete` were designed for manifest workers. Need to verify they handle children spawned mid-build by the TS host (workers not in the original manifest). May need a minor Go-side change or a new `--parent` flag.
-
-- **Domain tag granularity for hive wisdom (Phase 1/4):** Current domain tags are coarse (`["web", "api"]`). Hive wisdom injection needs technology-specific tags (`["go", "cli", "cobra"]`) to avoid irrelevant cross-colony advice. Tag expansion is a Go-side change to the colony registry and `hive-read` filtering.
+- **Go runtime learning extraction status:** The research could not confirm whether the hypothesis/validated/disproven lifecycle exists in the Go runtime's continue path. This needs source code inspection of `cmd/codex_continue.go` and the learning pipeline before Phase 3 planning. If the lifecycle is entirely absent, Phase 3 scope increases significantly.
+- **Worktree merge-back feasibility in build-complete:** Research identified the gap but did not assess whether moving merge-back from continue-advance to build-complete creates ordering problems (e.g., worktree branches not ready at build-complete time). Needs design validation.
+- **TS host end-to-end test infrastructure:** No information on how to test through the TypeScript host layer. The Go tests and Codex tests exist, but TS host testing may require different infrastructure.
+- **Quantitative impact of `|| true` removal:** Research identified 80+ instances but did not measure what percentage of builds would fail if suppression were removed immediately. Some calls may legitimately need graceful degradation. Needs per-instance analysis during Phase 1.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Aether source: `.aether/ts-host/src/lifecycle.ts` -- simulation guards, lifecycle orchestration
-- Aether source: `.aether/ts-host/src/worker-dispatch.ts` -- real dispatch path, spawn lifecycle
-- Aether source: `.aether/ts-host/src/platform-dispatcher.ts` -- platform CLI args, claims schema
-- Aether source: `.aether/ts-host/src/oracle-lifecycle.ts` -- confidence iteration pattern (template)
-- Aether source: `.aether/ts-host/src/claims-parser.ts` -- worker claims extraction
-- Aether source: `.aether/ts-host/src/prompt-assembler.ts` -- context assembly
-- Aether source: `.aether/ts-host/src/go-bridge.ts` -- Go CLI bridge, boundary enforcement
-- Aether source: `.aether/ts-host/src/wave-orchestrator.ts` -- parallel wave dispatch
-- Aether source: `.aether/ts-host/src/queen/orchestrator.ts` -- Queen orchestration
-- Go source: `cmd/hive.go` -- hive-read, hive-store, hive-promote
-- Go source: `cmd/queen_spawn_budget.go` -- spawn budget calculation
-- `.planning/PROJECT.md` -- project context and milestone history
+- `cmd/caste_relevance.go` -- caste relevance registry, scoring, threshold, always-required, suppression
+- `cmd/codex_continue.go` -- continue dispatches, review specs, always-required for continue flow
+- `cmd/queen_decision.go` -- gate classification, recommendations, circuit breaker, budget
+- `cmd/codex_build_finalize.go` -- finalizer completion contract and validation
+- `cmd/finalizer_completion_contract.go` -- temp path pattern and freshness validation
+- `cmd/discuss.go` -- pending decision scope filtering
+- `cmd/flag_cmds.go`, `cmd/pending_decision.go` -- pending decision reads
+- `cmd/recover_scanner.go` -- 7 stuck-state detectors
+- `pkg/colony/colony.go` -- VerificationDepth type, normalization
+- v5.4.0 git tag source code -- Classic behavioral baselines
+- `.aether/docs/command-playbooks/build-full.md`, `continue-full.md`, `continue-advance.md` -- playbook source
+- `.aether/docs/command-playbooks/build-wave.md`, `continue-gates.md` -- spawning instructions
+- `.aether/commands/*.yaml` -- YAML wrapper definitions
+- `aether audit-catalog --json` -- live CLI output
+- File system scans of cmd/*.go (201 files), cmd/*_test.go (219 files)
+- `go test ./... --count=1` -- 5,075 test functions, 18/18 packages passing
 
 ### Secondary (MEDIUM confidence)
-- Anthropic: Building Effective Agents (5 agent patterns) -- confidence iteration pattern validation
-- LangGraph 1.0 multi-agent patterns -- hierarchical delegation comparison
-- CrewAI hierarchical process -- spawn budget comparison
-- Erlang/OTP supervisor behaviour -- budget-capped spawn tree validation
+- `.claude/projects/*/memory/*.md` -- incident records (state corruption, CLI flag mismatch, worktree merge gap)
+- `.aether/docs/known-issues.md` -- documented known issues
+- `.aether/references/contracts/queen-execution-policy-contract.md` -- design intent
+- v1.10-MILESTONE-AUDIT.md, v1.12-REQUIREMENTS.md, v1.16-MILESTONE-AUDIT.md -- milestone audit trails
 
 ---
-*Research completed: 2026-05-18*
+*Research completed: 2026-05-20*
 *Ready for roadmap: yes*
