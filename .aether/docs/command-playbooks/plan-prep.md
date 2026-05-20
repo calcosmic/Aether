@@ -46,7 +46,7 @@ This controls task detail within each plan, not how many phases are generated. I
 Check for unresolved clarifications before planning:
 
 ```bash
-aether pending-decisions --count 2>/dev/null || echo "0"
+aether pending-decision-list | jq '.unresolved' 2>/dev/null || echo "0"
 ```
 
 If unresolved clarifications exist:
