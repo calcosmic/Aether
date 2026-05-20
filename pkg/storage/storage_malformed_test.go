@@ -316,3 +316,112 @@ func TestSaveAndLoadJSON(t *testing.T) {
 		t.Errorf("round-trip mismatch: got %+v, want %+v", loaded, original)
 	}
 }
+
+func TestSaveJSON_CapsEventsArray(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	state := map[string]interface{}{
+		"version": "3.0",
+		"events":  makeEvents(120),
+	}
+
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("SaveJSON: %v", err)
+	}
+
+	var loaded map[string]interface{}
+	if err := s.LoadJSON("COLONY_STATE.json", &loaded); err != nil {
+		t.Fatalf("LoadJSON: %v", err)
+	}
+
+	events, ok := loaded["events"].([]interface{})
+	if !ok {
+		t.Fatalf("events is not an array")
+	}
+	if len(events) != 100 {
+		t.Errorf("events len = %d, want 100", len(events))
+	}
+
+	// Verify the last event is preserved (event-119)
+	lastEvent, ok := events[len(events)-1].(string)
+	if !ok || lastEvent != "event-119" {
+		t.Errorf("last event = %v, want event-119", lastEvent)
+	}
+
+	// Verify the first event is dropped (should be event-20, not event-0)
+	firstEvent, ok := events[0].(string)
+	if !ok || firstEvent != "event-20" {
+		t.Errorf("first event = %v, want event-20", firstEvent)
+	}
+}
+
+func TestSaveJSON_NoCapForOtherFiles(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	data := map[string]interface{}{
+		"items": makeEvents(120),
+	}
+
+	if err := s.SaveJSON("other-file.json", data); err != nil {
+		t.Fatalf("SaveJSON: %v", err)
+	}
+
+	var loaded map[string]interface{}
+	if err := s.LoadJSON("other-file.json", &loaded); err != nil {
+		t.Fatalf("LoadJSON: %v", err)
+	}
+
+	items, ok := loaded["items"].([]interface{})
+	if !ok {
+		t.Fatalf("items is not an array")
+	}
+	if len(items) != 120 {
+		t.Errorf("items len = %d, want 120 (no cap)", len(items))
+	}
+}
+
+func TestSaveJSON_NoCapWhenUnderLimit(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	state := map[string]interface{}{
+		"version": "3.0",
+		"events":  makeEvents(50),
+	}
+
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("SaveJSON: %v", err)
+	}
+
+	var loaded map[string]interface{}
+	if err := s.LoadJSON("COLONY_STATE.json", &loaded); err != nil {
+		t.Fatalf("LoadJSON: %v", err)
+	}
+
+	events, ok := loaded["events"].([]interface{})
+	if !ok {
+		t.Fatalf("events is not an array")
+	}
+	if len(events) != 50 {
+		t.Errorf("events len = %d, want 50", len(events))
+	}
+}
+
+func makeEvents(n int) []string {
+	events := make([]string, n)
+	for i := 0; i < n; i++ {
+		events[i] = fmt.Sprintf("event-%d", i)
+	}
+	return events
+}
