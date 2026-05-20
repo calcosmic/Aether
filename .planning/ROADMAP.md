@@ -76,7 +76,10 @@
 **Plans**: 4 plans
 
 Plans:
+**Wave 1**
 - [ ] 145-01-PLAN.md — Remove error suppression from data-persistence CLI calls in playbooks
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 145-02-PLAN.md — Add session.json cleanup to init and event cap to storage layer
 - [ ] 145-03-PLAN.md — Enforce pending-decisions session scoping across all readers
 - [ ] 145-04-PLAN.md — Replace direct COLONY_STATE.json writes with state-mutate calls
