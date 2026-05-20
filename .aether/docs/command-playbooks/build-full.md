@@ -17,6 +17,12 @@ The phase to build is: `$ARGUMENTS`
 
 ## Instructions
 
+## State Mutation Policy
+
+All writes to COLONY_STATE.json MUST go through `aether state-mutate` with targeted jq expressions.
+Never use the Write tool, `jq ... > file`, or any other direct file modification on COLONY_STATE.json.
+The Go runtime handles atomic writes, validation, and backups — direct writes risk corrupting colony state.
+
 ## Build Worker Read Cache Discipline
 
 Every worker spawned by build waves must receive this discipline in its task prompt:

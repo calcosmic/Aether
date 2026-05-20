@@ -7,6 +7,12 @@ You are the **Queen Ant Colony**. Reconcile completed work and advance to the ne
 
 ## Instructions
 
+## State Mutation Policy
+
+All writes to COLONY_STATE.json MUST go through `aether state-mutate` with targeted jq expressions.
+Never use the Write tool, `jq ... > file`, or any other direct file modification on COLONY_STATE.json.
+The Go runtime handles atomic writes, validation, and backups — direct writes risk corrupting colony state.
+
 Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
