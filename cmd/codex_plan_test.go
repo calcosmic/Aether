@@ -143,6 +143,106 @@ func TestPlanUsesSurveyAndRecordsPlanningDispatches(t *testing.T) {
 	}
 }
 
+func TestPlanRepairArtifactNormalizesCustomDependenciesWithoutWorkers(t *testing.T) {
+	saveGlobals(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	planningDir := filepath.Join(dataDir, "planning")
+	if err := os.MkdirAll(planningDir, 0755); err != nil {
+		t.Fatalf("mkdir planning: %v", err)
+	}
+	artifact := codexWorkerPlanArtifact{
+		Phases: []codexWorkerPlanPhase{{
+			Name: "Repair dependency aliases",
+			Tasks: []codexWorkerPlanTask{
+				{Goal: "Create source task"},
+				{Goal: "Run dependent task", DependsOn: []string{"P1-T1"}},
+			},
+		}},
+		Confidence: codexPlanConfidence{Overall: 80},
+	}
+	if err := store.SaveJSON("planning/phase-plan.json", artifact); err != nil {
+		t.Fatalf("save phase-plan: %v", err)
+	}
+
+	result, err := runCodexPlanRepairArtifact(root)
+	if err != nil {
+		t.Fatalf("runCodexPlanRepairArtifact: %v", err)
+	}
+	if repaired, _ := result["repaired"].(bool); !repaired {
+		t.Fatalf("expected repaired true, got %#v", result)
+	}
+
+	var repaired codexWorkerPlanArtifact
+	if err := store.LoadJSON("planning/phase-plan.json", &repaired); err != nil {
+		t.Fatalf("load repaired phase-plan: %v", err)
+	}
+	got := repaired.Phases[0].Tasks[1].DependsOn
+	if len(got) != 1 || got[0] != "1.1" {
+		t.Fatalf("depends_on = %v, want [1.1]", got)
+	}
+}
+
+func TestPlanRepairArtifactRejectsTextDependencies(t *testing.T) {
+	saveGlobals(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	if err := os.MkdirAll(filepath.Join(dataDir, "planning"), 0755); err != nil {
+		t.Fatalf("mkdir planning: %v", err)
+	}
+	artifact := codexWorkerPlanArtifact{
+		Phases: []codexWorkerPlanPhase{{
+			Name: "Reject prose dependencies",
+			Tasks: []codexWorkerPlanTask{
+				{Goal: "Create source task"},
+				{Goal: "Run dependent task", DependsOn: []string{"Create source task"}},
+			},
+		}},
+		Confidence: codexPlanConfidence{Overall: 80},
+	}
+	if err := store.SaveJSON("planning/phase-plan.json", artifact); err != nil {
+		t.Fatalf("save phase-plan: %v", err)
+	}
+
+	_, err := runCodexPlanRepairArtifact(root)
+	if err == nil || !strings.Contains(err.Error(), "not a valid task id") {
+		t.Fatalf("expected actionable dependency error, got %v", err)
+	}
+}
+
+func TestMDSRepoDetectionProducesMaxForLivePlanningSurface(t *testing.T) {
+	saveGlobals(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	for _, rel := range []string{"devices", "m4l_builder", filepath.Join("scripts", "mds"), "MaxForLive_Vault"} {
+		if err := os.MkdirAll(filepath.Join(root, rel), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("MDS Max for Live repo instructions\n"), 0644); err != nil {
+		t.Fatalf("write AGENTS.md: %v", err)
+	}
+
+	survey, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("load survey context: %v", err)
+	}
+	if !containsString(survey.Frameworks, "Max for Live") || !containsString(survey.Frameworks, "MDS") {
+		t.Fatalf("frameworks = %v, want Max for Live and MDS", survey.Frameworks)
+	}
+	templates := planningTemplates("Build an AnalogWave MDS device", survey, codexScoutReport{Confidence: 80})
+	blob, _ := json.Marshal(templates)
+	if !strings.Contains(string(blob), "Max for Live") || !strings.Contains(string(blob), "MDS") {
+		t.Fatalf("MDS planning templates missing domain-specific wording:\n%s", string(blob))
+	}
+	if strings.Contains(string(blob), "generic app") {
+		t.Fatalf("MDS planning templates should not be generic app planning:\n%s", string(blob))
+	}
+}
+
 func TestPlanReturnsExistingPlanWithoutRefresh(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -817,7 +917,7 @@ func TestPlanCommandExposesWorkerTimeoutFlag(t *testing.T) {
 	if planCmd.Flags().Lookup("worker-timeout") == nil {
 		t.Fatal("expected plan command to expose --worker-timeout")
 	}
-	for _, flag := range []string{"target", "max-iterations", "accept"} {
+	for _, flag := range []string{"target", "max-iterations", "accept", "repair-artifact"} {
 		if planCmd.Flags().Lookup(flag) == nil {
 			t.Fatalf("expected plan command to expose --%s", flag)
 		}

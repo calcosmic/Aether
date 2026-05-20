@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/spf13/cobra"
 )
 
@@ -129,8 +130,29 @@ func makeHostSubcommand(subcommand string, forwardRawArgs bool) func(cmd *cobra.
 		c.Stdin = os.Stdin
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
+		c.Env = hostCommandEnv(os.Environ())
 		return c.Run()
 	}
+}
+
+func hostCommandEnv(env []string) []string {
+	active := codex.DetectActivePlatform()
+	if active == codex.PlatformUnknown {
+		return env
+	}
+	return upsertEnv(env, "AETHER_ACTIVE_PLATFORM", string(active))
+}
+
+func upsertEnv(env []string, key string, value string) []string {
+	prefix := key + "="
+	out := append([]string{}, env...)
+	for i, entry := range out {
+		if strings.HasPrefix(entry, prefix) {
+			out[i] = prefix + value
+			return out
+		}
+	}
+	return append(out, prefix+value)
 }
 
 // discoverNode checks PATH for `node` and validates version >= 20.

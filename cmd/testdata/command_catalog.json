@@ -2040,6 +2040,7 @@
       "plan-only",
       "planning-depth",
       "refresh",
+      "repair-artifact",
       "synthetic",
       "target",
       "verification-depth",

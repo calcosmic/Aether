@@ -58,12 +58,17 @@ const (
 	AvailabilityCategoryCredentialsMissing  AvailabilityCategory = "credentials_missing"
 	AvailabilityCategoryProbeSkipped        AvailabilityCategory = "probe_skipped"
 	AvailabilityCategoryUnsupportedProvider AvailabilityCategory = "unsupported_provider"
+	AvailabilityCategoryProviderConfig      AvailabilityCategory = "provider_config_invalid"
 )
 
 type PlatformDispatcher interface {
 	WorkerInvoker
 	Platform() Platform
 	Availability(ctx context.Context) AvailabilityStatus
+}
+
+type WorkerProviderPreflighter interface {
+	Preflight(ctx context.Context, root string) AvailabilityStatus
 }
 
 type selectionMetadata interface {
@@ -186,6 +191,21 @@ func (s *SelectedInvoker) ValidateAgent(path string) error {
 	return s.selected.ValidateAgent(path)
 }
 
+func (s *SelectedInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	if s == nil || s.selected == nil {
+		return AvailabilityStatus{
+			Platform:  PlatformUnknown,
+			Available: false,
+			Category:  AvailabilityCategoryBinaryMissing,
+			Reason:    "no platform dispatcher selected",
+		}
+	}
+	if preflighter, ok := s.selected.(WorkerProviderPreflighter); ok {
+		return preflighter.Preflight(ctx, root)
+	}
+	return s.selected.Availability(ctx)
+}
+
 func (u *UnavailableInvoker) Platform() Platform { return PlatformUnknown }
 
 func (u *UnavailableInvoker) Availability(ctx context.Context) AvailabilityStatus {
@@ -230,6 +250,10 @@ func (u *UnavailableInvoker) IsAvailable(ctx context.Context) bool { return fals
 
 func (u *UnavailableInvoker) ValidateAgent(path string) error {
 	return fmt.Errorf("worker dispatcher unavailable: %s", describeAvailabilitySet(u.active, u.available))
+}
+
+func (u *UnavailableInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	return u.Availability(ctx)
 }
 
 func IsAgentDelegateSession() bool {
@@ -613,6 +637,88 @@ func (o *OpenCodeDispatcher) IsAvailable(ctx context.Context) bool {
 }
 func (c *ClaudeDispatcher) ValidateAgent(path string) error   { return validateMarkdownAgent(path) }
 func (o *OpenCodeDispatcher) ValidateAgent(path string) error { return validateMarkdownAgent(path) }
+
+func (c *ClaudeDispatcher) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	status := c.Availability(ctx)
+	if !status.Available {
+		return status
+	}
+
+	args := []string{
+		"-p",
+		"--output-format", "json",
+		"--permission-mode", "bypassPermissions",
+	}
+	if root := strings.TrimSpace(root); root != "" {
+		args = append(args, "--add-dir", root)
+	}
+	args = append(args, "Return exactly OK.")
+	return runHostedProviderPreflight(ctx, status, root, args)
+}
+
+func (o *OpenCodeDispatcher) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	status := o.Availability(ctx)
+	if !status.Available {
+		return status
+	}
+
+	args := []string{
+		"run",
+		"--agent", openCodePrimaryAgent(),
+		"--format", "json",
+		"Return exactly OK.",
+	}
+	return runHostedProviderPreflight(ctx, status, root, args)
+}
+
+func runHostedProviderPreflight(ctx context.Context, status AvailabilityStatus, root string, args []string) AvailabilityStatus {
+	binary := strings.TrimSpace(status.Binary)
+	if binary == "" {
+		binary = string(status.Platform)
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(probeCtx, binary, args...)
+	if root := strings.TrimSpace(root); root != "" {
+		cmd.Dir = root
+	}
+	configureWorkerCommand(cmd)
+	if status.Platform == PlatformOpenCode {
+		if agentURL := os.Getenv(envOpenCodeAgentURL); agentURL != "" {
+			cmd.Env = append(os.Environ(), envOpenCodeAgentURL+"="+agentURL)
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		raw := strings.TrimSpace(combinedWorkerOutput(stdout.String(), stderr.String()))
+		reason := strings.TrimSpace(sanitizeWorkerDiagnosticOutput(raw))
+		if reason == "" {
+			reason = sanitizeWorkerDiagnosticOutput(err.Error())
+		}
+		category := AvailabilityCategoryProviderConfig
+		if probeCtx.Err() == context.DeadlineExceeded {
+			reason = fmt.Sprintf("%s provider/model preflight timed out before worker dispatch", status.Platform)
+			category = AvailabilityCategoryAuthProbeFailed
+		}
+		return AvailabilityStatus{
+			Platform:  status.Platform,
+			Binary:    binary,
+			Available: false,
+			Category:  category,
+			Reason:    fmt.Sprintf("%s provider/model preflight failed before worker dispatch: %s", status.Platform, reason),
+		}
+	}
+	return AvailabilityStatus{
+		Platform:  status.Platform,
+		Binary:    binary,
+		Available: true,
+		Category:  AvailabilityCategoryAvailable,
+	}
+}
 
 func (c *ClaudeDispatcher) Invoke(ctx context.Context, config WorkerConfig) (WorkerResult, error) {
 	return c.InvokeWithProgress(ctx, config, nil)

@@ -154,6 +154,26 @@ func TestHostPlanAndContinueForwardRawFlags(t *testing.T) {
 	}
 }
 
+func TestHostCommandEnvPassesDetectedActivePlatform(t *testing.T) {
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+
+	env := hostCommandEnv([]string{
+		"PATH=/bin",
+		"AETHER_ACTIVE_PLATFORM=claude",
+	})
+
+	found := false
+	for _, entry := range env {
+		if entry == "AETHER_ACTIVE_PLATFORM=codex" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("hostCommandEnv did not pass detected active platform: %#v", env)
+	}
+}
+
 func TestResolveTsHostPath(t *testing.T) {
 	path, hint := resolveTsHostPath("/nonexistent/repo")
 	if path != "" && hint != "" {

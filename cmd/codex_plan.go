@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -126,6 +127,7 @@ type codexPlanOptions struct {
 	TargetConfidence  int
 	MaxIterations     int
 	Accept            bool
+	RepairArtifact    bool
 }
 
 type codexPlanningLoop struct {
@@ -227,6 +229,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 
 	if opts.PlanOnly {
 		return runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+	}
+	if opts.RepairArtifact {
+		return runCodexPlanRepairArtifact(root)
 	}
 
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
@@ -355,6 +360,8 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			if dispatchErr != nil {
 				if _, ok := invoker.(*codex.FakeInvoker); ok {
 					dispatchMode = "simulated"
+				} else if isWorkerProviderPreflightError(dispatchErr) {
+					return nil, dispatchErr
 				} else {
 					dispatchMode = "fallback"
 					planningWarning = fmt.Sprintf("Real planning workers did not finish cleanly, so Aether fell back to local synthesis. Cause: %s", dispatchErr.Error())
@@ -389,10 +396,15 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	phases, confidence, unresolvedGaps := synthesizeRouteSetterPlan(*state.Goal, granularity, survey, scoutReport)
-	if workerPlan, ok, note := loadWorkerPlanArtifact(root, artifactSnapshots, dispatches); ok {
+	if workerPlan, ok, note, err := loadWorkerPlanArtifact(root, artifactSnapshots, dispatches); err != nil {
+		return nil, err
+	} else if ok {
 		phases = buildWorkerPlanPhases(workerPlan)
 		confidence = mergePlanConfidence(confidence, workerPlan.Confidence)
 		unresolvedGaps = limitStrings(uniqueSortedStrings(append(unresolvedGaps, workerPlan.Gaps...)), 4)
+		if len(note) > 0 {
+			unresolvedGaps = limitStrings(uniqueSortedStrings(append(unresolvedGaps, note)), 4)
+		}
 		planSource = "worker-artifact"
 	} else if note != "" {
 		unresolvedGaps = limitStrings(uniqueSortedStrings(append(unresolvedGaps, note)), 4)
@@ -1601,8 +1613,8 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("\n")
 		b.WriteString("- Also write a machine-readable plan artifact at ")
 		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "phase-plan.json")))
-		b.WriteString(" using this JSON shape:\n")
-		b.WriteString(`  {"phases":[{"name":"","description":"","tasks":[{"goal":"","constraints":[],"hints":[],"success_criteria":[],"depends_on":[]}],"success_criteria":[]}],"confidence":{"knowledge":0,"requirements":0,"risks":0,"dependencies":0,"effort":0,"overall":0},"gaps":[]}` + "\n")
+		b.WriteString(" using the phase-plan schema below.\n")
+		b.WriteString(renderPhasePlanSchemaGuidance())
 	} else {
 		scoutGuidance := ""
 		if len(scoutGuidanceOpt) > 0 {
@@ -1630,12 +1642,22 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("\n")
 		b.WriteString("- Also write a machine-readable plan artifact at ")
 		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "phase-plan.json")))
-		b.WriteString(" using this JSON shape:\n")
-		b.WriteString(`  {"phases":[{"name":"","description":"","tasks":[{"goal":"","constraints":[],"hints":[],"success_criteria":[],"depends_on":[]}],"success_criteria":[]}],"confidence":{"knowledge":0,"requirements":0,"risks":0,"dependencies":0,"effort":0,"overall":0},"gaps":[]}` + "\n")
+		b.WriteString(" using the phase-plan schema below.\n")
+		b.WriteString(renderPhasePlanSchemaGuidance())
 	}
 	b.WriteString("\nPlan the colony at ")
 	b.WriteString(root)
 	return b.String()
+}
+
+func renderPhasePlanSchemaGuidance() string {
+	return strings.TrimSpace(`
+- JSON shape:
+  {"phases":[{"name":"","description":"","tasks":[{"goal":"","constraints":[],"hints":[],"success_criteria":[],"depends_on":[]}],"success_criteria":[]}],"confidence":{"knowledge":0,"requirements":0,"risks":0,"dependencies":0,"effort":0,"overall":0},"gaps":[]}
+- Do not include task ids in phase-plan.json. Aether assigns task ids by array order after empty-goal tasks are ignored.
+- Dependency ids must use those assigned ids only: first task in first phase is "1.1", second is "1.2", first task in second phase is "2.1".
+- depends_on must be an array of task id strings such as ["1.1"]. Do not use task text, file paths, descriptions, or custom ids like "P1-T1".
+`) + "\n"
 }
 
 func claimedPlanningFiles(dispatches []codexPlanningDispatch) map[string]bool {
@@ -1648,25 +1670,188 @@ func claimedPlanningFiles(dispatches []codexPlanningDispatch) map[string]bool {
 	return claimed
 }
 
-func loadWorkerPlanArtifact(root string, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) (codexWorkerPlanArtifact, bool, string) {
+func loadWorkerPlanArtifact(root string, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) (codexWorkerPlanArtifact, bool, string, error) {
 	relPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json"))
 	if !shouldPreserveWorkerArtifact(root, relPath, snapshots, claimedPlanningFiles(dispatches)) {
-		return codexWorkerPlanArtifact{}, false, ""
+		return codexWorkerPlanArtifact{}, false, "", nil
 	}
 
 	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relPath)))
 	if err != nil {
-		return codexWorkerPlanArtifact{}, false, "Route-setter wrote phase-plan.json but it could not be read, so planning fell back to local synthesis."
+		return codexWorkerPlanArtifact{}, false, "", fmt.Errorf("Route-Setter wrote phase-plan.json but it could not be read: %w", err)
 	}
 
 	var artifact codexWorkerPlanArtifact
 	if err := json.Unmarshal(data, &artifact); err != nil {
-		return codexWorkerPlanArtifact{}, false, "Route-setter phase-plan.json was invalid, so planning fell back to local synthesis."
+		return codexWorkerPlanArtifact{}, false, "", fmt.Errorf("Route-Setter phase-plan.json is invalid JSON: %w", err)
 	}
 	if len(artifact.Phases) == 0 {
-		return codexWorkerPlanArtifact{}, false, "Route-setter phase-plan.json contained no phases, so planning fell back to local synthesis."
+		return codexWorkerPlanArtifact{}, false, "", fmt.Errorf("Route-Setter phase-plan.json contains no phases")
 	}
-	return artifact, true, ""
+	normalized, repairs, err := normalizeWorkerPlanArtifactDependencies(artifact)
+	if err != nil {
+		return codexWorkerPlanArtifact{}, false, "", err
+	}
+	return normalized, true, strings.Join(repairs, " "), nil
+}
+
+var (
+	phasePlanTaskIDPattern       = regexp.MustCompile(`^\d+\.\d+$`)
+	phasePlanCustomTaskIDPattern = regexp.MustCompile(`(?i)^p(?:hase)?\s*(\d+)\s*[-_:\s]*t(?:ask)?\s*(\d+)$`)
+)
+
+func normalizeWorkerPlanArtifactDependencies(artifact codexWorkerPlanArtifact) (codexWorkerPlanArtifact, []string, error) {
+	normalized := artifact
+	normalized.Phases = append([]codexWorkerPlanPhase{}, artifact.Phases...)
+	knownIDs := workerPlanTaskIDs(artifact)
+	repairs := []string{}
+
+	for phaseIndex := range normalized.Phases {
+		sourcePhase := artifact.Phases[phaseIndex]
+		normalized.Phases[phaseIndex].Tasks = append([]codexWorkerPlanTask{}, sourcePhase.Tasks...)
+		normalized.Phases[phaseIndex].SuccessCriteria = append([]string{}, sourcePhase.SuccessCriteria...)
+		for taskIndex := range normalized.Phases[phaseIndex].Tasks {
+			task := sourcePhase.Tasks[taskIndex]
+			taskID := fmt.Sprintf("%d.%d", phaseIndex+1, taskIndex+1)
+			if strings.TrimSpace(task.Goal) == "" {
+				normalized.Phases[phaseIndex].Tasks[taskIndex].DependsOn = nil
+				continue
+			}
+			deps, depRepairs, err := normalizeWorkerPlanTaskDependencies(taskID, task.DependsOn, knownIDs)
+			if err != nil {
+				return codexWorkerPlanArtifact{}, nil, err
+			}
+			normalized.Phases[phaseIndex].Tasks[taskIndex].DependsOn = deps
+			repairs = append(repairs, depRepairs...)
+		}
+	}
+	return normalized, uniqueSortedStrings(repairs), nil
+}
+
+func workerPlanTaskIDs(artifact codexWorkerPlanArtifact) map[string]bool {
+	ids := map[string]bool{}
+	for phaseIndex, phase := range artifact.Phases {
+		for taskIndex, task := range phase.Tasks {
+			if strings.TrimSpace(task.Goal) == "" {
+				continue
+			}
+			ids[fmt.Sprintf("%d.%d", phaseIndex+1, taskIndex+1)] = true
+		}
+	}
+	return ids
+}
+
+func normalizeWorkerPlanTaskDependencies(taskID string, dependsOn []string, knownIDs map[string]bool) ([]string, []string, error) {
+	normalized := make([]string, 0, len(dependsOn))
+	repairs := []string{}
+	for _, raw := range dependsOn {
+		dep := strings.TrimSpace(raw)
+		if dep == "" || strings.EqualFold(dep, "none") || strings.EqualFold(dep, "null") {
+			continue
+		}
+		switch {
+		case phasePlanTaskIDPattern.MatchString(dep):
+			if !knownIDs[dep] {
+				return nil, nil, unknownPhasePlanDependencyError(taskID, dep, knownIDs)
+			}
+			normalized = append(normalized, dep)
+		case phasePlanCustomTaskIDPattern.MatchString(dep):
+			matches := phasePlanCustomTaskIDPattern.FindStringSubmatch(dep)
+			canonical := fmt.Sprintf("%s.%s", matches[1], matches[2])
+			if !knownIDs[canonical] {
+				return nil, nil, unknownPhasePlanDependencyError(taskID, dep, knownIDs)
+			}
+			normalized = append(normalized, canonical)
+			repairs = append(repairs, fmt.Sprintf("Normalized phase-plan dependency %q to %q for task %s.", dep, canonical, taskID))
+		default:
+			return nil, nil, fmt.Errorf("phase-plan.json task %s depends_on %q is not a valid task id; use runtime task IDs like %q. Task IDs are assigned by order, so phase 1 task 1 is 1.1. Do not use task text, file paths, or custom dependency names", taskID, dep, firstKnownTaskIDExample(knownIDs))
+		}
+	}
+	return uniqueSortedStrings(normalized), repairs, nil
+}
+
+func unknownPhasePlanDependencyError(taskID, dep string, knownIDs map[string]bool) error {
+	return fmt.Errorf("phase-plan.json task %s depends_on %q references no buildable task; known task IDs are: %s", taskID, dep, strings.Join(knownWorkerPlanTaskIDs(knownIDs), ", "))
+}
+
+func knownWorkerPlanTaskIDs(knownIDs map[string]bool) []string {
+	ids := make([]string, 0, len(knownIDs))
+	for id := range knownIDs {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		left := strings.Split(ids[i], ".")
+		right := strings.Split(ids[j], ".")
+		if len(left) != 2 || len(right) != 2 {
+			return ids[i] < ids[j]
+		}
+		if left[0] == right[0] {
+			return left[1] < right[1]
+		}
+		return left[0] < right[0]
+	})
+	return ids
+}
+
+func firstKnownTaskIDExample(knownIDs map[string]bool) string {
+	ids := knownWorkerPlanTaskIDs(knownIDs)
+	if len(ids) == 0 {
+		return "1.1"
+	}
+	return ids[0]
+}
+
+func runCodexPlanRepairArtifact(root string) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+	relPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json"))
+	path := filepath.Join(root, filepath.FromSlash(relPath))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", relPath, err)
+	}
+	var artifact codexWorkerPlanArtifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", relPath, err)
+	}
+	if len(artifact.Phases) == 0 {
+		return nil, fmt.Errorf("%s contains no phases", relPath)
+	}
+	normalized, repairs, err := normalizeWorkerPlanArtifactDependencies(artifact)
+	if err != nil {
+		return nil, err
+	}
+	phases := buildWorkerPlanPhases(normalized)
+	if len(phases) == 0 || buildablePlanTaskCount(phases) == 0 {
+		return nil, fmt.Errorf("%s contains no buildable tasks", relPath)
+	}
+	if err := colony.DetectCycles(phases); err != nil {
+		return nil, fmt.Errorf("phase-plan dependency validation failed: %w", err)
+	}
+	repaired := len(repairs) > 0
+	if repaired {
+		encoded, err := json.MarshalIndent(normalized, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("encode repaired %s: %w", relPath, err)
+		}
+		encoded = append(encoded, '\n')
+		if err := os.WriteFile(path, encoded, 0644); err != nil {
+			return nil, fmt.Errorf("write repaired %s: %w", relPath, err)
+		}
+	}
+	next := "aether plan-finalize --completion-file <file>"
+	updateSessionSummary("plan", next, "Repaired and validated phase-plan dependency references")
+	return map[string]interface{}{
+		"repaired":      repaired,
+		"repairs":       repairs,
+		"validated":     true,
+		"phase_plan":    relPath,
+		"phase_count":   len(phases),
+		"task_count":    buildablePlanTaskCount(phases),
+		"next":          next,
+		"repair_source": "phase-plan dependency normalizer",
+	}, nil
 }
 
 func buildWorkerPlanPhases(artifact codexWorkerPlanArtifact) []colony.Phase {
@@ -2033,6 +2218,66 @@ func planningTemplates(goal string, survey codexSurveyContext, report codexScout
 				SuccessCriteria: []string{"The first design loop is evaluated", "The next iteration is specific and evidence-driven"},
 			},
 		}
+	case isMDSMaxForLiveSurvey(survey):
+		return []phaseTemplate{
+			{
+				Name:        "MDS and Max for Live surface map",
+				Description: "Lock the device, builder, and script surfaces before changing patch generation behavior.",
+				Tasks: []phaseTaskTemplate{
+					{
+						Goal:            "Map the MDS device catalog and Max for Live build entry points",
+						Constraints:     commonConstraints(survey),
+						Hints:           append([]string{"devices/", "m4l_builder/", "scripts/mds"}, commonHints(survey)...),
+						SuccessCriteria: []string{"Relevant devices are identified", "Build scripts and generated outputs are distinguished"},
+					},
+					{
+						Goal:            "Record the Max for Live packaging boundaries and generated-artifact policy",
+						Constraints:     []string{"Do not edit generated Max artifacts before identifying their source templates"},
+						Hints:           []string{"MaxForLive_Vault/", "AGENTS.md", "m4l_builder/"},
+						SuccessCriteria: []string{"Generated assets and editable source files are separated", "The build plan names the correct ownership surface"},
+					},
+				},
+				SuccessCriteria: []string{"MDS/Max for Live surfaces are explicit", "MDS-specific planning surface is explicit"},
+			},
+			{
+				Name:        "Device implementation slice",
+				Description: "Make the requested MDS or device changes against source-owned files with reproducible checks.",
+				Tasks: []phaseTaskTemplate{
+					{
+						Goal:            "Implement the first source-owned MDS device or builder change",
+						Constraints:     []string{"Keep Max patch output reproducible from source", "Preserve existing device naming and folder conventions"},
+						Hints:           append([]string{"devices/", "m4l_builder/"}, survey.SourceAnchors...),
+						SuccessCriteria: []string{"The requested behavior lands in source-owned files", "Generated artifacts can be rebuilt"},
+					},
+					{
+						Goal:            "Add or update focused MDS verification for the changed device path",
+						Constraints:     []string{"Use existing scripts before inventing new validation commands"},
+						Hints:           append([]string{"scripts/mds"}, survey.TestFiles...),
+						SuccessCriteria: []string{"The changed path has a repeatable verification command", "Failures point to the device or builder layer"},
+					},
+				},
+				SuccessCriteria: []string{"Device changes are source-owned", "MDS verification is repeatable"},
+			},
+			{
+				Name:        "Max for Live packaging verification",
+				Description: "Rebuild or validate the Max for Live package outputs and document the release handoff.",
+				Tasks: []phaseTaskTemplate{
+					{
+						Goal:            "Run the repository's MDS/Max for Live build or packaging command",
+						Constraints:     []string{"Capture exact command output", "Do not accept stale MaxForLive_Vault contents as proof"},
+						Hints:           []string{"m4l_builder/", "scripts/mds", "MaxForLive_Vault/"},
+						SuccessCriteria: []string{"Build command exits cleanly or produces an actionable failure", "Expected package outputs are present or explicitly blocked"},
+					},
+					{
+						Goal:            "Document changed devices, generated outputs, and manual Ableton/Max checks still required",
+						Constraints:     []string{"Separate automated proof from manual DAW verification"},
+						Hints:           []string{"README.md", "AGENTS.md"},
+						SuccessCriteria: []string{"Release notes name the affected devices", "Manual verification gaps are explicit"},
+					},
+				},
+				SuccessCriteria: []string{"Max for Live output is verified", "Manual DAW checks are not hidden"},
+			},
+		}
 	case isGreenfieldResearchGoal(goalLower, survey):
 		return []phaseTemplate{
 			{
@@ -2223,6 +2468,11 @@ func isGreenfieldResearchGoal(goalLower string, survey codexSurveyContext) bool 
 		return false
 	}
 	return len(survey.EntryPoints) == 0 && len(survey.Dependencies) == 0 && len(survey.TestFiles) == 0 && len(survey.Frameworks) == 0
+}
+
+func isMDSMaxForLiveSurvey(survey codexSurveyContext) bool {
+	joined := strings.ToLower(strings.Join(append(append([]string{}, survey.Frameworks...), survey.Directories...), " "))
+	return containsAny(joined, []string{"max for live", "maxforlive", "m4l", "mds", "max-for-live"})
 }
 
 func containsAny(text string, needles []string) bool {

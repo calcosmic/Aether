@@ -22,6 +22,7 @@ Direct `aether plan` may still run Go-owned local planning, but host/wrapper orc
 | --refresh | bool | no | false | Regenerate the plan even when an existing plan is present |
 | --force | bool | no | false | Alias for --refresh |
 | --plan-only | bool | no | false | Emit a dispatch manifest for host orchestration |
+| --repair-artifact | bool | no | false | Repair and validate dependency references in `.aether/data/planning/phase-plan.json` without rerunning workers |
 | --depth | string | no | "" | Planning depth: fast, balanced, deep, or exhaustive |
 | --planning-depth | string | no | "" | Task decomposition depth: light, standard, or deep |
 | --verification-depth | string | no | "" | Verification depth: light, standard, or heavy |
@@ -52,6 +53,7 @@ All paths return a JSON envelope through `outputWorkflow`.
 | New `--plan-only` / `host plan` | `plan_only: true`, `existing_plan: false`, `dispatch_mode: "plan-only"` or `"agent-delegate"`, `requires_finalizer: true`, `dispatches`, `plan_manifest`, and `planning_manifest` |
 | Existing plan without refresh | `plan_only: true`, `existing_plan: true`, `requires_finalizer: false`, existing `phases`, `count`, and `next` build command |
 | `plan-finalize` | Final `phases`, `confidence`, planning artifact paths, terminal `dispatches`, `dispatch_mode: "external-task"`, and next build command |
+| `plan --repair-artifact` | `repaired`, `repairs`, `validated`, `phase_plan`, `phase_count`, `task_count`, and next finalizer command |
 
 Both manifest and finalizer outputs include `planning_loop` with
 `target_confidence`, `max_iterations`, `iterations`, `stop_reason`, and final
@@ -104,10 +106,57 @@ Only terminal worker evidence, such as completed or failed worker result JSON, m
 - the manifest root, goal, colony mode, granularity, freshness, and workspace still match
 - Scout and Route-Setter results are terminal and complete
 - the Route-Setter phase plan is valid and not stale pre-existing evidence
+- every task dependency references a known runtime task id and the dependency graph has no cycles
 - planning-loop stop evidence is computed by the Go finalizer from the accepted
   confidence and manifest loop controls
 
 After validation, the finalizer writes canonical planning artifacts, updates `.aether/data/COLONY_STATE.json`, records spawn/run metadata, emits completion ceremony, and updates session summary.
+
+### `phase-plan.json` Schema
+
+Route-Setter writes the machine plan artifact at `.aether/data/planning/phase-plan.json`:
+
+```json
+{
+  "phases": [
+    {
+      "name": "Phase name",
+      "description": "Phase objective",
+      "tasks": [
+        {
+          "goal": "Concrete task outcome",
+          "constraints": [],
+          "hints": [],
+          "success_criteria": [],
+          "depends_on": ["1.1"]
+        }
+      ],
+      "success_criteria": []
+    }
+  ],
+  "confidence": {
+    "knowledge": 0,
+    "requirements": 0,
+    "risks": 0,
+    "dependencies": 0,
+    "effort": 0,
+    "overall": 0
+  },
+  "gaps": []
+}
+```
+
+Do not include task id fields in the artifact. Aether assigns task ids from the task's array position after ignoring empty-goal tasks: first task in phase 1 is `1.1`, second task in phase 1 is `1.2`, first task in phase 2 is `2.1`.
+
+`depends_on` must be an array of those runtime task ids only. Do not use task text, file paths, descriptions, or custom ids such as `P1-T1`. The finalizer rejects invalid text dependencies with an actionable error. Common custom aliases such as `P1-T1` are normalized to `1.1` only when the target runtime task exists; validation is not weakened.
+
+If the worker artifact is nearly valid but has repairable dependency aliases, run:
+
+```bash
+aether plan --repair-artifact
+```
+
+Then rerun `aether plan-finalize --completion-file <file>` with the same completion packet.
 
 ## Orchestrator Boundary Questions
 

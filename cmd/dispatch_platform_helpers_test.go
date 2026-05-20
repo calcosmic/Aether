@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 func TestDispatchAgentPathDoesNotDefaultUnknownPlatformToCodex(t *testing.T) {
@@ -111,6 +112,59 @@ func TestDispatchAvailabilityMessageExplainsProviderCauseAndNextAction(t *testin
 		if !strings.Contains(message, want) {
 			t.Fatalf("dispatchAvailabilityMessage() = %q, want to contain %q", message, want)
 		}
+	}
+}
+
+func TestDispatchBatchPreflightsProviderBeforeWorkerInvoke(t *testing.T) {
+	invoker := &preflightBlockingInvoker{}
+	_, err := dispatchBatchByWaveWithVisuals(
+		context.Background(),
+		invoker,
+		[]codex.WorkerDispatch{{
+			ID:         "d1",
+			WorkerName: "Scout-1",
+			Caste:      "scout",
+			TaskID:     "plan-scout",
+			TaskBrief:  "Plan",
+			Root:       t.TempDir(),
+			Wave:       1,
+		}},
+		colony.ModeInRepo,
+		"Planning Wave",
+		false,
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "preflight failed before worker dispatch") {
+		t.Fatalf("expected provider preflight error, got %v", err)
+	}
+	if invoker.invoked {
+		t.Fatal("worker Invoke was called despite provider preflight failure")
+	}
+}
+
+type preflightBlockingInvoker struct {
+	invoked bool
+}
+
+func (p *preflightBlockingInvoker) Invoke(context.Context, codex.WorkerConfig) (codex.WorkerResult, error) {
+	p.invoked = true
+	return codex.WorkerResult{}, nil
+}
+
+func (p *preflightBlockingInvoker) IsAvailable(context.Context) bool {
+	return true
+}
+
+func (p *preflightBlockingInvoker) ValidateAgent(string) error {
+	return nil
+}
+
+func (p *preflightBlockingInvoker) Preflight(context.Context, string) codex.AvailabilityStatus {
+	return codex.AvailabilityStatus{
+		Platform:  codex.PlatformCodex,
+		Available: false,
+		Category:  codex.AvailabilityCategoryProviderConfig,
+		Reason:    "configured model is not supported",
 	}
 }
 

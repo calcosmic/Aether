@@ -226,6 +226,15 @@ func (f *FakeInvoker) IsAvailable(ctx context.Context) bool {
 	return true
 }
 
+func (f *FakeInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	return AvailabilityStatus{
+		Platform:  PlatformFake,
+		Binary:    "fake",
+		Available: true,
+		Category:  AvailabilityCategoryAvailable,
+	}
+}
+
 // ValidateAgent always returns nil for FakeInvoker.
 func (f *FakeInvoker) ValidateAgent(path string) error {
 	return nil
@@ -274,6 +283,63 @@ func codexWritableDirs() []string {
 // IsAvailable checks whether the codex dispatcher is runnable and authenticated.
 func (r *RealInvoker) IsAvailable(ctx context.Context) bool {
 	return r.Availability(ctx).Available
+}
+
+func (r *RealInvoker) Preflight(ctx context.Context, root string) AvailabilityStatus {
+	status := r.Availability(ctx)
+	if !status.Available {
+		return status
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	args := []string{
+		"--sandbox", "workspace-write",
+		"--ask-for-approval", "never",
+		"exec",
+		"--json",
+		"--ephemeral",
+		"--skip-git-repo-check",
+	}
+	for _, dir := range codexWritableDirs() {
+		args = append(args, "--add-dir", dir)
+	}
+	cmd := exec.CommandContext(probeCtx, r.binaryName, args...)
+	if strings.TrimSpace(root) != "" {
+		cmd.Dir = root
+	}
+	cmd.Stdin = strings.NewReader("Return exactly OK.\n")
+	configureWorkerCommand(cmd)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		raw := strings.TrimSpace(combinedWorkerOutput(stdout.String(), stderr.String()))
+		reason := strings.TrimSpace(sanitizeWorkerDiagnosticOutput(raw))
+		if reason == "" {
+			reason = sanitizeWorkerDiagnosticOutput(err.Error())
+		}
+		category := AvailabilityCategoryProviderConfig
+		if probeCtx.Err() == context.DeadlineExceeded {
+			reason = "codex provider/model preflight timed out before worker dispatch"
+			category = AvailabilityCategoryAuthProbeFailed
+		}
+		return AvailabilityStatus{
+			Platform:  PlatformCodex,
+			Binary:    status.Binary,
+			Available: false,
+			Category:  category,
+			Reason:    fmt.Sprintf("codex provider/model preflight failed before worker dispatch: %s", reason),
+		}
+	}
+	return AvailabilityStatus{
+		Platform:  PlatformCodex,
+		Binary:    status.Binary,
+		Available: true,
+		Category:  AvailabilityCategoryAvailable,
+	}
 }
 
 // ValidateAgent parses and validates a TOML agent file.

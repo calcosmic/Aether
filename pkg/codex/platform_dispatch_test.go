@@ -307,6 +307,87 @@ func TestProviderAvailabilityOverridePathReportsProbeSkipped(t *testing.T) {
 	}
 }
 
+func TestCodexPreflightReportsUnsupportedModelBeforeWorkerDispatch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	token := "sk-proj-model-secret-123"
+	binary := writeFakeCodexPreflightCLI(t, dir, token)
+	invoker := &RealInvoker{binaryName: binary}
+
+	status := invoker.Preflight(context.Background(), dir)
+	if status.Available {
+		t.Fatalf("preflight available = true, want false")
+	}
+	if status.Category != AvailabilityCategoryProviderConfig {
+		t.Fatalf("preflight category = %s, want %s", status.Category, AvailabilityCategoryProviderConfig)
+	}
+	for _, want := range []string{"provider/model preflight failed", "o4-mini", "not supported"} {
+		if !strings.Contains(status.Reason, want) {
+			t.Fatalf("preflight reason = %q, want %q", status.Reason, want)
+		}
+	}
+	if strings.Contains(status.Reason, token) {
+		t.Fatalf("preflight reason leaked secret: %q", status.Reason)
+	}
+}
+
+func TestHostedProviderPreflightReportsConfigFailureBeforeWorkerDispatch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	tests := []struct {
+		name     string
+		platform Platform
+		status   func(string) AvailabilityStatus
+	}{
+		{
+			name:     "claude",
+			platform: PlatformClaude,
+			status: func(binary string) AvailabilityStatus {
+				return (&ClaudeDispatcher{binaryName: binary}).Preflight(context.Background(), filepath.Dir(binary))
+			},
+		},
+		{
+			name:     "opencode",
+			platform: PlatformOpenCode,
+			status: func(binary string) AvailabilityStatus {
+				return (&OpenCodeDispatcher{binaryName: binary}).Preflight(context.Background(), filepath.Dir(binary))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			token := "sk-proj-hosted-preflight-secret"
+			binary := writeFakeHostedPreflightCLI(t, dir, tt.platform, token)
+
+			status := tt.status(binary)
+			if status.Available {
+				t.Fatalf("preflight available = true, want false")
+			}
+			if status.Platform != tt.platform {
+				t.Fatalf("preflight platform = %s, want %s", status.Platform, tt.platform)
+			}
+			if status.Category != AvailabilityCategoryProviderConfig {
+				t.Fatalf("preflight category = %s, want %s", status.Category, AvailabilityCategoryProviderConfig)
+			}
+			for _, want := range []string{string(tt.platform), "provider/model preflight failed", "not supported"} {
+				if !strings.Contains(status.Reason, want) {
+					t.Fatalf("preflight reason = %q, want %q", status.Reason, want)
+				}
+			}
+			if strings.Contains(status.Reason, token) {
+				t.Fatalf("preflight reason leaked secret: %q", status.Reason)
+			}
+		})
+	}
+}
+
 func TestSelectPlatformInvokerReportsOrderedEvaluatedFallbackCandidates(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stub uses POSIX sh")
@@ -513,6 +594,66 @@ exit ` + strconv.Itoa(exitCode) + `
 `
 	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
 		t.Fatalf("write fake provider CLI %s: %v", path, err)
+	}
+	return path
+}
+
+func writeFakeCodexPreflightCLI(t *testing.T, dir, secret string) string {
+	t.Helper()
+	path := filepath.Join(dir, "codex")
+	script := `#!/bin/sh
+if [ "$1 $2" = "login status" ]; then
+  echo "Logged in as test@example.com"
+  exit 0
+fi
+case "$*" in
+  *"exec"*)
+    echo "The 'o4-mini' model is not supported when using Codex with a ChatGPT account. ` + secret + `" >&2
+    exit 2
+    ;;
+esac
+echo "unexpected args: $*" >&2
+exit 99
+`
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake codex preflight CLI: %v", err)
+	}
+	return path
+}
+
+func writeFakeHostedPreflightCLI(t *testing.T, dir string, platform Platform, secret string) string {
+	t.Helper()
+	path := filepath.Join(dir, string(platform))
+	authCase := ""
+	switch platform {
+	case PlatformClaude:
+		authCase = `if [ "$*" = "auth status --json" ]; then
+  echo '{"loggedIn":true}'
+  exit 0
+fi
+`
+	case PlatformOpenCode:
+		authCase = `if [ "$*" = "auth list" ]; then
+  printf '\342\227\217 default\n'
+  exit 0
+fi
+`
+	default:
+		t.Fatalf("unsupported hosted preflight platform %s", platform)
+	}
+	script := `#!/bin/sh
+` + authCase + `
+case "$*" in
+  *"Return exactly OK."*)
+    echo "` + string(platform) + ` configured model is not supported. ` + secret + `" >&2
+    exit 2
+    ;;
+esac
+echo "unexpected args: $*" >&2
+exit 99
+`
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake hosted preflight CLI: %v", err)
 	}
 	return path
 }

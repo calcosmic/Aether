@@ -201,6 +201,9 @@ func nextCommandFromState(state colony.ColonyState) string {
 	if state.Paused {
 		return "aether resume"
 	}
+	if _, ok := activePlanFinalizeFailureFlag(store); ok {
+		return "aether flags --status active"
+	}
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
 		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {

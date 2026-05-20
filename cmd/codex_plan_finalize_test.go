@@ -329,6 +329,76 @@ func TestPlanFinalizeRejectsPhasePlanWithoutBuildableTasksBeforeStateMutation(t 
 	assertPlanFinalizeNoSpawnRuns(t)
 }
 
+func TestPlanFinalizeRejectsTextDependsOnBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject prose dependency references"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = &codexWorkerPlanArtifact{
+				Phases: []codexWorkerPlanPhase{{
+					Name: "Dependency contract",
+					Tasks: []codexWorkerPlanTask{
+						{Goal: "Create the source task"},
+						{Goal: "Run the dependent task", DependsOn: []string{"Create the source task"}},
+					},
+				}},
+				Confidence: testWorkerPlanArtifact().Confidence,
+			}
+		}
+	}
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Dispatches:   results,
+	})
+	assertPlanFinalizeErrorContains(t, err, "not a valid task id")
+	assertPlanFinalizeErrorContains(t, err, "Create the source task")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeNoSpawnRuns(t)
+}
+
+func TestPlanFinalizeNormalizesStableCustomDependencyReferences(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Normalize custom dependency ids"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = &codexWorkerPlanArtifact{
+				Phases: []codexWorkerPlanPhase{{
+					Name: "Dependency contract",
+					Tasks: []codexWorkerPlanTask{
+						{Goal: "Create the source task"},
+						{Goal: "Run the dependent task", DependsOn: []string{"P1-T1"}},
+					},
+				}},
+				Confidence: testWorkerPlanArtifact().Confidence,
+			}
+		}
+	}
+
+	result, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Dispatches:   results,
+	})
+	if err != nil {
+		t.Fatalf("runCodexPlanFinalize: %v", err)
+	}
+	phases := result["phases"].([]colony.Phase)
+	got := phases[0].Tasks[1].DependsOn
+	if len(got) != 1 || got[0] != "1.1" {
+		t.Fatalf("depends_on = %v, want [1.1]", got)
+	}
+	if warning := stringValue(result["planning_warning"]); !strings.Contains(warning, "P1-T1") || !strings.Contains(warning, "1.1") {
+		t.Fatalf("planning_warning = %q, want normalized dependency note", warning)
+	}
+}
+
 func TestPlanFinalizeRejectsAmbiguousTopLevelPhasePlanBeforeStateMutation(t *testing.T) {
 	saveGlobals(t)
 

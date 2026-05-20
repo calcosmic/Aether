@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -47,6 +49,7 @@ type codexPlanProvenance struct {
 const (
 	planFinalizeManifestMaxAge     = 24 * time.Hour
 	planFinalizeManifestFutureSkew = 5 * time.Minute
+	planFinalizeFailureSource      = "plan-finalize"
 )
 
 var planFinalizeCmd = &cobra.Command{
@@ -62,6 +65,7 @@ var planFinalizeCmd = &cobra.Command{
 		}
 		result, err := runCodexPlanFinalize(skillWorkspaceRoot(), completion)
 		if err != nil {
+			recordPlanFinalizeFailure(err)
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
@@ -119,6 +123,108 @@ func (c codexExternalPlanCompletion) activeManifest() *codexPlanManifest {
 	return c.Manifest
 }
 
+func recordPlanFinalizeFailure(cause error) {
+	if store == nil || cause == nil {
+		return
+	}
+	flags := loadPlanFinalizeFlagsFile()
+	description := "Planning finalization failed: " + compactPlanFinalizeError(cause.Error())
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i := range flags.Decisions {
+		flag := &flags.Decisions[i]
+		if flag.Source == planFinalizeFailureSource && !flag.Resolved {
+			flag.Type = "blocker"
+			flag.Description = description
+			if flag.CreatedAt == "" {
+				flag.CreatedAt = now
+			}
+			_ = store.SaveJSON("pending-decisions.json", flags)
+			updateSessionSummary(planFinalizeFailureSource, "aether flags --status active", description)
+			return
+		}
+	}
+	flags.Decisions = append(flags.Decisions, colony.FlagEntry{
+		ID:          generateFlagID(),
+		Type:        "blocker",
+		Description: description,
+		Source:      planFinalizeFailureSource,
+		CreatedAt:   now,
+		Resolved:    false,
+	})
+	_ = store.SaveJSON("pending-decisions.json", flags)
+	updateSessionSummary(planFinalizeFailureSource, "aether flags --status active", description)
+}
+
+func resolvePlanFinalizeFailureFlags() {
+	if store == nil {
+		return
+	}
+	flags := loadPlanFinalizeFlagsFile()
+	changed := false
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i := range flags.Decisions {
+		flag := &flags.Decisions[i]
+		if flag.Source != planFinalizeFailureSource || flag.Resolved {
+			continue
+		}
+		flag.Resolved = true
+		flag.ResolvedAt = now
+		flag.Resolution = "plan-finalize succeeded"
+		changed = true
+	}
+	if changed {
+		_ = store.SaveJSON("pending-decisions.json", flags)
+	}
+}
+
+func loadPlanFinalizeFlagsFile() colony.FlagsFile {
+	flags := colony.FlagsFile{Version: "1.0", Decisions: []colony.FlagEntry{}}
+	if store == nil {
+		return flags
+	}
+	if err := store.LoadJSON("pending-decisions.json", &flags); err == nil {
+		if flags.Decisions == nil {
+			flags.Decisions = []colony.FlagEntry{}
+		}
+		return flags
+	}
+	if err := store.LoadJSON("flags.json", &flags); err == nil {
+		if flags.Decisions == nil {
+			flags.Decisions = []colony.FlagEntry{}
+		}
+		return flags
+	}
+	return flags
+}
+
+func activePlanFinalizeFailureFlag(s *storage.Store) (colony.FlagEntry, bool) {
+	if s == nil {
+		return colony.FlagEntry{}, false
+	}
+	flags, ok := loadFlagsFile(s)
+	if !ok {
+		return colony.FlagEntry{}, false
+	}
+	for _, flag := range flags.Decisions {
+		if flag.Source == planFinalizeFailureSource && !flag.Resolved {
+			return flag, true
+		}
+	}
+	return colony.FlagEntry{}, false
+}
+
+func compactPlanFinalizeError(text string) string {
+	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	if text == "" {
+		return "unknown finalizer error"
+	}
+	const limit = 320
+	if len(text) <= limit {
+		return text
+	}
+	return text[:limit-3] + "..."
+}
+
 func (c codexExternalPlanCompletion) workerResults() []codexPlanningDispatch {
 	results := make([]codexPlanningDispatch, 0, len(c.Dispatches)+len(c.Results)+len(c.Workers))
 	results = append(results, c.Dispatches...)
@@ -168,15 +274,35 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if len(phasePlan.Phases) == 0 {
 		return nil, fmt.Errorf("phase_plan contains no phases")
 	}
+	normalizedPhasePlan, dependencyRepairs, err := normalizeWorkerPlanArtifactDependencies(*phasePlan)
+	if err != nil {
+		return nil, err
+	}
+	phasePlan = &normalizedPhasePlan
 
 	phases := buildWorkerPlanPhases(*phasePlan)
 	if len(phases) == 0 || buildablePlanTaskCount(phases) == 0 {
 		return nil, fmt.Errorf("phase_plan contains no buildable tasks")
 	}
+	if err := colony.DetectCycles(phases); err != nil {
+		var cycleErr *colony.CycleError
+		if errors.As(err, &cycleErr) {
+			return nil, fmt.Errorf("phase_plan contains circular dependency: %s. Remove the cycle and rerun `aether plan-finalize --completion-file <file>`", cycleErr)
+		}
+		return nil, fmt.Errorf("phase_plan dependency validation failed: %w", err)
+	}
 	groundingWarnings := checkPlanGrounding(phases, manifest.Survey.SourceAnchors)
 	_, baseConfidence, baseGaps := synthesizeRouteSetterPlan(manifest.Goal, granularity, manifest.Survey, scoutReport)
 	confidence := mergePlanConfidence(baseConfidence, phasePlan.Confidence)
 	unresolvedGaps := limitStrings(uniqueSortedStrings(append(baseGaps, phasePlan.Gaps...)), 4)
+	if len(dependencyRepairs) > 0 {
+		repairWarning := strings.Join(dependencyRepairs, " ")
+		if strings.TrimSpace(provenance.PlanningWarning) != "" {
+			provenance.PlanningWarning += "; " + repairWarning
+		} else {
+			provenance.PlanningWarning = repairWarning
+		}
+	}
 	planningLoop := evaluatePlanningLoop(confidence, unresolvedGaps, codexPlanOptions{
 		TargetConfidence: manifest.PlanningLoop.TargetConfidence,
 		MaxIterations:    manifest.PlanningLoop.MaxIterations,
@@ -260,6 +386,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
 		return nil, fmt.Errorf("failed to save colony state: %w", err)
 	}
+	resolvePlanFinalizeFailureFlags()
 	if provenance.RecordWorkers {
 		emitPlanCeremonyDispatchSequence("aether-plan-finalize", dispatches)
 	}
