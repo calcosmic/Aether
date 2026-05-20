@@ -137,13 +137,60 @@ func (s *Store) UpdateJSONAtomically(path string, ptr interface{}, mutate func()
 }
 
 // SaveJSON marshals data as formatted JSON and writes it atomically.
+// For COLONY_STATE.json, the events array is capped at 100 entries.
 func (s *Store) SaveJSON(path string, data interface{}) error {
 	encoded, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("storage: marshal JSON for %q: %w", path, err)
 	}
 	encoded = append(encoded, '\n')
+
+	// Enforce event array cap for COLONY_STATE.json
+	if path == "COLONY_STATE.json" {
+		encoded, err = capEventsArray(encoded)
+		if err != nil {
+			return fmt.Errorf("storage: cap events array for %q: %w", path, err)
+		}
+	}
+
 	return s.AtomicWrite(path, encoded)
+}
+
+// capEventsArray trims the "events" array to at most 100 entries using a
+// generic map[string]interface{} approach to avoid importing pkg/colony.
+// It returns the re-marshaled JSON bytes and logs a warning when trimming.
+func capEventsArray(data []byte) ([]byte, error) {
+	var root map[string]interface{}
+	if err := json.Unmarshal(data, &root); err != nil {
+		return nil, err
+	}
+
+	eventsRaw, ok := root["events"]
+	if !ok {
+		return data, nil
+	}
+
+	events, ok := eventsRaw.([]interface{})
+	if !ok {
+		return data, nil
+	}
+
+	const cap = 100
+	if len(events) <= cap {
+		return data, nil
+	}
+
+	dropped := len(events) - cap
+	root["events"] = events[dropped:]
+
+	fmt.Fprintf(os.Stderr, "warning: event array capped at %d (dropped %d old events)\n", cap, dropped)
+
+	trimmed, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	trimmed = append(trimmed, '\n')
+	return trimmed, nil
 }
 
 // LoadJSON reads and unmarshals a JSON file.
