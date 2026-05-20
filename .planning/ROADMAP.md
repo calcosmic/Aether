@@ -73,7 +73,13 @@
   3. Starting a new colony with `/ant-init` clears stale session.json from any prior colony, preventing old decisions from leaking in
   4. Reading pending decisions from any command (flag, plan, council) filters by current session scope -- stale decisions from prior colonies never appear
   5. The event array in colony state is automatically capped at 100 entries at the storage layer -- no caller can overflow it
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 145-01-PLAN.md — Remove error suppression from data-persistence CLI calls in playbooks
+- [ ] 145-02-PLAN.md — Add session.json cleanup to init and event cap to storage layer
+- [ ] 145-03-PLAN.md — Enforce pending-decisions session scoping across all readers
+- [ ] 145-04-PLAN.md — Replace direct COLONY_STATE.json writes with state-mutate calls
 
 ### Phase 146: Command Classification
 **Goal**: Every Aether command is classified and documented in a reliability matrix, enabling systematic verification of the full command surface
