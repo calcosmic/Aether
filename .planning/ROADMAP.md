@@ -33,7 +33,7 @@
 **Milestone Goal:** Restore Aether as a reliable daily-driver system -- prove every command works, fix silent data loss, streamline Queen orchestration, and demonstrate end-to-end in a downstream repo.
 
 - [x] **Phase 145: Silent Pipeline Fix** - Remove error suppression so data-persistence calls fail honestly
-- [ ] **Phase 146: Command Classification** - Build reliability matrix and classify every command
+- [x] **Phase 146: Command Classification** - Build reliability matrix and classify every command
 - [ ] **Phase 147: Critical Test Coverage** - Add tests for 12 HIGH-severity untested source files
 - [ ] **Phase 148: Learning and Workflow Restoration** - Verify and restore the learning lifecycle and flagship workflows
 - [ ] **Phase 149: Queen Execution Policy** - Align documentation and spawning with Go runtime behavior
@@ -157,8 +157,8 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 145. Silent Pipeline Fix | v1.23 | 4/4 | Complete    | 2026-05-20 |
-| 146. Command Classification | v1.23 | 0/? | Not started | - |
-| 147. Critical Test Coverage | v1.23 | 0/? | Not started | - |
+| 146. Command Classification | v1.23 | 4/4 | Complete    | 2026-05-21 |
+| 147. Critical Test Coverage | v1.23 | 0/? | Next        | - |
 | 148. Learning and Workflow Restoration | v1.23 | 0/? | Not started | - |
 | 149. Queen Execution Policy | v1.23 | 0/? | Not started | - |
 | 150. Runtime Safety | v1.23 | 0/? | Not started | - |
