@@ -166,7 +166,7 @@ Update COLONY_STATE.json:
    ```
 
    Error pattern confidence is 0.8 (higher than success patterns) because recurring failures are strong negative signals.
-   If no recurring patterns found, skip silently.
+   If no recurring patterns found, skip without error.
 
 3b. **Extract instincts from success patterns:**
 
@@ -347,7 +347,7 @@ parallel_mode=$(echo "$parallel_result" | jq -r '.result.mode // "in-repo"')
 
 **If `mode` is `"in-repo"` (or empty/missing -- default):**
 
-Set empty variables and skip silently:
+Set empty variables and skip without error:
 ```bash
 last_merged_branch=""
 last_merge_sha=""
@@ -399,7 +399,7 @@ This step sets `$last_merged_branch` and `$last_merge_sha` which are consumed by
 > exported-file PR merge path is still design intent rather than the default
 > Codex runtime flow.
 
-If a `pheromone-branch-export.json` exists in `.aether/data/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This entire step is silent and non-blocking -- continue proceeds even if merge-back fails.
+If a `pheromone-branch-export.json` exists in `.aether/data/` (written by seal ceremony on a PR branch and merged to main), run merge-back to collect branch-discovered signals into main's pheromone store. This step is non-blocking -- continue proceeds even if merge-back fails. Errors are visible (honest stderr) but do not halt execution.
 
 Run using the Bash tool with description "Checking for pheromone merge-back file...":
 ```bash
@@ -425,7 +425,7 @@ fi
 
 ### Step 2.0.6: Midden Collection (NON-BLOCKING)
 
-After pheromone merge-back, collect failure records from any recently merged branch worktrees. This step is silent and non-blocking -- continue proceeds even if collection fails.
+After pheromone merge-back, collect failure records from any recently merged branch worktrees. This step is non-blocking -- continue proceeds even if collection fails. Errors are visible (honest stderr) but do not halt execution.
 
 **Per D-04: Wire midden-collect into /ant-continue flow.**
 
@@ -453,7 +453,7 @@ if [[ -n "$last_merge_branch" && -n "$last_merge_sha" ]]; then
 fi
 ```
 
-This step is NON-BLOCKING -- continue proceeds regardless of collection outcome. If `last_merge_branch` and `last_merge_sha` are not set (e.g., no recent merge), this step is silently skipped.
+This step is NON-BLOCKING -- continue proceeds regardless of collection outcome. If `last_merge_branch` and `last_merge_sha` are not set (e.g., no recent merge), this step is skipped without error.
 
 ### Step 2.0.7: Cross-PR Midden Analysis (NON-BLOCKING)
 
@@ -479,7 +479,7 @@ This step is NON-BLOCKING -- advance proceeds regardless of analysis outcome.
 
 ### Step 2.1: Auto-Emit Phase Pheromones (SILENT)
 
-**This entire step produces NO user-visible output.** All pheromone operations run silently — learnings are deposited in the background. If any pheromone call fails, log the error and continue. Phase advancement must never fail due to pheromone errors.
+**This entire step produces minimal user-visible output.** All pheromone operations run in the background. If any pheromone call fails, the error is visible (honest stderr) and execution continues. Phase advancement must never fail due to pheromone errors.
 
 #### 2.1a: Auto-emit FEEDBACK pheromone for phase outcome
 

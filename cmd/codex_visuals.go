@@ -460,6 +460,17 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 		return `Run ` + "`aether resume`" + ` to restore the paused colony into a runnable state.`,
 			[]string{`Run ` + "`aether status`" + ` if you only want to inspect the saved colony first.`}
 	}
+	if flag, ok := activePlanFinalizeFailureFlag(store); ok {
+		description := compactActionText(flag.Description, 120)
+		if description == "" {
+			description = "plan-finalize failed"
+		}
+		return `Run ` + "`aether flags --status active`" + ` to inspect the planning blocker before building.`,
+			[]string{
+				`Run ` + "`aether plan --repair-artifact`" + ` if the blocker is only invalid phase-plan dependency references.`,
+				fmt.Sprintf("Blocker: %s", description),
+			}
+	}
 
 	if len(state.Plan.Phases) == 0 {
 		return `Run ` + "`aether discuss`" + ` to capture intent clarifications before planning.`,
@@ -947,6 +958,29 @@ func renderPlanVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("plan"), "Plan"))
 	b.WriteString(visualDivider)
+	if _, ok := result["repair_source"]; ok {
+		if repaired, _ := result["repaired"].(bool); repaired {
+			b.WriteString("Repaired phase-plan dependency references.\n")
+		} else {
+			b.WriteString("Phase-plan dependency references are already valid.\n")
+		}
+		if phasePlan := strings.TrimSpace(stringValue(result["phase_plan"])); phasePlan != "" {
+			b.WriteString("Artifact: ")
+			b.WriteString(phasePlan)
+			b.WriteString("\n")
+		}
+		b.WriteString(fmt.Sprintf("Plan size: %d phases, %d tasks\n\n", intValue(result["phase_count"]), intValue(result["task_count"])))
+		if repairs := stringSliceValue(result["repairs"]); len(repairs) > 0 {
+			b.WriteString("Repairs\n")
+			b.WriteString(renderIndentedList(repairs))
+			b.WriteString("\n")
+		}
+		b.WriteString(renderNextUp(
+			`Run `+"`aether plan-finalize --completion-file <file>`"+` to retry finalization with the repaired artifact.`,
+			`Run `+"`aether flags --status active`"+` if a planning blocker is still open.`,
+		))
+		return b.String()
+	}
 	existing, _ := result["existing_plan"].(bool)
 	planOnly, _ := result["plan_only"].(bool)
 	requiresFinalizer, _ := result["requires_finalizer"].(bool)

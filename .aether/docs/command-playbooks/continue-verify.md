@@ -506,7 +506,7 @@ Continue to Step 1.6.
 
 ### Step 2.0.6: Midden Collection (NON-BLOCKING)
 
-After verification passes, collect failure records from any recently merged branch worktrees. This step is silent and non-blocking -- continue proceeds even if collection fails.
+After verification passes, collect failure records from any recently merged branch worktrees. This step is non-blocking -- continue proceeds even if collection fails. Errors are visible (honest stderr) but do not halt execution.
 
 **Per D-04: Wire midden-collect into /ant-continue flow.**
 
@@ -534,4 +534,4 @@ if [[ -n "$last_merge_branch" && -n "$last_merge_sha" ]]; then
 fi
 ```
 
-This step is NON-BLOCKING -- continue proceeds regardless of collection outcome. If `last_merge_branch` and `last_merge_sha` are not set (e.g., no recent merge), this step is silently skipped.
+This step is NON-BLOCKING -- continue proceeds regardless of collection outcome. If `last_merge_branch` and `last_merge_sha` are not set (e.g., no recent merge), this step is skipped without error.

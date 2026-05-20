@@ -1255,6 +1255,45 @@ func TestWorkflowSuggestionsForInterruptedExecutingSuggestsRestartBuild(t *testi
 	}
 }
 
+func TestWorkflowSuggestionsBlockBuildAfterPlanFinalizeFailure(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	if err := store.SaveJSON("pending-decisions.json", colony.FlagsFile{
+		Decisions: []colony.FlagEntry{{
+			ID:          "flag-plan-finalize",
+			Type:        "blocker",
+			Description: "Planning finalization failed: invalid depends_on",
+			Source:      planFinalizeFailureSource,
+			CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		}},
+	}); err != nil {
+		t.Fatalf("save flags: %v", err)
+	}
+
+	goal := "Do not build after failed plan-finalize"
+	primary, alternatives := workflowSuggestionsForState(colony.ColonyState{
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Unsafe phase", Status: colony.PhaseReady}},
+		},
+	})
+	if !strings.Contains(primary, "aether flags --status active") {
+		t.Fatalf("expected active flags primary, got: %s", primary)
+	}
+	all := primary + "\n" + strings.Join(alternatives, "\n")
+	if strings.Contains(all, "aether build 1") {
+		t.Fatalf("failed finalization must not suggest build:\n%s", all)
+	}
+	if !strings.Contains(all, "aether plan --repair-artifact") {
+		t.Fatalf("expected repair-artifact alternative, got:\n%s", all)
+	}
+}
+
 func TestSetupVisualOutput(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

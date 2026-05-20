@@ -511,6 +511,23 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 	if names["Makefile"] {
 		facts.Frameworks = appendUnique(facts.Frameworks, "make")
 	}
+	if detectMDSWorkspace(root) {
+		if facts.DetectedType == "unknown" {
+			facts.DetectedType = "max-for-live-mds"
+		}
+		for _, framework := range []string{"Max for Live", "MDS"} {
+			if !seenFramework[framework] {
+				facts.Frameworks = append(facts.Frameworks, framework)
+				seenFramework[framework] = true
+			}
+		}
+		for _, rel := range []string{filepath.Join("scripts", "mds")} {
+			if _, err := os.Stat(filepath.Join(root, rel)); err == nil && !seenDirs[rel] {
+				facts.TopLevelDirs = append(facts.TopLevelDirs, rel)
+				seenDirs[rel] = true
+			}
+		}
+	}
 
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -569,6 +586,7 @@ func surveyWorkspace(root string) (codexWorkspaceFacts, error) {
 	sort.Strings(facts.Frameworks)
 	sort.Strings(facts.Languages)
 	sort.Strings(facts.Integrations)
+	sort.Strings(facts.TopLevelDirs)
 	facts.SourceAnchors = extractSourceAnchors(root, 50)
 	return facts, nil
 }
@@ -976,7 +994,7 @@ func writeSurveyCompatibilityJSON(surveyDir string, facts codexWorkspaceFacts) e
 		},
 		"anchors.json": {
 			"source_anchors": facts.SourceAnchors,
-			"anchor_count":  len(facts.SourceAnchors),
+			"anchor_count":   len(facts.SourceAnchors),
 			"summary":        "Repo-owned source files for plan grounding",
 		},
 	}

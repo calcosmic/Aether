@@ -189,7 +189,7 @@ Otherwise: Apply existing file-modification conditional below.
 6. **Wait for user** to indicate review is complete. The user will run approve/dismiss commands in the conversation and then signal continuation. The build does NOT proceed to Step 4.3 until the user has had the opportunity to review suggestions.
 
 **Error handling** (detection is non-blocking; review pause is intentional):
-- If suggest-analyze returns error: Skip silently, continue to Step 4.3 (no pause)
+- If suggest-analyze returns error: Skip without error, continue to Step 4.3 (no pause)
 - If suggest-approve returns error during review: Log the error but keep the pause -- user still needs to acknowledge
 - Never let suggestion DETECTION failures block the build, but the REVIEW PAUSE is intentional per D-04
 

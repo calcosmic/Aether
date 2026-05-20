@@ -43,13 +43,14 @@ Use small, dependency-aware tasks:
 
 ```json
 {
-  "id": "1.1",
   "goal": "Concrete outcome",
   "depends_on": [],
   "hints": ["likely file or command"],
   "success_criteria": ["observable proof"]
 }
 ```
+
+Do not write an `id` field in `.aether/data/planning/phase-plan.json`. Aether assigns task ids from phase/task array order: phase 1 task 1 is `1.1`, phase 1 task 2 is `1.2`, and phase 2 task 1 is `2.1`. `depends_on` must reference only those runtime ids, never task prose, file paths, or aliases such as `P1-T1`.
 
 ## Worker Fit
 

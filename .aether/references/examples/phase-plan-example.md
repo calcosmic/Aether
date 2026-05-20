@@ -28,25 +28,24 @@ Make the reference library global-only and usable by Oracle.
 ```json
 [
   {
-    "id": "1.1",
     "goal": "Replace generic REFERENCE.md layout with named category files",
     "hints": [".aether/references/{category}/{id}.md"],
     "success_criteria": ["reference-list shows named files"]
   },
   {
-    "id": "1.2",
     "goal": "Update runtime matching for named files",
     "depends_on": ["1.1"],
     "success_criteria": ["reference-match returns oracle-tech-evaluation for tech-eval"]
   },
   {
-    "id": "1.3",
     "goal": "Prevent target repo reference sync",
     "depends_on": ["1.2"],
     "success_criteria": ["update test proves no .aether/references in target repo"]
   }
 ]
 ```
+
+Aether assigns ids by task order. `depends_on` references those runtime ids (`1.1`, `1.2`) and must not use task prose or aliases.
 
 ## Verification
 

@@ -62,6 +62,7 @@ var planCmd = &cobra.Command{
 		forceAlias, _ := cmd.Flags().GetBool("force")
 		synthetic, _ := cmd.Flags().GetBool("synthetic")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
+		repairArtifact, _ := cmd.Flags().GetBool("repair-artifact")
 		depth, _ := cmd.Flags().GetString("depth")
 		planningDepth, _ := cmd.Flags().GetString("planning-depth")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
@@ -84,6 +85,7 @@ var planCmd = &cobra.Command{
 			TargetConfidence:  targetConfidence,
 			MaxIterations:     maxIterations,
 			Accept:            acceptBelowTarget,
+			RepairArtifact:    repairArtifact,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -795,8 +797,35 @@ func detectDomainsFromRoot(root string) []string {
 			}
 		}
 	}
+	if detectMDSWorkspace(root) {
+		domains = append(domains, "max-for-live", "mds")
+	}
 	sort.Strings(domains)
 	return domains
+}
+
+func detectMDSWorkspace(root string) bool {
+	for _, rel := range []string{
+		"devices",
+		"m4l_builder",
+		filepath.Join("scripts", "mds"),
+		"MaxForLive_Vault",
+	} {
+		if _, err := os.Stat(filepath.Join(root, rel)); err == nil {
+			return true
+		}
+	}
+	for _, rel := range []string{"AGENTS.md", filepath.Join(".aether", "AGENTS.md")} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			continue
+		}
+		text := strings.ToLower(string(data))
+		if strings.Contains(text, "max for live") || strings.Contains(text, "maxforlive") || strings.Contains(text, "mds") {
+			return true
+		}
+	}
+	return false
 }
 
 // scanHighSeverityOpen iterates all domain ledgers and collects warning strings
@@ -1088,6 +1117,7 @@ func init() {
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
 	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
+	planCmd.Flags().Bool("repair-artifact", false, "Repair and validate dependency references in .aether/data/planning/phase-plan.json without rerunning workers")
 	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")
 	planCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
