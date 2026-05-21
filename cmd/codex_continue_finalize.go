@@ -282,7 +282,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 				}
 				entry := GateCheckResult{
 					Name:            c.Name,
-					Status:          status,
+				Status:          status,
 					Detail:          c.Detail,
 					FixHint:         c.FixHint,
 					RecoveryOptions: c.RecoveryOptions,
@@ -329,7 +329,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 						TaskID:         "",
 						Caste:          "",
 						Phase:          phase.ID,
-						Status:         "failed",
+					Status:         "failed",
 						Classification: Recoverable,
 						FailureType:    Transient,
 						ErrorMessage:   fmt.Sprintf("soft_block gate %q failed", resolved),
@@ -401,7 +401,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 						Wave:           1,
 						WorkerName:     fmt.Sprintf("gate-%s", c.Name),
 						Caste:          "watcher",
-						Status:         "failed",
+					Status:         "failed",
 						ErrorMessage:   c.Detail,
 						Budget:         budget,
 						CircuitBreaker: globalCircuitBreaker,
@@ -489,7 +489,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			workerResults = append(workerResults, learn.WorkerResult{
 				Name:         step.Name,
 				Caste:        step.Caste,
-				Status:       step.Status,
+			Status:       step.Status,
 				FilesTouched: nil, // codexContinueWorkerFlowStep has no FilesModified field
 			})
 		}
@@ -515,8 +515,8 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			"repo-local",
 		)
 
-		// Build learning content from phase summary
-		content := fmt.Sprintf("Phase %d completed successfully: %s", phase.ID, phase.Name)
+		// Build learning content from deep worker extraction
+		content := buildLearningContent(phase, workerFlow)
 
 		// Run privacy scan + classify (D-10, D-11, PRIV-03)
 		scanResult := privacyScan(content)
@@ -538,6 +538,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			Classification: classification,
 			Phase:          phase.ID,
 			Confidence:     evidence.Confidence,
+			Status:         learn.StatusHypothesis,
 		}
 		if err := learnStore.Add(entry); err != nil {
 			// Non-blocking: learning failure must not prevent phase advancement
@@ -641,7 +642,7 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 				Name:    dispatch.Name,
 				Task:    dispatch.Task,
 				TaskID:  dispatch.TaskID,
-				Status:  "timeout",
+			Status:  "timeout",
 				Summary: "worker result was not provided; treated as timed out",
 			}
 		}
@@ -1261,4 +1262,66 @@ func writeCodexContinueWorkerOutcomeReports(root string, phase colony.Phase, wor
 		}
 	}
 	return nil
+}
+
+
+// buildLearningContent extracts structured learning content from worker flow steps.
+// It aggregates findings, reusable lessons, recommendations, weak spots, and edge cases
+// from completed workers into a multi-line content string.
+func buildLearningContent(phase colony.Phase, workerFlow []codexContinueWorkerFlowStep) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Phase %d: %s\n", phase.ID, phase.Name))
+
+	var completedWorkers []codexContinueWorkerFlowStep
+	for _, step := range workerFlow {
+		if step.Status == "completed" {
+			completedWorkers = append(completedWorkers, step)
+		}
+	}
+
+	if len(completedWorkers) == 0 {
+		b.WriteString("\nNo workers completed successfully.\n")
+		return b.String()
+	}
+
+	b.WriteString(fmt.Sprintf("\nWorkers completed: %d\n", len(completedWorkers)))
+
+	for _, step := range completedWorkers {
+		b.WriteString(fmt.Sprintf("\n--- %s (%s) ---\n", step.Name, step.Caste))
+		if step.Task != "" {
+			b.WriteString(fmt.Sprintf("Task: %s\n", step.Task))
+		}
+		if len(step.Findings) > 0 {
+			b.WriteString("Findings:\n")
+			for _, f := range step.Findings {
+				b.WriteString(fmt.Sprintf("  - %s\n", f.Description))
+			}
+		}
+		if len(step.ReusableLessons) > 0 {
+			b.WriteString("Reusable Lessons:\n")
+			for _, l := range step.ReusableLessons {
+				b.WriteString(fmt.Sprintf("  - %s\n", l))
+			}
+		}
+		if len(step.Recommendations) > 0 {
+			b.WriteString("Recommendations:\n")
+			for _, r := range step.Recommendations {
+				b.WriteString(fmt.Sprintf("  - %s\n", r))
+			}
+		}
+		if len(step.WeakSpots) > 0 {
+			b.WriteString("Weak Spots:\n")
+			for _, w := range step.WeakSpots {
+				b.WriteString(fmt.Sprintf("  - %s\n", w))
+			}
+		}
+		if len(step.EdgeCases) > 0 {
+			b.WriteString("Edge Cases:\n")
+			for _, e := range step.EdgeCases {
+				b.WriteString(fmt.Sprintf("  - %s\n", e))
+			}
+		}
+	}
+
+	return b.String()
 }

@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +24,7 @@ type autopilotState struct {
 	TotalPhases    int                    `json:"total_phases"`
 	CurrentPhase   int                    `json:"current_phase"`
 	Status         string                 `json:"status"` // running, paused, stopped, completed
+	Reason         string                 `json:"reason"`
 	Headless       bool                   `json:"headless"`
 	ReplanInterval int                    `json:"replan_interval"`
 	Phases         []autopilotPhaseStatus `json:"phases"`
@@ -38,6 +41,69 @@ func normalizeAutopilotPhaseStatus(status string) string {
 	default:
 		return status
 	}
+}
+
+// checkAutopilotPauseConditions inspects colony state for conditions that should
+// pause autopilot advancement. Returns a non-empty reason string if a pause
+// condition is triggered, empty string otherwise.
+func checkAutopilotPauseConditions() string {
+	if store == nil {
+		return ""
+	}
+
+	// 1. Active blockers from pending-decisions.json
+	var pending PendingDecisionFile
+	if err := store.LoadJSON("pending-decisions.json", &pending); err == nil {
+		blockerCount := 0
+		for _, d := range pending.Decisions {
+			if d.Type == "blocker" && !d.Resolved {
+				blockerCount++
+			}
+		}
+		if blockerCount > 0 {
+			return fmt.Sprintf("active_blockers:%d", blockerCount)
+		}
+	}
+
+	// 2. Test failures from colony state signals
+	var cstate colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &cstate); err == nil {
+		for _, signal := range cstate.Signals {
+			if strings.Contains(strings.ToLower(signal.Type), "test-failure") ||
+				strings.Contains(strings.ToLower(signal.Type), "test_failure") {
+				return "test_failures"
+			}
+		}
+		// Also check gate_results for failures
+		for _, gr := range cstate.GateResults {
+			if !gr.Passed {
+				return fmt.Sprintf("gate_failure:%s", gr.Name)
+			}
+		}
+	}
+
+	// 3. Critical chaos findings from midden
+	var middenFile struct {
+		Entries []colony.MiddenEntry `json:"entries"`
+	}
+	if err := store.LoadJSON("midden/midden.json", &middenFile); err == nil {
+		for _, entry := range middenFile.Entries {
+			if strings.Contains(strings.ToLower(entry.Category), "chaos") {
+				for _, tag := range entry.Tags {
+					if strings.Contains(strings.ToLower(tag), "critical") {
+						return "critical_chaos_findings"
+					}
+				}
+			}
+		}
+	}
+
+	// 4. Uncommitted changes marker
+	if _, err := os.Stat(filepath.Join(store.BasePath(), "uncommitted-changes.marker")); err == nil {
+		return "uncommitted_changes"
+	}
+
+	return ""
 }
 
 // --- autopilot-init ---
@@ -126,6 +192,14 @@ var autopilotUpdateCmd = &cobra.Command{
 			state.Status = "running"
 		}
 
+		// Check pause conditions when a phase completes
+		if status == "completed" && state.Status == "running" {
+			if pauseReason := checkAutopilotPauseConditions(); pauseReason != "" {
+				state.Status = "paused"
+				state.Reason = pauseReason
+			}
+		}
+
 		if err := store.SaveJSON(autopilotStatePath, state); err != nil {
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
@@ -139,13 +213,18 @@ var autopilotUpdateCmd = &cobra.Command{
 			}
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"updated": true,
 			"phase":   phase,
 			"status":  status,
 			"current": state.CurrentPhase,
 			"total":   state.TotalPhases,
-		})
+		}
+		if state.Status == "paused" {
+			result["paused"] = true
+			result["reason"] = state.Reason
+		}
+		outputOK(result)
 		return nil
 	},
 }
@@ -168,7 +247,7 @@ var autopilotStatusCmd = &cobra.Command{
 			return nil
 		}
 
-		outputOK(map[string]interface{}{
+		result := map[string]interface{}{
 			"active":          state.Status == "running",
 			"status":          state.Status,
 			"current_phase":   state.CurrentPhase,
@@ -178,7 +257,11 @@ var autopilotStatusCmd = &cobra.Command{
 			"phases":          state.Phases,
 			"initialized_at":  state.InitializedAt,
 			"last_updated":    state.LastUpdated,
-		})
+		}
+		if state.Reason != "" {
+			result["reason"] = state.Reason
+		}
+		outputOK(result)
 		return nil
 	},
 }
@@ -328,6 +411,50 @@ var autopilotHeadlessCheckCmd = &cobra.Command{
 	},
 }
 
+// --- autopilot-resume ---
+
+var autopilotResumeCmd = &cobra.Command{
+	Use:   "autopilot-resume",
+	Short: "Resume autopilot from paused state",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			outputErrorMessage("no store initialized")
+			return nil
+		}
+
+		var state autopilotState
+		if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
+			outputError(1, fmt.Sprintf("autopilot not initialized: %v", err), nil)
+			return nil
+		}
+
+		if state.Status != "paused" {
+			outputOK(map[string]interface{}{
+				"resumed": false,
+				"reason":  fmt.Sprintf("autopilot status is %q, not paused", state.Status),
+			})
+			return nil
+		}
+
+		state.Status = "running"
+		state.Reason = ""
+		state.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+
+		if err := store.SaveJSON(autopilotStatePath, state); err != nil {
+			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
+			return nil
+		}
+
+		outputOK(map[string]interface{}{
+			"resumed":       true,
+			"current_phase": state.CurrentPhase,
+			"total_phases":  state.TotalPhases,
+		})
+		return nil
+	},
+}
+
 func init() {
 	autopilotInitCmd.Flags().Int("phases", 0, "Number of phases (required)")
 	autopilotUpdateCmd.Flags().Int("phase", 0, "Phase number (required)")
@@ -339,6 +466,7 @@ func init() {
 		autopilotInitCmd, autopilotUpdateCmd, autopilotStatusCmd,
 		autopilotStopCmd, autopilotCheckReplanCmd,
 		autopilotSetHeadlessCmd, autopilotHeadlessCheckCmd,
+		autopilotResumeCmd,
 	} {
 		rootCmd.AddCommand(c)
 	}

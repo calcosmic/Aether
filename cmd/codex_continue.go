@@ -1364,6 +1364,11 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 		b.WriteString("\nOperational issues already observed:\n")
 		b.WriteString(trimBriefList("", assessment.OperationalIssues, 5))
 	}
+	if surveySection := resolveSurveySection(); surveySection != "" {
+		b.WriteString("\n")
+		b.WriteString(surveySection)
+		b.WriteString("\n")
+	}
 	return b.String()
 }
 

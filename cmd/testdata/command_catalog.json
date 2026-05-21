@@ -311,6 +311,14 @@
     "stability_score": 91
   },
   {
+    "name": "autopilot-resume",
+    "short_description": "Resume autopilot from paused state",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "autopilot-set-headless",
     "short_description": "Set headless mode",
     "flags": [
@@ -3835,6 +3843,16 @@
     "stability_score": 91
   },
   {
+    "name": "learning-disprove",
+    "short_description": "Mark a hypothesis as disproven",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "learning-extract-fallback",
     "short_description": "Extract learning with fallback to simpler approach",
     "flags": [
@@ -3890,6 +3908,16 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "learning-list",
+    "short_description": "List learning entries with optional status filter",
+    "flags": [
+      "status"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "learning-observe",
@@ -3970,6 +3998,18 @@
     "stability_score": 91
   },
   {
+    "name": "learning-propose",
+    "short_description": "Create a new learning hypothesis",
+    "flags": [
+      "content",
+      "evidence",
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "learning-select-proposals",
     "short_description": "Select specific proposals for interactive review",
     "flags": [
@@ -4020,6 +4060,16 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "learning-validate",
+    "short_description": "Promote a hypothesis to validated",
+    "flags": [
+      "id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "load-state",
