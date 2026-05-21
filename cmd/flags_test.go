@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -222,5 +223,151 @@ func TestFlagsFilterByStatus(t *testing.T) {
 	}
 	if strings.Contains(output, "flag_001") {
 		t.Errorf("did not expect active flag_001 when filtering by resolved, got: %s", output)
+	}
+}
+
+func TestFlagAddCreatesFlag(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	rootCmd.SetArgs([]string{"flag-add", "--title", "Test blocker", "--type", "blocker", "--severity", "high", "--description", "Something is broken"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("flag-add returned error: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &envelope); err != nil {
+		t.Fatalf("invalid JSON output: %v, got: %s", err, output)
+	}
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got: %s", output)
+	}
+	result := envelope["result"].(map[string]interface{})
+	if result["created"] != true {
+		t.Fatalf("expected created:true, got: %v", result["created"])
+	}
+
+	// Verify filesystem
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		t.Fatalf("failed to load flags: %v", err)
+	}
+	if len(ff.Decisions) != 1 {
+		t.Fatalf("expected 1 flag, got %d", len(ff.Decisions))
+	}
+	if ff.Decisions[0].Type != "blocker" {
+		t.Fatalf("expected type=blocker, got %q", ff.Decisions[0].Type)
+	}
+}
+
+func TestFlagResolveUpdatesFlag(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Add a flag first
+	rootCmd.SetArgs([]string{"flag-add", "--title", "To resolve", "--type", "issue", "--severity", "low"})
+	_ = rootCmd.Execute()
+
+	// Extract the flag ID from output
+	output := strings.TrimSpace(buf.String())
+	var envelope map[string]interface{}
+	json.Unmarshal([]byte(output), &envelope)
+	result := envelope["result"].(map[string]interface{})
+	flagObj := result["flag"].(map[string]interface{})
+	id := flagObj["id"].(string)
+
+	// Resolve it
+	buf.Reset()
+	rootCmd.SetArgs([]string{"flag-resolve", "--id", id, "--message", "Fixed in commit abc"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("flag-resolve returned error: %v", err)
+	}
+
+	output = strings.TrimSpace(buf.String())
+	json.Unmarshal([]byte(output), &envelope)
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got: %s", output)
+	}
+	resResult := envelope["result"].(map[string]interface{})
+	if resResult["resolved"] != true {
+		t.Fatalf("expected resolved:true, got: %v", resResult["resolved"])
+	}
+
+	// Verify filesystem
+	var ff colony.FlagsFile
+	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
+		t.Fatalf("failed to load flags: %v", err)
+	}
+	if !ff.Decisions[0].Resolved {
+		t.Fatalf("expected flag to be resolved")
+	}
+	if ff.Decisions[0].Resolution != "Fixed in commit abc" {
+		t.Fatalf("expected resolution message, got %q", ff.Decisions[0].Resolution)
+	}
+}
+
+func TestFlagCheckBlockersCounts(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	// Add flags of different types
+	rootCmd.SetArgs([]string{"flag-add", "--title", "Blocker 1", "--type", "blocker", "--severity", "critical"})
+	_ = rootCmd.Execute()
+	buf.Reset()
+	rootCmd.SetArgs([]string{"flag-add", "--title", "Issue 1", "--type", "issue", "--severity", "high"})
+	_ = rootCmd.Execute()
+	buf.Reset()
+	rootCmd.SetArgs([]string{"flag-add", "--title", "Note 1", "--type", "note", "--severity", "low"})
+	_ = rootCmd.Execute()
+
+	buf.Reset()
+	rootCmd.SetArgs([]string{"flag-check-blockers"})
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("flag-check-blockers returned error: %v", err)
+	}
+
+	output := strings.TrimSpace(buf.String())
+	var envelope map[string]interface{}
+	json.Unmarshal([]byte(output), &envelope)
+	if envelope["ok"] != true {
+		t.Fatalf("expected ok:true, got: %s", output)
+	}
+	result := envelope["result"].(map[string]interface{})
+	if result["blockers"] != float64(1) {
+		t.Fatalf("expected blockers=1, got %v", result["blockers"])
+	}
+	if result["issues"] != float64(1) {
+		t.Fatalf("expected issues=1, got %v", result["issues"])
+	}
+	if result["notes"] != float64(1) {
+		t.Fatalf("expected notes=1, got %v", result["notes"])
+	}
+	if result["has_blockers"] != true {
+		t.Fatalf("expected has_blockers=true, got %v", result["has_blockers"])
 	}
 }
