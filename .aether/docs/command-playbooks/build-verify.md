@@ -1,5 +1,9 @@
 ### Step 5.3.5: Generate Compact Review Context for Review Cycles
 
+### Queen Spawn Decision
+
+Build verification spawns `watcher` (mandatory), `probe` (always required), and optionally `measurer` or `chaos` based on phase keywords. Budget is 4-8 workers depending on risk and mode. See [caste-relevance-reference.md](caste-relevance-reference.md) for the full table.
+
 ## Build Verification Read Cache Discipline
 
 Every worker spawned by build verification must receive this discipline in its task prompt:

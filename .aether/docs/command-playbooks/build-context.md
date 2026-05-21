@@ -1,3 +1,7 @@
+### Queen Spawn Decision
+
+The Queen selects castes using relevance scoring (`casteRelevanceScore`) and enforces a spawn budget (`queenMaxWorkersForBudget`). Required castes like `builder`, `watcher`, and `probe` are always included for build flows. See [caste-relevance-reference.md](caste-relevance-reference.md) for the full table.
+
 ### Step 4: Load Colony Context (colony-prime)
 
 Call `colony-prime --compact` to get unified worker context (wisdom + context capsule + signals + instincts):

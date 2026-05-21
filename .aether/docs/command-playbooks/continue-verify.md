@@ -11,6 +11,10 @@ Parse `$ARGUMENTS`:
 - If contains `--no-visual`: set `visual_mode = false` (visual is ON by default)
 - Otherwise: set `visual_mode = true`
 
+### Queen Spawn Decision
+
+Continue spawns verification castes based on depth: `watcher` always; `probe` at standard and heavy; `gatekeeper` + `auditor` only at heavy. Budget ranges from 3 (light) to 6 (heavy). See [caste-relevance-reference.md](caste-relevance-reference.md) for the full table.
+
 ## Continue Worker Read Cache Discipline
 
 Every worker spawned by continue verification must receive this discipline in its task prompt:
