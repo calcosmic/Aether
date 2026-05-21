@@ -377,3 +377,101 @@ func TestAllocateBuildWorktreeCleansExistingPath(t *testing.T) {
 		t.Error("leftover file should have been cleaned up")
 	}
 }
+
+func TestDetectOrphanedWorktrees(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Test"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Worktrees: []colony.WorktreeEntry{
+			{Phase: 1, Branch: "phase-1-wt", Status: colony.WorktreeInProgress, Path: ".aether/worktrees/wt1"},
+			{Phase: 2, Branch: "phase-2-wt", Status: colony.WorktreeInProgress, Path: ".aether/worktrees/wt2"},
+			{Phase: 2, Branch: "phase-2-merged", Status: colony.WorktreeMerged, Path: ".aether/worktrees/wt3"},
+		},
+	})
+
+	// Current phase 1 should detect phase-2 unmerged worktree as orphan
+	orphans := detectOrphanedWorktrees(1)
+	if len(orphans) != 1 {
+		t.Fatalf("expected 1 orphan for current phase 1, got %d", len(orphans))
+	}
+	if orphans[0].Branch != "phase-2-wt" {
+		t.Errorf("expected orphan branch phase-2-wt, got %s", orphans[0].Branch)
+	}
+
+	// Current phase 2 should detect phase-1 as orphan
+	orphans = detectOrphanedWorktrees(2)
+	if len(orphans) != 1 {
+		t.Fatalf("expected 1 orphan for current phase 2, got %d", len(orphans))
+	}
+	if orphans[0].Branch != "phase-1-wt" {
+		t.Errorf("expected orphan branch phase-1-wt, got %s", orphans[0].Branch)
+	}
+
+	// Current phase 3 should detect both unmerged as orphans
+	orphans = detectOrphanedWorktrees(3)
+	if len(orphans) != 2 {
+		t.Fatalf("expected 2 orphans for current phase 3, got %d", len(orphans))
+	}
+}
+
+func TestDetectOrphanedWorktreesNone(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Test"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:   "3.0",
+		Goal:      &goal,
+		State:     colony.StateREADY,
+		Worktrees: []colony.WorktreeEntry{},
+	})
+
+	orphans := detectOrphanedWorktrees(1)
+	if len(orphans) != 0 {
+		t.Errorf("expected 0 orphans, got %d", len(orphans))
+	}
+}
+
+func TestMergePhaseWorktreesEmpty(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	goal := "Test"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:   "3.0",
+		Goal:      &goal,
+		State:     colony.StateREADY,
+		Worktrees: []colony.WorktreeEntry{},
+	})
+
+	merged, failed, err := mergePhaseWorktrees(1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(merged) != 0 {
+		t.Errorf("expected 0 merged, got %d", len(merged))
+	}
+	if len(failed) != 0 {
+		t.Errorf("expected 0 failed, got %d", len(failed))
+	}
+}

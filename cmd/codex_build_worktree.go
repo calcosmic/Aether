@@ -843,3 +843,103 @@ func gcOrphanedWorktrees() (cleaned int, orphaned int, err error) {
 	}
 	return cleaned, orphaned, nil
 }
+
+// ---------------------------------------------------------------------------
+// Worktree Merge-Back (extracted for reuse by build-finalize and continue)
+// ---------------------------------------------------------------------------
+
+// mergePhaseWorktrees merges all unmerged worktree branches for the given phase.
+// It returns a summary of merged and failed branches.
+func mergePhaseWorktrees(phaseNum int) (merged []string, failed []string, err error) {
+	if store == nil {
+		return nil, nil, fmt.Errorf("no store initialized")
+	}
+
+	var state colony.ColonyState
+	if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr != nil {
+		return nil, nil, fmt.Errorf("load colony state: %w", loadErr)
+	}
+
+	root := resolveAetherRoot()
+	for _, entry := range state.Worktrees {
+		if entry.Phase != phaseNum {
+			continue
+		}
+		if entry.Status == colony.WorktreeMerged {
+			continue
+		}
+
+		wtAbsPath := entry.Path
+		if !filepath.IsAbs(wtAbsPath) {
+			wtAbsPath = filepath.Join(root, wtAbsPath)
+		}
+
+		// Gate 1: run tests in worktree
+		testCtx, testCancel := context.WithTimeout(context.Background(), BuildTimeout)
+		testCmd := exec.CommandContext(testCtx, "go", "test", "./...")
+		testCmd.Dir = wtAbsPath
+		_, testErr := testCmd.CombinedOutput()
+		testCancel()
+		if testErr != nil {
+			failed = append(failed, fmt.Sprintf("%s (tests failed)", entry.Branch))
+			continue
+		}
+
+		// Gate 2: clash detection
+		clashes, clashErr := checkClashesForWorktree(wtAbsPath, entry.Branch)
+		if clashErr != nil {
+			failed = append(failed, fmt.Sprintf("%s (clash detection error)", entry.Branch))
+			continue
+		}
+		if len(clashes) > 0 {
+			failed = append(failed, fmt.Sprintf("%s (clash: %s)", entry.Branch, strings.Join(clashes, ", ")))
+			continue
+		}
+
+		// Merge
+		gitCtx, gitCancel := context.WithTimeout(context.Background(), GitTimeout)
+		coOut, coErr := exec.CommandContext(gitCtx, "git", "-C", root, "checkout", "main").CombinedOutput()
+		if coErr != nil {
+			coOut2, coErr2 := exec.CommandContext(gitCtx, "git", "-C", root, "checkout", "master").CombinedOutput()
+			if coErr2 != nil {
+				gitCancel()
+				failed = append(failed, fmt.Sprintf("%s (checkout failed: %s / %s)", entry.Branch, string(coOut), string(coOut2)))
+				continue
+			}
+		}
+
+		mergeOut, mergeErr := exec.CommandContext(gitCtx, "git", "-C", root, "merge", entry.Branch).CombinedOutput()
+		gitCancel()
+		if mergeErr != nil {
+			failed = append(failed, fmt.Sprintf("%s (merge failed: %s)", entry.Branch, string(mergeOut)))
+			continue
+		}
+
+		merged = append(merged, entry.Branch)
+	}
+
+	return merged, failed, nil
+}
+
+// detectOrphanedWorktrees finds worktree branches that belong to phases other
+// than the current one and are not yet merged.
+func detectOrphanedWorktrees(currentPhase int) []colony.WorktreeEntry {
+	if store == nil {
+		return nil
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return nil
+	}
+	var orphans []colony.WorktreeEntry
+	for _, entry := range state.Worktrees {
+		if entry.Phase == currentPhase {
+			continue
+		}
+		if entry.Status == colony.WorktreeMerged {
+			continue
+		}
+		orphans = append(orphans, entry)
+	}
+	return orphans
+}

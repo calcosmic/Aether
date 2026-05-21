@@ -334,6 +334,17 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
 		return nil, err
 	}
+
+	// Detect orphaned worktrees from prior interrupted builds
+	orphans := detectOrphanedWorktrees(phaseNum)
+	if len(orphans) > 0 && !options.Force {
+		var orphanBranches []string
+		for _, o := range orphans {
+			orphanBranches = append(orphanBranches, fmt.Sprintf("%s (phase %d)", o.Branch, o.Phase))
+		}
+		return nil, fmt.Errorf("orphaned worktree branches detected: %s. Run with --force to proceed anyway, or run `aether worktree-merge-back` to recover", strings.Join(orphanBranches, ", "))
+	}
+
 	originalState, err := cloneColonyState(state)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone colony state: %w", err)

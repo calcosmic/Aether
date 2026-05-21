@@ -271,6 +271,23 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
+	// Worktree mode: merge back completed branches before marking phase done.
+	if effectiveParallelMode(updatedState) == colony.ModeWorktree {
+		merged, failed, mergeErr := mergePhaseWorktrees(phaseNum)
+		if mergeErr != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("worktree merge-back failed: %w", mergeErr)
+		}
+		if len(failed) > 0 {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("worktree merge-back blocked: %s", strings.Join(failed, "; "))
+		}
+		if len(merged) > 0 {
+			updatedState.Events = append(updatedState.Events,
+				fmt.Sprintf("%s|worktree_merge|build-finalize|Merged %d worktree branch(es): %s",
+					completedAt.Format(time.RFC3339), len(merged), strings.Join(merged, ", ")),
+			)
+		}
+	}
+
 	// Atomically commit the colony state mutation.
 	var committedState colony.ColonyState
 	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
