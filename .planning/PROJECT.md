@@ -34,37 +34,42 @@ That means:
 
 ## Current State
 
-- **v1.23 Daily Driver Reliability — in progress**
+- **v1.23 Daily Driver Reliability — SHIPPED 2026-05-21**
 - **Product version: v1.0.41**
-- v1.22 shipped: Survey noise filtering, source anchors, grounding gate, decision conflict detection, ceremony restore
-- Focus: prove every command works, streamline Queen orchestration, demonstrate end-to-end in downstream repo
+- v1.23 shipped: Honest error pipeline, command classification, critical test coverage, learning lifecycle, Queen policy alignment, runtime safety, end-to-end proof
+- Focus: Planning next milestone
 - Go = truth (state, gates, finalizers), playbooks = soul, YAML = packaging
-- 465 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
+- 512 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
 
-## Current Milestone: v1.23 Daily Driver Reliability
+## Current Milestone: v1.24 [Next]
 
-**Goal:** Restore Aether as a reliable daily-driver system for developing other repos — prove every command works, streamline Queen orchestration, and demonstrate end-to-end in a downstream repo.
+*Next milestone not yet defined. Run `/gsd-new-milestone` to start planning.*
 
-**Target features:**
-1. Command reliability matrix (audit-catalog + historical tags v1.10-v1.21 + v5.4.0)
-2. Command classification (public lifecycle, public utility, internal, alias, deprecated)
-3. Smoke/fixture/e2e tests for every command
-4. Flagship workflow restore (colonize, plan, oracle/RALF, build, continue, run, swarm, seal, entomb)
-5. Queen execution policy restore (direct, single-worker, focused-review, full-colony)
-6. Remove unnecessary agent spawning from deterministic commands
-7. Fix stale decision/session leakage between colonies
-8. Fix worker artifact/result collection (completed work not lost)
-9. End-to-end proof in a separate downstream repo
+**Previous Milestone: v1.23 Daily Driver Reliability** — Shipped 2026-05-21
 
-**Hard constraints:**
-- No new features until existing command surface is reliable
-- No docs-only papering — must have executable evidence
-- Every public command needs test proof
-- Prefer deterministic runtime checks over agent spawning
+Key accomplishments: Removed 29+ error suppressions, built audit-catalog classification matrix, added tests for 12 critical source files, restored learning lifecycle and 9 flagship workflows, aligned Queen policy with Go runtime, added provider error classification + build-reconcile + worktree safety, full lifecycle smoke test in downstream repo. 30/30 requirements, 27 plans, 7 phases.
 
-**Previous Milestone: v1.22 Grounded Planning + Ceremony Restore** — Shipped 2026-05-19
+**Stats:** 41 commits, 213 files changed, +20,787 / −9,965 lines
 
-Key accomplishments: Survey noise filtering, source anchors, grounding gate, decision conflict detection, PlaybookLoader ceremony restore. 22/22 requirements, 84 new tests, zero tech debt.
+Full details: `.planning/milestones/v1.23-ROADMAP.md`
+
+## Previous Milestone: v1.23 Daily Driver Reliability
+
+**Shipped:** 2026-05-21
+**Phases:** 7 (145-151) | **Plans:** 27
+
+**Key accomplishments:**
+- Removed error suppression from 29+ data-persistence CLI calls — errors now surface honestly
+- Built command reliability matrix and `audit-catalog` classification report
+- Added tests for 12 HIGH-severity untested source files (eventbus, queen, instinct, midden, hive, spawn, autopilot, flags, council, shelf)
+- Restored learning lifecycle (hypothesis/validate/disprove) and all 9 flagship workflows
+- Aligned Queen execution policy docs with Go runtime; verified deterministic commands spawn zero agents
+- Added provider error classification, build-reconcile recovery, worktree merge-back, orphan detection
+- Full lifecycle smoke test in downstream repo + TS host e2e + Go manifest integration tests
+
+**Stats:** 41 commits, 213 files changed, +20,787 / −9,965 lines
+
+Full details: `.planning/milestones/v1.23-ROADMAP.md`
 
 ## Previous Milestone: v1.22 Grounded Planning + Ceremony Restore
 

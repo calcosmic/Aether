@@ -1,5 +1,31 @@
 # Aether Milestones
 
+## v1.23 Daily Driver Reliability (Shipped: 2026-05-21)
+
+**Phases completed:** 7 phases, 27 plans, 30 requirements
+
+**Key accomplishments:**
+
+1. Removed error suppression from 29+ data-persistence CLI calls — errors now surface honestly instead of silently dropping
+2. Built command reliability matrix and `audit-catalog` classification report covering all 60+ commands with historical tags
+3. Added tests for 12 HIGH-severity untested source files (eventbus, queen, instinct, midden, hive, spawn, autopilot, flags, council, shelf)
+4. Restored learning lifecycle (hypothesis/validate/disprove) and all 9 flagship workflows with correct state mutations
+5. Aligned Queen execution policy docs with Go runtime; verified 17 deterministic commands spawn zero agents
+6. Added provider error classification, build-reconcile recovery, worktree merge-back, and orphan detection
+7. Full lifecycle smoke test in downstream repo + TS host e2e tests + Go manifest integration tests
+
+**Stats:** 41 commits, 213 files changed, +20,787 / −9,965 lines, ~2 days
+**Go LOC:** ~208K | **TS Tests:** 512 | **Go Tests:** 2900+
+
+**Tech Debt:** Missing VERIFICATION.md and SUMMARY.md process artifacts for phases 146–151 (documentation gaps, not work gaps)
+
+**Archives:**
+- [Roadmap](milestones/v1.23-ROADMAP.md)
+- [Requirements](milestones/v1.23-REQUIREMENTS.md)
+- [Audit](milestones/v1.23-MILESTONE-AUDIT.md)
+
+---
+
 ## v1.22 Grounded Planning + Ceremony Restore (Shipped: 2026-05-19)
 
 **Phases completed:** 4 phases, 8 plans, 22 requirements
