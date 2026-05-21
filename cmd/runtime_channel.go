@@ -87,8 +87,8 @@ func resolveHubPathForHome(homeDir string, channel runtimeChannel) string {
 	return filepath.Join(homeDir, defaultHubDirName(channel))
 }
 
-func shouldSyncPlatformHomes(channel runtimeChannel) bool {
-	return channel != channelDev
+func shouldSyncPlatformHomes(channel runtimeChannel, optIn bool) bool {
+	return channel != channelDev || optIn
 }
 
 func alignDownloadedBinaryToChannel(result *downloader.DownloadResult, destDir string, channel runtimeChannel) (*downloader.DownloadResult, error) {

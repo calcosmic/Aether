@@ -28,6 +28,7 @@ func init() {
 	publishCmd.Flags().String("channel", "", "Runtime channel (stable or dev; default: infer from binary/env)")
 	publishCmd.Flags().String("binary-dest", "", "Destination directory for the built binary")
 	publishCmd.Flags().Bool("skip-build-binary", false, "Skip go build and use existing binary")
+	publishCmd.Flags().Bool("sync-platform-homes", false, "For dev channel, also sync global Claude/OpenCode/Codex home assets")
 
 	rootCmd.AddCommand(publishCmd)
 }
@@ -114,8 +115,9 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("TS host hub sync failed: %w", tsHostErr)
 	}
 
-	if shouldSyncPlatformHomes(channel) {
-		_, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel)
+	syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
+	if shouldSyncPlatformHomes(channel, syncPlatformHomes) {
+		_, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel, syncPlatformHomes)
 		if len(platformErrors) > 0 {
 			return fmt.Errorf("platform home sync failed: %s", strings.Join(platformErrors, "; "))
 		}

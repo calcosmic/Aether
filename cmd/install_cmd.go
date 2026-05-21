@@ -61,6 +61,7 @@ func init() {
 	installCmd.Flags().String("binary-dest", "", "Destination directory for binary (default: channel-specific hub bin, or current/local bin when rebuilding from source)")
 	installCmd.Flags().String("binary-version", "", "Binary version to download (default: current version)")
 	installCmd.Flags().Bool("skip-build-binary", false, "Skip auto-building the Go binary when installing from an Aether source checkout")
+	installCmd.Flags().Bool("sync-platform-homes", false, "For dev channel, also sync global Claude/OpenCode/Codex home assets")
 
 	rootCmd.AddCommand(installCmd)
 }
@@ -102,7 +103,8 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	results := []map[string]interface{}{}
 	var syncErrors []string
 
-	platformResults, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel)
+	syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
+	platformResults, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel, syncPlatformHomes)
 	results = append(results, platformResults...)
 	syncErrors = append(syncErrors, platformErrors...)
 
@@ -426,18 +428,18 @@ func mapSyncDestRelPath(relPath string, mapper syncRelPathMapper) string {
 	return filepath.Clean(mapped)
 }
 
-func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel) ([]map[string]interface{}, []string) {
+func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel, force bool) ([]map[string]interface{}, []string) {
 	results := []map[string]interface{}{}
 	var syncErrors []string
 
-	if !shouldSyncPlatformHomes(channel) {
+	if !shouldSyncPlatformHomes(channel, force) {
 		return append(results, map[string]interface{}{
 			"label":   "Platform homes",
 			"src":     ".claude/.opencode/.codex",
 			"dest":    "skipped",
 			"copied":  0,
 			"skipped": 0,
-			"note":    "Dev channel leaves global Claude/OpenCode/Codex home assets untouched by default.",
+			"note":    "Dev channel leaves global Claude/OpenCode/Codex home assets untouched by default. Use --sync-platform-homes to opt in.",
 		}), syncErrors
 	}
 
@@ -491,18 +493,18 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel) 
 	return results, syncErrors
 }
 
-func syncPlatformHomeAssetsFromHub(hubDir, homeDir string, channel runtimeChannel) ([]map[string]interface{}, []string) {
+func syncPlatformHomeAssetsFromHub(hubDir, homeDir string, channel runtimeChannel, force bool) ([]map[string]interface{}, []string) {
 	results := []map[string]interface{}{}
 	var syncErrors []string
 
-	if !shouldSyncPlatformHomes(channel) {
+	if !shouldSyncPlatformHomes(channel, force) {
 		return append(results, map[string]interface{}{
 			"label":   "Platform homes",
 			"src":     "hub/system",
 			"dest":    "skipped",
 			"copied":  0,
 			"skipped": 0,
-			"note":    "Dev channel leaves global Claude/OpenCode/Codex home assets untouched by default.",
+			"note":    "Dev channel leaves global Claude/OpenCode/Codex home assets untouched by default. Use --sync-platform-homes to opt in.",
 		}), syncErrors
 	}
 

@@ -126,7 +126,8 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 	staleClarificationCount := countClarifications(stalePending)
 	activeSignals := activeSignalTexts()
 
-	questions, createdCount, existingCount, err := materializeDiscussQuestions(goal, survey, pending, activeSignals, maxQuestions, dryRun, scope)
+	analyze := runDiscussAnalyze(root, goal)
+	questions, createdCount, existingCount, err := materializeDiscussQuestions(goal, survey, analyze, pending, activeSignals, maxQuestions, dryRun, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -277,10 +278,10 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	}, nil
 }
 
-func materializeDiscussQuestions(goal string, survey codexSurveyContext, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool, scope pendingDecisionScope) ([]discussQuestion, int, int, error) {
+func materializeDiscussQuestions(goal string, survey codexSurveyContext, analyze analyzeScanData, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool, scope pendingDecisionScope) ([]discussQuestion, int, int, error) {
 	activePending, _ := filterPendingDecisionFileForScope(pending, scope)
 	existingBySource := clarificationDecisionIndex(activePending)
-	candidates := generateDiscussCandidates(goal, survey)
+	candidates := generateDiscussCandidates(goal, survey, analyze)
 	questions := make([]discussQuestion, 0, maxQuestions)
 	createdCount := 0
 	existingCount := 0
@@ -332,23 +333,106 @@ func materializeDiscussQuestions(goal string, survey codexSurveyContext, pending
 	return questions, createdCount, existingCount, nil
 }
 
-func generateDiscussCandidates(goal string, survey codexSurveyContext) []discussQuestion {
+func generateDiscussCandidates(goal string, survey codexSurveyContext, analyze analyzeScanData) []discussQuestion {
 	goalLower := strings.ToLower(goal)
 	candidates := []discussQuestion{
 		buildDiscussSurfaceQuestion(survey),
 		buildDiscussIntegrationQuestion(goalLower, survey),
+	}
+	candidates = append(candidates, rankDiscussAnalyzeQuestions(goalLower, analyze)...)
+	candidates = append(candidates,
 		buildDiscussScopeQuestion(goalLower),
 		buildDiscussVerificationQuestion(survey),
-	}
+	)
 
 	filtered := make([]discussQuestion, 0, len(candidates))
+	seen := map[string]bool{}
 	for _, candidate := range candidates {
 		if strings.TrimSpace(candidate.Question) == "" || strings.TrimSpace(candidate.Source) == "" {
 			continue
 		}
+		source := strings.TrimSpace(candidate.Source)
+		if seen[source] {
+			continue
+		}
+		seen[source] = true
 		filtered = append(filtered, candidate)
 	}
 	return filtered
+}
+
+func rankDiscussAnalyzeQuestions(goalLower string, scan analyzeScanData) []discussQuestion {
+	if !discussAnalyzeHasContext(scan) {
+		return nil
+	}
+	questions := generateAnalyzeQuestions(scan)
+	type scoredQuestion struct {
+		score    int
+		question discussQuestion
+	}
+	scored := make([]scoredQuestion, 0, len(questions))
+	for _, question := range questions {
+		if strings.TrimSpace(question.Question) == "" || strings.TrimSpace(question.Source) == "" {
+			continue
+		}
+		score := 10
+		switch question.Category {
+		case "architecture":
+			score += 20
+			if len(scan.TopLevelDirs) > 3 || scan.HasDockerCompose || scan.HasK8s {
+				score += 20
+			}
+			if containsAnyOracleKeyword(goalLower, "architecture", "refactor", "module", "surface", "system") {
+				score += 20
+			}
+		case "dependencies":
+			score += 15 + len(scan.Frameworks)*3 + len(scan.Languages)*2
+			if containsAnyOracleKeyword(goalLower, "dependency", "library", "package", "tool", "integration") {
+				score += 20
+			}
+		case "testing_infrastructure":
+			score += len(scan.Governance.TestFrameworks) * 5
+			if containsAnyOracleKeyword(goalLower, "test", "verify", "coverage", "quality", "regression") {
+				score += 25
+			}
+		case "deployment":
+			if scan.HasDocker || scan.HasDockerCompose || scan.HasK8s {
+				score += 30
+			}
+			if containsAnyOracleKeyword(goalLower, "deploy", "release", "production", "ship") {
+				score += 20
+			}
+		case "performance":
+			if containsAnyOracleKeyword(goalLower, "performance", "speed", "latency", "throughput", "scale") {
+				score += 35
+			}
+		}
+		scored = append(scored, scoredQuestion{score: score, question: question})
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score == scored[j].score {
+			return scored[i].question.Category < scored[j].question.Category
+		}
+		return scored[i].score > scored[j].score
+	})
+	result := make([]discussQuestion, 0, len(scored))
+	for _, item := range scored {
+		result = append(result, item.question)
+	}
+	return result
+}
+
+func discussAnalyzeHasContext(scan analyzeScanData) bool {
+	return strings.TrimSpace(scan.DetectedType) != "" && scan.DetectedType != "unknown" ||
+		len(scan.Languages) > 0 ||
+		len(scan.Frameworks) > 0 ||
+		len(scan.TopLevelDirs) > 0 ||
+		len(scan.Governance.TestFrameworks) > 0 ||
+		len(scan.Governance.CIConfigs) > 0 ||
+		scan.HasDocker ||
+		scan.HasDockerCompose ||
+		scan.HasK8s ||
+		scan.HasMakefile
 }
 
 func buildDiscussSurfaceQuestion(survey codexSurveyContext) discussQuestion {
@@ -734,10 +818,15 @@ func activeSignalTexts() []string {
 
 func clarificationSuppressedBySignals(category string, activeSignals []string) bool {
 	keywords := map[string][]string{
-		"surface":      {"react", "vue", "svelte", "stack", "surface", "module", "backend", "frontend"},
-		"integration":  {"api", "contract", "integration", "endpoint", "data", "adapter"},
-		"scope":        {"scope", "slice", "prototype", "polish", "cleanup", "breadth"},
-		"verification": {"test", "coverage", "qa", "verify", "validation"},
+		"surface":                {"react", "vue", "svelte", "stack", "surface", "module", "backend", "frontend"},
+		"integration":            {"api", "contract", "integration", "endpoint", "data", "adapter"},
+		"scope":                  {"scope", "slice", "prototype", "polish", "cleanup", "breadth"},
+		"verification":           {"test", "coverage", "qa", "verify", "validation"},
+		"architecture":           {"architecture", "monolith", "module", "service", "boundary", "stack"},
+		"dependencies":           {"dependency", "dependencies", "package", "library", "contract", "integration"},
+		"testing_infrastructure": {"test", "coverage", "qa", "verify", "validation", "regression"},
+		"deployment":             {"deploy", "deployment", "docker", "kubernetes", "release", "production"},
+		"performance":            {"performance", "speed", "latency", "throughput", "scale"},
 	}
 	for _, signal := range activeSignals {
 		for _, keyword := range keywords[category] {

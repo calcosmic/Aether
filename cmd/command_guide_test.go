@@ -778,6 +778,49 @@ func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
 	}
 }
 
+func TestCodexGeneratedCommandShimsCoverIntelligentCommands(t *testing.T) {
+	shims := map[string]codexSkillShim{}
+	for _, shim := range codexSkillShims() {
+		shims[shim.Name] = shim
+	}
+	catalog := commandGuideCatalog()
+	for _, command := range []string{"init", "discuss", "oracle", "colonize", "plan", "build", "continue", "swarm", "seal"} {
+		def := catalog[command]
+		shim, ok := shims["aether-"+command]
+		if !ok {
+			t.Fatalf("codex generated shims missing command-shaped skill for %q", command)
+		}
+		if len(shim.WorkflowTriggers) != 1 || shim.WorkflowTriggers[0] != command {
+			t.Fatalf("%s workflow triggers = %v, want [%s]", shim.Name, shim.WorkflowTriggers, command)
+		}
+		for _, want := range []string{
+			"aether command-guide " + command + " --platform codex",
+			"aether " + command,
+			"/ant-" + command,
+			"Raw Bypass",
+		} {
+			text := shim.Description + "\n" + shim.Body + "\n" + strings.Join(shim.TaskKeywords, "\n")
+			if !strings.Contains(text, want) {
+				t.Fatalf("%s command shim missing %q", shim.Name, want)
+			}
+		}
+		if def.SkillReference != "" && !strings.Contains(shim.Body, def.SkillReference) {
+			t.Fatalf("%s command shim missing lifecycle skill %q", shim.Name, def.SkillReference)
+		}
+		if def.RunCommand != "" && !strings.Contains(shim.Body, def.RunCommand) {
+			t.Fatalf("%s command shim missing runtime command %q", shim.Name, def.RunCommand)
+		}
+		rendered := renderCodexSkillShim(shim)
+		fm := parseSkillFrontmatter(rendered)
+		if fm == nil {
+			t.Fatalf("%s generated shim should have parseable frontmatter", shim.Name)
+		}
+		if !stringSliceContains(fm.TaskKeywords, "aether "+command) {
+			t.Fatalf("%s generated frontmatter missing command keyword: %v", shim.Name, fm.TaskKeywords)
+		}
+	}
+}
+
 func stringSliceContains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

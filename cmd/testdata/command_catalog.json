@@ -590,6 +590,16 @@
     "stability_score": 91
   },
   {
+    "name": "build-reconcile",
+    "short_description": "Discover unrecorded worker changes and create a synthetic build packet",
+    "flags": [
+      "dry-run"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "bump-version",
     "short_description": "Bump Aether source and npm package versions",
     "flags": [
@@ -3443,7 +3453,8 @@
       "download-binary",
       "home-dir",
       "package-dir",
-      "skip-build-binary"
+      "skip-build-binary",
+      "sync-platform-homes"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -5446,7 +5457,8 @@
       "channel",
       "home-dir",
       "package-dir",
-      "skip-build-binary"
+      "skip-build-binary",
+      "sync-platform-homes"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -8791,7 +8803,8 @@
       "channel",
       "download-binary",
       "dry-run",
-      "force"
+      "force",
+      "sync-platform-homes"
     ],
     "parent_command": "",
     "has_subcommands": false,

@@ -125,18 +125,67 @@ func TestCouncilYamlSourceUsesRealRuntimeSubcommands(t *testing.T) {
 	}
 }
 
+func TestRepoRootForCommandSourceTestSkipsGeneratedPackageArtifacts(t *testing.T) {
+	tmp := t.TempDir()
+	repoRoot := filepath.Join(tmp, "Aether")
+	for _, rel := range []string{
+		filepath.Join(".aether", "commands"),
+		filepath.Join(".claude", "commands", "ant"),
+		filepath.Join(".opencode", "commands", "ant"),
+		filepath.Join(".codex", "agents"),
+		"cmd",
+	} {
+		if err := os.MkdirAll(filepath.Join(repoRoot, rel), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+	}
+	for _, rel := range []string{"AGENTS.md", "go.mod", filepath.Join("cmd", "AGENTS.md")} {
+		if err := os.WriteFile(filepath.Join(repoRoot, rel), []byte("test\n"), 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	got, err := repoRootForCommandSourceTestFrom(filepath.Join(repoRoot, "cmd"))
+	if err != nil {
+		t.Fatalf("repo root lookup failed: %v", err)
+	}
+	if got != repoRoot {
+		t.Fatalf("repo root = %s, want %s", got, repoRoot)
+	}
+}
+
 func repoRootForCommandSourceTest() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
-	candidates := []string{wd, filepath.Dir(wd)}
+	return repoRootForCommandSourceTestFrom(wd)
+}
+
+func repoRootForCommandSourceTestFrom(wd string) (string, error) {
+	candidates := []string{wd, filepath.Dir(wd), filepath.Dir(filepath.Dir(wd))}
 	for _, candidate := range candidates {
-		if _, err := os.Stat(filepath.Join(candidate, "AGENTS.md")); err == nil {
+		if isCommandSourceRepoRoot(candidate) {
 			return candidate, nil
 		}
 	}
 
 	return "", os.ErrNotExist
+}
+
+func isCommandSourceRepoRoot(candidate string) bool {
+	for _, rel := range []string{
+		"AGENTS.md",
+		"go.mod",
+		filepath.Join(".aether", "commands"),
+		filepath.Join(".claude", "commands", "ant"),
+		filepath.Join(".opencode", "commands", "ant"),
+		filepath.Join(".codex", "agents"),
+	} {
+		if _, err := os.Stat(filepath.Join(candidate, rel)); err != nil {
+			return false
+		}
+	}
+	return true
 }

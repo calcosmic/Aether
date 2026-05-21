@@ -91,6 +91,54 @@ func TestOracleBackgroundEnvMarksDetachedController(t *testing.T) {
 	}
 }
 
+func TestOracleContextCapsulePreservesFullLongTopic(t *testing.T) {
+	longTail := "Codex command skills, discuss restoration, Oracle prompt fidelity, and MDS Max for Live downstream proof must remain visible."
+	topic := strings.Repeat("Aether daily-driver recovery review with ceremony and worker routing context. ", 5) + longTail
+	state := oracleStateFile{
+		Topic:             topic,
+		Scope:             "repo",
+		Template:          "architecture-review",
+		Phase:             "survey",
+		Iteration:         1,
+		MaxIterations:     5,
+		TargetConfidence:  90,
+		OverallConfidence: 20,
+	}
+	plan := oraclePlanFile{
+		Questions: []oracleQuestion{{
+			ID:     "q1",
+			Text:   "What should be preserved?",
+			Status: "open",
+		}},
+	}
+
+	capsule := renderOracleContextCapsule(state, plan, "go", []string{"go"}, []string{"cobra"}, plan.Questions[0], 1, ".aether/oracle/responses/q1.json")
+	if !strings.Contains(capsule, "## Full User Topic") {
+		t.Fatalf("context capsule missing full-topic section:\n%s", capsule)
+	}
+	if !strings.Contains(capsule, longTail) {
+		t.Fatalf("context capsule dropped the long-topic acceptance criteria:\n%s", capsule)
+	}
+}
+
+func TestOracleQuestionGenerationUsesLongTopicContext(t *testing.T) {
+	longTail := "Codex command skills and MDS Max for Live downstream proof"
+	topic := strings.Repeat("Aether orchestration recovery context. ", 8) + longTail
+	profile, err := resolveOracleScope(topic, "repo")
+	if err != nil {
+		t.Fatalf("resolveOracleScope: %v", err)
+	}
+
+	questions := buildBriefInformedQuestions(topic, "# Oracle Research Brief\n", "go", profile)
+	joined := ""
+	for _, question := range questions {
+		joined += question.Text + "\n"
+	}
+	if !strings.Contains(joined, longTail) {
+		t.Fatalf("generated questions lost long-topic context:\n%s", joined)
+	}
+}
+
 func TestOracleRunLoopModeResumesInitializedWorkspace(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

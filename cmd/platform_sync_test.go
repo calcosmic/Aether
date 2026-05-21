@@ -128,6 +128,41 @@ func TestSyncCodexSkillShimsPrunesFullMirrorAndPreservesCustom(t *testing.T) {
 	}
 }
 
+func TestDevPlatformHomeSyncRequiresExplicitOptIn(t *testing.T) {
+	sourceDir := t.TempDir()
+	homeDir := t.TempDir()
+	for _, rel := range []string{
+		filepath.Join(".claude", "commands", "ant"),
+		filepath.Join(".claude", "agents", "ant"),
+		filepath.Join(".opencode", "commands", "ant"),
+		filepath.Join(".opencode", "agents"),
+		filepath.Join(".codex", "agents"),
+	} {
+		if err := os.MkdirAll(filepath.Join(sourceDir, rel), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+	}
+
+	results, errors := syncPlatformHomeAssets(sourceDir, homeDir, channelDev, false)
+	if len(errors) > 0 {
+		t.Fatalf("dev default sync returned errors: %v", errors)
+	}
+	if len(results) != 1 || results[0]["dest"] != "skipped" {
+		t.Fatalf("dev default should skip platform homes, got %#v", results)
+	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", "aether-plan", "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("dev default should not write Codex command shims, stat err: %v", err)
+	}
+
+	results, errors = syncPlatformHomeAssets(sourceDir, homeDir, channelDev, true)
+	if len(errors) > 0 {
+		t.Fatalf("dev opt-in sync returned errors: %v", errors)
+	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", "aether-plan", "SKILL.md")); err != nil {
+		t.Fatalf("dev opt-in should write Codex command shim: %v; results=%#v", err, results)
+	}
+}
+
 func TestPruneShippedFromUserSkillsDirRemovesOnlyExactHubMatches(t *testing.T) {
 	tmpDir := t.TempDir()
 	hubSystem := filepath.Join(tmpDir, "system")

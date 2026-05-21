@@ -272,6 +272,7 @@
     "bootstrap-system",
     "build",
     "build-finalize",
+    "build-reconcile",
     "bump-version",
     "cache-clean",
     "cache-clean-stale",

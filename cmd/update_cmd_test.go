@@ -334,7 +334,7 @@ func TestSyncPlatformHomeAssetsFromHubRefreshesGlobalPlatformHomes(t *testing.T)
 		t.Fatalf("write custom OpenCode home command: %v", err)
 	}
 
-	results, errors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channelStable)
+	results, errors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channelStable, false)
 	if len(errors) > 0 {
 		t.Fatalf("syncPlatformHomeAssetsFromHub errors: %v", errors)
 	}

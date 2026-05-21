@@ -68,6 +68,66 @@ func TestDiscussCreatesClarificationQuestions(t *testing.T) {
 	}
 }
 
+func TestDiscussIncludesCodebaseAwareQuestionWhenRepoContextExists(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	if err := os.MkdirAll(filepath.Join(root, "cmd"), 0755); err != nil {
+		t.Fatalf("mkdir cmd: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/discuss\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM scratch\n"), 0644); err != nil {
+		t.Fatalf("write Dockerfile: %v", err)
+	}
+
+	goal := "Refactor the architecture and improve test coverage"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 0,
+		ColonyDepth:  "light",
+		Plan:         colony.Plan{},
+	})
+
+	rootCmd.SetArgs([]string{"discuss"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("discuss returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	questions := result["questions"].([]interface{})
+	if len(questions) != 3 {
+		t.Fatalf("default discuss questions = %d, want 3", len(questions))
+	}
+	hasAnalyze := false
+	for _, raw := range questions {
+		question := raw.(map[string]interface{})
+		source, _ := question["source"].(string)
+		if strings.HasPrefix(source, analyzeSourcePrefix) {
+			hasAnalyze = true
+			break
+		}
+	}
+	if !hasAnalyze {
+		t.Fatalf("expected at least one codebase-aware analyze question, got %#v", questions)
+	}
+}
+
 func TestDiscussVisualPendingQuestionsAvoidsWorkerTheatre(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

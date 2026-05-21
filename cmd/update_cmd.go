@@ -47,6 +47,7 @@ func init() {
 	updateCmd.Flags().String("binary-version", "", "Binary version to download (default: resolved installed version)")
 	updateCmd.Flags().Bool("dry-run", false, "Show what would be updated without making changes")
 	updateCmd.Flags().Bool("force", false, "Overwrite modified companion files and remove stale ones")
+	updateCmd.Flags().Bool("sync-platform-homes", false, "For dev channel, also sync global Claude/OpenCode/Codex home assets")
 
 	rootCmd.AddCommand(updateCmd)
 }
@@ -61,6 +62,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
+	syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
 
 	// Check hub exists
 	hubDir := resolveHubPathForHome(homeDir, channel)
@@ -149,7 +151,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			})
 			return nil
 		}
-		platformResults, platformErrors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channel)
+		platformResults, platformErrors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channel, syncPlatformHomes)
 		syncResult.details = append(syncResult.details, platformResults...)
 		for _, entry := range platformResults {
 			syncResult.copied += intValue(entry["copied"])
