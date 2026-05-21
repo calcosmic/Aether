@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-20)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** v1.23 Daily Driver Reliability -- Phase 147: Critical Test Coverage
+**Current focus:** v1.23 Daily Driver Reliability -- Phase 149: Queen Execution Policy
 
 ## Current Position
 
-Phase: 4 of 7 (Learning and Workflow Restoration)
+Phase: 5 of 7 (Queen Execution Policy)
 Plan: 4 plans ready
 Status: Ready to execute
 Last activity: 2026-05-21
 
-Progress: [###       ] 43%
+Progress: [####      ] 57%
 
 ## Performance Metrics
 

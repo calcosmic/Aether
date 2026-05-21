@@ -24,7 +24,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	required := []string{
 		"Use the Go `aether` CLI as the source of truth.",
 		"AETHER_OUTPUT_MODE=visual aether status",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
 		"aether host continue --dry-run --classic-ceremony $ARGUMENTS",
 		"aether host continue --dry-run --verification-depth heavy $ARGUMENTS",
 		"The wrapper is the sole conductor for interactive reviewer spawning",
@@ -40,7 +40,7 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	inOrder := []string{
 		"## Default Continue",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
 		"## Heavy External Review",
 		"aether host continue --dry-run --classic-ceremony $ARGUMENTS",
 		"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
@@ -113,7 +113,7 @@ func TestContinueWrapperSourcesUseFastDevContinue(t *testing.T) {
 		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	command := "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
+	command := "AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS"
 	paths := []string{
 		filepath.Join(repoRoot, ".aether", "commands", "continue.yaml"),
 		filepath.Join(repoRoot, ".claude", "commands", "ant-continue.md"),

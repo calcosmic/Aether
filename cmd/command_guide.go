@@ -327,7 +327,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			finalizerCompletionContractStep("continue"),
 			"For heavy external review, after each terminal result, render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <approved temp worker result JSON>`.",
 		},
-		RunCommand: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+		RunCommand: "AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
 		PostSteps: []string{
 			"For heavy external review, after `continue-finalize` succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file <approved temp completion JSON>`.",
 			"If phase advanced, summarize verification and route to the next `aether build <phase>`.",

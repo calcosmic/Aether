@@ -214,7 +214,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
 				"aether host continue",
 				"result.manifest.continue_manifest",
 				"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",
@@ -520,7 +520,7 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
 				"AETHER_OUTPUT_MODE=visual aether status",
-				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS",
+				"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
 				"aether host continue",
 				"result.manifest.continue_manifest",
 				"AETHER_OUTPUT_MODE=json aether continue-finalize --completion-file",

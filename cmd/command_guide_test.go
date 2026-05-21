@@ -179,7 +179,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether build-finalize",
 		},
 		"continue": {
-			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+			"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
 			"aether host continue --dry-run --classic-ceremony",
 			"Parse `result.manifest.continue_manifest`",
 			"visible live Task/subagent panels",
@@ -262,7 +262,7 @@ func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
 		},
 		"continue": {
 			required: []string{
-				"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+				"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
 				"aether host continue --dry-run --classic-ceremony",
 				"Parse `result.manifest.continue_manifest`",
 				"continue-finalize",
@@ -359,7 +359,7 @@ func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
 			"build-finalize",
 		},
 		"continue": {
-			"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+			"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
 			"aether host continue --dry-run --classic-ceremony",
 			"continue-finalize",
 		},
@@ -441,7 +441,7 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 		"aether host colonize",
 		"aether host plan --depth <choice> --planning-depth <choice>",
 		"aether host build --dry-run <phase>",
-		"AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard",
+		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
 		"aether host continue --dry-run --classic-ceremony",
 		"aether host seal",
 		"aether spawn-log",

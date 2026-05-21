@@ -32,7 +32,7 @@ AETHER_OUTPUT_MODE=visual aether status
 Then run the fast path directly:
 
 ```
-AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS
+AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS
 ```
 
 This is the normal path. Do not ask for a plan-only manifest, spawn wrapper workers, or run `continue-finalize` for default continue.

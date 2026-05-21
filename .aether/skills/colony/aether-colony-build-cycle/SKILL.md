@@ -197,7 +197,7 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
 Default path:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard <args>
+AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard <args>
 ```
 
 Use external review orchestration only when the user explicitly requested

@@ -2,7 +2,7 @@ name: ant-continue
 description: "👁️ Verify build work, extract learnings, and advance the colony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  default_command: "AETHER_OUTPUT_MODE=visual aether continue --skip-watchers --verification-depth standard $ARGUMENTS"
+  default_command: "AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS"
   manifest_command: "aether host continue --dry-run --classic-ceremony $ARGUMENTS"
   finalizer_command: "aether continue-finalize --completion-file <completion_file>"
   contract: ".aether/docs/wrapper-host-contract.md"
@@ -55,9 +55,9 @@ wrapper_additions:
     6. When signal housekeeping appears, explain what expired, what remained active, and what that means for the next phase or final seal without diffing pheromone files directly.
   verification_depth_ceremony: |
     Verification depth controls how thorough the continue review is. Three levels:
-    - light: Skip all review agents (fastest, minimal safety net)
-    - standard: Probe-only review (default, watcher + probe coverage)
-    - heavy: Full quality gauntlet (gatekeeper + auditor + probe)
+    - light: Watcher only (fastest, minimal safety net; max 3 workers)
+    - standard: Watcher + Probe (default; max 4 workers)
+    - heavy: Watcher + Gatekeeper + Auditor + Probe (full quality gauntlet; max 6 workers)
     The default is "standard" for intermediate phases. Final phases default to "heavy" when depth is automatic.
     Users can override any automatic depth, including final phases, with --verification-depth <light|standard|heavy>.
     Users who want the older visible review ritual can say --classic-ceremony; that asks the TS host for a heavy-review manifest (via --dry-run) and the wrapper spawns reviewers from that manifest before calling continue-finalize.
