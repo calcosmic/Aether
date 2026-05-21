@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1633,5 +1634,271 @@ func TestStatusDashboard_OmitsGateSectionWhenNoResults(t *testing.T) {
 	output := buf.String()
 	if strings.Contains(output, "G A T E") {
 		t.Errorf("expected no Gate Status section when no gate-results file, got:\n%s", output)
+	}
+}
+
+func TestStatusReconciliationClean(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	// Initialize git so detectUnreconciledChanges can run
+	if err := exec.Command("git", "init").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.email", "test@aether").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.name", "Test").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	// Ignore .aether/ so it doesn't show as untracked
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".aether/\n"), 0644); err != nil {
+		t.Fatalf("write gitignore: %v", err)
+	}
+	// Commit existing files so working tree is clean
+	if err := exec.Command("git", "add", ".").Run(); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := exec.Command("git", "commit", "-m", "initial").Run(); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
+
+	goal := "Clean working tree"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Phase 1",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	// Seed build claims that match the current files so nothing is unreconciled
+	claims := codexBuildClaims{
+		BuildPhase:    1,
+		FilesCreated:  []string{"go.mod", "main.go", "main_test.go"},
+		FilesModified: []string{},
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("save claims: %v", err)
+	}
+
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "Reconciliation") {
+		t.Errorf("expected no Reconciliation section for clean working tree, got:\n%s", output)
+	}
+}
+
+func TestStatusReconciliationUnreconciled(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	// Initialize git
+	if err := exec.Command("git", "init").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.email", "test@aether").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.name", "Test").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	// Ignore .aether/ so it doesn't show as untracked
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".aether/\n"), 0644); err != nil {
+		t.Fatalf("write gitignore: %v", err)
+	}
+	if err := exec.Command("git", "add", ".").Run(); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := exec.Command("git", "commit", "-m", "initial").Run(); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
+
+	// Create an uncommitted file not in any worker result
+	if err := os.WriteFile(filepath.Join(root, "unreconciled.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write unreconciled file: %v", err)
+	}
+
+	goal := "Unreconciled changes"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Phase 1",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	// Seed build claims that do NOT include the new file
+	claims := codexBuildClaims{
+		BuildPhase:    1,
+		FilesCreated:  []string{"go.mod", "main.go", "main_test.go"},
+		FilesModified: []string{},
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("save claims: %v", err)
+	}
+
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "R E C O N C I L I A T I O N") {
+		t.Fatalf("expected Reconciliation section for unreconciled changes, got:\n%s", output)
+	}
+	if !strings.Contains(output, "unreconciled.go") {
+		t.Errorf("expected unreconciled.go in Reconciliation section, got:\n%s", output)
+	}
+	if !strings.Contains(output, "build-reconcile") {
+		t.Errorf("expected build-reconcile recommendation, got:\n%s", output)
+	}
+}
+
+func TestStatusReconciliationJSON(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+
+	if err := exec.Command("git", "init").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.email", "test@aether").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	if err := exec.Command("git", "config", "user.name", "Test").Run(); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".aether/\n"), 0644); err != nil {
+		t.Fatalf("write gitignore: %v", err)
+	}
+	if err := exec.Command("git", "add", ".").Run(); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := exec.Command("git", "commit", "-m", "initial").Run(); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "orphan.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write orphan file: %v", err)
+	}
+
+	goal := "JSON reconciliation"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Phase 1",
+					Status: colony.PhaseInProgress,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Build", Status: colony.TaskInProgress}},
+				},
+			},
+		},
+	})
+
+	claims := codexBuildClaims{
+		BuildPhase:    1,
+		FilesCreated:  []string{"go.mod", "main.go", "main_test.go"},
+		FilesModified: []string{},
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("save claims: %v", err)
+	}
+
+	forceJSONOutputModeForTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+
+	rootCmd.SetArgs([]string{"status"})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status returned error: %v", err)
+	}
+
+	var envelope map[string]interface{}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &envelope); err != nil {
+		t.Fatalf("status JSON not parseable: %v\n%s", err, buf.String())
+	}
+	result := envelope["result"].(map[string]interface{})
+	recon, ok := result["reconciliation"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected reconciliation in JSON result, got: %v", result)
+	}
+	if recon["has_unreconciled_changes"] != true {
+		t.Errorf("expected has_unreconciled_changes=true, got: %v", recon["has_unreconciled_changes"])
+	}
+	changedFiles, ok := recon["changed_files"].([]interface{})
+	if !ok || len(changedFiles) == 0 {
+		t.Errorf("expected changed_files array, got: %v", recon["changed_files"])
+	}
+	found := false
+	for _, f := range changedFiles {
+		if f == "orphan.go" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected orphan.go in changed_files, got: %v", changedFiles)
 	}
 }

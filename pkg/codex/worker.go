@@ -596,13 +596,39 @@ waitLoop:
 
 	claims, parseErr := ParseWorkerOutput(string(lastMessage))
 	if parseErr != nil {
+		// Before reporting "no JSON found", check if the raw output contains a
+		// provider error message (e.g., auth failure printed to stdout).
+		combinedOutput := rawOutput + "\n" + string(lastMessage)
+		if providerClass := classifyProviderError(combinedOutput); providerClass != "" {
+			msg := providerErrorMessage(providerClass)
+			if msg != "" {
+				return WorkerResult{
+					WorkerName: config.WorkerName,
+					Caste:      config.Caste,
+					TaskID:     config.TaskID,
+					Status:     "failed",
+					Duration:   duration,
+					RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(combinedOutput)),
+					Error:      fmt.Errorf("provider error: %s: %s", providerClass, msg),
+				}, nil
+			}
+			return WorkerResult{
+				WorkerName: config.WorkerName,
+				Caste:      config.Caste,
+				TaskID:     config.TaskID,
+				Status:     "failed",
+				Duration:   duration,
+				RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(combinedOutput)),
+				Error:      fmt.Errorf("provider error: %s", providerClass),
+			}, nil
+		}
 		return WorkerResult{
 			WorkerName: config.WorkerName,
 			Caste:      config.Caste,
 			TaskID:     config.TaskID,
 			Status:     "failed",
 			Duration:   duration,
-			RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(rawOutput + "\n" + string(lastMessage))),
+			RawOutput:  sanitizeWorkerDiagnosticOutput(strings.TrimSpace(combinedOutput)),
 			Error:      classifyWorkerFinalMessageError("parse worker output", parseErr, running.Observed()),
 		}, nil
 	}
@@ -1218,7 +1244,87 @@ func combinedWorkerOutput(stdout, stderr string) string {
 	return strings.TrimSpace(strings.TrimSpace(stdout) + "\n" + strings.TrimSpace(stderr))
 }
 
+// classifyProviderError scans stderr/stdout text for known provider error patterns.
+// It returns a user-friendly classification string if a pattern matches, or ""
+// if the error is not recognized as a provider error.
+//
+// Categories:
+//   - auth failure: authentication, API key, 401, unauthorized
+//   - rate limited: rate limit, 429, too many requests, throttled
+//   - unavailable: model not found, model unavailable, 503, overloaded, service unavailable
+//   - context exceeded: context length, token limit, too long, maximum context
+func classifyProviderError(text string) string {
+	text = strings.ToLower(text)
+
+	// Auth failures
+	if strings.Contains(text, "authentication") ||
+		strings.Contains(text, "unauthorized") ||
+		strings.Contains(text, "api key") ||
+		strings.Contains(text, "401") ||
+		strings.Contains(text, "invalid key") ||
+		strings.Contains(text, "access denied") {
+		return "provider auth failure"
+	}
+
+	// Rate limits
+	if strings.Contains(text, "rate limit") ||
+		strings.Contains(text, "429") ||
+		strings.Contains(text, "too many requests") ||
+		strings.Contains(text, "throttled") ||
+		strings.Contains(text, "quota exceeded") {
+		return "rate limited"
+	}
+
+	// Provider unavailability
+	if strings.Contains(text, "model not found") ||
+		strings.Contains(text, "model unavailable") ||
+		strings.Contains(text, "unavailable") ||
+		strings.Contains(text, "503") ||
+		strings.Contains(text, "overloaded") ||
+		strings.Contains(text, "service unavailable") ||
+		strings.Contains(text, "temporary error") ||
+		strings.Contains(text, "internal server error") {
+		return "provider unavailable"
+	}
+
+	// Context length exceeded
+	if strings.Contains(text, "context length") ||
+		strings.Contains(text, "token limit") ||
+		strings.Contains(text, "maximum context") ||
+		strings.Contains(text, "too long for model") ||
+		strings.Contains(text, "exceeds maximum") {
+		return "context exceeded"
+	}
+
+	return ""
+}
+
+// providerErrorMessage returns a user-friendly message for a classified provider error.
+func providerErrorMessage(classification string) string {
+	switch classification {
+	case "provider auth failure":
+		return "Provider authentication failed. Check your API key and try again."
+	case "rate limited":
+		return "Rate limited by provider. Wait a moment and retry."
+	case "provider unavailable":
+		return "Provider temporarily unavailable. Try again later."
+	case "context exceeded":
+		return "Input too long for provider context window. Reduce prompt size and retry."
+	default:
+		return ""
+	}
+}
+
 func classifyWorkerExecutionError(err error, stderr string, runningObserved bool) error {
+	// First: check if this is a known provider error before generic classification
+	if providerClass := classifyProviderError(stderr); providerClass != "" {
+		msg := providerErrorMessage(providerClass)
+		if msg != "" {
+			return fmt.Errorf("provider error: %s: %s", providerClass, msg)
+		}
+		return fmt.Errorf("provider error: %s", providerClass)
+	}
+
 	detail := sanitizeWorkerDiagnosticOutput(stderr)
 	prefix := "codex exec failed"
 	if !runningObserved {

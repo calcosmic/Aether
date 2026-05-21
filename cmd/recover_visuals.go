@@ -176,6 +176,8 @@ func recoverNextStep(issues []HealthIssue) string {
 			return "Run `aether colonize` to regenerate survey data."
 		case "partial_phase":
 			return "Run `aether continue` to advance the colony."
+		case "unreconciled_worker_changes":
+			return "Run `aether build-reconcile` to record changes."
 		default:
 			return "Review the warnings above."
 		}

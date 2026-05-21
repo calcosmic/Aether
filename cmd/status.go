@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -151,6 +152,141 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 	}
 
 	return warnings
+}
+
+// ---------------------------------------------------------------------------
+// Reconciliation: unreconciled worker changes
+// ---------------------------------------------------------------------------
+
+// unreconciledChangesResult holds the outcome of comparing git working tree
+// changes against worker-reported files.
+type unreconciledChangesResult struct {
+	HasUnreconciledChanges bool     `json:"has_unreconciled_changes"`
+	ChangedFiles           []string `json:"changed_files,omitempty"`
+	Recommendation         string   `json:"recommendation,omitempty"`
+}
+
+// detectUnreconciledChanges compares the current git working tree against
+// files recorded in the latest build claims and manifest dispatches.
+// If changed files exist that are NOT in any worker result, they are flagged.
+func detectUnreconciledChanges(s *storage.Store, state *colony.ColonyState) unreconciledChangesResult {
+	result := unreconciledChangesResult{}
+	if s == nil {
+		return result
+	}
+
+	// a. Run git status --short in the repo root
+	root := resolveAetherRoot()
+	cmd := exec.Command("git", "-C", root, "status", "--short")
+	out, err := cmd.Output()
+	if err != nil {
+		// Not a git repo or git not available -- nothing to reconcile
+		return result
+	}
+
+	// b. Collect modified/added/deleted files
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	var changedFiles []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) < 3 {
+			continue
+		}
+		// git status --short format: XY <path> or XY <path> -> <origpath>
+		// The path starts at index 3
+		path := strings.TrimSpace(line[2:])
+		if path == "" {
+			continue
+		}
+		// Handle rename format: "R  old -> new"
+		if strings.Contains(path, " -> ") {
+			parts := strings.Split(path, " -> ")
+			if len(parts) == 2 {
+				changedFiles = append(changedFiles, strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]))
+				continue
+			}
+		}
+		changedFiles = append(changedFiles, path)
+	}
+	if len(changedFiles) == 0 {
+		return result
+	}
+
+	// c. Gather all files reported by workers (build claims + manifest dispatches)
+	recorded := make(map[string]bool)
+
+	// From last-build-claims.json
+	claims, claimsOk := loadCodexBuildClaims()
+	if claimsOk {
+		for _, f := range claims.FilesCreated {
+			recorded[strings.TrimSpace(f)] = true
+		}
+		for _, f := range claims.FilesModified {
+			recorded[strings.TrimSpace(f)] = true
+		}
+		for _, f := range claims.TestsWritten {
+			recorded[strings.TrimSpace(f)] = true
+		}
+		for _, tc := range claims.TaskClaims {
+			for _, f := range tc.FilesCreated {
+				recorded[strings.TrimSpace(f)] = true
+			}
+			for _, f := range tc.FilesModified {
+				recorded[strings.TrimSpace(f)] = true
+			}
+			for _, f := range tc.TestsWritten {
+				recorded[strings.TrimSpace(f)] = true
+			}
+		}
+	}
+
+	// From current phase manifest dispatches (if state available)
+	if state != nil && state.CurrentPhase > 0 {
+		manifest := loadCodexContinueManifest(state.CurrentPhase)
+		if manifest.Present {
+			for _, d := range manifest.Data.Dispatches {
+				for _, f := range d.Outputs {
+					recorded[strings.TrimSpace(f)] = true
+				}
+			}
+		}
+	}
+
+	// d. Compare: are changed files listed in any worker result?
+	var unreconciled []string
+	for _, f := range changedFiles {
+		if !recorded[f] {
+			unreconciled = append(unreconciled, f)
+		}
+	}
+
+	if len(unreconciled) > 0 {
+		result.HasUnreconciledChanges = true
+		result.ChangedFiles = unreconciled
+		result.Recommendation = "Run `aether build-reconcile` to record changes"
+	}
+
+	return result
+}
+
+// renderReconciliationSection renders the reconciliation block for visual mode.
+// Returns empty string when there are no unreconciled changes.
+func renderReconciliationSection(result unreconciledChangesResult) string {
+	if !result.HasUnreconciledChanges {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("⚠️", "Reconciliation"))
+	b.WriteString(visualDivider)
+	fmt.Fprintf(&b, "%d unreconciled file change(s) not recorded by any worker\n", len(result.ChangedFiles))
+	for _, f := range result.ChangedFiles {
+		fmt.Fprintf(&b, "  - %s\n", f)
+	}
+	if result.Recommendation != "" {
+		fmt.Fprintf(&b, "  %s\n", result.Recommendation)
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 // Warnings are visual-mode only. JSON output uses structured colony state data.
@@ -535,6 +671,12 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		}
 	}
 
+	// Reconciliation section (JSON mode)
+	recon := detectUnreconciledChanges(s, &state)
+	if recon.HasUnreconciledChanges {
+		result["reconciliation"] = recon
+	}
+
 	return result
 }
 
@@ -778,6 +920,12 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 			b.WriteString(guidance.ReportPath)
 			b.WriteString("\n")
 		}
+	}
+
+	// Reconciliation section (visual mode)
+	recon := detectUnreconciledChanges(s, &state)
+	if reconSection := renderReconciliationSection(recon); reconSection != "" {
+		b.WriteString(reconSection)
 	}
 
 	if totalInstincts > 0 {
