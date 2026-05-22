@@ -1,0 +1,23 @@
+model_routing:
+  default_provider: "anthropic"
+  fallback_providers:
+    - "openai"
+  routing_rules:
+    - agent_role: "builder"
+      provider: "anthropic"
+      model: "claude-opus-4"
+    - agent_role: "watcher"
+      provider: "anthropic"
+      model: "claude-sonnet-4"
+
+memory_rules:
+  max_learnings: 100
+  auto_promote_threshold: 0.75
+
+skill_creation:
+  allowed: true
+  auto_approve: false
+
+safety_gates:
+  security_scan: true
+  quality_gate: true

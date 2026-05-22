@@ -1,0 +1,8 @@
+id: "builder"
+role: "builder"
+prompt_file: "colony/prompts/builder.md"
+allowed_tools:
+  - "read"
+  - "write"
+  - "edit"
+  - "bash"

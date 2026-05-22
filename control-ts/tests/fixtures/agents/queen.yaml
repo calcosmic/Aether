@@ -1,0 +1,7 @@
+id: "queen"
+role: "queen"
+prompt_file: "colony/prompts/queen.md"
+allowed_tools:
+  - "spawn"
+  - "delegate"
+  - "signal"

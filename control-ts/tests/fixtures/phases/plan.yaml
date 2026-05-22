@@ -1,0 +1,24 @@
+id: "plan"
+entry_agent: "scout"
+required_agents:
+  - "scout"
+  - "queen"
+inputs:
+  goal:
+    type: "string"
+    required: true
+  context:
+    type: "object"
+    required: false
+outputs:
+  - "phases"
+  - "roadmap"
+success_criteria:
+  - "Phase list generated"
+  - "Roadmap approved"
+failure_policy: "retry"
+ceremony:
+  stages:
+    - "research"
+    - "draft"
+    - "review"
