@@ -1,0 +1,34 @@
+{
+  "name": "@aether/control",
+  "version": "0.1.0",
+  "description": "TypeScript control plane for Aether colony orchestration",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:schemas": "vitest run tests/schemas"
+  },
+  "dependencies": {
+    "zod": "^4.4.3",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "tsx": "^4.22.3",
+    "@types/node": "^25.9.1"
+  },
+  "keywords": [
+    "aether",
+    "colony",
+    "orchestration",
+    "ai-agent"
+  ],
+  "license": "MIT"
+}
