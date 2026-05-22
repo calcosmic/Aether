@@ -41,9 +41,20 @@ That means:
 - Go = truth (state, gates, finalizers), playbooks = soul, YAML = packaging
 - 512 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
 
-## Current Milestone: v1.24 [Next]
+## Current Milestone: v1.24 Hybrid Architecture Salvage
 
-*Next milestone not yet defined. Run `/gsd-new-milestone` to start planning.*
+**Goal:** Demote Go from "whole organism" to "runtime spine," extract living behaviour into editable Markdown/YAML, and bootstrap a TypeScript control plane — without rewriting from scratch.
+
+**Target features:**
+- Define the architecture boundary (Go vs TS vs config)
+- Create Classic parity checklist as the golden reference
+- Audit Go codebase for behaviour that must move out
+- Build minimal TS control plane that loads agents/phases/prompts from files
+- Extract hardcoded Go prompt/agent/phase logic into editable assets
+- Establish NDJSON event stream as observable truth
+- Validate: one end-to-end flow (init → plan → build → verify → seal) via TS orchestrator
+
+**Key constraint:** Salvage, not rewrite. Preserve Go's runtime reliability. Make behaviour human-editable.
 
 **Previous Milestone: v1.23 Daily Driver Reliability** — Shipped 2026-05-21
 
