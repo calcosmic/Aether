@@ -10,8 +10,8 @@ progress:
   total_phases: 15
   completed_phases: 2
   total_plans: 31
-  completed_plans: 6
-  percent: 19
+  completed_plans: 7
+  percent: 23
 ---
 
 # Project State
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-05-22)
 
 Milestone: v1.24 Hybrid Architecture Salvage — IN PROGRESS
 Phase: 153 (ts-scaffold-and-schemas) — EXECUTING
-Plan: 1 of 2
+Plan: 2 of 2
 Status: Executing Phase 153
-Last activity: 2026-05-22 -- Phase 153 execution started
+Last activity: 2026-05-22 -- Plan 153-01 complete (scaffold + fixtures)
 
-Progress: [                    ] 0%
+Progress: [##                  ] 12%
 
 ## Performance Metrics
 

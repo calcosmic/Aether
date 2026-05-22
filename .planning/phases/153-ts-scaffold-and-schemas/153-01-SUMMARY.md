@@ -130,6 +130,14 @@ None - no external service configuration required.
 - Fixtures exist and are syntactically valid; ready to be consumed by schema tests
 - No blockers
 
+## Self-Check: PASSED
+
+- All 13 created files verified on disk
+- All 5 commits verified in git log
+- npm install completes with 0 vulnerabilities
+- npx tsc --noEmit exits with code 0
+- All YAML and NDJSON fixtures parse successfully
+
 ---
 *Phase: 153-ts-scaffold-and-schemas*
 *Completed: 2026-05-22*

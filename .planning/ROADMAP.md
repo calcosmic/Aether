@@ -180,7 +180,7 @@ Plans:
 **Plans**: 2 plans (ready to execute)
 
 **Wave 1**
-- [ ] 153-01-PLAN.md — Bootstrap `control-ts/` project scaffold with package.json, tsconfig, vitest config, and sample fixtures
+- [x] 153-01-PLAN.md — Bootstrap `control-ts/` project scaffold with package.json, tsconfig, vitest config, and sample fixtures
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 153-02-PLAN.md — Implement Zod schemas for agents, phases, events, policies and validate against fixtures
@@ -273,7 +273,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 150. Runtime Safety | v1.23 | 4/4 | Complete    | 2026-05-21 |
 | 151. End-to-End Proof | v1.23 | 3/3 | Complete    | 2026-05-21 |
 | 152. Boundary & Parity | v1.24 | 2/2 | Complete | 2026-05-22 |
-| 153. TS Scaffold & Schemas | v1.24 | 2/2 | Ready to execute | - |
+| 153. TS Scaffold & Schemas | v1.24 | 1/2 | In progress | 2026-05-22 |
 | 154. Colony Assets | v1.24 | 0/3 | Not started | - |
 | 155. Go Boundary Refactor | v1.24 | 0/2 | Not started | - |
 | 156. TS Control Plane Core | v1.24 | 0/4 | Not started | - |
