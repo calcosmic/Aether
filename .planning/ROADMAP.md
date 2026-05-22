@@ -155,10 +155,113 @@ Plans:
   3. All 9 remaining public utility commands (preferences, pause-colony, resume-colony, data-clean, insert-phase, quick, verify-castes, bump-version, maturity) have test files with executable evidence
 **Plans**: TBD
 
+### Phase 152: Boundary & Parity
+**Goal:** The architecture boundary is documented, Classic behaviour is catalogued, and extraction targets are identified.
+**Depends on:** Phase 151 (v1.23 completion)
+**Requirements:** BOUNDARY-01, BOUNDARY-02, BOUNDARY-03, BOUNDARY-04
+**Success Criteria** (what must be TRUE):
+  1. User can read `docs/ARCHITECTURE_BOUNDARY.md` and understand what stays in Go, what moves to TS, and what moves to Markdown/YAML/JSON
+  2. User can read `docs/PARITY_CLASSIC_VS_GO.md` and see 15+ verifiable items covering init ceremony, queen loads, worker spawn, planner, oracle loop, scout, build wave, watcher, gatekeeper, probe, memory, lessons, skills, events, recovery, and cleanup
+  3. User can read `docs/BEHAVIOUR_EXTRACTION_AUDIT.md` and see every Go symbol containing agent/prompt/phase/skill/memory/ritual/ceremony logic classified as KEEP_IN_GO, MOVE_TO_TS, MOVE_TO_YAML, MOVE_TO_MARKDOWN, MOVE_TO_JSON, DELETE, or UNKNOWN
+  4. The hard rule "Compiled code may execute behaviour, but editable assets must define behaviour" is documented and referenced in all three docs
+**Plans**: 2 plans (all complete)
+
+### Phase 153: TypeScript Scaffold & Schemas
+**Goal:** The TypeScript control plane project exists with validated schemas for all colony asset types.
+**Depends on:** Phase 152
+**Requirements:** CONTROL-01, SCHEMA-01, SCHEMA-02, SCHEMA-03, SCHEMA-04
+**Success Criteria** (what must be TRUE):
+  1. User can run `npm install` in `control-ts/` and the project builds without errors
+  2. User can run `npm run test:schemas` and all Zod schemas validate against sample YAML files
+  3. Agent schema validates id, role, prompt_file, allowed_tools, and confirms referenced prompt files exist
+  4. Phase schema validates id, entry_agent, required_agents, inputs, outputs, success_criteria, failure_policy, and ceremony
+  5. Event schema validates NDJSON shape (type, timestamp, payload)
+  6. Policy schema validates model-routing, memory-rules, skill-creation, and safety-gates
+**Plans**: 2 plans (ready to execute)
+
+**Wave 1**
+- [ ] 153-01-PLAN.md — Bootstrap `control-ts/` project scaffold with package.json, tsconfig, vitest config, and sample fixtures
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 153-02-PLAN.md — Implement Zod schemas for agents, phases, events, policies and validate against fixtures
+
+### Phase 154: Colony Assets
+**Goal:** All living behaviour is defined in editable YAML and Markdown files under `colony/`.
+**Depends on:** Phase 152
+**Requirements:** EXTRACT-01, EXTRACT-02, EXTRACT-03, EXTRACT-04, EXTRACT-05, EXTRACT-06
+**Success Criteria** (what must be TRUE):
+  1. User can run `cat colony/agents/queen.yaml` (and 7 other agent files) and see complete agent definitions
+  2. User can run `cat colony/prompts/builder.md` (and other prompt files) and see complete prompt text
+  3. User can run `cat colony/phases/init.yaml` (and other phase files) and see complete phase definitions
+  4. User can run `cat colony/playbooks/build.md` (and other playbook files) and see complete playbook content
+  5. User can run `cat colony/policies/model-routing.yaml` (and other policy files) and see routing and memory rules
+  6. No agent personality, prompt text, phase ritual, playbook, model-routing policy, or memory rule exists only in compiled Go code
+**Plans**: TBD
+
+### Phase 155: Go Boundary Refactor
+**Goal:** Go runtime loads behaviour from files instead of hardcoded strings, while preserving its role as the runtime spine.
+**Depends on:** Phase 154
+**Requirements:** EXTRACT-07
+**Success Criteria** (what must be TRUE):
+  1. User can run `go test ./...` and all tests pass after extraction (no regressions)
+  2. User can inspect Go source and see that previously hardcoded agent/prompt/phase strings now load from `colony/` or `.aether/` files at runtime
+  3. Go commands that previously embedded behaviour inline now reference file paths with fallback/error text only
+  4. The Go binary still builds and `aether version` reports correctly
+**Plans**: TBD
+
+### Phase 156: TS Control Plane Core
+**Goal:** TypeScript control plane can load colony assets and execute a single phase and a full plan sequence.
+**Depends on:** Phase 153, Phase 155
+**Requirements:** CONTROL-02, CONTROL-03, CONTROL-04, CONTROL-05, CONTROL-06, CONTROL-09, CONTROL-10
+**Success Criteria** (what must be TRUE):
+  1. User can run a script that calls `loadAgents.ts` and sees all 8 core agents loaded from YAML with validated schemas
+  2. User can run a script that calls `loadPhases.ts` and sees all phase definitions loaded from YAML with validated schemas
+  3. User can run a script that calls `assemblePrompt.ts` and sees a complete prompt assembled from Markdown fragments
+  4. User can run `runPhase.ts` with a phase ID and see it load the phase definition, select the entry agent, and emit events
+  5. User can run `executePlan.ts` and see a full sequence execute: init → plan → build → verify → seal
+  6. User can run a script that loads skills from `control-ts/src/skills/` and reads/writes memory via `control-ts/src/memory/`
+**Plans**: TBD
+
+### Phase 157: TS Adapters & Oracle
+**Goal:** Platform adapter stubs and Oracle loop stub exist in TypeScript.
+**Depends on:** Phase 156
+**Requirements:** CONTROL-07, CONTROL-08
+**Success Criteria** (what must be TRUE):
+  1. User can inspect `control-ts/src/adapters/` and see stub implementations for Claude Code, Codex, OpenCode, and MCP
+  2. User can inspect `control-ts/src/oracle/` and see confidence evaluation and research planning stubs
+  3. Adapter stubs have defined interfaces that match the platform dispatch patterns used in the Go runtime
+  4. Oracle stub can accept a query, evaluate confidence, and return a research plan object
+**Plans**: TBD
+
+### Phase 158: Event Stream
+**Goal:** NDJSON event stream is the shared observable truth between Go and TypeScript.
+**Depends on:** Phase 155, Phase 156
+**Requirements:** EVENT-01, EVENT-02, EVENT-03, EVENT-04
+**Success Criteria** (what must be TRUE):
+  1. User can run `tail -f .aether/events/current.ndjson` and see JSON lines appear during colony operations
+  2. Every phase start, agent selection, task planned, worker spawned, tool call, verification result, memory update, and run seal produces a machine-readable JSON line with type, timestamp, and structured payload
+  3. Go runtime writes NDJSON lines instead of prose-only logs where behaviour is observable
+  4. TypeScript control plane can append to and read from the event stream concurrently with Go
+**Plans**: TBD
+
+### Phase 159: End-to-End Acceptance
+**Goal:** The hybrid system is validated: no hardcoded behaviour remains, Classic parity is partially verified, and a demo flow runs end-to-end.
+**Depends on:** Phase 157, Phase 158
+**Requirements:** TEST-01, TEST-02, TEST-03, TEST-04, TEST-05, TEST-06, TEST-07
+**Success Criteria** (what must be TRUE):
+  1. User can run `go test ./...` and all tests pass (no regressions in runtime spine)
+  2. User can run `npm run test:schemas` and all Zod schemas validate against sample YAML files
+  3. User can run `npm run test:control` and the phase runner and orchestrator tests pass
+  4. User can run `npm run aether:control -- --task "create a small test file and verify it"` and see the task complete with events for each lifecycle step
+  5. A grep/audit confirms no prompt text is hardcoded in Go except fallback/error text
+  6. The extraction audit confirms no agent behaviour exists only in Go
+  7. The Classic parity checklist exists and at least 50% of items are verifiable against the new hybrid system
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151
+Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 → 151 → 152 → 153 → 154 → 155 → 156 → 157 → 158 → 159
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -169,3 +272,11 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 149. Queen Execution Policy | v1.23 | 4/4 | Complete    | 2026-05-21 |
 | 150. Runtime Safety | v1.23 | 4/4 | Complete    | 2026-05-21 |
 | 151. End-to-End Proof | v1.23 | 3/3 | Complete    | 2026-05-21 |
+| 152. Boundary & Parity | v1.24 | 2/2 | Complete | 2026-05-22 |
+| 153. TS Scaffold & Schemas | v1.24 | 2/2 | Ready to execute | - |
+| 154. Colony Assets | v1.24 | 0/3 | Not started | - |
+| 155. Go Boundary Refactor | v1.24 | 0/2 | Not started | - |
+| 156. TS Control Plane Core | v1.24 | 0/4 | Not started | - |
+| 157. TS Adapters & Oracle | v1.24 | 0/2 | Not started | - |
+| 158. Event Stream | v1.24 | 0/2 | Not started | - |
+| 159. End-to-End Acceptance | v1.24 | 0/3 | Not started | - |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.24
 milestone_name: Hybrid Architecture Salvage
-status: Phase 152 complete
-stopped_at: Phase 152 execution complete
-last_updated: "2026-05-22T15:05:00.000Z"
-last_activity: 2026-05-22 -- Phase 152 executed (2 plans, 2 waves)
+status: executing
+stopped_at: Phase 152 context gathered
+last_updated: "2026-05-22T22:17:09.987Z"
+last_activity: 2026-05-22 -- Phase 153 execution started
 progress:
   total_phases: 15
   completed_phases: 2
-  total_plans: 29
+  total_plans: 31
   completed_plans: 6
-  percent: 20
+  percent: 19
 ---
 
 # Project State
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Hybrid Architecture Salvage — extract behaviour from Go into editable assets
+**Current focus:** Phase 153 — ts-scaffold-and-schemas
 **Milestone:** v1.24 Hybrid Architecture Salvage
 **Previous milestone:** v1.23 Daily Driver Reliability (shipped 2026-05-21, phases 145-151)
 **Product version:** v1.0.41
 
 ## Current Position
 
-Milestone: v1.24 Hybrid Architecture Salvage — ROADMAP DRAFTED
-Phase: 0 of 8
-Plan: 0/0
-Status: Roadmap created, awaiting user approval
-Last activity: 2026-05-22 -- Roadmap drafted for v1.24
+Milestone: v1.24 Hybrid Architecture Salvage — IN PROGRESS
+Phase: 153 (ts-scaffold-and-schemas) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 153
+Last activity: 2026-05-22 -- Phase 153 execution started
 
 Progress: [                    ] 0%
 
@@ -62,9 +62,9 @@ Progress: [                    ] 0%
 
 ### Pending Todos
 
-- [ ] Approve roadmap
-- [ ] Execute Phase 152: Boundary & Parity
-- [ ] Execute Phase 153: TS Scaffold & Schemas
+- [x] Approve roadmap
+- [x] Execute Phase 152: Boundary & Parity
+- [ ] Execute Phase 153: TS Scaffold & Schemas (planned, 2 plans ready)
 - [ ] Execute Phase 154: Colony Assets
 - [ ] Execute Phase 155: Go Boundary Refactor
 - [ ] Execute Phase 156: TS Control Plane Core

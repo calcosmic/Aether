@@ -98,6 +98,79 @@ func TestCeremonySpawnPlanExplainsQueenSpawnBudget(t *testing.T) {
 	}
 }
 
+func TestCeremonySpawnPlanRendersQueenFrameAndSkillCards(t *testing.T) {
+	manifest := ceremonyTestManifest()
+	manifest["dispatch_mode"] = "plan-only"
+	manifest["execution_owner"] = "host-wrapper"
+	manifest["host_platform"] = "codex"
+	manifest["parallel_mode"] = "in-repo"
+	manifest["review_depth"] = "standard"
+	manifest["colony_depth"] = "balanced"
+	manifest["queen_recommendation"] = map[string]interface{}{
+		"review_depth": "standard",
+		"reason":       "phase has implementation and verification risk",
+	}
+	manifest["queen_execution_policy"] = map[string]interface{}{
+		"spawn_budget": map[string]interface{}{
+			"worker_count":    3,
+			"selected_castes": 2,
+			"selected_reasons": map[string]string{
+				"builder": "selected within Queen spawn budget 4 (implementation risk)",
+				"watcher": "required for verification",
+			},
+		},
+	}
+	manifest["dispatches"] = []map[string]interface{}{
+		{
+			"name":               "Brick-79",
+			"agent_name":         "aether-builder",
+			"caste":              "builder",
+			"task_id":            "2.1",
+			"task":               "CardNode wrapper",
+			"execution_wave":     11,
+			"wave":               1,
+			"skill_count":        2,
+			"colony_skill_count": 1,
+			"domain_skill_count": 1,
+			"matched_skills":     []string{"build-discipline", "typescript"},
+		},
+		{
+			"name":           "Watch-64",
+			"agent_name":     "aether-watcher",
+			"caste":          "watcher",
+			"task_id":        "verify",
+			"task":           "Independent verification",
+			"execution_wave": 12,
+			"stage":          "verification",
+			"skill_section":  "### Skill: test-writer\n\nUse focused tests.\n",
+		},
+	}
+	manifestFile := writeCeremonyTestJSON(t, map[string]interface{}{"dispatch_manifest": manifest})
+
+	_, visual, err := renderCeremonySpawnPlanFromFile("build", manifestFile)
+	if err != nil {
+		t.Fatalf("render spawn plan: %v", err)
+	}
+
+	for _, want := range []string{
+		"👑 Queen Orchestration",
+		"mode=plan-only",
+		"owner=host-wrapper",
+		"platform=codex",
+		"Recommendation: standard — phase has implementation and verification risk",
+		"Skill Cards: 3 matched across 2 worker(s)",
+		"Brick-79: build-discipline, typescript (1 colony, 1 domain)",
+		"Watch-64: test-writer",
+		"aether-builder",
+		"selected within Queen spawn budget",
+		"Skills:2",
+	} {
+		if !strings.Contains(visual, want) {
+			t.Fatalf("rich spawn ceremony missing %q\n%s", want, visual)
+		}
+	}
+}
+
 func TestCeremonyWaveStartRendersCasteBanner(t *testing.T) {
 	manifestFile := writeCeremonyTestJSON(t, map[string]interface{}{
 		"ok": true,

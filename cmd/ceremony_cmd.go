@@ -21,18 +21,25 @@ var ceremonyFlags struct {
 }
 
 type ceremonyDispatch struct {
-	Name          string
-	Caste         string
-	Task          string
-	TaskID        string
-	Stage         string
-	Status        string
-	Summary       string
-	Wave          int
-	ExecutionWave int
-	ToolCount     int
-	Blockers      []string
-	Artifacts     []string
+	Name           string
+	AgentName      string
+	Caste          string
+	Task           string
+	TaskID         string
+	Stage          string
+	Status         string
+	Summary        string
+	Wave           int
+	ExecutionWave  int
+	ToolCount      int
+	Blockers       []string
+	Artifacts      []string
+	SkillCount     int
+	ColonySkills   int
+	DomainSkills   int
+	MatchedSkills  []string
+	SkillSection   string
+	SelectedReason string
 }
 
 type ceremonyExecutionPlan struct {
@@ -150,6 +157,7 @@ func renderCeremonySpawnPlanFromFile(workflow, path string) (map[string]interfac
 		return nil, "", fmt.Errorf("manifest file %s does not contain a lifecycle manifest", path)
 	}
 	dispatches := ceremonyDispatchesFromManifest(manifest)
+	dispatches = enrichCeremonyDispatchesFromManifest(manifest, dispatches)
 	plans := ceremonyExecutionPlansFromManifest(manifest, dispatches)
 	result := map[string]interface{}{
 		"workflow":       normalizedCeremonyWorkflow(workflow),
@@ -170,6 +178,7 @@ func renderCeremonyWaveStartFromFile(workflow, path string, executionWave int) (
 		return nil, "", fmt.Errorf("manifest file %s does not contain a lifecycle manifest", path)
 	}
 	dispatches := ceremonyDispatchesFromManifest(manifest)
+	dispatches = enrichCeremonyDispatchesFromManifest(manifest, dispatches)
 	plans := ceremonyExecutionPlansFromManifest(manifest, dispatches)
 	filtered, plan := ceremonyDispatchesForExecutionWave(dispatches, plans, executionWave)
 	result := map[string]interface{}{
@@ -250,9 +259,16 @@ func renderCeremonySpawnPlan(workflow string, manifest map[string]interface{}, d
 	var b strings.Builder
 	b.WriteString(renderOldStyleCeremonyHeader(commandEmoji(emptyFallback(workflow, "spawn-plan")), "Spawn Plan"))
 	b.WriteString("\n")
+	if queen := renderCeremonyQueenFrame(workflow, manifest, dispatches); queen != "" {
+		b.WriteString(queen)
+		b.WriteString("\n")
+	}
 	writeCeremonyPhaseLine(&b, manifest)
 	if budget := renderCeremonyQueenSpawnBudget(manifest); budget != "" {
 		b.WriteString(budget)
+	}
+	if skills := renderCeremonySkillAssignments(dispatches); skills != "" {
+		b.WriteString(skills)
 	}
 	if len(dispatches) == 0 {
 		b.WriteString("No workers planned.\n")
@@ -336,6 +352,104 @@ func renderCeremonyQueenSpawnBudget(manifest map[string]interface{}) string {
 		b.WriteString("\n")
 	}
 
+	return b.String()
+}
+
+func renderCeremonyQueenFrame(workflow string, manifest map[string]interface{}, dispatches []ceremonyDispatch) string {
+	parts := []string{}
+	for _, item := range []struct {
+		label string
+		value string
+	}{
+		{"workflow", normalizedCeremonyWorkflow(workflow)},
+		{"mode", stringValue(manifest["dispatch_mode"])},
+		{"owner", stringValue(manifest["execution_owner"])},
+		{"platform", stringValue(manifest["host_platform"])},
+		{"parallel", stringValue(manifest["parallel_mode"])},
+		{"review", emptyFallback(stringValue(manifest["review_depth"]), stringValue(manifest["verification_depth"]))},
+		{"depth", stringValue(manifest["colony_depth"])},
+	} {
+		if strings.TrimSpace(item.value) != "" {
+			parts = append(parts, fmt.Sprintf("%s=%s", item.label, item.value))
+		}
+	}
+	if len(parts) == 0 && len(dispatches) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("👑 Queen Orchestration")
+	if len(parts) > 0 {
+		b.WriteString(": ")
+		b.WriteString(strings.Join(parts, " | "))
+	}
+	b.WriteString("\n")
+
+	if recommendation := mapValue(manifest["queen_recommendation"]); len(recommendation) > 0 {
+		reason := strings.TrimSpace(stringValue(recommendation["reason"]))
+		reviewDepth := strings.TrimSpace(stringValue(recommendation["review_depth"]))
+		if reason != "" || reviewDepth != "" {
+			b.WriteString("   Recommendation: ")
+			if reviewDepth != "" {
+				b.WriteString(reviewDepth)
+				if reason != "" {
+					b.WriteString(" — ")
+				}
+			}
+			b.WriteString(reason)
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
+func renderCeremonySkillAssignments(dispatches []ceremonyDispatch) string {
+	total := 0
+	workers := 0
+	for _, dispatch := range dispatches {
+		count := dispatch.SkillCount
+		if count == 0 {
+			count = len(dispatch.MatchedSkills)
+		}
+		if count > 0 || len(dispatch.MatchedSkills) > 0 {
+			total += count
+			workers++
+		}
+	}
+	if workers == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Skill Cards: %d matched across %d worker(s)\n", total, workers)
+	for _, dispatch := range dispatches {
+		count := dispatch.SkillCount
+		if count == 0 {
+			count = len(dispatch.MatchedSkills)
+		}
+		if count == 0 && len(dispatch.MatchedSkills) == 0 {
+			continue
+		}
+		b.WriteString("  ")
+		b.WriteString(casteIdentity(dispatch.Caste))
+		b.WriteString(" ")
+		b.WriteString(emptyFallback(dispatch.Name, "worker"))
+		b.WriteString(": ")
+		if len(dispatch.MatchedSkills) > 0 {
+			b.WriteString(strings.Join(limitStrings(dispatch.MatchedSkills, 4), ", "))
+			if len(dispatch.MatchedSkills) > 4 {
+				fmt.Fprintf(&b, ", ... and %d more", len(dispatch.MatchedSkills)-4)
+			}
+		} else {
+			fmt.Fprintf(&b, "%d skill card(s)", count)
+		}
+		if dispatch.ColonySkills > 0 || dispatch.DomainSkills > 0 {
+			fmt.Fprintf(&b, " (%d colony, %d domain)", dispatch.ColonySkills, dispatch.DomainSkills)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 	return b.String()
 }
 
@@ -795,18 +909,31 @@ func ceremonyDispatchFromMap(raw map[string]interface{}) ceremonyDispatch {
 		artifacts = append(artifacts, stringSliceValue(raw[field])...)
 	}
 	dispatch := ceremonyDispatch{
-		Name:          name,
-		Caste:         stringValue(raw["caste"]),
-		Task:          emptyFallback(stringValue(raw["task"]), stringValue(raw["goal"])),
-		TaskID:        stringValue(raw["task_id"]),
-		Stage:         stringValue(raw["stage"]),
-		Status:        status,
-		Summary:       summary,
-		Wave:          intValue(raw["wave"]),
-		ExecutionWave: intValue(raw["execution_wave"]),
-		ToolCount:     intValue(raw["tool_count"]),
-		Blockers:      stringSliceValue(raw["blockers"]),
-		Artifacts:     uniqueSortedStrings(artifacts),
+		Name:           name,
+		AgentName:      stringValue(raw["agent_name"]),
+		Caste:          stringValue(raw["caste"]),
+		Task:           emptyFallback(stringValue(raw["task"]), stringValue(raw["goal"])),
+		TaskID:         stringValue(raw["task_id"]),
+		Stage:          stringValue(raw["stage"]),
+		Status:         status,
+		Summary:        summary,
+		Wave:           intValue(raw["wave"]),
+		ExecutionWave:  intValue(raw["execution_wave"]),
+		ToolCount:      intValue(raw["tool_count"]),
+		Blockers:       stringSliceValue(raw["blockers"]),
+		Artifacts:      uniqueSortedStrings(artifacts),
+		SkillCount:     intValue(raw["skill_count"]),
+		ColonySkills:   intValue(raw["colony_skill_count"]),
+		DomainSkills:   intValue(raw["domain_skill_count"]),
+		MatchedSkills:  stringSliceValue(raw["matched_skills"]),
+		SkillSection:   stringValue(raw["skill_section"]),
+		SelectedReason: emptyFallback(stringValue(raw["selected_reason"]), stringValue(raw["selection_reason"])),
+	}
+	if len(dispatch.MatchedSkills) == 0 {
+		dispatch.MatchedSkills = skillNamesFromSkillSection(dispatch.SkillSection)
+	}
+	if dispatch.SkillCount == 0 && len(dispatch.MatchedSkills) > 0 {
+		dispatch.SkillCount = len(dispatch.MatchedSkills)
 	}
 	if dispatch.ExecutionWave <= 0 {
 		dispatch.ExecutionWave = dispatch.Wave
@@ -818,6 +945,47 @@ func ceremonyDispatchFromMap(raw map[string]interface{}) ceremonyDispatch {
 		dispatch.Wave = dispatch.ExecutionWave
 	}
 	return dispatch
+}
+
+func enrichCeremonyDispatchesFromManifest(manifest map[string]interface{}, dispatches []ceremonyDispatch) []ceremonyDispatch {
+	if len(dispatches) == 0 {
+		return dispatches
+	}
+	selectedReasons := ceremonyStringMapValue(mapValue(mapValue(manifest["queen_execution_policy"])["spawn_budget"])["selected_reasons"])
+	if len(selectedReasons) == 0 {
+		return dispatches
+	}
+	enriched := append([]ceremonyDispatch(nil), dispatches...)
+	for i := range enriched {
+		if strings.TrimSpace(enriched[i].SelectedReason) != "" {
+			continue
+		}
+		caste := normalizeCasteKey(enriched[i].Caste)
+		if reason := strings.TrimSpace(selectedReasons[caste]); reason != "" {
+			enriched[i].SelectedReason = reason
+		} else if reason := strings.TrimSpace(selectedReasons[enriched[i].Caste]); reason != "" {
+			enriched[i].SelectedReason = reason
+		}
+	}
+	return enriched
+}
+
+func skillNamesFromSkillSection(section string) []string {
+	if strings.TrimSpace(section) == "" {
+		return nil
+	}
+	names := []string{}
+	for _, line := range strings.Split(section, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "### Skill:") {
+			continue
+		}
+		name := strings.TrimSpace(strings.TrimPrefix(line, "### Skill:"))
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return uniqueSortedStrings(names)
 }
 
 func ceremonyExecutionPlansFromManifest(manifest map[string]interface{}, dispatches []ceremonyDispatch) []ceremonyExecutionPlan {
@@ -914,6 +1082,10 @@ func writeCeremonyDispatchLine(b *strings.Builder, dispatch ceremonyDispatch, pr
 	b.WriteString(casteIdentity(dispatch.Caste))
 	b.WriteString(" ")
 	b.WriteString(emptyFallback(dispatch.Name, "worker"))
+	if dispatch.AgentName != "" && dispatch.AgentName != dispatch.Name {
+		b.WriteString("  ")
+		b.WriteString(dispatch.AgentName)
+	}
 	if dispatch.TaskID != "" {
 		b.WriteString("  Task ")
 		b.WriteString(dispatch.TaskID)
@@ -921,6 +1093,14 @@ func writeCeremonyDispatchLine(b *strings.Builder, dispatch ceremonyDispatch, pr
 	if dispatch.Task != "" {
 		b.WriteString("  ")
 		b.WriteString(dispatch.Task)
+	}
+	if dispatch.SelectedReason != "" {
+		b.WriteString("  [")
+		b.WriteString(dispatch.SelectedReason)
+		b.WriteString("]")
+	}
+	if dispatch.SkillCount > 0 {
+		fmt.Fprintf(b, "  Skills:%d", dispatch.SkillCount)
 	}
 	if dispatch.Status != "" {
 		b.WriteString(" ")
