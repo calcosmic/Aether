@@ -196,7 +196,15 @@ Plans:
   4. User can run `cat colony/playbooks/build.md` (and other playbook files) and see complete playbook content
   5. User can run `cat colony/policies/model-routing.yaml` (and other policy files) and see routing and memory rules
   6. No agent personality, prompt text, phase ritual, playbook, model-routing policy, or memory rule exists only in compiled Go code
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+- [ ] 154-01-PLAN.md — Create all 27 agent YAMLs and prompt Markdowns, expand AgentSchema to 27 roles
+- [ ] 154-02-PLAN.md — Create all phase YAMLs and canonical playbook Markdowns
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 154-03-PLAN.md — Create all policy YAMLs, extend PolicySchema, expand policy tests
 
 ### Phase 155: Go Boundary Refactor
 **Goal:** Go runtime loads behaviour from files instead of hardcoded strings, while preserving its role as the runtime spine.
