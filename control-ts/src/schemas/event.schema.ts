@@ -3,7 +3,7 @@ import { z } from "zod";
 export const EventSchema = z.object({
   type: z.string().min(1),
   timestamp: z.string().datetime({ offset: true }),
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
 });
 
 export type ColonyEvent = z.infer<typeof EventSchema>;
