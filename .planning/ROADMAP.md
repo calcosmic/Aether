@@ -177,13 +177,13 @@ Plans:
   4. Phase schema validates id, entry_agent, required_agents, inputs, outputs, success_criteria, failure_policy, and ceremony
   5. Event schema validates NDJSON shape (type, timestamp, payload)
   6. Policy schema validates model-routing, memory-rules, skill-creation, and safety-gates
-**Plans**: 2 plans (ready to execute)
+**Plans**: 2 plans (complete)
 
 **Wave 1**
 - [x] 153-01-PLAN.md — Bootstrap `control-ts/` project scaffold with package.json, tsconfig, vitest config, and sample fixtures
 
-**Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 153-02-PLAN.md — Implement Zod schemas for agents, phases, events, policies and validate against fixtures
+**Wave 2**
+- [x] 153-02-PLAN.md — Implement Zod schemas for agents, phases, events, policies and validate against fixtures
 
 ### Phase 154: Colony Assets
 **Goal:** All living behaviour is defined in editable YAML and Markdown files under `colony/`.
