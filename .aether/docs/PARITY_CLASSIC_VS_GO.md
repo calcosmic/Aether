@@ -1,7 +1,7 @@
 # Classic Parity Checklist: Classic v5.4.0 vs Current Go Runtime
 
 > **Version:** v1.24
-> **Last Updated:** 2026-05-22
+> **Last Updated:** 2026-05-24
 > **Classic Baseline:** v5.4.0
 > **Applies to:** Phases 152-159
 
@@ -29,6 +29,19 @@ Each row uses five columns:
 
 **Decision rule:** When Classic and Go disagree, the user decides per item (D-06). There is no blanket "Classic wins" or "Go wins." Each behaviour is evaluated on its own merit.
 
+### Counting Verifiable Items
+
+To determine whether the parity checklist meets the "at least 50% verifiable" threshold (TEST-07), use the following counting method:
+
+| Status | Counts as Verifiable? | Reason |
+|--------|----------------------|--------|
+| **MATCH** | Yes | Behaviour matches Classic; can be verified against golden tests |
+| **DEGRADED** | Yes | Behaviour is observable but differs from Classic; still verifiable |
+| **GAP** | No | Behaviour is missing; nothing to verify |
+| **INTENTIONALLY_CHANGED** | No | Behaviour was deliberately altered; not a parity target |
+
+**Threshold:** At least 50% of total checklist items (excluding Known Gaps) must be verifiable.
+
 ---
 
 ## Parity Checklist
@@ -51,6 +64,16 @@ Each row uses five columns:
 | **Events** — Event bus, NDJSON stream, event TTL, pub/sub | Go `eventbus.go` emits events; TTL cleanup in maintenance | DEGRADED | Golden test: events have type, timestamp, payload; manual: NDJSON stream is readable by TS host | Hybrid |
 | **Recovery** — Stuck-state detection (7 classes), auto-repair, resume with full context | Go `recovery_snapshot.go` + `autofix.go`; 7 stuck-state classes detected; resume restores context | MATCH | E2E test: `aether recover` detects and fixes safe issues | Go |
 | **Cleanup** — Data-clean, midden review, session sync, stale file removal | Go `data-clean` command + midden review in `midden_cmds.go`; session freshness checks | MATCH | Test: data-clean removes test artifacts; midden-review groups failures by category | Go |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total checklist items | 15 |
+| Verifiable items (MATCH + DEGRADED) | 12 |
+| Non-verifiable items (GAP + INTENTIONALLY_CHANGED) | 3 |
+| Percentage verifiable | **80%** |
+| Threshold | ≥50% — **PASS** |
 
 ---
 
