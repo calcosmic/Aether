@@ -12,14 +12,22 @@ const (
 	CurrentStreamName = "current.ndjson"
 )
 
-// InitEventStream ensures the events directory exists and returns the path
-// to the current NDJSON stream file.
+// InitEventStream ensures the events directory and current stream file exist,
+// and returns the path to the current NDJSON stream file.
 func InitEventStream() (string, error) {
 	eventsDir := filepath.Join(".aether", EventsDirName)
 	if err := os.MkdirAll(eventsDir, 0755); err != nil {
 		return "", fmt.Errorf("creating events directory: %w", err)
 	}
 	streamPath := filepath.Join(eventsDir, CurrentStreamName)
+	// Ensure the file exists so consumers can tail it immediately.
+	f, err := os.OpenFile(streamPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return "", fmt.Errorf("creating stream file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("closing stream file: %w", err)
+	}
 	return streamPath, nil
 }
 
