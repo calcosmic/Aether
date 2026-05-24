@@ -4,8 +4,8 @@ milestone: v1.24
 milestone_name: Hybrid Architecture Salvage
 status: executing
 stopped_at: Phase 154 context gathered
-last_updated: "2026-05-24T13:35:08.629Z"
-last_activity: 2026-05-24 -- Phase 158 planning complete
+last_updated: "2026-05-24T14:36:35.249Z"
+last_activity: 2026-05-24 -- Phase 158 execution started
 progress:
   total_phases: 15
   completed_phases: 7
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 157 — ts-adapters-oracle
+**Current focus:** Phase 158 — event-stream
 **Milestone:** v1.24 Hybrid Architecture Salvage
 **Previous milestone:** v1.23 Daily Driver Reliability (shipped 2026-05-21, phases 145-151)
 **Product version:** v1.0.41
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-05-22)
 ## Current Position
 
 Milestone: v1.24 Hybrid Architecture Salvage — IN PROGRESS
-Phase: 157 (ts-adapters-oracle) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-05-24 -- Phase 158 planning complete
+Phase: 158 (event-stream) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 158
+Last activity: 2026-05-24 -- Phase 158 execution started
 
 Progress: [######              ] 30%
 
