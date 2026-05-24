@@ -12,7 +12,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:schemas": "vitest run tests/schemas"
+    "test:schemas": "vitest run tests/schemas",
+    "test:control": "vitest run tests/orchestrator tests/agents tests/phases tests/prompts tests/skills tests/memory",
+    "aether:control": "tsx src/cli.ts"
   },
   "dependencies": {
     "zod": "^4.4.3",
