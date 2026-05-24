@@ -286,5 +286,5 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 155. Go Boundary Refactor | v1.24 | 0/2 | Not started | - |
 | 156. TS Control Plane Core | v1.24 | 0/4 | Not started | - |
 | 157. TS Adapters & Oracle | v1.24 | 2/2 | Complete   | 2026-05-24 |
-| 158. Event Stream | v1.24 | 0/2 | Not started | - |
+| 158. Event Stream | v1.24 | 2/3 | In Progress|  |
 | 159. End-to-End Acceptance | v1.24 | 0/3 | Not started | - |
