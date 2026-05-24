@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.24
 milestone_name: Hybrid Architecture Salvage
 status: executing
-stopped_at: Phase 154 context gathered
-last_updated: "2026-05-24T14:36:35.249Z"
-last_activity: 2026-05-24 -- Phase 158 execution started
+stopped_at: Completed 158-02-PLAN.md
+last_updated: "2026-05-24T14:54:45Z"
+last_activity: 2026-05-24 -- Phase 158 plan 02 complete
 progress:
   total_phases: 15
   completed_phases: 7
   total_plans: 45
-  completed_plans: 22
-  percent: 49
+  completed_plans: 23
+  percent: 51
 ---
 
 # Project State
@@ -30,18 +30,18 @@ See: .planning/PROJECT.md (updated 2026-05-22)
 
 Milestone: v1.24 Hybrid Architecture Salvage — IN PROGRESS
 Phase: 158 (event-stream) — EXECUTING
-Plan: 1 of 3
+Plan: 2 of 3 complete
 Status: Executing Phase 158
-Last activity: 2026-05-24 -- Phase 158 execution started
+Last activity: 2026-05-24 -- Phase 158 plan 02 complete
 
-Progress: [######              ] 30%
+Progress: [######              ] 51%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (v1.24)
-- Average duration: -
+- Total plans completed: 1 (v1.24)
+- Average duration: 8 min
 - Total execution time: 0 hours
 
 **By Phase:**
@@ -59,6 +59,9 @@ Progress: [######              ] 30%
 - File-backed memory is sufficient (vector backend deferred)
 - Terminal + NDJSON is sufficient (web UI deferred)
 - Local-only for now (federation deferred)
+- Go EventPayload uses map[string]interface{} for flexibility while TS uses discriminated union; both produce identical NDJSON
+- CreateEventStream persists open file with per-write sync for crash safety
+- TailEvents uses polling (100ms) to avoid fsnotify dependency
 
 ### Pending Todos
 
@@ -68,7 +71,7 @@ Progress: [######              ] 30%
 - [x] Execute Phase 154: Colony Assets
 - [x] Execute Phase 155: Go Boundary Refactor
 - [x] Execute Phase 156: TS Control Plane Core
-- [ ] Execute Phase 157: TS Adapters & Oracle
+- [x] Execute Phase 157: TS Adapters & Oracle
 - [ ] Execute Phase 158: Event Stream
 - [ ] Execute Phase 159: End-to-End Acceptance
 
@@ -78,6 +81,6 @@ Progress: [######              ] 30%
 
 ## Session Continuity
 
-Last session: 2026-05-23T14:42:18.599Z
-Stopped at: Phase 154 context gathered
-Resume file: .planning/phases/154-colony-assets/154-CONTEXT.md
+Last session: 2026-05-24T14:54:45Z
+Stopped at: Completed 158-02-PLAN.md
+Resume file: None
