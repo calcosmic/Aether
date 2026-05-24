@@ -48,5 +48,23 @@ export type {
   OracleWorkerResponse,
 } from "./oracle/types.js";
 
+// Events
+export {
+  writeEvent,
+  readEvents,
+  tailEvents,
+  createEventStream,
+  createEventLine,
+  getBuffer,
+  clearBuffer,
+} from "./events/index.js";
+export type {
+  EventType,
+  EventLine,
+  EventPayload,
+  EventWriter,
+  EventReader,
+} from "./events/index.js";
+
 // Utilities
 export { projectRoot } from "./utils/projectRoot.js";
