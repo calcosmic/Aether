@@ -281,10 +281,10 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 150. Runtime Safety | v1.23 | 4/4 | Complete    | 2026-05-21 |
 | 151. End-to-End Proof | v1.23 | 3/3 | Complete    | 2026-05-21 |
 | 152. Boundary & Parity | v1.24 | 2/2 | Complete | 2026-05-22 |
-| 153. TS Scaffold & Schemas | v1.24 | 1/2 | In progress | 2026-05-22 |
-| 154. Colony Assets | v1.24 | 0/3 | Not started | - |
-| 155. Go Boundary Refactor | v1.24 | 0/2 | Not started | - |
-| 156. TS Control Plane Core | v1.24 | 0/4 | Not started | - |
+| 153. TS Scaffold & Schemas | v1.24 | 2/2 | Complete | 2026-05-22 |
+| 154. Colony Assets | v1.24 | 3/3 | Complete | 2026-05-23 |
+| 155. Go Boundary Refactor | v1.24 | 2/2 | Complete | 2026-05-23 |
+| 156. TS Control Plane Core | v1.24 | 4/4 | Complete | 2026-05-23 |
 | 157. TS Adapters & Oracle | v1.24 | 2/2 | Complete   | 2026-05-24 |
-| 158. Event Stream | v1.24 | 2/3 | In Progress|  |
+| 158. Event Stream | v1.24 | 2/3 | In Progress| 2026-05-24 |
 | 159. End-to-End Acceptance | v1.24 | 0/3 | Not started | - |
