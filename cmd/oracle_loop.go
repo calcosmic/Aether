@@ -1541,19 +1541,39 @@ func oraclePhaseDirective(state oracleStateFile, plan oraclePlanFile) string {
 	return buildOraclePhaseDirective(state.Phase)
 }
 
-func buildOraclePhaseDirective(phase string) string {
-	switch strings.ToLower(strings.TrimSpace(phase)) {
-	case "survey":
-		return "Your task is to survey the landscape. Identify key concepts, existing solutions, and open questions. Do not form conclusions yet."
-	case "verify":
-		return "Your task is to verify previous findings. Test assumptions, look for contradictions, and assess confidence levels."
-	case "investigate":
-		return "Your task is to investigate specific questions. Deep-dive into the most promising areas identified in the survey."
-	case "synthesize":
-		return "Your task is to synthesize all findings into a coherent report. Connect dots, resolve contradictions, and formulate recommendations."
-	default:
-		return "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."
+func loadOraclePhaseDirectives() map[string]string {
+	data, err := os.ReadFile("colony/policies/oracle-phase-directives.yaml")
+	if err != nil {
+		return nil
 	}
+	directives := make(map[string]string)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		val = strings.Trim(val, `"`)
+		directives[key] = val
+	}
+	return directives
+}
+
+func buildOraclePhaseDirective(phase string) string {
+	directives := loadOraclePhaseDirectives()
+	key := strings.ToLower(strings.TrimSpace(phase))
+	if d, ok := directives[key]; ok && d != "" {
+		return d
+	}
+	if d, ok := directives["default"]; ok && d != "" {
+		return d
+	}
+	return "Investigate pass: deepen the lowest-confidence unresolved question with new source-backed findings."
 }
 
 func oracleWorkspacePaths(root string) oraclePaths {
