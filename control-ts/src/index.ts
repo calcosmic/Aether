@@ -37,5 +37,16 @@ export type {
   PlatformAdapter,
 } from "./adapters/types.js";
 
+// Oracle
+export { runOracleLoop, createOracleState, createOraclePlan } from "./oracle/index.js";
+export type {
+  OracleState,
+  OraclePlan,
+  OracleQuestion,
+  OracleFinding,
+  OracleSource,
+  OracleWorkerResponse,
+} from "./oracle/types.js";
+
 // Utilities
 export { projectRoot } from "./utils/projectRoot.js";
