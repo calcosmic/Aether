@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-05-22)
 
 Milestone: v1.24 Hybrid Architecture Salvage — IN PROGRESS
 Phase: 157 (ts-adapters-oracle) — EXECUTING
-Plan: 1 of 2
+Plan: 2 of 2
 Status: Executing Phase 157
 Last activity: 2026-05-24 -- Phase 157 execution started
 
