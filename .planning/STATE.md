@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.24
 milestone_name: Hybrid Architecture Salvage
 status: executing
-stopped_at: Phase 153 execution complete
-last_updated: "2026-05-23T15:25:00.000Z"
-last_activity: 2026-05-23 -- Phase 153 execution complete (2 plans, 2 waves)
+stopped_at: Phase 154 context gathered
+last_updated: "2026-05-24T11:25:40.295Z"
+last_activity: 2026-05-24 -- Phase 157 execution started
 progress:
   total_phases: 15
-  completed_phases: 3
-  total_plans: 31
-  completed_plans: 9
-  percent: 29
+  completed_phases: 6
+  total_plans: 42
+  completed_plans: 20
+  percent: 48
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-22)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 153 complete — awaiting verification
+**Current focus:** Phase 157 — ts-adapters-oracle
 **Milestone:** v1.24 Hybrid Architecture Salvage
 **Previous milestone:** v1.23 Daily Driver Reliability (shipped 2026-05-21, phases 145-151)
 **Product version:** v1.0.41
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-05-22)
 ## Current Position
 
 Milestone: v1.24 Hybrid Architecture Salvage — IN PROGRESS
-Phase: 153 (ts-scaffold-and-schemas) — COMPLETE
-Plan: 2 of 2
-Status: Phase 153 execution complete
-Last activity: 2026-05-23 -- Plan 153-02 complete (schemas + tests)
+Phase: 157 (ts-adapters-oracle) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 157
+Last activity: 2026-05-24 -- Phase 157 execution started
 
-Progress: [###                 ] 15%
+Progress: [######              ] 30%
 
 ## Performance Metrics
 
@@ -64,10 +64,10 @@ Progress: [###                 ] 15%
 
 - [x] Approve roadmap
 - [x] Execute Phase 152: Boundary & Parity
-- [ ] Execute Phase 153: TS Scaffold & Schemas (planned, 2 plans ready)
-- [ ] Execute Phase 154: Colony Assets
-- [ ] Execute Phase 155: Go Boundary Refactor
-- [ ] Execute Phase 156: TS Control Plane Core
+- [x] Execute Phase 153: TS Scaffold & Schemas
+- [x] Execute Phase 154: Colony Assets
+- [x] Execute Phase 155: Go Boundary Refactor
+- [x] Execute Phase 156: TS Control Plane Core
 - [ ] Execute Phase 157: TS Adapters & Oracle
 - [ ] Execute Phase 158: Event Stream
 - [ ] Execute Phase 159: End-to-End Acceptance
@@ -78,6 +78,6 @@ Progress: [###                 ] 15%
 
 ## Session Continuity
 
-Last session: 2026-05-22T10:55:47.171Z
-Stopped at: Phase 152 context gathered
-Resume file: .planning/phases/152-boundary-parity/152-CONTEXT.md
+Last session: 2026-05-23T14:42:18.599Z
+Stopped at: Phase 154 context gathered
+Resume file: .planning/phases/154-colony-assets/154-CONTEXT.md

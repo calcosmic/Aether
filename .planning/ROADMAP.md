@@ -285,6 +285,6 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 154. Colony Assets | v1.24 | 0/3 | Not started | - |
 | 155. Go Boundary Refactor | v1.24 | 0/2 | Not started | - |
 | 156. TS Control Plane Core | v1.24 | 0/4 | Not started | - |
-| 157. TS Adapters & Oracle | v1.24 | 0/2 | Not started | - |
+| 157. TS Adapters & Oracle | v1.24 | 1/2 | In Progress|  |
 | 158. Event Stream | v1.24 | 0/2 | Not started | - |
 | 159. End-to-End Acceptance | v1.24 | 0/3 | Not started | - |
