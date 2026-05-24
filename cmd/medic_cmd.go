@@ -175,7 +175,7 @@ func performBasicHealthScan(state colony.ColonyState, opts MedicOptions) []Healt
 func renderNoColonyMedicVisual() string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("medic"), "Colony Health"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("No colony initialized in this repo.\n")
 	b.WriteString(renderNextUp(
 		`Run `+"`aether init \"goal\"`"+` to start a colony.`,
@@ -188,7 +188,7 @@ func renderMedicReport(results []HealthIssue, opts MedicOptions, state *colony.C
 	var b strings.Builder
 
 	b.WriteString(renderBanner(commandEmoji("medic"), "Colony Health"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	// Summary counts
 	criticalCount := 0

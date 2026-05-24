@@ -38,7 +38,7 @@ func checkAndEmitFirstRun(dataDir string) {
 func renderWelcomeBanner() string {
 	var b strings.Builder
 	b.WriteString(renderBanner("\U0001F41C", "Welcome to Aether"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Aether manages your development colony -- a team of AI workers that plan, build, and verify code together.\n")
 	b.WriteString("To get started, set up this repo and create your first colony:\n")
 	b.WriteString("\n")

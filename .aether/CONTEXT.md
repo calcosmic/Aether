@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-20T17:51:24Z |
+| **Last Updated** | 2026-05-23T20:18:24Z |
 | **Current Phase** | 7 |
 | **Phase Name** | Full Release Readiness Verification |
 | **Phase Status** | completed |
@@ -27,7 +27,7 @@ Fix TS host typecheck, resolve double-dispatch, restore ceremony surfaces, and c
 
 ## What's In Progress
 
-Colony sealed
+Pre-compact snapshot (auto): state=COMPLETED phase=7 goal=Fix TS host typecheck, resolve double-dispatch, restore ceremony surfaces, and clean documentation drift task=Full Release Readiness Verification
 
 ---
 
@@ -100,7 +100,7 @@ Colony sealed
 
 ## Next Steps
 
-1. Run `aether entomb`
+1. Run `aether seal`
 2. Run `aether phase --number 7` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 

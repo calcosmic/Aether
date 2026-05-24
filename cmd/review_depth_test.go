@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1714,5 +1716,118 @@ func TestDepthKeysPresentInFreshPlanResultMap(t *testing.T) {
 		if count < 3 {
 			t.Errorf("key %s found %d times in codex_plan.go, expected at least 3 (existing-plan, fresh generation, plan-only)", key, count)
 		}
+	}
+}
+
+// resetReviewDepthPolicyState clears the loaded policy and cache so each test
+// starts fresh.
+func resetReviewDepthPolicyState() {
+	loadedReviewDepthPolicy = nil
+	loadedReviewDepthPolicyOnce = sync.Once{}
+	policyCacheMu.Lock()
+	delete(policyCache, reviewDepthPathOverride)
+	policyCacheMu.Unlock()
+}
+
+func TestReviewDepthLoad_CustomHeavyKeywords(t *testing.T) {
+	resetReviewDepthPolicyState()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "review-depth.yaml")
+	content := `review_depth_version: "2.0"
+heavy_keywords:
+  - customkeyword
+  - anothercustom
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reviewDepthPathOverride = path
+	defer func() { reviewDepthPathOverride = "" }()
+
+	keywords := getHeavyKeywords()
+	if len(keywords) != 2 || keywords[0] != "customkeyword" {
+		t.Errorf("getHeavyKeywords() = %v, want [customkeyword anothercustom]", keywords)
+	}
+	if !phaseHasHeavyKeywords("something with customkeyword inside") {
+		t.Error("expected phaseHasHeavyKeywords to match customkeyword from policy")
+	}
+}
+
+func TestReviewDepthFallback_NoPolicyFile(t *testing.T) {
+	resetReviewDepthPolicyState()
+	reviewDepthPathOverride = filepath.Join(t.TempDir(), "nonexistent.yaml")
+	defer func() { reviewDepthPathOverride = "" }()
+
+	keywords := getHeavyKeywords()
+	if len(keywords) != len(heavyKeywordsFallback) {
+		t.Fatalf("getHeavyKeywords() length = %d, want %d", len(keywords), len(heavyKeywordsFallback))
+	}
+	for i, kw := range keywords {
+		if kw != heavyKeywordsFallback[i] {
+			t.Errorf("keyword[%d] = %q, want %q", i, kw, heavyKeywordsFallback[i])
+		}
+	}
+}
+
+func TestReviewDepthLoad_CustomSmartDefaultReasons(t *testing.T) {
+	resetReviewDepthPolicyState()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "review-depth.yaml")
+	content := `review_depth_version: "2.0"
+smart_default_reasons:
+  high_risk: "custom: security risk"
+  final_phase: "custom: final phase"
+  medium_risk: "custom: high blast radius"
+  early_phase: "custom: early phase"
+  late_phase: "custom: late phase"
+  standard: "custom: standard"
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reviewDepthPathOverride = path
+	defer func() { reviewDepthPathOverride = "" }()
+
+	phase := colony.Phase{ID: 2, Name: "Security audit"}
+	got := renderSmartDepthReason(phase, 5)
+	want := "custom: security risk"
+	if got != want {
+		t.Errorf("renderSmartDepthReason(high risk) = %q, want %q", got, want)
+	}
+
+	phase = colony.Phase{ID: 5, Name: "Final polish"}
+	got = renderSmartDepthReason(phase, 5)
+	want = "custom: final phase"
+	if got != want {
+		t.Errorf("renderSmartDepthReason(final phase) = %q, want %q", got, want)
+	}
+
+	phase = colony.Phase{ID: 3, Name: "Core runtime refactor"}
+	got = renderSmartDepthReason(phase, 5)
+	want = "custom: high blast radius"
+	if got != want {
+		t.Errorf("renderSmartDepthReason(medium risk) = %q, want %q", got, want)
+	}
+}
+
+func TestReviewDepthLoad_KeywordUsedInPhaseHasHeavyKeywords(t *testing.T) {
+	resetReviewDepthPolicyState()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "review-depth.yaml")
+	content := `review_depth_version: "2.0"
+heavy_keywords:
+  - unicornkeyword
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	reviewDepthPathOverride = path
+	defer func() { reviewDepthPathOverride = "" }()
+
+	if !phaseHasHeavyKeywords("phase with unicornkeyword inside") {
+		t.Error("expected phaseHasHeavyKeywords to match unicornkeyword from policy")
+	}
+	if phaseHasHeavyKeywords("plain phase without match") {
+		t.Error("expected phaseHasHeavyKeywords to return false for plain phase")
 	}
 }

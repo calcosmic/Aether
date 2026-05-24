@@ -1,0 +1,6 @@
+# Aether local state - not versioned
+data/
+checkpoints/
+locks/
+dreams/
+oracle/

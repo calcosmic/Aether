@@ -96,7 +96,7 @@ func runRecover(cmd *cobra.Command, args []string) error {
 func renderNoColonyRecoverVisual() string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("recover"), "Colony Recovery"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("No colony initialized in this repo.\n")
 	b.WriteString(renderNextUp(
 		`Run `+"`aether init \"goal\"`"+` to start a colony.`,

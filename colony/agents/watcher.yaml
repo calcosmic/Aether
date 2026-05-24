@@ -1,0 +1,16 @@
+id: watcher
+role: watcher
+prompt_file: colony/prompts/watcher.md
+allowed_tools:
+- read
+- bash
+- grep
+- glob
+- write
+tier: core
+model: sonnet
+color: green
+description: Use this agent when validating implementations, running test suites,
+  checking quality gates, or verifying that built work meets specifications. Spawned
+  by /ant-build and /ant-continue after Builder completes. Also use when independent
+  verification of code correctness, security posture, or test coverage is needed.

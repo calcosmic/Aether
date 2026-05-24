@@ -563,7 +563,7 @@ func syncRunAutopilotState(state colony.ColonyState, opts runCompatibilityOption
 func renderRunCompatibilityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("run"), "Run"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	if dryRun, _ := result["dry_run"].(bool); dryRun {
 		b.WriteString("Autopilot preview only.\n")
@@ -617,7 +617,7 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 func renderOracleCompatibilityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("oracle"), "Oracle"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Mode: ")
 	b.WriteString(emptyFallback(stringValue(result["mode"]), "status"))
 	b.WriteString("\n")

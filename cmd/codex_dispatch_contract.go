@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -21,6 +22,67 @@ var (
 	surveyorDispatchTimeout     = 5 * time.Minute
 	continueReviewTimeout       = 10 * time.Minute
 	continueVerificationTimeout = 15 * time.Minute
+)
+
+// dispatchContractPathOverride allows tests to point at a temporary policy file.
+// When empty, the default colony/policies/dispatch-contract.yaml is used.
+var dispatchContractPathOverride string
+
+// dispatchContractPolicy mirrors the YAML structure for the dispatch contract policy.
+type dispatchContractPolicy struct {
+	ExecutionModels          map[string]string   `yaml:"execution_models"`
+	DeadlinePolicies         map[string]string   `yaml:"deadline_policies"`
+	DependencyBehaviors      map[string]string   `yaml:"dependency_behaviors"`
+	FallbackBehaviors        map[string]string   `yaml:"fallback_behaviors"`
+	FallbackVisibility       map[string][]string `yaml:"fallback_visibility"`
+	ResultCollectionPolicies map[string]string   `yaml:"result_collection_policies"`
+}
+
+// dispatchContractPolicyWrapper matches the top-level YAML key.
+type dispatchContractPolicyWrapper struct {
+	DispatchContract dispatchContractPolicy `yaml:"dispatch_contract"`
+}
+
+var (
+	loadedDispatchPolicy     *dispatchContractPolicy
+	loadedDispatchPolicyOnce sync.Once
+)
+
+// loadDispatchContractPolicy loads the dispatch contract policy from YAML.
+// It caches the result and falls back to nil on any error so callers can use
+// hardcoded defaults.
+func loadDispatchContractPolicy() *dispatchContractPolicy {
+	loadedDispatchPolicyOnce.Do(func() {
+		path := dispatchContractPathOverride
+		if path == "" {
+			path = policyPath("dispatch-contract")
+		}
+		var wrapper dispatchContractPolicyWrapper
+		if err := loadYAMLPolicy(path, &wrapper); err == nil {
+			loadedDispatchPolicy = &wrapper.DispatchContract
+		}
+	})
+	return loadedDispatchPolicy
+}
+
+// Hardcoded fallback strings for dispatch contract fields.
+const (
+	fallbackSurveyExecutionModel         = "1 wave, parallel read-only worker execution"
+	fallbackPlanningExecutionModel       = "2 staged workers, scout then route-setter"
+	fallbackSurveyDeadlinePolicy         = "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets."
+	fallbackPlanningDeadlinePolicy       = "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked."
+	fallbackSurveyDependencyBehavior     = "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher."
+	fallbackPlanningDependencyBehavior   = "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first."
+	fallbackPlanningExtendedDependencyBehavior = "Real worker dispatch requires an authenticated platform dispatcher. Supporting planning castes may contribute evidence, and route-setter finalization is selected by caste identity rather than fixed array position."
+	fallbackSurveyFallbackBehavior       = "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first."
+	fallbackPlanningFallbackBehavior     = "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first."
+	fallbackSurveyResultCollectionPolicy = "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
+	fallbackPlanningResultCollectionPolicy = "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."
+)
+
+var (
+	fallbackSurveyFallbackVisibility   = []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"}
+	fallbackPlanningFallbackVisibility = []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source", "planning_loop"}
 )
 
 func effectivePlanningDispatchTimeout(override time.Duration) time.Duration {
@@ -72,19 +134,46 @@ func surveyDispatchContract() map[string]interface{} {
 }
 
 func surveyDispatchContractWithTimeout(workerTimeout time.Duration) map[string]interface{} {
+	p := loadDispatchContractPolicy()
+	executionModel := fallbackSurveyExecutionModel
+	deadlinePolicy := fallbackSurveyDeadlinePolicy
+	dependencyBehavior := fallbackSurveyDependencyBehavior
+	fallbackBehavior := fallbackSurveyFallbackBehavior
+	fallbackVisibility := append([]string{}, fallbackSurveyFallbackVisibility...)
+	resultCollectionPolicy := fallbackSurveyResultCollectionPolicy
+	if p != nil {
+		if v, ok := p.ExecutionModels["survey"]; ok && v != "" {
+			executionModel = v
+		}
+		if v, ok := p.DeadlinePolicies["survey"]; ok && v != "" {
+			deadlinePolicy = v
+		}
+		if v, ok := p.DependencyBehaviors["survey"]; ok && v != "" {
+			dependencyBehavior = v
+		}
+		if v, ok := p.FallbackBehaviors["survey"]; ok && v != "" {
+			fallbackBehavior = v
+		}
+		if v, ok := p.FallbackVisibility["survey"]; ok && len(v) > 0 {
+			fallbackVisibility = append([]string{}, v...)
+		}
+		if v, ok := p.ResultCollectionPolicies["survey"]; ok && v != "" {
+			resultCollectionPolicy = v
+		}
+	}
 	return codexDispatchContract{
-		ExecutionModel:         "1 wave, parallel read-only worker execution",
+		ExecutionModel:         executionModel,
 		WaveCount:              1,
 		WorkerCount:            len(surveyorSpecs),
 		SharedTimeoutSeconds:   0,
 		WorkerTimeoutSeconds:   int(effectiveSurveyorDispatchTimeout(workerTimeout) / time.Second),
-		DeadlinePolicy:         "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets.",
-		DependencyBehavior:     "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher.",
-		FallbackBehavior:       "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first.",
-		FallbackVisibility:     []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"},
+		DeadlinePolicy:         deadlinePolicy,
+		DependencyBehavior:     dependencyBehavior,
+		FallbackBehavior:       fallbackBehavior,
+		FallbackVisibility:     fallbackVisibility,
 		CoordinationPath:       dataContractPath("spawn-tree.txt"),
 		ResultArtifactPaths:    []string{finalizerCompletionTempPattern},
-		ResultCollectionPolicy: "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files.",
+		ResultCollectionPolicy: resultCollectionPolicy,
 		ArtifactPaths: []string{
 			dataContractPath("survey", "PROVISIONS.md"),
 			dataContractPath("survey", "TRAILS.md"),
@@ -107,19 +196,46 @@ func planningDispatchContract() map[string]interface{} {
 }
 
 func planningDispatchContractWithTimeout(workerTimeout time.Duration) map[string]interface{} {
+	p := loadDispatchContractPolicy()
+	executionModel := fallbackPlanningExecutionModel
+	deadlinePolicy := fallbackPlanningDeadlinePolicy
+	dependencyBehavior := fallbackPlanningDependencyBehavior
+	fallbackBehavior := fallbackPlanningFallbackBehavior
+	fallbackVisibility := append([]string{}, fallbackPlanningFallbackVisibility...)
+	resultCollectionPolicy := fallbackPlanningResultCollectionPolicy
+	if p != nil {
+		if v, ok := p.ExecutionModels["planning"]; ok && v != "" {
+			executionModel = v
+		}
+		if v, ok := p.DeadlinePolicies["planning"]; ok && v != "" {
+			deadlinePolicy = v
+		}
+		if v, ok := p.DependencyBehaviors["planning"]; ok && v != "" {
+			dependencyBehavior = v
+		}
+		if v, ok := p.FallbackBehaviors["planning"]; ok && v != "" {
+			fallbackBehavior = v
+		}
+		if v, ok := p.FallbackVisibility["planning"]; ok && len(v) > 0 {
+			fallbackVisibility = append([]string{}, v...)
+		}
+		if v, ok := p.ResultCollectionPolicies["planning"]; ok && v != "" {
+			resultCollectionPolicy = v
+		}
+	}
 	return codexDispatchContract{
-		ExecutionModel:         "2 staged workers, scout then route-setter",
+		ExecutionModel:         executionModel,
 		WaveCount:              2,
 		WorkerCount:            len(planningWorkerSpecs),
 		SharedTimeoutSeconds:   0,
 		WorkerTimeoutSeconds:   int(effectivePlanningDispatchTimeout(workerTimeout) / time.Second),
-		DeadlinePolicy:         "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked.",
-		DependencyBehavior:     "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first.",
-		FallbackBehavior:       "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first.",
-		FallbackVisibility:     []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source", "planning_loop"},
+		DeadlinePolicy:         deadlinePolicy,
+		DependencyBehavior:     dependencyBehavior,
+		FallbackBehavior:       fallbackBehavior,
+		FallbackVisibility:     fallbackVisibility,
 		CoordinationPath:       dataContractPath("spawn-tree.txt"),
 		ResultArtifactPaths:    []string{finalizerCompletionTempPattern},
-		ResultCollectionPolicy: "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid.",
+		ResultCollectionPolicy: resultCollectionPolicy,
 		ArtifactPaths: []string{
 			dataContractPath("planning", "SCOUT.md"),
 			dataContractPath("planning", "ROUTE-SETTER.md"),
@@ -147,8 +263,21 @@ func planningDispatchContractForDispatches(dispatches []codexPlanningDispatch, w
 	contract["worker_count"] = len(dispatches)
 	contract["wave_count"] = maxWave
 	if len(dispatches) != len(planningWorkerSpecs) {
-		contract["execution_model"] = fmt.Sprintf("%d staged planning workers, scout plus route-setter with supporting castes", len(dispatches))
-		contract["dependency_behavior"] = "Real worker dispatch requires an authenticated platform dispatcher. Supporting planning castes may contribute evidence, and route-setter finalization is selected by caste identity rather than fixed array position."
+		p := loadDispatchContractPolicy()
+		em := fmt.Sprintf("%d staged planning workers, scout plus route-setter with supporting castes", len(dispatches))
+		if p != nil {
+			if v, ok := p.ExecutionModels["planning_extended"]; ok && v != "" {
+				em = fmt.Sprintf(v, len(dispatches))
+			}
+		}
+		contract["execution_model"] = em
+		dep := fallbackPlanningExtendedDependencyBehavior
+		if p != nil {
+			if v, ok := p.DependencyBehaviors["planning_extended"]; ok && v != "" {
+				dep = v
+			}
+		}
+		contract["dependency_behavior"] = dep
 	}
 	return contract
 }
@@ -606,7 +735,7 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 	}
 
 	var b strings.Builder
-	b.WriteString("## Previous Worker Handoffs\n\n")
+	writeSectionHeader(&b, "worker_handoffs", "## Previous Worker Handoffs\n\n")
 	for _, record := range filtered {
 		title := strings.TrimSpace(record.WorkerName)
 		if title == "" {
@@ -615,12 +744,12 @@ func renderWorkerHandoffSection(workflow string, phaseID int, workerName string)
 		if record.TaskID != "" {
 			title += " (" + record.TaskID + ")"
 		}
-		fmt.Fprintf(&b, "### %s\n", title)
+		b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.WorkerHeaderFormat }, "### %s\n", title))
 		if record.Status != "" || record.VerificationStatus != "" {
-			fmt.Fprintf(&b, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown"))
+			b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.StatusFormat }, "- Status: %s; verification: %s\n", firstNonEmpty(record.Status, "unknown"), firstNonEmpty(record.VerificationStatus, "unknown")))
 		}
 		if record.Summary != "" {
-			fmt.Fprintf(&b, "- Summary: %s\n", record.Summary)
+			b.WriteString(fmtOrFallback("worker_handoffs", func(t *sectionTemplate) string { return t.SummaryFormat }, "- Summary: %s\n", record.Summary))
 		}
 		appendHandoffList(&b, "Changed files", record.ChangedFiles)
 		appendHandoffList(&b, "Commands run", record.CommandsRun)

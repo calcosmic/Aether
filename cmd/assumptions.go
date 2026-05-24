@@ -433,7 +433,7 @@ func firstPathLike(values []string) string {
 func renderAssumptionsAnalyzeVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧠", "Assumptions"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Goal: ")
 	b.WriteString(stringValue(result["goal"]))
 	b.WriteString("\n")
@@ -456,7 +456,7 @@ func renderAssumptionsAnalyzeVisual(result map[string]interface{}) string {
 func renderAssumptionListVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧠", "Assumption List"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Goal: ")
 	b.WriteString(emptyFallback(stringValue(result["goal"]), "unknown"))
 	b.WriteString("\n")
@@ -480,7 +480,7 @@ func renderAssumptionListVisual(result map[string]interface{}) string {
 func renderAssumptionValidateVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧠", "Assumption Validate"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Validated: ")
 	b.WriteString(stringValue(result["id"]))
 	b.WriteString("\n")

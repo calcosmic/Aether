@@ -2656,3 +2656,200 @@ func TestCodexVisualParity(t *testing.T) {
 		}
 	})
 }
+
+// --- Visuals Config File Loading Tests (Phase 155-01) ---
+
+func TestVisualsFileLoad(t *testing.T) {
+	tmpDir := t.TempDir()
+	visualsPath := filepath.Join(tmpDir, "visuals.md")
+	content := `---
+visuals_version: "test"
+caste_emoji_map:
+  builder: "TEST_BUILDER_EMOJI"
+  watcher: "TEST_WATCHER_EMOJI"
+---
+`
+	if err := os.WriteFile(visualsPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write visuals.md: %v", err)
+	}
+
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = visualsPath
+	defer func() { visualsPathOverride = "" }()
+
+	got := casteEmoji("builder")
+	if got != "TEST_BUILDER_EMOJI" {
+		t.Errorf("casteEmoji(builder) with file: got %q, want TEST_BUILDER_EMOJI", got)
+	}
+}
+
+func TestVisualsFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = filepath.Join(tmpDir, "nonexistent-visuals.md")
+	defer func() { visualsPathOverride = "" }()
+
+	got := casteEmoji("builder")
+	if got != "🔨" {
+		t.Errorf("casteEmoji(builder) fallback: got %q, want 🔨", got)
+	}
+}
+
+func TestVisualsPartialFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	visualsPath := filepath.Join(tmpDir, "visuals.md")
+	content := `---
+visuals_version: "test"
+caste_emoji_map:
+  builder: "CUSTOM_BUILDER"
+---
+`
+	if err := os.WriteFile(visualsPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write visuals.md: %v", err)
+	}
+
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = visualsPath
+	defer func() { visualsPathOverride = "" }()
+
+	// builder is in file
+	if got := casteEmoji("builder"); got != "CUSTOM_BUILDER" {
+		t.Errorf("casteEmoji(builder) partial: got %q, want CUSTOM_BUILDER", got)
+	}
+	// watcher is not in file — should fall back to hardcoded
+	if got := casteEmoji("watcher"); got != "👁️" {
+		t.Errorf("casteEmoji(watcher) partial fallback: got %q, want 👁️", got)
+	}
+}
+
+func TestVisualsWordmarkLoad(t *testing.T) {
+	tmpDir := t.TempDir()
+	visualsPath := filepath.Join(tmpDir, "visuals.md")
+	content := `---
+visuals_version: "test"
+aether_wordmark: |
+  CUSTOM_WORDMARK_LINE
+---
+`
+	if err := os.WriteFile(visualsPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write visuals.md: %v", err)
+	}
+
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = visualsPath
+	defer func() { visualsPathOverride = "" }()
+
+	got := renderAetherWordmark()
+	if !strings.Contains(got, "CUSTOM_WORDMARK_LINE") {
+		t.Errorf("renderAetherWordmark() did not contain custom wordmark: %q", got)
+	}
+}
+
+func TestVisualsCommandEmoji(t *testing.T) {
+	tmpDir := t.TempDir()
+	visualsPath := filepath.Join(tmpDir, "visuals.md")
+	content := `---
+visuals_version: "test"
+command_emoji_map:
+  init: "CUSTOM_INIT"
+---
+`
+	if err := os.WriteFile(visualsPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write visuals.md: %v", err)
+	}
+
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = visualsPath
+	defer func() { visualsPathOverride = "" }()
+
+	got := commandEmoji("init")
+	if got != "CUSTOM_INIT" {
+		t.Errorf("commandEmoji(init) with file: got %q, want CUSTOM_INIT", got)
+	}
+}
+
+func TestVisualsDeterministicName(t *testing.T) {
+	tmpDir := t.TempDir()
+	visualsPath := filepath.Join(tmpDir, "visuals.md")
+	content := `---
+visuals_version: "test"
+caste_prefixes:
+  builder: ["Alpha", "Beta"]
+default_prefixes: ["Gamma", "Delta"]
+---
+`
+	if err := os.WriteFile(visualsPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write visuals.md: %v", err)
+	}
+
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = visualsPath
+	defer func() { visualsPathOverride = "" }()
+
+	name := deterministicAntName("builder", "test-seed-1")
+	if !strings.HasPrefix(name, "Alpha-") && !strings.HasPrefix(name, "Beta-") {
+		t.Errorf("deterministicAntName(builder) did not use file prefixes: got %q", name)
+	}
+
+	// unknown caste should use file default_prefixes
+	name2 := deterministicAntName("unknown_caste", "test-seed-2")
+	if !strings.HasPrefix(name2, "Gamma-") && !strings.HasPrefix(name2, "Delta-") {
+		t.Errorf("deterministicAntName(unknown_caste) did not use file default prefixes: got %q", name2)
+	}
+}
+
+func TestVisualsCasteLabelAndColor(t *testing.T) {
+	tmpDir := t.TempDir()
+	visualsPath := filepath.Join(tmpDir, "visuals.md")
+	content := `---
+visuals_version: "test"
+caste_label_map:
+  builder: "CustomBuilder"
+caste_color_map:
+  builder: "99"
+---
+`
+	if err := os.WriteFile(visualsPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write visuals.md: %v", err)
+	}
+
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = visualsPath
+	defer func() { visualsPathOverride = "" }()
+
+	if got := casteLabel("builder"); got != "CustomBuilder" {
+		t.Errorf("casteLabel(builder) with file: got %q, want CustomBuilder", got)
+	}
+	if got := casteANSIColor("builder"); got != "99" {
+		t.Errorf("casteANSIColor(builder) with file: got %q, want 99", got)
+	}
+}
+
+func TestVisualsDividerLoad(t *testing.T) {
+	tmpDir := t.TempDir()
+	visualsPath := filepath.Join(tmpDir, "visuals.md")
+	content := `---
+visuals_version: "test"
+visual_divider: "CUSTOM_DIVIDER\n"
+---
+`
+	if err := os.WriteFile(visualsPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write visuals.md: %v", err)
+	}
+
+	resetVisualsCache()
+	defer resetVisualsCache()
+	visualsPathOverride = visualsPath
+	defer func() { visualsPathOverride = "" }()
+
+	if got := visualDividerStr(); got != "CUSTOM_DIVIDER\n" {
+		t.Errorf("visualDividerStr() with file: got %q, want CUSTOM_DIVIDER\\n", got)
+	}
+}

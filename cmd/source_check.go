@@ -592,7 +592,7 @@ func sortSourceCheckIssues(issues []sourceCheckIssue) {
 func renderSourceCheckVisual(result sourceCheckResult) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("source-check"), "Source Check"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Root: ")
 	b.WriteString(result.Root)
 	b.WriteString("\n\n")

@@ -16,7 +16,7 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repa
 	var b strings.Builder
 
 	b.WriteString(renderBanner(commandEmoji("recover"), "Colony Recovery"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	// Colony context: goal, phase, state.
 	if state.Goal != nil && *state.Goal != "" {

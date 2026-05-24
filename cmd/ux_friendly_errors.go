@@ -88,7 +88,7 @@ func friendlyErrorForPattern(message string) (friendlyError, bool) {
 func renderFriendlyError(entry friendlyError, rawMessage string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("\u274C", "Error"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(entry.Explanation)
 	b.WriteString("\n\n")
 	b.WriteString("Next steps:\n")

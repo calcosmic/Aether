@@ -1,0 +1,5 @@
+safety_gates:
+  security_scan: true
+  quality_gate: true
+  chaos_scan: true
+  auditor_score_threshold: 60

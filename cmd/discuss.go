@@ -555,7 +555,7 @@ func discussionStatus(questionCount, createdCount, existingCount int) string {
 func renderDiscussVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧭", "Discuss"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	if resolved, _ := result["resolved"].(bool); resolved {
 		b.WriteString("Clarification locked in.\n")

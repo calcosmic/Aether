@@ -569,7 +569,7 @@ func isLaterProfileTimestamp(candidate, baseline string) bool {
 func renderBehaviorObserveVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧠", "Behavior Observe"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Dimension: ")
 	b.WriteString(stringValue(result["dimension"]))
 	b.WriteString("\nSignal: ")
@@ -588,7 +588,7 @@ func renderBehaviorObserveVisual(result map[string]interface{}) string {
 func renderProfileReadVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧠", "Profile"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	profile, _ := result["profile"].(colony.UserProfile)
 	b.WriteString(fmt.Sprintf("Colonies observed: %d\n", profile.ColonyCount))
 	b.WriteString(fmt.Sprintf("Directives: %d\n\n", len(profile.Directives)))
@@ -609,7 +609,7 @@ func renderProfileReadVisual(result map[string]interface{}) string {
 func renderProfileUpdateVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧠", "Profile Update"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Observations consolidated: %d\n", intValue(result["observation_count"])))
 	b.WriteString(fmt.Sprintf("Directives promoted: %d\n", intValue(result["promoted_count"])))
 	if promoted := stringSliceValue(result["promoted"]); len(promoted) > 0 {

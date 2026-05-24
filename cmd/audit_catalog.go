@@ -249,7 +249,7 @@ func outputReliabilityJSON(entries []CatalogEntry) error {
 func renderAuditCatalogVisual(catalog []CatalogEntry) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("audit-catalog"), "Command Catalog"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	// Table header
 	b.WriteString(fmt.Sprintf("%-28s %-6s %-12s %-4s\n", "Name", "Flags", "Output", "Sub"))

@@ -1,0 +1,45 @@
+---
+review_depth_version: "1.0"
+heavy_keywords:
+  - security
+  - auth
+  - crypto
+  - secrets
+  - permissions
+  - compliance
+  - audit
+  - release
+  - deploy
+  - production
+  - ship
+  - launch
+security_risk_keywords:
+  - security
+  - auth
+  - crypto
+  - secrets
+  - permissions
+  - compliance
+  - audit
+  - token
+  - session
+  - password
+blast_radius_keywords:
+  - core runtime
+  - state mutation
+  - colony state
+  - state machine
+  - phase transition
+  - dispatch
+  - build command
+  - continue command
+  - verification depth
+  - planning depth
+smart_default_reasons:
+  high_risk: "auto: security risk"
+  final_phase: "auto: final phase"
+  medium_risk: "auto: high blast radius"
+  early_phase: "auto: early phase"
+  late_phase: "auto: late phase"
+  standard: "auto: standard"
+---

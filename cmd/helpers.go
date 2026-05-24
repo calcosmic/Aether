@@ -176,7 +176,7 @@ func renderVisualError(message string, details interface{}) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner("\u274C", "Error"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(strings.TrimSpace(message))
 	b.WriteString("\n")
 	if details != nil {

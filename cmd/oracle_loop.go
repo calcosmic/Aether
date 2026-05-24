@@ -3136,7 +3136,7 @@ func renderOracleIterationPreview(state oracleStateFile, plan oraclePlanFile) st
 
 	var b strings.Builder
 	b.WriteString(renderBanner("🔮🐜", "Oracle Loop"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Phase: %s\n", emptyFallback(state.Phase, "survey"))
 	fmt.Fprintf(&b, "Iteration: %d of %d\n", state.Iteration, state.MaxIterations)
 	if state.ActiveAttempt > 0 {
@@ -3156,7 +3156,7 @@ func renderOracleIterationPreview(state oracleStateFile, plan oraclePlanFile) st
 func renderOracleRetryPreview(state oracleStateFile) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🔁", "Oracle Retry"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Iteration: %d of %d\n", state.Iteration, state.MaxIterations)
 	fmt.Fprintf(&b, "Attempt: %d of %d\n", state.ActiveAttempt+1, defaultOracleMaxAttempts)
 	fmt.Fprintf(&b, "Target: %s\n", oracleQuestionLabel(oracleQuestion{ID: state.ActiveQuestionID, Text: state.ActiveQuestionText}))

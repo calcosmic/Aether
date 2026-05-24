@@ -52,7 +52,7 @@ func init() {
 func renderNoColonyStatusVisual() string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("No colony initialized in this repo.\n")
 	b.WriteString(renderNextUp(
 		`Run `+"`aether init \"goal\"`"+` to start a colony.`,
@@ -277,7 +277,7 @@ func renderReconciliationSection(result unreconciledChangesResult) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner("⚠️", "Reconciliation"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "%d unreconciled file change(s) not recorded by any worker\n", len(result.ChangedFiles))
 	for _, f := range result.ChangedFiles {
 		fmt.Fprintf(&b, "  - %s\n", f)
@@ -296,7 +296,7 @@ func renderWarningsSection(warnings []string) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner("\u26A0\uFE0F", "Warnings"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	for _, w := range warnings {
 		b.WriteString(w)
 		b.WriteString("\n")
@@ -332,7 +332,7 @@ func renderLoopSafetySection(loopEvents []events.Event) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderBanner("\U0001F527", "Loop Safety"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Loop Safety: %d events in last 7 days\n", len(loopEvents))
 
 	t := table.NewWriter()
@@ -392,7 +392,7 @@ func renderGateStatusSection(state colony.ColonyState, s *storage.Store) string 
 
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("status"), "Gate Status"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Phase: %d\n", state.CurrentPhase)
 	fmt.Fprintf(&b, "Gates: %d (%d passed, %d failed, %d skipped)\n", len(results), passed, failed, skipped)
 	if lastRun != "" {
@@ -686,7 +686,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 
 	// Banner
 	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 
 	// Goal (truncated to 60 chars)
 	goal := *state.Goal

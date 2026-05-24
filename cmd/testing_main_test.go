@@ -99,6 +99,7 @@ func saveGlobals(t *testing.T) {
 	origNarratorCommandContext := narratorCommandContext
 	origNarratorRuntimePath := narratorRuntimePath
 	origResumeNoHandoff := resumeNoHandoff
+	origColonyPrimeTemplatesPathOverride := colonyPrimeTemplatesPathOverride
 	t.Cleanup(func() {
 		store = origStore
 		stdout = origStdout
@@ -120,6 +121,8 @@ func saveGlobals(t *testing.T) {
 		narratorCommandContext = origNarratorCommandContext
 		narratorRuntimePath = origNarratorRuntimePath
 		resumeNoHandoff = origResumeNoHandoff
+		colonyPrimeTemplatesPathOverride = origColonyPrimeTemplatesPathOverride
+		resetColonyPrimeTemplatesCache()
 	})
 }
 

@@ -246,7 +246,7 @@ func buildPriorReviewsSection(s *storage.Store, compact bool) (colonyPrimeSectio
 
 	// 4. Format section content with budget management (D-01, D-03, D-08)
 	var sb strings.Builder
-	sb.WriteString("## Prior Reviews\n\n")
+	writeSectionHeader(&sb, "prior_reviews", "## Prior Reviews\n\n")
 
 	domainCounts := make(map[string]int)
 	totalOpen := 0
@@ -363,19 +363,19 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 
 	var stateSection strings.Builder
-	stateSection.WriteString("## Colony State\n\n")
+	writeSectionHeader(&stateSection, "state", "## Colony State\n\n")
 	if state.Goal != nil {
-		stateSection.WriteString(fmt.Sprintf("Goal: %s\n", *state.Goal))
+		stateSection.WriteString(fmtOrFallback("state", func(t *sectionTemplate) string { return t.GoalFormat }, "Goal: %s\n", *state.Goal))
 	}
-	stateSection.WriteString(fmt.Sprintf("State: %s\n", state.State))
-	stateSection.WriteString(fmt.Sprintf("Phase: %d\n", state.CurrentPhase))
+	stateSection.WriteString(fmtOrFallback("state", func(t *sectionTemplate) string { return t.StateFormat }, "State: %s\n", state.State))
+	stateSection.WriteString(fmtOrFallback("state", func(t *sectionTemplate) string { return t.PhaseFormat }, "Phase: %d\n", state.CurrentPhase))
 	if len(state.Plan.Phases) > 0 && state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
 		phase := state.Plan.Phases[state.CurrentPhase-1]
-		stateSection.WriteString(fmt.Sprintf("Phase Name: %s\n", phase.Name))
+		stateSection.WriteString(fmtOrFallback("state", func(t *sectionTemplate) string { return t.PhaseNameFormat }, "Phase Name: %s\n", phase.Name))
 		if len(phase.Tasks) > 0 {
-			stateSection.WriteString("Tasks:\n")
+			stateSection.WriteString(sectionString("state", func(t *sectionTemplate) string { return t.TasksHeader }, "Tasks:\n"))
 			for _, t := range phase.Tasks {
-				stateSection.WriteString(fmt.Sprintf("  - [%s] %s\n", t.Status, t.Goal))
+				stateSection.WriteString(fmtOrFallback("state", func(tmpl *sectionTemplate) string { return tmpl.TaskFormat }, "  - [%s] %s\n", t.Status, t.Goal))
 			}
 		}
 	}
@@ -383,7 +383,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	if mode == "" {
 		mode = colony.ModeInRepo
 	}
-	stateSection.WriteString(fmt.Sprintf("Parallel Mode: %s\n", mode))
+	stateSection.WriteString(fmtOrFallback("state", func(t *sectionTemplate) string { return t.ParallelModeFormat }, "Parallel Mode: %s\n", mode))
 	stateProtected, statePreserveReason := protectedSectionPolicy("state")
 	sections = append(sections, colonyPrimeSection{
 		name:              "state",
@@ -406,19 +406,23 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		var depthText string
 		switch reviewDepth {
 		case colony.VerificationDepthLight:
-			depthText = "Light review -- core verification only"
+			depthText = sectionString("review_depth", func(t *sectionTemplate) string { return t.LightText }, "Light review -- core verification only")
 		case colony.VerificationDepthStandard:
-			depthText = "Standard review -- watcher and probe verification"
+			depthText = sectionString("review_depth", func(t *sectionTemplate) string { return t.StandardText }, "Standard review -- watcher and probe verification")
 		case colony.VerificationDepthHeavy:
-			depthText = "Heavy review -- full quality gauntlet"
+			depthText = sectionString("review_depth", func(t *sectionTemplate) string { return t.HeavyText }, "Heavy review -- full quality gauntlet")
 		default:
-			depthText = "Standard review -- watcher and probe verification"
+			depthText = sectionString("review_depth", func(t *sectionTemplate) string { return t.DefaultText }, "Standard review -- watcher and probe verification")
 		}
+		var rdSB strings.Builder
+		writeSectionHeader(&rdSB, "review_depth", "## Review Depth\n\n")
+		rdSB.WriteString(depthText)
+		rdSB.WriteString("\n")
 		sections = append(sections, colonyPrimeSection{
 			name:           "review_depth",
 			title:          "Review Depth",
 			source:         statePath,
-			content:        fmt.Sprintf("## Review Depth\n\n%s\n", depthText),
+			content:        rdSB.String(),
 			priority:       6,
 			freshnessScore: 1.0,
 		})
@@ -431,7 +435,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		result.SignalCount = len(activeSignals)
 		if len(activeSignals) > 0 {
 			var phSB strings.Builder
-			phSB.WriteString("## Pheromone Signals\n\n")
+			writeSectionHeader(&phSB, "pheromones", "## Pheromone Signals\n\n")
 			phSB.WriteString(colonyLifecycleSignalContext(state))
 			phSB.WriteString("\n\n")
 			for _, sig := range activeSignals {
@@ -439,7 +443,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 				if text == "" {
 					continue
 				}
-				phSB.WriteString(fmt.Sprintf("- [%s] %s\n", sig.Type, text))
+				phSB.WriteString(fmtOrFallback("pheromones", func(t *sectionTemplate) string { return t.SignalFormat }, "- [%s] %s\n", sig.Type, text))
 			}
 			if strings.TrimSpace(phSB.String()) != "" {
 				signalTimestamps := make([]string, 0, len(activeSignals))
@@ -500,9 +504,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 	if len(instincts) > 0 {
 		var instSB strings.Builder
-		instSB.WriteString("## Active Instincts\n\n")
+		writeSectionHeader(&instSB, "instincts", "## Active Instincts\n\n")
 		for _, inst := range instincts {
-			instSB.WriteString(fmt.Sprintf("- [%s] %s (confidence: %.2f)\n", inst.trigger, inst.action, inst.confidence))
+			instSB.WriteString(fmtOrFallback("instincts", func(t *sectionTemplate) string { return t.InstinctFormat }, "- [%s] %s (confidence: %.2f)\n", inst.trigger, inst.action, inst.confidence))
 		}
 		source := instinctsPath
 		if !instinctsLoaded {
@@ -523,9 +527,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 
 	if state.Memory.Decisions != nil && len(state.Memory.Decisions) > 0 {
 		var decSB strings.Builder
-		decSB.WriteString("## Key Decisions\n\n")
+		writeSectionHeader(&decSB, "decisions", "## Key Decisions\n\n")
 		for _, d := range state.Memory.Decisions {
-			decSB.WriteString(fmt.Sprintf("- Phase %d: %s — %s\n", d.Phase, d.Claim, d.Rationale))
+			decSB.WriteString(fmtOrFallback("decisions", func(t *sectionTemplate) string { return t.DecisionFormat }, "- Phase %d: %s — %s\n", d.Phase, d.Claim, d.Rationale))
 		}
 		sections = append(sections, colonyPrimeSection{
 			name:              "decisions",
@@ -541,11 +545,11 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 
 	if state.Memory.PhaseLearnings != nil && len(state.Memory.PhaseLearnings) > 0 {
 		var learnSB strings.Builder
-		learnSB.WriteString("## Phase Learnings\n\n")
+		writeSectionHeader(&learnSB, "learnings", "## Phase Learnings\n\n")
 		for _, pl := range state.Memory.PhaseLearnings {
-			learnSB.WriteString(fmt.Sprintf("### Phase %d: %s\n", pl.Phase, pl.PhaseName))
+			learnSB.WriteString(fmtOrFallback("learnings", func(t *sectionTemplate) string { return t.PhaseHeaderFormat }, "### Phase %d: %s\n", pl.Phase, pl.PhaseName))
 			for _, l := range pl.Learnings {
-				learnSB.WriteString(fmt.Sprintf("  - %s [%s]\n", l.Claim, l.Status))
+				learnSB.WriteString(fmtOrFallback("learnings", func(t *sectionTemplate) string { return t.LearningFormat }, "  - %s [%s]\n", l.Claim, l.Status))
 			}
 		}
 		sections = append(sections, colonyPrimeSection{
@@ -583,9 +587,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	hiveLines := buildHiveWisdomLines(hiveEntries)
 	if len(hiveLines) > 0 {
 		var hiveSB strings.Builder
-		hiveSB.WriteString("## HIVE WISDOM (Cross-Colony Patterns)\n\n")
+		writeSectionHeader(&hiveSB, "hive_wisdom", "## HIVE WISDOM (Cross-Colony Patterns)\n\n")
 		for _, entry := range hiveLines {
-			hiveSB.WriteString(fmt.Sprintf("- %s\n", entry))
+			hiveSB.WriteString(fmtOrFallback("hive_wisdom", func(t *sectionTemplate) string { return t.EntryFormat }, "- %s\n", entry))
 		}
 		sections = append(sections, colonyPrimeSection{
 			name:              "hive_wisdom",
@@ -608,9 +612,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	})
 	if len(learnEntries) > 0 {
 		var learnSB strings.Builder
-		learnSB.WriteString("## LEARNED MEMORY (Verified Outcomes)\n\n")
+		writeSectionHeader(&learnSB, "learned_memory", "## LEARNED MEMORY (Verified Outcomes)\n\n")
 		for _, entry := range learnEntries {
-			learnSB.WriteString(fmt.Sprintf("- [Phase %d] %s (confidence: %.0f%%, classification: %s)\n",
+			learnSB.WriteString(fmtOrFallback("learned_memory", func(t *sectionTemplate) string { return t.EntryFormat }, "- [Phase %d] %s (confidence: %.0f%%, classification: %s)\n",
 				entry.Phase, entry.Content, entry.Confidence*100, entry.Classification))
 		}
 
@@ -654,9 +658,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	globalWisdom := readQUEENMd(globalQueenPath)
 	if len(globalWisdom) > 0 {
 		var gwSB strings.Builder
-		gwSB.WriteString("## GLOBAL QUEEN WISDOM (Cross-Colony)\n\n")
+		writeSectionHeader(&gwSB, "global_queen_md", "## GLOBAL QUEEN WISDOM (Cross-Colony)\n\n")
 		for _, v := range globalWisdom {
-			gwSB.WriteString(fmt.Sprintf("- %s\n", v))
+			gwSB.WriteString(fmtOrFallback("global_queen_md", func(t *sectionTemplate) string { return t.EntryFormat }, "- %s\n", v))
 		}
 		gqProtected, gqPreserveReason := protectedSectionPolicy("global_queen_md")
 		sections = append(sections, colonyPrimeSection{
@@ -680,9 +684,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	userPrefs = append(userPrefs, readUserPreferences(localQueenPath)...)
 	if len(userPrefs) > 0 {
 		var prefsSB strings.Builder
-		prefsSB.WriteString("## USER PREFERENCES\n\n")
+		writeSectionHeader(&prefsSB, "user_preferences", "## USER PREFERENCES\n\n")
 		for _, pref := range userPrefs {
-			prefsSB.WriteString(fmt.Sprintf("- %s\n", pref))
+			prefsSB.WriteString(fmtOrFallback("user_preferences", func(t *sectionTemplate) string { return t.EntryFormat }, "- %s\n", pref))
 		}
 		prefsProtected, prefsPreserveReason := protectedSectionPolicy("user_preferences")
 		sections = append(sections, colonyPrimeSection{
@@ -710,9 +714,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	localWisdom := readQUEENMd(localQueenPath)
 	if len(localWisdom) > 0 {
 		var lwSB strings.Builder
-		lwSB.WriteString("## LOCAL QUEEN WISDOM (Repo-Specific)\n\n")
+		writeSectionHeader(&lwSB, "local_queen_wisdom", "## LOCAL QUEEN WISDOM (Repo-Specific)\n\n")
 		for _, v := range localWisdom {
-			lwSB.WriteString(fmt.Sprintf("- %s\n", v))
+			lwSB.WriteString(fmtOrFallback("local_queen_wisdom", func(t *sectionTemplate) string { return t.EntryFormat }, "- %s\n", v))
 		}
 		sections = append(sections, colonyPrimeSection{
 			name:              "local_queen_wisdom",
@@ -735,7 +739,7 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 	}
 	if len(clarifiedIntent.Lines) > 0 {
 		var clarifySB strings.Builder
-		clarifySB.WriteString("## CLARIFIED INTENT\n\n")
+		writeSectionHeader(&clarifySB, "clarified_intent", "## CLARIFIED INTENT\n\n")
 		for _, clarification := range clarifiedIntent.Lines {
 			clarifySB.WriteString(clarification)
 			clarifySB.WriteString("\n")
@@ -769,9 +773,9 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 				continue
 			}
 			if blockerSB.Len() == 0 {
-				blockerSB.WriteString("## Active Blockers\n\n")
+				writeSectionHeader(&blockerSB, "blockers", "## Active Blockers\n\n")
 			}
-			blockerSB.WriteString(fmt.Sprintf("- %s\n", blocker.Description))
+			blockerSB.WriteString(fmtOrFallback("blockers", func(t *sectionTemplate) string { return t.BlockerFormat }, "- %s\n", blocker.Description))
 			blockerTimestamps = append(blockerTimestamps, blocker.CreatedAt)
 		}
 		if blockerSB.Len() > 0 {
@@ -801,12 +805,12 @@ func buildColonyPrimeOutput(compact bool) colonyPrimeOutput {
 		}
 		if len(criticalIssues) > 0 {
 			var healthSB strings.Builder
-			healthSB.WriteString("## Colony Health Issues\n\n")
-			healthSB.WriteString(fmt.Sprintf("Last scan: %s\n\n", lastScan.Timestamp))
+			writeSectionHeader(&healthSB, "medic_health", "## Colony Health Issues\n\n")
+			healthSB.WriteString(fmtOrFallback("medic_health", func(t *sectionTemplate) string { return t.ScanTimestampFormat }, "Last scan: %s\n\n", lastScan.Timestamp))
 			for _, issue := range criticalIssues {
-				healthSB.WriteString(fmt.Sprintf("- [%s] %s", issue.Severity, issue.Message))
+				healthSB.WriteString(fmtOrFallback("medic_health", func(t *sectionTemplate) string { return t.IssueFormat }, "- [%s] %s", issue.Severity, issue.Message))
 				if issue.File != "" {
-					healthSB.WriteString(fmt.Sprintf(" (%s)", issue.File))
+					healthSB.WriteString(fmtOrFallback("medic_health", func(t *sectionTemplate) string { return t.IssueFileFormat }, " (%s)", issue.File))
 				}
 				healthSB.WriteString("\n")
 			}

@@ -218,7 +218,7 @@ func validateSkipPhaseTarget(state colony.ColonyState, phaseNum int) error {
 func renderSkipPhaseVisual(state colony.ColonyState, skipped colony.Phase, nextPhase *colony.Phase, result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("skip-phase"), fmt.Sprintf("Skip Phase %d", skipped.ID)))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Phase was force-skipped.\n")
 	b.WriteString(renderProgressSummary(skipped.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")

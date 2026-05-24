@@ -1,0 +1,24 @@
+id: "colonize"
+entry_agent: "scout"
+required_agents:
+  - "scout"
+  - "surveyor-nest"
+  - "surveyor-disciplines"
+  - "surveyor-pathogens"
+  - "surveyor-provisions"
+inputs:
+  codebase:
+    type: "string"
+    required: false
+outputs:
+  - "territory_survey"
+  - "state_initialization"
+success_criteria:
+  - "Territory survey loaded"
+  - "State initialized"
+failure_policy: "retry"
+ceremony:
+  stages:
+    - "survey"
+    - "map"
+    - "initialize"

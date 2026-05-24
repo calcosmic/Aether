@@ -143,7 +143,7 @@ func workflowRecipeIDs() []string {
 func renderRecipesVisual(recipes []workflowRecipe, selected bool) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("📚", "Aether Recipes"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Copyable paths for common Aether jobs.\n\n")
 
 	for i, recipe := range recipes {

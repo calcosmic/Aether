@@ -59,8 +59,9 @@ export async function* readGoEvents(
   // First yield everything that already exists.
   yield* readEvents(eventStreamPath);
 
-  // Then tail for new events.
-  yield* tailEvents(eventStreamPath, { pollIntervalMs: 100 });
+  // Then tail for new events, starting from where we left off.
+  const buffer = getBuffer(eventStreamPath);
+  yield* tailEvents(eventStreamPath, { pollIntervalMs: 100, startFrom: buffer.length });
 }
 
 /**

@@ -877,7 +877,7 @@ func computeColonyDuration(state colony.ColonyState) string {
 func renderEntombVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("⚰️", "Entomb"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Colony archived into chambers.\n")
 	b.WriteString("Goal: ")
 	b.WriteString(emptyFallback(stringValue(result["goal"]), "No goal recorded"))

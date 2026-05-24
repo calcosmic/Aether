@@ -193,7 +193,7 @@ func goalText(state colony.ColonyState) string {
 func renderMaturityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("maturity"), "Maturity"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
 		b.WriteString("Goal: ")
 		b.WriteString(goal)
@@ -288,7 +288,7 @@ func renderQuickContextCapsule(question string) string {
 func renderQuickVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("⚡", "Quick Scout"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Question: ")
 	b.WriteString(emptyFallback(stringValue(result["question"]), "(none)"))
 	b.WriteString("\n")
@@ -432,7 +432,7 @@ func parseSemver(version string) ([3]int, error) {
 func renderBumpVersionVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("bump-version"), "Bump Version"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString("Version: ")
 	b.WriteString(emptyFallback(stringValue(result["version"]), "unknown"))
 	b.WriteString("\n")
@@ -508,7 +508,7 @@ func runMigrateState(dryRun bool) (map[string]interface{}, error) {
 func renderMigrateStateVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("migrate-state"), "Migrate State"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if boolValue(result["migrated"]) {
 		b.WriteString("State migrated.\n")
 	} else {
@@ -575,7 +575,7 @@ func loadCasteAssignments(root string) []map[string]interface{} {
 func renderVerifyCastesVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("verify-castes"), "Verify Castes"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Expected agents per surface: %d\n", intValue(result["expected_agents"])))
 	if counts, ok := result["counts"].(map[string]int); ok {
 		keys := make([]string, 0, len(counts))

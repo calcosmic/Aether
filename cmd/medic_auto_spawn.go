@@ -149,7 +149,7 @@ func loadMedicLastScan(dataPath string) (*MedicLastScan, error) {
 func renderMedicAutoSpawnVisual(reason string, name string) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("medic"), "Auto-Spawn: Colony Health Check"))
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(fmt.Sprintf("Trigger: %s\n", reason))
 	b.WriteString(fmt.Sprintf("Spawning: %s\n", name))
 	b.WriteString("\n")

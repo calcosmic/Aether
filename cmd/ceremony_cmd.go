@@ -539,12 +539,12 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 		title = fmt.Sprintf("%s Failed", workflow)
 	}
 	var b strings.Builder
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	b.WriteString(emoji)
 	b.WriteString(" ")
 	b.WriteString(spacedTitle(title))
 	b.WriteString("\n")
-	b.WriteString(visualDivider)
+	b.WriteString(visualDividerStr())
 	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
 		b.WriteString("Goal: ")
 		b.WriteString(goal)

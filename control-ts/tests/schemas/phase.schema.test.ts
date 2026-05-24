@@ -46,4 +46,26 @@ describe("PhaseSchema", () => {
       })
     ).toThrow();
   });
+
+  it("validates all 9 phase fixtures", () => {
+    const phases = [
+      "init",
+      "discuss",
+      "plan",
+      "build",
+      "continue",
+      "seal",
+      "colonize",
+      "oracle",
+      "swarm",
+    ];
+    for (const name of phases) {
+      const text = readFileSync(fixturePath("phases", `${name}.yaml`), "utf8");
+      const data = parse(text);
+      const result = PhaseSchema.parse(data);
+      expect(result.id).toBe(name);
+      expect(result.required_agents.length).toBeGreaterThanOrEqual(1);
+      expect(result.success_criteria.length).toBeGreaterThanOrEqual(1);
+    }
+  });
 });

@@ -27,10 +27,10 @@ export async function* readEvents(
  */
 export async function* tailEvents(
   streamPath: string,
-  options: { pollIntervalMs?: number } = {}
+  options: { pollIntervalMs?: number; startFrom?: number } = {}
 ): AsyncGenerator<EventLine> {
-  const { pollIntervalMs = 100 } = options;
-  let seen = 0;
+  const { pollIntervalMs = 100, startFrom = 0 } = options;
+  let seen = startFrom;
 
   while (true) {
     const buffer = getBuffer(streamPath);
