@@ -29,6 +29,7 @@
 - `49c7c46c` feat(159-02): add demo CLI entry point for end-to-end acceptance
 - `7e7d8390` feat(159-02): add hardcoded behaviour audit script
 - `7393cb7b` feat(159-02): add extraction audit script
+- `2201fcb0` fix(159-02): extract oracle directives to colony asset and refine audit
 
 ## Verification
 
