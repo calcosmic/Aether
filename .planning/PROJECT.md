@@ -34,29 +34,26 @@ That means:
 
 ## Current State
 
-- **v1.23 Daily Driver Reliability — SHIPPED 2026-05-21**
+- **v1.24 Hybrid Architecture Salvage — SHIPPED 2026-05-24**
 - **Product version: v1.0.41**
-- v1.23 shipped: Honest error pipeline, command classification, critical test coverage, learning lifecycle, Queen policy alignment, runtime safety, end-to-end proof
+- v1.24 shipped: Architecture boundary defined, 27 agent YAMLs + 28 prompt MDs + 9 phase YAMLs + 7 playbooks extracted, TypeScript control plane with 68 tests, NDJSON event stream, 80% Classic parity verified, end-to-end demo flow running
 - Focus: Planning next milestone
-- Go = truth (state, gates, finalizers), playbooks = soul, YAML = packaging
+- Go = runtime spine (state, gates, finalizers), TS = control plane (orchestration), colony/ = editable behaviour
 - 512 TS tests, 2900+ Go tests, 86 skills, 60 commands per platform, 27 Codex agents
 
-## Current Milestone: v1.24 Hybrid Architecture Salvage
+## Current Milestone: [Next]
 
-**Goal:** Demote Go from "whole organism" to "runtime spine," extract living behaviour into editable Markdown/YAML, and bootstrap a TypeScript control plane — without rewriting from scratch.
+*Next milestone not yet defined. Run `/gsd-new-milestone` to start planning.*
 
-**Target features:**
-- Define the architecture boundary (Go vs TS vs config)
-- Create Classic parity checklist as the golden reference
-- Audit Go codebase for behaviour that must move out
-- Build minimal TS control plane that loads agents/phases/prompts from files
-- Extract hardcoded Go prompt/agent/phase logic into editable assets
-- Establish NDJSON event stream as observable truth
-- Validate: one end-to-end flow (init → plan → build → verify → seal) via TS orchestrator
+**Previous Milestone: v1.24 Hybrid Architecture Salvage** — Shipped 2026-05-24
 
-**Key constraint:** Salvage, not rewrite. Preserve Go's runtime reliability. Make behaviour human-editable.
+Key accomplishments: Architecture boundary documented with hard rule, Classic parity checklist with 16 items, 162 Go symbols classified for extraction, 27 agent YAMLs + 28 prompt MDs + 9 phase YAMLs + 7 playbooks + 8 policy YAMLs created under `colony/`, Go runtime refactored to load from files, TypeScript control plane with loaders, orchestrator, and 68 tests, NDJSON event stream shared between Go and TS, 80% Classic parity verified, end-to-end demo CLI emits 48 events per run.
 
-**Previous Milestone: v1.23 Daily Driver Reliability** — Shipped 2026-05-21
+**Stats:** 86 commits, 375 files changed, +45,732 / −507 lines
+
+Full details: `.planning/milestones/v1.24-ROADMAP.md`
+
+## Previous Milestone: v1.23 Daily Driver Reliability — Shipped 2026-05-21
 
 Key accomplishments: Removed 29+ error suppressions, built audit-catalog classification matrix, added tests for 12 critical source files, restored learning lifecycle and 9 flagship workflows, aligned Queen policy with Go runtime, added provider error classification + build-reconcile + worktree safety, full lifecycle smoke test in downstream repo. 30/30 requirements, 27 plans, 7 phases.
 
@@ -196,9 +193,10 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.18 Hybrid Runtime Parity & Release Gate -- Phases 119-123 (shipped 2026-05-14)
 - [x] v1.19 TypeScript Host Cutover + Oracle Confidence Recovery -- Phases 124-129 (shipped 2026-05-15)
 - [x] v1.20 Host Contract Hardening and Wrapper Reality Check -- Phases 130-135 (shipped 2026-05-15)
-- [ ] v1.21 Live Colony -- Phases 136+
+- [x] v1.21 Live Colony -- Phases 136-140 (shipped 2026-05-18)
 - [x] v1.22 Grounded Planning + Ceremony Restore -- Phases 141-144 (shipped 2026-05-19)
-- [ ] v1.23 Daily Driver Reliability -- Phases 145+
+- [x] v1.23 Daily Driver Reliability -- Phases 145-151 (shipped 2026-05-21)
+- [x] v1.24 Hybrid Architecture Salvage -- Phases 152-159 (shipped 2026-05-24)
 
 ## Requirements
 

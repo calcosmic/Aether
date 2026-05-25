@@ -1,5 +1,34 @@
 # Aether Milestones
 
+## v1.24 Hybrid Architecture Salvage (Shipped: 2026-05-24)
+
+**Phases completed:** 8 phases, 21 plans, 36 requirements
+
+**Key accomplishments:**
+
+1. Architecture boundary documented with hard rule: "Compiled code may execute behaviour, but editable assets must define behaviour"
+2. Classic parity checklist created with 16 items covering all major subsystems, 80% verifiable
+3. Behaviour extraction audit classified 162 Go symbols as KEEP_IN_GO, MOVE_TO_TS, MOVE_TO_YAML, etc.
+4. 27 agent YAMLs, 28 prompt Markdowns, 9 phase YAMLs, 7 playbooks, and 8 policy YAMLs created under `colony/`
+5. Go runtime refactored to load oracle directives and other behaviour from `colony/` files instead of hardcoded strings
+6. TypeScript control plane bootstrapped with loaders, orchestrator, and 68 tests passing
+7. NDJSON event stream established as shared observable truth between Go and TypeScript
+8. End-to-end demo flow runs via `npm run aether:control`, emitting 48 events across init → plan → build lifecycle
+
+**Stats:** 86 commits, 375 files changed, +45,732 / −507 lines, ~4 days
+
+**Tech Debt:**
+- `executePlan.test.ts` test isolation — create parent directory before writing COLONY_STATE.json
+- Phases 152-156 missing VERIFICATION.md (completed before verification workflow was standard)
+- REQUIREMENTS.md traceability table shows all requirements as "Pending" (bookkeeping only)
+
+**Archives:**
+- [Roadmap](milestones/v1.24-ROADMAP.md)
+- [Requirements](milestones/v1.24-REQUIREMENTS.md)
+- [Audit](milestones/v1.24-MILESTONE-AUDIT.md)
+
+---
+
 ## v1.23 Daily Driver Reliability (Shipped: 2026-05-21)
 
 **Phases completed:** 7 phases, 27 plans, 30 requirements

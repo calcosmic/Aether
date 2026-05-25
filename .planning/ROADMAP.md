@@ -26,12 +26,27 @@
 - **v1.21 Live Colony** - Phases 136-140 (shipped 2026-05-18) — [Archive](milestones/v1.21-ROADMAP.md)
 - **v1.22 Grounded Planning + Ceremony Restore** - Phases 141-144 (shipped 2026-05-19) — [Archive](milestones/v1.22-ROADMAP.md)
 - **v1.23 Daily Driver Reliability** - Phases 145-151 (shipped 2026-05-21) — [Archive](milestones/v1.23-ROADMAP.md)
+- **v1.24 Hybrid Architecture Salvage** - Phases 152-159 (shipped 2026-05-24) — [Archive](milestones/v1.24-ROADMAP.md)
 
 ## Phases
 
-### v1.24 [Next Milestone] (Planned)
+### v1.25 [Next Milestone] (Planned)
 
 *Next milestone not yet defined. Run `/gsd-new-milestone` to start planning.*
+
+<details>
+<summary>v1.24 Hybrid Architecture Salvage (Phases 152-159) — SHIPPED 2026-05-24</summary>
+
+- [x] Phase 152: Boundary & Parity (2/2 plans) — completed 2026-05-22
+- [x] Phase 153: TS Scaffold & Schemas (2/2 plans) — completed 2026-05-22
+- [x] Phase 154: Colony Assets (3/3 plans) — completed 2026-05-23
+- [x] Phase 155: Go Boundary Refactor (3/3 plans) — completed 2026-05-23
+- [x] Phase 156: TS Control Plane Core (3/3 plans) — completed 2026-05-23
+- [x] Phase 157: TS Adapters & Oracle (2/2 plans) — completed 2026-05-24
+- [x] Phase 158: Event Stream (3/3 plans) — completed 2026-05-24
+- [x] Phase 159: End-to-End Acceptance (3/3 plans) — completed 2026-05-24
+
+</details>
 
 <details>
 <summary>v1.23 Daily Driver Reliability (Phases 145-151) — SHIPPED 2026-05-21</summary>
@@ -200,11 +215,11 @@ Plans:
 
 Plans:
 **Wave 1**
-- [ ] 154-01-PLAN.md — Create all 27 agent YAMLs and prompt Markdowns, expand AgentSchema to 27 roles
-- [ ] 154-02-PLAN.md — Create all phase YAMLs and canonical playbook Markdowns
+- [x] 154-01-PLAN.md — Create all 27 agent YAMLs and prompt Markdowns, expand AgentSchema to 27 roles
+- [x] 154-02-PLAN.md — Create all phase YAMLs and canonical playbook Markdowns
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 154-03-PLAN.md — Create all policy YAMLs, extend PolicySchema, expand policy tests
+- [x] 154-03-PLAN.md — Create all policy YAMLs, extend PolicySchema, expand policy tests
 
 ### Phase 155: Go Boundary Refactor
 **Goal:** Go runtime loads behaviour from files instead of hardcoded strings, while preserving its role as the runtime spine.
@@ -283,7 +298,7 @@ Phases execute in numeric order: 145 → 146 → 147 → 148 → 149 → 150 →
 | 152. Boundary & Parity | v1.24 | 2/2 | Complete | 2026-05-22 |
 | 153. TS Scaffold & Schemas | v1.24 | 2/2 | Complete | 2026-05-22 |
 | 154. Colony Assets | v1.24 | 3/3 | Complete | 2026-05-23 |
-| 155. Go Boundary Refactor | v1.24 | 2/2 | Complete | 2026-05-23 |
+| 155. Go Boundary Refactor | v1.24 | 3/3 | Complete | 2026-05-23 |
 | 156. TS Control Plane Core | v1.24 | 4/4 | Complete | 2026-05-23 |
 | 157. TS Adapters & Oracle | v1.24 | 2/2 | Complete   | 2026-05-24 |
 | 158. Event Stream | v1.24 | 3/3 | Complete | 2026-05-24 |
