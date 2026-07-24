@@ -166,8 +166,9 @@ func TestPipeline_Consolidation(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Pre-populate instincts with old timestamps (40 days ago for decay)
-	oldTime := "2026-02-25T00:00:00Z"
+	// Keep this relative so the eligibility case does not silently become an
+	// archival case as the calendar advances.
+	oldTime := time.Now().UTC().Add(-40 * 24 * time.Hour).Format(time.RFC3339)
 	instincts := colony.InstinctsFile{
 		Version: "1.0",
 		Instincts: []colony.InstinctEntry{

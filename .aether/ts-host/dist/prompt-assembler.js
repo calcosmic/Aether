@@ -1,11 +1,14 @@
 /**
- * Prompt assembler for the TypeScript orchestration host.
+ * Legacy TypeScript prompt assembler retained for regression tests only.
+ *
+ * Production worker prompts are assembled by Go at the same boundary that
+ * selects and launches the provider.
  *
  * Loads agent definitions from platform-specific paths, assembles worker
  * prompts matching Go's AssemblePrompt output, and renders the response
  * contract that instructs workers to return structured JSON claims.
  *
- * Satisfies TS-01 (real worker dispatch).
+ * @deprecated Test/forensic compatibility only; not production prompt truth.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";

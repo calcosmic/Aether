@@ -7,7 +7,7 @@ import { EventSchema, type ColonyEvent } from "../schemas/event.schema.js";
 import { projectRoot } from "../utils/projectRoot.js";
 import type { PhaseResult } from "../types/runtime.js";
 
-const EVENTS_DIR = resolve(projectRoot, "..", ".aether", "events");
+const EVENTS_DIR = resolve(projectRoot, ".retired-state", "events");
 const DEFAULT_EVENTS_FILE = resolve(EVENTS_DIR, "current.ndjson");
 
 function getEventsFile(): string {

@@ -20,8 +20,7 @@
 import { callGoJSON, discoverGoBinary, writeCompletionFile, approvedCompletionDirPrefix, cleanupCompletionDir } from "./go-bridge.js";
 import { buildHostGoArgs, getHostCommandDefinition, listHostCommandDefinitions, } from "./command-registry.js";
 import { runGoJSONCommand } from "./go-command.js";
-import { dispatchWorkers, toWorkerResults } from "./worker-dispatch.js";
-import { detectAvailablePlatforms, formatPlatformUnavailableMessage, formatWorkerPlatformSelectionMessage, preflightWorkerPlatform, selectWorkerPlatform, } from "./platform-dispatcher.js";
+import { dispatchWorkers, preflightGoWorkerProvider, toWorkerResults, } from "./worker-dispatch.js";
 import { createSpawnOrchestrator } from "./spawn-orchestrator.js";
 import { createCeremonyAdapter, renderDryRunBadge, } from "./ceremony-adapter.js";
 import { ConfidenceLoop } from "./confidence-loop.js";
@@ -32,7 +31,17 @@ export { buildHostGoArgs } from "./command-registry.js";
 let _callGoJSONRef = callGoJSON;
 /** Test-only: inject a mock callGoJSON. */
 export function __setCallGoJSON(fn) {
-    _callGoJSONRef = fn;
+    _callGoJSONRef = ((opts, args) => {
+        const result = fn(opts, args);
+        if (args[0] !== "build-completion-stage")
+            return result;
+        const record = result;
+        if (typeof record?.completion_path === "string")
+            return result;
+        const flagIndex = args.indexOf("--completion-file");
+        const completionPath = flagIndex >= 0 ? args[flagIndex + 1] : undefined;
+        return { completion_path: completionPath };
+    });
 }
 /** Test-only: restore the real callGoJSON. */
 export function __restoreCallGoJSON() {
@@ -40,8 +49,8 @@ export function __restoreCallGoJSON() {
 }
 // Mutable references for dispatch worker injection (testing).
 let _dispatchWorkersRef = dispatchWorkers;
-let _detectAvailablePlatformsRef = detectAvailablePlatforms;
-let _preflightWorkerPlatformRef = preflightWorkerPlatform;
+let _detectAvailablePlatformsRef;
+let _preflightWorkerPlatformRef;
 /** Test-only: inject a mock dispatchWorkers. */
 export function __setDispatchWorkers(fn) {
     _dispatchWorkersRef = fn;
@@ -56,7 +65,7 @@ export function __setDetectAvailablePlatforms(fn) {
 }
 /** Test-only: restore the real detectAvailablePlatforms. */
 export function __restoreDetectAvailablePlatforms() {
-    _detectAvailablePlatformsRef = detectAvailablePlatforms;
+    _detectAvailablePlatformsRef = undefined;
 }
 /** Test-only: inject a mock worker provider preflight. */
 export function __setPreflightWorkerPlatform(fn) {
@@ -64,7 +73,7 @@ export function __setPreflightWorkerPlatform(fn) {
 }
 /** Test-only: restore the real worker provider preflight. */
 export function __restorePreflightWorkerPlatform() {
-    _preflightWorkerPlatformRef = preflightWorkerPlatform;
+    _preflightWorkerPlatformRef = undefined;
 }
 /** Restore all test mocks at once. */
 export function __restoreAllMocks() {
@@ -103,6 +112,9 @@ export function parseArgs(argv) {
     let targetConfidence = undefined;
     let maxIterations = undefined;
     let accept = false;
+    let revisionType = undefined;
+    let revisionReason = undefined;
+    const revisionEvidence = [];
     let verificationTimeout = undefined;
     let light = false;
     let heavy = false;
@@ -194,6 +206,17 @@ export function parseArgs(argv) {
         else if (arg === "--accept") {
             accept = true;
         }
+        else if (arg === "--revision-type") {
+            revisionType = readValue(arg);
+        }
+        else if (arg === "--revision-reason") {
+            revisionReason = readValue(arg);
+        }
+        else if (arg === "--revision-evidence") {
+            const value = readValue(arg);
+            if (value !== undefined)
+                revisionEvidence.push(value);
+        }
         else if (arg === "--verification-timeout") {
             verificationTimeout = readValue(arg);
         }
@@ -258,6 +281,9 @@ export function parseArgs(argv) {
         targetConfidence,
         maxIterations,
         accept,
+        revisionType,
+        revisionReason,
+        revisionEvidence,
         verificationTimeout,
         light,
         heavy,
@@ -289,6 +315,9 @@ function printUsage() {
         "  --skip-midden-check    Skip pre-build midden threshold check\n" +
         "  --skip-watchers        Skip continue watcher workers when Go allows it\n" +
         "  --refresh              Refresh an existing plan\n" +
+        "  --revision-type TYPE   manual, user_feedback, research, verification_failure, or scope_change\n" +
+        "  --revision-reason TEXT Explain why completed work requires replanning\n" +
+        "  --revision-evidence PATH  Repository-relative evidence file (repeatable)\n" +
         "  --force                Forward Go force aliases for plan/build\n" +
         "  --force-resurvey       Refresh colonize survey artifacts\n" +
         "  --task <id>            Limit build dispatch to a task id (repeatable)\n" +
@@ -419,18 +448,36 @@ async function prepareHiveSection(bridge) {
         return "";
     }
 }
-async function preflightHostWorkerDispatch(available, cwd, context) {
-    const selected = selectWorkerPlatform(available);
-    if (!selected) {
-        throw new Error(formatWorkerPlatformSelectionMessage(available));
+async function preflightHostWorkerDispatch(bridge, context, fallbackDiagnostic) {
+    // Compatibility-only test hooks. Production always delegates selection and
+    // provider preflight to the Go adapter boundary below.
+    if (_detectAvailablePlatformsRef) {
+        const available = await _detectAvailablePlatformsRef();
+        if (available.length === 0) {
+            throw new Error(fallbackDiagnostic ??
+                `Worker dispatch cannot start for ${context.toLowerCase()}; no provider is available.`);
+        }
+        const requested = process.env["AETHER_WORKER_PLATFORM"]?.trim().toLowerCase();
+        const selected = requested
+            ? available.find((platform) => platform === requested)
+            : available[0];
+        if (!selected) {
+            throw new Error(requested
+                ? `AETHER_WORKER_PLATFORM is set to ${requested}, but that provider is not available. Available providers: ${available.join(", ")}.`
+                : `No selectable worker platform is available. Available providers: ${available.join(", ") || "none"}.`);
+        }
+        if (_preflightWorkerPlatformRef) {
+            try {
+                await _preflightWorkerPlatformRef(selected, bridge.cwd);
+            }
+            catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                throw new Error(`${context} cannot start: ${message}`);
+            }
+        }
+        return;
     }
-    try {
-        await _preflightWorkerPlatformRef(selected, cwd);
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        throw new Error(`${context} cannot start: ${message}`);
-    }
+    await preflightGoWorkerProvider(bridge, context);
 }
 // ---------------------------------------------------------------------------
 // Dry-run ceremony preview (HOST-07, D-06)
@@ -509,8 +556,8 @@ function renderIterationComplete(stopReason) {
     emitCeremonyOutput(`\u2500\u2500 Iteration complete: ${stopReason} \u2500\u2500`);
 }
 /**
- * Dispatch a single build wave: dispatch workers, render ceremony,
- * write completion file, call finalizer.
+ * Dispatch a single build iteration, render ceremony, and write its completion
+ * packet. The caller finalizes only the last accepted iteration.
  *
  * @param bridge - Go bridge options
  * @param parsed - Parsed host arguments
@@ -522,7 +569,6 @@ function renderIterationComplete(stopReason) {
  * @returns Wave result with mapped workers, completion path, and claims
  */
 async function dispatchBuildWave(bridge, parsed, ceremony, buildManifest, dispatches, spawnOrchestrator, iterationFeedback) {
-    const phase = parsed.positional[0] ?? "1";
     // Inject iteration feedback into task briefs if provided
     if (iterationFeedback) {
         for (const d of dispatches) {
@@ -537,27 +583,28 @@ async function dispatchBuildWave(bridge, parsed, ceremony, buildManifest, dispat
     // Hive wisdom injection summary
     emitHiveSummary(dispatches);
     // Dispatch workers
+    if (!buildManifest.execution_binding) {
+        throw new Error("Build manifest contains no durable execution_binding");
+    }
     const dispatchOpts = {
         goBinaryPath: bridge.goBinaryPath,
         cwd: bridge.cwd,
         simulateWorkers: parsed.simulate,
         spawnOrchestrator,
+        workflow: "build",
+        phase: buildManifest.phase,
+        executionBinding: buildManifest.execution_binding,
     };
     const workerResults = await _dispatchWorkersRef(dispatchOpts, dispatches);
     const mappedResults = toWorkerResults(dispatches, workerResults);
     // Render worker-complete ceremony
     renderWorkerCeremony(ceremony, "build", mappedResults);
-    // Write completion file and call finalizer
+    // Write a completion candidate. Finalization happens once after iteration.
     const completion = {
         dispatch_manifest: buildManifest,
         dispatches: mappedResults,
     };
     const completionPath = writeCompletionFile(approvedCompletionDirPrefix("build"), "build-completion.json", { result: completion });
-    _callGoJSONRef(bridge, [
-        "build-finalize", phase,
-        "--completion-file", completionPath,
-    ]);
-    cleanupCompletionDir(completionPath);
     // Build worker claims from raw dispatch results for confidence evaluation.
     // Raw results carry extra fields (blockers, test_results) that toWorkerResults drops.
     const workerClaims = workerResults.map((w) => {
@@ -609,7 +656,12 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     if (!buildManifest) {
         throw new Error("Build --plan-only returned no dispatch_manifest. Check colony state and try again.");
     }
-    let dispatches = buildManifest.dispatches ?? buildResult.dispatches ?? [];
+    if (buildManifest.orchestrator_boundary_guidance?.active) {
+        const guidance = buildManifest.orchestrator_boundary_guidance;
+        throw new Error(guidance.summary ?? `Build is paused for unresolved boundary questions. Run ${guidance.next ?? "aether discuss"}.`);
+    }
+    const issuedDispatches = buildManifest.dispatches ?? buildResult.dispatches ?? [];
+    let dispatches = JSON.parse(JSON.stringify(issuedDispatches));
     if (dispatches.length === 0) {
         throw new Error("Build manifest contains no dispatches. Nothing to build.");
     }
@@ -626,17 +678,10 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
             d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + buildPlaybookContext;
         }
     }
-    // Step 2: Check available platforms (unless simulating)
+    // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
-        const available = await _detectAvailablePlatformsRef();
-        if (available.length === 0) {
-            const diagnostic = buildResult.provider_diagnostics;
-            const msg = diagnostic
-                ? `No platform workers available. ${diagnostic}`
-                : formatPlatformUnavailableMessage(`build phase ${phase}`);
-            throw new Error(msg);
-        }
-        await preflightHostWorkerDispatch(available, bridge.cwd, `Build phase ${phase}`);
+        const diagnostic = buildResult.provider_diagnostics;
+        await preflightHostWorkerDispatch(bridge, `Build phase ${phase}`, diagnostic ? `No platform workers available. ${diagnostic}` : undefined);
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { dispatch_manifest: buildManifest };
@@ -688,7 +733,11 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
             }
         }
         // Dispatch the wave
+        const previousWaveResult = lastWaveResult;
         lastWaveResult = await dispatchBuildWave(bridge, parsed, ceremony, buildManifest, dispatches, spawnOrchestrator, iterationFeedback);
+        if (previousWaveResult && previousWaveResult.completionPath !== lastWaveResult.completionPath) {
+            cleanupCompletionDir(previousWaveResult.completionPath);
+        }
         // Evaluate confidence from worker claims
         const evaluated = confidenceEvaluator.evaluate({
             workerClaims: lastWaveResult.workerClaims,
@@ -702,33 +751,28 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
             renderIterationComplete(loopResult.stopReason);
             break;
         }
-        // Re-fetch manifest for next iteration (Go may adjust dispatches)
-        const reFetchResult = _callGoJSONRef(bridge, goArgs);
-        const reFetchManifest = reFetchResult.dispatch_manifest;
-        if (!reFetchManifest) {
-            // Manifest re-fetch failed; stop iterating
-            renderIterationComplete("manifest_re_fetch_failed");
-            break;
-        }
-        const newDispatches = reFetchManifest.dispatches ?? reFetchResult.dispatches ?? [];
-        if (newDispatches.length === 0) {
-            renderIterationComplete("no_dispatches");
-            break;
-        }
-        // Update dispatches and spawn orchestrator consumed budget for new dispatches
-        dispatches = newDispatches;
-        // Re-inject playbook context for re-fetched dispatches (playbook content
-        // is lost when manifest is re-fetched from Go on subsequent iterations)
-        if (buildPlaybookContext) {
-            for (const d of dispatches) {
-                d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + buildPlaybookContext;
-            }
-        }
-        // Re-create spawn orchestrator with updated budget for the new dispatches
-        // The confidence loop already tracks cumulative budget internally
+        // The Go-issued manifest is immutable for the whole attempt. Subsequent
+        // iterations reuse cloned dispatches with feedback injected into briefs.
     }
-    // Step 8: Render closeout with final completion path
-    const finalCompletionPath = lastWaveResult?.completionPath ?? "";
+    if (!lastWaveResult) {
+        throw new Error("Build dispatch produced no completion packet.");
+    }
+    // Step 8: Commit the accepted completion exactly once. Preserve the packet
+    // on failure so the same attempt can be retried without rerunning workers.
+    const finalCompletionPath = lastWaveResult.completionPath;
+    const staged = _callGoJSONRef(bridge, [
+        "build-completion-stage", phase,
+        "--completion-file", finalCompletionPath,
+    ]);
+    const durableCompletionPath = staged.completion_path;
+    if (!durableCompletionPath) {
+        throw new Error("Go did not return a durable build completion path.");
+    }
+    _callGoJSONRef(bridge, [
+        "build-finalize", phase,
+        "--completion-file", durableCompletionPath,
+    ]);
+    cleanupCompletionDir(finalCompletionPath);
     emitCeremonyOutput(ceremony.renderCloseout("build", finalCompletionPath));
     // Output result JSON to stdout with iteration summary
     const loopState = confidenceLoop.getState();
@@ -753,7 +797,7 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     }
     process.stdout.write(JSON.stringify({
         ok: true,
-        completion_file: finalCompletionPath,
+        completion_file: durableCompletionPath,
         iterations: {
             count: loopState.iterationCount,
             final_confidence: loopState.confidenceHistory[loopState.confidenceHistory.length - 1] ?? 0,
@@ -791,13 +835,9 @@ async function runDispatchedPlanCommand(bridge, parsed) {
             d.task_brief = (d.task_brief ?? d.task ?? "") + "\n\n" + planPlaybookContext;
         }
     }
-    // Step 2: Check platforms (unless simulating)
+    // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
-        const available = await _detectAvailablePlatformsRef();
-        if (available.length === 0) {
-            throw new Error(formatPlatformUnavailableMessage("plan"));
-        }
-        await preflightHostWorkerDispatch(available, bridge.cwd, "Plan");
+        await preflightHostWorkerDispatch(bridge, "Plan");
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
@@ -809,6 +849,7 @@ async function runDispatchedPlanCommand(bridge, parsed) {
         goBinaryPath: bridge.goBinaryPath,
         cwd: bridge.cwd,
         simulateWorkers: parsed.simulate,
+        workflow: "plan",
     };
     const buildDispatches = toWorkerDispatches(dispatches);
     const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);
@@ -852,13 +893,9 @@ async function runDispatchedContinueCommand(bridge, parsed) {
     for (const d of dispatches) {
         d.hive_section = hiveSection;
     }
-    // Step 2: Check platforms (unless simulating)
+    // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
-        const available = await _detectAvailablePlatformsRef();
-        if (available.length === 0) {
-            throw new Error(formatPlatformUnavailableMessage("continue"));
-        }
-        await preflightHostWorkerDispatch(available, bridge.cwd, "Continue");
+        await preflightHostWorkerDispatch(bridge, "Continue");
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
@@ -870,6 +907,7 @@ async function runDispatchedContinueCommand(bridge, parsed) {
         goBinaryPath: bridge.goBinaryPath,
         cwd: bridge.cwd,
         simulateWorkers: parsed.simulate,
+        workflow: "continue",
     };
     const buildDispatches = toWorkerDispatches(dispatches);
     const workerResults = await _dispatchWorkersRef(dispatchOpts, buildDispatches);

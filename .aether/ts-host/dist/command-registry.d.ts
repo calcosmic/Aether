@@ -19,6 +19,9 @@ export interface ParsedHostArgs {
     targetConfidence: string | undefined;
     maxIterations: string | undefined;
     accept: boolean;
+    revisionType: string | undefined;
+    revisionReason: string | undefined;
+    revisionEvidence: string[];
     verificationTimeout: string | undefined;
     light: boolean;
     heavy: boolean;

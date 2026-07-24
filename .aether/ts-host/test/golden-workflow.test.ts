@@ -1,8 +1,9 @@
 /**
- * Golden workflow test — captures the full ceremony output of a lifecycle run.
+ * Golden workflow test — captures the lifecycle planning boundary.
  *
- * Runs plan -> build -> continue with simulated workers, captures all rendered
- * output, and compares against a stored baseline snapshot.
+ * The TS lifecycle harness no longer fabricates a final plan from local
+ * synthesis. It should stop after the planning finalizer reports that a fresh
+ * Scout -> Route-Setter iteration is required.
  *
  * To update the snapshot after intentional ceremony changes:
  *   AETHER_UPDATE_SNAPSHOTS=1 npx tsx --test test/golden-workflow.test.ts
@@ -167,7 +168,7 @@ describe("golden-workflow", () => {
     }
   });
 
-  it("runLifecycle produces deterministic golden output", async () => {
+  it("runLifecycle reports the pending planning boundary deterministically", async () => {
     const goBinaryPath = discoverSourceGoBinary();
     const result = await runLifecycle({
       goBinaryPath,
@@ -176,13 +177,17 @@ describe("golden-workflow", () => {
       phase: 1,
     });
 
-    assert.equal(result.success, true, "Lifecycle should succeed");
-    assert.deepEqual(result.steps_completed, ["plan", "build", "continue"]);
+    assert.equal(result.success, false, "Lifecycle should stop at planning");
+    assert.deepEqual(result.steps_completed, []);
+    assert.match(
+      result.error ?? "",
+      /intermediate planning iteration|synthesis planning packets|real Scout and Route-Setter/
+    );
 
-    // Combine stdout captures into normalized golden output
+    // Combine stdout captures into normalized output. Ceremony output is routed
+    // to stderr, and no fake build/continue output should be emitted on stdout.
     const rawOutput = capturedOutput.join("");
     const normalized = normalizeOutput(rawOutput);
-
-    assertGoldenSnapshot(normalized);
+    assert.equal(normalized, "");
   });
 });

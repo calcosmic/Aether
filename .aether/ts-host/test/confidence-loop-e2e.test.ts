@@ -37,6 +37,7 @@ import {
 import type { CeremonyAdapter, CeremonyWorkflow } from "../src/ceremony-adapter.js";
 import type { GoBridgeOptions } from "../src/go-bridge.js";
 import type { BuildDispatch } from "../src/types.js";
+import { TEST_EXECUTION_BINDING } from "./execution-binding-fixture.js";
 
 // ---------------------------------------------------------------------------
 // Shared mock helpers
@@ -126,7 +127,10 @@ function createIterationMockGo(
         });
       }
       const manifest: Record<string, unknown> = {
-        dispatch_manifest: { dispatches },
+        dispatch_manifest: {
+          execution_binding: TEST_EXECUTION_BINDING,
+          dispatches,
+        },
       };
       if (spawnBudget !== undefined) {
         (manifest.dispatch_manifest as Record<string, unknown>).queen_execution_policy = {
@@ -262,9 +266,9 @@ describe("E2E: full iteration lifecycle", () => {
 
     await runDispatchedBuildCommand(bridge, parsed, def);
 
-    // Verify 2 iterations (2 build-finalize calls)
+    // Iterations dispatch independently, then commit one accepted completion.
     const finalizeCount = countGoCommandCalls(harness.goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should run 2 iterations: low then high confidence");
+    assert.equal(finalizeCount, 1, "Should finalize exactly once after iteration");
     assert.equal(harness.dispatchCallCount, 2, "Should dispatch 2 waves");
 
     // Verify ceremony shows both iterations
@@ -414,9 +418,9 @@ describe("E2E: full iteration lifecycle", () => {
 
     await runDispatchedBuildCommand(bridge, parsed, def);
 
-    // Verify 3 iterations completed (all three dispatched)
+    // Verify 3 iterations completed while lifecycle finalization stayed singular.
     const finalizeCount = countGoCommandCalls(harness.goCalls, "build-finalize");
-    assert.equal(finalizeCount, 3, "Should run 3 iterations before stopping");
+    assert.equal(finalizeCount, 1, "Should finalize exactly once after iteration");
     assert.equal(harness.dispatchCallCount, 3, "Should dispatch 3 waves");
 
     // Verify stop reason is diminishing_returns, NOT max_iterations_met
@@ -486,7 +490,7 @@ describe("E2E: full iteration lifecycle", () => {
 
     // Should stop at iteration 2 because budget (5) is exhausted by 3+3=6 workers
     const finalizeCount = countGoCommandCalls(harness.goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should stop at 2 iterations due to budget exhaustion");
+    assert.equal(finalizeCount, 1, "Should finalize exactly once after budget exhaustion");
     assert.equal(harness.dispatchCallCount, 2, "Should dispatch 2 waves before budget exhausted");
 
     // Verify stop reason includes budget
@@ -631,9 +635,9 @@ describe("E2E: feedback injection across iterations", () => {
 
     await runDispatchedBuildCommand(bridge, parsed, def);
 
-    // Verify 2 dispatches occurred
+    // Verify 2 dispatches occurred before one lifecycle commit.
     const finalizeCount = countGoCommandCalls(harness.goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should call build-finalize twice");
+    assert.equal(finalizeCount, 1, "Should call build-finalize exactly once");
     assert.equal(harness.dispatchCallCount, 2, "Should dispatch 2 waves");
 
     // Verify second dispatch has feedback from first iteration's blockers
@@ -832,7 +836,10 @@ describe("E2E: edge cases", () => {
       if (cmd === "build") {
         // Empty dispatches
         return {
-          dispatch_manifest: { dispatches: [] },
+          dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
+            dispatches: [],
+          },
         } as unknown as T;
       }
       return { ok: true } as unknown as T;
@@ -908,7 +915,7 @@ describe("E2E: edge cases", () => {
 
     // Should stop at max iterations (default 3)
     const finalizeCount = countGoCommandCalls(harness.goCalls, "build-finalize");
-    assert.equal(finalizeCount, 3, "Should run exactly 3 iterations (default max)");
+    assert.equal(finalizeCount, 1, "Should finalize exactly once after max iterations");
     assert.equal(harness.dispatchCallCount, 3, "Should dispatch 3 waves");
 
     // Verify stop reason

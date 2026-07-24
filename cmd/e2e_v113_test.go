@@ -139,7 +139,7 @@ func TestE2EV113FullFlow(t *testing.T) {
 
 	results, claims, mode, err := executeCodexBuildDispatches(
 		ctx, tmpDir, phase, dispatches, nil, startedAt,
-		invoker, colony.ModeInRepo, 5*time.Minute, 3, false,
+		invoker, colony.ModeInRepo, 5*time.Minute, 3, false, nil,
 	)
 	if err != nil {
 		t.Fatalf("Step 2: executeCodexBuildDispatches failed: %v", err)
@@ -172,8 +172,8 @@ func TestE2EV113FullFlow(t *testing.T) {
 	// ===== Step 3: Trigger gate failure =====
 	t.Log("Step 3: Trigger gate failure")
 	gateResults := map[string]interface{}{
-		"phase":         1,
-		"generated_at":  time.Now().Format(time.RFC3339),
+		"phase":        1,
+		"generated_at": time.Now().Format(time.RFC3339),
 		"checks": []map[string]interface{}{
 			{"name": "tests_gate", "passed": false, "summary": "2 tests failed"},
 			{"name": "build_gate", "passed": true, "summary": "Build succeeded"},
@@ -206,8 +206,8 @@ func TestE2EV113FullFlow(t *testing.T) {
 	// ===== Step 4: Unblock (simulate fixer success) =====
 	t.Log("Step 4: Unblock -- simulate fixer resolved gate failure")
 	gateResultsFixed := map[string]interface{}{
-		"phase":         1,
-		"generated_at":  time.Now().Format(time.RFC3339),
+		"phase":        1,
+		"generated_at": time.Now().Format(time.RFC3339),
 		"checks": []map[string]interface{}{
 			{"name": "tests_gate", "passed": true, "summary": "All tests pass after fix"},
 			{"name": "build_gate", "passed": true, "summary": "Build succeeded"},
@@ -241,7 +241,7 @@ func TestE2EV113FullFlow(t *testing.T) {
 	}
 	fixerResults, _, _, err := executeCodexBuildDispatches(
 		ctx, tmpDir, phase, fixerDispatch, nil, time.Now(),
-		invoker, colony.ModeInRepo, 5*time.Minute, 3, false,
+		invoker, colony.ModeInRepo, 5*time.Minute, 3, false, nil,
 	)
 	if err != nil {
 		t.Fatalf("Step 5: fixer dispatch failed: %v", err)
@@ -297,15 +297,15 @@ func TestE2EV113FullFlow(t *testing.T) {
 	// ===== Step 7: Learning capture =====
 	t.Log("Step 7: Learning capture")
 	learningEntry := map[string]interface{}{
-		"run_id":       "e2e-run-001",
-		"worker":       "Mason-67",
-		"caste":        "builder",
-		"phase":        1,
-		"files":        []string{"cmd/e2e_v113_test.go"},
-		"observation":  "FakeInvoker completes deterministically within 50ms",
-		"confidence":   0.85,
+		"run_id":         "e2e-run-001",
+		"worker":         "Mason-67",
+		"caste":          "builder",
+		"phase":          1,
+		"files":          []string{"cmd/e2e_v113_test.go"},
+		"observation":    "FakeInvoker completes deterministically within 50ms",
+		"confidence":     0.85,
 		"classification": "pattern",
-		"timestamp":    time.Now().Format(time.RFC3339),
+		"timestamp":      time.Now().Format(time.RFC3339),
 	}
 	learningData, _ := json.Marshal(learningEntry)
 	if err := os.MkdirAll(filepath.Join(dataDir, "learnings"), 0755); err != nil {
@@ -343,10 +343,10 @@ func TestE2EV113FullFlow(t *testing.T) {
 	}
 
 	wisdomEntry := map[string]interface{}{
-		"id":         "wisdom-001",
-		"text":       "FakeInvoker produces deterministic results for testing",
-		"domain":     []string{"testing", "e2e"},
-		"confidence": 0.90,
+		"id":          "wisdom-001",
+		"text":        "FakeInvoker produces deterministic results for testing",
+		"domain":      []string{"testing", "e2e"},
+		"confidence":  0.90,
 		"source_repo": "Aether",
 		"created_at":  time.Now().Format(time.RFC3339),
 	}
@@ -456,12 +456,12 @@ This skill was auto-created from verified difficult task execution.
 	processes := map[string]interface{}{
 		"workers": []map[string]interface{}{
 			{
-				"name":     "Mason-67",
-				"pid":      0,
-				"started":  time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
-				"root":     tmpDir,
-				"caste":    "builder",
-				"phase":    1,
+				"name":    "Mason-67",
+				"pid":     0,
+				"started": time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
+				"root":    tmpDir,
+				"caste":   "builder",
+				"phase":   1,
 			},
 		},
 	}

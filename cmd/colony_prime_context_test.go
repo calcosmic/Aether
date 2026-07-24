@@ -156,6 +156,11 @@ section_templates:
 
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
 	os.MkdirAll(dataDir, 0755)
+	hubDir := filepath.Join(tmpDir, "hub")
+	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
+		t.Fatalf("mkdir hub hive: %v", err)
+	}
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 	s, err := storage.NewStore(dataDir)
 	if err != nil {
 		t.Fatalf("create store: %v", err)
@@ -240,11 +245,25 @@ section_templates:
 	}
 
 	// hub QUEEN.md (global queen wisdom + user preferences)
-	hubDir := resolveHubPath()
-	os.MkdirAll(hubDir, 0755)
 	globalQueenContent := "## Patterns\n\n- Always write tests first\n\n## User Preferences\n\n- Speak plain English\n"
 	if err := os.WriteFile(filepath.Join(hubDir, "QUEEN.md"), []byte(globalQueenContent), 0644); err != nil {
 		t.Fatalf("write global queen: %v", err)
+	}
+	hiveData := hiveWisdomData{
+		Entries: []hiveWisdomEntry{{
+			ID:         "hw1",
+			Text:       "Hive wisdom: prefer composition over inheritance",
+			Confidence: 0.85,
+			Domain:     "go",
+			AccessedAt: time.Now().UTC().Format(time.RFC3339),
+		}},
+	}
+	hiveJSON, err := json.MarshalIndent(hiveData, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal hive wisdom: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hubDir, "hive", "wisdom.json"), hiveJSON, 0644); err != nil {
+		t.Fatalf("write hive wisdom: %v", err)
 	}
 
 	// local QUEEN.md (local queen wisdom)
@@ -869,11 +888,11 @@ section_templates:
 
 	entries := []map[string]interface{}{
 		{
-			"phase":           1,
-			"content":         "learned something",
-			"confidence":      0.85,
-			"classification":  "pattern",
-			"evidence":        map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
+			"phase":          1,
+			"content":        "learned something",
+			"confidence":     0.85,
+			"classification": "pattern",
+			"evidence":       map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
 		},
 	}
 	if err := s.SaveJSON("entries.json", entries); err != nil {

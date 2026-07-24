@@ -19,7 +19,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { approvedCompletionDirPrefix, callGoJSON, writeCompletionFile } from "./go-bridge.js";
-import { detectAvailablePlatforms, formatPlatformUnavailableMessage } from "./platform-dispatcher.js";
 import { createDashboard } from "./dashboard.js";
 import { createQueenOrchestrator as _createQueenOrchestrator } from "./queen/orchestrator.js";
 import { runOracleLifecycle } from "./oracle-lifecycle.js";
@@ -63,21 +62,6 @@ function renderWorkerCeremony(ceremony, workflow, workers) {
     for (const worker of workers) {
         emitCeremonyOutput(ceremony.renderWorkerComplete(workflow, worker));
     }
-}
-function stringField(value, key) {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        return undefined;
-    }
-    const field = value[key];
-    return typeof field === "string" && field.trim() !== "" ? field.trim() : undefined;
-}
-function providerDiagnosticFromBuildResult(buildResult, buildManifest) {
-    return (stringField(buildResult, "provider_diagnostics") ??
-        stringField(buildManifest, "provider_diagnostics"));
-}
-function formatLifecycleProviderUnavailableMessage(context, buildResult, buildManifest) {
-    return (providerDiagnosticFromBuildResult(buildResult, buildManifest) ??
-        formatPlatformUnavailableMessage(context));
 }
 // ---------------------------------------------------------------------------
 // Lifecycle orchestrator
@@ -152,7 +136,8 @@ export async function runLifecycle(opts) {
         renderManifestCeremony(ceremony, "plan", planCeremonyEnvelope, planDispatches);
         // The TS host does not run planning workers here. Only real planning
         // dispatch completions belong in this list; host-created plans are labeled
-        // with the synthesis envelope below.
+        // with the synthesis envelope below and must not be treated as a completed
+        // production plan unless the Go finalizer says a real stop condition was met.
         const planningResults = [];
         renderWorkerCeremony(ceremony, "plan", planningResults);
         // Build plan completion file with explicit host synthesis.
@@ -197,12 +182,17 @@ export async function runLifecycle(opts) {
             },
         };
         const planCompletionPath = writeCompletionFile(approvedCompletionDirPrefix("plan"), "plan-completion.json", { result: planCompletion });
-        // Call plan-finalizer to commit the plan to colony state
-        callGoJSON(opts, [
+        // Call plan-finalizer. Iterative planning can validly return an
+        // intermediate result that requires a fresh Scout -> Route-Setter pass.
+        const planFinalizeResult = callGoJSON(opts, [
             "plan-finalize",
             "--completion-file",
             planCompletionPath,
         ]);
+        if (planFinalizeResult["requires_next_iteration"] === true ||
+            planFinalizeResult["planned"] !== true) {
+            throw new Error("Plan finalizer returned an intermediate planning iteration; TS lifecycle host cannot synthesize the remaining planning loop. Run Claude /ant-plan or provide real Scout and Route-Setter completions, then rerun the build lifecycle.");
+        }
         emitCeremonyOutput(ceremony.renderCloseout("plan", planCompletionPath));
         stepsCompleted.push("plan");
         process.stderr.write("Plan finalized successfully\n");
@@ -225,16 +215,10 @@ export async function runLifecycle(opts) {
         }
         const buildCeremonyEnvelope = { dispatch_manifest: buildManifest };
         renderManifestCeremony(ceremony, "build", buildCeremonyEnvelope, buildDispatches);
-        // Detect available platforms before dispatching.
-        const availablePlatforms = await detectAvailablePlatforms();
-        const hasPlatforms = availablePlatforms.length > 0;
         // Lifecycle is guarded to explicit simulation at entry. Keep the local
         // variable so the build path can share the same option shape as worker
         // dispatch without pretending this is production orchestration.
         const simulateWorkers = true;
-        if (!hasPlatforms && !simulateWorkers) {
-            throw new Error(formatLifecycleProviderUnavailableMessage(`phase ${targetPhase} build`, buildResult, buildManifest));
-        }
         // Create a placeholder file for simulated worker file claims.
         // The Go build-finalizer validates that all claimed files exist on disk
         // and are within the repository. For simulated workers, we create a real

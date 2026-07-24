@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync, existsSync, unlinkSync, rmdirSync, mkdtempSync } from "fs";
-import { resolve, dirname } from "path";
+import { resolve } from "path";
 import { tmpdir } from "os";
-import { runPhase, type PhaseResult } from "../../src/orchestrator/runPhase.js";
+import { runPhase } from "../../src/orchestrator/runPhase.js";
 import { parseEventLine, type ColonyEvent } from "../../src/schemas/event.schema.js";
-import { projectRoot } from "../../src/utils/projectRoot.js";
 
 function getEventsFile(): string {
-  return process.env.AETHER_EVENTS_FILE || resolve(projectRoot, "..", ".aether", "events", "current.ndjson");
+  return process.env.AETHER_EVENTS_FILE || "";
 }
 
 function cleanupEvents(): void {
@@ -37,19 +36,21 @@ describe("runPhase", () => {
     delete process.env.AETHER_EVENTS_FILE;
   });
 
-  it("loads the init phase, finds the queen agent, and returns completed status", async () => {
+  it("loads the init phase but fails closed because the control plane is retired", async () => {
     const result = await runPhase("init");
     expect(result.phaseId).toBe("init");
     expect(result.agentId).toBe("queen");
-    expect(result.status).toBe("completed");
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("retired experimental control plane");
     expect(result.events.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("emits at least phase:start and phase:complete events", async () => {
+  it("emits phase:start and phase:failed without a false completion event", async () => {
     const result = await runPhase("init");
     const types = result.events.map((e) => e.type);
     expect(types).toContain("phase:start");
-    expect(types).toContain("phase:complete");
+    expect(types).toContain("phase:failed");
+    expect(types).not.toContain("phase:complete");
     for (const ev of result.events) {
       expect(ev.timestamp).toBeDefined();
       expect(ev.payload).toBeDefined();
@@ -70,7 +71,7 @@ describe("runPhase", () => {
     await expect(runPhase("missing-agent-phase")).rejects.toThrow("Phase not found");
   });
 
-  it("appends emitted events to .aether/events/current.ndjson and they are parseable", async () => {
+  it("appends emitted events to the isolated event file and they are parseable", async () => {
     await runPhase("init");
     const eventsFile = getEventsFile();
     expect(existsSync(eventsFile)).toBe(true);

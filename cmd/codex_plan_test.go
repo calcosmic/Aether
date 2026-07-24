@@ -57,7 +57,7 @@ func TestPlanUsesSurveyAndRecordsPlanningDispatches(t *testing.T) {
 	}
 
 	stdout = &bytes.Buffer{}
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestPlanIgnoresPriorGoalPlanningArtifactForFreshSession(t *testing.T) {
 		Plan:         colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -698,27 +698,31 @@ func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
 							"description": "Land external planning finalization.",
 							"tasks": []map[string]interface{}{
 								{
-									"goal":             "Record wrapper planning outputs through the runtime",
-									"constraints":      []string{"Go owns state"},
-									"hints":            []string{"cmd/codex_plan_finalize.go"},
-									"success_criteria": []string{"Planning finalizer writes state"},
+									"goal":                  "Record wrapper planning outputs through the runtime",
+									"constraints":           []string{"Go owns state"},
+									"hints":                 []string{"cmd/codex_plan_finalize.go"},
+									"success_criteria":      []string{"Planning finalizer writes state"},
+									"evidence_requirements": []map[string]interface{}{{"criterion": "Planning finalizer writes state", "checks": []string{"claims", "watcher"}}},
 								},
 							},
-							"success_criteria": []string{"Finalizer exists"},
+							"success_criteria":      []string{"Finalizer exists"},
+							"evidence_requirements": []map[string]interface{}{{"criterion": "Finalizer exists", "checks": []string{"claims", "watcher"}}},
 						},
 						{
 							"name":        "Wrapper plan ceremony",
 							"description": "Wire Claude/OpenCode plan wrappers.",
 							"tasks": []map[string]interface{}{
 								{
-									"goal":             "Spawn Scout and Route-Setter from manifest",
-									"constraints":      []string{"Use plan-finalize"},
-									"hints":            []string{".claude/commands/ant/plan.md"},
-									"success_criteria": []string{"Wrapper contract is tested"},
-									"depends_on":       []string{"1.1"},
+									"goal":                  "Spawn Scout and Route-Setter from manifest",
+									"constraints":           []string{"Use plan-finalize"},
+									"hints":                 []string{".claude/commands/ant/plan.md"},
+									"success_criteria":      []string{"Wrapper contract is tested"},
+									"evidence_requirements": []map[string]interface{}{{"criterion": "Wrapper contract is tested", "checks": []string{"tests", "watcher"}}},
+									"depends_on":            []string{"1.1"},
 								},
 							},
-							"success_criteria": []string{"Wrappers use real agents"},
+							"success_criteria":      []string{"Wrappers use real agents"},
+							"evidence_requirements": []map[string]interface{}{{"criterion": "Wrappers use real agents", "checks": []string{"claims", "watcher"}}},
 						},
 					},
 					"confidence": map[string]interface{}{"knowledge": 91, "requirements": 88, "risks": 82, "dependencies": 80, "effort": 84, "overall": 86},
@@ -846,7 +850,7 @@ func TestPlanIncludesDispatchContract(t *testing.T) {
 		Plan:    colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--plan-only"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -879,15 +883,15 @@ func TestPlanIncludesDispatchContract(t *testing.T) {
 	if got := stringValue(contract["dependency_behavior"]); !strings.Contains(got, "Route-setter execution depends on the scout completing first") {
 		t.Fatalf("dependency_behavior = %q, want scout dependency guidance", got)
 	}
-	if got := stringValue(contract["fallback_behavior"]); !strings.Contains(got, "dispatch_mode=fallback") {
-		t.Fatalf("fallback_behavior = %q, want fallback visibility guidance", got)
+	if got := stringValue(contract["fallback_behavior"]); !strings.Contains(got, "does not fall back to local synthesis") || !strings.Contains(got, "aether plan --synthetic") {
+		t.Fatalf("fallback_behavior = %q, want fail-closed synthetic guidance", got)
 	}
 	if got := stringValue(contract["coordination_path"]); got != filepath.ToSlash(filepath.Join(".aether", "data", "spawn-tree.txt")) {
 		t.Fatalf("coordination_path = %q", got)
 	}
 
 	visibility := stringSliceValue(contract["fallback_visibility"])
-	for _, want := range []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source"} {
+	for _, want := range []string{"dispatch_mode", "planning_warning", "synthetic", "synthetic_warning", "artifact_source", "plan_source"} {
 		if !containsString(visibility, want) {
 			t.Fatalf("fallback_visibility missing %q: %v", want, visibility)
 		}
@@ -954,7 +958,7 @@ func TestPlanForceRecoversFromStaleInProgress(t *testing.T) {
 	var errBuf bytes.Buffer
 	stderr = &errBuf
 
-	rootCmd.SetArgs([]string{"plan", "--force"})
+	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan --force returned error: %v", err)
 	}
@@ -980,7 +984,7 @@ func TestPlanForceRecoversFromStaleInProgress(t *testing.T) {
 	}
 }
 
-func TestPlanForceRejectsAfterCompletedPhases(t *testing.T) {
+func TestPlanForcePreservesCompletedPhasesAndRevisesFutureWork(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1020,13 +1024,29 @@ func TestPlanForceRejectsAfterCompletedPhases(t *testing.T) {
 	var errBuf bytes.Buffer
 	stderr = &errBuf
 
-	rootCmd.SetArgs([]string{"plan", "--force"})
+	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic", "--revision-type", "user_feedback", "--revision-reason", "The remaining scope changed after phase one"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
 
-	if !strings.Contains(errBuf.String(), "cannot force-replan after completed phases") {
-		t.Fatalf("expected force-replan rejection for completed phases, got: %s", errBuf.String())
+	if strings.Contains(errBuf.String(), `"ok":false`) {
+		t.Fatalf("expected completed-prefix revision to succeed, got: %s", errBuf.String())
+	}
+	var revised colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &revised); err != nil {
+		t.Fatalf("load revised state: %v", err)
+	}
+	if len(revised.Plan.Phases) < 2 {
+		t.Fatalf("revised phase count = %d, want completed prefix plus replacement work", len(revised.Plan.Phases))
+	}
+	if revised.Plan.Phases[0].Name != "Done phase" || revised.Plan.Phases[0].Status != colony.PhaseCompleted || revised.Plan.Phases[0].Tasks[0].Status != colony.TaskCompleted {
+		t.Fatalf("completed phase was not preserved: %+v", revised.Plan.Phases[0])
+	}
+	if revised.CurrentPhase != 2 || revised.Plan.Phases[1].ID != 2 {
+		t.Fatalf("revision did not activate the replacement suffix at phase 2: current=%d phases=%+v", revised.CurrentPhase, revised.Plan.Phases)
+	}
+	if active, ok := activePlanRevision(revised.Plan); !ok || active.ReasonType != colony.PlanRevisionUserFeedback || len(revised.Plan.Revisions) != 2 {
+		t.Fatalf("revision history was not recorded: active=%+v ok=%v history=%+v", active, ok, revised.Plan.Revisions)
 	}
 }
 
@@ -1152,6 +1172,61 @@ func TestPlanUsesWorkerWrittenArtifactsWhenProvided(t *testing.T) {
 		if !strings.Contains(string(data), check.want) {
 			t.Fatalf("expected %s to be preserved, got:\n%s", filepath.Base(check.path), string(data))
 		}
+	}
+}
+
+func TestPlanDirectRealBelowTargetPersistsOnlyIntermediateIteration(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/aether-low-confidence-plan\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	goal := "Keep real planning iterative until confidence target"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &planningLowConfidenceArtifactInvoker{} }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"plan", "--target", "90", "--max-iterations", "4"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if result["planned"] != false || result["requires_next_iteration"] != true {
+		t.Fatalf("below-target real plan should require next iteration, got %+v", result)
+	}
+	if next := stringValue(result["next"]); !strings.Contains(next, "aether host plan") {
+		t.Fatalf("next = %q, want host plan iteration command", next)
+	}
+	loop := result["planning_loop"].(map[string]interface{})
+	if got := loop["stop_reason"].(string); got != planningLoopPendingStop {
+		t.Fatalf("stop_reason = %q, want pending", got)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(state.Plan.Phases) != 0 {
+		t.Fatalf("pending planning iteration must not commit final phases: %+v", state.Plan.Phases)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, planningIterationStateRel)); err != nil {
+		t.Fatalf("expected planning iteration state: %v", err)
 	}
 }
 
@@ -1307,9 +1382,10 @@ func TestPlanUsesFreshWorkerPlanArtifactWhenTimestampDoesNotAdvance(t *testing.T
 	}
 }
 
-func TestPlanFallsBackWhenRealPlanningDispatchFails(t *testing.T) {
+func TestPlanFailsClosedWhenRealPlanningDispatchFails(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
 
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
@@ -1326,7 +1402,7 @@ func TestPlanFallsBackWhenRealPlanningDispatchFails(t *testing.T) {
 		t.Fatalf("failed to write go.mod: %v", err)
 	}
 
-	goal := "Fall back when planner workers stall"
+	goal := "Stop honestly when planner workers stall"
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
@@ -1343,28 +1419,82 @@ func TestPlanFallsBackWhenRealPlanningDispatchFails(t *testing.T) {
 		t.Fatalf("plan returned error: %v", err)
 	}
 
-	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
-	result := env["result"].(map[string]interface{})
-	if got := result["dispatch_mode"]; got != "fallback" {
-		t.Fatalf("dispatch_mode = %v, want fallback", got)
+	env := parseEnvelope(t, stderr.(*bytes.Buffer).String())
+	if env["ok"] != false {
+		t.Fatalf("expected error envelope, got %#v", env)
 	}
-	if got := strings.TrimSpace(result["planning_warning"].(string)); got == "" {
-		t.Fatal("expected planning_warning to be populated")
+	errText := stringValue(env["error"])
+	for _, want := range []string{"real planning workers did not finish cleanly", "aether plan --synthetic"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error = %q, want %q", errText, want)
+		}
 	}
-	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 2 {
-		t.Fatalf("expected 2 planning dispatches, got %d", len(dispatches))
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
 	}
-	first := dispatches[0].(map[string]interface{})
-	if first["status"] != "timeout" {
-		t.Fatalf("first dispatch status = %v, want timeout", first["status"])
-	}
-	if count := int(result["count"].(float64)); count == 0 {
-		t.Fatal("expected fallback plan to still contain phases")
+	if len(state.Plan.Phases) != 0 {
+		t.Fatalf("normal planning failure must not commit fallback phases: %+v", state.Plan.Phases)
 	}
 }
 
-func TestPlanFallbackForLanguageDesignGoalIsGoalAware(t *testing.T) {
+func TestPlanFailsClosedWhenPlanningWorkersUnavailableBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Stop before local planning when provider is unavailable"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &planTestUnavailableInvoker{} }
+	defer func() { newCodexWorkerInvoker = originalInvoker }()
+
+	rootCmd.SetArgs([]string{"plan"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	env := parseEnvelope(t, stderr.(*bytes.Buffer).String())
+	if env["ok"] != false {
+		t.Fatalf("expected error envelope, got %#v", env)
+	}
+	errText := stringValue(env["error"])
+	for _, want := range []string{"real planning workers unavailable", "aether plan --synthetic"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error = %q, want %q", errText, want)
+		}
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(state.Plan.Phases) != 0 {
+		t.Fatalf("provider-unavailable planning must not commit phases: %+v", state.Plan.Phases)
+	}
+	if strings.TrimSpace(state.VerificationDepth) != "" {
+		t.Fatalf("provider-unavailable planning should not persist verification depth, got %q", state.VerificationDepth)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "planning")); !os.IsNotExist(err) {
+		t.Fatalf("provider-unavailable planning should not create planning dir, stat error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "spawn-tree.txt")); !os.IsNotExist(err) {
+		t.Fatalf("provider-unavailable planning should not record spawn tree, stat error: %v", err)
+	}
+}
+
+func TestPlanSyntheticForLanguageDesignGoalIsGoalAware(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1381,22 +1511,24 @@ func TestPlanFallbackForLanguageDesignGoalIsGoalAware(t *testing.T) {
 		Plan:            colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	originalInvoker := newCodexWorkerInvoker
-	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &failingPlanningInvoker{} }
-	defer func() { newCodexWorkerInvoker = originalInvoker }()
-
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if got := result["dispatch_mode"]; got != "fallback" {
-		t.Fatalf("dispatch_mode = %v, want fallback", got)
+	if got := result["dispatch_mode"]; got != "synthetic" {
+		t.Fatalf("dispatch_mode = %v, want synthetic", got)
+	}
+	if got := result["synthetic"]; got != true {
+		t.Fatalf("synthetic = %v, want true", got)
+	}
+	if got := strings.TrimSpace(stringValue(result["synthetic_warning"])); got == "" {
+		t.Fatal("expected synthetic_warning to be populated")
 	}
 	if got := int(result["count"].(float64)); got < 4 {
-		t.Fatalf("fallback count = %d, want at least 4 phases for milestone granularity", got)
+		t.Fatalf("synthetic count = %d, want at least 4 phases for milestone granularity", got)
 	}
 
 	phases := result["phases"].([]interface{})
@@ -1424,18 +1556,18 @@ func TestPlanFallbackForLanguageDesignGoalIsGoalAware(t *testing.T) {
 		"prototype",
 	} {
 		if !strings.Contains(blob, want) {
-			t.Fatalf("goal-aware fallback missing %q\nphase names: %v\n%s", want, names, blob)
+			t.Fatalf("goal-aware synthetic plan missing %q\nphase names: %v\n%s", want, names, blob)
 		}
 	}
 
 	for _, unwanted := range []string{"Discovery and boundaries", "Implementation", "Verification and polish"} {
 		if strings.Contains(blob, unwanted) {
-			t.Fatalf("goal-aware fallback should not collapse to generic template %q\nphase names: %v\n%s", unwanted, names, blob)
+			t.Fatalf("goal-aware synthetic plan should not collapse to generic template %q\nphase names: %v\n%s", unwanted, names, blob)
 		}
 	}
 }
 
-func TestPlanFallbackDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
+func TestPlanSyntheticDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1456,11 +1588,7 @@ func TestPlanFallbackDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
 		Plan:            colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	originalInvoker := newCodexWorkerInvoker
-	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &failingPlanningInvoker{} }
-	defer func() { newCodexWorkerInvoker = originalInvoker }()
-
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1468,7 +1596,7 @@ func TestPlanFallbackDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
 	if got := int(result["count"].(float64)); got < 4 {
-		t.Fatalf("fallback count = %d, want at least 4 phases for milestone granularity", got)
+		t.Fatalf("synthetic count = %d, want at least 4 phases for milestone granularity", got)
 	}
 
 	phases := result["phases"].([]interface{})
@@ -1485,7 +1613,7 @@ func TestPlanFallbackDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
 	}
 }
 
-func TestPlanFallbackDoesNotTreatCommandCenterAsAetherCommandWork(t *testing.T) {
+func TestPlanSyntheticDoesNotTreatCommandCenterAsAetherCommandWork(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1502,19 +1630,15 @@ func TestPlanFallbackDoesNotTreatCommandCenterAsAetherCommandWork(t *testing.T) 
 		Plan:            colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	originalInvoker := newCodexWorkerInvoker
-	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &failingPlanningInvoker{} }
-	defer func() { newCodexWorkerInvoker = originalInvoker }()
-
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if got := result["dispatch_mode"]; got != "fallback" {
-		t.Fatalf("dispatch_mode = %v, want fallback", got)
+	if got := result["dispatch_mode"]; got != "synthetic" {
+		t.Fatalf("dispatch_mode = %v, want synthetic", got)
 	}
 
 	blob := ""
@@ -1537,11 +1661,11 @@ func TestPlanFallbackDoesNotTreatCommandCenterAsAetherCommandWork(t *testing.T) 
 		"ant workflow",
 	} {
 		if strings.Contains(blob, unwanted) {
-			t.Fatalf("command-center fallback should not produce Aether orchestration plan containing %q:\n%s", unwanted, blob)
+			t.Fatalf("command-center synthetic plan should not produce Aether orchestration plan containing %q:\n%s", unwanted, blob)
 		}
 	}
 	if strings.TrimSpace(blob) == "" {
-		t.Fatal("expected command-center fallback to produce non-empty non-Aether plan")
+		t.Fatal("expected command-center synthetic plan to produce non-empty non-Aether plan")
 	}
 }
 
@@ -1584,17 +1708,23 @@ func TestPlanFallbackTreatsLifecycleReliabilityAsAetherWork(t *testing.T) {
 	}
 }
 
-func TestPlannedPlanningWorkersUsesQueenSelectedGatekeeper(t *testing.T) {
+func TestPlannedPlanningWorkersUsesClassicScoutRouteSetterPair(t *testing.T) {
 	saveGlobals(t)
 	setupRuntimeSkillAssignmentHub(t)
 
 	root := t.TempDir()
 	dispatches := plannedPlanningWorkersForGoal(root, "Plan secure auth token rotation")
 
-	for _, caste := range []string{"scout", "route_setter", "gatekeeper"} {
+	for _, caste := range []string{"scout", "route_setter"} {
 		if !planningDispatchHasCaste(dispatches, caste) {
-			t.Fatalf("planned planning dispatches missing Queen-selected %s: %+v", caste, dispatches)
+			t.Fatalf("planned planning dispatches missing classic %s: %+v", caste, dispatches)
 		}
+	}
+	if planningDispatchHasCaste(dispatches, "gatekeeper") {
+		t.Fatalf("classic planning should not add Gatekeeper to the Scout/Route-Setter pair: %+v", dispatches)
+	}
+	if len(dispatches) != 2 {
+		t.Fatalf("planning dispatch count = %d, want Scout + Route-Setter only: %+v", len(dispatches), dispatches)
 	}
 }
 
@@ -1849,11 +1979,13 @@ func (p *planningArtifactInvoker) Invoke(_ context.Context, config codex.WorkerC
           "goal": "Land the worker-authored planning flow",
           "constraints": ["Keep plan artifact authoritative"],
           "hints": ["cmd/codex_plan.go"],
-          "success_criteria": ["The worker plan is applied"],
-          "depends_on": []
+		  "success_criteria": ["The worker plan is applied"],
+		  "evidence_requirements": [{"criterion":"The worker plan is applied","checks":["claims","watcher"]}],
+		  "depends_on": []
         }
       ],
-      "success_criteria": ["Worker route-setter plan used"]
+	      "success_criteria": ["Worker route-setter plan used"],
+	      "evidence_requirements": [{"criterion":"Worker route-setter plan used","checks":["claims","watcher"]}]
     },
     {
       "name": "Verification",
@@ -1863,20 +1995,22 @@ func (p *planningArtifactInvoker) Invoke(_ context.Context, config codex.WorkerC
           "goal": "Confirm the worker plan survives serialization",
           "constraints": [],
           "hints": ["cmd/codex_plan_test.go"],
-          "success_criteria": ["Regression coverage exists"],
-          "depends_on": ["1.1"]
+		  "success_criteria": ["Regression coverage exists"],
+		  "evidence_requirements": [{"criterion":"Regression coverage exists","checks":["tests","watcher"]}],
+		  "depends_on": ["1.1"]
         }
       ],
-      "success_criteria": ["Plan verification ready"]
+	      "success_criteria": ["Plan verification ready"],
+	      "evidence_requirements": [{"criterion":"Plan verification ready","checks":["claims","watcher"]}]
     }
   ],
   "confidence": {
-    "knowledge": 91,
-    "requirements": 88,
-    "risks": 84,
-    "dependencies": 79,
-    "effort": 86,
-    "overall": 86
+    "knowledge": 92,
+    "requirements": 91,
+    "risks": 90,
+    "dependencies": 90,
+    "effort": 91,
+    "overall": 91
   },
   "gaps": ["Worker identified one remaining follow-up."]
 }`
@@ -1906,6 +2040,80 @@ func (p *planningArtifactInvoker) IsAvailable(_ context.Context) bool {
 }
 
 func (p *planningArtifactInvoker) ValidateAgent(_ string) error {
+	return nil
+}
+
+type planningLowConfidenceArtifactInvoker struct{}
+
+func (p *planningLowConfidenceArtifactInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	result := codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "worker-authored low-confidence planning artifact",
+	}
+	switch config.Caste {
+	case "scout":
+		result.ScoutReport = json.RawMessage(`{
+			"findings": [
+				{
+					"area": "planning loop",
+					"discovery": "Scout found enough evidence for a draft but not enough to hit the target",
+					"source": "cmd/codex_plan_test.go"
+				}
+			],
+			"gaps": ["Route-Setter needs one more implementation-contract pass"],
+			"confidence": 84,
+			"study_files": ["cmd/codex_plan.go"]
+		}`)
+	case "route_setter":
+		planningDir := filepath.Join(config.Root, ".aether", "data", "planning")
+		if err := os.MkdirAll(planningDir, 0755); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		planArtifact := `{
+  "phases": [
+    {
+      "name": "Pending real planning draft",
+      "description": "Draft that must not become the colony plan before another iteration.",
+      "tasks": [
+        {
+          "goal": "Gather the missing implementation-contract evidence",
+          "constraints": ["Do not finalize below target without a stop condition"],
+          "hints": ["cmd/codex_plan.go"],
+          "success_criteria": ["The next iteration has targeted gap evidence"],
+          "depends_on": []
+        }
+      ],
+      "success_criteria": ["The draft remains intermediate"]
+    }
+  ],
+  "confidence": {
+    "knowledge": 84,
+    "requirements": 84,
+    "risks": 84,
+    "dependencies": 84,
+    "effort": 84,
+    "overall": 84
+  },
+  "gaps": ["Route-Setter needs one more implementation-contract pass"]
+}`
+		if err := os.WriteFile(filepath.Join(planningDir, "phase-plan.json"), []byte(planArtifact), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		result.FilesCreated = []string{
+			filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json")),
+		}
+	}
+	return result, nil
+}
+
+func (p *planningLowConfidenceArtifactInvoker) IsAvailable(_ context.Context) bool {
+	return true
+}
+
+func (p *planningLowConfidenceArtifactInvoker) ValidateAgent(_ string) error {
 	return nil
 }
 
@@ -1942,20 +2150,22 @@ func (p *planningSameTimestampInvoker) Invoke(_ context.Context, config codex.Wo
           "goal": "Make planner artifacts from active workers authoritative even when timestamps do not advance",
           "constraints": ["Do not fall back to stale synthetic plans"],
           "hints": ["cmd/codex_plan.go", "cmd/codex_worker_artifacts.go"],
-          "success_criteria": ["Worker plan artifact is committed to colony state"],
-          "depends_on": []
+		  "success_criteria": ["Worker plan artifact is committed to colony state"],
+		  "evidence_requirements": [{"criterion":"Worker plan artifact is committed to colony state","checks":["claims","watcher"]}],
+		  "depends_on": []
         }
       ],
-      "success_criteria": ["Fresh worker-authored plan is selected"]
+	      "success_criteria": ["Fresh worker-authored plan is selected"],
+	      "evidence_requirements": [{"criterion":"Fresh worker-authored plan is selected","checks":["claims","watcher"]}]
     }
   ],
   "confidence": {
     "knowledge": 92,
     "requirements": 90,
-    "risks": 84,
-    "dependencies": 82,
-    "effort": 80,
-    "overall": 87
+    "risks": 90,
+    "dependencies": 91,
+    "effort": 90,
+    "overall": 91
   },
   "gaps": []
 }`
@@ -2182,7 +2392,7 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 	var errBuf bytes.Buffer
 	stderr = &errBuf
 
-	rootCmd.SetArgs([]string{"plan", "--force"})
+	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan --force returned error: %v", err)
 	}
@@ -2369,11 +2579,26 @@ func TestPlanningLoopOptionsClampAndEvaluateStopReasons(t *testing.T) {
 	if loop.MaxIterations != 12 {
 		t.Fatalf("max iterations = %d, want clamped 12", loop.MaxIterations)
 	}
-	if loop.StopReason != planningLoopStalled {
-		t.Fatalf("stop reason = %q, want stalled", loop.StopReason)
+	if loop.StopReason != planningLoopPendingStop {
+		t.Fatalf("stop reason = %q, want pending", loop.StopReason)
 	}
-	if loop.Iterations != 3 {
-		t.Fatalf("iterations = %d, want 3 after two stall deltas", loop.Iterations)
+	if loop.Iterations != 1 {
+		t.Fatalf("iterations = %d, want 1 evidence-backed pass", loop.Iterations)
+	}
+	if len(loop.History) != 1 {
+		t.Fatalf("history length = %d, want 1", len(loop.History))
+	}
+	if loop.History[0].Delta != 0 {
+		t.Fatalf("first delta = %d, want 0 without a prior evidence pass", loop.History[0].Delta)
+	}
+	if loop.History[0].StallCount != 0 {
+		t.Fatalf("first stall count = %d, want 0 without a prior evidence pass", loop.History[0].StallCount)
+	}
+	if loop.History[0].EvidenceHash == "" {
+		t.Fatal("expected evidence hash in planning loop sample")
+	}
+	if !containsString(loop.History[0].SelectedGaps, "gap") {
+		t.Fatalf("selected gaps = %v, want gap", loop.History[0].SelectedGaps)
 	}
 
 	targetReached := evaluatePlanningLoop(codexPlanConfidence{Overall: 95}, nil, codexPlanOptions{}, "balanced")
@@ -2389,6 +2614,26 @@ func TestPlanningLoopOptionsClampAndEvaluateStopReasons(t *testing.T) {
 	)
 	if accepted.StopReason != planningLoopAccepted || !accepted.AcceptedBelowTarget {
 		t.Fatalf("accepted loop = %+v, want accepted below target", accepted)
+	}
+}
+
+func TestPlanningEvidenceHashChangesWhenEvidenceChanges(t *testing.T) {
+	base := codexPlanConfidence{Knowledge: 70, Requirements: 70, Risks: 60, Dependencies: 65, Effort: 75, Overall: 68}
+	first := evaluatePlanningLoop(base, []string{"confirm provider dispatch"}, codexPlanOptions{}, "balanced")
+	changed := evaluatePlanningLoop(codexPlanConfidence{Knowledge: 72, Requirements: 70, Risks: 60, Dependencies: 65, Effort: 75, Overall: 70}, []string{"confirm provider dispatch"}, codexPlanOptions{}, "balanced")
+	gapChanged := evaluatePlanningLoop(base, []string{"confirm route-setter synthesis"}, codexPlanOptions{}, "balanced")
+
+	if len(first.History) != 1 || len(changed.History) != 1 || len(gapChanged.History) != 1 {
+		t.Fatalf("expected single-sample histories: %+v %+v %+v", first.History, changed.History, gapChanged.History)
+	}
+	if first.History[0].EvidenceHash == changed.History[0].EvidenceHash {
+		t.Fatal("confidence input changes must change the evidence hash")
+	}
+	if first.History[0].EvidenceHash == gapChanged.History[0].EvidenceHash {
+		t.Fatal("gap changes must change the evidence hash")
+	}
+	if !strings.Contains(first.History[0].Evidence, "single planning evidence pass") {
+		t.Fatalf("evidence summary = %q", first.History[0].Evidence)
 	}
 }
 
@@ -2432,6 +2677,21 @@ func TestPlanOnlyManifestIncludesClassicPlanningLoopControls(t *testing.T) {
 	}
 	if loop["stop_reason"].(string) != planningLoopPendingStop {
 		t.Fatalf("stop_reason = %q, want pending", loop["stop_reason"])
+	}
+	if strings.TrimSpace(manifest["planning_run_id"].(string)) == "" {
+		t.Fatal("expected planning_run_id in manifest")
+	}
+	if int(manifest["iteration"].(float64)) != 1 {
+		t.Fatalf("iteration = %v, want 1", manifest["iteration"])
+	}
+	if int(manifest["target_confidence"].(float64)) != 94 {
+		t.Fatalf("manifest target_confidence = %v, want 94", manifest["target_confidence"])
+	}
+	if int(manifest["max_iterations"].(float64)) != 7 {
+		t.Fatalf("manifest max_iterations = %v, want 7", manifest["max_iterations"])
+	}
+	if got := len(manifest["expected_workers"].([]interface{})); got != 2 {
+		t.Fatalf("expected_workers length = %d, want Scout and Route-Setter", got)
 	}
 }
 

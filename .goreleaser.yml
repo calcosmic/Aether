@@ -1,5 +1,10 @@
 version: 2
 
+snapshot:
+  # Local and CI release candidates must use the source manifest version rather
+  # than whichever historical tag happens to be nearest to the checkout.
+  version_template: '{{ envOrDefault "AETHER_RELEASE_VERSION" .Version }}'
+
 before:
   hooks:
     - go mod tidy

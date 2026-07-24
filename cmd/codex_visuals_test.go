@@ -692,7 +692,7 @@ func TestPlanVisualOutputShowsDispatchContractDetails(t *testing.T) {
 		effectivePlanningDispatchTimeout(0).String() + " worker max",
 		"route-setter only runs after a completed scout stage",
 		"authenticated platform dispatcher",
-		"dispatch_mode, planning_warning, provider_diagnostics, artifact_source, plan_source",
+		"dispatch_mode, planning_warning, synthetic, synthetic_warning, artifact_source, plan_source",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)

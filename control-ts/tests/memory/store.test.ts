@@ -1,26 +1,37 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { readFileSync, existsSync, unlinkSync, rmdirSync } from "fs";
-import { resolve, dirname } from "path";
+import { readFileSync, existsSync, mkdtempSync, rmSync } from "fs";
+import { resolve } from "path";
+import { tmpdir } from "os";
 import {
+  colonyStatePath,
   readColonyState,
   writeColonyState,
   updateColonyState,
   type ColonyState,
 } from "../../src/memory/store.js";
-import { projectRoot } from "../../src/utils/projectRoot.js";
 
-const TEST_STATE_DIR = resolve(projectRoot, "..", ".aether", "data");
-const TEST_STATE_PATH = resolve(TEST_STATE_DIR, "COLONY_STATE.json");
+let tempDir = "";
 
 function cleanup(): void {
-  if (existsSync(TEST_STATE_PATH)) {
-    unlinkSync(TEST_STATE_PATH);
+  if (tempDir) {
+    rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
+function setup(): void {
+  tempDir = mkdtempSync(resolve(tmpdir(), "aether-control-state-"));
+  process.env.AETHER_CONTROL_STATE_PATH = resolve(tempDir, "COLONY_STATE.json");
+}
+
+function teardown(): void {
+  cleanup();
+  delete process.env.AETHER_CONTROL_STATE_PATH;
+  tempDir = "";
+}
+
 describe("readColonyState", () => {
-  beforeEach(cleanup);
-  afterEach(cleanup);
+  beforeEach(setup);
+  afterEach(teardown);
 
   it("returns default state when file does not exist", () => {
     const state = readColonyState();
@@ -56,8 +67,8 @@ describe("readColonyState", () => {
 });
 
 describe("writeColonyState", () => {
-  beforeEach(cleanup);
-  afterEach(cleanup);
+  beforeEach(setup);
+  afterEach(teardown);
 
   it("serializes and writes state atomically", () => {
     const state: ColonyState = {
@@ -76,26 +87,25 @@ describe("writeColonyState", () => {
       },
     };
     writeColonyState(state);
-    expect(existsSync(TEST_STATE_PATH)).toBe(true);
-    const raw = readFileSync(TEST_STATE_PATH, "utf8");
+    expect(existsSync(colonyStatePath())).toBe(true);
+    const raw = readFileSync(colonyStatePath(), "utf8");
     const parsed = JSON.parse(raw);
     expect(parsed.goal).toBe("Test goal");
   });
 
   it("creates parent directories if they do not exist", () => {
-    // The default path already includes .aether/data; if it exists, this is fine.
-    // We test by removing the file (not the dir) and writing again.
+    // Remove the isolated state path and verify the store recreates its parent.
     cleanup();
     const state = readColonyState();
     state.goal = "Dir test";
     writeColonyState(state);
-    expect(existsSync(TEST_STATE_PATH)).toBe(true);
+    expect(existsSync(colonyStatePath())).toBe(true);
   });
 });
 
 describe("updateColonyState", () => {
-  beforeEach(cleanup);
-  afterEach(cleanup);
+  beforeEach(setup);
+  afterEach(teardown);
 
   it("reads current state, applies updater, and writes back", () => {
     const initial = readColonyState();

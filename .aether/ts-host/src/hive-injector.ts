@@ -70,8 +70,9 @@ export async function readHiveWisdom(opts: HiveInjectorOptions): Promise<string>
   let result: HiveReadResult;
   try {
     result = callGoJSON<HiveReadResult>(opts, [
-      "hive-read",
-      "--min-confidence",
+		"hive-read",
+		"--for-worker",
+		"--min-confidence",
       String(opts.minConfidence),
     ]);
   } catch (err: unknown) {

@@ -13,6 +13,9 @@ type goreleaserConfig struct {
 	Before struct {
 		Hooks []string `yaml:"hooks"`
 	} `yaml:"before"`
+	Snapshot struct {
+		VersionTemplate string `yaml:"version_template"`
+	} `yaml:"snapshot"`
 }
 
 type githubWorkflowConfig struct {
@@ -73,6 +76,24 @@ func TestGoReleaserBeforeHooksGuardGoModDiff(t *testing.T) {
 	}
 	if guardIndex <= tidyIndex {
 		t.Fatalf("go.mod/go.sum git diff guard must run after go mod tidy: tidy index %d, guard index %d", tidyIndex, guardIndex)
+	}
+}
+
+func TestGoReleaserSnapshotUsesExplicitReleaseVersion(t *testing.T) {
+	root, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".goreleaser.yml"))
+	if err != nil {
+		t.Fatalf("failed to read .goreleaser.yml: %v", err)
+	}
+	var cfg goreleaserConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("failed to parse .goreleaser.yml: %v", err)
+	}
+	if !strings.Contains(cfg.Snapshot.VersionTemplate, "AETHER_RELEASE_VERSION") {
+		t.Fatalf("snapshot version template does not honor AETHER_RELEASE_VERSION: %q", cfg.Snapshot.VersionTemplate)
 	}
 }
 
@@ -162,6 +183,50 @@ func TestReleaseWorkflowKeepsSecretChecksOutOfJobConditionals(t *testing.T) {
 	}
 	if !strings.Contains(npm.If, "needs.goreleaser.outputs.publish_release == 'true'") {
 		t.Fatalf("npm-bootstrap job if does not preserve dry-run publish_release guard: %s", npm.If)
+	}
+}
+
+func TestReleaseWorkflowsBindSnapshotAndBinaryToExpectedVersion(t *testing.T) {
+	tests := []struct {
+		rel               string
+		job               string
+		expectedReference string
+	}{
+		{filepath.Join(".github", "workflows", "ci.yml"), "go", "steps.source-version.outputs.version"},
+		{filepath.Join(".github", "workflows", "release.yml"), "goreleaser", "steps.release-meta.outputs.release_version"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.rel, func(t *testing.T) {
+			workflow := readGitHubWorkflow(t, tt.rel)
+			job := workflow.Jobs[tt.job]
+			snapshotIndex := workflowStepIndex(job, "Build GoReleaser snapshot")
+			if snapshotIndex == -1 {
+				t.Fatalf("%s missing snapshot build", tt.rel)
+			}
+			snapshot := job.Steps[snapshotIndex]
+			if got := snapshot.Env["AETHER_RELEASE_VERSION"]; !strings.Contains(got, tt.expectedReference) {
+				t.Fatalf("%s snapshot release version = %q, want reference to %s", tt.rel, got, tt.expectedReference)
+			}
+			if !strings.Contains(snapshot.Run, "goreleaser release --snapshot --clean") {
+				t.Fatalf("%s snapshot does not assemble archives and checksums:\n%s", tt.rel, snapshot.Run)
+			}
+			smokeIndex := workflowStepIndex(job, "Binary smoke test")
+			if smokeIndex == -1 {
+				t.Fatalf("%s missing binary smoke test", tt.rel)
+			}
+			smoke := job.Steps[smokeIndex].Run
+			if !strings.Contains(smoke, "BINARY_VERSION") || !strings.Contains(smoke, tt.expectedReference) {
+				t.Fatalf("%s binary smoke does not enforce %s:\n%s", tt.rel, tt.expectedReference, smoke)
+			}
+			installIndex := workflowStepIndex(job, "Install staged release through packed npm")
+			if installIndex == -1 || installIndex <= snapshotIndex {
+				t.Fatalf("%s does not install the staged release after snapshot assembly", tt.rel)
+			}
+			install := job.Steps[installIndex]
+			if install.Env["AETHER_RELEASE_ACCEPTANCE_DIR"] != "dist" || !strings.Contains(install.Run, "TestStagedGoReleaserArtifactsInstallThroughPackedNPM") {
+				t.Fatalf("%s staged npm acceptance is incomplete: env=%v run=%s", tt.rel, install.Env, install.Run)
+			}
+		})
 	}
 }
 

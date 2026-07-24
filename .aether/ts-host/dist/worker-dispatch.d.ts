@@ -5,16 +5,15 @@
  * dispatches the worker (simulated or real), and records spawn-complete
  * after. Restores the visible worker activity lost in the Bash-to-Go migration.
  *
- * When simulateWorkers is false, dispatches real workers via platform CLI
- * subprocess using platform-dispatcher.ts, prompt-assembler.ts, and
- * claims-parser.ts.
+ * When simulateWorkers is false, delegates real worker execution to Go's
+ * typed platform adapter boundary. The host coordinates waves but never
+ * selects or launches provider CLIs itself.
  *
  * Satisfies HOST-03 (visible dispatch from manifest) and HOST-06 (spawn
  * lifecycle events via Go CLI).
  */
 import type { GoBridgeOptions } from "./go-bridge.js";
-import type { BuildDispatch, WorkerResult, TerminalWorkerStatus, SpawnClaim, WorkerHandoff } from "./types.js";
-import { type Platform } from "./platform-dispatcher.js";
+import type { BuildDispatch, ExecutionBinding, PermissionProfile, WorkerResult, TerminalWorkerStatus, SpawnClaim, WorkerHandoff } from "./types.js";
 /** Result of dispatching a single worker. */
 export interface DispatchResult {
     /** Worker name from the manifest dispatch. */
@@ -37,12 +36,34 @@ export interface DispatchResult {
     spawns?: SpawnClaim[];
     /** Worker handoff data, including child_results for spawned children (SPAWN-04). */
     handoff?: WorkerHandoff;
+    /** Provider-returned structured artifacts. */
+    artifacts?: Record<string, unknown>;
+    /** Planning Scout evidence, when this is a Scout dispatch. */
+    scout_report?: unknown;
+    /** Route-Setter plan artifact, when returned by the provider. */
+    phase_plan?: unknown;
+    /** Number of provider tool calls reported by the worker. */
+    tool_count?: number;
+    /** Blocking findings reported by the worker. */
+    blockers?: string[];
+    /** Go's host-enforcement decision for the requested caste profile. */
+    permission_decision?: PermissionDecision;
+    /** Durable build-run identity echoed by the Go adapter. */
+    execution_binding?: ExecutionBinding;
+    /** Unique provider invocation within the durable build run. */
+    provider_run_id?: string;
 }
 /** Options for worker dispatch, extending Go bridge options. */
 export interface DispatchOptions extends GoBridgeOptions {
+    /** Workflow owning this dispatch. Build requests require a durable binding. */
+    workflow?: string;
+    /** Build phase associated with the durable binding. */
+    phase?: number;
+    /** Go-authored immutable execution identity from the build manifest. */
+    executionBinding?: ExecutionBinding;
     /**
-     * When true (default), simulate worker execution instead of spawning
-     * a real platform CLI. The prototype uses simulation.
+     * When explicitly true, simulate worker execution instead of delegating
+     * to the Go adapter. Production execution is the default.
      */
     simulateWorkers?: boolean;
     /**
@@ -93,12 +114,47 @@ export interface DispatchOptions extends GoBridgeOptions {
  * @returns Dispatch result with name, status, and summary
  */
 export declare function dispatchSingleWorker(opts: DispatchOptions, dispatch: BuildDispatch): Promise<DispatchResult>;
-export declare function buildPromptForDispatch(opts: GoBridgeOptions, dispatch: BuildDispatch, platform: Platform, agentName?: string): string;
-export interface GoPromptContextResult {
-    prompt_section?: string;
-    context?: string;
+export interface PermissionDecision {
+    schema_version: number;
+    platform: string;
+    profile: PermissionProfile;
+    allowed: boolean;
+    enforcement: string;
+    mechanism: string;
+    limitations?: string[];
 }
-export declare function resolveGoPromptContext(opts: GoBridgeOptions): string;
+interface GoWorkerAdapterWorker {
+    name: string;
+    caste: string;
+    task_id?: string;
+    status: string;
+    summary?: string;
+    files_created?: string[];
+    files_modified?: string[];
+    tests_written?: string[];
+    artifacts?: Record<string, unknown>;
+    scout_report?: unknown;
+    tool_count?: number;
+    blockers?: string[];
+    spawns?: string[];
+    duration?: number;
+    error?: string;
+    handoff?: WorkerHandoff;
+}
+export interface GoWorkerAdapterResponse {
+    schema_version: number;
+    execution_owner: string;
+    platform: string;
+    platform_contract: Record<string, unknown>;
+    availability: Record<string, unknown>;
+    provider_diagnostics?: string;
+    permission_decision: PermissionDecision;
+    execution_binding?: ExecutionBinding;
+    provider_run_id?: string;
+    worker?: GoWorkerAdapterWorker;
+}
+/** Ask the Go-owned adapter layer to select and preflight the worker provider. */
+export declare function preflightGoWorkerProvider(opts: GoBridgeOptions, context: string): Promise<GoWorkerAdapterResponse>;
 export declare function sanitizeWorkerDiagnosticOutput(value: string): string;
 /**
  * Check if an error is classified as an authentication error.
@@ -137,3 +193,4 @@ export declare function dispatchWorkers(opts: DispatchOptions, dispatches: Build
  * @returns WorkerResult array suitable for the Go finalizer completion file
  */
 export declare function toWorkerResults(dispatches: BuildDispatch[], results: DispatchResult[]): WorkerResult[];
+export {};

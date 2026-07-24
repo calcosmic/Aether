@@ -8,7 +8,7 @@
  * Contract: cmd/helpers.go outputOK produces {"ok":true,"result":<data>}
  * and outputError produces {"ok":false,"error":"msg","code":N}.
  */
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -154,6 +154,63 @@ function sanitizeBridgeMessage(message) {
 export function callGoJSON(opts, args) {
     return _callGoJSONRef(opts, args);
 }
+/**
+ * Asynchronously call a Go CLI command and parse its JSON envelope.
+ *
+ * Worker dispatch must use the async bridge so Promise-based wave concurrency
+ * is real. A synchronous child process here would serialize every worker even
+ * when the wave orchestrator uses Promise.all.
+ */
+let _callGoJSONAsyncRef = _realCallGoJSONAsync;
+function _realCallGoJSONAsync(opts, args, timeoutMs = 0) {
+    return new Promise((resolve, reject) => {
+        execFile(opts.goBinaryPath, args, {
+            cwd: opts.cwd,
+            env: { ...process.env, AETHER_OUTPUT_MODE: "json" },
+            encoding: "utf-8",
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: timeoutMs > 0 ? timeoutMs : undefined,
+            killSignal: "SIGTERM",
+        }, (err, stdout, stderr) => {
+            if (err) {
+                const envelope = parseGoErrorText(stdout, stderr);
+                if (envelope?.error) {
+                    reject(new Error(`Go command failed: ${formatGoCommand(args)}: ${sanitizeBridgeMessage(envelope.error)}`));
+                    return;
+                }
+                reject(new Error(`Go subprocess failed for ${formatGoCommand(args)}: ${subprocessFailureDetail(err)}; subprocess output omitted`));
+                return;
+            }
+            let parsed;
+            try {
+                parsed = JSON.parse(stdout);
+            }
+            catch {
+                reject(new Error(`Go subprocess returned invalid JSON for ${formatGoCommand(args)}; subprocess output omitted`));
+                return;
+            }
+            if (!parsed.ok || parsed.error) {
+                reject(new Error(`Go command failed: ${formatGoCommand(args)}: ${sanitizeBridgeMessage(parsed.error ?? "unknown error (ok=false)")}`));
+                return;
+            }
+            resolve(parsed.result);
+        });
+    });
+}
+function parseGoErrorText(stdout, stderr) {
+    const output = [stdout, stderr].find((value) => value.trim().startsWith("{"));
+    if (!output)
+        return undefined;
+    try {
+        return JSON.parse(output);
+    }
+    catch {
+        return undefined;
+    }
+}
+export function callGoJSONAsync(opts, args, timeoutMs = 0) {
+    return _callGoJSONAsyncRef(opts, args, timeoutMs);
+}
 /** Test-only: inject a mock callGoJSON. */
 export function __setCallGoJSON(fn) {
     _callGoJSONRef = fn;
@@ -161,6 +218,14 @@ export function __setCallGoJSON(fn) {
 /** Test-only: restore the real callGoJSON. */
 export function __restoreCallGoJSON() {
     _callGoJSONRef = _realCallGoJSON;
+}
+/** Test-only: inject a mock asynchronous Go bridge. */
+export function __setCallGoJSONAsync(fn) {
+    _callGoJSONAsyncRef = fn;
+}
+/** Test-only: restore the real asynchronous Go bridge. */
+export function __restoreCallGoJSONAsync() {
+    _callGoJSONAsyncRef = _realCallGoJSONAsync;
 }
 // ---------------------------------------------------------------------------
 // Boundary enforcement (HOST-05)

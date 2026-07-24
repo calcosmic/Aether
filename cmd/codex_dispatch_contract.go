@@ -67,22 +67,22 @@ func loadDispatchContractPolicy() *dispatchContractPolicy {
 
 // Hardcoded fallback strings for dispatch contract fields.
 const (
-	fallbackSurveyExecutionModel         = "1 wave, parallel read-only worker execution"
-	fallbackPlanningExecutionModel       = "2 staged workers, scout then route-setter"
-	fallbackSurveyDeadlinePolicy         = "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets."
-	fallbackPlanningDeadlinePolicy       = "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked."
-	fallbackSurveyDependencyBehavior     = "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher."
-	fallbackPlanningDependencyBehavior   = "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first."
+	fallbackSurveyExecutionModel               = "1 wave, parallel read-only worker execution"
+	fallbackPlanningExecutionModel             = "2 staged workers, scout then route-setter"
+	fallbackSurveyDeadlinePolicy               = "Each surveyor gets its own timeout. One surveyor timing out does not reduce sibling surveyor budgets."
+	fallbackPlanningDeadlinePolicy             = "Each planning worker gets its own timeout. The route-setter only runs after a completed scout stage; otherwise it becomes dependency_blocked."
+	fallbackSurveyDependencyBehavior           = "Surveyors are independent read-only workers; real dispatch requires an authenticated platform dispatcher."
+	fallbackPlanningDependencyBehavior         = "Real worker dispatch requires an authenticated platform dispatcher. Route-setter execution depends on the scout completing first."
 	fallbackPlanningExtendedDependencyBehavior = "Real worker dispatch requires an authenticated platform dispatcher. Supporting planning castes may contribute evidence, and route-setter finalization is selected by caste identity rather than fixed array position."
-	fallbackSurveyFallbackBehavior       = "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first."
-	fallbackPlanningFallbackBehavior     = "If the scout or route-setter fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize planning artifacts locally while preserving any real worker artifacts that landed first."
-	fallbackSurveyResultCollectionPolicy = "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
-	fallbackPlanningResultCollectionPolicy = "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."
+	fallbackSurveyFallbackBehavior             = "If any surveyor fails, blocks, or times out after dispatch starts, emit dispatch_mode=fallback and synthesize survey artifacts locally while preserving any real worker artifacts that landed first."
+	fallbackPlanningFallbackBehavior           = "Normal planning does not fall back to local synthesis. If Scout or Route-Setter workers are unavailable, blocked, failed, or timed out, stop with recovery guidance; only explicit `aether plan --synthetic` may produce dispatch_mode=synthetic local preview artifacts."
+	fallbackSurveyResultCollectionPolicy       = "Wrapper result artifacts must stay outside .aether/data; finalizers reject malformed completion JSON and .aether/data completion files."
+	fallbackPlanningResultCollectionPolicy     = "A structurally valid completed result wins over a timeout placeholder for the same worker; duplicate terminal results remain invalid."
 )
 
 var (
 	fallbackSurveyFallbackVisibility   = []string{"dispatch_mode", "survey_warning", "provider_diagnostics", "artifact_source"}
-	fallbackPlanningFallbackVisibility = []string{"dispatch_mode", "planning_warning", "provider_diagnostics", "artifact_source", "plan_source", "planning_loop"}
+	fallbackPlanningFallbackVisibility = []string{"dispatch_mode", "planning_warning", "synthetic", "synthetic_warning", "artifact_source", "plan_source", "planning_loop"}
 )
 
 func effectivePlanningDispatchTimeout(override time.Duration) time.Duration {
@@ -935,9 +935,10 @@ func buildToWorkerDispatches(dispatches []codexBuildDispatch) []codex.WorkerDisp
 	result := make([]codex.WorkerDispatch, len(dispatches))
 	for i, d := range dispatches {
 		result[i] = codex.WorkerDispatch{
-			WorkerName: d.Name,
-			Caste:      d.Caste,
-			TaskID:     d.TaskID,
+			WorkerName:        d.Name,
+			Caste:             d.Caste,
+			TaskID:            d.TaskID,
+			PermissionProfile: d.PermissionProfile,
 		}
 	}
 	return result

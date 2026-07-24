@@ -31,7 +31,12 @@ After selecting planning depth, choose task decomposition depth. If `$ARGUMENTS`
 
 ## Planning Manifest
 
-Run the TS host to fetch the authoritative planning manifest:
+If this is a refresh after completed work, keep the current colony and pass
+`--refresh --revision-type <type> --revision-reason "<why>"` to every host-plan
+iteration. Research and verification revisions also require one or more
+repository-relative `--revision-evidence <path>` arguments.
+
+Run the TS host to fetch the authoritative planning manifest for one planning iteration:
 
 ```
 aether host plan --depth <choice> --planning-depth <choice2> $ARGUMENTS
@@ -39,7 +44,11 @@ aether host plan --depth <choice> --planning-depth <choice2> $ARGUMENTS
 
 The TS host is the sole entry point to the Go CLI for manifest generation. See `.aether/docs/wrapper-host-contract.md`.
 
-Parse `result.plan_manifest` or `result.planning_manifest`. This manifest is the only source for worker names, castes, waves, task IDs, briefs, and finalizer contract.
+Parse `result.plan_manifest` or `result.planning_manifest`. This manifest is the only source for `planning_run_id`, `iteration`, target confidence, selected gaps, previous draft, worker names, castes, waves, task IDs, briefs, and finalizer contract.
+
+When the manifest includes `revision`, pass its worker briefs verbatim. Completed
+phases are immutable; Route-Setter must output replacement unfinished phases
+only. The Go finalizer preserves completed evidence and assigns final IDs.
 
 Save the JSON envelope to a temporary manifest file outside `.aether/data/`.
 
@@ -62,11 +71,12 @@ This output is display-only; do not parse it as state.
 
 ## Worker Spawning
 
-Dispatch Scout from wave 1, then Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, and `agent_name` as `subagent_type`. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`.
+Dispatch exactly one Scout from wave 1, then exactly one Route-Setter from wave 2, using manifest names, castes, task IDs, briefs, `permission_profile`, and `agent_name` as `subagent_type`. Scout's `repository_read_only` profile must remain host-enforced; never substitute an unrestricted agent or a prompt-only promise. Preserve caste-labelled descriptions: `{caste emoji} {Caste} {name}: {task}`.
 
 - Issue parallel workers as visible Task/subagent calls. Do not set `run_in_background`.
 - Pass each dispatch's `brief` verbatim under a `Runtime Worker Brief` heading.
 - For Route-Setter, include the Scout terminal result in the prompt.
+- If the manifest includes `selected_gaps` or `previous_plan_draft`, keep them in the brief and require fresh evidence or resolved gaps before allowing confidence to rise.
 
 For each manifest wave:
 
@@ -83,13 +93,15 @@ Wave 1 Scout must complete before wave 2 Route-Setter starts.
 
 ## Finalize
 
-After workers return, collect results into a completion JSON and finalize through the runtime:
+After workers return, collect results into a completion JSON. Include `planning_run_id`, `iteration`, Scout `scout_report`, Route-Setter `phase_plan`, and a compact `source_summary`, then finalize through the runtime:
 
 ```
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <completion_file>
 ```
 
-Then render the user-facing closeout:
+If the JSON result contains `requires_next_iteration: true`, do not render final closeout and do not claim the colony plan is complete. Request a fresh `aether host plan` manifest with the same depth, planning depth, target, and max-iteration controls, then repeat Scout -> Route-Setter -> `plan-finalize`.
+
+When `plan-finalize` returns a completed plan, render the user-facing closeout:
 
 ```
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <completion_file>
@@ -100,9 +112,10 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-
 Branch on the `plan-finalize` result:
 
 1. If planning succeeded, use the visual closeout's next-step line as the source of truth.
-2. Summarize selected depth, phase count, confidence, and which agents ran.
-3. Route first to `/ant-build 1` or the runtime-surfaced next build command.
-4. If planning blocked, follow the runtime recovery command first.
+2. Summarize selected depth, phase count, confidence, `planning_loop.stop_reason`, and which agents ran.
+3. For a revision, surface the accepted `plan_revision` reason and preserved, superseded, and replacement phase IDs.
+4. Route first to `/ant-build 1` or the runtime-surfaced next build command.
+5. If planning blocked, follow the runtime recovery command first.
 
 ## Cross-Platform Drift Guard
 
@@ -119,5 +132,9 @@ the matching Codex flow.
 - Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand.
 - Do NOT parse visual output as authoritative state.
 - Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`.
+- Do NOT dispatch extra planning workers; the real planning contract is Scout then Route-Setter per iteration.
+- Do NOT reuse a manifest or completion packet across iterations.
+- Do NOT repeat or renumber completed phases during a revision, and do not reuse packets from the superseded revision.
+- Do NOT treat `requires_next_iteration: true` as a completed colony plan.
 - Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table.
 - If docs and runtime disagree, runtime wins.

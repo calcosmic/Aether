@@ -50,6 +50,12 @@ func stripANSI(s string) string {
 // the entire match with a caste-agnostic placeholder for golden file stability.
 var workerNameRe = regexp.MustCompile(`\b[A-Z][a-z]+-\d{1,3}\b`)
 
+// stepElapsedRe matches rendered workflow step durations, which vary with host
+// load and race instrumentation even when the workflow output is otherwise identical.
+var stepElapsedRe = regexp.MustCompile(`(?m)(Step \d+/\d+: [^\n]+) \(\d+s\)$`)
+
+var ceremonyElapsedRe = regexp.MustCompile(`(?m)(Ceremony complete in )\d+s$`)
+
 // normalizeWorkerNames replaces all worker name patterns (CapitalWord-Number)
 // with a fixed placeholder so golden files are stable across test runs.
 // Worker names are hash-based on temp directory paths, making them non-deterministic.
@@ -60,10 +66,13 @@ func normalizeWorkerNames(s string) string {
 // normalizeForGolden prepares output for golden comparison by:
 // 1. Stripping ANSI escape codes
 // 2. Normalizing non-deterministic worker names
-// 3. Removing ceremony activity lines (non-deterministic concurrent output)
+// 3. Normalizing non-deterministic workflow step durations
+// 4. Removing ceremony activity lines (non-deterministic concurrent output)
 func normalizeForGolden(s string) string {
 	clean := stripANSI(s)
 	clean = normalizeWorkerNames(clean)
+	clean = stepElapsedRe.ReplaceAllString(clean, "$1 (0s)")
+	clean = ceremonyElapsedRe.ReplaceAllString(clean, "${1}0s")
 
 	var filtered strings.Builder
 	for _, line := range strings.Split(clean, "\n") {
@@ -143,12 +152,13 @@ func compareGolden(t *testing.T, goldenPath, got string) {
 	if err != nil {
 		t.Fatalf("read golden file %s: %v (run with -update-golden to create)", goldenPath, err)
 	}
+	want := normalizeForGolden(string(data))
 
-	if clean != strings.TrimRight(string(data), "\n\t ")+"\n" {
+	if clean != want {
 		t.Errorf("golden mismatch for %s; run with -update-golden to refresh", goldenPath)
 		// Show first difference for debugging
 		gotLines := strings.Split(clean, "\n")
-		wantLines := strings.Split(string(data), "\n")
+		wantLines := strings.Split(want, "\n")
 		maxLen := len(gotLines)
 		if len(wantLines) > maxLen {
 			maxLen = len(wantLines)

@@ -16,7 +16,9 @@ import (
 // cleanup via saveGlobals.
 func TestMain(m *testing.M) {
 	origOutputMode, hadOutputMode := os.LookupEnv("AETHER_OUTPUT_MODE")
+	origHivePolicy, hadHivePolicy := os.LookupEnv(hivePolicyEnv)
 	_ = os.Setenv("AETHER_OUTPUT_MODE", "json")
+	_ = os.Setenv(hivePolicyEnv, "promote")
 
 	origStore := store
 	origStdout := stdout
@@ -68,6 +70,11 @@ func TestMain(m *testing.M) {
 		_ = os.Setenv("AETHER_OUTPUT_MODE", origOutputMode)
 	} else {
 		_ = os.Unsetenv("AETHER_OUTPUT_MODE")
+	}
+	if hadHivePolicy {
+		_ = os.Setenv(hivePolicyEnv, origHivePolicy)
+	} else {
+		_ = os.Unsetenv(hivePolicyEnv)
 	}
 
 	os.Exit(code)

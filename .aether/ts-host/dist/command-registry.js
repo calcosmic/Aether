@@ -27,6 +27,11 @@ function planArgs(parsed) {
         args.push("--max-iterations", parsed.maxIterations);
     if (parsed.accept)
         args.push("--accept");
+    if (parsed.revisionType)
+        args.push("--revision-type", parsed.revisionType);
+    if (parsed.revisionReason)
+        args.push("--revision-reason", parsed.revisionReason);
+    pushRepeatedFlag(args, "--revision-evidence", parsed.revisionEvidence);
     if (parsed.synthetic || parsed.simulate)
         args.push("--synthetic");
     if (parsed.workerTimeout)
@@ -118,9 +123,9 @@ export const HOST_COMMANDS = [
     {
         command: "plan",
         usage: "plan",
-        description: "Dispatch real Scout/Route-Setter planning workers with ceremony",
+        description: "Call aether plan --plan-only and print one planning-iteration manifest",
         category: "orchestrated",
-        runner: "dispatched",
+        runner: "go-json",
         goPlanCommand: "aether plan --plan-only",
         finalizerCommand: "aether plan-finalize --completion-file <file>",
         ceremonyWorkflow: "plan",

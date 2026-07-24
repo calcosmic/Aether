@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -388,6 +389,7 @@ type porterCommandCheck struct {
 	Name            string
 	Dir             string
 	Args            []string
+	Env             map[string]string
 	Timeout         time.Duration
 	RecoveryCommand string
 }
@@ -429,9 +431,10 @@ func buildFullReleaseCommandChecks(root string, skipCommands bool) []integrityCh
 		{
 			Name:            "GoReleaser snapshot",
 			Dir:             root,
-			Args:            []string{"goreleaser", "build", "--snapshot", "--clean"},
+			Args:            []string{"goreleaser", "release", "--snapshot", "--clean"},
+			Env:             map[string]string{"AETHER_RELEASE_VERSION": readRepoVersion(root)},
 			Timeout:         10 * time.Minute,
-			RecoveryCommand: "Fix GoReleaser snapshot build before release",
+			RecoveryCommand: "Fix GoReleaser snapshot archives or checksums before release",
 		},
 		{
 			Name:            "TS host typecheck",
@@ -520,7 +523,7 @@ func runPorterCommandCheck(spec porterCommandCheck) integrityCheck {
 
 	cmd := exec.CommandContext(ctx, spec.Args[0], spec.Args[1:]...)
 	cmd.Dir = spec.Dir
-	cmd.Env = porterTestEnv(os.Environ())
+	cmd.Env = mergePorterEnvironment(porterTestEnv(os.Environ()), spec.Env)
 	output, err := cmd.CombinedOutput()
 	details := map[string]interface{}{
 		"command": strings.Join(spec.Args, " "),
@@ -550,6 +553,40 @@ func runPorterCommandCheck(spec porterCommandCheck) integrityCheck {
 		Message: "Command passed",
 		Details: details,
 	}
+}
+
+func mergePorterEnvironment(base []string, replacements map[string]string) []string {
+	if len(replacements) == 0 {
+		return append([]string(nil), base...)
+	}
+	result := make([]string, 0, len(base)+len(replacements))
+	seen := make(map[string]bool, len(replacements))
+	for _, entry := range base {
+		key, _, found := strings.Cut(entry, "=")
+		if !found {
+			result = append(result, entry)
+			continue
+		}
+		if replacement, ok := replacements[key]; ok {
+			if !seen[key] {
+				result = append(result, key+"="+replacement)
+				seen[key] = true
+			}
+			continue
+		}
+		result = append(result, entry)
+	}
+	keys := make([]string, 0, len(replacements))
+	for key := range replacements {
+		if !seen[key] {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		result = append(result, key+"="+replacements[key])
+	}
+	return result
 }
 
 func lastPorterOutputLines(output []byte, limit int) string {

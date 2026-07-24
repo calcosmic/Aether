@@ -24,8 +24,14 @@ func invokeCodexWorkerWithRuntimeProgress(
 	dispatch codex.WorkerDispatch,
 	wave int,
 ) (codex.WorkerResult, error) {
+	if err := beginDirectBuildWorkerRun(dispatch, invoker); err != nil {
+		return codex.WorkerResult{}, err
+	}
 	if progressInvoker, ok := invoker.(codex.ProgressAwareWorkerInvoker); ok {
 		return progressInvoker.InvokeWithProgress(ctx, cfg, func(event codex.WorkerProgressEvent) {
+			if event.ProcessID > 0 && dispatch.ExecutionBinding != nil {
+				_ = recordBuildAttemptWorkerProcess(dispatch.Phase, *dispatch.ExecutionBinding, dispatch.ProviderRunID, event.ProcessID)
+			}
 			status := strings.TrimSpace(event.Status)
 			switch status {
 			case "running", "active":
@@ -42,6 +48,37 @@ type buildWorktreeSession struct {
 	Branch  string
 	RelPath string
 	AbsPath string
+}
+
+type buildPathOwnership struct {
+	mu     sync.Mutex
+	owners map[string]string
+}
+
+func newBuildPathOwnership() *buildPathOwnership {
+	return &buildPathOwnership{owners: map[string]string{}}
+}
+
+func (o *buildPathOwnership) claim(worker string, paths []string) []string {
+	if o == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	conflicts := make([]string, 0)
+	for _, path := range uniqueSortedStrings(paths) {
+		if owner := o.owners[path]; owner != "" && owner != worker {
+			conflicts = append(conflicts, fmt.Sprintf("%s (owned by %s)", path, owner))
+		}
+	}
+	if len(conflicts) > 0 {
+		return conflicts
+	}
+	for _, path := range uniqueSortedStrings(paths) {
+		o.owners[path] = worker
+	}
+	return nil
 }
 
 func effectiveParallelMode(state colony.ColonyState) colony.ParallelMode {
@@ -145,6 +182,10 @@ func collectRepoTouchedPaths(root string, baseline map[string]string, result cod
 }
 
 func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
+	return dispatchCodexBuildWorkersWithOwnership(ctx, root, phase, dispatches, invoker, startedAt, parallelMode, cb, newBuildPathOwnership())
+}
+
+func dispatchCodexBuildWorkersWithOwnership(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker, ownership *buildPathOwnership) ([]codex.DispatchResult, error) {
 	if parallelMode != colony.ModeWorktree {
 		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode, cb)
 	}
@@ -239,18 +280,22 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				emitCodexBuildWorkerStarted(dispatch, wave)
 
 				cfg := codex.WorkerConfig{
-					AgentName:        dispatch.AgentName,
-					AgentTOMLPath:    dispatch.AgentTOMLPath,
-					Caste:            dispatch.Caste,
-					WorkerName:       dispatch.WorkerName,
-					TaskID:           dispatch.TaskID,
-					TaskBrief:        dispatch.TaskBrief,
-					ContextCapsule:   dispatch.ContextCapsule,
-					Root:             session.AbsPath,
-					Timeout:          dispatch.Timeout,
-					SkillSection:     dispatch.SkillSection,
-					PheromoneSection: dispatch.PheromoneSection,
-					HandoffSection:   dispatch.HandoffSection,
+					AgentName:         dispatch.AgentName,
+					AgentTOMLPath:     dispatch.AgentTOMLPath,
+					Caste:             dispatch.Caste,
+					WorkerName:        dispatch.WorkerName,
+					TaskID:            dispatch.TaskID,
+					TaskBrief:         dispatch.TaskBrief,
+					ContextCapsule:    dispatch.ContextCapsule,
+					Root:              session.AbsPath,
+					TrackingRoot:      root,
+					Timeout:           dispatch.Timeout,
+					SkillSection:      dispatch.SkillSection,
+					PheromoneSection:  dispatch.PheromoneSection,
+					HandoffSection:    dispatch.HandoffSection,
+					PermissionProfile: dispatch.PermissionProfile,
+					ExecutionBinding:  dispatch.ExecutionBinding,
+					ProviderRunID:     dispatch.ProviderRunID,
 				}
 
 				result, invokeErr := invokeCodexWorkerWithRuntimeProgress(ctx, invoker, cfg, dispatch, wave)
@@ -267,25 +312,35 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				}
 
 				finalStatus := colony.WorktreeMerged
+				preserveWorktree := false
 				if dr.Status != "completed" || dr.WorkerResult == nil {
 					finalStatus = colony.WorktreeOrphaned
+					preserveWorktree = true
 				} else {
 					touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, *dr.WorkerResult)
 					if touchErr != nil {
 						dr.Status = "failed"
 						dr.Error = touchErr
 						finalStatus = colony.WorktreeOrphaned
+						preserveWorktree = true
 					} else {
 						applyObservedClaims(session.AbsPath, baseline, touched, dr.WorkerResult)
 						rootOpsMu.Lock()
-						if syncErr := syncWorktreeChangesToRoot(root, session.AbsPath, touched); syncErr != nil {
+						if conflicts := ownership.claim(dispatch.WorkerName, touched); len(conflicts) > 0 {
+							dr.Status = "failed"
+							dr.Error = fmt.Errorf("worktree ownership conflict: %s", strings.Join(conflicts, ", "))
+							finalStatus = colony.WorktreeOrphaned
+							preserveWorktree = true
+						} else if syncErr := syncWorktreeChangesToRoot(root, session.AbsPath, touched); syncErr != nil {
 							dr.Status = "failed"
 							dr.Error = syncErr
 							finalStatus = colony.WorktreeOrphaned
+							preserveWorktree = true
 						} else if pheromoneResult, pheromoneErr := syncPheromoneStores(session.AbsPath, root, pheromoneSyncOptions{}); pheromoneErr != nil {
 							dr.Status = "failed"
 							dr.Error = pheromoneErr
 							finalStatus = colony.WorktreeOrphaned
+							preserveWorktree = true
 						} else if dr.WorkerResult != nil {
 							syncSummary := formatPheromoneSyncSummary(pheromoneResult)
 							if syncSummary != "" {
@@ -311,7 +366,12 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				}
 
 				rootOpsMu.Lock()
-				if cleanupErr := finalizeBuildWorktree(root, session, finalStatus); cleanupErr != nil && dr.Error == nil {
+				if preserveWorktree {
+					if statusErr := updateBuildWorktreeStatus(session.Branch, colony.WorktreeOrphaned); statusErr != nil && dr.Error == nil {
+						dr.Status = "failed"
+						dr.Error = statusErr
+					}
+				} else if cleanupErr := finalizeBuildWorktree(root, session, finalStatus); cleanupErr != nil && dr.Error == nil {
 					dr.Status = "failed"
 					dr.Error = cleanupErr
 				}
@@ -330,6 +390,13 @@ func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Ph
 				if statusErr != nil {
 					dr.Status = "failed"
 					dr.Error = fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, statusErr)
+				}
+				if journalErr := recordDirectBuildWorkerTerminal(dispatch, dr); journalErr != nil {
+					dr.Status = "failed"
+					dr.Error = fmt.Errorf("journal terminal worker %s: %w", dispatch.WorkerName, journalErr)
+					rootOpsMu.Lock()
+					_ = updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr))
+					rootOpsMu.Unlock()
 				}
 
 				emitBuildCeremonyWorkerFinished(dispatch, dr)
@@ -399,18 +466,22 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			emitCodexBuildWorkerStarted(dispatch, wave)
 
 			cfg := codex.WorkerConfig{
-				AgentName:        dispatch.AgentName,
-				AgentTOMLPath:    dispatch.AgentTOMLPath,
-				Caste:            dispatch.Caste,
-				WorkerName:       dispatch.WorkerName,
-				TaskID:           dispatch.TaskID,
-				TaskBrief:        dispatch.TaskBrief,
-				ContextCapsule:   dispatch.ContextCapsule,
-				Root:             dispatch.Root,
-				Timeout:          dispatch.Timeout,
-				SkillSection:     dispatch.SkillSection,
-				PheromoneSection: dispatch.PheromoneSection,
-				HandoffSection:   dispatch.HandoffSection,
+				AgentName:         dispatch.AgentName,
+				AgentTOMLPath:     dispatch.AgentTOMLPath,
+				Caste:             dispatch.Caste,
+				WorkerName:        dispatch.WorkerName,
+				TaskID:            dispatch.TaskID,
+				TaskBrief:         dispatch.TaskBrief,
+				ContextCapsule:    dispatch.ContextCapsule,
+				Root:              dispatch.Root,
+				TrackingRoot:      dispatch.TrackingRoot,
+				Timeout:           dispatch.Timeout,
+				SkillSection:      dispatch.SkillSection,
+				PheromoneSection:  dispatch.PheromoneSection,
+				HandoffSection:    dispatch.HandoffSection,
+				PermissionProfile: dispatch.PermissionProfile,
+				ExecutionBinding:  dispatch.ExecutionBinding,
+				ProviderRunID:     dispatch.ProviderRunID,
 			}
 
 			result, err := invokeCodexWorkerWithRuntimeProgress(ctx, invoker, cfg, dispatch, wave)
@@ -442,6 +513,11 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			if statusErr := updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr)); statusErr != nil {
 				dr.Status = "failed"
 				dr.Error = fmt.Errorf("complete worker %s: %w", dispatch.WorkerName, statusErr)
+			}
+			if journalErr := recordDirectBuildWorkerTerminal(dispatch, dr); journalErr != nil {
+				dr.Status = "failed"
+				dr.Error = fmt.Errorf("journal terminal worker %s: %w", dispatch.WorkerName, journalErr)
+				_ = updateCodexBuildDispatchRuntimeStatus(dispatch.WorkerName, dr.Status, buildDispatchResultSummary(dispatch, dr))
 			}
 			emitBuildCeremonyWorkerFinished(dispatch, dr)
 			emitCodexBuildWorkerFinished(dispatch, dr)

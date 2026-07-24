@@ -30,7 +30,7 @@ func findOpenCodeRepoRoot() (string, error) {
 	}
 }
 
-// TestOpenCodeAgentSchema validates that all 25 OpenCode agent files
+// TestOpenCodeAgentSchema validates the 27 caste agents plus the provider router
 // in .opencode/agents/ have valid YAML frontmatter per the OpenCode spec.
 func TestOpenCodeAgentSchema(t *testing.T) {
 	repoRoot, err := findOpenCodeRepoRoot()
@@ -58,8 +58,8 @@ func TestOpenCodeAgentSchema(t *testing.T) {
 	if len(agentFiles) == 0 {
 		t.Fatal("no aether-*.md files found in .opencode/agents/")
 	}
-	if len(agentFiles) != 27 {
-		t.Errorf("expected 27 agent files, found %d", len(agentFiles))
+	if len(agentFiles) != 28 {
+		t.Errorf("expected 28 agent files (27 castes plus router), found %d", len(agentFiles))
 	}
 
 	hexColorRe := regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

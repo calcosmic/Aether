@@ -1,5 +1,9 @@
 /**
- * Platform dispatcher for the TypeScript orchestration host.
+ * Legacy TypeScript provider launcher retained for regression tests only.
+ *
+ * Production host code must not import this module. Real provider selection,
+ * preflight, launch, and result parsing are owned by Go's hidden
+ * `internal-worker-adapter` command.
  *
  * Detects available platform CLIs (claude, opencode, codex), checks
  * authentication, and spawns real worker subprocesses with the correct
@@ -8,7 +12,7 @@
  * Uses spawn (not execFileSync) for async subprocess invocation.
  * Default timeout: 10 minutes via AbortController.
  *
- * Satisfies TS-01 (real worker dispatch).
+ * @deprecated Test/forensic compatibility only; not a production launcher.
  */
 /** Supported platform names. */
 export type Platform = "claude" | "opencode" | "codex";

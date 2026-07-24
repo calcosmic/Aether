@@ -39,16 +39,19 @@ func TestAgentDefinitionPathUsesSourceCheckoutLocalAgents(t *testing.T) {
 	}
 }
 
-func TestAgentDefinitionPathUsesGlobalHomesForConsumerRepo(t *testing.T) {
+func TestAgentDefinitionPathMatchesHostedProviderPrecedenceForConsumerRepo(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
 	hub := filepath.Join(home, ".aether")
 	t.Setenv("HOME", home)
 	t.Setenv("AETHER_HUB_DIR", hub)
 
-	// Stale local copies should not win in consumer repos.
-	writeTestFile(t, filepath.Join(root, ".claude", "agents", "ant", "aether-builder.md"), "local")
-	writeTestFile(t, filepath.Join(root, ".opencode", "agents", "aether-builder.md"), "local")
+	// Hosted providers select project-local agents before global definitions,
+	// so Aether must validate the same file the provider will execute.
+	claudeLocal := filepath.Join(root, ".claude", "agents", "ant", "aether-builder.md")
+	opencodeLocal := filepath.Join(root, ".opencode", "agents", "aether-builder.md")
+	writeTestFile(t, claudeLocal, "local")
+	writeTestFile(t, opencodeLocal, "local")
 	writeTestFile(t, filepath.Join(root, ".codex", "agents", "aether-builder.toml"), "local")
 
 	claudeGlobal := filepath.Join(home, ".claude", "agents", "ant", "aether-builder.md")
@@ -62,8 +65,8 @@ func TestAgentDefinitionPathUsesGlobalHomesForConsumerRepo(t *testing.T) {
 		platform Platform
 		want     string
 	}{
-		{PlatformClaude, claudeGlobal},
-		{PlatformOpenCode, opencodeGlobal},
+		{PlatformClaude, claudeLocal},
+		{PlatformOpenCode, opencodeLocal},
 		{PlatformCodex, codexGlobal},
 	}
 
@@ -388,6 +391,44 @@ func TestHostedProviderPreflightReportsConfigFailureBeforeWorkerDispatch(t *test
 	}
 }
 
+func TestClaudePreflightUsesReadOnlyPermissionMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	binary := filepath.Join(dir, "claude")
+	script := `#!/bin/sh
+if [ "$*" = "auth status --json" ]; then
+  echo '{"loggedIn":true}'
+  exit 0
+fi
+printf '%s\n' "$@" > "$ARGS_PATH"
+exit 0
+`
+	if err := os.WriteFile(binary, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake claude: %v", err)
+	}
+	t.Setenv("ARGS_PATH", argsPath)
+
+	status := (&ClaudeDispatcher{binaryName: binary}).Preflight(context.Background(), dir)
+	if !status.Available {
+		t.Fatalf("preflight available = false: %s", status.Reason)
+	}
+	data, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read captured args: %v", err)
+	}
+	argsText := string(data)
+	if !strings.Contains(argsText, "Return exactly OK.") || !strings.Contains(argsText, "--permission-mode\nplan") {
+		t.Fatalf("captured args missing prompt or plan permission mode:\n%s", argsText)
+	}
+	if strings.Contains(argsText, "bypassPermissions") || strings.Contains(argsText, "--add-dir") {
+		t.Fatalf("preflight must not bypass permissions or widen filesystem access:\n%s", argsText)
+	}
+}
+
 func TestSelectPlatformInvokerReportsOrderedEvaluatedFallbackCandidates(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stub uses POSIX sh")
@@ -413,11 +454,10 @@ func TestSelectPlatformInvokerReportsOrderedEvaluatedFallbackCandidates(t *testi
 		t.Fatalf("selected invoker does not expose candidate metadata: %T", invoker)
 	}
 	statuses := meta.CandidateStatuses()
-	if len(statuses) != 2 {
-		t.Fatalf("candidate count = %d, want evaluated candidates only [codex, claude]: %+v", len(statuses), statuses)
+	if len(statuses) != 1 {
+		t.Fatalf("candidate count = %d, want evaluated candidates only [claude]: %+v", len(statuses), statuses)
 	}
-	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "binary_missing")
-	assertCandidateStatus(t, statuses[1], PlatformClaude, true, "probe_skipped")
+	assertCandidateStatus(t, statuses[0], PlatformClaude, true, "probe_skipped")
 	if _, err := os.Stat(opencodeCalled); !os.IsNotExist(err) {
 		t.Fatalf("opencode candidate was probed despite evaluated-candidates semantics")
 	}
@@ -427,8 +467,8 @@ func TestSelectPlatformInvokerReportsOrderedEvaluatedFallbackCandidates(t *testi
 			t.Fatalf("DescribeInvokerAvailability() = %q, want to contain %q", description, want)
 		}
 	}
-	if strings.Contains(description, "opencode") {
-		t.Fatalf("DescribeInvokerAvailability() = %q, want evaluated fallback only", description)
+	if strings.Contains(description, "opencode") || strings.Contains(description, "missing-codex-binary") {
+		t.Fatalf("DescribeInvokerAvailability() = %q, want evaluated Claude-first selection only", description)
 	}
 }
 
@@ -470,6 +510,39 @@ func TestSelectPlatformInvokerRejectsUnsupportedWorkerPlatformOverride(t *testin
 	}
 }
 
+func TestSelectPlatformInvokerDoesNotFallbackFromUnavailableExplicitOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+
+	dir := t.TempDir()
+	codexCalled := filepath.Join(dir, "codex-called")
+	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv(envWorkerPlatform, string(PlatformClaude))
+	t.Setenv(envClaudePath, filepath.Join(dir, "missing-claude"))
+	t.Setenv("AETHER_CODEX_PATH", writeInvokedMarkerCLI(t, dir, "codex", codexCalled))
+
+	invoker := SelectPlatformInvoker(context.Background())
+	if got := PlatformFromInvoker(invoker); got != PlatformUnknown {
+		t.Fatalf("selected platform = %s, want unknown for unavailable explicit Claude override", got)
+	}
+	meta, ok := invoker.(selectionMetadata)
+	if !ok {
+		t.Fatalf("unavailable override invoker does not expose candidate metadata: %T", invoker)
+	}
+	statuses := meta.CandidateStatuses()
+	if len(statuses) != 1 {
+		t.Fatalf("candidate count = %d, want only explicitly pinned Claude: %+v", len(statuses), statuses)
+	}
+	assertCandidateStatus(t, statuses[0], PlatformClaude, false, "binary_missing")
+	if _, err := os.Stat(codexCalled); !os.IsNotExist(err) {
+		t.Fatalf("Codex was probed despite unavailable explicit Claude override")
+	}
+	if description := DescribeInvokerAvailability(invoker, context.Background()); strings.Contains(description, "falling back") {
+		t.Fatalf("explicit unavailable override described a fallback: %q", description)
+	}
+}
+
 func TestSelectPlatformInvokerUnavailableStatusRedactsAndCategorizes(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stub uses POSIX sh")
@@ -497,8 +570,8 @@ func TestSelectPlatformInvokerUnavailableStatusRedactsAndCategorizes(t *testing.
 	if len(statuses) != 3 {
 		t.Fatalf("candidate count = %d, want 3 unavailable candidates: %+v", len(statuses), statuses)
 	}
-	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "auth_probe_failed")
-	assertCandidateStatus(t, statuses[1], PlatformClaude, false, "binary_missing")
+	assertCandidateStatus(t, statuses[0], PlatformClaude, false, "binary_missing")
+	assertCandidateStatus(t, statuses[1], PlatformCodex, false, "auth_probe_failed")
 	assertCandidateStatus(t, statuses[2], PlatformOpenCode, false, "binary_missing")
 
 	status := invoker.(interface {
@@ -541,8 +614,8 @@ func TestSelectPlatformInvokerNoCredentialsReportsUnavailable(t *testing.T) {
 	if len(statuses) != 3 {
 		t.Fatalf("candidate count = %d, want 3 no-credential candidates: %+v", len(statuses), statuses)
 	}
-	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "auth_inactive")
-	assertCandidateStatus(t, statuses[1], PlatformClaude, false, "auth_inactive")
+	assertCandidateStatus(t, statuses[0], PlatformClaude, false, "auth_inactive")
+	assertCandidateStatus(t, statuses[1], PlatformCodex, false, "auth_inactive")
 	assertCandidateStatus(t, statuses[2], PlatformOpenCode, false, "credentials_missing")
 
 	status := invoker.(interface {
@@ -1042,10 +1115,38 @@ func TestWriteHostedWorkerOutputDebugRedactsProviderOutput(t *testing.T) {
 // createTestMarkdownAgent creates a minimal markdown agent file for testing.
 func createTestMarkdownAgent(t *testing.T, dir, name, description string) string {
 	t.Helper()
+	createTestOpenCodeRouter(t, dir)
 	agentPath := filepath.Join(dir, name+".md")
-	content := "---\nname: " + name + "\ndescription: " + description + "\nmode: subagent\n---\nYou are the " + description + ".\n"
+	content := "---\nname: " + name + "\ndescription: " + description + "\nmode: subagent\npermission:\n  external_directory: deny\n---\nYou are the " + description + ".\n"
 	if err := os.WriteFile(agentPath, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write agent markdown: %v", err)
 	}
 	return agentPath
+}
+
+func createTestOpenCodeRouter(t *testing.T, root string) string {
+	t.Helper()
+	dir := filepath.Join(root, ".opencode", "agents")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("create OpenCode test agent directory: %v", err)
+	}
+	path := filepath.Join(dir, defaultOpenCodePrimaryAgent+".md")
+	content := `---
+name: aether-worker-router
+description: Restricted test router
+mode: primary
+tools:
+  write: false
+  edit: false
+  bash: false
+  task: true
+permission:
+  external_directory: deny
+---
+Route one worker.
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write OpenCode test router: %v", err)
+	}
+	return path
 }

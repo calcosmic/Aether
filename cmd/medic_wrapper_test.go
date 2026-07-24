@@ -89,10 +89,11 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 	for i := 0; i < expectedClaudeAgents; i++ {
 		writeFile(t, claudeDir, fmt.Sprintf("agents/ant/agent%d.md", i), []byte("test"))
 	}
-	// Create expected number of OpenCode agents (25)
-	for i := 0; i < expectedOpenCodeAgents; i++ {
+	// OpenCode ships the same castes plus one infrastructure-only worker router.
+	for i := 0; i < expectedOpenCodeAgents-1; i++ {
 		writeFile(t, opencodeDir, fmt.Sprintf("agents/agent%d.md", i), []byte("test"))
 	}
+	writeFile(t, opencodeDir, "agents/aether-worker-router.md", []byte("test"))
 	// Create expected number of colony skills
 	for i := 0; i < expectedColonySkills; i++ {
 		name := fmt.Sprintf("colony-skill-%d", i)

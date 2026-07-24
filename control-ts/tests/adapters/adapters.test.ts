@@ -25,35 +25,19 @@ const baseConfig: WorkerConfig = {
   configOverrides: [],
 };
 
-describe("Adapter stubs", () => {
-  it("ClaudeAdapter.dispatch returns completed result with matching taskID", async () => {
-    const adapter = new ClaudeAdapter();
-    const { result } = await adapter.dispatch({ platform: "claude", config: baseConfig });
-    expect(result.status).toBe("completed");
-    expect(result.taskID).toBe(baseConfig.taskID);
-    expect(result.workerName).toBe(baseConfig.workerName);
-    expect(result.caste).toBe(baseConfig.caste);
-  });
-
-  it("CodexAdapter.dispatch returns completed result with matching taskID", async () => {
-    const adapter = new CodexAdapter();
-    const { result } = await adapter.dispatch({ platform: "codex", config: baseConfig });
-    expect(result.status).toBe("completed");
-    expect(result.taskID).toBe(baseConfig.taskID);
-  });
-
-  it("OpenCodeAdapter.dispatch returns completed result with matching taskID", async () => {
-    const adapter = new OpenCodeAdapter();
-    const { result } = await adapter.dispatch({ platform: "opencode", config: baseConfig });
-    expect(result.status).toBe("completed");
-    expect(result.taskID).toBe(baseConfig.taskID);
-  });
-
-  it("McpAdapter.dispatch returns completed result with matching taskID", async () => {
-    const adapter = new McpAdapter();
-    const { result } = await adapter.dispatch({ platform: "mcp", config: baseConfig });
-    expect(result.status).toBe("completed");
-    expect(result.taskID).toBe(baseConfig.taskID);
+describe("retired adapters", () => {
+  it("every retired adapter refuses to dispatch instead of reporting completion", async () => {
+    const adapters: PlatformAdapter[] = [
+      new ClaudeAdapter(),
+      new CodexAdapter(),
+      new OpenCodeAdapter(),
+      new McpAdapter(),
+    ];
+    for (const adapter of adapters) {
+      await expect(
+        adapter.dispatch({ platform: adapter.platform, config: baseConfig })
+      ).rejects.toThrow("retired experimental control plane");
+    }
   });
 
   it("all adapters implement PlatformAdapter interface", async () => {
@@ -71,7 +55,7 @@ describe("Adapter stubs", () => {
     }
   });
 
-  it("preflight returns available=true for stubs", async () => {
+  it("preflight reports every retired adapter unavailable", async () => {
     const adapters: PlatformAdapter[] = [
       new ClaudeAdapter(),
       new CodexAdapter(),
@@ -80,12 +64,12 @@ describe("Adapter stubs", () => {
     ];
     for (const adapter of adapters) {
       const status = await adapter.preflight();
-      expect(status.available).toBe(true);
-      expect(status.category).toBe("available");
+      expect(status.available).toBe(false);
+      expect(status.category).toBe("provider_config_invalid");
     }
   });
 
-  it("health returns healthy for all stubs", async () => {
+  it("health reports every retired adapter unhealthy", async () => {
     const adapters: PlatformAdapter[] = [
       new ClaudeAdapter(),
       new CodexAdapter(),
@@ -94,7 +78,7 @@ describe("Adapter stubs", () => {
     ];
     for (const adapter of adapters) {
       const h = await adapter.health();
-      expect(h.status).toBe("healthy");
+      expect(h.status).toBe("unhealthy");
     }
   });
 
@@ -105,13 +89,8 @@ describe("Adapter stubs", () => {
     expect(createAdapter("mcp")).toBeInstanceOf(McpAdapter);
   });
 
-  it("getAvailableAdapters returns all four platform names", () => {
-    const platforms = getAvailableAdapters();
-    expect(platforms).toContain("claude");
-    expect(platforms).toContain("codex");
-    expect(platforms).toContain("opencode");
-    expect(platforms).toContain("mcp");
-    expect(platforms.length).toBe(4);
+  it("getAvailableAdapters returns no production adapters", () => {
+    expect(getAvailableAdapters()).toEqual([]);
   });
 
   it("dispatching with an invalid platform throws Unknown platform", () => {

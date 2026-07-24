@@ -29,6 +29,9 @@ function parsed(overrides: Partial<ParsedHostArgs>): ParsedHostArgs {
     targetConfidence: undefined,
     maxIterations: undefined,
     accept: false,
+    revisionType: undefined,
+    revisionReason: undefined,
+    revisionEvidence: [],
     verificationTimeout: undefined,
     light: false,
     heavy: false,
@@ -85,6 +88,21 @@ describe("command registry", () => {
     assert.deepEqual(
       buildHostGoArgs(parsed({ command: "plan", targetConfidence: "95", maxIterations: "8", accept: true })),
       ["plan", "--plan-only", "--target", "95", "--max-iterations", "8", "--accept"]
+    );
+    assert.deepEqual(
+      buildHostGoArgs(parsed({
+        command: "plan",
+        refresh: true,
+        revisionType: "research",
+        revisionReason: "Oracle disproved the assumption",
+        revisionEvidence: [".aether/oracle/synthesis.md"],
+      })),
+      [
+        "plan", "--plan-only", "--refresh",
+        "--revision-type", "research",
+        "--revision-reason", "Oracle disproved the assumption",
+        "--revision-evidence", ".aether/oracle/synthesis.md",
+      ]
     );
     assert.deepEqual(buildHostGoArgs(parsed({ command: "build", positional: ["2"], tasks: ["5.1", "5.2"], heavy: true, force: true })), [
       "build",

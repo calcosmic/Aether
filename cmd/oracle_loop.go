@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 const (
@@ -1269,7 +1270,7 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	}
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"mode":               "run",
 		"autonomous":         true,
 		"status":             status,
@@ -1315,7 +1316,20 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 		"approval_status":    mapApprovalStatus(status),
 		"original_prompt":    strings.TrimSpace(state.Topic),
 		"synthesized_prompt": buildSynthesizedPrompt(plan, state),
-	}, nil
+	}
+	if status == "complete" {
+		evidencePath, err := filepath.Rel(paths.Root, paths.SynthesisPath)
+		if err != nil {
+			return nil, fmt.Errorf("resolve Oracle synthesis evidence path: %w", err)
+		}
+		evidencePath = filepath.ToSlash(evidencePath)
+		result["plan_revision_option"] = planRevisionRecommendation(
+			colony.PlanRevisionResearch,
+			fmt.Sprintf("Oracle completed research for %s; revise unfinished phases if the findings invalidate plan assumptions", strings.TrimSpace(state.Topic)),
+			evidencePath,
+		)
+	}
+	return result, nil
 }
 
 type oracleAttemptResult struct {

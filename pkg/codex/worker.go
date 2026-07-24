@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,21 +34,25 @@ const envRealDispatch = "AETHER_CODEX_REAL_DISPATCH"
 // WorkerConfig specifies all parameters needed to invoke a single worker.
 // Field names match the documented codexWorkerConfig in doc.go.
 type WorkerConfig struct {
-	AgentName        string        // TOML agent name (e.g., "aether-builder")
-	AgentTOMLPath    string        // Absolute path to the agent's TOML file
-	Caste            string        // Worker caste (builder, watcher, scout, etc.)
-	WorkerName       string        // Deterministic ant name (e.g., "Hammer-23")
-	TaskID           string        // Task identifier from the build dispatch
-	TaskBrief        string        // The markdown task brief content
-	ContextCapsule   string        // The assembled compact colony-prime context
-	Root             string        // Repository root directory (working dir for subprocess)
-	Timeout          time.Duration // Per-worker timeout (default: 10 minutes)
-	SkillSection     string        // Skill guidance content injected into worker prompts
-	PheromoneSection string        // Pheromone signal content injected into worker prompts
-	HandoffSection   string        // Previous worker relay context injected into worker prompts
-	ConfigOverrides  []string      // Optional codex config overrides passed as -c key=value
-	ResponsePath     string        // Optional controller-managed response file path
-	CallbackURL      string        // Worker callback/messaging URL (separate from LLM provider URL)
+	AgentName         string            // TOML agent name (e.g., "aether-builder")
+	AgentTOMLPath     string            // Absolute path to the agent's TOML file
+	Caste             string            // Worker caste (builder, watcher, scout, etc.)
+	WorkerName        string            // Deterministic ant name (e.g., "Hammer-23")
+	TaskID            string            // Task identifier from the build dispatch
+	TaskBrief         string            // The markdown task brief content
+	ContextCapsule    string            // The assembled compact colony-prime context
+	Root              string            // Repository root directory (working dir for subprocess)
+	TrackingRoot      string            // Owning colony root for durable process registration
+	Timeout           time.Duration     // Per-worker timeout (default: 10 minutes)
+	SkillSection      string            // Skill guidance content injected into worker prompts
+	PheromoneSection  string            // Pheromone signal content injected into worker prompts
+	HandoffSection    string            // Previous worker relay context injected into worker prompts
+	ConfigOverrides   []string          // Optional codex config overrides passed as -c key=value
+	ResponsePath      string            // Optional controller-managed response file path
+	CallbackURL       string            // Worker callback/messaging URL (separate from LLM provider URL)
+	PermissionProfile PermissionProfile // Host-enforced filesystem and execution boundary
+	ExecutionBinding  *ExecutionBinding // Durable build-run identity, when dispatch is journal-bound
+	ProviderRunID     string            // Unique provider invocation within the bound build run
 }
 
 // effectiveTimeout returns the configured timeout or the default.
@@ -118,6 +123,7 @@ type WorkerProgressEvent struct {
 	Status     string
 	Message    string
 	OccurredAt time.Time
+	ProcessID  int
 }
 
 // WorkerProgressObserver receives worker execution progress events.
@@ -256,30 +262,6 @@ func NewRealInvoker() *RealInvoker {
 	return &RealInvoker{binaryName: name}
 }
 
-func codexWritableDirs() []string {
-	var dirs []string
-	if dir := strings.TrimSpace(os.Getenv("CODEX_HOME")); dir != "" {
-		dirs = append(dirs, filepath.Clean(dir))
-	} else if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-		dirs = append(dirs, filepath.Join(home, ".codex"))
-	}
-
-	seen := make(map[string]struct{}, len(dirs))
-	out := make([]string, 0, len(dirs))
-	for _, dir := range dirs {
-		dir = strings.TrimSpace(dir)
-		if dir == "" {
-			continue
-		}
-		if _, ok := seen[dir]; ok {
-			continue
-		}
-		seen[dir] = struct{}{}
-		out = append(out, dir)
-	}
-	return out
-}
-
 // IsAvailable checks whether the codex dispatcher is runnable and authenticated.
 func (r *RealInvoker) IsAvailable(ctx context.Context) bool {
 	return r.Availability(ctx).Available
@@ -295,15 +277,12 @@ func (r *RealInvoker) Preflight(ctx context.Context, root string) AvailabilitySt
 	defer cancel()
 
 	args := []string{
-		"--sandbox", "workspace-write",
+		"--sandbox", "read-only",
 		"--ask-for-approval", "never",
 		"exec",
 		"--json",
 		"--ephemeral",
 		"--skip-git-repo-check",
-	}
-	for _, dir := range codexWritableDirs() {
-		args = append(args, "--add-dir", dir)
 	}
 	cmd := exec.CommandContext(probeCtx, r.binaryName, args...)
 	if strings.TrimSpace(root) != "" {
@@ -379,7 +358,13 @@ func (r *RealInvoker) Invoke(ctx context.Context, config WorkerConfig) (WorkerRe
 // InvokeWithProgress runs the codex CLI as a subprocess with timeout while
 // emitting proof-backed runtime progress.
 func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
+	observer = synchronizedWorkerProgressObserver(observer)
 	start := time.Now()
+	permission, permissionErr := ResolvePermissionDecision(PlatformCodex, config.Caste, config.PermissionProfile)
+	if permissionErr != nil {
+		return permissionDeniedWorkerResult(config, start, permissionErr)
+	}
+	config.PermissionProfile = permission.Profile
 
 	if status := r.Availability(ctx); !status.Available {
 		err := fmt.Errorf("worker startup failed: %s", strings.TrimSpace(status.Reason))
@@ -438,7 +423,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 			Error:      err,
 		}, fmt.Errorf("worker startup failed: assemble worker prompt: %w", err)
 	}
-	prompt = strings.TrimSpace(prompt + "\n\n" + renderResponseContract(config))
+	prompt = strings.TrimSpace(prompt + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
 
 	// Create a timeout context
 	timeout := config.effectiveTimeout()
@@ -469,9 +454,9 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 	defer os.Remove(schemaPath)
 
-	// Build the command: codex --sandbox workspace-write --ask-for-approval never exec ...
+	// Build the command with the permission profile selected by the Go adapter.
 	args := []string{
-		"--sandbox", "workspace-write",
+		"--sandbox", codexSandboxForPermission(permission),
 		"--ask-for-approval", "never",
 		"exec",
 		"--json",
@@ -479,9 +464,6 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 		"--skip-git-repo-check",
 		"--output-last-message", lastMessagePath,
 		"--output-schema", schemaPath,
-	}
-	for _, dir := range codexWritableDirs() {
-		args = append(args, "--add-dir", dir)
 	}
 	for _, override := range compactStrings(config.ConfigOverrides) {
 		args = append(args, "-c", override)
@@ -519,12 +501,21 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 
 	GlobalProcessTracker().TrackProcess(cmd.Process.Pid, TrackedProcess{
-		WorkerName: config.WorkerName,
-		Caste:      config.Caste,
-		Platform:   "codex",
-		Root:       config.Root,
+		WorkerName:    config.WorkerName,
+		TaskID:        config.TaskID,
+		Caste:         config.Caste,
+		Platform:      "codex",
+		Root:          workerTrackingRoot(config),
+		ProviderRunID: config.ProviderRunID,
+		Binding:       config.ExecutionBinding,
 	})
 	defer GlobalProcessTracker().UntrackProcess(cmd.Process.Pid)
+	emitWorkerProgress(observer, WorkerProgressEvent{
+		Status:     "running",
+		Message:    "provider process started",
+		OccurredAt: time.Now().UTC(),
+		ProcessID:  cmd.Process.Pid,
+	})
 
 	waitCh := make(chan error, 1)
 	go func() {
@@ -652,6 +643,32 @@ waitLoop:
 		Duration:      duration,
 		RawOutput:     safeRawOutput,
 	}, nil
+}
+
+func workerTrackingRoot(config WorkerConfig) string {
+	if root := strings.TrimSpace(config.TrackingRoot); root != "" {
+		return root
+	}
+	return config.Root
+}
+
+func codexSandboxForPermission(decision PermissionDecision) string {
+	if decision.Profile.Name == PermissionRepositoryReadOnly {
+		return "read-only"
+	}
+	return "workspace-write"
+}
+
+func permissionDeniedWorkerResult(config WorkerConfig, startedAt time.Time, err error) (WorkerResult, error) {
+	wrapped := fmt.Errorf("worker startup failed: %w", err)
+	return WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "failed",
+		Duration:   time.Since(startedAt),
+		Error:      wrapped,
+	}, wrapped
 }
 
 // --- ParseWorkerOutput ---
@@ -1157,6 +1174,18 @@ func emitWorkerProgress(observer WorkerProgressObserver, event WorkerProgressEve
 		event.OccurredAt = time.Now().UTC()
 	}
 	observer(event)
+}
+
+func synchronizedWorkerProgressObserver(observer WorkerProgressObserver) WorkerProgressObserver {
+	if observer == nil {
+		return nil
+	}
+	var mu sync.Mutex
+	return func(event WorkerProgressEvent) {
+		mu.Lock()
+		defer mu.Unlock()
+		observer(event)
+	}
 }
 
 func configureWorkerCommand(cmd *exec.Cmd) {

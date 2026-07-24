@@ -26,10 +26,15 @@ export interface GoBridgeOptions {
  */
 export declare function discoverGoBinary(): string;
 export declare function callGoJSON<T>(opts: GoBridgeOptions, args: string[]): T;
+export declare function callGoJSONAsync<T>(opts: GoBridgeOptions, args: string[], timeoutMs?: number): Promise<T>;
 /** Test-only: inject a mock callGoJSON. */
 export declare function __setCallGoJSON(fn: typeof callGoJSON): void;
 /** Test-only: restore the real callGoJSON. */
 export declare function __restoreCallGoJSON(): void;
+/** Test-only: inject a mock asynchronous Go bridge. */
+export declare function __setCallGoJSONAsync(fn: typeof callGoJSONAsync): void;
+/** Test-only: restore the real asynchronous Go bridge. */
+export declare function __restoreCallGoJSONAsync(): void;
 /**
  * Assert that the given file path does not fall within Go-owned directories.
  * Throws if the path starts with any entry in GO_OWNED_PATHS.

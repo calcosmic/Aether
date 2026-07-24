@@ -19,14 +19,11 @@ import {
   writeColonyState,
   updateColonyState,
 } from "../../src/memory/store.js";
-import { projectRoot } from "../../src/utils/projectRoot.js";
-
-const TEST_STATE_DIR = resolve(projectRoot, "..", ".aether", "data");
-const TEST_STATE_PATH = resolve(TEST_STATE_DIR, "COLONY_STATE.json");
 
 function cleanupState(): void {
-  if (existsSync(TEST_STATE_PATH)) {
-    unlinkSync(TEST_STATE_PATH);
+  const statePath = process.env.AETHER_CONTROL_STATE_PATH;
+  if (statePath && existsSync(statePath)) {
+    unlinkSync(statePath);
   }
 }
 
@@ -47,6 +44,7 @@ describe("executePlan", () => {
   beforeEach(() => {
     tempDir = mkdtempSync(resolve(tmpdir(), "aether-events-"));
     process.env.AETHER_EVENTS_FILE = resolve(tempDir, "events.ndjson");
+    process.env.AETHER_CONTROL_STATE_PATH = resolve(tempDir, "COLONY_STATE.json");
     cleanupState();
     // Seed a fresh colony state
     const initial = readColonyState();
@@ -63,20 +61,17 @@ describe("executePlan", () => {
       rmdirSync(tempDir);
     }
     delete process.env.AETHER_EVENTS_FILE;
+    delete process.env.AETHER_CONTROL_STATE_PATH;
     cleanupState();
     vi.restoreAllMocks();
   });
 
-  it("runs a full sequence of phases in order and returns completed status", async () => {
+  it("fails on the first phase instead of simulating a completed plan", async () => {
     const result = await executePlan(["init", "plan", "build"]);
-    expect(result.status).toBe("completed");
-    expect(result.results.length).toBe(3);
+    expect(result.status).toBe("failed");
+    expect(result.results.length).toBe(1);
     expect(result.results[0].phaseId).toBe("init");
-    expect(result.results[0].status).toBe("completed");
-    expect(result.results[1].phaseId).toBe("plan");
-    expect(result.results[1].status).toBe("completed");
-    expect(result.results[2].phaseId).toBe("build");
-    expect(result.results[2].status).toBe("completed");
+    expect(result.results[0].status).toBe("failed");
   });
 
   it("emits plan:start and plan:complete events to NDJSON", async () => {
@@ -90,8 +85,8 @@ describe("executePlan", () => {
     expect(startEvent!.payload.startedAt).toBeDefined();
 
     expect(completeEvent).toBeDefined();
-    expect(completeEvent!.payload.status).toBe("completed");
-    expect(completeEvent!.payload.phaseCount).toBe(2);
+    expect(completeEvent!.payload.status).toBe("failed");
+    expect(completeEvent!.payload.phaseCount).toBe(1);
     expect(completeEvent!.payload.completedAt).toBeDefined();
   });
 
@@ -245,11 +240,11 @@ describe("executePlan", () => {
     expect(mockRunPhase).toHaveBeenCalledTimes(3);
   });
 
-  it("updates colony state current_phase and state transitions", async () => {
+  it("leaves current_phase unchanged and records failed state", async () => {
     await executePlan(["init", "plan"]);
     const state = readColonyState();
-    expect(state.state).toBe("COMPLETED");
-    expect(state.current_phase).toBe(2);
+    expect(state.state).toBe("FAILED");
+    expect(state.current_phase).toBe(0);
   });
 
   it("returns immediately with completed status for an empty sequence", async () => {

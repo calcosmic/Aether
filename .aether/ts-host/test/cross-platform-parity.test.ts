@@ -10,8 +10,6 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { detectAvailablePlatforms, isPlatformAvailable } from "../src/platform-dispatcher.js";
-
 const REPO_ROOT = "/Users/callumcowie/repos/Aether";
 
 // ---------------------------------------------------------------------------
@@ -74,6 +72,8 @@ describe("cross-platform parity", () => {
     );
 
     assert.equal(claudeAgents.length, 27, `Claude should have 27 agents, found ${claudeAgents.length}`);
+	assert.equal(opencodeAgents.length, 28, `OpenCode should have 27 castes plus one router, found ${opencodeAgents.length}`);
+	assert.ok(opencodeAgents.includes("worker-router"), "OpenCode missing restricted Aether worker router");
 
     for (const agent of claudeAgents) {
       assert.ok(
@@ -131,18 +131,14 @@ describe("cross-platform parity", () => {
     }
   });
 
-  it("platform dispatcher returns at least one available platform", async () => {
-    const platforms = await detectAvailablePlatforms();
-
-    if (platforms.length === 0) {
-      console.warn("Warning: no platforms detected on this machine (expected in CI)");
-      return; // Skip, do not fail
-    }
-
-    for (const platform of platforms) {
-      const available = await isPlatformAvailable(platform);
-      assert.ok(available, `Platform ${platform} should be available`);
-    }
+  it("production provider launch is owned by the compiled Go adapter", () => {
+    const adapterSource = readFileSync(
+      join(REPO_ROOT, "cmd", "internal_worker_adapter.go"),
+      "utf-8"
+    );
+    assert.ok(adapterSource.includes('ExecutionOwner:      "go-adapter"'));
+    assert.ok(adapterSource.includes("codex.SelectPlatformInvoker(ctx)"));
+    assert.ok(adapterSource.includes("invoker.Invoke(ctx, config)"));
   });
 });
 

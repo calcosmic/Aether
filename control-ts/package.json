@@ -1,7 +1,8 @@
 {
   "name": "@aether/control",
   "version": "0.1.0",
-  "description": "TypeScript control plane for Aether colony orchestration",
+  "description": "Retired experimental Aether control-plane prototype (non-production, fail-closed)",
+  "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

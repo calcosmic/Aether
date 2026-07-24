@@ -50,6 +50,7 @@ export async function readHiveWisdom(opts) {
     try {
         result = callGoJSON(opts, [
             "hive-read",
+            "--for-worker",
             "--min-confidence",
             String(opts.minConfidence),
         ]);

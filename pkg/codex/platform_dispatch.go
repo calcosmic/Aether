@@ -26,7 +26,7 @@ const (
 	defaultProbeTimout  = 3 * time.Second
 )
 
-const defaultOpenCodePrimaryAgent = "build"
+const defaultOpenCodePrimaryAgent = "aether-worker-router"
 
 type Platform string
 
@@ -80,6 +80,16 @@ type selectionMetadata interface {
 type markdownAgentDefinition struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
+}
+
+type openCodePermissionDefinition struct {
+	Name        string          `yaml:"name"`
+	Description string          `yaml:"description"`
+	Mode        string          `yaml:"mode"`
+	Tools       map[string]bool `yaml:"tools"`
+	Permission  struct {
+		ExternalDirectory string `yaml:"external_directory"`
+	} `yaml:"permission"`
 }
 
 type CodexDispatcher = RealInvoker
@@ -167,12 +177,18 @@ func (s *SelectedInvoker) Invoke(ctx context.Context, config WorkerConfig) (Work
 	if s == nil || s.selected == nil {
 		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: no platform selected")
 	}
+	if contract, ok := PlatformContractFor(s.selected.Platform()); !ok || !contract.canDispatchWorkers() {
+		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: platform %s does not support worker dispatch", s.selected.Platform())
+	}
 	return s.selected.Invoke(ctx, config)
 }
 
 func (s *SelectedInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
 	if s == nil || s.selected == nil {
 		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: no platform selected")
+	}
+	if contract, ok := PlatformContractFor(s.selected.Platform()); !ok || !contract.canDispatchWorkers() {
+		return WorkerResult{}, fmt.Errorf("worker dispatcher unavailable: platform %s does not support worker dispatch", s.selected.Platform())
 	}
 	if invoker, ok := s.selected.(ProgressAwareWorkerInvoker); ok {
 		return invoker.InvokeWithProgress(ctx, config, observer)
@@ -314,6 +330,11 @@ func AgentDefinitionPath(root string, platform Platform, agentName string) strin
 	}
 
 	local := localAgentDefinitionPath(root, platform, base)
+	// Hosted CLIs resolve project-local agents before global agents. Validate
+	// and report the same file the provider will actually select.
+	if (platform == PlatformClaude || platform == PlatformOpenCode) && fileExists(local) {
+		return local
+	}
 	if isAetherSourceRoot(root) {
 		return local
 	}
@@ -423,7 +444,8 @@ func fileExists(path string) bool {
 
 func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 	active := DetectActivePlatform()
-	preferred := active
+	preferences := defaultWorkerPlatformPreferences(active)
+	explicitOverride := PlatformUnknown
 	if rawOverride := strings.TrimSpace(os.Getenv(envWorkerPlatform)); rawOverride != "" {
 		override := normalizePlatform(rawOverride)
 		if override == PlatformUnknown {
@@ -433,7 +455,8 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 			}
 		}
 		if override != PlatformFake {
-			preferred = override
+			explicitOverride = override
+			preferences = []Platform{override}
 		}
 	}
 
@@ -441,10 +464,28 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 		NewCodexDispatcher(),
 		NewClaudeDispatcher(),
 		NewOpenCodeDispatcher(),
-	}, preferred)
+	}, preferences...)
+	if explicitOverride != PlatformUnknown {
+		for _, dispatcher := range dispatchers {
+			if dispatcher.Platform() == explicitOverride {
+				dispatchers = []PlatformDispatcher{dispatcher}
+				break
+			}
+		}
+	}
 
 	statuses := make([]AvailabilityStatus, 0, len(dispatchers))
 	for _, dispatcher := range dispatchers {
+		contract, supported := PlatformContractFor(dispatcher.Platform())
+		if !supported || !contract.canDispatchWorkers() {
+			statuses = append(statuses, AvailabilityStatus{
+				Platform:  dispatcher.Platform(),
+				Available: false,
+				Category:  AvailabilityCategoryUnsupportedProvider,
+				Reason:    fmt.Sprintf("platform %s does not support Aether worker dispatch", dispatcher.Platform()),
+			})
+			continue
+		}
 		status := dispatcher.Availability(ctx)
 		statuses = append(statuses, status)
 		if status.Available {
@@ -646,13 +687,10 @@ func (c *ClaudeDispatcher) Preflight(ctx context.Context, root string) Availabil
 
 	args := []string{
 		"-p",
+		"Return exactly OK.",
 		"--output-format", "json",
-		"--permission-mode", "bypassPermissions",
+		"--permission-mode", "plan",
 	}
-	if root := strings.TrimSpace(root); root != "" {
-		args = append(args, "--add-dir", root)
-	}
-	args = append(args, "Return exactly OK.")
 	return runHostedProviderPreflight(ctx, status, root, args)
 }
 
@@ -730,6 +768,11 @@ func (o *OpenCodeDispatcher) Invoke(ctx context.Context, config WorkerConfig) (W
 
 func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
 	start := time.Now()
+	permission, permissionErr := ResolvePermissionDecision(PlatformClaude, config.Caste, config.PermissionProfile)
+	if permissionErr != nil {
+		return permissionDeniedWorkerResult(config, start, permissionErr)
+	}
+	config.PermissionProfile = permission.Profile
 	schemaJSON, err := marshalJSON(workerClaimsSchema())
 	if err != nil {
 		return WorkerResult{
@@ -741,21 +784,65 @@ func (c *ClaudeDispatcher) InvokeWithProgress(ctx context.Context, config Worker
 			Error:      fmt.Errorf("marshal worker claims schema: %w", err),
 		}, err
 	}
-	args := []string{"-p", "--output-format", "json", "--json-schema", string(schemaJSON), "--agent", strings.TrimSpace(config.AgentName), "--permission-mode", "bypassPermissions"}
-	if root := strings.TrimSpace(config.Root); root != "" {
-		args = append(args, "--add-dir", root)
+	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
+	args := []string{"-p", prompt, "--output-format", "json", "--json-schema", string(schemaJSON), "--agent", strings.TrimSpace(config.AgentName)}
+	if permission.Profile.Name == PermissionRepositoryReadOnly {
+		args = append(args, "--permission-mode", "plan")
+	} else {
+		settingsPath, settingsErr := writeClaudeWorkspaceSettings()
+		if settingsErr != nil {
+			return permissionDeniedWorkerResult(config, start, fmt.Errorf("prepare Claude workspace sandbox: %w", settingsErr))
+		}
+		defer os.Remove(settingsPath)
+		args = append(args, "--permission-mode", "acceptEdits", "--settings", settingsPath)
 	}
-	prompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
-	args = append(args, prompt)
 	return invokeHostedWorker(ctx, c, config, observer, args, "claude")
 }
 
 func (o *OpenCodeDispatcher) InvokeWithProgress(ctx context.Context, config WorkerConfig, observer WorkerProgressObserver) (WorkerResult, error) {
+	start := time.Now()
+	permission, permissionErr := ResolvePermissionDecision(PlatformOpenCode, config.Caste, config.PermissionProfile)
+	if permissionErr != nil {
+		return permissionDeniedWorkerResult(config, start, permissionErr)
+	}
+	if primary := openCodePrimaryAgent(); primary != defaultOpenCodePrimaryAgent {
+		return permissionDeniedWorkerResult(config, start, fmt.Errorf(
+			"permission profile %q requires OpenCode primary router %q; configured router is %q",
+			permission.Profile.Name, defaultOpenCodePrimaryAgent, primary,
+		))
+	}
+	if err := validateOpenCodePermissionBoundary(config.AgentTOMLPath, permission.Profile); err != nil {
+		return permissionDeniedWorkerResult(config, start, err)
+	}
+	if err := validateOpenCodeRouter(config.Root); err != nil {
+		return permissionDeniedWorkerResult(config, start, err)
+	}
+	config.PermissionProfile = permission.Profile
 	args := []string{"run", "--agent", openCodePrimaryAgent(), "--format", "json"}
-	workerPrompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + renderResponseContract(config))
+	workerPrompt := strings.TrimSpace(AssembleHostedPrompt(config.ContextCapsule, config.HandoffSection, config.SkillSection, config.PheromoneSection, config.TaskBrief) + "\n\n" + RenderPermissionProfileSection(permission) + "\n\n" + renderResponseContract(config))
 	prompt := renderOpenCodeSubagentDispatchPrompt(config, workerPrompt)
 	args = append(args, prompt)
 	return invokeHostedWorker(ctx, o, config, observer, args, "opencode")
+}
+
+func writeClaudeWorkspaceSettings() (string, error) {
+	settings := map[string]interface{}{
+		"permissions": map[string]interface{}{
+			"defaultMode":                  "acceptEdits",
+			"disableBypassPermissionsMode": "disable",
+		},
+		"sandbox": map[string]interface{}{
+			"enabled":                  true,
+			"failIfUnavailable":        true,
+			"autoAllowBashIfSandboxed": true,
+			"allowUnsandboxedCommands": false,
+		},
+	}
+	payload, err := json.Marshal(settings)
+	if err != nil {
+		return "", err
+	}
+	return writeTempFile("", "aether-claude-settings-*.json", payload)
 }
 
 func openCodePrimaryAgent() string {
@@ -794,6 +881,7 @@ Do not summarize, wrap, or reformat the JSON. Do not run the worker task yoursel
 }
 
 func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, config WorkerConfig, observer WorkerProgressObserver, args []string, label string) (WorkerResult, error) {
+	observer = synchronizedWorkerProgressObserver(observer)
 	start := time.Now()
 	status := dispatcher.Availability(ctx)
 	if !status.Available {
@@ -842,6 +930,22 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 		startupErr := fmt.Errorf("worker startup failed: %s start failed: %w", label, err)
 		return WorkerResult{WorkerName: config.WorkerName, Caste: config.Caste, TaskID: config.TaskID, Status: "failed", Duration: time.Since(start), Error: startupErr}, startupErr
 	}
+	GlobalProcessTracker().TrackProcess(cmd.Process.Pid, TrackedProcess{
+		WorkerName:    config.WorkerName,
+		TaskID:        config.TaskID,
+		Caste:         config.Caste,
+		Platform:      label,
+		Root:          workerTrackingRoot(config),
+		ProviderRunID: config.ProviderRunID,
+		Binding:       config.ExecutionBinding,
+	})
+	defer GlobalProcessTracker().UntrackProcess(cmd.Process.Pid)
+	emitWorkerProgress(observer, WorkerProgressEvent{
+		Status:     "running",
+		Message:    "provider process started",
+		OccurredAt: time.Now().UTC(),
+		ProcessID:  cmd.Process.Pid,
+	})
 
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }()
@@ -1210,20 +1314,38 @@ func hasEnvPrefix(prefix string) bool {
 	return false
 }
 
-func reorderDispatchers(dispatchers []PlatformDispatcher, preferred Platform) []PlatformDispatcher {
-	if preferred == PlatformUnknown {
-		return dispatchers
+func defaultWorkerPlatformPreferences(active Platform) []Platform {
+	preferences := []Platform{PlatformClaude}
+	if active != PlatformUnknown && active != PlatformClaude {
+		preferences = append(preferences, active)
 	}
+	preferences = append(preferences, PlatformCodex, PlatformOpenCode)
+	return preferences
+}
+
+func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform) []PlatformDispatcher {
+	seen := make(map[Platform]struct{}, len(dispatchers))
 	out := make([]PlatformDispatcher, 0, len(dispatchers))
-	for _, dispatcher := range dispatchers {
-		if dispatcher.Platform() == preferred {
+	for _, platform := range preferred {
+		if platform == PlatformUnknown {
+			continue
+		}
+		for _, dispatcher := range dispatchers {
+			if dispatcher.Platform() != platform {
+				continue
+			}
+			if _, ok := seen[dispatcher.Platform()]; ok {
+				continue
+			}
 			out = append(out, dispatcher)
+			seen[dispatcher.Platform()] = struct{}{}
 		}
 	}
 	for _, dispatcher := range dispatchers {
-		if dispatcher.Platform() != preferred {
-			out = append(out, dispatcher)
+		if _, ok := seen[dispatcher.Platform()]; ok {
+			continue
 		}
+		out = append(out, dispatcher)
 	}
 	return out
 }
@@ -1348,9 +1470,21 @@ func validateMarkdownAgent(path string) error {
 }
 
 func parseMarkdownAgentDefinition(data []byte) (markdownAgentDefinition, error) {
+	frontmatter, err := markdownFrontmatter(data)
+	if err != nil {
+		return markdownAgentDefinition{}, err
+	}
+	var def markdownAgentDefinition
+	if err := yaml.Unmarshal(frontmatter, &def); err != nil {
+		return markdownAgentDefinition{}, err
+	}
+	return def, nil
+}
+
+func markdownFrontmatter(data []byte) ([]byte, error) {
 	text := strings.TrimSpace(string(data))
 	if !strings.HasPrefix(text, "---") {
-		return markdownAgentDefinition{}, fmt.Errorf("missing YAML frontmatter")
+		return nil, fmt.Errorf("missing YAML frontmatter")
 	}
 	lines := strings.Split(text, "\n")
 	end := -1
@@ -1361,14 +1495,64 @@ func parseMarkdownAgentDefinition(data []byte) (markdownAgentDefinition, error) 
 		}
 	}
 	if end == -1 {
-		return markdownAgentDefinition{}, fmt.Errorf("unterminated YAML frontmatter")
+		return nil, fmt.Errorf("unterminated YAML frontmatter")
 	}
-	frontmatter := strings.Join(lines[1:end], "\n")
-	var def markdownAgentDefinition
-	if err := yaml.Unmarshal([]byte(frontmatter), &def); err != nil {
-		return markdownAgentDefinition{}, err
+	return []byte(strings.Join(lines[1:end], "\n")), nil
+}
+
+func parseOpenCodePermissionDefinition(path string) (openCodePermissionDefinition, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return openCodePermissionDefinition{}, fmt.Errorf("read %s: %w", path, err)
+	}
+	frontmatter, err := markdownFrontmatter(data)
+	if err != nil {
+		return openCodePermissionDefinition{}, fmt.Errorf("%s: %w", path, err)
+	}
+	var def openCodePermissionDefinition
+	if err := yaml.Unmarshal(frontmatter, &def); err != nil {
+		return openCodePermissionDefinition{}, fmt.Errorf("%s: %w", path, err)
 	}
 	return def, nil
+}
+
+func validateOpenCodePermissionBoundary(path string, profile PermissionProfile) error {
+	def, err := parseOpenCodePermissionDefinition(path)
+	if err != nil {
+		return fmt.Errorf("OpenCode permission attestation failed: %w", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(def.Permission.ExternalDirectory), "deny") {
+		return fmt.Errorf("OpenCode permission attestation failed for %s: external_directory must be denied", def.Name)
+	}
+	if profile.Name == PermissionRepositoryReadOnly {
+		for _, tool := range []string{"write", "edit", "bash"} {
+			allowed, declared := def.Tools[tool]
+			if !declared || allowed {
+				return fmt.Errorf("OpenCode permission attestation failed for %s: read-only profile requires tools.%s=false", def.Name, tool)
+			}
+		}
+	}
+	return nil
+}
+
+func validateOpenCodeRouter(root string) error {
+	path := localAgentDefinitionPath(root, PlatformOpenCode, defaultOpenCodePrimaryAgent)
+	if !fileExists(path) {
+		path = globalAgentDefinitionPath(PlatformOpenCode, defaultOpenCodePrimaryAgent)
+	}
+	if !fileExists(path) {
+		return fmt.Errorf("OpenCode permission attestation failed: primary router %q is not installed", defaultOpenCodePrimaryAgent)
+	}
+	def, err := parseOpenCodePermissionDefinition(path)
+	if err != nil {
+		return fmt.Errorf("OpenCode permission attestation failed: %w", err)
+	}
+	if def.Name != defaultOpenCodePrimaryAgent || def.Mode != "primary" ||
+		def.Tools["write"] || def.Tools["edit"] || def.Tools["bash"] || !def.Tools["task"] ||
+		!strings.EqualFold(strings.TrimSpace(def.Permission.ExternalDirectory), "deny") {
+		return fmt.Errorf("OpenCode permission attestation failed: router %s does not enforce task-only delegation", path)
+	}
+	return nil
 }
 
 func classifyHostedExecutionError(label string, err error, stderr string, runningObserved bool) error {
@@ -1423,9 +1607,21 @@ func describeAvailabilitySet(active Platform, statuses []AvailabilityStatus) str
 }
 
 func availabilityCategoryForStatuses(statuses []AvailabilityStatus) AvailabilityCategory {
-	for _, status := range statuses {
-		if status.Category != "" && !status.Available {
-			return status.Category
+	priority := []AvailabilityCategory{
+		AvailabilityCategoryUnsupportedProvider,
+		AvailabilityCategoryAuthProbeFailed,
+		AvailabilityCategoryAuthInactive,
+		AvailabilityCategoryInvalidAuthOutput,
+		AvailabilityCategoryCredentialsMissing,
+		AvailabilityCategoryProviderConfig,
+		AvailabilityCategoryBinaryMissing,
+		AvailabilityCategoryProbeSkipped,
+	}
+	for _, category := range priority {
+		for _, status := range statuses {
+			if status.Category == category && !status.Available {
+				return category
+			}
 		}
 	}
 	for _, status := range statuses {

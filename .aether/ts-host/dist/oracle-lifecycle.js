@@ -3,7 +3,7 @@
  *
  * Drives the Oracle research iteration loop by:
  * 1. Calling `aether oracle-iterate --plan-only` to get the iteration manifest
- * 2. Dispatching Oracle workers via the platform dispatcher
+ * 2. Coordinating Oracle workers through the Go-owned provider adapter
  * 3. Building completion files with worker results
  * 4. Calling `aether oracle-iterate-finalize --completion-file` to commit state
  * 5. Repeating until stop conditions are met

@@ -24,9 +24,12 @@ go test ./... -race
 go vet ./...
 go build ./cmd/aether
 goreleaser check
-goreleaser build --snapshot --clean
+AETHER_RELEASE_VERSION="$(node -p "require('./.aether/version.json').version")" goreleaser release --snapshot --clean
+AETHER_RELEASE_ACCEPTANCE_DIR=dist go test ./cmd -run '^TestStagedGoReleaserArtifactsInstallThroughPackedNPM$' -count=1 -v
 ```
 
+The snapshot command assembles the archives and `checksums.txt` consumed by the
+npm bootstrap; a raw `goreleaser build` is not sufficient release evidence.
 After the snapshot build, run the produced binary's `version` command. CI and
 the release workflow use:
 
@@ -43,13 +46,15 @@ host command spine are still aligned with wrappers and runtime guidance:
 
 ```bash
 go test ./cmd -run 'TestCodexHostBackedGuidesUseTypeScriptHostSpine|TestWrapperSourcesUseTypeScriptHostManifestSpine|TestClassicCommandParityMatrix' -count=1
+go test ./cmd -run '^TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild$' -count=1
 npm --prefix .aether/ts-host run typecheck
 npm --prefix .aether/ts-host test
 ```
 
 Release notes may claim that TypeScript conducts host-backed workflows only if
 the tests above pass and the wording keeps Go as the state, verification,
-finalizer, provider-diagnostic, and ceremony authority.
+finalizer, provider-adapter, provider-diagnostic, and ceremony authority. The TS
+host coordinates waves; it does not select or spawn provider CLIs.
 
 ## Provider/Auth Evidence
 
@@ -71,17 +76,61 @@ has already started and failed.
 
 Evidence surfaces that should stay green:
 
-- `.aether/ts-host/test/platform-dispatcher.test.ts` covers deterministic
-  no-credential fake providers for Claude, OpenCode, and Codex.
+- `cmd/blackbox_harness_test.go` exercises the compiled hidden Go adapter with a
+  deterministic external provider and proves malformed results fail closed.
 - `pkg/codex/platform_dispatch_test.go` and
   `cmd/dispatch_platform_helpers_test.go` cover categorized and redacted
-  provider availability diagnostics.
+  provider availability diagnostics, including hard-pin no-fallback behavior.
 - `pkg/codex/platform_dispatch_test.go`,
   `pkg/codex/worker_test.go`,
   `.aether/ts-host/test/go-bridge.test.ts`, and
   `.aether/ts-host/test/worker-dispatch.test.ts` cover post-launch diagnostic
   redaction before errors, debug artifacts, RawOutput, and TS summaries expose
   provider output.
+- `.aether/ts-host/test/worker-dispatch.test.ts` also proves production host
+  sources do not import the legacy TypeScript provider launcher.
+
+`.aether/ts-host/test/platform-dispatcher.test.ts` is legacy regression evidence
+only. It cannot qualify production providers or justify release claims.
+
+## Permission Profile Evidence
+
+Every production worker request must carry the canonical permission profile from
+its Go-authored manifest. Go rejects missing, stale, or broadened profiles before
+provider launch.
+
+Release evidence must include:
+
+```bash
+go test ./pkg/codex -run 'TestPermission|TestCodexReadOnly|TestClaudeWorkspace|TestShippedOpenCode' -count=1
+go test ./cmd -run 'TestInternalWorkerAdapterRequiresAndValidatesPermissionProfile|TestBuildAndPlanningManifestsCarryCanonicalPermissionProfiles' -count=1
+npm --prefix .aether/ts-host test
+```
+
+The supported release contract is `repository_read_only` for Scout and Includer,
+and `workspace_write` for current write-capable castes. `scoped_write` and
+`test_write` must fail closed until path-level enforcement exists. Probe,
+review-ledger, survey, and documentation scopes are behavioral restrictions
+inside a workspace boundary and must not be advertised as stronger isolation.
+
+## Durable Build Run Evidence
+
+Every supported build worker must carry the exact Go-authored execution binding.
+Release evidence must prove stale results fail closed, parallel process registry
+writes do not lose PIDs, wrapper retries reuse terminal results, and native workers
+journal terminal evidence before wave completion:
+
+```bash
+go test ./pkg/codex -run 'TestWorkspaceFingerprint|TestExecutionBinding|TestProcessTracker' -count=1
+go test ./pkg/codex -run 'TestProcessTrackerConcurrentUpsertsPreserveEveryProvider' -race -count=1
+go test ./cmd -run 'TestPlanOnlyManifestCarriesJournalBoundExecutionIdentity|TestInternalBuildAdapter|TestTerminalWorkerJournal|TestNativeBuildDispatch|TestCLIInterruptedBuild' -count=1
+npm --prefix .aether/ts-host test
+```
+
+Do not describe this as universal provider stream reattachment. Wrapper-hosted
+builds can stage and replay a terminal completion after host loss. Native direct
+builds preserve worker evidence and exact cancellation but still force-retry if
+the parent dies before aggregate lifecycle commit.
 
 ## Seal-Time Blockers
 
@@ -90,6 +139,17 @@ Block seal if any of these are true:
 - any required smoke command fails;
 - provider/auth no-credential smoke lacks clear fake-provider evidence;
 - post-launch worker diagnostic redaction evidence is missing or failing;
+- a production TS host source imports `platform-dispatcher.ts` or launches a
+  provider CLI directly;
+- an explicit `AETHER_WORKER_PLATFORM` pin falls back to another provider;
+- `control-ts` can return success or mutate the live `.aether/data` store;
+- a worker manifest/request omits its permission profile, broadens it, or launches
+  after the selected host fails permission attestation;
+- a build worker request/result is missing its execution binding, carries a stale
+  run/attempt/manifest/workspace/owner value, or is accepted after exact-run
+  cancellation fails;
+- Claude uses `bypassPermissions`, OpenCode bypasses `aether-worker-router`, or
+  Codex grants an additional writable `CODEX_HOME`;
 - release documentation claims `govulncheck` passed without actual tool output;
 - release documentation claims supply-chain hardening from SHA-pinned Actions
   while workflows still use version tags.
@@ -109,6 +169,10 @@ accepted.
   CI. Manual live-provider validation remains optional and should not replace
   deterministic fake-provider coverage. When live validation is in scope, use
   `.aether/docs/manual-provider-smoke-checklist.md`.
+- Network access is still provider-managed. The current permission contract does
+  not claim a cross-provider network sandbox.
+- Narrow in-workspace scopes such as test-only and review-ledger-only are not yet
+  host-enforced profiles.
 
 ## Publish Handoff
 

@@ -1021,3 +1021,19 @@ func TestExecutionPathAudit_OneConductorPerWorkflow(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildCommandGuideIncludesPlatformContract(t *testing.T) {
+	guide, err := buildCommandGuide("build", "opencode")
+	if err != nil {
+		t.Fatalf("buildCommandGuide: %v", err)
+	}
+	if guide.PlatformContract.Platform != "opencode" {
+		t.Fatalf("platform contract = %#v", guide.PlatformContract)
+	}
+	if guide.PlatformContract.WorkerDispatch.Level != "limited" {
+		t.Fatalf("worker dispatch support = %#v", guide.PlatformContract.WorkerDispatch)
+	}
+	if guide.PlatformContract.NamedCasteRouting.Level != "limited" {
+		t.Fatalf("named caste routing support = %#v", guide.PlatformContract.NamedCasteRouting)
+	}
+}

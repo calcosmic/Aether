@@ -9,7 +9,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, symlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -47,6 +47,7 @@ import {
   __restoreCreateCeremonyAdapter,
 } from "../src/ceremony-adapter.js";
 import type { CeremonyAdapter, CeremonyWorkflow } from "../src/ceremony-adapter.js";
+import { TEST_EXECUTION_BINDING } from "./execution-binding-fixture.js";
 
 // Path to host entry point source
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -202,10 +203,10 @@ describe("dispatched plan and continue runners", () => {
     __restoreAllMocks();
   });
 
-  it("plan command uses dispatched runner type", async () => {
+  it("plan command uses go-json manifest bridge type", async () => {
     const { getHostCommandDefinition } = await import("../src/command-registry.js");
     const def = getHostCommandDefinition("plan");
-    assert.equal(def?.runner, "dispatched", "plan command should use dispatched runner");
+    assert.equal(def?.runner, "go-json", "plan command should return a Go-owned iteration manifest");
     assert.equal(def?.ceremonyWorkflow, "plan", "plan should have plan ceremony workflow");
   });
 
@@ -321,6 +322,7 @@ describe("dry-run ceremony preview", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1, skill_section: "TDD" },
             ],
@@ -504,6 +506,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
               { name: "Builder-02", caste: "builder", task: "Build more", wave: 1, execution_wave: 1 },
@@ -578,6 +581,7 @@ describe("hive wisdom injection (HIVE-04, HIVE-05)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
             ],
@@ -800,6 +804,7 @@ describe("cross-colony wisdom benefit (HIVE-05)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
             ],
@@ -910,6 +915,7 @@ describe("spawn orchestrator initialization (SPAWN-03, SPAWN-05)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
               { name: "Builder-02", caste: "builder", task: "Build more", wave: 1, execution_wave: 1 },
@@ -1078,7 +1084,10 @@ describe("build iteration loop", () => {
           });
         }
         return {
-          dispatch_manifest: { dispatches },
+          dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
+            dispatches,
+          },
         } as unknown as T;
       }
       if (cmd === "build-finalize") {
@@ -1158,6 +1167,111 @@ describe("build iteration loop", () => {
     assert.equal(dispatchCallCount, 1, "Should dispatch exactly 1 wave when confidence is high");
   });
 
+  it("keeps the Go-issued manifest immutable while enriching worker briefs", async () => {
+    const issuedManifest = {
+      execution_binding: TEST_EXECUTION_BINDING,
+      phase: 1,
+      attempt_id: "attempt-immutable",
+      attempt_path: ".aether/data/build/phase-1/attempts/attempt-immutable.json",
+      dispatches: [{
+        name: "Builder-01",
+        caste: "builder",
+        task: "Build immutable contract",
+        wave: 1,
+        execution_wave: 1,
+      }],
+    };
+    let finalizedManifest: unknown;
+    const mockGo = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      if (args[0] === "hive-read") {
+        return { entries: [{ text: "Use typed errors", domain: "go", confidence: 0.9 }], total: 1 } as unknown as T;
+      }
+		if (args[0] === "build") {
+			return { dispatch_manifest: issuedManifest } as unknown as T;
+		}
+		if (args[0] === "build-completion-stage") {
+			const sourcePath = args[args.indexOf("--completion-file") + 1]!;
+			return { completion_path: sourcePath } as unknown as T;
+		}
+      if (args[0] === "build-finalize") {
+        const completionPath = args[args.indexOf("--completion-file") + 1]!;
+        const packet = JSON.parse(readFileSync(completionPath, "utf8")) as {
+          result: { dispatch_manifest: unknown };
+        };
+        finalizedManifest = packet.result.dispatch_manifest;
+        return { ok: true } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+    __setCallGoJSON(mockGo);
+    __setGoBridgeCallGoJSON(mockGo);
+    __setDispatchWorkers(async (_opts, dispatches) => {
+      dispatchCallCount++;
+      capturedAllDispatches.push(dispatches);
+      return [{
+        name: "Builder-01",
+        status: "completed",
+        summary: "Done",
+        duration: 1,
+        files_modified: ["src/module.ts"],
+        tests_written: ["test/module.test.ts"],
+        test_results: { passed: 1, total: 1 },
+      }];
+    });
+    __setDetectAvailablePlatforms(async () => ["claude" as const]);
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    await runDispatchedBuildCommand(bridge, parsed, getHostCommandDefinition("build")!);
+
+		assert.deepEqual(finalizedManifest, issuedManifest, "completion must preserve the exact Go-issued manifest");
+		const stageIndex = goCalls.findIndex((args) => args[0] === "build-completion-stage");
+		const finalizeIndex = goCalls.findIndex((args) => args[0] === "build-finalize");
+		assert.ok(stageIndex >= 0 && stageIndex < finalizeIndex, "accepted completion must be staged before finalization");
+    const enriched = capturedAllDispatches[0]![0] as Record<string, unknown>;
+    assert.match(String(enriched.task_brief), /Relevant Playbooks/);
+    assert.match(String(enriched.hive_section), /Use typed errors/);
+  });
+
+  it("does not dispatch a build blocked by orchestrator boundary questions", async () => {
+    const mockGo = <T>(_bridgeOpts: unknown, args: string[]): T => {
+      goCalls.push(args);
+      if (args[0] === "build") {
+        return {
+          dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
+            dispatches: [{ name: "Builder-01", caste: "builder", task: "Do not run" }],
+            orchestrator_boundary_guidance: {
+              active: true,
+              next: "aether discuss",
+              summary: "Answer the build boundary question first.",
+            },
+          },
+        } as unknown as T;
+      }
+      return { ok: true } as unknown as T;
+    };
+    __setCallGoJSON(mockGo);
+    __setGoBridgeCallGoJSON(mockGo);
+    __setDispatchWorkers(async () => {
+      dispatchCallCount++;
+      return [];
+    });
+
+    const parsed = parseArgs(["node", "host.js", "build", "1", "--simulate"]);
+    const bridge: GoBridgeOptions = { goBinaryPath: "/usr/bin/aether", cwd: process.cwd() };
+    const { getHostCommandDefinition } = await import("../src/command-registry.js");
+    await assert.rejects(
+      runDispatchedBuildCommand(bridge, parsed, getHostCommandDefinition("build")!),
+      /Answer the build boundary question first/,
+    );
+
+    assert.equal(dispatchCallCount, 0);
+    assert.equal(countGoCommandCalls(goCalls, "build-finalize"), 0);
+  });
+
   it("two iterations when confidence is low then high", async () => {
     const workerResults = (_callNum: number) => {
       if (_callNum === 0) {
@@ -1196,7 +1310,7 @@ describe("build iteration loop", () => {
     await runDispatchedBuildCommand(bridge, parsed, def);
 
     const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should call build-finalize twice for 2 iterations");
+    assert.equal(finalizeCount, 1, "Should call build-finalize once for 2 iterations");
     assert.equal(dispatchCallCount, 2, "Should dispatch 2 waves");
   });
 
@@ -1227,7 +1341,7 @@ describe("build iteration loop", () => {
     await runDispatchedBuildCommand(bridge, parsed, def);
 
     const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
-    assert.equal(finalizeCount, 3, "Should call build-finalize 3 times (default max)");
+    assert.equal(finalizeCount, 1, "Should call build-finalize once after the default max");
     assert.equal(dispatchCallCount, 3, "Should dispatch exactly 3 waves (default max)");
   });
 
@@ -1258,7 +1372,7 @@ describe("build iteration loop", () => {
     await runDispatchedBuildCommand(bridge, parsed, def);
 
     const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should call build-finalize 2 times (custom max)");
+    assert.equal(finalizeCount, 1, "Should call build-finalize once after the custom max");
     assert.equal(dispatchCallCount, 2, "Should dispatch exactly 2 waves (custom max)");
   });
 
@@ -1282,6 +1396,7 @@ describe("build iteration loop", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
               { name: "Builder-02", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
@@ -1385,6 +1500,7 @@ describe("feedback injection", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
             ],
@@ -1433,7 +1549,7 @@ describe("feedback injection", () => {
 
     // Verify 2 dispatches occurred (confidence goes low then high)
     const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should call build-finalize twice");
+    assert.equal(finalizeCount, 1, "Should call build-finalize exactly once");
 
     // Verify second dispatch has feedback from first iteration's blockers
     assert.ok(capturedAllDispatches.length >= 2, "Should have captured at least 2 dispatch calls");
@@ -1497,6 +1613,7 @@ describe("ceremony output", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
             ],
@@ -1623,6 +1740,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Implement feature", wave: 1, execution_wave: 1, skill_section: "" },
               { name: "Watcher-01", caste: "watcher", task: "Verify tests", wave: 1, execution_wave: 1, skill_section: "" },
@@ -1694,9 +1812,9 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
     assert.equal(orchestrator.totalBudget, 10, "Total budget should match manifest max_workers");
     assert.equal(orchestrator.consumedBudget, 2, "Consumed budget should equal manifest dispatch count");
 
-    // 3. build-finalize called twice (2 iterations)
+    // 3. Two dispatch iterations produce one lifecycle finalization.
     const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should call build-finalize twice (2 iterations)");
+    assert.equal(finalizeCount, 1, "Should call build-finalize once after 2 iterations");
 
     // 4. Second iteration dispatches have task_brief with blocker text from iteration 1
     assert.ok(capturedAllDispatches.length >= 2, "Should have at least 2 dispatch calls");
@@ -1759,6 +1877,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Implement", wave: 1, execution_wave: 1 },
             ],
@@ -1860,6 +1979,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build A", wave: 1, execution_wave: 1 },
               { name: "Builder-02", caste: "builder", task: "Build B", wave: 1, execution_wave: 1 },
@@ -1921,7 +2041,7 @@ describe("cross-phase integration (hive + spawn + iteration)", () => {
 
     // Should have 2 iterations (first fails, second succeeds)
     const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
-    assert.equal(finalizeCount, 2, "Should call build-finalize twice");
+    assert.equal(finalizeCount, 1, "Should call build-finalize exactly once");
 
     // First dispatch opts should have spawnOrchestrator with totalBudget=5, consumedBudget=3
     assert.ok(capturedDispatchOpts.length >= 2, "Should have captured dispatch opts for both iterations");

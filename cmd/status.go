@@ -662,6 +662,7 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		"tasks_total":            tasksTotal,
 		"colony_mode":            string(state.EffectiveColonyMode()),
 		"agent_delegate_session": codex.IsAgentDelegateSession(),
+		"plan_revision":          planRevisionSummary(state.Plan),
 	}
 
 	if s != nil {
@@ -669,6 +670,9 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		if len(warnings) > 0 {
 			result["warnings"] = warnings
 		}
+	}
+	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
+		result["build_attempt"] = buildAttemptSummary(attempt)
 	}
 
 	// Reconciliation section (JSON mode)
@@ -811,6 +815,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	// Scope
 	fmt.Fprintf(&b, "Scope: %s\n", state.EffectiveScope())
 	fmt.Fprintf(&b, "Colony Mode: %s\n", state.EffectiveColonyMode())
+	if revision, ok := activePlanRevision(state.Plan); ok {
+		fmt.Fprintf(&b, "Plan Revision: r%d (%s) - %s\n", revision.Number, revision.ReasonType, revision.Reason)
+	} else if len(state.Plan.Phases) > 0 {
+		fmt.Fprintf(&b, "Plan Revision: legacy (%s)\n", activePlanRevisionID(state.Plan))
+	}
 
 	// Milestone
 	if state.Milestone != "" {
@@ -903,6 +912,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		b.WriteString("\nRecent Outcomes\n")
 		renderRecentWorkerOutcomes(&b, spawnSummary.RecentOutcomeEntries)
 	}
+	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
+		b.WriteString("\nBuild Attempt\n")
+		b.WriteString(renderBuildAttemptStatus(attempt))
+	}
 	if guidance := loadActiveRecoveryGuidance(state); guidance != nil {
 		b.WriteString("\nRecovery\n")
 		if guidance.Summary != "" {
@@ -973,6 +986,49 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	alternatives = append(alternatives, `Run `+"`aether proof`"+` to inspect the current context and skill proof.`)
 	b.WriteString(renderNextUp(primary, alternatives...))
 
+	return b.String()
+}
+
+func renderBuildAttemptStatus(attempt buildAttemptRecord) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "  %s | %s | %d workers\n", attempt.ID, attempt.Status, len(attempt.Dispatches))
+	if attempt.RunID != "" {
+		fmt.Fprintf(&b, "  Run: %s\n", attempt.RunID)
+	}
+	if attempt.ManifestSHA256 != "" {
+		digest := attempt.ManifestSHA256
+		if len(digest) > 12 {
+			digest = digest[:12]
+		}
+		fmt.Fprintf(&b, "  Manifest: %s\n", digest)
+	}
+	workerCounts := map[string]int{}
+	for _, workerRun := range attempt.WorkerRuns {
+		workerCounts[workerRun.Status]++
+	}
+	if len(attempt.WorkerRuns) > 0 {
+		fmt.Fprintf(
+			&b,
+			"  Worker runs: %d completed | %d active | %d failed | %d blocked | %d timed out | %d cancelled\n",
+			workerCounts[buildWorkerCompleted],
+			workerCounts[buildWorkerDispatching],
+			workerCounts[buildWorkerFailed],
+			workerCounts[buildWorkerBlocked],
+			workerCounts[buildWorkerTimeout],
+			workerCounts[buildWorkerCancelled],
+		)
+	}
+	if attempt.RunID != "" {
+		if processes, err := codex.GlobalProcessTracker().ProcessesForRun(buildAttemptWorkspaceRoot(), attempt.RunID); err == nil && len(processes) > 0 {
+			fmt.Fprintf(&b, "  Provider processes: %d active\n", len(processes))
+		}
+	}
+	if attempt.Error != "" {
+		fmt.Fprintf(&b, "  Error: %s\n", compactActionText(attempt.Error, 160))
+	}
+	if attempt.RecoveryCommand != "" {
+		fmt.Fprintf(&b, "  Next: %s\n", attempt.RecoveryCommand)
+	}
 	return b.String()
 }
 

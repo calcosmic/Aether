@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,29 +20,30 @@ import (
 )
 
 type codexPlanningDispatch struct {
-	Stage         string                   `json:"stage,omitempty"`
-	Wave          int                      `json:"wave,omitempty"`
-	Caste         string                   `json:"caste"`
-	AgentName     string                   `json:"agent_name,omitempty"`
-	Name          string                   `json:"name"`
-	Task          string                   `json:"task"`
-	TaskID        string                   `json:"task_id,omitempty"`
-	Outputs       []string                 `json:"outputs"`
-	Status        string                   `json:"status"`
-	Summary       string                   `json:"summary,omitempty"`
-	Blockers      []string                 `json:"blockers,omitempty"`
-	Duration      float64                  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
-	Brief         string                   `json:"brief,omitempty"`
-	FilesCreated  []string                 `json:"files_created,omitempty"`
-	FilesModified []string                 `json:"files_modified,omitempty"`
-	ScoutReport   *codexScoutReport        `json:"scout_report,omitempty"`
-	PhasePlan     *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
-	SkillSection  string                   `json:"skill_section,omitempty"`
-	SkillCount    int                      `json:"skill_count,omitempty"`
-	ColonySkills  int                      `json:"colony_skill_count,omitempty"`
-	DomainSkills  int                      `json:"domain_skill_count,omitempty"`
-	MatchedSkills []string                 `json:"matched_skills,omitempty"`
-	Claimed       []string                 `json:"-"`
+	Stage             string                   `json:"stage,omitempty"`
+	Wave              int                      `json:"wave,omitempty"`
+	Caste             string                   `json:"caste"`
+	AgentName         string                   `json:"agent_name,omitempty"`
+	Name              string                   `json:"name"`
+	Task              string                   `json:"task"`
+	TaskID            string                   `json:"task_id,omitempty"`
+	Outputs           []string                 `json:"outputs"`
+	Status            string                   `json:"status"`
+	Summary           string                   `json:"summary,omitempty"`
+	Blockers          []string                 `json:"blockers,omitempty"`
+	Duration          float64                  `json:"duration,omitempty"` // Wall-clock seconds (0 = not measured)
+	Brief             string                   `json:"brief,omitempty"`
+	FilesCreated      []string                 `json:"files_created,omitempty"`
+	FilesModified     []string                 `json:"files_modified,omitempty"`
+	ScoutReport       *codexScoutReport        `json:"scout_report,omitempty"`
+	PhasePlan         *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
+	SkillSection      string                   `json:"skill_section,omitempty"`
+	SkillCount        int                      `json:"skill_count,omitempty"`
+	ColonySkills      int                      `json:"colony_skill_count,omitempty"`
+	DomainSkills      int                      `json:"domain_skill_count,omitempty"`
+	MatchedSkills     []string                 `json:"matched_skills,omitempty"`
+	Claimed           []string                 `json:"-"`
+	PermissionProfile codex.PermissionProfile  `json:"permission_profile"`
 }
 
 type codexSurveyContext struct {
@@ -87,18 +90,20 @@ type codexWorkerPlanArtifact struct {
 }
 
 type codexWorkerPlanPhase struct {
-	Name            string                `json:"name"`
-	Description     string                `json:"description"`
-	Tasks           []codexWorkerPlanTask `json:"tasks"`
-	SuccessCriteria []string              `json:"success_criteria,omitempty"`
+	Name                 string                                `json:"name"`
+	Description          string                                `json:"description"`
+	Tasks                []codexWorkerPlanTask                 `json:"tasks"`
+	SuccessCriteria      []string                              `json:"success_criteria,omitempty"`
+	EvidenceRequirements []colony.CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
 }
 
 type codexWorkerPlanTask struct {
-	Goal            string   `json:"goal"`
-	Constraints     []string `json:"constraints,omitempty"`
-	Hints           []string `json:"hints,omitempty"`
-	SuccessCriteria []string `json:"success_criteria,omitempty"`
-	DependsOn       []string `json:"depends_on,omitempty"`
+	Goal                 string                                `json:"goal"`
+	Constraints          []string                              `json:"constraints,omitempty"`
+	Hints                []string                              `json:"hints,omitempty"`
+	SuccessCriteria      []string                              `json:"success_criteria,omitempty"`
+	EvidenceRequirements []colony.CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
+	DependsOn            []string                              `json:"depends_on,omitempty"`
 }
 
 type phaseTemplate struct {
@@ -128,6 +133,9 @@ type codexPlanOptions struct {
 	MaxIterations     int
 	Accept            bool
 	RepairArtifact    bool
+	RevisionType      string
+	RevisionReason    string
+	RevisionEvidence  []string
 }
 
 type codexPlanningLoop struct {
@@ -145,20 +153,37 @@ type codexPlanningLoop struct {
 }
 
 type codexPlanningLoopSample struct {
-	Iteration  int      `json:"iteration"`
-	Confidence int      `json:"confidence"`
-	Delta      int      `json:"delta"`
-	StallCount int      `json:"stall_count"`
-	Gaps       []string `json:"gaps,omitempty"`
-	Evidence   string   `json:"evidence,omitempty"`
+	Iteration     int      `json:"iteration"`
+	Confidence    int      `json:"confidence"`
+	Delta         int      `json:"delta"`
+	StallCount    int      `json:"stall_count"`
+	Gaps          []string `json:"gaps,omitempty"`
+	SelectedGaps  []string `json:"selected_gaps,omitempty"`
+	Evidence      string   `json:"evidence,omitempty"`
+	EvidenceCount int      `json:"evidence_count,omitempty"`
+	EvidenceHash  string   `json:"evidence_hash,omitempty"`
 }
 
 type codexPlanManifest struct {
 	Goal                      string                           `json:"goal"`
 	Root                      string                           `json:"root"`
 	GeneratedAt               string                           `json:"generated_at"`
+	BaseRevisionID            string                           `json:"base_revision_id,omitempty"`
+	BasePlanStateHash         string                           `json:"base_plan_state_hash"`
 	ColonyMode                string                           `json:"colony_mode,omitempty"`
+	Synthetic                 bool                             `json:"synthetic,omitempty"`
+	SyntheticWarning          string                           `json:"synthetic_warning,omitempty"`
+	PlanningRunID             string                           `json:"planning_run_id,omitempty"`
+	Iteration                 int                              `json:"iteration,omitempty"`
+	TargetConfidence          int                              `json:"target_confidence,omitempty"`
+	MaxIterations             int                              `json:"max_iterations,omitempty"`
+	PreviousConfidence        int                              `json:"previous_confidence,omitempty"`
+	PreviousEvidenceHash      string                           `json:"previous_evidence_hash,omitempty"`
+	SelectedGaps              []string                         `json:"selected_gaps,omitempty"`
+	PreviousPlanDraft         *codexWorkerPlanArtifact         `json:"previous_plan_draft,omitempty"`
+	ExpectedWorkers           []codexPlanningDispatch          `json:"expected_workers,omitempty"`
 	Refresh                   bool                             `json:"refresh"`
+	Revision                  *codexPlanRevisionContext        `json:"revision,omitempty"`
 	ExistingPlan              bool                             `json:"existing_plan"`
 	ExistingPhaseCount        int                              `json:"existing_phase_count,omitempty"`
 	Depth                     string                           `json:"depth"`
@@ -182,6 +207,45 @@ type codexPlanManifest struct {
 	OrchestratorGuidance      *orchestratorBoundaryGuidance    `json:"orchestrator_boundary_guidance,omitempty"`
 }
 
+type codexPlanIterationState struct {
+	PlanningRunID        string                    `json:"planning_run_id"`
+	Goal                 string                    `json:"goal"`
+	Root                 string                    `json:"root"`
+	Depth                string                    `json:"depth"`
+	PlanningDepth        string                    `json:"planning_depth"`
+	TargetConfidence     int                       `json:"target_confidence"`
+	MaxIterations        int                       `json:"max_iterations"`
+	LastIteration        int                       `json:"last_iteration"`
+	PreviousConfidence   int                       `json:"previous_confidence"`
+	PreviousEvidenceHash string                    `json:"previous_evidence_hash,omitempty"`
+	SelectedGaps         []string                  `json:"selected_gaps,omitempty"`
+	PreviousPlanDraft    *codexWorkerPlanArtifact  `json:"previous_plan_draft,omitempty"`
+	History              []codexPlanningLoopSample `json:"history,omitempty"`
+	ConsecutiveStalls    int                       `json:"consecutive_stalls,omitempty"`
+	Revision             *codexPlanRevisionContext `json:"revision,omitempty"`
+	UpdatedAt            string                    `json:"updated_at"`
+}
+
+const planningSyntheticWarning = "Synthetic planning was explicitly requested; output is local preview/test synthesis and does not prove provider-backed Scout or Route-Setter work."
+
+func planningSyntheticWarningForMode(synthetic bool) string {
+	if synthetic {
+		return planningSyntheticWarning
+	}
+	return ""
+}
+
+func planningWorkersUnavailableError(invoker codex.WorkerInvoker) error {
+	return fmt.Errorf("real planning workers unavailable: %s. Normal planning requires provider-backed Scout and Route-Setter work. Fix provider authentication or CLI availability, then rerun `aether plan`; use `aether plan --synthetic` only for an explicitly marked preview/test plan", dispatchAvailabilityMessage(invoker))
+}
+
+func planningWorkersFailedError(err error) error {
+	if err == nil {
+		return fmt.Errorf("real planning workers did not finish cleanly. Normal planning requires completed provider-backed Scout and Route-Setter work; rerun `aether plan` after fixing worker dispatch, or use `aether plan --synthetic` only for an explicitly marked preview/test plan")
+	}
+	return fmt.Errorf("real planning workers did not finish cleanly: %s. Normal planning requires completed provider-backed Scout and Route-Setter work; rerun `aether plan` after fixing worker dispatch, or use `aether plan --synthetic` only for an explicitly marked preview/test plan", err.Error())
+}
+
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
 	return runCodexPlanWithOptions(root, codexPlanOptions{
 		Refresh:   refresh,
@@ -197,6 +261,14 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	state, err := loadActiveColonyState()
 	if err != nil {
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	revisionContext, err := buildPlanRevisionContext(root, state, opts)
+	if err != nil {
+		return nil, err
+	}
+	basePlanStateHash, err := planStateHash(state.Plan)
+	if err != nil {
+		return nil, fmt.Errorf("hash active plan before planning: %w", err)
 	}
 
 	granularity, planDepth, err := resolvePlanGranularityDepth(state.PlanGranularity, opts.Depth)
@@ -252,6 +324,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			"colony_mode":                string(state.EffectiveColonyMode()),
 			"goal":                       *state.Goal,
 			"phases":                     state.Plan.Phases,
+			"plan_revision":              planRevisionSummary(state.Plan),
 			"count":                      len(state.Plan.Phases),
 			"depth":                      planDepth,
 			"planning_depth":             planningDepth,
@@ -272,6 +345,14 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		return runCodexPlanAgentDelegate(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
 	}
 
+	var invoker codex.WorkerInvoker
+	if !opts.Synthetic {
+		invoker = newCodexWorkerInvoker()
+		if _, ok := invoker.(*codex.FakeInvoker); !ok && (invoker == nil || !invoker.IsAvailable(context.Background())) {
+			return nil, planningWorkersUnavailableError(invoker)
+		}
+	}
+
 	// Persist resolved verification depth only once planning will finalize in this process.
 	state.VerificationDepth = verificationDepth
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -279,30 +360,6 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if opts.Refresh {
-		if state.CurrentPhase > 0 {
-			hasCompletedPhase := false
-			for _, phase := range state.Plan.Phases {
-				if phase.Status == colony.PhaseCompleted {
-					hasCompletedPhase = true
-					break
-				}
-			}
-			if hasCompletedPhase {
-				return nil, fmt.Errorf("cannot force-replan after completed phases; archive this colony and start a new one")
-			}
-			// In-progress phase with no completed work — stale state. Reset for fresh plan.
-			for i := range state.Plan.Phases {
-				state.Plan.Phases[i].Status = colony.PhaseReady
-				for j := range state.Plan.Phases[i].Tasks {
-					state.Plan.Phases[i].Tasks[j].Status = colony.TaskPending
-				}
-			}
-			state.CurrentPhase = 0
-			state.State = colony.StateREADY
-			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-				return nil, fmt.Errorf("failed to reset stale phase state for force-replan: %w", err)
-			}
-		}
 		clearFallbackPlanningArtifacts(root)
 	}
 
@@ -319,6 +376,18 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, err
 	}
+	generatedAt := time.Now().UTC()
+	iterationLoop := resolvePlanningLoopOptions(planDepth, opts)
+	iterationSeed := planningManifestIterationSeed(*state.Goal, root, planDepth, planningDepth, iterationLoop, revisionContext, generatedAt)
+	iteration := iterationSeed.LastIteration + 1
+	if iteration < 1 {
+		iteration = 1
+	}
+	iterationLoop.History = append([]codexPlanningLoopSample{}, iterationSeed.History...)
+	iterationLoop.Iterations = iterationSeed.LastIteration
+	iterationLoop.FinalConfidence = iterationSeed.PreviousConfidence
+	iterationLoop.Gaps = append([]string{}, iterationSeed.SelectedGaps...)
+	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(revisionContext)
 
 	planningDir := filepath.Join(store.BasePath(), "planning")
 	phaseResearchDir := filepath.Join(store.BasePath(), "phase-research")
@@ -337,7 +406,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	dispatchMode := "synthetic"
 	artifactSource := "local-synthesis"
 	planSource := "local-synthesis"
-	planningWarning := ""
+	planningWarning := planningSyntheticWarningForMode(opts.Synthetic)
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	for _, dispatch := range dispatches {
 		if err := spawnTree.RecordSpawn("Queen", dispatch.Caste, dispatch.Name, dispatch.Task, 1); err != nil {
@@ -348,30 +417,29 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	emitVisualProgress(renderPlanDispatchPreview(*state.Goal, dispatches))
 
 	if !opts.Synthetic {
-		invoker := newCodexWorkerInvoker()
-		if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
-			dispatchMode = "fallback"
-			planningWarning = fmt.Sprintf("Real planning workers were unavailable, so Aether fell back to local synthesis. Cause: %s", dispatchAvailabilityMessage(invoker))
-		} else {
-			realDispatches, dispatchErr := dispatchRealPlanningWorkersWithTimeout(context.Background(), root, survey, invoker, opts.WorkerTimeout, *state.Goal)
-			if realDispatches != nil {
-				dispatches = realDispatches
+		realDispatches, dispatchErr := dispatchRealPlanningWorkersWithIterationContext(context.Background(), root, survey, invoker, opts.WorkerTimeout, iterationAppendix, *state.Goal)
+		if realDispatches != nil {
+			dispatches = realDispatches
+		}
+		if dispatchErr != nil {
+			if _, ok := invoker.(*codex.FakeInvoker); ok {
+				dispatchMode = "simulated"
+			} else if isWorkerProviderPreflightError(dispatchErr) {
+				return nil, dispatchErr
+			} else {
+				return nil, planningWorkersFailedError(dispatchErr)
 			}
-			if dispatchErr != nil {
-				if _, ok := invoker.(*codex.FakeInvoker); ok {
-					dispatchMode = "simulated"
-				} else if isWorkerProviderPreflightError(dispatchErr) {
-					return nil, dispatchErr
-				} else {
-					dispatchMode = "fallback"
-					planningWarning = fmt.Sprintf("Real planning workers did not finish cleanly, so Aether fell back to local synthesis. Cause: %s", dispatchErr.Error())
-				}
-			} else if realDispatches != nil {
-				if _, ok := invoker.(*codex.FakeInvoker); ok {
-					dispatchMode = "simulated"
-				} else {
-					dispatchMode = "real"
-				}
+		} else if realDispatches == nil {
+			if _, ok := invoker.(*codex.FakeInvoker); ok {
+				dispatchMode = "simulated"
+			} else {
+				return nil, planningWorkersUnavailableError(invoker)
+			}
+		} else if realDispatches != nil {
+			if _, ok := invoker.(*codex.FakeInvoker); ok {
+				dispatchMode = "simulated"
+			} else {
+				dispatchMode = "real"
 			}
 		}
 	} else {
@@ -409,7 +477,56 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	} else if note != "" {
 		unresolvedGaps = limitStrings(uniqueSortedStrings(append(unresolvedGaps, note)), 4)
 	}
+	if (opts.Synthetic && planSource == "local-synthesis") || dispatchMode == "simulated" {
+		phases = bindSyntheticPlanEvidence(phases)
+	}
+	phasePlanDraft := workerPlanArtifactFromPhases(confidence, unresolvedGaps, phases, codexPlanningLoop{})
+	evidenceHash := planningCompletionEvidenceHash(scoutReport, phasePlanDraft)
+	dispatchContract := planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
+	manifest := codexPlanManifest{
+		Goal:                 *state.Goal,
+		Root:                 root,
+		GeneratedAt:          generatedAt.Format(time.RFC3339),
+		BaseRevisionID:       activePlanRevisionID(state.Plan),
+		BasePlanStateHash:    basePlanStateHash,
+		ColonyMode:           string(state.EffectiveColonyMode()),
+		Refresh:              opts.Refresh,
+		Revision:             revisionContext,
+		ExistingPlan:         len(state.Plan.Phases) > 0,
+		ExistingPhaseCount:   len(state.Plan.Phases),
+		Synthetic:            opts.Synthetic,
+		SyntheticWarning:     planningSyntheticWarningForMode(opts.Synthetic),
+		PlanningRunID:        iterationSeed.PlanningRunID,
+		Iteration:            iteration,
+		TargetConfidence:     iterationLoop.TargetConfidence,
+		MaxIterations:        iterationLoop.MaxIterations,
+		PreviousConfidence:   iterationSeed.PreviousConfidence,
+		PreviousEvidenceHash: iterationSeed.PreviousEvidenceHash,
+		SelectedGaps:         append([]string{}, iterationSeed.SelectedGaps...),
+		PreviousPlanDraft:    iterationSeed.PreviousPlanDraft,
+		ExpectedWorkers:      append([]codexPlanningDispatch{}, dispatches...),
+		Depth:                planDepth,
+		Granularity:          string(granularity),
+		GranularityMin:       granularityMin(granularity),
+		GranularityMax:       granularityMax(granularity),
+		PlanningDepth:        planningDepth,
+		VerificationDepth:    verificationDepth,
+		PlanningLoop:         iterationLoop,
+		Survey:               survey,
+		Dispatches:           append([]codexPlanningDispatch{}, dispatches...),
+		Snapshots:            artifactSnapshots,
+		DispatchMode:         dispatchMode,
+		DispatchContract:     dispatchContract,
+		FinalizeSurface:      "direct-runtime",
+		RequiresFinalizer:    false,
+	}
 	planningLoop := evaluatePlanningLoop(confidence, unresolvedGaps, opts, planDepth)
+	if !opts.Synthetic && dispatchMode == "real" {
+		if err := validatePlanningConfidenceEvidence(manifest, confidence, evidenceHash); err != nil {
+			return nil, err
+		}
+		planningLoop = evaluatePlanningLoopIteration(manifest, confidence, unresolvedGaps, evidenceHash)
+	}
 	routeSetterFile, preservedRouteArtifact, err := writeRouteSetterArtifact(root, planningDir, *state.Goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots)
 	if err != nil {
 		return nil, err
@@ -426,7 +543,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		artifactSource = "worker-written"
 	}
 
-	// Mark fallback artifacts so a subsequent refresh can overwrite them.
+	// Legacy fallback artifacts are cleared after real, simulated, or explicit synthetic planning.
 	if dispatchMode == "fallback" {
 		markerPath := filepath.Join(planningDir, ".fallback-marker")
 		os.WriteFile(markerPath, []byte(time.Now().UTC().Format(time.RFC3339)), 0644)
@@ -445,14 +562,63 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		if summary == "" {
 			summary = strings.Join(dispatches[i].Outputs, ", ")
 		}
-		if summary == "" && dispatchMode != "real" {
-			summary = "Local planning synthesis fallback"
+		if summary == "" && dispatchMode == "synthetic" {
+			summary = "Explicit synthetic planning synthesis"
+		}
+		if summary == "" && dispatchMode == "simulated" {
+			summary = "Simulated planning dispatch"
 		}
 		if err := spawnTree.UpdateStatus(dispatches[i].Name, status, summary); err != nil {
 			return nil, fmt.Errorf("failed to update planning completion: %w", err)
 		}
 	}
 	emitPlanCeremonyDispatchSequence("aether-plan", dispatches)
+
+	statuses := make([]string, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		statuses = append(statuses, dispatch.Status)
+	}
+	runStatus = summarizeRunStatus(statuses...)
+	if !opts.Synthetic && dispatchMode == "real" && planningLoop.StopReason == planningLoopPendingStop {
+		phasePlanDraft = workerPlanArtifactFromPhases(confidence, unresolvedGaps, phases, planningLoop)
+		result, err := persistIntermediatePlanningIteration(root, manifest, dispatches, scoutReport, phasePlanDraft, confidence, unresolvedGaps, evidenceHash, planningLoop, codexPlanProvenance{
+			Dispatches:     dispatches,
+			ScoutReport:    scoutReport,
+			PhasePlan:      &phasePlanDraft,
+			DispatchMode:   dispatchMode,
+			ArtifactSource: artifactSource,
+			PlanSource:     planSource,
+			SourceSummary:  "direct real planning workers",
+			RecordWorkers:  false,
+		})
+		if err != nil {
+			return nil, err
+		}
+		result["existing_plan"] = false
+		result["refreshed"] = opts.Refresh
+		result["colony_mode"] = string(state.EffectiveColonyMode())
+		result["granularity"] = string(granularity)
+		result["granularity_min"] = granularityMin(granularity)
+		result["granularity_max"] = granularityMax(granularity)
+		result["verification_depth"] = verificationDepth
+		result["planning_phase"] = planningPhase
+		result["verification_smart_default"] = verificationSmartDefault
+		result["planning_smart_default"] = planningSmartDefault
+		result["planning_files"] = []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)}
+		result["plan_artifact"] = filepath.Base(planArtifactFile)
+		result["phase_research_dir"] = phaseResearchDir
+		result["phase_research_files"] = phaseResearchFiles
+		result["dispatch_contract"] = dispatchContract
+		result["synthetic"] = false
+		result["synthetic_warning"] = ""
+		result["survey_docs"] = survey.SurveyDocs
+		result["unresolved_clarifications"] = unresolvedClarifications
+		result["clarification_warning"] = clarificationWarning
+		return result, nil
+	}
+	if err := validateNewPlanEvidenceContract(phases); err != nil {
+		return nil, fmt.Errorf("new plan evidence contract is incomplete: %w", err)
+	}
 
 	// Validate task dependency graph for cycles (LOOP-04)
 	if err := colony.DetectCycles(phases); err != nil {
@@ -468,23 +634,35 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	now := time.Now().UTC()
-	state.State = colony.StateREADY
-	state.CurrentPhase = firstBuildablePhase(phases)
-	state.BuildStartedAt = nil
-	state.PlanGranularity = granularity
 	planConfidence := float64(confidence.Overall) / 100.0
-	state.Plan = colony.Plan{
-		GeneratedAt: &now,
-		Confidence:  &planConfidence,
-		Phases:      phases,
+	var revision colony.PlanRevision
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
+		state = normalizeLegacyColonyState(state)
+		if err := validatePlanManifestBase(root, manifest, state); err != nil {
+			return err
+		}
+		acceptedPlan, acceptedRevision, err := activateGeneratedPlan(state.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, manifest, evidenceHash)
+		if err != nil {
+			return err
+		}
+		state.State = colony.StateREADY
+		state.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
+		state.BuildStartedAt = nil
+		state.PlanGranularity = granularity
+		state.VerificationDepth = verificationDepth
+		state.Plan = acceptedPlan
+		revision = acceptedRevision
+		state.Events = append(trimmedEvents(state.Events),
+			fmt.Sprintf("%s|planning_scout|plan|Scout summarized surveyed repo context", now.Format(time.RFC3339)),
+			fmt.Sprintf("%s|plan_revision_activated|plan|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
+			fmt.Sprintf("%s|plan_generated|plan|Generated %d active phases with %d%% confidence; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, planningLoop.StopReason),
+		)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
 	}
-	state.Events = append(trimmedEvents(state.Events),
-		fmt.Sprintf("%s|planning_scout|plan|Scout summarized surveyed repo context", now.Format(time.RFC3339)),
-		fmt.Sprintf("%s|plan_generated|plan|Generated %d phases with %d%% confidence; planning loop stopped: %s", now.Format(time.RFC3339), len(phases), confidence.Overall, planningLoop.StopReason),
-	)
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		return nil, fmt.Errorf("failed to save colony state: %w", err)
-	}
+	phases = state.Plan.Phases
+	_ = os.Remove(filepath.Join(store.BasePath(), planningIterationStateRel))
 
 	nextPhase := firstBuildablePhase(phases)
 	nextCommand := "aether build 1"
@@ -532,6 +710,8 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"granularity_min":            granularityMin(granularity),
 		"granularity_max":            granularityMax(granularity),
 		"confidence":                 confidence,
+		"evidence_policy":            string(colony.PlanEvidenceBoundV1),
+		"plan_revision":              revision,
 		"planning_loop":              planningLoop,
 		"planning_dir":               planningDir,
 		"planning_files":             []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
@@ -540,7 +720,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"phase_research_files":       phaseResearchFiles,
 		"dispatches":                 dispatchMaps,
 		"dispatch_mode":              dispatchMode,
-		"dispatch_contract":          planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout),
+		"dispatch_contract":          dispatchContract,
+		"synthetic":                  opts.Synthetic,
+		"synthetic_warning":          planningSyntheticWarningForMode(opts.Synthetic),
 		"artifact_source":            artifactSource,
 		"plan_source":                planSource,
 		"gaps":                       unresolvedGaps,
@@ -549,12 +731,10 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"clarification_warning":      clarificationWarning,
 		"planning_warning":           planningWarning,
 		"next":                       nextCommand,
+		"planning_run_id":            manifest.PlanningRunID,
+		"iteration":                  manifest.Iteration,
+		"evidence_hash":              evidenceHash,
 	}
-	statuses := make([]string, 0, len(dispatches))
-	for _, dispatch := range dispatches {
-		statuses = append(statuses, dispatch.Status)
-	}
-	runStatus = summarizeRunStatus(statuses...)
 	return result, nil
 }
 
@@ -617,6 +797,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"colony_mode":                string(state.EffectiveColonyMode()),
 			"goal":                       *state.Goal,
 			"phases":                     state.Plan.Phases,
+			"plan_revision":              planRevisionSummary(state.Plan),
 			"count":                      len(state.Plan.Phases),
 			"depth":                      planDepth,
 			"planning_depth":             planningDepth,
@@ -637,52 +818,82 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		addOrchestratorBoundaryGuidance(result, "plan", state, nextCommand, boundary.Questions)
 		return result, nil
 	}
-	if opts.Refresh && state.CurrentPhase > 0 {
-		for _, phase := range state.Plan.Phases {
-			if phase.Status == colony.PhaseCompleted {
-				return nil, fmt.Errorf("cannot force-replan after completed phases; archive this colony and start a new one")
-			}
-		}
+	revisionContext, err := buildPlanRevisionContext(root, state, opts)
+	if err != nil {
+		return nil, err
+	}
+	basePlanStateHash, err := planStateHash(state.Plan)
+	if err != nil {
+		return nil, fmt.Errorf("hash active plan before planning: %w", err)
 	}
 
 	survey, err := loadCodexSurveyContext(root)
 	if err != nil {
 		return nil, err
 	}
+	generatedAt := time.Now().UTC()
+	planningLoop := resolvePlanningLoopOptions(planDepth, opts)
+	iterationSeed := planningManifestIterationSeed(*state.Goal, root, planDepth, planningDepth, planningLoop, revisionContext, generatedAt)
+	iteration := iterationSeed.LastIteration + 1
+	if iteration < 1 {
+		iteration = 1
+	}
+	planningLoop.History = append([]codexPlanningLoopSample{}, iterationSeed.History...)
+	planningLoop.Iterations = iterationSeed.LastIteration
+	planningLoop.FinalConfidence = iterationSeed.PreviousConfidence
+	planningLoop.Gaps = append([]string{}, iterationSeed.SelectedGaps...)
+
 	dispatches := plannedPlanningWorkersForGoal(root, *state.Goal)
 	specs := planningWorkerSpecsForGoal(*state.Goal)
+	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(revisionContext)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i])
+		if iterationAppendix != "" {
+			dispatches[i].Brief += iterationAppendix
+		}
 	}
 	artifactSnapshots := snapshotRelativeFiles(root,
 		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
 	)
 	dispatchContract := planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
-	generatedAt := time.Now().UTC()
 	manifest := codexPlanManifest{
-		Goal:               *state.Goal,
-		Root:               root,
-		GeneratedAt:        generatedAt.Format(time.RFC3339),
-		ColonyMode:         string(state.EffectiveColonyMode()),
-		Refresh:            opts.Refresh,
-		ExistingPlan:       len(state.Plan.Phases) > 0,
-		ExistingPhaseCount: len(state.Plan.Phases),
-		Depth:              planDepth,
-		Granularity:        string(granularity),
-		GranularityMin:     granularityMin(granularity),
-		GranularityMax:     granularityMax(granularity),
-		PlanningDepth:      planningDepth,
-		VerificationDepth:  verificationDepth,
-		PlanningLoop:       resolvePlanningLoopOptions(planDepth, opts),
-		Survey:             survey,
-		Dispatches:         dispatches,
-		Snapshots:          artifactSnapshots,
-		DispatchMode:       "plan-only",
-		DispatchContract:   dispatchContract,
-		FinalizeSurface:    "pending",
-		RequiresFinalizer:  true,
+		Goal:                 *state.Goal,
+		Root:                 root,
+		GeneratedAt:          generatedAt.Format(time.RFC3339),
+		BaseRevisionID:       activePlanRevisionID(state.Plan),
+		BasePlanStateHash:    basePlanStateHash,
+		ColonyMode:           string(state.EffectiveColonyMode()),
+		Refresh:              opts.Refresh,
+		Revision:             revisionContext,
+		ExistingPlan:         len(state.Plan.Phases) > 0,
+		ExistingPhaseCount:   len(state.Plan.Phases),
+		Synthetic:            opts.Synthetic,
+		SyntheticWarning:     planningSyntheticWarningForMode(opts.Synthetic),
+		PlanningRunID:        iterationSeed.PlanningRunID,
+		Iteration:            iteration,
+		TargetConfidence:     planningLoop.TargetConfidence,
+		MaxIterations:        planningLoop.MaxIterations,
+		PreviousConfidence:   iterationSeed.PreviousConfidence,
+		PreviousEvidenceHash: iterationSeed.PreviousEvidenceHash,
+		SelectedGaps:         append([]string{}, iterationSeed.SelectedGaps...),
+		PreviousPlanDraft:    iterationSeed.PreviousPlanDraft,
+		ExpectedWorkers:      append([]codexPlanningDispatch{}, dispatches...),
+		Depth:                planDepth,
+		Granularity:          string(granularity),
+		GranularityMin:       granularityMin(granularity),
+		GranularityMax:       granularityMax(granularity),
+		PlanningDepth:        planningDepth,
+		VerificationDepth:    verificationDepth,
+		PlanningLoop:         planningLoop,
+		Survey:               survey,
+		Dispatches:           dispatches,
+		Snapshots:            artifactSnapshots,
+		DispatchMode:         "plan-only",
+		DispatchContract:     dispatchContract,
+		FinalizeSurface:      "pending",
+		RequiresFinalizer:    true,
 	}
 
 	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
@@ -705,6 +916,12 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"planning_depth":             planningDepth,
 		"verification_depth":         verificationDepth,
 		"planning_loop":              manifest.PlanningLoop,
+		"planning_run_id":            manifest.PlanningRunID,
+		"iteration":                  manifest.Iteration,
+		"target_confidence":          manifest.TargetConfidence,
+		"max_iterations":             manifest.MaxIterations,
+		"previous_confidence":        manifest.PreviousConfidence,
+		"selected_gaps":              manifest.SelectedGaps,
 		"verification_smart_default": verificationSmartDefault,
 		"planning_smart_default":     planningSmartDefault,
 		"planning_phase":             planningPhase,
@@ -713,6 +930,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"granularity_max":            granularityMax(granularity),
 		"plan_manifest":              manifest,
 		"planning_manifest":          manifest,
+		"revision_request":           revisionContext,
 		"dispatches":                 dispatches,
 		"dispatch_count":             len(dispatches),
 		"dispatch_mode":              "plan-only",
@@ -915,6 +1133,7 @@ func planningStageForCaste(caste string) string {
 
 func attachPlanningDispatchSkillAssignments(dispatches []codexPlanningDispatch) {
 	for i := range dispatches {
+		dispatches[i].PermissionProfile = codex.PermissionProfileForCaste(dispatches[i].Caste)
 		assignment := resolveWorkerSkillAssignmentForWorkflow("plan", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section
 		dispatches[i].SkillCount = assignment.SkillCount
@@ -948,27 +1167,9 @@ var planningWorkerSpecs = []planningWorkerSpec{
 	},
 }
 
-func planningWorkerSpecsForGoal(goal string) []planningWorkerSpec {
-	phase := colony.Phase{
-		Name:        strings.TrimSpace(goal),
-		Description: strings.TrimSpace(goal),
-		Mode:        colony.InferPhaseMode(goal, goal),
-	}
-	selected := queenBuildCasteSet(queenOrchestrate(phase, "plan", colony.ColonyState{}))
-	specs := make([]planningWorkerSpec, 0, len(planningWorkerSpecs))
-	for _, spec := range planningWorkerSpecs {
-		if selected[spec.Caste] {
-			specs = append(specs, spec)
-		}
-	}
-	for _, caste := range []string{"architect", "oracle", "gatekeeper", "includer", "keeper", "chronicler"} {
-		if !selected[caste] {
-			continue
-		}
-		if spec, ok := planningWorkerSpecForCaste(caste); ok {
-			specs = append(specs, spec)
-		}
-	}
+func planningWorkerSpecsForGoal(_ string) []planningWorkerSpec {
+	specs := make([]planningWorkerSpec, len(planningWorkerSpecs))
+	copy(specs, planningWorkerSpecs)
 	return specs
 }
 
@@ -990,13 +1191,18 @@ func planningWorkerSpecForCaste(caste string) (planningWorkerSpec, bool) {
 	return planningWorkerSpec{}, false
 }
 
-// dispatchRealPlanningWorkers attempts real worker invocation for planning.
-// If the invoker is not available, it returns nil, nil (caller falls back to plannedPlanningWorkers).
+// dispatchRealPlanningWorkers attempts worker invocation for planning.
+// If the invoker is not available, it returns nil, nil so callers can choose
+// whether to fail closed, delegate to a wrapper, or run explicit synthetic mode.
 func dispatchRealPlanningWorkers(ctx context.Context, root string, invoker codex.WorkerInvoker) ([]codexPlanningDispatch, error) {
 	return dispatchRealPlanningWorkersWithTimeout(ctx, root, codexSurveyContext{}, invoker, 0)
 }
 
 func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, survey codexSurveyContext, invoker codex.WorkerInvoker, timeoutOverride time.Duration, goalOpt ...string) ([]codexPlanningDispatch, error) {
+	return dispatchRealPlanningWorkersWithIterationContext(ctx, root, survey, invoker, timeoutOverride, "", goalOpt...)
+}
+
+func dispatchRealPlanningWorkersWithIterationContext(ctx context.Context, root string, survey codexSurveyContext, invoker codex.WorkerInvoker, timeoutOverride time.Duration, iterationAppendix string, goalOpt ...string) ([]codexPlanningDispatch, error) {
 	if invoker == nil || !invoker.IsAvailable(ctx) {
 		return nil, nil
 	}
@@ -1015,21 +1221,25 @@ func dispatchRealPlanningWorkersWithTimeout(ctx context.Context, root string, su
 	for i, spec := range specs {
 		agentName := strings.TrimSuffix(spec.AgentFile, ".toml")
 		dispatch := codex.WorkerDispatch{
-			ID:               fmt.Sprintf("planning-%d", i),
-			WorkerName:       planned[i].Name,
-			AgentName:        agentName,
-			AgentTOMLPath:    dispatchAgentPath(root, invoker, agentName),
-			Caste:            spec.Caste,
-			TaskID:           fmt.Sprintf("plan-%d", i),
-			TaskBrief:        renderPlanningWorkerBrief(root, survey, spec, scoutGuidance),
-			ContextCapsule:   capsule,
-			HandoffSection:   renderWorkerHandoffSection("plan", 0, planned[i].Name),
-			Workflow:         "plan",
-			SkillSection:     resolveSkillSectionForWorkflow("plan", spec.Caste, spec.Task),
-			PheromoneSection: pheromoneSection,
-			Root:             root,
-			Wave:             i + 1,
-			Timeout:          workerTimeout,
+			ID:                fmt.Sprintf("planning-%d", i),
+			WorkerName:        planned[i].Name,
+			AgentName:         agentName,
+			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
+			Caste:             spec.Caste,
+			TaskID:            fmt.Sprintf("plan-%d", i),
+			ContextCapsule:    capsule,
+			HandoffSection:    renderWorkerHandoffSection("plan", 0, planned[i].Name),
+			Workflow:          "plan",
+			SkillSection:      resolveSkillSectionForWorkflow("plan", spec.Caste, spec.Task),
+			PheromoneSection:  pheromoneSection,
+			Root:              root,
+			Wave:              i + 1,
+			Timeout:           workerTimeout,
+			PermissionProfile: planned[i].PermissionProfile,
+		}
+		dispatch.TaskBrief = renderPlanningWorkerBrief(root, survey, spec, scoutGuidance)
+		if strings.TrimSpace(iterationAppendix) != "" {
+			dispatch.TaskBrief += iterationAppendix
 		}
 
 		stageResults, err := dispatchBatchByWaveWithVisuals(
@@ -1077,11 +1287,12 @@ func convertPlanningDispatchResults(results []codex.DispatchResult, root string,
 
 	for i, planned := range planned {
 		d := codexPlanningDispatch{
-			Caste:   planned.Caste,
-			Name:    planned.Name,
-			Task:    planned.Task,
-			Outputs: planned.Outputs,
-			Status:  "spawned",
+			Caste:             planned.Caste,
+			Name:              planned.Name,
+			Task:              planned.Task,
+			Outputs:           planned.Outputs,
+			Status:            "spawned",
+			PermissionProfile: planned.PermissionProfile,
 		}
 
 		if i < len(results) {
@@ -1417,6 +1628,7 @@ const (
 	planningLoopMaxIterationsHit = "max_iterations"
 	planningLoopStalled          = "stalled"
 	planningLoopAccepted         = "accepted"
+	planningIterationStateRel    = "planning/iteration-state.json"
 )
 
 func planningLoopPreset(planDepth string) (int, int) {
@@ -1450,6 +1662,85 @@ func resolvePlanningLoopOptions(planDepth string, opts codexPlanOptions) codexPl
 	}
 }
 
+func loadPlanningIterationState() (codexPlanIterationState, bool) {
+	var state codexPlanIterationState
+	if store == nil {
+		return state, false
+	}
+	if err := store.LoadJSON(planningIterationStateRel, &state); err != nil {
+		return codexPlanIterationState{}, false
+	}
+	if strings.TrimSpace(state.PlanningRunID) == "" || state.LastIteration < 1 {
+		return codexPlanIterationState{}, false
+	}
+	return state, true
+}
+
+func planningRunID(goal, root string, generatedAt time.Time) string {
+	source := fmt.Sprintf("%s|%s|%s", strings.TrimSpace(goal), strings.TrimSpace(root), generatedAt.UTC().Format(time.RFC3339Nano))
+	sum := sha256.Sum256([]byte(source))
+	return "plan-" + hex.EncodeToString(sum[:])[:12]
+}
+
+func planningIterationStateMatches(state codexPlanIterationState, goal, root, planDepth, planningDepth string, loop codexPlanningLoop, revision *codexPlanRevisionContext) bool {
+	return strings.TrimSpace(state.Goal) == strings.TrimSpace(goal) &&
+		strings.TrimSpace(state.Root) == strings.TrimSpace(root) &&
+		strings.TrimSpace(state.Depth) == strings.TrimSpace(planDepth) &&
+		strings.TrimSpace(state.PlanningDepth) == strings.TrimSpace(planningDepth) &&
+		state.TargetConfidence == loop.TargetConfidence &&
+		state.MaxIterations == loop.MaxIterations &&
+		planRevisionContextsEqual(state.Revision, revision)
+}
+
+func planningManifestIterationSeed(goal, root, planDepth, planningDepth string, loop codexPlanningLoop, revision *codexPlanRevisionContext, generatedAt time.Time) codexPlanIterationState {
+	if previous, ok := loadPlanningIterationState(); ok && planningIterationStateMatches(previous, goal, root, planDepth, planningDepth, loop, revision) {
+		return previous
+	}
+	return codexPlanIterationState{
+		PlanningRunID:    planningRunID(goal, root, generatedAt),
+		Goal:             strings.TrimSpace(goal),
+		Root:             strings.TrimSpace(root),
+		Depth:            strings.TrimSpace(planDepth),
+		PlanningDepth:    strings.TrimSpace(planningDepth),
+		TargetConfidence: loop.TargetConfidence,
+		MaxIterations:    loop.MaxIterations,
+		Revision:         revision,
+		UpdatedAt:        generatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func planningIterationAppendix(seed codexPlanIterationState, nextIteration int) string {
+	if nextIteration <= 1 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\n## Runtime Planning Iteration Context\n")
+	b.WriteString(fmt.Sprintf("- Planning run: %s\n", seed.PlanningRunID))
+	b.WriteString(fmt.Sprintf("- Iteration: %d\n", nextIteration))
+	b.WriteString(fmt.Sprintf("- Previous confidence: %d%%\n", seed.PreviousConfidence))
+	if len(seed.SelectedGaps) > 0 {
+		b.WriteString("- Targeted gaps for this iteration:\n")
+		for _, gap := range seed.SelectedGaps {
+			b.WriteString(fmt.Sprintf("  - %s\n", gap))
+		}
+	}
+	if seed.PreviousPlanDraft != nil && len(seed.PreviousPlanDraft.Phases) > 0 {
+		b.WriteString("- Previous plan draft summary:\n")
+		for i, phase := range limitWorkerPlanPhases(seed.PreviousPlanDraft.Phases, 4) {
+			b.WriteString(fmt.Sprintf("  - Phase %d: %s\n", i+1, strings.TrimSpace(phase.Name)))
+		}
+	}
+	b.WriteString("- Gather fresh evidence or resolve the targeted gaps. Do not raise confidence by restating the previous evidence.\n")
+	return b.String()
+}
+
+func limitWorkerPlanPhases(phases []codexWorkerPlanPhase, limit int) []codexWorkerPlanPhase {
+	if len(phases) <= limit {
+		return append([]codexWorkerPlanPhase{}, phases...)
+	}
+	return append([]codexWorkerPlanPhase{}, phases[:limit]...)
+}
+
 func evaluatePlanningLoop(confidence codexPlanConfidence, unresolvedGaps []string, opts codexPlanOptions, planDepth string) codexPlanningLoop {
 	loop := resolvePlanningLoopOptions(planDepth, opts)
 	overall := clampInt(confidence.Overall, 0, 100)
@@ -1457,50 +1748,78 @@ func evaluatePlanningLoop(confidence codexPlanConfidence, unresolvedGaps []strin
 	loop.FinalConfidence = overall
 	loop.Gaps = gaps
 
-	lastConfidence := 0
-	stallCount := 0
-	for iteration := 1; iteration <= loop.MaxIterations; iteration++ {
-		delta := overall - lastConfidence
-		if iteration > 1 {
-			if delta < loop.StallThreshold {
-				stallCount++
-			} else {
-				stallCount = 0
-			}
-		}
-		loop.History = append(loop.History, codexPlanningLoopSample{
-			Iteration:  iteration,
-			Confidence: overall,
-			Delta:      delta,
-			StallCount: stallCount,
-			Gaps:       gaps,
-			Evidence:   "current planning evidence",
-		})
-		loop.Iterations = iteration
-		lastConfidence = overall
+	// Aether currently has one completed planning evidence pass at this point.
+	// Do not manufacture extra loop samples without dispatching fresh workers.
+	loop.Iterations = 1
+	loop.History = append(loop.History, codexPlanningLoopSample{
+		Iteration:     1,
+		Confidence:    overall,
+		Delta:         0,
+		StallCount:    0,
+		Gaps:          gaps,
+		SelectedGaps:  selectPlanningIterationGaps(gaps),
+		Evidence:      planningEvidenceSummary(confidence, gaps),
+		EvidenceCount: planningEvidenceCount(confidence),
+		EvidenceHash:  planningEvidenceHash(confidence, gaps),
+	})
 
-		if opts.Accept {
-			loop.StopReason = planningLoopAccepted
-			loop.AcceptedBelowTarget = overall < loop.TargetConfidence
-			break
-		}
-		if overall >= loop.TargetConfidence {
-			loop.StopReason = planningLoopTargetReached
-			break
-		}
-		if iteration > 1 && stallCount >= loop.StallLimit {
-			loop.StopReason = planningLoopStalled
-			break
-		}
-		if iteration == loop.MaxIterations {
-			loop.StopReason = planningLoopMaxIterationsHit
-			break
-		}
+	if opts.Accept {
+		loop.StopReason = planningLoopAccepted
+		loop.AcceptedBelowTarget = overall < loop.TargetConfidence
+		return loop
 	}
-	if loop.StopReason == planningLoopPendingStop {
+	if overall >= loop.TargetConfidence {
+		loop.StopReason = planningLoopTargetReached
+		return loop
+	}
+	if loop.MaxIterations <= 1 {
 		loop.StopReason = planningLoopMaxIterationsHit
+		return loop
 	}
+
 	return loop
+}
+
+func selectPlanningIterationGaps(gaps []string) []string {
+	return limitStrings(uniqueSortedStrings(gaps), 2)
+}
+
+func planningEvidenceSummary(confidence codexPlanConfidence, gaps []string) string {
+	return fmt.Sprintf(
+		"single planning evidence pass; confidence inputs knowledge=%d requirements=%d risks=%d dependencies=%d effort=%d overall=%d; unresolved_gaps=%d",
+		confidence.Knowledge,
+		confidence.Requirements,
+		confidence.Risks,
+		confidence.Dependencies,
+		confidence.Effort,
+		confidence.Overall,
+		len(gaps),
+	)
+}
+
+func planningEvidenceCount(confidence codexPlanConfidence) int {
+	count := 0
+	for _, score := range []int{confidence.Knowledge, confidence.Requirements, confidence.Risks, confidence.Dependencies, confidence.Effort, confidence.Overall} {
+		if score > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+func planningEvidenceHash(confidence codexPlanConfidence, gaps []string) string {
+	source := fmt.Sprintf(
+		"%d|%d|%d|%d|%d|%d|%s",
+		confidence.Knowledge,
+		confidence.Requirements,
+		confidence.Risks,
+		confidence.Dependencies,
+		confidence.Effort,
+		confidence.Overall,
+		strings.Join(uniqueSortedStrings(gaps), "\x00"),
+	)
+	sum := sha256.Sum256([]byte(source))
+	return hex.EncodeToString(sum[:])
 }
 
 func renderScoutPlanningGuidance(report codexScoutReport) string {
@@ -1653,10 +1972,11 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 func renderPhasePlanSchemaGuidance() string {
 	return strings.TrimSpace(`
 - JSON shape:
-  {"phases":[{"name":"","description":"","tasks":[{"goal":"","constraints":[],"hints":[],"success_criteria":[],"depends_on":[]}],"success_criteria":[]}],"confidence":{"knowledge":0,"requirements":0,"risks":0,"dependencies":0,"effort":0,"overall":0},"gaps":[]}
+  {"phases":[{"name":"","description":"","tasks":[{"goal":"","constraints":[],"hints":[],"success_criteria":["criterion"],"evidence_requirements":[{"criterion":"criterion","artifacts":["path/to/output"],"checks":["tests"]}],"depends_on":[]}],"success_criteria":["criterion"],"evidence_requirements":[{"criterion":"criterion","artifacts":["path/to/output"],"checks":["build","tests","claims","watcher"]}]}],"confidence":{"knowledge":0,"requirements":0,"risks":0,"dependencies":0,"effort":0,"overall":0},"gaps":[]}
 - Do not include task ids in phase-plan.json. Aether assigns task ids by array order after empty-goal tasks are ignored.
 - Dependency ids must use those assigned ids only: first task in first phase is "1.1", second is "1.2", first task in second phase is "2.1".
 - depends_on must be an array of task id strings such as ["1.1"]. Do not use task text, file paths, descriptions, or custom ids like "P1-T1".
+- Bind every success criterion when using evidence_requirements. artifacts are exact repository-relative project files; checks are selected from build, types, lint, tests, claims, and watcher. Do not use .aether/data files as product evidence.
 `) + "\n"
 }
 
@@ -1710,8 +2030,10 @@ func normalizeWorkerPlanArtifactDependencies(artifact codexWorkerPlanArtifact) (
 		sourcePhase := artifact.Phases[phaseIndex]
 		normalized.Phases[phaseIndex].Tasks = append([]codexWorkerPlanTask{}, sourcePhase.Tasks...)
 		normalized.Phases[phaseIndex].SuccessCriteria = append([]string{}, sourcePhase.SuccessCriteria...)
+		normalized.Phases[phaseIndex].EvidenceRequirements = normalizeWorkerCriterionRequirements(sourcePhase.EvidenceRequirements)
 		for taskIndex := range normalized.Phases[phaseIndex].Tasks {
 			task := sourcePhase.Tasks[taskIndex]
+			normalized.Phases[phaseIndex].Tasks[taskIndex].EvidenceRequirements = normalizeWorkerCriterionRequirements(task.EvidenceRequirements)
 			taskID := fmt.Sprintf("%d.%d", phaseIndex+1, taskIndex+1)
 			if strings.TrimSpace(task.Goal) == "" {
 				normalized.Phases[phaseIndex].Tasks[taskIndex].DependsOn = nil
@@ -1858,13 +2180,14 @@ func buildWorkerPlanPhases(artifact codexWorkerPlanArtifact) []colony.Phase {
 	phases := make([]colony.Phase, 0, len(artifact.Phases))
 	for i, sourcePhase := range artifact.Phases {
 		phase := colony.Phase{
-			ID:              i + 1,
-			Name:            strings.TrimSpace(sourcePhase.Name),
-			Description:     strings.TrimSpace(sourcePhase.Description),
-			Status:          colony.PhasePending,
-			Mode:            colony.InferPhaseMode(sourcePhase.Name, sourcePhase.Description),
-			Tasks:           []colony.Task{},
-			SuccessCriteria: uniqueSortedStrings(sourcePhase.SuccessCriteria),
+			ID:                   i + 1,
+			Name:                 strings.TrimSpace(sourcePhase.Name),
+			Description:          strings.TrimSpace(sourcePhase.Description),
+			Status:               colony.PhasePending,
+			Mode:                 colony.InferPhaseMode(sourcePhase.Name, sourcePhase.Description),
+			Tasks:                []colony.Task{},
+			SuccessCriteria:      uniqueSortedStrings(sourcePhase.SuccessCriteria),
+			EvidenceRequirements: normalizeWorkerCriterionRequirements(sourcePhase.EvidenceRequirements),
 		}
 		if phase.Name == "" {
 			phase.Name = fmt.Sprintf("Phase %d", i+1)
@@ -1879,18 +2202,57 @@ func buildWorkerPlanPhases(artifact codexWorkerPlanArtifact) []colony.Phase {
 			}
 			taskID := fmt.Sprintf("%d.%d", i+1, j+1)
 			phase.Tasks = append(phase.Tasks, colony.Task{
-				ID:              &taskID,
-				Goal:            goal,
-				Status:          colony.TaskPending,
-				Constraints:     uniqueSortedStrings(sourceTask.Constraints),
-				Hints:           uniqueSortedStrings(sourceTask.Hints),
-				SuccessCriteria: uniqueSortedStrings(sourceTask.SuccessCriteria),
-				DependsOn:       uniqueSortedStrings(sourceTask.DependsOn),
+				ID:                   &taskID,
+				Goal:                 goal,
+				Status:               colony.TaskPending,
+				Constraints:          uniqueSortedStrings(sourceTask.Constraints),
+				Hints:                uniqueSortedStrings(sourceTask.Hints),
+				SuccessCriteria:      uniqueSortedStrings(sourceTask.SuccessCriteria),
+				EvidenceRequirements: normalizeWorkerCriterionRequirements(sourceTask.EvidenceRequirements),
+				DependsOn:            uniqueSortedStrings(sourceTask.DependsOn),
 			})
 		}
 		phases = append(phases, phase)
 	}
 	return phases
+}
+
+func workerPlanArtifactFromPhases(confidence codexPlanConfidence, unresolvedGaps []string, phases []colony.Phase, planningLoop codexPlanningLoop) codexWorkerPlanArtifact {
+	artifact := codexWorkerPlanArtifact{
+		Confidence:   confidence,
+		Gaps:         limitStrings(uniqueSortedStrings(unresolvedGaps), 4),
+		PlanningLoop: &planningLoop,
+		Phases:       make([]codexWorkerPlanPhase, 0, len(phases)),
+	}
+	for _, phase := range phases {
+		entry := codexWorkerPlanPhase{
+			Name:                 phase.Name,
+			Description:          phase.Description,
+			Tasks:                make([]codexWorkerPlanTask, 0, len(phase.Tasks)),
+			SuccessCriteria:      uniqueSortedStrings(phase.SuccessCriteria),
+			EvidenceRequirements: normalizeWorkerCriterionRequirements(phase.EvidenceRequirements),
+		}
+		for _, task := range phase.Tasks {
+			entry.Tasks = append(entry.Tasks, codexWorkerPlanTask{
+				Goal:                 task.Goal,
+				Constraints:          uniqueSortedStrings(task.Constraints),
+				Hints:                uniqueSortedStrings(task.Hints),
+				SuccessCriteria:      uniqueSortedStrings(task.SuccessCriteria),
+				EvidenceRequirements: normalizeWorkerCriterionRequirements(task.EvidenceRequirements),
+				DependsOn:            uniqueSortedStrings(task.DependsOn),
+			})
+		}
+		artifact.Phases = append(artifact.Phases, entry)
+	}
+	return artifact
+}
+
+func normalizeWorkerCriterionRequirements(requirements []colony.CriterionEvidenceRequirement) []colony.CriterionEvidenceRequirement {
+	result := make([]colony.CriterionEvidenceRequirement, 0, len(requirements))
+	for _, requirement := range requirements {
+		result = append(result, normalizedCriterionRequirement(requirement, ""))
+	}
+	return result
 }
 
 func mergePlanConfidence(base codexPlanConfidence, override codexPlanConfidence) codexPlanConfidence {
@@ -2599,30 +2961,7 @@ func writeWorkerPlanArtifact(root, planningDir string, confidence codexPlanConfi
 		return path, true, nil
 	}
 
-	artifact := codexWorkerPlanArtifact{
-		Confidence:   confidence,
-		Gaps:         limitStrings(uniqueSortedStrings(unresolvedGaps), 4),
-		PlanningLoop: &planningLoop,
-		Phases:       make([]codexWorkerPlanPhase, 0, len(phases)),
-	}
-	for _, phase := range phases {
-		entry := codexWorkerPlanPhase{
-			Name:            phase.Name,
-			Description:     phase.Description,
-			Tasks:           make([]codexWorkerPlanTask, 0, len(phase.Tasks)),
-			SuccessCriteria: uniqueSortedStrings(phase.SuccessCriteria),
-		}
-		for _, task := range phase.Tasks {
-			entry.Tasks = append(entry.Tasks, codexWorkerPlanTask{
-				Goal:            task.Goal,
-				Constraints:     uniqueSortedStrings(task.Constraints),
-				Hints:           uniqueSortedStrings(task.Hints),
-				SuccessCriteria: uniqueSortedStrings(task.SuccessCriteria),
-				DependsOn:       uniqueSortedStrings(task.DependsOn),
-			})
-		}
-		artifact.Phases = append(artifact.Phases, entry)
-	}
+	artifact := workerPlanArtifactFromPhases(confidence, unresolvedGaps, phases, planningLoop)
 
 	data, err := json.MarshalIndent(artifact, "", "  ")
 	if err != nil {

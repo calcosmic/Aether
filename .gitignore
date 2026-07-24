@@ -87,6 +87,8 @@ logs/
 .aether/HANDOFF.md
 .aether/PAUSE_HANDOFF.md
 .aether/error_ledger.json
+.aether/events/*
+!.aether/events/.gitkeep
 .aether/checkpoints/
 .aether/ledger.jsonl
 .aether/manifest.json
@@ -123,3 +125,5 @@ cmd/.aether/worktrees/
 # Go build output
 /aether
 *.test
+# Retired TypeScript control-plane quarantine state
+control-ts/.retired-state/

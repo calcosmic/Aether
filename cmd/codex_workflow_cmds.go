@@ -69,6 +69,9 @@ var planCmd = &cobra.Command{
 		targetConfidence, _ := cmd.Flags().GetInt("target")
 		maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 		acceptBelowTarget, _ := cmd.Flags().GetBool("accept")
+		revisionType, _ := cmd.Flags().GetString("revision-type")
+		revisionReason, _ := cmd.Flags().GetString("revision-reason")
+		revisionEvidence, _ := cmd.Flags().GetStringArray("revision-evidence")
 		workerTimeout, err := resolveWorkerTimeoutFlag(cmd)
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -86,6 +89,9 @@ var planCmd = &cobra.Command{
 			MaxIterations:     maxIterations,
 			Accept:            acceptBelowTarget,
 			RepairArtifact:    repairArtifact,
+			RevisionType:      revisionType,
+			RevisionReason:    revisionReason,
+			RevisionEvidence:  revisionEvidence,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -121,6 +127,7 @@ var buildCmd = &cobra.Command{
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, codexBuildOptions{
 				WorkerTimeout:     workerTimeout,
+				Force:             forceBuild,
 				LightFlag:         lightFlag,
 				HeavyFlag:         heavyFlag,
 				VerificationDepth: verificationDepth,
@@ -409,7 +416,10 @@ func completeSealRuntime(state colony.ColonyState) error {
 			}
 			if entry.Confidence >= 0.8 && entry.Action != "" {
 				hiveEligibleCount++
-				// Hive Brain promotion (non-blocking per CERE-02)
+				if !automaticHivePromotionEnabled() {
+					continue
+				}
+				// Explicitly enabled Hive Brain promotion remains non-blocking.
 				domain := entry.Domain
 				if domain == "" {
 					domain = "general"
@@ -430,6 +440,9 @@ func completeSealRuntime(state colony.ColonyState) error {
 	}
 	if hivePromotionFailures > 0 {
 		fmt.Fprintln(stdout, fmt.Sprintf("WARNING: %d hive promotion(s) failed (see log)", hivePromotionFailures))
+	}
+	if hiveEligibleCount > 0 && !automaticHivePromotionEnabled() {
+		fmt.Fprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
 	}
 
 	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
@@ -1124,6 +1137,9 @@ func init() {
 	planCmd.Flags().Int("target", 0, "Planning confidence target 70-99 (default from depth preset)")
 	planCmd.Flags().Int("max-iterations", 0, "Planning iteration budget 2-12 (default from depth preset)")
 	planCmd.Flags().Bool("accept", false, "Accept the current best plan even if confidence is below target")
+	planCmd.Flags().String("revision-type", "", "Why a refreshed plan is needed: manual, user_feedback, research, verification_failure, or scope_change")
+	planCmd.Flags().String("revision-reason", "", "Traceable explanation for refreshing a plan after completed work")
+	planCmd.Flags().StringArray("revision-evidence", nil, "Repository-relative evidence file supporting the revision (repeatable)")
 	planCmd.Flags().Bool("synthetic", false, "Skip real worker dispatch and use local synthesis only")
 	planCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for real planning dispatches (e.g. 5m)")
 	planFinalizeCmd.Flags().String("completion-file", "", "JSON file containing plan_manifest and external planning worker results")
@@ -1140,6 +1156,7 @@ func init() {
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
 	buildFinalizeCmd.Flags().String("completion-file", "", "JSON file containing dispatch_manifest and external worker results")
+	buildCompletionStageCmd.Flags().String("completion-file", "", "JSON file containing the accepted dispatch_manifest and external worker results")
 	continueCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled before continue gating (repeatable or comma-separated)")
 	continueCmd.Flags().Bool("plan-only", false, "Print the continue verification/review manifest without mutating colony state or spawning review workers")
 	continueCmd.Flags().Bool("light", false, "Force light review (skip heavy review agents)")
@@ -1168,6 +1185,7 @@ func init() {
 	rootCmd.AddCommand(planFinalizeCmd)
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(buildFinalizeCmd)
+	rootCmd.AddCommand(buildCompletionStageCmd)
 	rootCmd.AddCommand(continueCmd)
 	rootCmd.AddCommand(continueFinalizeCmd)
 	rootCmd.AddCommand(skipPhaseCmd)

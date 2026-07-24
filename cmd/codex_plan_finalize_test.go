@@ -47,6 +47,7 @@ func TestValidateExternalPlanStateSuggestsStaleCleanupForFreshManifest(t *testin
 		ExistingPlan: false,
 		Refresh:      false,
 	}
+	bindTestPlanManifestToCurrentState(manifest)
 
 	_, _, err := validateExternalPlanState(manifest)
 	if err == nil {
@@ -98,6 +99,7 @@ func TestValidateExternalPlanStateAllowsExistingPlanWhenManifestAcknowledges(t *
 		ExistingPlan: true,
 		Refresh:      false,
 	}
+	bindTestPlanManifestToCurrentState(manifest)
 
 	_, _, err := validateExternalPlanState(manifest)
 	if err != nil {
@@ -161,6 +163,76 @@ func TestPlanFinalizeRejectsStaleManifestBeforeStateMutation(t *testing.T) {
 	}
 	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
 	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
+func TestPlanRevisionFinalizeRejectsChangedBaseWithoutStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/stale-revision\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	evidencePath := filepath.Join(root, ".aether", "oracle", "synthesis.md")
+	if err := os.MkdirAll(filepath.Dir(evidencePath), 0755); err != nil {
+		t.Fatalf("create Oracle evidence directory: %v", err)
+	}
+	if err := os.WriteFile(evidencePath, []byte("The original assumption is false.\n"), 0644); err != nil {
+		t.Fatalf("write Oracle evidence: %v", err)
+	}
+
+	goal := "Reject a plan revision after its base changes"
+	doneTaskID := "1.1"
+	futureTaskID := "2.1"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Accepted work", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &doneTaskID, Goal: "Keep accepted work", Status: colony.TaskCompleted}}},
+			{ID: 2, Name: "Old future", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &futureTaskID, Goal: "Replace this work", Status: colony.TaskPending}}},
+		}},
+	}
+	createTestColonyState(t, dataDir, state)
+	survey, err := loadCodexSurveyContext(root)
+	if err != nil {
+		t.Fatalf("load survey context: %v", err)
+	}
+	dispatches := testPlanningDispatches()
+	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
+	manifest.ExistingPlan = true
+	manifest.Refresh = true
+	var baseState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &baseState); err != nil {
+		t.Fatalf("load revision base state: %v", err)
+	}
+	baseState = normalizeLegacyColonyState(baseState)
+	manifest.Revision, err = buildPlanRevisionContext(root, baseState, codexPlanOptions{
+		Refresh:          true,
+		RevisionType:     string(colony.PlanRevisionResearch),
+		RevisionReason:   "Oracle disproved the future approach",
+		RevisionEvidence: []string{".aether/oracle/synthesis.md"},
+	})
+	if err != nil {
+		t.Fatalf("build revision context: %v", err)
+	}
+	bindTestPlanManifestToCurrentState(manifest)
+
+	state.Plan.Phases[1].Description = "A newer session already changed this plan"
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("save changed plan state: %v", err)
+	}
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err = runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: manifest,
+		Dispatches:   testCompletedPlanningResults(dispatches),
+	})
+	assertPlanFinalizeErrorContains(t, err, "plan state changed after this planning packet")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeNoSpawnRuns(t)
 }
 
 func TestPlanFinalizeRejectsFutureManifestBeforeStateMutation(t *testing.T) {
@@ -275,6 +347,28 @@ func TestPlanFinalizeRejectsMissingPhasePlanBeforeStateMutation(t *testing.T) {
 	assertPlanFinalizeStateUnchanged(t, 0)
 }
 
+func TestPlanFinalizeRejectsMissingScoutEvidenceBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject missing Scout evidence"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "scout" {
+			results[i].ScoutReport = nil
+		}
+	}
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Dispatches:   results,
+	})
+	assertPlanFinalizeErrorContains(t, err, "Scout evidence")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
 func TestPlanFinalizeRejectsEmptyPhasePlanBeforeStateMutation(t *testing.T) {
 	saveGlobals(t)
 
@@ -371,10 +465,28 @@ func TestPlanFinalizeNormalizesStableCustomDependencyReferences(t *testing.T) {
 		if results[i].Caste == "route_setter" {
 			results[i].PhasePlan = &codexWorkerPlanArtifact{
 				Phases: []codexWorkerPlanPhase{{
-					Name: "Dependency contract",
+					Name:            "Dependency contract",
+					SuccessCriteria: []string{"Dependency ids are normalized"},
+					EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+						Criterion: "Dependency ids are normalized",
+						Checks:    []string{"claims", "watcher"},
+					}},
 					Tasks: []codexWorkerPlanTask{
-						{Goal: "Create the source task"},
-						{Goal: "Run the dependent task", DependsOn: []string{"P1-T1"}},
+						{
+							Goal:            "Create the source task",
+							SuccessCriteria: []string{"Source task exists"},
+							EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+								Criterion: "Source task exists", Checks: []string{"claims", "watcher"},
+							}},
+						},
+						{
+							Goal:            "Run the dependent task",
+							DependsOn:       []string{"P1-T1"},
+							SuccessCriteria: []string{"Dependent task runs after source"},
+							EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+								Criterion: "Dependent task runs after source", Checks: []string{"claims", "watcher"},
+							}},
+						},
 					},
 				}},
 				Confidence: testWorkerPlanArtifact().Confidence,
@@ -418,6 +530,27 @@ func TestPlanFinalizeRejectsAmbiguousTopLevelPhasePlanBeforeStateMutation(t *tes
 		PhasePlan:    testWorkerPlanArtifact(),
 	})
 	assertPlanFinalizeErrorContains(t, err, "explicit synthesis")
+	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
+	assertPlanFinalizeStateUnchanged(t, 0)
+	assertPlanFinalizeNoSpawnRuns(t)
+}
+
+func TestPlanFinalizeRejectsSynthesisCompletionBeforeStateMutation(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject host synthesis planning claims"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	stateBefore := readPlanFinalizeStateBytes(t)
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
+		Synthesis: &codexPlanSynthesis{
+			Source:    "ts-host",
+			Reason:    "legacy lifecycle smoke harness",
+			PhasePlan: testWorkerPlanArtifact(),
+		},
+	})
+	assertPlanFinalizeErrorContains(t, err, "synthesis planning packets cannot satisfy")
 	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
 	assertPlanFinalizeStateUnchanged(t, 0)
 	assertPlanFinalizeNoSpawnRuns(t)
@@ -468,7 +601,7 @@ func TestPlanFinalizeRejectsPlannedOrSpawnedResultsBeforeStateMutation(t *testin
 	}
 }
 
-func TestPlanFinalizeUsesRouteSetterEvidenceWithDynamicWorkers(t *testing.T) {
+func TestPlanFinalizeRejectsDynamicPlanningWorkerSets(t *testing.T) {
 	saveGlobals(t)
 
 	dataDir := setupBuildFlowTest(t)
@@ -498,41 +631,14 @@ func TestPlanFinalizeUsesRouteSetterEvidenceWithDynamicWorkers(t *testing.T) {
 	results := testCompletedPlanningResults(dispatches)
 	results[2].PhasePlan = testWorkerPlanArtifact()
 
-	result, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+	_, err = runCodexPlanFinalize(root, codexExternalPlanCompletion{
 		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
 		Dispatches:   results,
 	})
-	if err != nil {
-		t.Fatalf("runCodexPlanFinalize: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "exactly one Scout followed by one Route-Setter") {
+		t.Fatalf("expected dynamic worker-set rejection, got %v", err)
 	}
-	if got := len(result["dispatches"].([]map[string]interface{})); got != 3 {
-		t.Fatalf("dispatch count = %d, want 3", got)
-	}
-
-	routeSetterData, err := os.ReadFile(filepath.Join(dataDir, "planning", "ROUTE-SETTER.md"))
-	if err != nil {
-		t.Fatalf("read route-setter artifact: %v", err)
-	}
-	if !strings.Contains(string(routeSetterData), "Route-Setter: Route-1") {
-		t.Fatalf("route-setter artifact did not use route-setter dispatch:\n%s", string(routeSetterData))
-	}
-	if strings.Contains(string(routeSetterData), "Route-Setter: Arch-1") {
-		t.Fatalf("route-setter artifact used non-route-setter dispatch:\n%s", string(routeSetterData))
-	}
-
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		t.Fatalf("load state: %v", err)
-	}
-	if len(state.Plan.Phases) != 1 || len(state.Plan.Phases[0].Tasks) != 1 {
-		t.Fatalf("unexpected saved phases: %+v", state.Plan.Phases)
-	}
-	task := state.Plan.Phases[0].Tasks[0]
-	for _, want := range []string{"Keep route-setter evidence authoritative", "cmd/codex_plan_finalize.go", "Constraints survive finalization"} {
-		if !stringSliceContains(append(append([]string{}, task.Constraints...), append(task.Hints, task.SuccessCriteria...)...), want) {
-			t.Fatalf("saved task evidence missing %q: %+v", want, task)
-		}
-	}
+	assertPlanFinalizeStateUnchanged(t, 0)
 }
 
 func TestPlanFinalizeRejectsStaleClaimedPhasePlanArtifact(t *testing.T) {
@@ -679,6 +785,225 @@ func TestPlanFinalizeRejectsInvalidClaimedPhasePlanFiles(t *testing.T) {
 	}
 }
 
+func TestPlanFinalizePendingIterationDoesNotWriteFinalPlanAndDrivesNextManifest(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Iterate planning until confidence target"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
+	manifest.TargetConfidence = 99
+	manifest.PlanningLoop.TargetConfidence = 99
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = testWorkerPlanArtifactWithConfidence(84, []string{"Route-Setter needs API boundary evidence"})
+		}
+	}
+
+	result, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: manifest,
+		Dispatches:   results,
+	})
+	if err != nil {
+		t.Fatalf("runCodexPlanFinalize pending iteration: %v", err)
+	}
+	if result["planned"] != false || result["requires_next_iteration"] != true {
+		t.Fatalf("pending result should require next iteration, got %+v", result)
+	}
+	assertPlanFinalizeStateUnchanged(t, 0)
+	if _, err := os.Stat(filepath.Join(store.BasePath(), planningIterationStateRel)); err != nil {
+		t.Fatalf("expected planning iteration state: %v", err)
+	}
+
+	next, err := runCodexPlanWithOptions(root, codexPlanOptions{
+		PlanOnly:         true,
+		Depth:            "fast",
+		PlanningDepth:    "standard",
+		TargetConfidence: 99,
+		MaxIterations:    manifest.MaxIterations,
+	})
+	if err != nil {
+		t.Fatalf("next plan-only manifest: %v", err)
+	}
+	nextManifest := next["plan_manifest"].(codexPlanManifest)
+	if nextManifest.Iteration != 2 {
+		t.Fatalf("next iteration = %d, want 2", nextManifest.Iteration)
+	}
+	if nextManifest.PreviousConfidence != 84 {
+		t.Fatalf("previous confidence = %d, want 84", nextManifest.PreviousConfidence)
+	}
+	if !containsString(nextManifest.SelectedGaps, "Route-Setter needs API boundary evidence") {
+		t.Fatalf("selected gaps = %v, want route-setter gap", nextManifest.SelectedGaps)
+	}
+	if nextManifest.PreviousPlanDraft == nil || len(nextManifest.PreviousPlanDraft.Phases) == 0 {
+		t.Fatalf("expected previous_plan_draft in next manifest: %+v", nextManifest.PreviousPlanDraft)
+	}
+	if len(nextManifest.Dispatches) != 2 || !strings.Contains(nextManifest.Dispatches[0].Brief, "Route-Setter needs API boundary evidence") {
+		t.Fatalf("next manifest briefs did not carry selected gap context: %+v", nextManifest.Dispatches)
+	}
+}
+
+func TestPlanFinalizeStallsOnlyAfterTwoLowImprovements(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Stall only after repeated low planning improvement"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
+	manifest.TargetConfidence = 99
+	manifest.PlanningLoop.TargetConfidence = 99
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = testWorkerPlanArtifactWithConfidence(84, []string{"Need second evidence pass"})
+		}
+	}
+
+	first, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: manifest,
+		Dispatches:   results,
+	})
+	if err != nil {
+		t.Fatalf("first pending finalize: %v", err)
+	}
+	if first["planned"] != false || first["requires_next_iteration"] != true {
+		t.Fatalf("first low-confidence iteration should remain pending, got %+v", first)
+	}
+
+	secondManifestResult, err := runCodexPlanWithOptions(root, codexPlanOptions{
+		PlanOnly:         true,
+		Depth:            "fast",
+		PlanningDepth:    "standard",
+		TargetConfidence: 99,
+		MaxIterations:    manifest.MaxIterations,
+	})
+	if err != nil {
+		t.Fatalf("second manifest: %v", err)
+	}
+	secondManifest := secondManifestResult["plan_manifest"].(codexPlanManifest)
+	if secondManifest.Iteration != 2 {
+		t.Fatalf("second iteration = %d, want 2", secondManifest.Iteration)
+	}
+	if len(secondManifest.PlanningLoop.History) != 1 {
+		t.Fatalf("second manifest history length = %d, want 1", len(secondManifest.PlanningLoop.History))
+	}
+	secondResults := testCompletedPlanningResults(secondManifest.Dispatches)
+	for i := range secondResults {
+		if secondResults[i].Caste == "route_setter" {
+			secondResults[i].PhasePlan = testWorkerPlanArtifactWithConfidence(86, []string{"Need third evidence pass"})
+		}
+	}
+	second, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: &secondManifest,
+		Dispatches:   secondResults,
+	})
+	if err != nil {
+		t.Fatalf("second pending finalize: %v", err)
+	}
+	if second["planned"] != false || second["requires_next_iteration"] != true {
+		t.Fatalf("second low-improvement iteration should still be pending, got %+v", second)
+	}
+	secondLoop := second["planning_loop"].(codexPlanningLoop)
+	if len(secondLoop.History) != 2 || secondLoop.History[1].StallCount != 1 {
+		t.Fatalf("second loop history = %+v, want one consecutive stall", secondLoop.History)
+	}
+
+	thirdManifestResult, err := runCodexPlanWithOptions(root, codexPlanOptions{
+		PlanOnly:         true,
+		Depth:            "fast",
+		PlanningDepth:    "standard",
+		TargetConfidence: 99,
+		MaxIterations:    manifest.MaxIterations,
+	})
+	if err != nil {
+		t.Fatalf("third manifest: %v", err)
+	}
+	thirdManifest := thirdManifestResult["plan_manifest"].(codexPlanManifest)
+	if thirdManifest.Iteration != 3 {
+		t.Fatalf("third iteration = %d, want 3", thirdManifest.Iteration)
+	}
+	if len(thirdManifest.PlanningLoop.History) != 2 {
+		t.Fatalf("third manifest history length = %d, want 2", len(thirdManifest.PlanningLoop.History))
+	}
+	thirdResults := testCompletedPlanningResults(thirdManifest.Dispatches)
+	for i := range thirdResults {
+		if thirdResults[i].Caste == "route_setter" {
+			thirdResults[i].PhasePlan = testWorkerPlanArtifactWithConfidence(88, []string{"Need final implementation evidence"})
+		}
+	}
+	third, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: &thirdManifest,
+		Dispatches:   thirdResults,
+	})
+	if err != nil {
+		t.Fatalf("third finalize: %v", err)
+	}
+	if third["planned"] != true {
+		t.Fatalf("third low-improvement iteration should finalize as stalled, got %+v", third)
+	}
+	thirdLoop := third["planning_loop"].(codexPlanningLoop)
+	if thirdLoop.StopReason != planningLoopStalled {
+		t.Fatalf("third stop reason = %q, want stalled", thirdLoop.StopReason)
+	}
+}
+
+func TestPlanFinalizeRejectsReusedIterationCompletionPacket(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject reused planning completion"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
+	manifest.TargetConfidence = 99
+	manifest.PlanningLoop.TargetConfidence = 99
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = testWorkerPlanArtifactWithConfidence(84, []string{"Need second evidence pass"})
+		}
+	}
+	completion := codexExternalPlanCompletion{PlanManifest: manifest, Dispatches: results}
+	if _, err := runCodexPlanFinalize(root, completion); err != nil {
+		t.Fatalf("first pending finalize: %v", err)
+	}
+	_, err := runCodexPlanFinalize(root, completion)
+	if err == nil || !strings.Contains(err.Error(), "reused planning completion packet") {
+		t.Fatalf("expected reused packet rejection, got %v", err)
+	}
+	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
+func TestPlanFinalizeRejectsConfidenceIncreaseWithoutNewEvidence(t *testing.T) {
+	saveGlobals(t)
+
+	goal := "Reject confidence-only planning bump"
+	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	results := testCompletedPlanningResults(dispatches)
+	for i := range results {
+		if results[i].Caste == "route_setter" {
+			results[i].PhasePlan = testWorkerPlanArtifactWithConfidence(80, []string{"Need stronger dependency evidence"})
+		}
+	}
+	scout := *results[0].ScoutReport
+	hash := planningCompletionEvidenceHash(scout, *results[1].PhasePlan)
+	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
+	manifest.Iteration = 2
+	manifest.PreviousConfidence = 70
+	manifest.PreviousEvidenceHash = hash
+	manifest.PlanningLoop.History = []codexPlanningLoopSample{{
+		Iteration:    1,
+		Confidence:   70,
+		EvidenceHash: hash,
+	}}
+
+	_, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
+		PlanManifest: manifest,
+		Dispatches:   results,
+	})
+	if err == nil || !strings.Contains(err.Error(), "without new Scout or Route-Setter evidence") {
+		t.Fatalf("expected confidence-only rejection, got %v", err)
+	}
+	assertPlanFinalizeStateUnchanged(t, 0)
+}
+
 func TestPlanOnlyDoesNotPersistVerificationDepth(t *testing.T) {
 	saveGlobals(t)
 	setupRuntimeSkillAssignmentHub(t)
@@ -754,16 +1079,23 @@ func testPlanningDispatches() []codexPlanningDispatch {
 }
 
 func testPlanManifest(root, goal string, generatedAt time.Time, survey codexSurveyContext, dispatches []codexPlanningDispatch) *codexPlanManifest {
-	return &codexPlanManifest{
+	loop := resolvePlanningLoopOptions("fast", codexPlanOptions{})
+	manifest := &codexPlanManifest{
 		Goal:              goal,
 		Root:              root,
 		GeneratedAt:       generatedAt.Format(time.RFC3339),
 		ColonyMode:        "colony",
+		PlanningRunID:     planningRunID(goal, root, generatedAt),
+		Iteration:         1,
+		TargetConfidence:  loop.TargetConfidence,
+		MaxIterations:     loop.MaxIterations,
+		ExpectedWorkers:   append([]codexPlanningDispatch{}, dispatches...),
 		Depth:             "fast",
 		Granularity:       string(colony.GranularitySprint),
 		GranularityMin:    1,
 		GranularityMax:    2,
 		PlanningDepth:     "standard",
+		PlanningLoop:      loop,
 		VerificationDepth: "standard",
 		Survey:            survey,
 		Dispatches:        dispatches,
@@ -772,6 +1104,25 @@ func testPlanManifest(root, goal string, generatedAt time.Time, survey codexSurv
 		FinalizeSurface:   "pending",
 		RequiresFinalizer: true,
 	}
+	bindTestPlanManifestToCurrentState(manifest)
+	return manifest
+}
+
+func bindTestPlanManifestToCurrentState(manifest *codexPlanManifest) {
+	var state colony.ColonyState
+	if store == nil {
+		panic("test store is not initialized")
+	}
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		panic(err)
+	}
+	state = normalizeLegacyColonyState(state)
+	hash, err := planStateHash(state.Plan)
+	if err != nil {
+		panic(err)
+	}
+	manifest.BaseRevisionID = activePlanRevisionID(state.Plan)
+	manifest.BasePlanStateHash = hash
 }
 
 func testCompletedPlanningResults(dispatches []codexPlanningDispatch) []codexPlanningDispatch {
@@ -779,6 +1130,20 @@ func testCompletedPlanningResults(dispatches []codexPlanningDispatch) []codexPla
 	for _, dispatch := range dispatches {
 		dispatch.Status = "completed"
 		dispatch.Summary = dispatch.Name + " completed"
+		if dispatch.Caste == "scout" {
+			dispatch.ScoutReport = &codexScoutReport{
+				Findings: []codexScoutFinding{{
+					Area:      "Planning fixture",
+					Discovery: "Fixture Scout gathered repository evidence",
+					Source:    "cmd/codex_plan_finalize_test.go",
+				}},
+				Gaps:       []string{},
+				Confidence: 85,
+				StudyFiles: []string{
+					"cmd/codex_plan_finalize.go",
+				},
+			}
+		}
 		if dispatch.Caste == "route_setter" {
 			dispatch.PhasePlan = testWorkerPlanArtifact()
 		}
@@ -788,7 +1153,7 @@ func testCompletedPlanningResults(dispatches []codexPlanningDispatch) []codexPla
 }
 
 func testWorkerPlanArtifact() *codexWorkerPlanArtifact {
-	return &codexWorkerPlanArtifact{
+	artifact := &codexWorkerPlanArtifact{
 		Phases: []codexWorkerPlanPhase{{
 			Name:        "Route-setter evidence phase",
 			Description: "Preserve route-setter task fields.",
@@ -802,6 +1167,23 @@ func testWorkerPlanArtifact() *codexWorkerPlanArtifact {
 		}},
 		Confidence: codexPlanConfidence{Knowledge: 90, Requirements: 90, Risks: 80, Dependencies: 80, Effort: 80, Overall: 84},
 	}
+	phases := bindSyntheticPlanEvidence(buildWorkerPlanPhases(*artifact))
+	bound := workerPlanArtifactFromPhases(artifact.Confidence, artifact.Gaps, phases, codexPlanningLoop{})
+	return &bound
+}
+
+func testWorkerPlanArtifactWithConfidence(overall int, gaps []string) *codexWorkerPlanArtifact {
+	artifact := testWorkerPlanArtifact()
+	artifact.Confidence = codexPlanConfidence{
+		Knowledge:    overall,
+		Requirements: overall,
+		Risks:        overall,
+		Dependencies: overall,
+		Effort:       overall,
+		Overall:      overall,
+	}
+	artifact.Gaps = append([]string{}, gaps...)
+	return artifact
 }
 
 func setupPlanFinalizeFailureFixture(t *testing.T, goal string) (string, codexSurveyContext, []codexPlanningDispatch) {

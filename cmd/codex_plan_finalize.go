@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,6 +23,11 @@ type codexExternalPlanCompletion struct {
 	PlanManifest     *codexPlanManifest       `json:"plan_manifest,omitempty"`
 	PlanningManifest *codexPlanManifest       `json:"planning_manifest,omitempty"`
 	Manifest         *codexPlanManifest       `json:"manifest,omitempty"`
+	PlanningRunID    string                   `json:"planning_run_id,omitempty"`
+	Iteration        int                      `json:"iteration,omitempty"`
+	EvidenceHash     string                   `json:"evidence_hash,omitempty"`
+	SourceSummary    string                   `json:"source_summary,omitempty"`
+	Synthetic        bool                     `json:"synthetic,omitempty"`
 	Dispatches       []codexPlanningDispatch  `json:"dispatches,omitempty"`
 	Results          []codexPlanningDispatch  `json:"results,omitempty"`
 	Workers          []codexPlanningDispatch  `json:"workers,omitempty"`
@@ -247,6 +255,9 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if len(manifest.Dispatches) == 0 {
 		return nil, fmt.Errorf("plan_manifest contains no dispatches")
 	}
+	if err := validatePlanningIterationContract(manifest, completion); err != nil {
+		return nil, err
+	}
 	if err := validateFinalizerManifestRoot("plan_manifest", manifest.Root, root); err != nil {
 		return nil, err
 	}
@@ -303,11 +314,25 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 			provenance.PlanningWarning = repairWarning
 		}
 	}
-	planningLoop := evaluatePlanningLoop(confidence, unresolvedGaps, codexPlanOptions{
-		TargetConfidence: manifest.PlanningLoop.TargetConfidence,
-		MaxIterations:    manifest.PlanningLoop.MaxIterations,
-		Accept:           manifest.PlanningLoop.Accept,
-	}, manifest.Depth)
+	evidenceHash := planningCompletionEvidenceHash(scoutReport, *phasePlan)
+	if strings.TrimSpace(completion.EvidenceHash) != "" && strings.TrimSpace(completion.EvidenceHash) != evidenceHash {
+		return nil, fmt.Errorf("completion evidence_hash does not match Scout and Route-Setter evidence")
+	}
+	if err := validatePlanningConfidenceEvidence(*manifest, confidence, evidenceHash); err != nil {
+		return nil, err
+	}
+	planningLoop := evaluatePlanningLoopIteration(*manifest, confidence, unresolvedGaps, evidenceHash)
+
+	if planningLoop.StopReason == planningLoopPendingStop {
+		result, err := persistIntermediatePlanningIteration(root, *manifest, dispatches, scoutReport, *phasePlan, confidence, unresolvedGaps, evidenceHash, planningLoop, provenance)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+	if err := validateNewPlanEvidenceContract(phases); err != nil {
+		return nil, fmt.Errorf("new plan evidence contract is incomplete: %w", err)
+	}
 
 	runHandle, err := beginRuntimeSpawnRun("plan", now)
 	if err != nil {
@@ -365,27 +390,41 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		}
 	}
 
-	updatedState := state
-	updatedState.State = colony.StateREADY
-	updatedState.CurrentPhase = firstBuildablePhase(phases)
-	updatedState.BuildStartedAt = nil
-	updatedState.PlanGranularity = granularity
-	if strings.TrimSpace(manifest.VerificationDepth) != "" {
-		updatedState.VerificationDepth = string(colony.NormalizeVerificationDepth(manifest.VerificationDepth))
-	}
 	planConfidence := float64(confidence.Overall) / 100.0
-	updatedState.Plan = colony.Plan{
-		GeneratedAt: &now,
-		Confidence:  &planConfidence,
-		Phases:      phases,
+	updatedState := state
+	var revision colony.PlanRevision
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updatedState, func() error {
+		updatedState = normalizeLegacyColonyState(updatedState)
+		if updatedState.Goal == nil || strings.TrimSpace(*updatedState.Goal) != strings.TrimSpace(manifest.Goal) {
+			return fmt.Errorf("plan_manifest goal does not match active colony goal")
+		}
+		if err := validatePlanManifestBase(root, *manifest, updatedState); err != nil {
+			return err
+		}
+		acceptedPlan, acceptedRevision, err := activateGeneratedPlan(updatedState.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, *manifest, evidenceHash)
+		if err != nil {
+			return err
+		}
+		updatedState.State = colony.StateREADY
+		updatedState.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
+		updatedState.BuildStartedAt = nil
+		updatedState.PlanGranularity = granularity
+		if strings.TrimSpace(manifest.VerificationDepth) != "" {
+			updatedState.VerificationDepth = string(colony.NormalizeVerificationDepth(manifest.VerificationDepth))
+		}
+		updatedState.Plan = acceptedPlan
+		revision = acceptedRevision
+		updatedState.Events = append(trimmedEvents(updatedState.Events),
+			fmt.Sprintf("%s|planning_scout|plan-finalize|%s", now.Format(time.RFC3339), provenance.SourceSummary),
+			fmt.Sprintf("%s|plan_revision_activated|plan-finalize|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
+			fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d active phases with %d%% confidence from %s; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, provenance.SourceSummary, planningLoop.StopReason),
+		)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
 	}
-	updatedState.Events = append(trimmedEvents(updatedState.Events),
-		fmt.Sprintf("%s|planning_scout|plan-finalize|%s", now.Format(time.RFC3339), provenance.SourceSummary),
-		fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d phases with %d%% confidence from %s; planning loop stopped: %s", now.Format(time.RFC3339), len(phases), confidence.Overall, provenance.SourceSummary, planningLoop.StopReason),
-	)
-	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
-		return nil, fmt.Errorf("failed to save colony state: %w", err)
-	}
+	phases = updatedState.Plan.Phases
+	_ = os.Remove(filepath.Join(store.BasePath(), planningIterationStateRel))
 	resolvePlanFinalizeFailureFlags()
 	if provenance.RecordWorkers {
 		emitPlanCeremonyDispatchSequence("aether-plan-finalize", dispatches)
@@ -412,6 +451,10 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		"granularity_max":           granularityMax(granularity),
 		"confidence":                confidence,
 		"planning_loop":             planningLoop,
+		"planning_run_id":           manifest.PlanningRunID,
+		"iteration":                 manifest.Iteration,
+		"evidence_hash":             evidenceHash,
+		"plan_revision":             revision,
 		"planning_dir":              planningDir,
 		"planning_files":            []string{filepath.Base(scoutFile), filepath.Base(routeSetterFile)},
 		"plan_artifact":             filepath.Base(planArtifactFile),
@@ -464,6 +507,9 @@ func validateExternalPlanState(manifest *codexPlanManifest) (colony.ColonyState,
 	if !granularity.Valid() {
 		return state, "", fmt.Errorf("plan_manifest granularity %q is invalid", manifest.Granularity)
 	}
+	if err := validatePlanManifestBase(manifest.Root, *manifest, state); err != nil {
+		return state, granularity, err
+	}
 	if len(state.Plan.Phases) > 0 && !manifest.Refresh {
 		if manifest.ExistingPlan {
 			// Manifest acknowledges existing phases were detected during plan-only.
@@ -471,13 +517,6 @@ func validateExternalPlanState(manifest *codexPlanManifest) (colony.ColonyState,
 			return state, granularity, nil
 		}
 		return state, granularity, fmt.Errorf("stale phases from a prior session are blocking finalization; rerun `aether plan --plan-only --refresh` or run `aether init` to start fresh")
-	}
-	if manifest.Refresh && state.CurrentPhase > 0 {
-		for _, phase := range state.Plan.Phases {
-			if phase.Status == colony.PhaseCompleted {
-				return state, granularity, fmt.Errorf("cannot force-replan after completed phases; archive this colony and start a new one")
-			}
-		}
 	}
 	return state, granularity, nil
 }
@@ -525,6 +564,319 @@ func validateCodexPlanManifestWorkspace(root string, manifest codexPlanManifest)
 		if !sameStringSet(comparison.was, comparison.now) {
 			return fmt.Errorf("plan_manifest workspace changed since generation: %s changed; rerun `aether plan --plan-only`", comparison.name)
 		}
+	}
+	return nil
+}
+
+func validatePlanningIterationContract(manifest *codexPlanManifest, completion codexExternalPlanCompletion) error {
+	if manifest == nil {
+		return fmt.Errorf("completion file must include plan_manifest")
+	}
+	if manifest.Synthetic || completion.Synthetic {
+		return fmt.Errorf("synthetic planning packets cannot satisfy the real plan-finalize contract; rerun real Scout and Route-Setter workers or use `aether plan --synthetic` only as a preview")
+	}
+	if completion.Synthesis != nil {
+		return fmt.Errorf("ts-host synthesis planning packets cannot satisfy the real plan-finalize contract; rerun real Scout and Route-Setter workers or use `aether plan --synthetic` only as a preview")
+	}
+	if strings.TrimSpace(manifest.PlanningRunID) == "" {
+		return fmt.Errorf("plan_manifest planning_run_id is required")
+	}
+	if manifest.Iteration < 1 {
+		return fmt.Errorf("plan_manifest iteration must be >= 1")
+	}
+	if manifest.TargetConfidence <= 0 {
+		return fmt.Errorf("plan_manifest target_confidence is required")
+	}
+	if manifest.MaxIterations <= 0 {
+		return fmt.Errorf("plan_manifest max_iterations is required")
+	}
+	if strings.TrimSpace(completion.PlanningRunID) != "" && strings.TrimSpace(completion.PlanningRunID) != strings.TrimSpace(manifest.PlanningRunID) {
+		return fmt.Errorf("completion planning_run_id does not match plan_manifest")
+	}
+	if completion.Iteration > 0 && completion.Iteration != manifest.Iteration {
+		return fmt.Errorf("completion iteration does not match plan_manifest")
+	}
+	if err := validatePlanningWorkerChain("plan_manifest dispatches", manifest.Dispatches); err != nil {
+		return err
+	}
+	if len(manifest.ExpectedWorkers) == 0 {
+		return fmt.Errorf("plan_manifest expected_workers is required")
+	}
+	if err := validatePlanningWorkerChain("plan_manifest expected_workers", manifest.ExpectedWorkers); err != nil {
+		return err
+	}
+	for i := range manifest.ExpectedWorkers {
+		if err := validateExternalPlanIdentity(manifest.ExpectedWorkers[i], manifest.Dispatches[i]); err != nil {
+			return fmt.Errorf("plan_manifest expected_workers[%d] does not match dispatches[%d]: %w", i, i, err)
+		}
+	}
+	if previous, ok := loadPlanningIterationState(); ok &&
+		strings.TrimSpace(previous.PlanningRunID) == strings.TrimSpace(manifest.PlanningRunID) &&
+		previous.LastIteration >= manifest.Iteration {
+		return fmt.Errorf("reused planning completion packet for run %s iteration %d; request a fresh manifest for the next iteration", manifest.PlanningRunID, manifest.Iteration)
+	}
+	return nil
+}
+
+func validatePlanningWorkerChain(label string, dispatches []codexPlanningDispatch) error {
+	if len(dispatches) != 2 {
+		return fmt.Errorf("%s must contain exactly one Scout followed by one Route-Setter", label)
+	}
+	if !strings.EqualFold(dispatches[0].Caste, "scout") {
+		return fmt.Errorf("%s first worker must be Scout", label)
+	}
+	if !strings.EqualFold(dispatches[1].Caste, "route_setter") {
+		return fmt.Errorf("%s second worker must be Route-Setter", label)
+	}
+	if dispatches[0].Wave >= dispatches[1].Wave {
+		return fmt.Errorf("%s must order Scout before Route-Setter", label)
+	}
+	return nil
+}
+
+func validatePlanningConfidenceEvidence(manifest codexPlanManifest, confidence codexPlanConfidence, evidenceHash string) error {
+	if manifest.Iteration <= 1 || manifest.PreviousConfidence <= 0 {
+		return nil
+	}
+	if strings.TrimSpace(manifest.PreviousEvidenceHash) == "" {
+		return fmt.Errorf("plan_manifest previous_evidence_hash is required after iteration 1")
+	}
+	if strings.TrimSpace(manifest.PreviousEvidenceHash) == strings.TrimSpace(evidenceHash) && confidence.Overall != manifest.PreviousConfidence {
+		return fmt.Errorf("planning confidence changed from %d%% to %d%% without new Scout or Route-Setter evidence", manifest.PreviousConfidence, confidence.Overall)
+	}
+	return nil
+}
+
+func evaluatePlanningLoopIteration(manifest codexPlanManifest, confidence codexPlanConfidence, unresolvedGaps []string, evidenceHash string) codexPlanningLoop {
+	loop := manifest.PlanningLoop
+	if loop.TargetConfidence <= 0 || loop.MaxIterations <= 0 {
+		loop = resolvePlanningLoopOptions(manifest.Depth, codexPlanOptions{
+			TargetConfidence: manifest.TargetConfidence,
+			MaxIterations:    manifest.MaxIterations,
+			Accept:           manifest.PlanningLoop.Accept,
+		})
+	}
+	if manifest.TargetConfidence > 0 {
+		loop.TargetConfidence = manifest.TargetConfidence
+	}
+	if manifest.MaxIterations > 0 {
+		loop.MaxIterations = manifest.MaxIterations
+	}
+	if loop.StallThreshold <= 0 {
+		loop.StallThreshold = planningLoopStallThreshold
+	}
+	if loop.StallLimit <= 0 {
+		loop.StallLimit = planningLoopStallLimit
+	}
+
+	iteration := manifest.Iteration
+	if iteration < 1 {
+		iteration = 1
+	}
+	overall := clampInt(confidence.Overall, 0, 100)
+	gaps := limitStrings(uniqueSortedStrings(unresolvedGaps), 4)
+	history := append([]codexPlanningLoopSample{}, loop.History...)
+	previousConfidence := manifest.PreviousConfidence
+	previousStallCount := 0
+	if len(history) > 0 {
+		last := history[len(history)-1]
+		previousConfidence = last.Confidence
+		previousStallCount = last.StallCount
+	}
+	delta := 0
+	stallCount := 0
+	if iteration > 1 {
+		delta = overall - previousConfidence
+		if delta < loop.StallThreshold {
+			stallCount = previousStallCount + 1
+		}
+	}
+
+	history = append(history, codexPlanningLoopSample{
+		Iteration:     iteration,
+		Confidence:    overall,
+		Delta:         delta,
+		StallCount:    stallCount,
+		Gaps:          gaps,
+		SelectedGaps:  selectedPlanningGapsForNext(confidence, gaps),
+		Evidence:      planningCompletionEvidenceSummary(confidence, gaps),
+		EvidenceCount: planningEvidenceCount(confidence),
+		EvidenceHash:  evidenceHash,
+	})
+
+	loop.Iterations = iteration
+	loop.FinalConfidence = overall
+	loop.Gaps = gaps
+	loop.History = history
+	loop.StopReason = planningLoopPendingStop
+	if loop.Accept {
+		loop.StopReason = planningLoopAccepted
+		loop.AcceptedBelowTarget = overall < loop.TargetConfidence
+		return loop
+	}
+	if overall >= loop.TargetConfidence {
+		loop.StopReason = planningLoopTargetReached
+		return loop
+	}
+	if iteration >= loop.MaxIterations {
+		loop.StopReason = planningLoopMaxIterationsHit
+		return loop
+	}
+	if stallCount >= loop.StallLimit {
+		loop.StopReason = planningLoopStalled
+		return loop
+	}
+	return loop
+}
+
+func selectedPlanningGapsForNext(confidence codexPlanConfidence, gaps []string) []string {
+	selected := selectPlanningIterationGaps(gaps)
+	if len(selected) > 0 {
+		return selected
+	}
+	type dimension struct {
+		name  string
+		score int
+	}
+	dimensions := []dimension{
+		{name: "knowledge evidence", score: confidence.Knowledge},
+		{name: "requirements evidence", score: confidence.Requirements},
+		{name: "risk evidence", score: confidence.Risks},
+		{name: "dependency evidence", score: confidence.Dependencies},
+		{name: "effort evidence", score: confidence.Effort},
+	}
+	sort.SliceStable(dimensions, func(i, j int) bool {
+		return dimensions[i].score < dimensions[j].score
+	})
+	for _, dim := range dimensions {
+		if dim.score > 0 && dim.score < 85 {
+			selected = append(selected, fmt.Sprintf("Gather stronger %s; current score %d%%", dim.name, dim.score))
+		}
+		if len(selected) == 2 {
+			break
+		}
+	}
+	if len(selected) == 0 {
+		selected = append(selected, "Gather fresh repository-specific evidence before raising planning confidence")
+	}
+	return selected
+}
+
+func planningCompletionEvidenceHash(scout codexScoutReport, phasePlan codexWorkerPlanArtifact) string {
+	scout = normalizeScoutPlanningReport(scout)
+	source := struct {
+		ScoutFindings []codexScoutFinding    `json:"scout_findings"`
+		ScoutGaps     []string               `json:"scout_gaps"`
+		StudyFiles    []string               `json:"study_files"`
+		Phases        []codexWorkerPlanPhase `json:"phases"`
+		Gaps          []string               `json:"gaps"`
+	}{
+		ScoutFindings: scout.Findings,
+		ScoutGaps:     uniqueSortedStrings(scout.Gaps),
+		StudyFiles:    uniqueSortedStrings(scout.StudyFiles),
+		Phases:        append([]codexWorkerPlanPhase{}, phasePlan.Phases...),
+		Gaps:          uniqueSortedStrings(phasePlan.Gaps),
+	}
+	data, _ := json.Marshal(source)
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func planningCompletionEvidenceSummary(confidence codexPlanConfidence, gaps []string) string {
+	return fmt.Sprintf(
+		"Scout and Route-Setter evidence; confidence inputs knowledge=%d requirements=%d risks=%d dependencies=%d effort=%d overall=%d; unresolved_gaps=%d",
+		confidence.Knowledge,
+		confidence.Requirements,
+		confidence.Risks,
+		confidence.Dependencies,
+		confidence.Effort,
+		confidence.Overall,
+		len(gaps),
+	)
+}
+
+func persistIntermediatePlanningIteration(root string, manifest codexPlanManifest, dispatches []codexPlanningDispatch, scoutReport codexScoutReport, phasePlan codexWorkerPlanArtifact, confidence codexPlanConfidence, unresolvedGaps []string, evidenceHash string, planningLoop codexPlanningLoop, provenance codexPlanProvenance) (map[string]interface{}, error) {
+	now := time.Now().UTC()
+	planningDir := filepath.Join(store.BasePath(), "planning")
+	iterationsDir := filepath.Join(planningDir, "iterations")
+	if err := os.MkdirAll(iterationsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create planning iterations directory: %w", err)
+	}
+	iterPrefix := fmt.Sprintf("iteration-%02d", manifest.Iteration)
+	if err := writePlanningJSONFile(filepath.Join(iterationsDir, iterPrefix+"-scout.json"), scoutReport); err != nil {
+		return nil, err
+	}
+	if err := writePlanningJSONFile(filepath.Join(iterationsDir, iterPrefix+"-phase-plan.json"), phasePlan); err != nil {
+		return nil, err
+	}
+	selectedGaps := selectedPlanningGapsForNext(confidence, unresolvedGaps)
+	state := codexPlanIterationState{
+		PlanningRunID:        manifest.PlanningRunID,
+		Goal:                 manifest.Goal,
+		Root:                 root,
+		Depth:                manifest.Depth,
+		PlanningDepth:        manifest.PlanningDepth,
+		TargetConfidence:     manifest.TargetConfidence,
+		MaxIterations:        manifest.MaxIterations,
+		LastIteration:        manifest.Iteration,
+		PreviousConfidence:   confidence.Overall,
+		PreviousEvidenceHash: evidenceHash,
+		SelectedGaps:         selectedGaps,
+		PreviousPlanDraft:    &phasePlan,
+		History:              append([]codexPlanningLoopSample{}, planningLoop.History...),
+		Revision:             manifest.Revision,
+		UpdatedAt:            now.Format(time.RFC3339),
+	}
+	if len(planningLoop.History) > 0 {
+		state.ConsecutiveStalls = planningLoop.History[len(planningLoop.History)-1].StallCount
+	}
+	if err := store.SaveJSON(planningIterationStateRel, state); err != nil {
+		return nil, fmt.Errorf("failed to save planning iteration state: %w", err)
+	}
+	if provenance.RecordWorkers {
+		if err := recordExternalPlanSpawnTree(dispatches); err != nil {
+			return nil, err
+		}
+	}
+	nextCommand := fmt.Sprintf("aether host plan --depth %s --planning-depth %s --target %d --max-iterations %d", manifest.Depth, manifest.PlanningDepth, manifest.TargetConfidence, manifest.MaxIterations)
+	if revisionArgs := planRevisionCLIArgs(manifest.Revision); revisionArgs != "" {
+		nextCommand += " " + revisionArgs
+	}
+	updateSessionSummary("plan-finalize", nextCommand, fmt.Sprintf("Planning iteration %d reached %d%% confidence; another iteration is required", manifest.Iteration, confidence.Overall))
+	return map[string]interface{}{
+		"planned":                 false,
+		"iteration_completed":     true,
+		"requires_next_iteration": true,
+		"planning_run_id":         manifest.PlanningRunID,
+		"iteration":               manifest.Iteration,
+		"goal":                    manifest.Goal,
+		"depth":                   manifest.Depth,
+		"planning_depth":          manifest.PlanningDepth,
+		"confidence":              confidence,
+		"planning_loop":           planningLoop,
+		"dispatches":              planningDispatchMaps(dispatches),
+		"dispatch_mode":           provenance.DispatchMode,
+		"artifact_source":         "planning-iteration",
+		"plan_source":             provenance.PlanSource,
+		"gaps":                    unresolvedGaps,
+		"selected_gaps":           selectedGaps,
+		"evidence_hash":           evidenceHash,
+		"planning_dir":            planningDir,
+		"iteration_state":         planningIterationStateRel,
+		"planning_warning":        "Planning iteration validated, but confidence target has not been reached; final colony plan was not written.",
+		"revision_request":        manifest.Revision,
+		"next":                    nextCommand,
+	}, nil
+}
+
+func writePlanningJSONFile(path string, value interface{}) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", filepath.Base(path), err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
 }
@@ -612,9 +964,13 @@ func (c codexExternalPlanCompletion) planProvenance(root string, manifest *codex
 	if err != nil {
 		return codexPlanProvenance{}, err
 	}
+	scoutReport, err := c.scoutReport(dispatches)
+	if err != nil {
+		return codexPlanProvenance{}, err
+	}
 	return codexPlanProvenance{
 		Dispatches:      dispatches,
-		ScoutReport:     c.scoutReport(dispatches, manifest),
+		ScoutReport:     scoutReport,
 		PhasePlan:       phasePlan,
 		DispatchMode:    "external-task",
 		ArtifactSource:  "external-task",
@@ -674,30 +1030,22 @@ func synthesizedPlanDispatches(dispatches []codexPlanningDispatch, reason string
 	return synthesized
 }
 
-func (c codexExternalPlanCompletion) scoutReport(dispatches []codexPlanningDispatch, manifest *codexPlanManifest) codexScoutReport {
+func (c codexExternalPlanCompletion) scoutReport(dispatches []codexPlanningDispatch) (codexScoutReport, error) {
 	if c.ScoutReport != nil {
-		return *c.ScoutReport
+		report := normalizeScoutPlanningReport(*c.ScoutReport)
+		if scoutReportHasContent(report) {
+			return report, nil
+		}
 	}
 	for _, dispatch := range dispatches {
 		if dispatch.ScoutReport != nil {
-			return *dispatch.ScoutReport
-		}
-	}
-	report := synthesizeScoutPlanningReport(manifest.Goal, manifest.Survey)
-	for _, dispatch := range dispatches {
-		if dispatch.Caste == "scout" && strings.TrimSpace(dispatch.Summary) != "" {
-			report.Findings = append([]codexScoutFinding{{
-				Area:      "External Scout",
-				Discovery: dispatch.Summary,
-				Source:    dispatch.Name,
-			}}, report.Findings...)
-			if len(report.Findings) > 5 {
-				report.Findings = report.Findings[:5]
+			report := normalizeScoutPlanningReport(*dispatch.ScoutReport)
+			if scoutReportHasContent(report) {
+				return report, nil
 			}
-			break
 		}
 	}
-	return report
+	return codexScoutReport{}, fmt.Errorf("completion file must include Scout evidence as scout_report from the Scout worker")
 }
 
 func routeSetterPhasePlan(root string, dispatches []codexPlanningDispatch, manifest *codexPlanManifest) (*codexWorkerPlanArtifact, error) {

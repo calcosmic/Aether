@@ -186,7 +186,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	}
 	// Per SAFE-03, SAFE-04: trace continue provenance against stored manifest data.
 	// Rejects claims that reference missing or stale worker results.
-	if err := traceContinueProvenance(manifest.Data.Dispatches); err != nil {
+	if err := traceContinueProvenanceForManifest(manifest); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
 	finalizeReviewDepth := colony.VerificationDepthLight
@@ -282,7 +282,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 				}
 				entry := GateCheckResult{
 					Name:            c.Name,
-				Status:          status,
+					Status:          status,
 					Detail:          c.Detail,
 					FixHint:         c.FixHint,
 					RecoveryOptions: c.RecoveryOptions,
@@ -329,7 +329,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 						TaskID:         "",
 						Caste:          "",
 						Phase:          phase.ID,
-					Status:         "failed",
+						Status:         "failed",
 						Classification: Recoverable,
 						FailureType:    Transient,
 						ErrorMessage:   fmt.Sprintf("soft_block gate %q failed", resolved),
@@ -401,7 +401,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 						Wave:           1,
 						WorkerName:     fmt.Sprintf("gate-%s", c.Name),
 						Caste:          "watcher",
-					Status:         "failed",
+						Status:         "failed",
 						ErrorMessage:   c.Detail,
 						Budget:         budget,
 						CircuitBreaker: globalCircuitBreaker,
@@ -489,7 +489,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			workerResults = append(workerResults, learn.WorkerResult{
 				Name:         step.Name,
 				Caste:        step.Caste,
-			Status:       step.Status,
+				Status:       step.Status,
 				FilesTouched: nil, // codexContinueWorkerFlowStep has no FilesModified field
 			})
 		}
@@ -642,7 +642,7 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 				Name:    dispatch.Name,
 				Task:    dispatch.Task,
 				TaskID:  dispatch.TaskID,
-			Status:  "timeout",
+				Status:  "timeout",
 				Summary: "worker result was not provided; treated as timed out",
 			}
 		}
@@ -1012,6 +1012,12 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 		"recovery":            assessment.Recovery,
 		"reconciled_tasks":    assessment.ReconciledTasks,
 		"blocking_issues":     blockers,
+		"plan_revision_option": planRevisionRecommendation(
+			colony.PlanRevisionVerificationFailure,
+			fmt.Sprintf("Verification or review blocked phase %d: %s", phase.ID, summary),
+			displayDataPath(verificationReportRel),
+			displayOptionalDataPath(reviewReportRel),
+		),
 	}
 	if review != nil {
 		result["review"] = *review
@@ -1263,7 +1269,6 @@ func writeCodexContinueWorkerOutcomeReports(root string, phase colony.Phase, wor
 	}
 	return nil
 }
-
 
 // buildLearningContent extracts structured learning content from worker flow steps.
 // It aggregates findings, reusable lessons, recommendations, weak spots, and edge cases

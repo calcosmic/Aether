@@ -33,6 +33,7 @@ func outputOK(result interface{}) {
 //
 // This matches the shell's json_err() function format for playbook compatibility.
 func outputError(code int, message string, details interface{}) {
+	markRenderedCommandError(code)
 	if shouldRenderVisualOutput(stderr) {
 		fmt.Fprint(stderr, renderVisualError(message, details))
 		return
@@ -191,7 +192,6 @@ func renderVisualError(message string, details interface{}) string {
 	return b.String()
 }
 
-
 // newLearningValidator returns a memory.LearningValidator callback that
 // bridges observation promotions to the learning store. When an observation
 // is promoted with trust >= 0.8, any learning entry with matching content
@@ -215,7 +215,6 @@ func newLearningValidator(s *storage.Store) func(string, float64) {
 		}
 	}
 }
-
 
 // resolveSurveySection reads available survey artifacts from .aether/data/survey/
 // and returns a markdown section summarizing them. Returns empty string if no

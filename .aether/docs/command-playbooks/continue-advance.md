@@ -223,7 +223,9 @@ Update COLONY_STATE.json:
 
 3d. **Hive Promotion (NON-BLOCKING):**
 
-   After QUEEN.md promotion, promote abstracted instincts to the cross-colony hive.
+   Automatic cross-project promotion is disabled by default. This step may only
+   promote when `AETHER_HIVE_POLICY=promote`; otherwise `hive-promote --automatic`
+   returns a visible skipped result and keeps the instinct project-local.
 
    Run using the Bash tool with description "Promoting high-confidence instincts to hive...":
    ```bash
@@ -257,12 +259,12 @@ Update COLONY_STATE.json:
      promote_text="When ${trigger_clean}: ${action}"
 
      # Build hive-promote args with --text and --source-repo (required)
-     promote_args=(hive-promote --text "$promote_text" --source-repo "$source_repo" --confidence "$confidence")
+     promote_args=(hive-promote --automatic --text "$promote_text" --source-repo "$source_repo" --confidence "$confidence")
      [[ -n "$repo_domain_tags" ]] && promote_args+=(--domain "$repo_domain_tags")
 
      # Call hive-promote which orchestrates abstract + store
      result=$(aether "${promote_args[@]}" 2>/dev/null || echo '{}')
-     was_promoted=$(echo "$result" | jq -r '.result.action // "skipped"' 2>/dev/null || echo "skipped")
+     was_promoted=$(echo "$result" | jq -r 'if .result.promoted == true then "promoted" elif .result.skipped == true then "skipped" else (.result.action // "skipped") end' 2>/dev/null || echo "skipped")
 
      if [[ "$was_promoted" == "promoted" || "$was_promoted" == "merged" ]]; then
        hive_promoted_count=$((hive_promoted_count + 1))

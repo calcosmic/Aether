@@ -53,15 +53,19 @@ type codexClaimVerification struct {
 }
 
 type codexContinueVerificationReport struct {
-	Phase                      int                      `json:"phase"`
-	GeneratedAt                string                   `json:"generated_at"`
-	VerificationTimeoutSeconds int                      `json:"verification_timeout_seconds,omitempty"`
-	Steps                      []codexVerificationStep  `json:"steps"`
-	Claims                     codexClaimVerification   `json:"claims"`
-	Watcher                    codexWatcherVerification `json:"watcher"`
-	ChecksPassed               bool                     `json:"checks_passed"`
-	Passed                     bool                     `json:"passed"`
-	BlockingIssues             []string                 `json:"blocking_issues,omitempty"`
+	Phase                      int                          `json:"phase"`
+	GeneratedAt                string                       `json:"generated_at"`
+	VerificationTimeoutSeconds int                          `json:"verification_timeout_seconds,omitempty"`
+	Steps                      []codexVerificationStep      `json:"steps"`
+	Claims                     codexClaimVerification       `json:"claims"`
+	Watcher                    codexWatcherVerification     `json:"watcher"`
+	CriteriaPolicy             string                       `json:"criteria_policy"`
+	CriteriaEnforced           bool                         `json:"criteria_enforced"`
+	CriteriaPassed             bool                         `json:"criteria_passed"`
+	Criteria                   []codexCriterionVerification `json:"criteria,omitempty"`
+	ChecksPassed               bool                         `json:"checks_passed"`
+	Passed                     bool                         `json:"passed"`
+	BlockingIssues             []string                     `json:"blocking_issues,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -740,6 +744,11 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"reconciled_tasks":    assessment.ReconciledTasks,
 			"blocking_issues":     blockers,
 			"review_depth":        string(reviewDepth),
+			"plan_revision_option": planRevisionRecommendation(
+				colony.PlanRevisionVerificationFailure,
+				fmt.Sprintf("Verification blocked phase %d: %s", phase.ID, summary),
+				displayDataPath(verificationReportRel),
+			),
 		}
 		runStatus = "blocked"
 		return result, blockedState, phase, nil, nil, false, nil
@@ -815,6 +824,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"reconciled_tasks":    assessment.ReconciledTasks,
 			"blocking_issues":     append([]string{}, review.BlockingIssues...),
 			"review_depth":        string(reviewDepth),
+			"plan_revision_option": planRevisionRecommendation(
+				colony.PlanRevisionVerificationFailure,
+				fmt.Sprintf("Review blocked phase %d: %s", phase.ID, summary),
+				displayDataPath(verificationReportRel),
+				displayDataPath(reviewReportRel),
+			),
 		}
 		runStatus = "blocked"
 		return result, blockedState, phase, nil, nil, false, nil
@@ -1420,10 +1435,18 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 
 	// Compute shell verification pass/fail before deciding whether to spawn watcher.
 	shellChecksPassed := true
+	executedChecks := 0
 	for _, step := range steps {
-		if !step.Passed && !step.Skipped {
+		if step.Skipped {
+			continue
+		}
+		executedChecks++
+		if !step.Passed {
 			shellChecksPassed = false
 		}
+	}
+	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
+		shellChecksPassed = false
 	}
 
 	var continueWatcher codexWatcherVerification
@@ -1469,6 +1492,9 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	blockers := []string{}
 	warnings := []string{}
 	if !shellChecksPassed {
+		if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
+			blockers = append(blockers, "no deterministic verification command was resolved; at least one fresh check is required before advancement")
+		}
 		for _, step := range steps {
 			if !step.Passed && !step.Skipped {
 				if step.ErrorClass == ErrorClassEnvironment && phase.Mode != colony.PhaseModeProduction {
@@ -1504,6 +1530,12 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		}
 	}
 
+	criteria := evaluatePhaseCriterionEvidence(root, phase, manifest, steps, claims, watcher)
+	if criteria.Enforced && !criteria.Passed {
+		checksPassed = false
+		blockers = append(blockers, criteria.BlockingIssues...)
+	}
+
 	// LOOP-01: Update watcher failure counter based on watcher outcome.
 	if continueWatcher.Present && !continueWatcher.Passed && continueWatcher.Status == "failed" {
 		_ = incrementWatcherFailureCount(phase.ID)
@@ -1519,6 +1551,10 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		Steps:                      steps,
 		Claims:                     claims,
 		Watcher:                    watcher,
+		CriteriaPolicy:             criteria.Policy,
+		CriteriaEnforced:           criteria.Enforced,
+		CriteriaPassed:             criteria.Passed,
+		Criteria:                   criteria.Criteria,
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,

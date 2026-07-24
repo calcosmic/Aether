@@ -37,6 +37,9 @@ func validateBuildProvenanceForManifest(manifest *codexBuildManifest, results []
 	if err == nil {
 		return nil
 	}
+	if manifest != nil && manifest.PhaseMode == "discovery" && hasExternalDiscoveryEvidence(results) {
+		return nil
+	}
 	if manifest == nil || !isVerificationOnlyBuildManifest(*manifest) {
 		return err
 	}
@@ -55,6 +58,20 @@ func validateBuildProvenanceForManifest(manifest *codexBuildManifest, results []
 		return err
 	}
 	return fmt.Errorf("build provenance: verification-only phase completed but no implementation workers reported output evidence")
+}
+
+func hasExternalDiscoveryEvidence(results []codexExternalBuildWorkerResult) bool {
+	foundTask := false
+	for _, result := range results {
+		if strings.TrimSpace(result.TaskID) == "" {
+			continue
+		}
+		foundTask = true
+		if normalizeExternalBuildStatus(result.Status) != "completed" || strings.TrimSpace(result.Summary) == "" {
+			return false
+		}
+	}
+	return foundTask
 }
 
 func isVerificationOnlyBuildManifest(manifest codexBuildManifest) bool {
@@ -132,4 +149,14 @@ func traceContinueProvenance(dispatches []codexBuildDispatch) error {
 	}
 
 	return nil
+}
+
+func traceContinueProvenanceForManifest(manifest codexContinueManifest) error {
+	if manifest.Present && manifest.Data.PhaseMode == "discovery" {
+		if hasDurableDiscoveryDispatchEvidence(manifest.Data.Dispatches) {
+			return nil
+		}
+		return fmt.Errorf("continue provenance: discovery phase has no durable completed task summaries")
+	}
+	return traceContinueProvenance(manifest.Data.Dispatches)
 }

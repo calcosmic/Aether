@@ -15,6 +15,8 @@ const REPO_NAME = "Aether";
 const DEFAULT_AETHER_VERSION = packageJson.version;
 const PACKAGE_VERSION = packageJson.version;
 const MAX_REDIRECTS = 5;
+const RELEASE_BASE_URL_ENV = "AETHER_RELEASE_BASE_URL";
+const ROLLBACK_SUFFIX = ".previous";
 const BANNER = `
       █████╗ ███████╗████████╗██╗  ██╗███████╗██████╗
      ██╔══██╗██╔════╝╚══██╔══╝██║  ██║██╔════╝██╔══██╗
@@ -132,7 +134,21 @@ function checksumsFilename(version) {
 }
 
 function releaseBaseURL(version) {
-  return `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${version}`;
+  const normalizedVersion = normalizeVersion(version);
+  const override = String(process.env[RELEASE_BASE_URL_ENV] || "").trim();
+  if (!override) {
+    return `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${normalizedVersion}`;
+  }
+
+  const parsed = new URL(override);
+  const loopback = ["127.0.0.1", "::1", "localhost"].includes(parsed.hostname);
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && loopback)) {
+    throw new Error(`${RELEASE_BASE_URL_ENV} must use HTTPS (HTTP is allowed only for loopback acceptance tests)`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error(`${RELEASE_BASE_URL_ENV} must not contain credentials`);
+  }
+  return `${override.replace(/\/+$/, "")}/v${normalizedVersion}`;
 }
 
 function archiveURL(version, platform) {
@@ -227,6 +243,76 @@ function needsInstall(binaryPath, targetVersion) {
   return installedVersion !== normalizeVersion(targetVersion);
 }
 
+function rollbackBinaryPath(binaryPath) {
+  return `${binaryPath}${ROLLBACK_SUFFIX}`;
+}
+
+async function pathExists(filePath) {
+  try {
+    await fsp.access(filePath);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function recoverInterruptedInstall(binaryPath, targetVersion) {
+  const rollbackPath = rollbackBinaryPath(binaryPath);
+  const [binaryExists, rollbackExists] = await Promise.all([
+    pathExists(binaryPath),
+    pathExists(rollbackPath)
+  ]);
+  if (!rollbackExists) {
+    return "none";
+  }
+  if (!binaryExists) {
+    await fsp.rename(rollbackPath, binaryPath);
+    return "restored";
+  }
+  if (getInstalledVersion(binaryPath) === normalizeVersion(targetVersion)) {
+    await fsp.rm(rollbackPath, { force: true });
+    return "committed";
+  }
+
+  await fsp.rm(binaryPath, { force: true });
+  await fsp.rename(rollbackPath, binaryPath);
+  return "restored";
+}
+
+async function activateReleaseBinary(stagedPath, binaryPath, targetVersion) {
+  const expectedVersion = normalizeVersion(targetVersion);
+  const stagedVersion = getInstalledVersion(stagedPath);
+  if (stagedVersion !== expectedVersion) {
+    throw new Error(`Downloaded binary version mismatch: expected ${expectedVersion}, got ${stagedVersion || "unreadable"}`);
+  }
+
+  await recoverInterruptedInstall(binaryPath, expectedVersion);
+  const rollbackPath = rollbackBinaryPath(binaryPath);
+  const hadPrevious = await pathExists(binaryPath);
+  if (hadPrevious) {
+    await fsp.rm(rollbackPath, { force: true });
+    await fsp.rename(binaryPath, rollbackPath);
+  }
+
+  try {
+    await fsp.rename(stagedPath, binaryPath);
+    const activatedVersion = getInstalledVersion(binaryPath);
+    if (activatedVersion !== expectedVersion) {
+      throw new Error(`Activated binary version mismatch: expected ${expectedVersion}, got ${activatedVersion || "unreadable"}`);
+    }
+  } catch (error) {
+    await fsp.rm(binaryPath, { force: true });
+    if (hadPrevious && await pathExists(rollbackPath)) {
+      await fsp.rename(rollbackPath, binaryPath);
+    }
+    throw error;
+  }
+
+  if (hadPrevious) {
+    await fsp.rm(rollbackPath, { force: true });
+  }
+}
+
 function requestWithRedirects(url, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
     const transport = url.startsWith("https:") ? https : http;
@@ -319,17 +405,21 @@ function findBinaryRecursively(baseDir, binaryFile) {
 }
 
 async function installReleaseBinary(version, destDir) {
+  const normalizedVersion = normalizeVersion(version);
   const platform = detectPlatform();
-  const archiveFile = archiveFilename(version, platform);
+  const archiveFile = archiveFilename(normalizedVersion, platform);
   const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "aether-npm-"));
   const archivePath = path.join(tmpRoot, archiveFile);
   const extractDir = path.join(tmpRoot, "extract");
   const destPath = installedBinaryPath(destDir, platform);
 
   try {
-    const checksums = await downloadText(checksumsURL(version));
+    await fsp.mkdir(destDir, { recursive: true });
+    await recoverInterruptedInstall(destPath, normalizedVersion);
+
+    const checksums = await downloadText(checksumsURL(normalizedVersion));
     const expected = parseChecksum(checksums, archiveFile);
-    await downloadFile(archiveURL(version, platform), archivePath);
+    await downloadFile(archiveURL(normalizedVersion, platform), archivePath);
     const actual = await sha256File(archivePath);
     if (actual !== expected) {
       throw new Error(`Checksum mismatch for ${archiveFile}`);
@@ -341,14 +431,12 @@ async function installReleaseBinary(version, destDir) {
       throw new Error(`Binary ${binaryName(platform)} not found in extracted archive`);
     }
 
-    await fsp.mkdir(destDir, { recursive: true });
     const tmpDest = `${destPath}.tmp-${process.pid}`;
     await fsp.copyFile(extractedBinary, tmpDest);
     if (platform.os !== "windows") {
       await fsp.chmod(tmpDest, 0o755);
     }
-    await fsp.rm(destPath, { force: true });
-    await fsp.rename(tmpDest, destPath);
+    await activateReleaseBinary(tmpDest, destPath, normalizedVersion);
     return destPath;
   } finally {
     await fsp.rm(tmpRoot, { recursive: true, force: true });
@@ -430,6 +518,9 @@ async function main(argv) {
 
 module.exports = {
   MAX_REDIRECTS,
+  RELEASE_BASE_URL_ENV,
+  ROLLBACK_SUFFIX,
+  activateReleaseBinary,
   archiveFilename,
   archiveURL,
   binaryName,
@@ -438,11 +529,14 @@ module.exports = {
   defaultDestDir,
   detectPlatform,
   installedBinaryPath,
+  installReleaseBinary,
   main,
   normalizeArgs,
   normalizeVersion,
   parseChecksum,
   parseVersionOutput,
   hasHubInstalled,
-  releaseBaseURL
+  recoverInterruptedInstall,
+  releaseBaseURL,
+  rollbackBinaryPath
 };

@@ -12,11 +12,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import {
-  __setDetectAvailablePlatforms,
-  __restoreDetectAvailablePlatforms,
-} from "../src/platform-dispatcher.js";
-
 import { runLifecycle } from "../src/lifecycle.js";
 import {
   dispatchSingleWorker,
@@ -25,6 +20,8 @@ import type { BuildDispatch } from "../src/types.js";
 import {
   __setCallGoJSON,
   __restoreCallGoJSON,
+  __setCallGoJSONAsync,
+  __restoreCallGoJSONAsync,
 } from "../src/go-bridge.js";
 
 function completionFileArg(args: string[]): string {
@@ -55,8 +52,8 @@ function readCompletionResult(path: string): Record<string, unknown> {
 
 describe("lifecycle honesty", { concurrency: false }, () => {
   afterEach(() => {
-    __restoreDetectAvailablePlatforms();
     __restoreCallGoJSON();
+    __restoreCallGoJSONAsync();
   });
 
   const mockGoJSON = <T>(_opts: unknown, args: string[]): T => {
@@ -90,14 +87,21 @@ describe("lifecycle honesty", { concurrency: false }, () => {
         },
       } as unknown as T;
     }
-    if (args[0] === "plan-finalize" || args[0] === "build-finalize" || args[0] === "continue-finalize") {
+    if (args[0] === "plan-finalize") {
+      return {
+        ok: true,
+        planned: false,
+        iteration_completed: true,
+        requires_next_iteration: true,
+      } as unknown as T;
+    }
+    if (args[0] === "build-finalize" || args[0] === "continue-finalize") {
       return { ok: true } as unknown as T;
     }
     throw new Error(`Unexpected: ${args[0]}`);
   };
 
   it("rejects simulateWorkers=false before any production-style lifecycle work", async () => {
-    __setDetectAvailablePlatforms(async () => []);
     let goCalled = false;
     __setCallGoJSON(<T>(opts: unknown, args: string[]): T => {
       goCalled = true;
@@ -116,12 +120,6 @@ describe("lifecycle honesty", { concurrency: false }, () => {
   });
 
   it("rejects simulateWorkers undefined before any production-style lifecycle work", async () => {
-    __setDetectAvailablePlatforms(async () => []);
-    let platformProbeCalled = false;
-    __setDetectAvailablePlatforms(async () => {
-      platformProbeCalled = true;
-      return ["claude"];
-    });
     __setCallGoJSON(mockGoJSON);
 
     const result = await runLifecycle({
@@ -131,12 +129,16 @@ describe("lifecycle honesty", { concurrency: false }, () => {
 
     assert.equal(result.success, false);
     assert.ok(result.error?.includes("simulate-only"), `Expected simulate-only error but got: ${result.error}`);
-    assert.equal(platformProbeCalled, false, "Lifecycle rejection should not probe provider CLIs");
   });
 
-  it("succeeds with simulateWorkers=true even when no platforms available", async () => {
-    __setDetectAvailablePlatforms(async () => []);
-    __setCallGoJSON(mockGoJSON);
+  it("stops with simulateWorkers=true when planning still needs real worker loop", async () => {
+    let buildCalled = false;
+    __setCallGoJSON(<T>(opts: unknown, args: string[]): T => {
+      if (args[0] === "build") {
+        buildCalled = true;
+      }
+      return mockGoJSON<T>(opts, args);
+    });
 
     const result = await runLifecycle({
       goBinaryPath: "/usr/bin/true",
@@ -144,11 +146,15 @@ describe("lifecycle honesty", { concurrency: false }, () => {
       simulateWorkers: true,
     });
 
-    assert.equal(result.success, true, `Expected success but got error: ${result.error ?? "unknown"}`);
+    assert.equal(buildCalled, false, "Build step should not be reached before planning finishes");
+    assert.equal(result.success, false);
+    assert.ok(
+      /intermediate planning iteration|synthesis planning packets|real Scout and Route-Setter/.test(result.error ?? ""),
+      `Expected pending planning error but got: ${result.error ?? "unknown"}`
+    );
   });
 
-  it("rejects lifecycle without explicit simulation even when platforms are available", async () => {
-    __setDetectAvailablePlatforms(async () => ["claude"]);
+  it("rejects lifecycle without explicit simulation before provider preflight", async () => {
     let buildCalled = false;
     __setCallGoJSON(<T>(_opts: unknown, args: string[]): T => {
       if (args[0] === "build") {
@@ -296,8 +302,8 @@ describe("lifecycle honesty", { concurrency: false }, () => {
 
 describe("worker-dispatch honesty", { concurrency: false }, () => {
   afterEach(() => {
-    __restoreDetectAvailablePlatforms();
     __restoreCallGoJSON();
+    __restoreCallGoJSONAsync();
   });
 
   const mockDispatch: BuildDispatch = {
@@ -309,25 +315,27 @@ describe("worker-dispatch honesty", { concurrency: false }, () => {
   };
 
   it("defaults to real execution when simulateWorkers is undefined", async () => {
-    __setDetectAvailablePlatforms(async () => []);
     __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => {
+      throw new Error("no worker provider available");
+    });
 
-    await assert.rejects(
-      async () =>
-        dispatchSingleWorker(
-          {
-            goBinaryPath: "/usr/bin/true",
-            cwd: "/tmp",
-          } as import("../src/worker-dispatch.js").DispatchOptions,
-          mockDispatch
-        ),
-      /Worker dispatch cannot start/
+    const result = await dispatchSingleWorker(
+      {
+        goBinaryPath: "/usr/bin/true",
+        cwd: "/tmp",
+      } as import("../src/worker-dispatch.js").DispatchOptions,
+      mockDispatch
     );
+    assert.equal(result.status, "failed");
+    assert.match(result.summary, /no worker provider available/);
   });
 
   it("delegates detailed provider diagnostics to Go when no platforms are available", async () => {
-    __setDetectAvailablePlatforms(async () => []);
     __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => {
+      throw new Error("Go AvailabilityStatus contract: credentials missing");
+    });
 
     await assert.rejects(
       async () =>
@@ -343,8 +351,10 @@ describe("worker-dispatch honesty", { concurrency: false }, () => {
   });
 
   it("simulates only with explicit simulateWorkers=true", async () => {
-    __setDetectAvailablePlatforms(async () => []);
     __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => {
+      throw new Error("real adapter must not be called");
+    });
 
     const result = await dispatchSingleWorker(
       {
@@ -362,21 +372,21 @@ describe("worker-dispatch honesty", { concurrency: false }, () => {
     );
   });
 
-  it("throws error with explicit simulateWorkers=false and no platforms", async () => {
-    __setDetectAvailablePlatforms(async () => []);
+  it("returns a failed result with explicit simulateWorkers=false and no platforms", async () => {
     __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => {
+      throw new Error("no worker provider available");
+    });
 
-    await assert.rejects(
-      async () =>
-        dispatchSingleWorker(
-          {
-            goBinaryPath: "/usr/bin/true",
-            cwd: "/tmp",
-            simulateWorkers: false,
-          },
-          mockDispatch
-        ),
-      /Worker dispatch cannot start/
+    const result = await dispatchSingleWorker(
+      {
+        goBinaryPath: "/usr/bin/true",
+        cwd: "/tmp",
+        simulateWorkers: false,
+      },
+      mockDispatch
     );
+    assert.equal(result.status, "failed");
+    assert.match(result.summary, /no worker provider available/);
   });
 });

@@ -6,11 +6,12 @@ import { EventSchema, type ColonyEvent } from "../schemas/event.schema.js";
 import { projectRoot } from "../utils/projectRoot.js";
 
 import type { PhaseResult } from "../types/runtime.js";
+import { RETIRED_CONTROL_PLANE_MESSAGE } from "../retired.js";
 
 // Re-export for convenience
 export type { PhaseResult };
 
-const EVENTS_DIR = resolve(projectRoot, "..", ".aether", "events");
+const EVENTS_DIR = resolve(projectRoot, ".retired-state", "events");
 const DEFAULT_EVENTS_FILE = resolve(EVENTS_DIR, "current.ndjson");
 
 function getEventsFile(): string {
@@ -35,7 +36,8 @@ function emitEvent(event: ColonyEvent): ColonyEvent {
 /**
  * Run a phase by ID.
  * Loads the phase definition, resolves the entry agent, emits NDJSON events,
- * and returns a PhaseResult. Simulation only — no actual adapter calls.
+ * and returns a failed PhaseResult. This retired prototype must never report
+ * successful execution because it has no production provider adapter.
  */
 export async function runPhase(
   phaseId: string,
@@ -55,57 +57,33 @@ export async function runPhase(
 
   const events: ColonyEvent[] = [];
 
-  try {
-    const startEvent: ColonyEvent = {
-      type: "phase:start",
-      timestamp: new Date().toISOString(),
-      payload: {
-        phaseId,
-        agentId: agent.id,
-        inputs: inputs ?? {},
-      },
-    };
-    events.push(emitEvent(startEvent));
-
-    // Simulate execution — no actual adapter call in Phase 156
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-    const completeEvent: ColonyEvent = {
-      type: "phase:complete",
-      timestamp: new Date().toISOString(),
-      payload: {
-        phaseId,
-        agentId: agent.id,
-        status: "completed",
-      },
-    };
-    events.push(emitEvent(completeEvent));
-
-    return {
+  const startEvent: ColonyEvent = {
+    type: "phase:start",
+    timestamp: new Date().toISOString(),
+    payload: {
       phaseId,
       agentId: agent.id,
-      status: "completed",
-      events,
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const failedEvent: ColonyEvent = {
-      type: "phase:failed",
-      timestamp: new Date().toISOString(),
-      payload: {
-        phaseId,
-        agentId: agent.id,
-        error: message,
-      },
-    };
-    events.push(emitEvent(failedEvent));
+      inputs: inputs ?? {},
+    },
+  };
+  events.push(emitEvent(startEvent));
 
-    return {
+  const failedEvent: ColonyEvent = {
+    type: "phase:failed",
+    timestamp: new Date().toISOString(),
+    payload: {
       phaseId,
       agentId: agent.id,
-      status: "failed",
-      events,
-      error: message,
-    };
-  }
+      error: RETIRED_CONTROL_PLANE_MESSAGE,
+    },
+  };
+  events.push(emitEvent(failedEvent));
+
+  return {
+    phaseId,
+    agentId: agent.id,
+    status: "failed",
+    events,
+    error: RETIRED_CONTROL_PLANE_MESSAGE,
+  };
 }

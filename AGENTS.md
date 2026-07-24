@@ -21,7 +21,7 @@ OpenCode, and Codex CLI.
 | What | Count/Status |
 |------|--------------|
 | Version | v1.0.41 |
-| Agent definitions | 27 (TOML in `.codex/agents/`) |
+| Agent definitions | 27 castes; OpenCode also ships 1 restricted infrastructure router |
 | Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
 | Verification | `go test ./...` and `go test ./... -race` clean |
@@ -662,6 +662,13 @@ domain, and shared across all colonies on the same machine.
 | `hive-abstract` | Generalize repo-specific instinct into cross-colony wisdom |
 | `hive-promote` | Orchestrate abstract + store pipeline |
 
+Automatic Hive influence is quarantined by default:
+
+- `AETHER_HIVE_POLICY=off` (default): worker retrieval and automatic promotion are disabled; manual inspection and explicitly invoked promotion remain available.
+- `AETHER_HIVE_POLICY=read`: workers may retrieve Hive entries, but lifecycle commands do not promote project instincts globally.
+- `AETHER_HIVE_POLICY=promote`: worker retrieval and automatic promotion are enabled explicitly.
+- Automated wrapper/playbook promotion must pass `hive-promote --automatic`; the runtime then enforces this policy instead of trusting prompt instructions.
+
 ### Multi-Repo Confidence Boosting
 
 | Repos Confirming | Confidence |
@@ -671,7 +678,8 @@ domain, and shared across all colonies on the same machine.
 | 4+ repos | 0.95 |
 
 Confidence is never downgraded. During `aether seal`, instincts with confidence
->= 0.8 are promoted to the Hive Brain (non-blocking).
+>= 0.8 remain project-local unless `AETHER_HIVE_POLICY=promote` explicitly enables
+non-blocking Hive promotion.
 
 ---
 
@@ -743,8 +751,8 @@ go vet ./...
 # Verify goreleaser config
 goreleaser check
 
-# Build snapshot (no tag required)
-goreleaser build --snapshot --clean
+# Assemble a version-coherent snapshot release (no tag or publication required)
+AETHER_RELEASE_VERSION="$(node -p "require('./.aether/version.json').version")" goreleaser release --snapshot --clean
 
 # Verify binary works
 aether version
@@ -793,7 +801,7 @@ wisdom.
 | 3. Instinct | `instinct-create` | Stores in `instincts.json` |
 | 4. QUEEN.md | `queen-promote` | Writes to QUEEN.md |
 | 5. Inject | colony-prime | Injected into worker context |
-| 6. Hive store | `hive-promote` | Abstracts to hive (confidence >= 0.8) |
+| 6. Hive store | `hive-promote --automatic` | Abstracts to Hive only when confidence >= 0.8 and `AETHER_HIVE_POLICY=promote` |
 | 7. Hive read | `hive-read` | Cross-colony retrieval by domain |
 
 ### Wisdom Pipeline Diagram
@@ -818,7 +826,7 @@ flowchart LR
     INST --> QP[queen-promote<br/>QUEEN.md]
     QP --> CP2[colony-prime injection<br/>next worker spawn]
 
-    INST -->|confidence >= 0.8<br/>at aether seal| HP[hive-promote]
+    INST -->|confidence >= 0.8<br/>seal + explicit promote policy| HP[hive-promote --automatic]
     HP --> HA[hive-abstract<br/>generalize]
     HA --> HS[hive-store<br/>200-cap LRU]
     HS --> HV2[(~/.aether/hive/wisdom.json)]
@@ -896,7 +904,7 @@ The system's pieces are now **connected**:
 - Learnings become instincts (observation to promotion pipeline)
 - Midden affects behavior (threshold auto-REDIRECT)
 - Hive Brain crosses colony boundaries (domain-scoped wisdom -> colony-prime)
-- Instincts promote to hive at seal (confidence >= 0.8 -> hive-promote)
+- Instincts remain project-local at seal unless `AETHER_HIVE_POLICY=promote` explicitly enables automatic Hive promotion
 - Multi-repo confirmation boosts confidence (2 repos = 0.7, 4+ = 0.95)
 - User preferences shape worker behavior (QUEEN.md -> colony-prime)
 - Codex uses the direct `build` -> `continue` -> `seal` lifecycle

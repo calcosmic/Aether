@@ -38,7 +38,6 @@ import {
   toWorkerResults,
   type DispatchOptions,
 } from "./worker-dispatch.js";
-import { detectAvailablePlatforms, formatPlatformUnavailableMessage } from "./platform-dispatcher.js";
 import { createDashboard, type Dashboard } from "./dashboard.js";
 import { createNarrator, type Narrator } from "./narrator.js";
 import { startEventBridge, stopEventBridge, type EventBridgeController } from "./event-bridge.js";
@@ -179,35 +178,6 @@ function renderWorkerCeremony(
   }
 }
 
-function stringField(value: unknown, key: string): string | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
-  }
-  const field = (value as Record<string, unknown>)[key];
-  return typeof field === "string" && field.trim() !== "" ? field.trim() : undefined;
-}
-
-function providerDiagnosticFromBuildResult(
-  buildResult: BuildManifestResult,
-  buildManifest: BuildManifest
-): string | undefined {
-  return (
-    stringField(buildResult, "provider_diagnostics") ??
-    stringField(buildManifest, "provider_diagnostics")
-  );
-}
-
-function formatLifecycleProviderUnavailableMessage(
-  context: string,
-  buildResult: BuildManifestResult,
-  buildManifest: BuildManifest
-): string {
-  return (
-    providerDiagnosticFromBuildResult(buildResult, buildManifest) ??
-    formatPlatformUnavailableMessage(context)
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Lifecycle orchestrator
 // ---------------------------------------------------------------------------
@@ -297,7 +267,8 @@ export async function runLifecycle(
 
     // The TS host does not run planning workers here. Only real planning
     // dispatch completions belong in this list; host-created plans are labeled
-    // with the synthesis envelope below.
+    // with the synthesis envelope below and must not be treated as a completed
+    // production plan unless the Go finalizer says a real stop condition was met.
     const planningResults: PlanningDispatch[] = [];
     renderWorkerCeremony(ceremony, "plan", planningResults);
 
@@ -350,12 +321,21 @@ export async function runLifecycle(
       { result: planCompletion }
     );
 
-    // Call plan-finalizer to commit the plan to colony state
-    callGoJSON<Record<string, unknown>>(opts, [
+    // Call plan-finalizer. Iterative planning can validly return an
+    // intermediate result that requires a fresh Scout -> Route-Setter pass.
+    const planFinalizeResult = callGoJSON<Record<string, unknown>>(opts, [
       "plan-finalize",
       "--completion-file",
       planCompletionPath,
     ]);
+    if (
+      planFinalizeResult["requires_next_iteration"] === true ||
+      planFinalizeResult["planned"] !== true
+    ) {
+      throw new Error(
+        "Plan finalizer returned an intermediate planning iteration; TS lifecycle host cannot synthesize the remaining planning loop. Run Claude /ant-plan or provide real Scout and Route-Setter completions, then rerun the build lifecycle."
+      );
+    }
     emitCeremonyOutput(ceremony.renderCloseout("plan", planCompletionPath));
 
     stepsCompleted.push("plan");
@@ -386,24 +366,10 @@ export async function runLifecycle(
     const buildCeremonyEnvelope = { dispatch_manifest: buildManifest };
     renderManifestCeremony(ceremony, "build", buildCeremonyEnvelope, buildDispatches);
 
-    // Detect available platforms before dispatching.
-    const availablePlatforms = await detectAvailablePlatforms();
-    const hasPlatforms = availablePlatforms.length > 0;
-
     // Lifecycle is guarded to explicit simulation at entry. Keep the local
     // variable so the build path can share the same option shape as worker
     // dispatch without pretending this is production orchestration.
     const simulateWorkers = true;
-
-    if (!hasPlatforms && !simulateWorkers) {
-      throw new Error(
-        formatLifecycleProviderUnavailableMessage(
-          `phase ${targetPhase} build`,
-          buildResult,
-          buildManifest
-        )
-      );
-    }
 
     // Create a placeholder file for simulated worker file claims.
     // The Go build-finalizer validates that all claimed files exist on disk

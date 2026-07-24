@@ -73,6 +73,7 @@ type oracleIterationCompletion struct {
 	CurrentConfidence int                       `json:"current_confidence"`
 	CurrentIteration  int                       `json:"current_iteration"`
 	ShouldContinue    bool                      `json:"should_continue"`
+	WorkerResponse    oracleWorkerResponse      `json:"worker_response,omitempty"`
 }
 
 // oracleFinalizeResult is the top-level JSON envelope from oracle-iterate-finalize.
@@ -205,25 +206,38 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 				Depth:             completion.IterationManifest.Depth,
 				MaxIterations:     completion.IterationManifest.MaxIterations,
 				ConfidenceTarget:  completion.IterationManifest.ConfidenceTarget,
-				CurrentIteration:  completion.CurrentIteration,
-				CurrentConfidence: completion.CurrentConfidence,
-				ShouldContinue:    completion.ShouldContinue,
+				CurrentIteration:  completion.IterationManifest.CurrentIteration,
+				CurrentConfidence: 0,
+				ShouldContinue:    true,
 			}
 		} else {
-			state.CurrentIteration = completion.CurrentIteration
-			state.CurrentConfidence = completion.CurrentConfidence
 			if completion.IterationManifest.Topic != "" {
 				state.Topic = completion.IterationManifest.Topic
 			}
 		}
+		if err := validateOracleIterationCompletionEvidence(completion); err != nil {
+			outputError(1, err.Error(), nil)
+			return renderedErrorExit(1)
+		}
+		if completion.IterationManifest.Depth != "" {
+			state.Depth = completion.IterationManifest.Depth
+		}
+		if completion.IterationManifest.MaxIterations > 0 {
+			state.MaxIterations = completion.IterationManifest.MaxIterations
+		}
+		if completion.IterationManifest.ConfidenceTarget > 0 {
+			state.ConfidenceTarget = completion.IterationManifest.ConfidenceTarget
+		}
+		completedIteration := completion.IterationManifest.CurrentIteration
+		state.CurrentConfidence = computeOracleIterationConfidence(state.CurrentConfidence, completion)
 
 		// Build history from dispatches
 		for _, d := range completion.Dispatches {
 			if d.Status == "completed" {
 				state.History = append(state.History, oracleHistoryEntry{
-					Iteration:  state.CurrentIteration,
+					Iteration:  completedIteration,
 					Confidence: state.CurrentConfidence,
-					Summary:    d.Summary,
+					Summary:    oracleIterationCompletionSummary(completion, d),
 				})
 			}
 		}
@@ -233,8 +247,12 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 		if state.CurrentConfidence >= state.ConfidenceTarget {
 			state.ShouldContinue = false
 		}
-		if state.CurrentIteration >= state.MaxIterations {
+		if completedIteration >= state.MaxIterations {
 			state.ShouldContinue = false
+		}
+		state.CurrentIteration = completedIteration
+		if state.ShouldContinue {
+			state.CurrentIteration = completedIteration + 1
 		}
 
 		// Clear pending iteration marker on successful finalize
@@ -261,6 +279,86 @@ var oracleIterateFinalizeCmd = &cobra.Command{
 		outputOK(result)
 		return nil
 	},
+}
+
+func validateOracleIterationCompletionEvidence(completion oracleIterationCompletion) error {
+	response := completion.WorkerResponse
+	if strings.TrimSpace(response.Status) != "" ||
+		strings.TrimSpace(response.Summary) != "" ||
+		response.Confidence > 0 ||
+		len(response.Findings) > 0 ||
+		len(response.Gaps) > 0 ||
+		len(response.Contradictions) > 0 ||
+		strings.TrimSpace(response.Recommendation) != "" {
+		return nil
+	}
+	for _, dispatch := range completion.Dispatches {
+		switch strings.ToLower(strings.TrimSpace(dispatch.Status)) {
+		case "blocked", "failed", "timeout":
+			return nil
+		}
+	}
+	return fmt.Errorf("completion file must include worker_response evidence for completed Oracle work; wrapper-supplied current_confidence and should_continue are not authoritative")
+}
+
+func computeOracleIterationConfidence(previous int, completion oracleIterationCompletion) int {
+	previous = clampInt(previous, 0, 100)
+	response := completion.WorkerResponse
+	if response.Confidence > 0 {
+		return oracleMaxInt(previous, clampInt(response.Confidence, 0, 100))
+	}
+
+	delta := 0
+	status := strings.ToLower(strings.TrimSpace(response.Status))
+	switch status {
+	case "answered", "completed":
+		delta = 12
+	case "partial":
+		delta = 7
+	case "blocked", "failed", "timeout":
+		delta = 0
+	}
+	if len(response.Findings) > 0 {
+		delta += oracleMinInt(len(response.Findings)*5, 20)
+	}
+	if len(response.Gaps) > 0 {
+		delta -= oracleMinInt(len(response.Gaps)*3, 12)
+	}
+	if len(response.Contradictions) > 0 {
+		delta -= oracleMinInt(len(response.Contradictions)*5, 20)
+	}
+	if delta == 0 {
+		for _, dispatch := range completion.Dispatches {
+			switch strings.ToLower(strings.TrimSpace(dispatch.Status)) {
+			case "completed":
+				delta = oracleMaxInt(delta, 5)
+			case "blocked", "failed", "timeout":
+				delta = oracleMaxInt(delta, 0)
+			}
+		}
+	}
+	return clampInt(previous+delta, 0, 100)
+}
+
+func oracleIterationCompletionSummary(completion oracleIterationCompletion, dispatch oracleIterationDispatch) string {
+	if summary := strings.TrimSpace(completion.WorkerResponse.Summary); summary != "" {
+		return summary
+	}
+	return strings.TrimSpace(dispatch.Summary)
+}
+
+func oracleMinInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func oracleMaxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func loadExternalOracleIterationCompletion(path string) (oracleIterationCompletion, error) {

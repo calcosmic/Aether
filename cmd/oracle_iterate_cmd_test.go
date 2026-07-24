@@ -21,7 +21,7 @@ func TestOracleIteratePlanOnlyReturnsManifest(t *testing.T) {
 	out, _ := runCmd(t, []string{"oracle-iterate", "--plan-only", "--topic", "test-topic"})
 
 	var envelope struct {
-		OK     bool                `json:"ok"`
+		OK     bool                  `json:"ok"`
 		Result oracleIterationResult `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -72,7 +72,7 @@ func TestOracleIterateRespectsDepthFlag(t *testing.T) {
 	out, _ := runCmd(t, []string{"oracle-iterate", "--plan-only", "--topic", "x", "--depth", "quick"})
 
 	var envelope struct {
-		OK     bool                `json:"ok"`
+		OK     bool                  `json:"ok"`
 		Result oracleIterationResult `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -101,18 +101,21 @@ func TestOracleIterateFinalizeWritesState(t *testing.T) {
 			"current_iteration": 2,
 		},
 		"dispatches": []map[string]any{
-			{"worker": "Oracle-01", "status": "completed", "summary": "Found patterns", "confidence_delta": 10},
+			{"worker": "Oracle-01", "status": "completed", "summary": "Found patterns"},
 		},
-		"current_confidence": 70,
-		"current_iteration":  2,
-		"should_continue":    true,
+		"worker_response": map[string]any{
+			"question_id": "2",
+			"status":      "answered",
+			"confidence":  70,
+			"summary":     "Found patterns",
+		},
 	}
 	compPath := writeTempJSON(t, completion)
 
 	out, _ := runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})
 
 	var envelope struct {
-		OK     bool               `json:"ok"`
+		OK     bool                 `json:"ok"`
 		Result oracleFinalizeResult `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -129,8 +132,8 @@ func TestOracleIterateFinalizeWritesState(t *testing.T) {
 	if state.Topic != "finalize-test" {
 		t.Errorf("topic=%q, want finalize-test", state.Topic)
 	}
-	if state.CurrentIteration != 2 {
-		t.Errorf("current_iteration=%d, want 2", state.CurrentIteration)
+	if state.CurrentIteration != 3 {
+		t.Errorf("current_iteration=%d, want 3", state.CurrentIteration)
 	}
 	if state.CurrentConfidence != 70 {
 		t.Errorf("current_confidence=%d, want 70", state.CurrentConfidence)
@@ -153,17 +156,22 @@ func TestOracleIterateFinalizeStopsAtConfidenceTarget(t *testing.T) {
 			"confidence_target": 85,
 			"current_iteration": 3,
 		},
-		"dispatches":        []map[string]any{},
-		"current_confidence": 90,
-		"current_iteration":  3,
-		"should_continue":    true,
+		"dispatches": []map[string]any{
+			{"worker": "Oracle-03", "status": "completed", "summary": "Target reached"},
+		},
+		"worker_response": map[string]any{
+			"question_id": "3",
+			"status":      "answered",
+			"confidence":  90,
+			"summary":     "Target reached",
+		},
 	}
 	compPath := writeTempJSON(t, completion)
 
 	out, _ := runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})
 
 	var envelope struct {
-		OK     bool               `json:"ok"`
+		OK     bool                 `json:"ok"`
 		Result oracleFinalizeResult `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -188,17 +196,22 @@ func TestOracleIterateFinalizeStopsAtMaxIterations(t *testing.T) {
 			"confidence_target": 60,
 			"current_iteration": 5,
 		},
-		"dispatches":        []map[string]any{},
-		"current_confidence": 50,
-		"current_iteration":  5,
-		"should_continue":    true,
+		"dispatches": []map[string]any{
+			{"worker": "Oracle-05", "status": "completed", "summary": "Iteration cap reached"},
+		},
+		"worker_response": map[string]any{
+			"question_id": "5",
+			"status":      "partial",
+			"confidence":  50,
+			"summary":     "Iteration cap reached",
+		},
 	}
 	compPath := writeTempJSON(t, completion)
 
 	out, _ := runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})
 
 	var envelope struct {
-		OK     bool               `json:"ok"`
+		OK     bool                 `json:"ok"`
 		Result oracleFinalizeResult `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -207,6 +220,36 @@ func TestOracleIterateFinalizeStopsAtMaxIterations(t *testing.T) {
 	result := envelope.Result
 	if result.ShouldContinue {
 		t.Error("expected should_continue=false when iteration >= max")
+	}
+}
+
+func TestOracleIterateFinalizeRejectsWrapperOnlyConfidence(t *testing.T) {
+	resetRootCmd(t)
+	cleanup := setupOracleTestDir(t)
+	defer cleanup()
+
+	completion := map[string]any{
+		"iteration_manifest": map[string]any{
+			"topic":             "wrapper-confidence-test",
+			"depth":             "balanced",
+			"max_iterations":    15,
+			"confidence_target": 85,
+			"current_iteration": 2,
+		},
+		"dispatches":         []map[string]any{},
+		"current_confidence": 99,
+		"current_iteration":  99,
+		"should_continue":    false,
+	}
+	compPath := writeTempJSON(t, completion)
+
+	_, errOut := runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})
+
+	if !strings.Contains(errOut, "worker_response evidence") {
+		t.Fatalf("expected worker evidence rejection, got: %s", errOut)
+	}
+	if _, err := loadOracleState(); err == nil {
+		t.Fatal("wrapper-only confidence should not create oracle state")
 	}
 }
 
@@ -231,7 +274,7 @@ func TestOracleIterateResumeFromExistingState(t *testing.T) {
 	out, _ := runCmd(t, []string{"oracle-iterate", "--plan-only", "--topic", "resume-test"})
 
 	var envelope struct {
-		OK     bool                `json:"ok"`
+		OK     bool                  `json:"ok"`
 		Result oracleIterationResult `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -497,10 +540,15 @@ func TestOracleStateInterruptRecovery(t *testing.T) {
 			"confidence_target": 85,
 			"current_iteration": 3,
 		},
-		"dispatches":        []map[string]any{},
-		"current_confidence": 70,
-		"current_iteration":  3,
-		"should_continue":    true,
+		"dispatches": []map[string]any{
+			{"worker": "Oracle-03", "status": "completed", "summary": "Recovered iteration finalized"},
+		},
+		"worker_response": map[string]any{
+			"question_id": "3",
+			"status":      "answered",
+			"confidence":  70,
+			"summary":     "Recovered iteration finalized",
+		},
 	}
 	compPath := writeTempJSON(t, completion)
 	_, _ = runCmd(t, []string{"oracle-iterate-finalize", "--completion-file", compPath})

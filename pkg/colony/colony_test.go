@@ -450,6 +450,42 @@ func TestPlanConfidence_LegacyObjectCompatibility(t *testing.T) {
 	}
 }
 
+func TestPlanUnmarshalPreservesRevisionHistory(t *testing.T) {
+	raw := `{
+		"generated_at":"2026-07-22T10:00:00Z",
+		"confidence":0.91,
+		"evidence_policy":"bound_v1",
+		"active_revision_id":"plan-r2-abcdef123456",
+		"revisions":[{
+			"schema_version":1,
+			"number":2,
+			"id":"plan-r2-abcdef123456",
+			"parent_id":"plan-r1-fedcba654321",
+			"created_at":"2026-07-22T10:00:00Z",
+			"reason_type":"research",
+			"reason":"Oracle disproved an assumption",
+			"evidence":[".aether/data/oracle/synthesis.md"],
+			"plan_hash":"abcdef1234567890",
+			"preserved_phase_ids":[1],
+			"superseded_phase_ids":[2],
+			"replacement_phase_ids":[2,3],
+			"phases":[]
+		}],
+		"phases":[]
+	}`
+	var plan Plan
+	if err := json.Unmarshal([]byte(raw), &plan); err != nil {
+		t.Fatalf("unmarshal revision-aware plan: %v", err)
+	}
+	if plan.ActiveRevisionID != "plan-r2-abcdef123456" || len(plan.Revisions) != 1 {
+		t.Fatalf("revision fields were dropped by custom Plan.UnmarshalJSON: %+v", plan)
+	}
+	revision := plan.Revisions[0]
+	if revision.ReasonType != PlanRevisionResearch || revision.ParentID != "plan-r1-fedcba654321" || len(revision.ReplacementPhaseIDs) != 2 {
+		t.Fatalf("revision history did not round trip: %+v", revision)
+	}
+}
+
 func TestMemory_LegacyStringifiedSlicesCompatibility(t *testing.T) {
 	raw := `{
 		"version":"3.0",

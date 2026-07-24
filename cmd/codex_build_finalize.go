@@ -84,6 +84,58 @@ var buildFinalizeCmd = &cobra.Command{
 	},
 }
 
+var buildCompletionStageCmd = &cobra.Command{
+	Use:    "build-completion-stage <phase>",
+	Short:  "Persist an accepted wrapper completion packet for crash-safe finalization",
+	Hidden: true,
+	Args:   cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		phaseNum, err := parsePositivePhaseArg(args[0])
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return err
+		}
+		completionPath, _ := cmd.Flags().GetString("completion-file")
+		completion, err := loadExternalBuildCompletion(completionPath)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return err
+		}
+		manifest := completion.activeManifest()
+		if manifest == nil || manifest.Phase != phaseNum {
+			err := fmt.Errorf("completion manifest phase does not match requested phase %d", phaseNum)
+			outputError(1, err.Error(), nil)
+			return err
+		}
+		state, err := loadActiveColonyState()
+		if err != nil {
+			outputError(1, colonyStateLoadMessage(err), nil)
+			return err
+		}
+		binding, err := validateBuildAttemptManifestBinding(*manifest, state)
+		if err != nil || !binding.Bound {
+			if err == nil {
+				err = fmt.Errorf("completion manifest is not bound to a durable build attempt")
+			}
+			outputError(1, err.Error(), nil)
+			return err
+		}
+		durablePath, digest, err := stageBuildAttemptCompletion(binding.Path, completion)
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return err
+		}
+		outputWorkflow(map[string]interface{}{
+			"phase":             phaseNum,
+			"attempt_id":        manifest.AttemptID,
+			"completion_path":   durablePath,
+			"completion_sha256": digest,
+			"next":              buildFinalizeRecoveryCommand(phaseNum, durablePath),
+		}, "")
+		return nil
+	},
+}
+
 func parsePositivePhaseArg(value string) (int, error) {
 	phaseNum, err := strconv.Atoi(value)
 	if err != nil || phaseNum < 1 {
@@ -168,9 +220,6 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	now := time.Now().UTC()
-	if err := validateFinalizerManifestFreshness("dispatch_manifest", manifest.GeneratedAt, now); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-	}
 
 	state, err := loadActiveColonyState()
 	if err != nil {
@@ -185,12 +234,38 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
+	if err := validateBuildManifestPlanRevision(*manifest, state); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	binding, err := validateBuildAttemptManifestBinding(*manifest, state)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	completionDigest, err := jsonSHA256(completion)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
+	}
+	if binding.Bound && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match the result already bound to attempt %s", binding.Record.ID)
+	}
+	if binding.Bound && binding.Record.Status != buildAttemptBuilt && state.State == colony.StateBUILT && state.CurrentPhase == phaseNum {
+		return reconcileCommittedExternalBuildAttempt(state, phaseNum, binding, completionDigest)
+	}
+	if binding.Bound && binding.Record.Status == buildAttemptBuilt {
+		return idempotentExternalBuildFinalizeResult(state, phaseNum, binding, completionDigest)
+	}
+	if err := validateFinalizerManifestFreshness("dispatch_manifest", manifest.GeneratedAt, now); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	state, _, err = reconcilePriorCompletedPhaseTasksFromTrustedManifests(root, state, phaseNum)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	selectedTaskIDs := uniqueSortedStrings(manifest.SelectedTasks)
 	phase := state.Plan.Phases[phaseNum-1]
+	if err := validatePhaseCriterionEvidence(phase); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	if err := validateBuildManifestTaskSetForPhase(codexContinueManifest{Present: true, Data: *manifest}, phase, true); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -223,9 +298,42 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	claimsRel := "last-build-claims.json"
 	resultCollectionRel := filepath.ToSlash(filepath.Join(buildDirRel, "result-collection.json"))
+	claims, err := completion.claimsOrAggregate(root, phaseNum, startedAt, dispatches)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	attachBuildArtifactEvidence(root, &claims)
 
 	if err := store.SaveJSON(checkpointRel, state); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
+	}
+	attemptRel := binding.Path
+	if !binding.Bound {
+		attemptRel, err = beginBuildAttempt(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, "external-task", dispatches)
+		if err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+	}
+	if _, err := bindBuildAttemptCompletion(attemptRel, completion); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	attemptFinished := false
+	finishAttempt := func(status, summary string, transitionErr error) {
+		if attemptFinished {
+			return
+		}
+		if err := transitionBuildAttempt(attemptRel, status, summary, nil, nil, "external-task", transitionErr); err == nil && buildAttemptStatusTerminal(status) {
+			attemptFinished = true
+		}
+	}
+	defer func() {
+		if !attemptFinished {
+			_ = transitionBuildAttempt(attemptRel, buildAttemptInterrupted, "build-finalize ended before durable finalization", nil, nil, "external-task", fmt.Errorf("build-finalize ended before durable finalization"))
+		}
+	}()
+	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "external worker results received for validation", dispatches, nil, "external-task", nil); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to persist external result collection start", err)
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 
 	// Prepare the updated state in memory first (needed for downstream writes).
@@ -238,11 +346,12 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", completedAt.Format(time.RFC3339), phaseNum),
 	)
 
-	claims, err := completion.claimsOrAggregate(root, phaseNum, startedAt, dispatches)
-	if err != nil {
+	if err := transitionBuildAttempt(attemptRel, buildAttemptTerminal, "external terminal worker results recorded before lifecycle projection", dispatches, &claims, "external-task", nil); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to persist external terminal worker results", err)
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if err := store.SaveJSON(claimsRel, claims); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to persist external current-build claims", err)
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build claims: %w", err)
 	}
 
@@ -253,6 +362,8 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 
 	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, manifest.Playbooks, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
 	finalManifest.GeneratedAt = completedAt.Format(time.RFC3339)
+	finalManifest.AttemptID = strings.TrimSpace(manifest.AttemptID)
+	finalManifest.AttemptPath = filepath.ToSlash(strings.TrimSpace(manifest.AttemptPath))
 	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build manifest: %w", err)
 	}
@@ -294,8 +405,13 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		committedState = updatedState
 		return nil
 	}); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to commit external built lifecycle state", err)
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "external built lifecycle state committed", dispatches, &claims, "external-task", nil); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("built state committed but external build attempt journal is incomplete; rerun build-finalize with the same completion packet: %w", err)
+	}
+	attemptFinished = true
 	updatedState = committedState
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
@@ -313,7 +429,9 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		"checkpoint":        displayDataPath(checkpointRel),
 		"manifest":          displayDataPath(manifestRel),
 		"claims_path":       displayDataPath(claimsRel),
+		"attempt":           displayDataPath(attemptRel),
 		"result_collection": displayDataPath(resultCollectionRel),
+		"idempotent":        false,
 		"next":              "aether continue",
 	}
 	if len(recoveryInstructions) > 0 {
@@ -321,6 +439,101 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
 	return result, updatedState, updatedPhase, dispatches, nil
+}
+
+func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState) error {
+	if revisionID := strings.TrimSpace(manifest.PlanRevisionID); revisionID != "" && revisionID != activePlanRevisionID(state.Plan) {
+		return fmt.Errorf("dispatch_manifest belongs to superseded plan revision %s; active revision is %s", revisionID, activePlanRevisionID(state.Plan))
+	}
+	if state.State == colony.StateBUILT && state.CurrentPhase == manifest.Phase {
+		// Exact retry safety is proved by the durable attempt and completion
+		// hashes. The lifecycle projection legitimately changed task statuses.
+		return nil
+	}
+	if expectedHash := strings.TrimSpace(manifest.PlanStateHash); expectedHash != "" {
+		currentHash, err := planStateHash(state.Plan)
+		if err != nil {
+			return fmt.Errorf("hash active plan while validating dispatch_manifest: %w", err)
+		}
+		if expectedHash != currentHash {
+			return fmt.Errorf("dispatch_manifest plan state is stale; discard the packet and rerun `aether build %d --plan-only`", manifest.Phase)
+		}
+	}
+	return nil
+}
+
+func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum int, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	record := binding.Record
+	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has no matching durable completion packet", record.ID)
+	}
+	if state.State != colony.StateBUILT || state.CurrentPhase != phaseNum {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s is already finalized, but colony state has advanced; do not replay its completion packet", record.ID)
+	}
+	phase := state.Plan.Phases[phaseNum-1]
+	if phase.Status != colony.PhaseInProgress {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s is already finalized, but phase %d is %s", record.ID, phaseNum, phase.Status)
+	}
+	dispatches := append([]codexBuildDispatch{}, record.Dispatches...)
+	resultCollectionRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "result-collection.json"))
+	result := map[string]interface{}{
+		"phase":             phaseNum,
+		"phase_name":        phase.Name,
+		"state":             state.State,
+		"plan_only":         false,
+		"dispatch_mode":     "external-task",
+		"dispatches":        codexBuildDispatchMaps(dispatches),
+		"dispatch_count":    len(dispatches),
+		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(state))),
+		"parallel_mode":     string(effectiveParallelMode(state)),
+		"selected_tasks":    append([]string{}, record.SelectedTasks...),
+		"checkpoint":        record.Checkpoint,
+		"manifest":          record.Manifest,
+		"claims_path":       record.ClaimsPath,
+		"attempt":           displayDataPath(binding.Path),
+		"result_collection": displayDataPath(resultCollectionRel),
+		"idempotent":        true,
+		"next":              "aether continue",
+	}
+	var boundaryQuestions []discussQuestion
+	if record.PlanManifest != nil {
+		boundaryQuestions = record.PlanManifest.BoundaryQuestions
+	}
+	addOrchestratorBoundaryGuidance(result, "build", state, "aether continue", boundaryQuestions)
+	return result, state, phase, dispatches, nil
+}
+
+func reconcileCommittedExternalBuildAttempt(state colony.ColonyState, phaseNum int, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	record := binding.Record
+	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest || record.Claims == nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile its committed state without matching terminal evidence", record.ID)
+	}
+	manifestRel := strings.TrimPrefix(filepath.ToSlash(record.Manifest), ".aether/data/")
+	var finalManifest codexBuildManifest
+	if err := store.LoadJSON(manifestRel, &finalManifest); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile without its final manifest: %w", record.ID, err)
+	}
+	if finalManifest.PlanOnly || finalManifest.Phase != phaseNum || finalManifest.AttemptID != record.ID || finalManifest.AttemptPath != displayDataPath(binding.Path) {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s final manifest does not prove the committed lifecycle state", record.ID)
+	}
+	claimsRel := strings.TrimPrefix(filepath.ToSlash(record.ClaimsPath), ".aether/data/")
+	var persistedClaims codexBuildClaims
+	if err := store.LoadJSON(claimsRel, &persistedClaims); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile without persisted claims: %w", record.ID, err)
+	}
+	recordClaimsDigest, err := jsonSHA256(record.Claims)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	persistedClaimsDigest, err := jsonSHA256(persistedClaims)
+	if err != nil || recordClaimsDigest != persistedClaimsDigest {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s persisted claims do not match terminal evidence", record.ID)
+	}
+	if err := transitionBuildAttempt(binding.Path, buildAttemptBuilt, "reconciled attempt journal after built lifecycle commit", record.Dispatches, record.Claims, "external-task", nil); err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	binding.Record.Status = buildAttemptBuilt
+	return idempotentExternalBuildFinalizeResult(state, phaseNum, binding, completionDigest)
 }
 
 func buildExternalBuildRecoveryInstructions(phaseNum int, dispatches []codexBuildDispatch) ([]map[string]interface{}, error) {

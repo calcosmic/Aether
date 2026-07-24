@@ -8,26 +8,26 @@
 
 | Field | Value |
 |-------|-------|
-| **Last Updated** | 2026-05-23T20:18:24Z |
-| **Current Phase** | 7 |
-| **Phase Name** | Full Release Readiness Verification |
-| **Phase Status** | completed |
-| **Milestone** | Crowned Anthill |
-| **Colony Status** | COMPLETED |
+| **Last Updated** | 2026-07-20T20:38:22Z |
+| **Current Phase** | 1 |
+| **Phase Name** | Lock Claude-First Planning Contract |
+| **Phase Status** | ready |
+| **Milestone** | First Mound |
+| **Colony Status** | READY |
 | **Colony Mode** | colony |
-| **Safe to Clear?** | YES — Colony complete |
+| **Safe to Clear?** | YES — Colony paused, safe to clear context |
 
 ---
 
 ## Current Goal
 
-Fix TS host typecheck, resolve double-dispatch, restore ceremony surfaces, and clean documentation drift
+Dogfood Aether on itself with real Claude-backed iterative planning to identify the necessary fixes to make the Claude-first planning restoration production-ready
 
 ---
 
 ## What's In Progress
 
-Pre-compact snapshot (auto): state=COMPLETED phase=7 goal=Fix TS host typecheck, resolve double-dispatch, restore ceremony surfaces, and clean documentation drift task=Full Release Readiness Verification
+Paused at phase 1
 
 ---
 
@@ -35,14 +35,8 @@ Pre-compact snapshot (auto): state=COMPLETED phase=7 goal=Fix TS host typecheck,
 
 | Constraint | Source | Date Set |
 |------------|--------|----------|
-| What boundary should final seal reviewers enforce: block on security or quality issues | pheromone | active |
-| What boundary should builders protect for Phase 5 (Full Lifecycle Verification And Delivery Readiness): phase tasks only | pheromone | active |
-| What boundary should builders protect for Phase 4 (Spawn Economy And Recovery Hygiene): phase tasks only | pheromone | active |
-| What boundary should builders protect for Phase 3 (Worker Result Collection Reliability): phase tasks only | pheromone | active |
-| How should Phase 6 (Seal Evidence and Delivery Readiness Cleanup) handle blocked continue evidence: reconcile with evidence and reverify | pheromone | active |
-| What boundary should builders protect for Phase 6 (End-to-end verification): phase tasks only | pheromone | active |
-| Do not plan a language, protocol, grammar, parser, encoding, or communication DSL. The colony goal is Aether runtime lifecycle reliability: platform dispatch... | pheromone | active |
-| Which existing surface should own the first implementation slice: Own the first implementation slice in the Go runtime lifecycle code under cmd/ and pkg/code... | pheromone | active |
+| How tightly should this work reuse existing contracts and integrations: Reuse existing contracts where possible. Add only narrow adapters when a current cont... | pheromone | active |
+| Which existing surface should own the first implementation slice: Go runtime planning/finalizer contracts and Claude command wrappers own the first implement... | pheromone | active |
 
 ---
 
@@ -72,11 +66,15 @@ Pre-compact snapshot (auto): state=COMPLETED phase=7 goal=Fix TS host typecheck,
 
 ---
 
-## Tasks For Phase 7 — Full Release Readiness Verification
+## Tasks For Phase 1 — Lock Claude-First Planning Contract
 
-- [x] Run full test suite: npm run typecheck, npm test, go test ./... -race, go vet ./...
-- [x] Run aether integrity to validate full release pipeline chain
-- [x] Verify documentation consistency: version strings, counts, and ceremony surfaces all correct
+- [ ] Add a failing manifest contract test in cmd/codex_plan_test.go proving aether plan --plan-only emits planning_run_id, iteration, target and max controls, dispatch_mode plan-only, requires_finalizer true, and exactly two dispatches ordered Scout then Route-Setter.
+- [ ] Add a failing finalizer proof test in cmd/codex_plan_finalize_test.go proving plan-finalize rejects completions missing Scout evidence, Route-Setter phase_plan, matching planning_run_id, or matching iteration.
+- [ ] Add a failing Claude wrapper contract test in cmd/plan_wrapper_ceremony_test.go proving .claude/commands/ant/plan.md uses aether host plan, dispatches Scout before Route-Setter, calls aether plan-finalize, and forbids post-worker synthetic planning.
+- [ ] Update cmd/codex_plan.go so the plan manifest includes dispatch_contract.host_plan_behavior set to manifest_only, dispatch_contract.worker_order set to scout and route-setter, and dispatch_contract.finalizer set to aether plan-finalize --completion-file <file>.
+- [ ] Update cmd/codex_plan_finalize.go to enforce exactly one Scout result followed by one Route-Setter result, non-empty Scout evidence, non-empty Route-Setter phase plan, and matching planning iteration identity.
+- [ ] Update .aether/commands/plan.yaml and .claude/commands/ant/plan.md to state that aether host plan returns a manifest only, Claude performs live visible planning workers, and closeout happens only after plan-finalize.
+- [ ] Run focused Go verification for the Phase 1 planning contract.
 
 ---
 
@@ -90,18 +88,15 @@ Pre-compact snapshot (auto): state=COMPLETED phase=7 goal=Fix TS host typecheck,
 
 ## Recent Activity (Last 5 Events)
 
-- 2026-05-20T17:07:25Z|deterministic_verification|continue|deterministic verification completed: 4 passed, 0 skipped
-- 2026-05-20T17:07:25Z|watcher_verification|continue|watcher skipped; relying on verification commands
-- 2026-05-20T17:07:25Z|continue_review|continue|review wave skipped by --skip-watchers; no platform review agents were launched
-- 2026-05-20T17:07:25Z|signal_housekeeping|continue|Signal housekeeping completed: 9 active -> 9 active
-- 2026-05-20T17:51:24Z|sealed|seal|Colony sealed at Crowned Anthill
+- 2026-07-20T19:35:08Z|planning_scout|plan|Scout summarized surveyed repo context
+- 2026-07-20T19:35:08Z|plan_generated|plan|Generated 5 phases with 81% confidence; planning loop stopped: stalled
 
 ---
 
 ## Next Steps
 
-1. Run `aether seal`
-2. Run `aether phase --number 7` to inspect the tracked phase details
+1. Run `aether resume`
+2. Run `aether phase --number 1` to inspect the tracked phase details
 3. Run `aether resume-colony` after a context clear if you want the full recovery view
 
 ---
@@ -111,3 +106,12 @@ Pre-compact snapshot (auto): state=COMPLETED phase=7 goal=Fix TS host typecheck,
 1. Run `aether resume` for the quick dashboard restore
 2. Run `aether resume-colony` for the full handoff and task view
 3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
+
+### Active Todos
+- Add a failing manifest contract test in cmd/codex_plan_test.go proving aether plan --plan-only emits planning_run_id, iteration, target and max controls, dispatch_mode plan-only, requires_finalizer true, and exactly two dispatches ordered Scout then Route-Setter.
+- Add a failing finalizer proof test in cmd/codex_plan_finalize_test.go proving plan-finalize rejects completions missing Scout evidence, Route-Setter phase_plan, matching planning_run_id, or matching iteration.
+- Add a failing Claude wrapper contract test in cmd/plan_wrapper_ceremony_test.go proving .claude/commands/ant/plan.md uses aether host plan, dispatches Scout before Route-Setter, calls aether plan-finalize, and forbids post-worker synthetic planning.
+- Update cmd/codex_plan.go so the plan manifest includes dispatch_contract.host_plan_behavior set to manifest_only, dispatch_contract.worker_order set to scout and route-setter, and dispatch_contract.finalizer set to aether plan-finalize --completion-file <file>.
+- Update cmd/codex_plan_finalize.go to enforce exactly one Scout result followed by one Route-Setter result, non-empty Scout evidence, non-empty Route-Setter phase plan, and matching planning iteration identity.
+- Update .aether/commands/plan.yaml and .claude/commands/ant/plan.md to state that aether host plan returns a manifest only, Claude performs live visible planning workers, and closeout happens only after plan-finalize.
+- Run focused Go verification for the Phase 1 planning contract.

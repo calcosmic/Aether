@@ -518,7 +518,7 @@ func workflowSuggestionsForState(state colony.ColonyState) (string, []string) {
 	switch state.State {
 	case colony.StateEXECUTING, colony.StateBUILT:
 		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
-			return fmt.Sprintf("Run `aether build %d` to restart the interrupted phase.", state.CurrentPhase),
+			return fmt.Sprintf("Run `%s` to restart the interrupted phase.", buildForceRedispatchCommand(state.CurrentPhase)),
 				[]string{`Run ` + "`aether status`" + ` if you want to inspect the saved colony first.`}
 		}
 		if guidance := loadActiveRecoveryGuidance(state); guidance != nil && guidance.HasTargetedRoute {
@@ -999,8 +999,11 @@ func renderPlanVisual(result map[string]interface{}) string {
 	existing, _ := result["existing_plan"].(bool)
 	planOnly, _ := result["plan_only"].(bool)
 	requiresFinalizer, _ := result["requires_finalizer"].(bool)
+	requiresNextIteration, _ := result["requires_next_iteration"].(bool)
 	if existing {
 		b.WriteString("Existing colony plan loaded.\n")
+	} else if requiresNextIteration {
+		b.WriteString("Planning iteration recorded; another Scout and Route-Setter pass is required before the colony plan is written.\n")
 	} else if planOnly && requiresFinalizer {
 		b.WriteString("Planning manifest prepared for host-dispatched Scout and Route-Setter workers.\n")
 	} else {
@@ -1079,6 +1082,11 @@ func renderPlanVisual(result map[string]interface{}) string {
 	phases := phaseSliceValue(result["phases"])
 	b.WriteString("Plan size: ")
 	b.WriteString(fmt.Sprintf("%d phases\n\n", len(phases)))
+	if revision, ok := result["plan_revision"].(colony.PlanRevision); ok && strings.TrimSpace(revision.ID) != "" {
+		b.WriteString(fmt.Sprintf("Plan revision: r%d (%s) - %s\n\n", revision.Number, revision.ReasonType, revision.Reason))
+	} else if revision, ok := result["plan_revision"].(map[string]interface{}); ok && strings.TrimSpace(stringValue(revision["id"])) != "" {
+		b.WriteString(fmt.Sprintf("Plan revision: %s (%s)\n\n", stringValue(revision["id"]), stringValue(revision["reason_type"])))
+	}
 	if warning := strings.TrimSpace(stringValue(result["clarification_warning"])); warning != "" {
 		b.WriteString("Clarifications\n")
 		b.WriteString(fmt.Sprintf("  - %d unresolved clarification(s)\n", intValue(result["unresolved_clarifications"])))
@@ -1158,6 +1166,25 @@ func renderPlanVisual(result map[string]interface{}) string {
 			b.WriteString(fmt.Sprintf("  - ... and %d more phase research files\n", len(files)-5))
 		}
 		b.WriteString("\n")
+	}
+	if requiresNextIteration {
+		if gaps := stringSliceValue(result["selected_gaps"]); len(gaps) > 0 {
+			b.WriteString("Next Iteration Gaps\n")
+			b.WriteString(renderIndentedList(gaps))
+			b.WriteString("\n")
+		}
+		b.WriteString("Coordination: ")
+		b.WriteString(displayDataPath("spawn-tree.txt"))
+		b.WriteString("\n\n")
+		next := strings.TrimSpace(stringValue(result["next"]))
+		if next == "" {
+			next = "aether host plan"
+		}
+		b.WriteString(renderNextUp(
+			fmt.Sprintf("Run `%s` to request the next planning iteration manifest.", next),
+			`Do not start `+"`aether build`"+` until the planning loop reaches a real stop condition or you explicitly accept below target.`,
+		))
+		return b.String()
 	}
 
 	for _, phase := range phases {

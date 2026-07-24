@@ -51,6 +51,9 @@ export interface BuildManifest {
   worker_dispatch_opt_in?: boolean;
   provider_diagnostics?: string;
   generated_at: string;
+  attempt_id?: string;
+  attempt_path?: string;
+  execution_binding?: ExecutionBinding;
   state: string;
   checkpoint: string;
   claims_path: string;
@@ -124,6 +127,28 @@ export interface BuildDispatch {
   pheromone_section?: string;
   /** Task brief for detailed worker instructions. */
   task_brief?: string;
+  /** Canonical Go-owned permission request for this caste. */
+  permission_profile?: PermissionProfile;
+}
+
+export interface PermissionProfile {
+  schema_version: number;
+  name: "repository_read_only" | "workspace_write" | "scoped_write" | "test_write";
+  filesystem: "repository_read_only" | "workspace_write" | "scoped_write" | "test_write";
+  shell: string;
+  network: string;
+  approval: string;
+  write_scopes?: string[];
+  behavioral_restrictions?: string[];
+}
+
+export interface ExecutionBinding {
+  schema_version: number;
+  run_id: string;
+  attempt_id: string;
+  manifest_sha256: string;
+  workspace_fingerprint: string;
+  execution_owner: string;
 }
 
 export interface BuildTaskPlan {
@@ -167,6 +192,12 @@ export interface WorkerResult {
   files_created?: string[];
   files_modified?: string[];
   tests_written?: string[];
+  /** Provider-returned structured artifacts retained for workflow finalizers. */
+  artifacts?: Record<string, unknown>;
+  /** Planning Scout evidence retained for plan-finalize. */
+  scout_report?: unknown;
+  /** Route-Setter plan artifact retained for plan-finalize. */
+  phase_plan?: unknown;
   /** Sub-workers requested by this worker via structured spawn claims. */
   spawns?: SpawnClaim[];
   handoff?: WorkerHandoff;
@@ -271,8 +302,22 @@ export interface PlanManifest {
   goal?: string;
   root?: string;
   generated_at?: string;
+  base_revision_id?: string;
+  base_plan_state_hash?: string;
   colony_mode?: string;
+  synthetic?: boolean;
+  synthetic_warning?: string;
+  planning_run_id?: string;
+  iteration?: number;
+  target_confidence?: number;
+  max_iterations?: number;
+  previous_confidence?: number;
+  previous_evidence_hash?: string;
+  selected_gaps?: string[];
+  previous_plan_draft?: WorkerPlanArtifact;
+  expected_workers?: PlanningDispatch[];
   refresh?: boolean;
+  revision?: PlanRevisionContext;
   existing_plan?: boolean;
   existing_phase_count?: number;
   depth?: string;
@@ -294,6 +339,17 @@ export interface PlanManifest {
   boundary_questions_created?: number;
   boundary_questions_existing?: number;
   orchestrator_boundary_guidance?: OrchestratorBoundaryGuidance;
+}
+
+export interface PlanRevisionContext {
+  base_revision_id?: string;
+  base_plan_state_hash: string;
+  reason_type: "manual" | "user_feedback" | "research" | "verification_failure" | "scope_change";
+  reason: string;
+  evidence?: string[];
+  evidence_hash?: string;
+  completed_phases?: unknown[];
+  superseded_phases?: unknown[];
 }
 
 export interface PlanningDispatch {

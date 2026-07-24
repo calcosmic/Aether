@@ -12,7 +12,7 @@ const (
 	expectedClaudeCommands   = 60
 	expectedOpenCodeCommands = 60
 	expectedClaudeAgents     = 27
-	expectedOpenCodeAgents   = 27
+	expectedOpenCodeAgents   = 28 // 27 castes plus the restricted primary router
 	expectedCodexAgents      = 27
 	expectedColonySkills     = 55
 	expectedDomainSkills     = 31
@@ -64,14 +64,24 @@ func scanWrapperParity(fc *fileChecker) []HealthIssue {
 				yamlCount, claudeCmdCount, opencodeCmdCount)))
 	}
 
-	// Cross-surface consistency: agent counts must match
+	// Cross-surface consistency: caste counts must match. OpenCode also ships one
+	// infrastructure-only primary router so provider-native task dispatch can be
+	// locked down without pretending that router is a colony caste.
 	codexAgentCount := counts["Codex agents"]
 	claudeAgentCount := counts["Claude agents"]
 	opencodeAgentCount := counts["OpenCode agents"]
-	if claudeAgentCount != codexAgentCount || claudeAgentCount != opencodeAgentCount {
+	opencodeCasteCount := opencodeAgentCount
+	routerPath := filepath.Join(fc.repoRoot, ".opencode", "agents", "aether-worker-router.md")
+	if _, err := os.Stat(routerPath); err == nil {
+		opencodeCasteCount--
+	} else {
+		issues = append(issues, issueWarning("wrapper", "OpenCode worker router",
+			"required infrastructure agent aether-worker-router.md is missing"))
+	}
+	if claudeAgentCount != codexAgentCount || claudeAgentCount != opencodeCasteCount {
 		issues = append(issues, issueWarning("wrapper", "agents",
-			fmt.Sprintf("Agent count mismatch: Claude=%d, OpenCode=%d, Codex=%d",
-				claudeAgentCount, opencodeAgentCount, codexAgentCount)))
+			fmt.Sprintf("Caste count mismatch: Claude=%d, OpenCode=%d, Codex=%d",
+				claudeAgentCount, opencodeCasteCount, codexAgentCount)))
 	}
 
 	// Colony skills count

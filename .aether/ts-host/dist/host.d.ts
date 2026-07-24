@@ -21,23 +21,25 @@ import { callGoJSON } from "./go-bridge.js";
 import type { GoBridgeOptions } from "./go-bridge.js";
 import { HOST_COMMANDS, type ParsedHostArgs } from "./command-registry.js";
 import { dispatchWorkers } from "./worker-dispatch.js";
-import { detectAvailablePlatforms, preflightWorkerPlatform } from "./platform-dispatcher.js";
 export { buildHostGoArgs } from "./command-registry.js";
 export type { ParsedHostArgs } from "./command-registry.js";
 /** Test-only: inject a mock callGoJSON. */
 export declare function __setCallGoJSON(fn: typeof callGoJSON): void;
 /** Test-only: restore the real callGoJSON. */
 export declare function __restoreCallGoJSON(): void;
+type Platform = "codex" | "claude" | "opencode";
+type DetectAvailablePlatforms = () => Promise<Platform[]>;
+type PreflightWorkerPlatform = (platform: Platform, cwd: string) => Promise<void>;
 /** Test-only: inject a mock dispatchWorkers. */
 export declare function __setDispatchWorkers(fn: typeof dispatchWorkers): void;
 /** Test-only: restore the real dispatchWorkers. */
 export declare function __restoreDispatchWorkers(): void;
 /** Test-only: inject a mock detectAvailablePlatforms. */
-export declare function __setDetectAvailablePlatforms(fn: typeof detectAvailablePlatforms): void;
+export declare function __setDetectAvailablePlatforms(fn: DetectAvailablePlatforms): void;
 /** Test-only: restore the real detectAvailablePlatforms. */
 export declare function __restoreDetectAvailablePlatforms(): void;
 /** Test-only: inject a mock worker provider preflight. */
-export declare function __setPreflightWorkerPlatform(fn: typeof preflightWorkerPlatform): void;
+export declare function __setPreflightWorkerPlatform(fn: PreflightWorkerPlatform): void;
 /** Test-only: restore the real worker provider preflight. */
 export declare function __restorePreflightWorkerPlatform(): void;
 /** Restore all test mocks at once. */

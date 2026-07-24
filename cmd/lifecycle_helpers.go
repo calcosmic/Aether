@@ -19,10 +19,7 @@ func allPhasesCompleted(state colony.ColonyState) bool {
 }
 
 func colonyNeedsEntomb(state colony.ColonyState) bool {
-	if strings.TrimSpace(state.Milestone) == "Crowned Anthill" {
-		return true
-	}
-	return state.State == colony.StateCOMPLETED && allPhasesCompleted(state)
+	return strings.TrimSpace(state.Milestone) == "Crowned Anthill"
 }
 
 func completedPhaseCount(state colony.ColonyState) int {

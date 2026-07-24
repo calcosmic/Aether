@@ -82,6 +82,7 @@ For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 - Use visible live Task/subagent calls. Do not set `run_in_background`.
 - Each worker description: `{caste emoji} {Caste} {name}: {task}`.
 - Inject phase objective, task metadata, dependencies, success criteria, active signals, and `skill_section` when present.
+- Inspect and preserve each dispatch `permission_profile`. A `repository_read_only` worker must use a host-enforced no-write boundary. Reject `scoped_write` or `test_write` when the host cannot enforce it. `behavioral_restrictions` inside `workspace_write` are instructions, not a sandbox claim.
 - Require terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `blockers`, `duration`.
 
 Respect `execution_plan`: serial steps stay serial; parallel steps may spawn together.
@@ -98,16 +99,22 @@ For each manifest wave:
 
 ## Finalize
 
-After all workers return, collect results into a completion JSON and finalize:
+After all workers return, collect results into a temporary completion JSON and stage it in the Go-owned attempt journal:
 
 ```
-AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <completion_file>
+AETHER_OUTPUT_MODE=json aether build-completion-stage $ARGUMENTS --completion-file <completion_file>
+```
+
+Parse `result.completion_path`. Finalize only that durable packet:
+
+```
+AETHER_OUTPUT_MODE=json aether build-finalize $ARGUMENTS --completion-file <Go-owned completion_path>
 ```
 
 Then render the user-facing closeout:
 
 ```
-AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <completion_file>
+AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
 
 ## After the Build

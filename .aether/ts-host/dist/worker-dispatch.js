@@ -5,17 +5,15 @@
  * dispatches the worker (simulated or real), and records spawn-complete
  * after. Restores the visible worker activity lost in the Bash-to-Go migration.
  *
- * When simulateWorkers is false, dispatches real workers via platform CLI
- * subprocess using platform-dispatcher.ts, prompt-assembler.ts, and
- * claims-parser.ts.
+ * When simulateWorkers is false, delegates real worker execution to Go's
+ * typed platform adapter boundary. The host coordinates waves but never
+ * selects or launches provider CLIs itself.
  *
  * Satisfies HOST-03 (visible dispatch from manifest) and HOST-06 (spawn
  * lifecycle events via Go CLI).
  */
-import { callGoJSON } from "./go-bridge.js";
-import { detectAvailablePlatforms, formatPlatformUnavailableMessage, formatWorkerPlatformSelectionMessage, classifyPlatformError, selectWorkerPlatform, spawnWorker, } from "./platform-dispatcher.js";
-import { assemblePrompt, getAgentNameForCaste, } from "./prompt-assembler.js";
-import { parseWorkerClaims } from "./claims-parser.js";
+import { callGoJSON, callGoJSONAsync, cleanupCompletionDir, writeCompletionFile, } from "./go-bridge.js";
+import { normalizeSpawnClaims } from "./claims-parser.js";
 import { dispatchWaves } from "./wave-orchestrator.js";
 // ---------------------------------------------------------------------------
 // Single worker dispatch
@@ -70,13 +68,6 @@ export async function dispatchSingleWorker(opts, dispatch) {
     if (simulate) {
         process.stderr.write(`ℹ️  Simulating worker ${dispatch.name} (simulateWorkers=true)\n`);
     }
-    else {
-        // Real dispatch path: verify platforms are available before attempting
-        const available = await detectAvailablePlatforms();
-        if (available.length === 0) {
-            throw new Error(formatPlatformUnavailableMessage(`worker ${dispatch.name}`));
-        }
-    }
     try {
         if (simulate) {
             // Simulated worker execution: brief delay to mimic work.
@@ -99,15 +90,14 @@ export async function dispatchSingleWorker(opts, dispatch) {
             }
         }
         else {
-            // Real worker dispatch via platform CLI.
+            // Real worker dispatch through the Go-owned platform adapter.
             result = await dispatchRealWorker(opts, dispatch);
         }
     }
     catch (dispatchErr) {
         const errMsg = dispatchErr instanceof Error ? dispatchErr.message : String(dispatchErr);
-        const errorClass = classifyPlatformError("unknown", dispatchErr);
         // Auth/config errors halt the build immediately (D-01).
-        if (errorClass === "auth") {
+        if (isAuthError(dispatchErr)) {
             throw new Error(`Worker dispatch halted: ${sanitizeWorkerDiagnosticOutput(errMsg)}`);
         }
         // Timeout/transient errors mark the worker as failed and continue (D-02).
@@ -140,117 +130,162 @@ export async function dispatchSingleWorker(opts, dispatch) {
 // Real worker dispatch
 // ---------------------------------------------------------------------------
 /**
- * Dispatch a real worker via platform CLI subprocess.
+ * Dispatch a real worker through Go's typed provider adapter.
  *
- * 1. Select the active/overridden platform
- * 2. Assemble prompt from agent definition + task brief + response contract
- * 3. Spawn subprocess via platform-dispatcher
- * 4. Parse claims JSON from stdout
- * 5. Build DispatchResult from claims
+ * Go owns platform selection, agent validation, provider invocation, claims
+ * parsing, and the versioned platform capability contract. TypeScript owns
+ * only the temporary request file and mapping the typed response into the
+ * host's wave result.
  *
  * @param opts - Dispatch options
  * @param dispatch - Build dispatch entry
  * @returns Dispatch result from real worker claims
  */
 async function dispatchRealWorker(opts, dispatch) {
-    const available = await detectAvailablePlatforms();
-    const platform = selectWorkerPlatform(available);
-    if (!platform) {
-        throw new Error(formatWorkerPlatformSelectionMessage(available));
-    }
-    const agentName = getAgentNameForCaste(dispatch.caste);
-    const prompt = buildPromptForDispatch(opts, dispatch, platform, agentName);
-    const config = {
-        platform,
-        agentName,
+    const timeoutMs = opts.timeoutMs ?? 600_000;
+    const request = {
+        schema_version: 1,
         caste: dispatch.caste,
-        name: dispatch.name,
+        worker_name: dispatch.name,
+        task_id: dispatch.task_id ?? dispatch.name,
         task: dispatch.task,
-        root: opts.cwd,
-        prompt,
+        task_brief: dispatch.task_brief ?? dispatch.task,
+        timeout_ms: timeoutMs,
+        permission_profile: dispatch.permission_profile ?? permissionProfileForCaste(dispatch.caste),
     };
-    const spawnResult = await spawnWorker(config);
-    if (spawnResult.exitCode !== 0) {
-        const diagnostic = sanitizeWorkerDiagnosticOutput(spawnResult.stderr).slice(0, 200);
-        return {
-            name: dispatch.name,
-            status: "failed",
-            summary: `Worker exited with code ${spawnResult.exitCode}: ${diagnostic}`,
-            duration: spawnResult.duration / 1000,
-            detectedPlatform: platform,
-        };
-    }
-    let claims;
+    if (opts.workflow !== undefined)
+        request.workflow = opts.workflow;
+    if (opts.phase !== undefined)
+        request.phase = opts.phase;
+    if (opts.executionBinding !== undefined)
+        request.execution_binding = opts.executionBinding;
+    if (dispatch.context_capsule !== undefined)
+        request.context_capsule = dispatch.context_capsule;
+    if (dispatch.skill_section !== undefined)
+        request.skill_section = dispatch.skill_section;
+    if (dispatch.hive_section !== undefined)
+        request.hive_section = dispatch.hive_section;
+    if (dispatch.pheromone_section !== undefined)
+        request.pheromone_section = dispatch.pheromone_section;
+    if (dispatch.handoff_section !== undefined)
+        request.handoff_section = dispatch.handoff_section;
+    const requestPath = writeCompletionFile("aether-worker-request", "worker-request.json", request);
+    let response;
     try {
-        claims = parseWorkerClaims(spawnResult.stdout);
+        response = await callGoJSONAsync(opts, ["internal-worker-adapter", "--request-file", requestPath], timeoutMs + 30_000);
     }
-    catch (parseErr) {
-        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-        return {
-            name: dispatch.name,
-            status: "failed",
-            summary: `Failed to parse worker claims: ${msg}`,
-            duration: spawnResult.duration / 1000,
-            detectedPlatform: platform,
-        };
+    finally {
+        cleanupCompletionDir(requestPath);
     }
+    if (response.execution_owner !== "go-adapter" || response.schema_version !== 1) {
+        throw new Error("Go worker adapter returned an unsupported ownership contract");
+    }
+    if (opts.workflow === "build") {
+        if (!opts.executionBinding || !response.execution_binding) {
+            throw new Error("Go worker adapter returned no durable build execution binding");
+        }
+        if (!sameExecutionBinding(opts.executionBinding, response.execution_binding)) {
+            throw new Error("Go worker adapter returned a result for a different build run");
+        }
+    }
+    const worker = response.worker;
+    if (!worker) {
+        throw new Error("Go worker adapter returned no terminal worker result");
+    }
+    if (worker.name !== dispatch.name || worker.caste.toLowerCase() !== dispatch.caste.toLowerCase()) {
+        throw new Error("Go worker adapter returned a result for a different worker");
+    }
+    const status = normalizeTerminalStatus(worker.status);
     const result = {
         name: dispatch.name,
-        status: claims.status ?? "completed",
-        summary: claims.summary ?? `Worker ${dispatch.name} completed`,
-        duration: spawnResult.duration / 1000,
-        detectedPlatform: platform,
+        status,
+        summary: worker.summary?.trim() ||
+            worker.error?.trim() ||
+            `Worker ${dispatch.name} returned ${status}`,
+        detectedPlatform: response.platform,
+        permission_decision: response.permission_decision,
     };
-    if (claims.files_created !== undefined) {
-        result.files_created = claims.files_created;
+    if (response.execution_binding !== undefined)
+        result.execution_binding = response.execution_binding;
+    if (response.provider_run_id !== undefined)
+        result.provider_run_id = response.provider_run_id;
+    if (worker.duration !== undefined)
+        result.duration = worker.duration;
+    if (worker.files_created !== undefined) {
+        result.files_created = worker.files_created;
     }
-    if (claims.files_modified !== undefined) {
-        result.files_modified = claims.files_modified;
+    if (worker.files_modified !== undefined) {
+        result.files_modified = worker.files_modified;
     }
-    if (claims.tests_written !== undefined) {
-        result.tests_written = claims.tests_written;
+    if (worker.tests_written !== undefined) {
+        result.tests_written = worker.tests_written;
     }
-    // TODO(SPAWN-01): Extract spawns from real worker output once worker output format stabilizes.
-    // Currently claims.spawns is typed as (string | SpawnClaim)[] but DispatchResult.spawns
-    // expects SpawnClaim[]. The claims-parser normalizes spawns on parse, so when present
-    // they will already be SpawnClaim[].
-    if (claims.spawns !== undefined && claims.spawns.length > 0) {
-        // After normalization from parseWorkerClaims, all entries are SpawnClaim objects
-        result.spawns = claims.spawns.filter((s) => typeof s === "object");
+    if (worker.spawns !== undefined && worker.spawns.length > 0) {
+        result.spawns = normalizeSpawnClaims(worker.spawns);
     }
+    if (worker.handoff !== undefined)
+        result.handoff = worker.handoff;
+    if (worker.artifacts !== undefined) {
+        result.artifacts = worker.artifacts;
+        if (worker.artifacts["phase_plan"] !== undefined) {
+            result.phase_plan = worker.artifacts["phase_plan"];
+        }
+        if (worker.scout_report === undefined && worker.artifacts["scout_report"] !== undefined) {
+            result.scout_report = worker.artifacts["scout_report"];
+        }
+    }
+    if (worker.scout_report !== undefined)
+        result.scout_report = worker.scout_report;
+    if (worker.tool_count !== undefined)
+        result.tool_count = worker.tool_count;
+    if (worker.blockers !== undefined)
+        result.blockers = worker.blockers;
     return result;
 }
-export function buildPromptForDispatch(opts, dispatch, platform, agentName = getAgentNameForCaste(dispatch.caste)) {
-    const contextCapsule = compactOptional(dispatch.context_capsule) || resolveGoPromptContext(opts);
-    return assemblePrompt({
-        cwd: opts.cwd,
-        caste: dispatch.caste,
-        name: dispatch.name,
-        task: dispatch.task,
-        platform,
-        agentName,
-        contextCapsule,
-        handoffSection: dispatch.handoff_section,
-        skillSection: dispatch.skill_section,
-        hiveSection: dispatch.hive_section,
-        pheromoneSection: dispatch.pheromone_section,
-        taskBrief: dispatch.task_brief,
-    });
+// Go remains authoritative and rejects stale or broadened values. This fallback
+// covers dynamically spawned children that are not present in a Go manifest.
+function permissionProfileForCaste(caste) {
+    const normalized = caste.trim().toLowerCase().replace(/^aether-/, "").replaceAll("-", "_");
+    const readOnly = normalized === "scout" || normalized === "includer";
+    const filesystem = readOnly ? "repository_read_only" : "workspace_write";
+    return {
+        schema_version: 1,
+        name: filesystem,
+        filesystem,
+        shell: "within_filesystem_boundary",
+        network: "provider_default",
+        approval: "never",
+    };
 }
-export function resolveGoPromptContext(opts) {
+function sameExecutionBinding(left, right) {
+    return left.schema_version === right.schema_version &&
+        left.run_id === right.run_id &&
+        left.attempt_id === right.attempt_id &&
+        left.manifest_sha256 === right.manifest_sha256 &&
+        left.workspace_fingerprint === right.workspace_fingerprint &&
+        left.execution_owner === right.execution_owner;
+}
+function normalizeTerminalStatus(value) {
+    const status = value.trim().toLowerCase();
+    switch (status) {
+        case "completed":
+        case "failed":
+        case "blocked":
+        case "timeout":
+            return status;
+        default:
+            throw new Error(`Go worker adapter returned invalid terminal status "${value}"`);
+    }
+}
+/** Ask the Go-owned adapter layer to select and preflight the worker provider. */
+export async function preflightGoWorkerProvider(opts, context) {
     try {
-        const result = callGoJSON(opts, [
-            "colony-prime",
-            "--compact",
-        ]);
-        return compactOptional(result.prompt_section) || compactOptional(result.context);
+        return await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], 30_000);
     }
-    catch {
-        return "";
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`${context} cannot start: ${sanitizeWorkerDiagnosticOutput(message)}`);
     }
-}
-function compactOptional(value) {
-    return typeof value === "string" ? value.trim() : "";
 }
 export function sanitizeWorkerDiagnosticOutput(value) {
     let output = stripAnsi(value.trim());
@@ -275,7 +310,8 @@ export function sanitizeWorkerDiagnosticOutput(value) {
  * @returns true if the error is an auth/config error
  */
 export function isAuthError(error) {
-    return classifyPlatformError("unknown", error) === "auth";
+    const message = error instanceof Error ? error.message : String(error);
+    return /\b(auth(?:entication|orization)?|credentials?|login|permission denied|api[_ -]?key)\b/i.test(message);
 }
 function stripAnsi(value) {
     return value.replace(/\x1b\[[0-9;]*m/g, "");
@@ -369,6 +405,22 @@ export function toWorkerResults(dispatches, results) {
             worker.files_created = result.files_created;
         if (result?.tests_written !== undefined)
             worker.tests_written = result.tests_written;
+        if (result?.blockers !== undefined)
+            worker.blockers = result.blockers;
+        if (result?.tool_count !== undefined)
+            worker.tool_count = result.tool_count;
+        if (result?.spawns !== undefined)
+            worker.spawns = result.spawns;
+        if (result?.handoff !== undefined)
+            worker.handoff = result.handoff;
+        if (result?.artifacts !== undefined)
+            worker.artifacts = result.artifacts;
+        if (result?.scout_report !== undefined) {
+            worker.scout_report = result.scout_report;
+        }
+        if (result?.phase_plan !== undefined) {
+            worker.phase_plan = result.phase_plan;
+        }
         return worker;
     });
 }

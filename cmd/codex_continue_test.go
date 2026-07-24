@@ -1113,7 +1113,8 @@ func TestContinueExpiresWorkerContinueSignalsUsingAdvancedPhaseState(t *testing.
 	withWorkingDir(t, root)
 
 	goal := "Expire stale continue guidance after three completed phases"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
+	continueCreated := now.Add(-96 * time.Hour).Format(time.RFC3339)
 	taskID := "4.1"
 	nextTaskID := "5.1"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -1142,9 +1143,9 @@ func TestContinueExpiresWorkerContinueSignalsUsingAdvancedPhaseState(t *testing.
 			},
 		},
 		Events: []string{
-			"2026-04-12T09:00:00Z|phase_advanced|continue|Completed phase 1, ready for phase 2",
-			"2026-04-13T09:00:00Z|phase_advanced|continue|Completed phase 2, ready for phase 3",
-			"2026-04-14T09:00:00Z|phase_advanced|continue|Completed phase 3, ready for phase 4",
+			now.Add(-72*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 1, ready for phase 2",
+			now.Add(-48*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 2, ready for phase 3",
+			now.Add(-24*time.Hour).Format(time.RFC3339) + "|phase_advanced|continue|Completed phase 3, ready for phase 4",
 		},
 	})
 
@@ -1161,7 +1162,7 @@ func TestContinueExpiresWorkerContinueSignalsUsingAdvancedPhaseState(t *testing.
 				Type:      "FEEDBACK",
 				Priority:  "low",
 				Source:    "worker:continue",
-				CreatedAt: "2026-04-12T12:00:00Z",
+				CreatedAt: continueCreated,
 				Active:    true,
 				Strength:  &s1_0,
 				Content:   json.RawMessage(`{"text":"stale continue guidance"}`),
@@ -5108,6 +5109,9 @@ func TestRunCodexContinueVerificationSkipsWatcherForRawBindEPERM(t *testing.T) {
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
 	store = s
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("## Verification Commands\n\nBuild: `true`\nTests: `true`\n"), 0644); err != nil {
+		t.Fatalf("write verification fixture: %v", err)
+	}
 
 	phase := colony.Phase{ID: 1, Name: "Prototype"}
 	state := colony.ColonyState{
@@ -5138,6 +5142,42 @@ func TestRunCodexContinueVerificationSkipsWatcherForRawBindEPERM(t *testing.T) {
 	}
 	if report.Watcher.Status != watcherStatusEnvironmentBlocked {
 		t.Fatalf("watcher status = %q, want %q", report.Watcher.Status, watcherStatusEnvironmentBlocked)
+	}
+}
+
+func TestRunCodexContinueVerificationBlocksWhenAllCommandsAreSkipped(t *testing.T) {
+	saveGlobals(t)
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	phase := colony.Phase{ID: 1, Name: "No verification fixture"}
+	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
+	report, watcherFlow := runCodexContinueVerification(
+		context.Background(),
+		tmpDir,
+		state,
+		phase,
+		codexContinueManifest{},
+		time.Second,
+		time.Second,
+		true,
+	)
+
+	if watcherFlow != nil {
+		t.Fatalf("watcherFlow = %+v, want nil with --skip-watchers", watcherFlow)
+	}
+	if report.Passed || report.ChecksPassed {
+		t.Fatalf("all-skipped verification passed: %+v", report)
+	}
+	if !strings.Contains(strings.Join(report.BlockingIssues, "\n"), "no deterministic verification command") {
+		t.Fatalf("missing explicit all-skipped blocker: %+v", report.BlockingIssues)
+	}
+	for _, step := range report.Steps {
+		if !step.Skipped {
+			t.Fatalf("expected every step to be skipped, got %+v", report.Steps)
+		}
 	}
 }
 

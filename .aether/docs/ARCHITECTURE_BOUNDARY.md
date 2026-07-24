@@ -1,110 +1,165 @@
-# Architecture Boundary: Go, TypeScript, and Editable Assets
+# Architecture Boundary: Go, Hosts, And Editable Assets
 
-> **Version:** v1.24
-> **Last Updated:** 2026-05-22
-> **Applies to:** Phases 152-159
-
----
+> **Candidate version:** v1.0.42 (unreleased)
+> **Last updated:** 2026-07-22
+> **Status:** Current production boundary
 
 ## The Hard Rule
 
-**Compiled code may execute behaviour, but editable assets must define behaviour.**
+**Go owns lifecycle truth and subprocess-provider execution. A host may coordinate
+one run, but it may not become a second state engine or launch the same work twice.**
 
-This means:
-- Go can run the logic, but it must not be the only place where that logic's rules live.
-- If a human cannot open a text file and change what an agent does, where it is routed, or what it is told, then the architecture has leaked behaviour into compiled code.
+For beginners: Aether can ask either its own engine or the current AI tool to run
+workers. It must choose one for that run. The engine still checks the result and
+is the only component allowed to mark work complete.
 
-For dummies: The engine (Go) can drive the car, but the map, the driver instructions, and the paint job must be things you can edit with a text editor — not hidden inside the engine block.
+## Ownership
 
----
+| Layer | Owns | Must not own |
+| --- | --- | --- |
+| Go core | Canonical state, locks, migrations, manifests, evidence policy, transition validation, recovery, finalizers, install/update/release integrity | Platform-specific presentation or editable role prose |
+| Go adapter boundary | Provider selection, hard pins, availability/auth preflight, agent resolution, prompt assembly, subprocess launch, timeout/cancellation, typed terminal-result parsing, diagnostic redaction | Lifecycle advancement without finalizer evidence |
+| `.aether/ts-host` | Manifest iteration, wave ordering/concurrency, retry coordination, ceremony calls, completion-packet transport | Direct provider CLI launch, provider fallback, prompt truth, direct `.aether/data` writes |
+| Platform-native wrappers | Interviews, native visible worker panels, summaries, and completion-packet submission for an explicitly selected wrapper-owned run | Running the Go subprocess path for the same manifest, direct state edits, claiming unsupported guarantees |
+| Editable assets | Agent instructions, skills, command metadata, playbooks, and declared policies | Bypassing compiled safety checks or authorizing a state transition by prose |
 
-## Three-Tier Boundary
+## Launch Modes
 
-| Layer | Owner | Examples | Rationale |
-|-------|-------|----------|-----------|
-| **Go Runtime Spine** | Go | State mutation, verification, CLI truth, file locking, install/update/publish, recovery, event emission | Safety-critical, must be compiled, tested, and atomic. Go is the sole authority for `.aether/data/` writes. |
-| **TypeScript Control Plane** | TypeScript | Orchestration, agent loader, phase runner, prompt assembler, event stream consumer, platform adapters | Living behaviour that needs iteration speed, platform awareness, and prompt contract testing. Never writes state directly. |
-| **Editable Assets** | Markdown/YAML/JSON | Agent definitions, prompts, phases, playbooks, policies, skills, visual config, ceremony templates | Human-editable, version-controlled, distributed by `aether update`. These are the colony's brain, not its engine. |
-| **Bash Glue** | Bash | Small wrapper scripts, platform-specific command dispatch, smoke tests, release helpers | Minimal glue only. No state mutation, no orchestration logic, no ceremony templates. |
+Exactly one launch mode is active for a manifest:
 
----
+| Entry path | Launch owner | State/finalization owner |
+| --- | --- | --- |
+| Direct `aether build`, `plan`, `colonize`, or other Go lifecycle | Go runtime adapter | Go |
+| Non-dry `aether host ...` | TS host coordinates; hidden Go `internal-worker-adapter` selects and launches each provider subprocess | Go |
+| Claude/OpenCode/Codex wrapper using a dry-run manifest and native Task/subagent panels | The selected host platform | Go |
+| Explicit simulation in tests | Named deterministic fake only | Isolated fixture Go state |
 
-## Asset-Type Matrix
+`AETHER_WORKER_PLATFORM` is a hard pin. A valid but unavailable pin fails with a
+structured diagnostic. It never falls through to another installed provider.
 
-| Asset Type | Current Location | Target Location | Format | Status |
-|------------|------------------|-----------------|--------|--------|
-| Agent definitions | `.claude/agents/ant/*.md`, `.opencode/agents/*.md`, `.codex/agents/*.toml` | `colony/agents/*.yaml` | YAML + Markdown | Planned (Phase 154) |
-| Prompt text | Hardcoded in Go render functions (e.g. `cmd/colony_prime_context.go`) | `colony/prompts/*.md` | Markdown | Planned (Phase 154) |
-| Phase definitions | Hardcoded in Go workflow commands | `colony/phases/*.yaml` | YAML | Planned (Phase 154) |
-| Playbooks | `.aether/docs/command-playbooks/*.md` | `colony/playbooks/*.md` | Markdown | Planned (Phase 154) |
-| Model-routing policy | `.aether/workers.md` and agent frontmatter | `colony/policies/model-routing.yaml` | YAML | Planned (Phase 154) |
-| Memory/skill-creation policy | Hardcoded in Go (`cmd/skills.go`, `cmd/learning.go`) | `colony/policies/*.yaml` | YAML | Planned (Phase 154) |
-| Visual config | Hardcoded in `cmd/codex_visuals.go` | `.aether/config/visuals.md` | Markdown + YAML frontmatter | Planned (Phase 155) |
-| Ceremony templates | Hardcoded in Go render functions | `colony/ceremony/*.md` | Markdown | Planned (Phase 154) |
-| Command definitions | `.aether/commands/*.yaml` | `.aether/commands/*.yaml` | YAML | Keep — already editable |
-| Worker specs | `.aether/workers.md` | `.aether/workers.md` | Markdown | Keep — already editable |
-| Skills | `.aether/skills/` | `.aether/skills/` | Markdown | Keep — already editable |
-| Event schema | Hardcoded in Go + TS | `control-ts/src/schemas/event.schema.ts` | Zod + TS | Planned (Phase 153) |
+## Provider Adapter Contract
 
----
+The current compiled boundary returns:
 
-## Integration Points
+- schema version and `execution_owner: "go-adapter"`;
+- selected platform and its capability contract;
+- the canonical caste `permission_profile` and the selected host's enforcement decision;
+- sanitized availability/provider diagnostics;
+- the immutable build `execution_binding` and unique provider-run ID when the
+  request belongs to a build attempt;
+- one terminal worker result bound to worker name, caste, and task ID;
+- structured claims, artifacts, handoff, child-spawn claims, tool count, and blockers.
 
-The three tiers communicate through well-defined contracts:
+A terminal result is rejected when it is missing, malformed, nonterminal, or
+belongs to a different worker/task. Request files must be regular non-symlink
+files in an `aether-worker-request-*` system-temporary directory. Production
+requests cannot override provider configuration or enable a fake adapter.
 
-1. **Go emits NDJSON events** → TypeScript control plane reads them from `.aether/events/current.ndjson`
-2. **TS control plane calls Go CLI** for state mutation (e.g. `aether state-mutate`, `aether build-finalize`). It never writes `.aether/data/` directly.
-3. **Go loads editable assets at runtime** from `colony/` and `.aether/` (e.g. visuals, prompts, policies)
-4. **`aether update` distributes new assets** alongside existing skills/commands, keeping hub and repo in sync
-5. **Platform wrappers** (Claude, OpenCode) add presentation framing but must not mutate state or duplicate verification logic
+For build requests, the binding includes the run, attempt, manifest digest,
+workspace/branch fingerprint, and execution owner. The adapter journals dispatch
+before launch, persists the provider PID, and hashes terminal results before
+responding. A stale binding fails closed. Parallel PID registry updates use the
+same cross-process storage lock as other canonical state.
 
-For dummies: Go is the vault — only Go opens the safe. TypeScript is the concierge — it arranges everything but asks Go to actually change the records. The text files are the menu — anyone can edit what's offered.
+## Permission Boundary
 
----
+Every generated build and planning dispatch carries a versioned permission
+profile. Go recalculates the canonical profile from the caste and rejects stale
+or broadened requests before provider launch.
 
-## Migration Sequence (Phases 152-159)
+The release-usable profiles are intentionally small:
 
-| Phase | Focus | Asset Types Moving |
-|-------|-------|-------------------|
-| **152** | Boundary & Parity | Docs only — define what goes where |
-| **153** | TS Scaffold & Schemas | Zod schemas for agents, phases, events, policies |
-| **154** | Colony Assets | Agents, prompts, phases, playbooks, policies, ceremony templates |
-| **155** | Go Boundary Refactor | Go loads visuals, prompts, policies from files instead of hardcoding |
-| **156** | TS Control Plane Core | Agent loader, phase loader, prompt assembler, phase runner, orchestrator |
-| **157** | TS Adapters & Oracle | Platform adapter stubs, Oracle loop stub |
-| **158** | Event Stream | NDJSON event stream as shared observable truth |
-| **159** | End-to-End Acceptance | Validate full lifecycle, verify no hardcoded behaviour remains |
+| Profile | Current castes | Enforced boundary |
+| --- | --- | --- |
+| `repository_read_only` | Scout, Includer | Repository writes denied by Codex read-only sandbox, Claude plan mode, or OpenCode's restricted router plus no-edit/no-bash subagent |
+| `workspace_write` | All other current castes | Writes confined to the project workspace by Codex sandbox, Claude fail-closed native sandbox, or OpenCode external-directory denial |
 
----
+`scoped_write` and `test_write` are recognized contract values but production
+adapters reject them. Probe's test-only rule, survey-only paths, documentation
+scope, and review-ledger-only rules remain visible `behavioral_restrictions`
+inside an enforced workspace boundary. They are not advertised as path-level
+security guarantees.
 
-## Decision Log
+Claude no longer launches workers with `bypassPermissions`. Workspace writers
+use `acceptEdits` with sandboxing enabled, `failIfUnavailable: true`, and the
+unsandboxed-command escape hatch disabled. OpenCode uses the infrastructure-only
+`aether-worker-router`; Aether rejects a configured alternate primary agent and
+attests the shipped target-agent permissions before launch. Codex selects
+`read-only` or `workspace-write` per dispatch and no longer grants `CODEX_HOME`
+as an additional writable directory.
 
-| Decision | ID | Rationale |
-|----------|-----|-----------|
-| Move hardcoded visuals from compiled Go to editable config files | D-01 | Visuals are behaviour, not safety logic. Users should be able to change caste colours without recompiling. |
-| One shared visual config file across all platforms | D-02 | Caste identity is runtime truth, not platform quirk. Codex, Claude, and OpenCode should render the same identity. |
-| Format: Markdown with YAML frontmatter | D-03 | Matches existing `.aether/agents/` and `.claude/agents/` patterns. No new format to learn. |
-| Location: `.aether/config/visuals.md` | D-04 | Central, version-controlled, distributed by `aether update`. |
-| Full inventory of all Classic v5.4.0 behaviours | D-05 | Need a complete baseline before deciding what to restore, improve, or drop. |
-| When Classic and Go disagree, user decides per item | D-06 | No blanket "Classic wins" or "Go wins" — each behaviour is evaluated on merit. |
-| Verification: automated golden/snapshot tests + manual checklist | D-07 | 9 flagship workflows get automated proof; edge cases and ceremony get human checklist. |
-| File-level classification for most Go files | D-08 | Practical and readable. Function-level notes only for mixed files. |
-| Agent-assisted audit: automated first pass + agent review | D-09 | Scale: 80+ Go files. Heuristics catch obvious cases; agents handle boundary judgement. |
-| Mixed files annotated as `MIXED` with function-level notes | D-10 | Some files (e.g. `cmd/colony_prime_context.go`) contain both spine logic and prompt strings. |
-| ARCHITECTURE_BOUNDARY.md and PARITY_CLASSIC_VS_GO.md live in `.aether/docs/` | D-11 | Distributed system reference docs, available to all platforms after `aether update`. |
-| BEHAVIOUR_EXTRACTION_AUDIT.md lives in `.planning/phases/152-boundary-parity/` | D-12 | Phase artifact, not user-facing. Kept with planning context for downstream phase use. |
-| Format: plain reference doc markdown | D-13 | ADR template is too rigid for a checklist and an audit table. Plain markdown is readable and diff-friendly. |
+## Quarantined Paths
 
----
+- `.aether/ts-host/src/platform-dispatcher.ts` and `prompt-assembler.ts` are
+  legacy regression-test fixtures. Production host sources are statically tested
+  not to import the TypeScript provider launcher.
+- `control-ts` is private and retired. Its adapters report unavailable, dispatch
+  throws, and phase execution fails without emitting completion. Any direct
+  legacy state/event writes are quarantined below `control-ts/.retired-state` or
+  an explicit test temporary path.
+- Historical migration documents can explain prior intent, but they are not
+  runtime authority.
+
+## Editable Asset Rule
+
+Editable assets remain important, but "editable" does not mean authoritative for
+safety. A human may change prompts, skills, routing hints, and presentation. Go
+must schema-validate any policy that affects permissions, evidence requirements,
+or transitions. Compiled fallbacks are allowed for recovery and safe failure, but
+must be versioned and test-visible.
+
+## Required Invariants
+
+1. One launch owner per manifest/run.
+2. One canonical state writer: Go.
+3. Explicit provider pins never fall back.
+4. Simulation requires an explicit test-only switch and is visibly labelled.
+5. Provider errors and raw output are redacted before entering user-visible or
+   durable summaries.
+6. Worker completion cannot advance lifecycle state without Go finalization and
+   evidence checks.
+7. Unsupported platform capabilities are reported as limited/unavailable, not
+   silently described as parity.
+8. Retired/legacy control planes fail closed and cannot touch live colony state.
+9. Every worker has a canonical typed permission profile; stale or broadened
+   requests fail before launch.
+10. Behavioral caste restrictions are never described as host-enforced scopes.
+11. Every build worker result matches the current run, attempt, manifest,
+    workspace/branch, and execution owner.
+12. Force redispatch cancels the exact superseded run and stops if cancellation
+    cannot be proven.
+
+## Verification
+
+The boundary is exercised by:
+
+- `cmd/internal_worker_adapter_test.go`;
+- `cmd/blackbox_harness_test.go` compiled adapter tests;
+- `pkg/codex/platform_dispatch_test.go` hard-pin and provider tests;
+- `pkg/codex/permission_profile_test.go` profile matrix, sandbox selection, and
+  shipped OpenCode permission-attestation tests;
+- `cmd/permission_profile_integration_test.go` manifest projection tests;
+- `cmd/build_execution_binding_test.go` attempt, replay, terminal, and stale-run
+  tests;
+- `pkg/codex/execution_binding_test.go` checkout/branch identity tests;
+- `pkg/codex/process_tracker_test.go` exact-run cancellation and concurrent PID
+  registry tests;
+- `.aether/ts-host/test/worker-dispatch.test.ts` delegation/static-import tests;
+- `.aether/ts-host/test/go-bridge.test.ts` asynchronous bridge/redaction tests;
+- `control-ts` fail-closed and live-state-isolation tests.
+
+Durable build identity, exact cancellation, wrapper result replay, and native
+terminal journaling are implemented. This is not universal provider-stream
+reattachment: a native parent crash before aggregate commit still requires a
+force retry, and a dead adapter cannot recover an orphaned provider's stdout.
+Plan/continue do not yet have build-equivalent per-worker journals. Narrow path
+profiles remain deferred until they can be enforced rather than inferred from
+prompt compliance.
 
 ## Cross-References
 
-- **Parity checklist:** See [PARITY_CLASSIC_VS_GO.md](PARITY_CLASSIC_VS_GO.md) for the Classic v5.4.0 behaviour baseline.
-- **Requirements:** See `.planning/REQUIREMENTS.md` §Boundary & Parity for BOUNDARY-01, BOUNDARY-02, BOUNDARY-03.
-- **v1.18 milestone:** See `.planning/milestones/v1.18-ROADMAP.md` for the Classic baseline and golden test coverage.
-- **Hybrid strategy research:** See `.aether/docs/hybrid-runtime-strategy-research.md` for the research that led to this boundary.
-- **Classic command parity:** See `.aether/docs/classic-command-parity-matrix.md` for the command-by-command runtime authority map.
-
----
-
-*Documented for Phase 152. Serves as the north star for Phases 153-159.*
+- Audit ADR: `docs/audits/aether-framework-polish/05-core-architecture-decision.md`
+- Implementation evidence: `docs/audits/aether-framework-polish/13-orchestration-owner-implementation.md`
+- Build-run evidence: `docs/audits/aether-framework-polish/15-durable-build-run-identity.md`
+- Release gate: `.aether/docs/release-readiness-handoff.md`
+- Platform capability schema: `pkg/codex/platform_contract.go`

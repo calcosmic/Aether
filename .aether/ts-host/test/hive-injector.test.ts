@@ -90,7 +90,7 @@ describe("readHiveWisdom", () => {
     });
 
     const result = await readHiveWisdom(defaultOpts);
-    assert.deepEqual(capturedArgs, ["hive-read", "--min-confidence", "0.5"]);
+		assert.deepEqual(capturedArgs, ["hive-read", "--for-worker", "--min-confidence", "0.5"]);
     assert.ok(result.includes("HIVE WISDOM"));
     assert.ok(result.includes("(go, 0.90) Test wisdom"));
   });

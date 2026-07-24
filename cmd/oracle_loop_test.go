@@ -826,6 +826,16 @@ func TestFinalizeOracleLoopRubricOutput(t *testing.T) {
 	if _, ok := result["final_confidence"]; !ok {
 		t.Error("finalizeOracleLoop output missing 'final_confidence' field")
 	}
+	revisionOption, ok := result["plan_revision_option"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("finalizeOracleLoop output missing plan_revision_option: %#v", result["plan_revision_option"])
+	}
+	if command := stringValue(revisionOption["command"]); !strings.Contains(command, "--revision-evidence \".aether/oracle/synthesis.md\"") {
+		t.Fatalf("Oracle revision command points at the wrong synthesis artifact: %q", command)
+	}
+	if _, err := os.Stat(paths.SynthesisPath); err != nil {
+		t.Fatalf("Oracle revision evidence does not exist: %v", err)
+	}
 
 	// Verify approval_status is "approved" for complete status
 	if result["approval_status"] != "approved" {

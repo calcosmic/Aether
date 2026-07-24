@@ -16,6 +16,9 @@ func readHiveWisdomEntries(hubDir string, limit int, fallbacks *[]string) []hive
 }
 
 func readHiveWisdomEntriesForDomains(hubDir string, limit int, domains []string, fallbacks *[]string) []hiveWisdomEntry {
+	if !automaticHiveReadEnabled() {
+		return nil
+	}
 	wisdomPath := filepath.Join(hubDir, "hive", "wisdom.json")
 	data, err := os.ReadFile(wisdomPath)
 	if err == nil {

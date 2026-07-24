@@ -369,8 +369,14 @@ func TestPlanFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			Tasks: []codexWorkerPlanTask{{
 				Goal:            "Route unresolved plan boundary questions through discuss",
 				SuccessCriteria: []string{"plan finalizer guidance is active"},
+				EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+					Criterion: "plan finalizer guidance is active", Checks: []string{"claims", "watcher"},
+				}},
 			}},
 			SuccessCriteria: []string{"Guidance is emitted"},
+			EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
+				Criterion: "Guidance is emitted", Checks: []string{"claims", "watcher"},
+			}},
 		}},
 		Confidence: codexPlanConfidence{Knowledge: 90, Requirements: 90, Risks: 85, Dependencies: 85, Effort: 85, Overall: 87},
 	}

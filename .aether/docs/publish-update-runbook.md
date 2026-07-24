@@ -297,7 +297,7 @@ aether publish --channel dev
 Companion file completeness checks verify expected counts:
 - 60 Claude commands
 - 60 OpenCode commands
-- 27 OpenCode agents
+- 28 OpenCode agent assets (27 castes plus `aether-worker-router`)
 - 27 Codex agents
 - 86 hub shipped skills
 - 5 Codex skill shims
@@ -314,7 +314,8 @@ GoReleaser `before.hooks` block the release if any hook fails:
 
 The GitHub `Release` workflow adds the release/auth gates around GoReleaser:
 - Verifies the tag version, `.aether/version.json`, and `npm/package.json` match before publishing.
-- Runs `goreleaser check`, `go build`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, narrator package verification, a GoReleaser snapshot build, and a binary smoke test before release publication.
+- Runs `goreleaser check`, `go build`, `go vet ./...`, `go test ./... -count=1`, `go test ./... -race -count=1`, narrator package verification, a full GoReleaser snapshot release (archives plus checksums), and an exact-version binary smoke test before release publication.
+- Packs the npm bootstrap and installs the actual current-platform snapshot archive through it before the publishing step.
 - Runs `.aether/ts-host` install, typecheck, tests, and build so provider/auth preflight behavior is exercised under deterministic no-credential conditions.
 - Publishes Go release assets with the workflow `GITHUB_TOKEN`.
 - Publishes npm only when the GoReleaser job reports `NPM_TOKEN` availability and the Go release is a real publish, not a dry run.
@@ -419,7 +420,7 @@ find "$HOME/.aether/system" -path '*/SKILL.md' | wc -l
 Expected counts:
 - Claude commands: `60`
 - OpenCode commands: `60`
-- OpenCode agents: `27`
+- OpenCode agents: `28` (27 castes plus the restricted router)
 - Codex agents: `27`
 - Hub shipped skills: `86`
 - Codex skill shims: `5`

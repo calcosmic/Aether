@@ -367,6 +367,7 @@ func TestNewWorkerInvoker_FakeByDefaultInTests(t *testing.T) {
 func TestNewWorkerInvoker_RealWhenEnvSet(t *testing.T) {
 	t.Setenv("AETHER_CODEX_REAL_DISPATCH", "1")
 	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv(envWorkerPlatform, string(PlatformCodex))
 	t.Setenv("AETHER_CODEX_PATH", "go")
 
 	invoker := NewWorkerInvoker()
@@ -384,6 +385,7 @@ func TestNewWorkerInvoker_RealWhenEnvSet(t *testing.T) {
 func TestNewWorkerInvoker_RealWhenEnvTrue(t *testing.T) {
 	t.Setenv("AETHER_CODEX_REAL_DISPATCH", "true")
 	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv(envWorkerPlatform, string(PlatformCodex))
 	t.Setenv("AETHER_CODEX_PATH", "go")
 
 	invoker := NewWorkerInvoker()
@@ -395,6 +397,21 @@ func TestNewWorkerInvoker_RealWhenEnvTrue(t *testing.T) {
 	}
 	if got := PlatformFromInvoker(invoker); got != PlatformCodex {
 		t.Errorf("PlatformFromInvoker() = %s, want %s", got, PlatformCodex)
+	}
+}
+
+func TestNewWorkerInvoker_PrefersClaudeWhenAvailable(t *testing.T) {
+	t.Setenv("AETHER_CODEX_REAL_DISPATCH", "1")
+	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv("AETHER_CODEX_PATH", "go")
+	t.Setenv(envClaudePath, "go")
+
+	invoker := NewWorkerInvoker()
+	if got := PlatformFromInvoker(invoker); got != PlatformClaude {
+		t.Fatalf("PlatformFromInvoker() = %s, want %s", got, PlatformClaude)
+	}
+	if !invoker.IsAvailable(context.Background()) {
+		t.Fatalf("expected Claude-first invoker to be available, got %T", invoker)
 	}
 }
 
@@ -699,10 +716,13 @@ printf '{"ant_name":"Hammer-23","caste":"builder","task_id":"2.1","status":"comp
 		t.Fatalf("failed to read captured args: %v", err)
 	}
 	argsText := string(argsData)
-	for _, want := range []string{"--sandbox", "workspace-write", "--ask-for-approval", "never", "exec", "--skip-git-repo-check", "--add-dir", filepath.Join(dir, "codex-home"), "-c", `model_reasoning_effort="medium"`, `model="gpt-5.4"`} {
+	for _, want := range []string{"--sandbox", "workspace-write", "--ask-for-approval", "never", "exec", "--skip-git-repo-check", "-c", `model_reasoning_effort="medium"`, `model="gpt-5.4"`} {
 		if !strings.Contains(argsText, want) {
 			t.Fatalf("captured args missing %q\n%s", want, argsText)
 		}
+	}
+	if strings.Contains(argsText, "--add-dir") || strings.Contains(argsText, filepath.Join(dir, "codex-home")) {
+		t.Fatalf("captured args widened write access outside the workspace:\n%s", argsText)
 	}
 	if strings.Contains(argsText, "--full-auto") {
 		t.Fatalf("captured args should not use deprecated --full-auto\n%s", argsText)
@@ -969,6 +989,14 @@ EOF
 			t.Fatalf("captured args missing %q:\n%s", want, argsText)
 		}
 	}
+	for _, want := range []string{"Build the feature.", "--permission-mode\nacceptEdits", "--settings", "Enforced Permission Profile"} {
+		if !strings.Contains(argsText, want) {
+			t.Fatalf("captured args missing %q:\n%s", want, argsText)
+		}
+	}
+	if strings.Contains(argsText, "bypassPermissions") || strings.Contains(argsText, "--add-dir") {
+		t.Fatalf("claude args bypassed or widened the permission boundary:\n%s", argsText)
+	}
 	if strings.Contains(argsText, "--output-format\ntext") {
 		t.Fatalf("claude args still use text output:\n%s", argsText)
 	}
@@ -980,11 +1008,14 @@ func TestOpenCodeDispatcher_Invoke_ParsesJSONEventText(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	createTestOpenCodeRouter(t, dir)
 	agentPath := filepath.Join(dir, "aether-builder.md")
 	if err := os.WriteFile(agentPath, []byte(`---
 name: aether-builder
 description: Builder
 mode: subagent
+permission:
+  external_directory: deny
 ---
 You are the Builder.
 `), 0644); err != nil {
@@ -1036,8 +1067,8 @@ EOF
 		t.Fatalf("failed to read captured args: %v", err)
 	}
 	argsText := string(argsData)
-	if !strings.Contains(argsText, "--agent\nbuild") {
-		t.Fatalf("expected opencode to run through primary build agent, got:\n%s", argsText)
+	if !strings.Contains(argsText, "--agent\naether-worker-router") {
+		t.Fatalf("expected opencode to run through the restricted Aether router, got:\n%s", argsText)
 	}
 	if strings.Contains(argsText, "--agent\naether-builder") {
 		t.Fatalf("opencode args attempted to run subagent directly:\n%s", argsText)
@@ -1055,7 +1086,7 @@ EOF
 	}
 }
 
-func TestOpenCodeDispatcher_Invoke_UsesPrimaryAgentOverride(t *testing.T) {
+func TestOpenCodeDispatcher_Invoke_RejectsUnattestedPrimaryAgentOverride(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stub uses POSIX sh")
 	}
@@ -1098,26 +1129,11 @@ EOF
 		ContextCapsule: "Goal: test",
 		Root:           dir,
 	})
-	if err != nil {
-		t.Fatalf("OpenCode Invoke returned error: %v", err)
+	if err == nil || result.Status != "failed" || !strings.Contains(err.Error(), "requires OpenCode primary router") {
+		t.Fatalf("unattested primary router was not rejected: result=%+v err=%v", result, err)
 	}
-	if result.Status != "completed" {
-		t.Fatalf("status = %q, want completed", result.Status)
-	}
-
-	argsData, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("failed to read captured args: %v", err)
-	}
-	argsText := string(argsData)
-	if !strings.Contains(argsText, "--agent\nplan") {
-		t.Fatalf("expected opencode primary agent override, got:\n%s", argsText)
-	}
-	if strings.Contains(argsText, "--agent\naether-oracle") {
-		t.Fatalf("opencode args attempted to run oracle subagent directly:\n%s", argsText)
-	}
-	if !strings.Contains(argsText, `subagent_type: "aether-oracle"`) {
-		t.Fatalf("captured args missing oracle subagent dispatch:\n%s", argsText)
+	if _, statErr := os.Stat(argsPath); !os.IsNotExist(statErr) {
+		t.Fatalf("provider launched before rejecting router override: %v", statErr)
 	}
 }
 
@@ -1127,10 +1143,13 @@ func TestOpenCodeDispatcher_Invoke_WritesDebugArtifactOnParseFailure(t *testing.
 	}
 
 	dir := t.TempDir()
+	createTestOpenCodeRouter(t, dir)
 	agentPath := filepath.Join(dir, "aether-builder.md")
 	if err := os.WriteFile(agentPath, []byte(`---
 name: aether-builder
 description: Builder
+permission:
+  external_directory: deny
 ---
 You are the Builder.
 `), 0644); err != nil {
@@ -1184,34 +1203,6 @@ EOF
 		if !strings.Contains(text, want) {
 			t.Fatalf("debug artifact missing %q:\n%s", want, text)
 		}
-	}
-}
-
-func TestCodexWritableDirs_PrefersEnv(t *testing.T) {
-	t.Setenv("CODEX_HOME", "  /tmp/custom-codex-home  ")
-	t.Setenv("HOME", t.TempDir())
-
-	dirs := codexWritableDirs()
-	if len(dirs) != 1 {
-		t.Fatalf("expected 1 writable dir, got %v", dirs)
-	}
-	if dirs[0] != "/tmp/custom-codex-home" {
-		t.Fatalf("expected CODEX_HOME to win, got %q", dirs[0])
-	}
-}
-
-func TestCodexWritableDirs_FallsBackToUserHome(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("CODEX_HOME", "")
-	t.Setenv("HOME", home)
-
-	dirs := codexWritableDirs()
-	if len(dirs) != 1 {
-		t.Fatalf("expected 1 writable dir, got %v", dirs)
-	}
-	want := filepath.Join(home, ".codex")
-	if dirs[0] != want {
-		t.Fatalf("expected fallback writable dir %q, got %q", want, dirs[0])
 	}
 }
 

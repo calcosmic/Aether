@@ -336,6 +336,9 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	if manifest["checkpoint"].(string) != "" || manifest["claims_path"].(string) != "" {
 		t.Fatalf("plan-only manifest should not claim artifact paths: %+v", manifest)
 	}
+	if strings.TrimSpace(manifest["attempt_id"].(string)) == "" || strings.TrimSpace(manifest["attempt_path"].(string)) == "" {
+		t.Fatalf("plan-only manifest should identify its durable attempt: %+v", manifest)
+	}
 	if workerBriefs := manifest["worker_briefs"].([]interface{}); len(workerBriefs) != 0 {
 		t.Fatalf("plan-only manifest should not write worker briefs, got %v", workerBriefs)
 	}
@@ -362,11 +365,19 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 
 	for _, rel := range []string{
 		"checkpoints/pre-build-phase-1.json",
-		"build/phase-1/manifest.json",
 		"last-build-claims.json",
 	} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); !os.IsNotExist(err) {
 			t.Fatalf("plan-only unexpectedly wrote %s (err=%v)", rel, err)
+		}
+	}
+	for _, rel := range []string{
+		"build/phase-1/manifest.json",
+		strings.TrimPrefix(manifest["attempt_path"].(string), ".aether/data/"),
+		"build/phase-1/latest-attempt.json",
+	} {
+		if _, err := os.Stat(filepath.Join(dataDir, rel)); err != nil {
+			t.Fatalf("plan-only did not persist durable coordination record %s: %v", rel, err)
 		}
 	}
 
@@ -1434,7 +1445,6 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
-	manifest.ColonyMode = ""
 	if err := os.WriteFile(filepath.Join(root, "wrapper-evidence.txt"), []byte("external work\n"), 0644); err != nil {
 		t.Fatalf("failed to write claimed file: %v", err)
 	}
@@ -2567,6 +2577,150 @@ func TestBuildAllowsRetryWhenBuiltPhaseHasFailedDispatches(t *testing.T) {
 
 func floatPtr(v float64) *float64 { return &v }
 
+type terminalBuildResultInvoker struct {
+	status string
+}
+
+func (i *terminalBuildResultInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     i.status,
+		Summary:    "controlled terminal worker result",
+	}, nil
+}
+
+func (i *terminalBuildResultInvoker) IsAvailable(context.Context) bool { return true }
+func (i *terminalBuildResultInvoker) ValidateAgent(string) error       { return nil }
+
+type noChangePlatformInvoker struct{}
+
+func (i *noChangePlatformInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "claimed success without changing the workspace",
+	}, nil
+}
+
+func (i *noChangePlatformInvoker) IsAvailable(context.Context) bool { return true }
+func (i *noChangePlatformInvoker) ValidateAgent(string) error       { return nil }
+func (i *noChangePlatformInvoker) Platform() codex.Platform         { return codex.PlatformCodex }
+
+func TestBuildDoesNotAdvanceWhenWorkersFailOrTimeout(t *testing.T) {
+	for _, status := range []string{"failed", "blocked", "timeout"} {
+		t.Run(status, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			withWorkingDir(t, root)
+			goal := "Reject false build completion"
+			taskID := "1.1"
+			createTestColonyState(t, dataDir, colony.ColonyState{
+				Version: "3.0",
+				Goal:    &goal,
+				State:   colony.StateREADY,
+				Plan: colony.Plan{Phases: []colony.Phase{{
+					ID:     1,
+					Name:   "Truthful build",
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement the feature", Status: colony.TaskPending}},
+				}}},
+			})
+
+			originalInvoker := newCodexWorkerInvoker
+			newCodexWorkerInvoker = func() codex.WorkerInvoker {
+				return &terminalBuildResultInvoker{status: status}
+			}
+			t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+			_, err := runCodexBuild(root, 1, nil, false)
+			if err == nil || !strings.Contains(err.Error(), "did not complete cleanly") {
+				t.Fatalf("build error = %v, want terminal-result failure", err)
+			}
+
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatalf("reload colony state: %v", err)
+			}
+			if state.State == colony.StateBUILT {
+				t.Fatalf("failed worker advanced colony to BUILT: %+v", state)
+			}
+			if strings.Contains(strings.Join(state.Events, "\n"), "|build_completed|") {
+				t.Fatalf("failed worker emitted build_completed: %v", state.Events)
+			}
+		})
+	}
+}
+
+func TestBuildDoesNotAdvanceOnProviderBackedNoOp(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Reject a no-op implementation"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "No-op build",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement the feature", Status: colony.TaskPending}},
+		}}},
+	})
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &noChangePlatformInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	_, err := runCodexBuild(root, 1, nil, false)
+	if err == nil || !strings.Contains(err.Error(), "without observed file changes") {
+		t.Fatalf("build error = %v, want no-op evidence failure", err)
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload colony state: %v", err)
+	}
+	if state.State == colony.StateBUILT {
+		t.Fatal("provider-backed no-op advanced colony to BUILT")
+	}
+}
+
+func TestDiscoveryBuildAcceptsDurableReadOnlyTaskEvidence(t *testing.T) {
+	dispatches := []codexBuildDispatch{
+		{TaskID: "1.1", Caste: "scout", Status: "completed", Summary: "Mapped the current command surface."},
+		{TaskID: "1.2", Caste: "scout", Status: "completed", Summary: "Recorded the active risks and boundaries."},
+		{Caste: "watcher", Status: "completed", Summary: "Discovery evidence is internally consistent."},
+	}
+	phase := colony.Phase{
+		ID:   1,
+		Name: "Discovery and boundaries",
+		Mode: colony.PhaseModeDiscovery,
+		Tasks: []colony.Task{
+			{Goal: "Read the current implementation"},
+			{Goal: "Capture risks and constraints"},
+		},
+	}
+	if err := validateRuntimeBuildDispatchResults(phase, dispatches, &codex.ClaimsSummary{}, true); err != nil {
+		t.Fatalf("read-only discovery evidence was rejected: %v", err)
+	}
+
+	dispatches[0].Summary = ""
+	if err := validateRuntimeBuildDispatchResults(phase, dispatches, &codex.ClaimsSummary{}, true); err == nil {
+		t.Fatal("discovery phase advanced without a durable task summary")
+	}
+}
+
 func mustParseRFC3339(t *testing.T, value string) time.Time {
 	t.Helper()
 	parsed, err := time.Parse(time.RFC3339, value)
@@ -3068,7 +3222,7 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 	}
 
 	invoker := &codex.FakeInvoker{}
-	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false)
+	results, _, _, err := executeCodexBuildDispatches(ctx, tmpDir, phase, dispatches, nil, time.Now(), invoker, colony.ModeInRepo, 0, 3, false, nil)
 	if err != nil {
 		t.Fatalf("execute dispatches: %v", err)
 	}

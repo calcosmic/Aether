@@ -12,15 +12,11 @@
 
 import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
 
 import type { BuildDispatch } from "../src/types.js";
 import {
-  buildPromptForDispatch,
   dispatchWorkers,
-  resolveGoPromptContext,
   sanitizeWorkerDiagnosticOutput,
   toWorkerResults,
   isAuthError,
@@ -29,7 +25,9 @@ import {
 } from "../src/worker-dispatch.js";
 import {
   __restoreCallGoJSON,
+  __restoreCallGoJSONAsync,
   __setCallGoJSON,
+  __setCallGoJSONAsync,
   type GoBridgeOptions,
 } from "../src/go-bridge.js";
 import {
@@ -37,12 +35,9 @@ import {
   __restoreDispatchSingleWorker,
 } from "../src/wave-orchestrator.js";
 import {
-  __setDetectAvailablePlatforms,
-  __restoreDetectAvailablePlatforms,
-} from "../src/platform-dispatcher.js";
-import {
   dispatchSingleWorker,
 } from "../src/worker-dispatch.js";
+import { TEST_EXECUTION_BINDING } from "./execution-binding-fixture.js";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -104,6 +99,20 @@ const defaultOpts: DispatchOptions = {
 // ---------------------------------------------------------------------------
 
 describe("worker-dispatch", () => {
+  it("production host sources do not import the retired TypeScript provider launcher", () => {
+    const legacyFixtures = new Set(["platform-dispatcher.ts", "prompt-assembler.ts"]);
+    const sourceNames = readdirSync(new URL("../src/", import.meta.url))
+      .filter((sourceName) => sourceName.endsWith(".ts") && !legacyFixtures.has(sourceName));
+    for (const sourceName of sourceNames) {
+      const source = readFileSync(new URL(`../src/${sourceName}`, import.meta.url), "utf-8");
+      assert.ok(!source.includes('from "./platform-dispatcher.js"'), sourceName);
+      if (sourceName === "worker-dispatch.ts") {
+        assert.ok(!source.includes("spawnWorker("), sourceName);
+        assert.ok(!source.includes("selectWorkerPlatform("), sourceName);
+      }
+    }
+  });
+
   it("sanitizeWorkerDiagnosticOutput redacts provider secrets for failed worker summaries", () => {
     const sanitized = sanitizeWorkerDiagnosticOutput(
       "stderr: auth failed token sk-proj-secret-123 ghp_worker_secret github_pat_abc npm_secret token=raw-secret"
@@ -121,114 +130,195 @@ describe("worker-dispatch", () => {
     assert.ok(sanitized.includes("[redacted]"), sanitized);
   });
 
-  it("resolveGoPromptContext reads Go colony-prime prompt_section", () => {
-    __setCallGoJSON(<T>(_opts: GoBridgeOptions, args: string[]): T => {
-      assert.deepEqual(args, ["colony-prime", "--compact"]);
+  it("real dispatch delegates the full worker context to the Go adapter boundary", async () => {
+    let request: Record<string, unknown> | undefined;
+    __setCallGoJSON(<T>(): T => ({ recorded: true, completed: true } as T));
+    __setCallGoJSONAsync(async <T>(
+      _opts: GoBridgeOptions,
+      args: string[]
+    ): Promise<T> => {
+      assert.equal(args[0], "internal-worker-adapter");
+      const requestIndex = args.indexOf("--request-file");
+      assert.ok(requestIndex >= 0);
+      request = JSON.parse(readFileSync(args[requestIndex + 1]!, "utf-8")) as Record<string, unknown>;
       return {
-        prompt_section: "## Colony State\n\nPhase: 6",
+        schema_version: 1,
+        execution_owner: "go-adapter",
+        platform: "codex",
+        platform_contract: {},
+        availability: {},
+        permission_decision: {
+          schema_version: 1,
+          platform: "codex",
+          profile: {
+            schema_version: 1,
+            name: "workspace_write",
+            filesystem: "workspace_write",
+            shell: "within_filesystem_boundary",
+            network: "provider_default",
+            approval: "never",
+          },
+          allowed: true,
+          enforcement: "proven",
+          mechanism: "test",
+        },
+        worker: {
+          name: "Builder-Prompt",
+          caste: "builder",
+          task_id: "6.3",
+          status: "completed",
+          summary: "Go adapter completed",
+          artifacts: { phase_plan: { phases: [] } },
+          scout_report: { findings: [], gaps: [], confidence: 80, study_files: [] },
+        },
       } as T;
     });
 
     try {
-      assert.equal(resolveGoPromptContext(defaultOpts), "## Colony State\n\nPhase: 6");
+      const result = await dispatchSingleWorker({ ...defaultOpts, simulateWorkers: false }, {
+        stage: "wave",
+        wave: 1,
+        caste: "builder",
+        name: "Builder-Prompt",
+        task: "Implement prompt parity",
+        status: "planned",
+        task_id: "6.3",
+        context_capsule: "## Colony State\n\nGo-provided context",
+        handoff_section: "## Previous Worker Handoffs\n\nPrior worker result",
+        skill_section: "### Skill: worker-priming\n\nUse matched skill context",
+        hive_section: "## HIVE WISDOM\n\nUse verified patterns",
+        task_brief: "# Build Dispatch\n\nGo-authored task brief",
+      });
+
+      assert.equal(result.detectedPlatform, "codex");
+      assert.deepEqual(result.phase_plan, { phases: [] });
+      assert.equal(request?.["context_capsule"], "## Colony State\n\nGo-provided context");
+      assert.equal(request?.["handoff_section"], "## Previous Worker Handoffs\n\nPrior worker result");
+      assert.equal(request?.["skill_section"], "### Skill: worker-priming\n\nUse matched skill context");
+      assert.equal(request?.["hive_section"], "## HIVE WISDOM\n\nUse verified patterns");
+      assert.equal(request?.["task_brief"], "# Build Dispatch\n\nGo-authored task brief");
+      assert.deepEqual(request?.["permission_profile"], {
+        schema_version: 1,
+        name: "workspace_write",
+        filesystem: "workspace_write",
+        shell: "within_filesystem_boundary",
+        network: "provider_default",
+        approval: "never",
+      });
+      assert.equal(result.permission_decision?.enforcement, "proven");
     } finally {
       __restoreCallGoJSON();
+      __restoreCallGoJSONAsync();
     }
   });
 
-  it("resolveGoPromptContext falls back to context when prompt_section is absent", () => {
-    __setCallGoJSON(<T>(_opts: GoBridgeOptions, _args: string[]): T => {
+  it("forwards the exact durable build binding and accepts its matching echo", async () => {
+    let request: Record<string, unknown> | undefined;
+    __setCallGoJSON(<T>(): T => ({ recorded: true, completed: true } as T));
+    __setCallGoJSONAsync(async <T>(
+      _opts: GoBridgeOptions,
+      args: string[]
+    ): Promise<T> => {
+      const requestIndex = args.indexOf("--request-file");
+      request = JSON.parse(readFileSync(args[requestIndex + 1]!, "utf-8")) as Record<string, unknown>;
       return {
-        context: "## Compact Context\n\nFallback section",
+        schema_version: 1,
+        execution_owner: "go-adapter",
+        platform: "codex",
+        platform_contract: {},
+        availability: {},
+        permission_decision: {
+          schema_version: 1,
+          platform: "codex",
+          profile: request["permission_profile"],
+          allowed: true,
+          enforcement: "proven",
+          mechanism: "test",
+        },
+        execution_binding: TEST_EXECUTION_BINDING,
+        provider_run_id: "provider-run-test",
+        worker: {
+          name: "Builder-Bound",
+          caste: "builder",
+          status: "completed",
+          summary: "Bound result",
+        },
       } as T;
     });
 
     try {
-      assert.equal(resolveGoPromptContext(defaultOpts), "## Compact Context\n\nFallback section");
+      const result = await dispatchSingleWorker({
+        ...defaultOpts,
+        simulateWorkers: false,
+        workflow: "build",
+        phase: 2,
+        executionBinding: TEST_EXECUTION_BINDING,
+      }, makeDispatch("Builder-Bound", 1));
+
+      assert.equal(request?.["workflow"], "build");
+      assert.equal(request?.["phase"], 2);
+      assert.deepEqual(request?.["execution_binding"], TEST_EXECUTION_BINDING);
+      assert.deepEqual(result.execution_binding, TEST_EXECUTION_BINDING);
+      assert.equal(result.provider_run_id, "provider-run-test");
+      assert.equal(result.status, "completed");
     } finally {
       __restoreCallGoJSON();
+      __restoreCallGoJSONAsync();
     }
   });
 
-  it("buildPromptForDispatch preserves Go manifest context, handoff, and skill sections", () => {
-    const dispatch: BuildDispatch = {
-      stage: "wave",
-      wave: 1,
-      execution_wave: 11,
-      caste: "builder",
-      name: "Builder-Prompt",
-      task: "Implement prompt parity",
-      status: "planned",
-      task_id: "6.3",
-      context_capsule: "## Colony State\n\nGo-provided context",
-      handoff_section: "## Previous Worker Handoffs\n\nPrior worker result",
-      skill_section: "### Skill: worker-priming\n\nUse matched skill context",
-      task_brief: "# Codex Build Dispatch\n\nGo-authored task brief",
-    };
+  it("rejects a terminal worker result echoed for a different build run", async () => {
+    __setCallGoJSON(<T>(): T => ({ recorded: true, completed: true } as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => ({
+      schema_version: 1,
+      execution_owner: "go-adapter",
+      platform: "codex",
+      platform_contract: {},
+      availability: {},
+      permission_decision: {
+        schema_version: 1,
+        platform: "codex",
+        profile: {
+          schema_version: 1,
+          name: "workspace_write",
+          filesystem: "workspace_write",
+          shell: "within_filesystem_boundary",
+          network: "provider_default",
+          approval: "never",
+        },
+        allowed: true,
+        enforcement: "proven",
+        mechanism: "test",
+      },
+      execution_binding: {
+        ...TEST_EXECUTION_BINDING,
+        run_id: "run-stale0000000000000000000000000000",
+      },
+      provider_run_id: "provider-run-stale",
+      worker: {
+        name: "Builder-Stale",
+        caste: "builder",
+        status: "completed",
+        summary: "This must not be accepted",
+      },
+    } as T));
 
-    const prompt = buildPromptForDispatch(
-      defaultOpts,
-      dispatch,
-      "claude",
-      "aether-builder"
-    );
+    try {
+      const result = await dispatchSingleWorker({
+        ...defaultOpts,
+        simulateWorkers: false,
+        workflow: "build",
+        phase: 2,
+        executionBinding: TEST_EXECUTION_BINDING,
+      }, makeDispatch("Builder-Stale", 1));
 
-    assert.match(prompt, /Go-provided context/);
-    assert.match(prompt, /Prior worker result/);
-    assert.match(prompt, /Skill: worker-priming/);
-    assert.match(prompt, /Go-authored task brief/);
-  });
-
-  it("buildPromptForDispatch passes hive_section from dispatch to prompt", () => {
-    const dispatch: BuildDispatch = {
-      stage: "wave",
-      wave: 1,
-      caste: "builder",
-      name: "Builder-Hive",
-      task: "Implement hive wiring",
-      status: "planned",
-      hive_section: "## HIVE WISDOM (Cross-Colony Patterns)\n\n(go, 0.90) Prefer table-driven tests",
-    };
-
-    const prompt = buildPromptForDispatch(
-      defaultOpts,
-      dispatch,
-      "claude",
-      "aether-builder"
-    );
-
-    assert.ok(
-      prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
-      "Prompt should contain hive section header from dispatch.hive_section"
-    );
-    assert.ok(
-      prompt.includes("(go, 0.90) Prefer table-driven tests"),
-      "Prompt should contain hive wisdom content from dispatch.hive_section"
-    );
-  });
-
-  it("buildPromptForDispatch omits hive section when hive_section is undefined", () => {
-    const dispatch: BuildDispatch = {
-      stage: "wave",
-      wave: 1,
-      caste: "builder",
-      name: "Builder-NoHive",
-      task: "Implement without hive",
-      status: "planned",
-      // hive_section intentionally omitted
-    };
-
-    const prompt = buildPromptForDispatch(
-      defaultOpts,
-      dispatch,
-      "claude",
-      "aether-builder"
-    );
-
-    assert.ok(
-      !prompt.includes("## HIVE WISDOM (Cross-Colony Patterns)"),
-      "Prompt should not contain hive section when dispatch.hive_section is undefined"
-    );
+      assert.equal(result.status, "failed");
+      assert.match(result.summary, /different build run/);
+      assert.notEqual(result.summary, "This must not be accepted");
+    } finally {
+      __restoreCallGoJSON();
+      __restoreCallGoJSONAsync();
+    }
   });
 
   it("dispatchWorkers flattens wave results", async () => {
@@ -412,16 +502,15 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
   };
 
   afterEach(() => {
-    __restoreDetectAvailablePlatforms();
     __restoreCallGoJSON();
+    __restoreCallGoJSONAsync();
   });
 
-  it("defaults to real execution when simulateWorkers is not set", async () => {
-    // With no platforms available and simulateWorkers undefined,
-    // the real dispatch path should be taken, which throws because
-    // no platform CLIs are found. This proves simulation is NOT the default.
-    __setDetectAvailablePlatforms(async () => []);
+  it("defaults to real Go-owned execution when simulateWorkers is not set", async () => {
     __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => {
+      throw new Error("Go command failed: no authenticated provider is available");
+    });
 
     const capturedStderr: string[] = [];
     const originalWrite = process.stderr.write.bind(process.stderr);
@@ -433,23 +522,21 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
       return originalWrite(chunk as string | Uint8Array);
     }) as typeof process.stderr.write;
 
+    let result;
     try {
-      await dispatchSingleWorker(
+      result = await dispatchSingleWorker(
         {
           goBinaryPath: "/usr/bin/true",
           cwd: "/tmp",
         },
         mockDispatch
       );
-      assert.fail("Should have thrown for missing platforms");
-    } catch (err: unknown) {
-      assert.ok(
-        err instanceof Error && /Worker dispatch cannot start/.test(err.message),
-        `Expected platform-unavailable error, got: ${err}`
-      );
     } finally {
       process.stderr.write = originalStderrWrite;
     }
+
+    assert.equal(result?.status, "failed");
+    assert.match(result?.summary ?? "", /no authenticated provider/);
 
     // Should NOT log "Simulating worker" because real dispatch is the default
     const simulationLog = capturedStderr.find((line) => /Simulating worker/.test(line));
@@ -461,8 +548,10 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
   });
 
   it("simulates when simulateWorkers is explicitly true", async () => {
-    __setDetectAvailablePlatforms(async () => []);
     __setCallGoJSON(<T>(): T => ({ recorded: true } as unknown as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => {
+      throw new Error("real adapter should not be called in simulation");
+    });
 
     const capturedStderr: string[] = [];
     const originalWrite = process.stderr.write.bind(process.stderr);
@@ -501,58 +590,30 @@ describe("worker-dispatch: simulation default", { concurrency: false }, () => {
     );
   });
 
-  it("uses active Codex platform even when Claude is also available", async () => {
-    const root = mkdtempSync(join(tmpdir(), "aether-worker-root-"));
-    const home = mkdtempSync(join(tmpdir(), "aether-worker-home-"));
-    const hub = join(home, ".aether");
-    const codexAgentDir = join(hub, "system", "codex");
-    mkdirSync(codexAgentDir, { recursive: true });
-    writeFileSync(
-      join(codexAgentDir, "aether-builder.toml"),
-      'name = "aether-builder"\ndescription = "Hub Codex Builder"\n',
-      "utf-8"
-    );
-
-    const fakeDir = mkdtempSync(join(tmpdir(), "aether-worker-provider-"));
-    const marker = join(fakeDir, "codex.invoked");
-    const fakeCodex = join(fakeDir, "codex");
-    writeFileSync(
-      fakeCodex,
-      `#!/bin/sh\nprintf invoked > ${JSON.stringify(marker)}\nprintf '{"status":"completed","summary":"codex selected"}\\n'\n`,
-      { encoding: "utf-8", mode: 0o755 }
-    );
-
-    const originalActive = process.env["AETHER_ACTIVE_PLATFORM"];
-    const originalHub = process.env["AETHER_HUB_DIR"];
-    const originalCodexPath = process.env["AETHER_CODEX_PATH"];
-    process.env["AETHER_ACTIVE_PLATFORM"] = "codex";
-    process.env["AETHER_HUB_DIR"] = hub;
-    process.env["AETHER_CODEX_PATH"] = fakeCodex;
-    __setDetectAvailablePlatforms(async () => ["claude", "codex"]);
+  it("reports the platform selected by Go without selecting a provider in TypeScript", async () => {
     __setCallGoJSON(<T>(): T => ({ recorded: true, completed: true } as unknown as T));
+    __setCallGoJSONAsync(async <T>(): Promise<T> => ({
+      schema_version: 1,
+      execution_owner: "go-adapter",
+      platform: "codex",
+      platform_contract: {},
+      availability: {},
+      worker: {
+        name: mockDispatch.name,
+        caste: mockDispatch.caste,
+        status: "completed",
+        summary: "codex selected by Go",
+      },
+    } as T));
 
-    try {
-      const result = await dispatchSingleWorker(
-        {
-          goBinaryPath: "/usr/bin/true",
-          cwd: root,
-        },
-        {
-          ...mockDispatch,
-          context_capsule: "## Colony State\n\nUse active platform.",
-        }
-      );
+    const result = await dispatchSingleWorker(
+      { goBinaryPath: "/usr/bin/true", cwd: "/tmp" },
+      mockDispatch
+    );
 
-      assert.equal(result.status, "completed");
-      assert.equal(result.detectedPlatform, "codex");
-      assert.ok(existsSync(marker), "Codex fake provider should have been invoked");
-    } finally {
-      restoreEnv("AETHER_ACTIVE_PLATFORM", originalActive);
-      restoreEnv("AETHER_HUB_DIR", originalHub);
-      restoreEnv("AETHER_CODEX_PATH", originalCodexPath);
-      __restoreDetectAvailablePlatforms();
-      __restoreCallGoJSON();
-    }
+    assert.equal(result.status, "completed");
+    assert.equal(result.detectedPlatform, "codex");
+    assert.equal(result.summary, "codex selected by Go");
   });
 });
 
@@ -736,11 +797,3 @@ describe("worker-dispatch: wave summary", { concurrency: false }, () => {
     );
   });
 });
-
-function restoreEnv(key: string, value: string | undefined): void {
-  if (value === undefined) {
-    delete process.env[key];
-    return;
-  }
-  process.env[key] = value;
-}

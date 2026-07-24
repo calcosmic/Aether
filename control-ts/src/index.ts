@@ -1,70 +1,10 @@
 /**
- * Public API entry point for @aether/control.
- * Re-exports schemas, types, and loaders.
+ * Retired experimental control-plane package.
+ *
+ * This package intentionally exports no state mutation, orchestration, or
+ * adapter API. Production Aether execution is owned by the Go runtime, with
+ * `.aether/ts-host` acting only as a manifest/wave conductor.
  */
 export const AETHER_CONTROL_VERSION = "0.1.0";
-
-// Schemas
-export { AgentSchema } from "./schemas/agent.schema.js";
-export { PhaseSchema } from "./schemas/phase.schema.js";
-export { EventSchema } from "./schemas/event.schema.js";
-export { PolicySchema } from "./schemas/policy.schema.js";
-
-// Types
-export type { Agent, Phase, ColonyEvent, Policy, Skill, ColonyState, PhaseResult, PlanResult } from "./types/index.js";
-
-// Loaders
-export { loadAgents, loadAgentById } from "./agents/loadAgents.js";
-export { loadPhases, loadPhaseById } from "./phases/loadPhases.js";
-export { assemblePrompt, assemblePromptForAgent } from "./prompts/assemblePrompt.js";
-export { loadSkills, matchSkillsForWorker } from "./skills/loadSkills.js";
-
-// Runtime
-export { readColonyState, writeColonyState, updateColonyState } from "./memory/store.js";
-export { runPhase } from "./orchestrator/runPhase.js";
-export { executePlan } from "./orchestrator/executePlan.js";
-
-// Adapters
-export { createAdapter, getAvailableAdapters } from "./adapters/index.js";
-export type {
-  Platform,
-  AvailabilityStatus,
-  WorkerConfig,
-  WorkerResult,
-  DispatchParams,
-  DispatchResult,
-  HealthStatus,
-  PlatformAdapter,
-} from "./adapters/types.js";
-
-// Oracle
-export { runOracleLoop, createOracleState, createOraclePlan } from "./oracle/index.js";
-export type {
-  OracleState,
-  OraclePlan,
-  OracleQuestion,
-  OracleFinding,
-  OracleSource,
-  OracleWorkerResponse,
-} from "./oracle/types.js";
-
-// Events
-export {
-  writeEvent,
-  readEvents,
-  tailEvents,
-  createEventStream,
-  createEventLine,
-  getBuffer,
-  clearBuffer,
-} from "./events/index.js";
-export type {
-  EventType,
-  EventLine,
-  EventPayload,
-  EventWriter,
-  EventReader,
-} from "./events/index.js";
-
-// Utilities
-export { projectRoot } from "./utils/projectRoot.js";
+export const AETHER_CONTROL_STATUS = "retired" as const;
+export { RETIRED_CONTROL_PLANE_MESSAGE } from "./retired.js";

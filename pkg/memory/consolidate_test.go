@@ -146,6 +146,46 @@ func TestConsolidate_ArchiveBelowFloor(t *testing.T) {
 	}
 }
 
+func TestConsolidate_StaleInstinctIsNotQueenEligible(t *testing.T) {
+	store, bus, _ := setupConsolidationTest(t)
+	stale := time.Now().UTC().Add(-365 * 24 * time.Hour).Format(time.RFC3339)
+	instincts := colony.InstinctsFile{
+		Version: "1.0",
+		Instincts: []colony.InstinctEntry{
+			{
+				ID:         "inst_stale_high_confidence",
+				Trigger:    "stale high-confidence trigger",
+				Action:     "do not promote without fresh evidence",
+				Domain:     "testing",
+				TrustScore: 0.85,
+				TrustTier:  "trusted",
+				Confidence: 0.90,
+				Provenance: colony.InstinctProvenance{
+					CreatedAt:        stale,
+					ApplicationCount: 4,
+				},
+			},
+		},
+	}
+	if err := store.SaveJSON("instincts.json", instincts); err != nil {
+		t.Fatalf("save instincts: %v", err)
+	}
+
+	svc := NewConsolidationService(store, bus, "", "test-colony")
+	result, err := svc.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.InstinctsArchived != 1 {
+		t.Fatalf("InstinctsArchived = %d, want 1", result.InstinctsArchived)
+	}
+	for _, id := range result.QueenEligible {
+		if id == "inst_stale_high_confidence" {
+			t.Fatal("stale archived instinct must not be Queen-eligible")
+		}
+	}
+}
+
 func TestConsolidate_ObservationDecay(t *testing.T) {
 	store, bus, _ := setupConsolidationTest(t)
 

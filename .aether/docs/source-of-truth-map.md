@@ -52,7 +52,7 @@ the hub, and keep target repos focused on their own state.
 | Go runtime | `cmd/`, `pkg/` | `aether` binary |
 | Claude agents | `.claude/agents/ant/*.md` | global Claude agent directory |
 | Claude commands | `.claude/commands/ant/*.md` | global Claude command directory |
-| OpenCode agents | `.opencode/agents/*.md` | global OpenCode agent directories: `~/.opencode/agent/` and legacy `~/.config/opencode/agents/` |
+| OpenCode agents | `.opencode/agents/*.md` (27 castes plus `aether-worker-router`) | global OpenCode agent directories: `~/.opencode/agent/` and legacy `~/.config/opencode/agents/` |
 | OpenCode commands | `.opencode/commands/ant/*.md` | global OpenCode command directories: `~/.opencode/command/` and legacy `~/.config/opencode/commands/ant/` |
 | Codex agents | `.codex/agents/aether-*.toml` | global Codex agent directory and hub `system/codex/` |
 | Shipped skills | `.aether/skills/**/SKILL.md` with `source: shipped` | hub `system/skills/` only |

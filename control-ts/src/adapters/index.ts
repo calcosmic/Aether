@@ -36,5 +36,5 @@ export function createAdapter(platform: Platform): PlatformAdapter {
 }
 
 export function getAvailableAdapters(): Platform[] {
-  return Object.keys(registry) as Platform[];
+  return [];
 }

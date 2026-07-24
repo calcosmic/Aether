@@ -40,6 +40,7 @@ import {
 } from "../src/go-bridge.js";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { TEST_EXECUTION_BINDING } from "./execution-binding-fixture.js";
 
 // Compute repo root from test file path: test/host.test.ts -> ts-host/test -> .aether -> repo root
 const _testDirname = dirname(fileURLToPath(import.meta.url));
@@ -157,6 +158,28 @@ describe("host integration", () => {
       "plan", "--plan-only",
       "--refresh",
       "--force",
+    ]);
+  });
+
+  it("plan preserves versioned revision metadata", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "plan",
+      "--refresh",
+      "--revision-type", "verification_failure",
+      "--revision-reason", "The acceptance check invalidated the remaining plan",
+      "--revision-evidence", ".aether/data/build/phase-2/verification.json",
+      "--revision-evidence=.aether/data/build/phase-2/review.json",
+    ]);
+
+    const args = buildHostGoArgs(parsed)!;
+
+    assert.deepStrictEqual(args, [
+      "plan", "--plan-only", "--refresh",
+      "--revision-type", "verification_failure",
+      "--revision-reason", "The acceptance check invalidated the remaining plan",
+      "--revision-evidence", ".aether/data/build/phase-2/verification.json",
+      "--revision-evidence", ".aether/data/build/phase-2/review.json",
     ]);
   });
 
@@ -448,6 +471,7 @@ describe("dispatched build runner", () => {
     ];
     return {
       dispatch_manifest: {
+        execution_binding: TEST_EXECUTION_BINDING,
         phase: 1,
         phase_name: "test",
         dispatches,
@@ -533,11 +557,11 @@ describe("dispatched build runner", () => {
     assert.ok(args.includes("--synthetic"), "--simulate should forward as --synthetic to Go");
   });
 
-  it("plan and continue now use dispatched runner", async () => {
+  it("plan is a manifest bridge while continue uses dispatched runner", async () => {
     const { getHostCommandDefinition } = await import("../src/command-registry.js");
 
     const planDef = getHostCommandDefinition("plan");
-    assert.equal(planDef?.runner, "dispatched", "plan should use dispatched runner");
+    assert.equal(planDef?.runner, "go-json", "plan should return a Go-owned iteration manifest");
 
     const continueDef = getHostCommandDefinition("continue");
     assert.equal(continueDef?.runner, "dispatched", "continue should use dispatched runner");
@@ -620,6 +644,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Implement feature", wave: 1, execution_wave: 1 },
             ],
@@ -762,6 +787,7 @@ describe("playbook context injection (CEREMONY-06)", () => {
       if (cmd === "build") {
         return {
           dispatch_manifest: {
+            execution_binding: TEST_EXECUTION_BINDING,
             dispatches: [
               { name: "Builder-01", caste: "builder", task: "Build", wave: 1, execution_wave: 1 },
             ],

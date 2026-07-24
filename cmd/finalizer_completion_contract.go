@@ -3,9 +3,12 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
+
+var durableBuildCompletionPattern = regexp.MustCompile(`(?:^|/)\.aether/data/build/phase-[1-9][0-9]*/attempts/attempt-[A-Za-z0-9._-]+\.completion\.json$`)
 
 const (
 	finalizerCompletionTempPattern = "${TMPDIR:-/tmp}/aether-<workflow>-<run>/<workflow>-completion.json"
@@ -31,6 +34,9 @@ func validateFinalizerCompletionFilePath(path string) error {
 	}
 	normalized := filepath.ToSlash(filepath.Clean(strings.ReplaceAll(path, "\\", "/")))
 	if normalized == ".aether/data" || strings.HasPrefix(normalized, ".aether/data/") || strings.Contains(normalized, "/.aether/data/") {
+		if durableBuildCompletionPattern.MatchString(normalized) {
+			return nil
+		}
 		return fmt.Errorf("completion file must be outside .aether/data; use an approved temp result artifact path such as %s", finalizerCompletionTempPattern)
 	}
 	return nil

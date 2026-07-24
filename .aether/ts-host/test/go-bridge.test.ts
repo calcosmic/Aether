@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import {
   discoverGoBinary,
   callGoJSON,
+  callGoJSONAsync,
   assertNoDirectDataWrites,
   approvedCompletionDirPrefix,
   writeCompletionFile,
@@ -160,6 +161,55 @@ describe("go-bridge", () => {
             assert.ok(!err.message.includes(forbidden), `leaked ${forbidden}: ${err.message}`);
           }
           assert.ok(err.message.includes("[redacted]") || err.message.includes("[omitted]"), err.message);
+          return true;
+        }
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("callGoJSONAsync parses the same Go envelope without blocking the host", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-async-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf '{\"ok\":true,\"result\":{\"execution_owner\":\"go-adapter\"}}\\n'\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      const result = await callGoJSONAsync<{ execution_owner: string }>(
+        { goBinaryPath: fakeGo, cwd: tempDir },
+        ["internal-worker-adapter", "--preflight"],
+        5000
+      );
+      assert.equal(result.execution_owner, "go-adapter");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("callGoJSONAsync redacts failed provider envelopes", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "ts-host-bridge-async-failure-"));
+    const fakeGo = join(tempDir, "aether-fake");
+    writeFileSync(
+      fakeGo,
+      "#!/bin/sh\nprintf '{\"ok\":false,\"error\":\"credentials sk-proj-async-secret\",\"code\":1}\\n' >&2\nexit 1\n",
+      { encoding: "utf-8", mode: 0o755 }
+    );
+
+    try {
+      await assert.rejects(
+        callGoJSONAsync(
+          { goBinaryPath: fakeGo, cwd: tempDir },
+          ["internal-worker-adapter", "--preflight"],
+          5000
+        ),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.ok(!err.message.includes("sk-proj-async-secret"), err.message);
+          assert.ok(err.message.includes("[redacted]"), err.message);
           return true;
         }
       );

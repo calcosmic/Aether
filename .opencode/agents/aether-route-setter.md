@@ -9,6 +9,8 @@ tools:
   grep: true
   glob: true
   task: true
+permission:
+  external_directory: deny
 color: "#9b59b6"
 ---
 

@@ -15,18 +15,16 @@ import {
   readColonyState,
   writeColonyState,
 } from "../../src/memory/store.js";
-import { projectRoot } from "../../src/utils/projectRoot.js";
-
-const TEST_STATE_PATH = resolve(projectRoot, "..", ".aether", "data", "COLONY_STATE.json");
 
 function cleanupState(): void {
-  if (existsSync(TEST_STATE_PATH)) {
-    unlinkSync(TEST_STATE_PATH);
+  const statePath = process.env.AETHER_CONTROL_STATE_PATH;
+  if (statePath && existsSync(statePath)) {
+    unlinkSync(statePath);
   }
 }
 
 function getEventsFile(): string {
-  return process.env.AETHER_EVENTS_FILE || resolve(projectRoot, "..", ".aether", "events", "current.ndjson");
+  return process.env.AETHER_EVENTS_FILE || "";
 }
 
 function cleanupEvents(): void {
@@ -53,6 +51,7 @@ describe("control plane integration", () => {
   beforeEach(() => {
     tempDir = mkdtempSync(resolve(tmpdir(), "aether-events-"));
     process.env.AETHER_EVENTS_FILE = resolve(tempDir, "events.ndjson");
+    process.env.AETHER_CONTROL_STATE_PATH = resolve(tempDir, "COLONY_STATE.json");
     cleanupState();
     const initial = readColonyState();
     initial.goal = "Integration test colony";
@@ -69,39 +68,42 @@ describe("control plane integration", () => {
       rmdirSync(tempDir);
     }
     delete process.env.AETHER_EVENTS_FILE;
+    delete process.env.AETHER_CONTROL_STATE_PATH;
     cleanupState();
   });
 
-  it("runs init -> plan -> build and emits events for each step", async () => {
+  it("fails closed on init and emits no false phase completions", async () => {
     const result = await executePlan(["init", "plan", "build"]);
-    expect(result.status).toBe("completed");
-    expect(result.results.length).toBe(3);
+    expect(result.status).toBe("failed");
+    expect(result.results.length).toBe(1);
 
     const events = readEvents();
     const phaseStarts = events.filter((e) => e.type === "phase:start");
+    const phaseFailures = events.filter((e) => e.type === "phase:failed");
     const phaseCompletes = events.filter((e) => e.type === "phase:complete");
-    expect(phaseStarts.length).toBeGreaterThanOrEqual(3);
-    expect(phaseCompletes.length).toBeGreaterThanOrEqual(3);
+    expect(phaseStarts.length).toBe(1);
+    expect(phaseFailures.length).toBe(1);
+    expect(phaseCompletes.length).toBe(0);
 
     const planStart = events.find((e) => e.type === "plan:start");
     const planComplete = events.find((e) => e.type === "plan:complete");
     expect(planStart).toBeDefined();
     expect(planComplete).toBeDefined();
-    expect(planComplete!.payload.status).toBe("completed");
+    expect(planComplete!.payload.status).toBe("failed");
   });
 
   it("runPhase loads agent and phase from colony assets", async () => {
     const result = await runPhase("init");
     expect(result.phaseId).toBe("init");
     expect(result.agentId).toBe("queen");
-    expect(result.status).toBe("completed");
+    expect(result.status).toBe("failed");
   });
 
-  it("colony state is updated after plan execution", async () => {
+  it("colony state records failure without phase advancement", async () => {
     await executePlan(["init", "plan"]);
     const state = readColonyState();
-    expect(state.state).toBe("COMPLETED");
-    expect(state.current_phase).toBe(2);
+    expect(state.state).toBe("FAILED");
+    expect(state.current_phase).toBe(0);
   });
 
   it("NDJSON events are parseable and contain required fields", async () => {

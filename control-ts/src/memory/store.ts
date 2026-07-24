@@ -3,7 +3,12 @@ import { resolve, dirname } from "path";
 import { projectRoot } from "../utils/projectRoot.js";
 import type { ColonyState } from "../types/runtime.js";
 
-const STATE_PATH = resolve(projectRoot, "..", ".aether", "data", "COLONY_STATE.json");
+const RETIRED_STATE_PATH = resolve(projectRoot, ".retired-state", "COLONY_STATE.json");
+
+export function colonyStatePath(): string {
+  const override = process.env.AETHER_CONTROL_STATE_PATH?.trim();
+  return override ? resolve(override) : RETIRED_STATE_PATH;
+}
 
 function defaultState(): ColonyState {
   const now = new Date().toISOString();
@@ -29,10 +34,11 @@ function defaultState(): ColonyState {
  * Returns a default empty state if the file does not exist.
  */
 export function readColonyState(): ColonyState {
-  if (!existsSync(STATE_PATH)) {
+  const statePath = colonyStatePath();
+  if (!existsSync(statePath)) {
     return defaultState();
   }
-  const raw = readFileSync(STATE_PATH, "utf8");
+  const raw = readFileSync(statePath, "utf8");
   const parsed = JSON.parse(raw) as ColonyState;
   return parsed;
 }
@@ -43,13 +49,14 @@ export function readColonyState(): ColonyState {
  * Creates parent directories if needed.
  */
 export function writeColonyState(state: ColonyState): void {
-  const dir = dirname(STATE_PATH);
+  const statePath = colonyStatePath();
+  const dir = dirname(statePath);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
-  const tmpPath = `${STATE_PATH}.tmp`;
+  const tmpPath = `${statePath}.tmp`;
   writeFileSync(tmpPath, JSON.stringify(state, null, 2), "utf8");
-  renameSync(tmpPath, STATE_PATH);
+  renameSync(tmpPath, statePath);
 }
 
 /**
